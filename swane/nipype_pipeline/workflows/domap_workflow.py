@@ -1,4 +1,4 @@
-import SWANi_supplement
+import swane_supplement
 
 from nipype.interfaces.fsl import (ApplyWarp, ApplyMask, BinaryMaths, FAST, ImageStats, )
 from nipype.pipeline.engine import Node
@@ -110,7 +110,7 @@ def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWork
 
     # NODE 7: Outliers removal from mask
     outliers_mask = Node(DOmapOutliersMask(), name="%s_outliers_mask" % name)
-    outliers_mask.inputs.mask_file = SWANi_supplement.cortex_mas
+    outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
     workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
 
     # NODE 8: Cerebellum removal from divided image
@@ -165,20 +165,20 @@ def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWork
     # NODE 13: Junction map mean value calculation
     junction_mean = Node(BinaryMaths(), name="%s_junction_mean" % name)
     junction_mean.inputs.operation = "sub"
-    junction_mean.inputs.operand_file = SWANi_supplement.mean_flair
+    junction_mean.inputs.operand_file = swane_supplement.mean_flair
     junction_mean.inputs.out_file = "junction_flair.nii.gz"
     workflow.connect(convolution_flair, "out_file", junction_mean, "in_file")
     
     # NODE 14: Junction z-score calculation
     junction_z = Node(BinaryMaths(), name="%s_junctionz" % name)
     junction_z.inputs.operation = "div"
-    junction_z.inputs.operand_file = SWANi_supplement.std_final_flair
+    junction_z.inputs.operand_file = swane_supplement.std_final_flair
     junction_z.inputs.out_file = "junctionZ_flair.nii.gz"
     workflow.connect(junction_mean, "out_file", junction_z, "in_file")
 
     # NODE 15: Cerebellum mask on restore_t1
     masked_cerebellum = Node(ApplyMask(), name="%s_masked_cerebellum" % name)
-    masked_cerebellum.inputs.mask_file = SWANi_supplement.binary_cerebellum
+    masked_cerebellum.inputs.mask_file = swane_supplement.binary_cerebellum
     workflow.connect(restore_2_mni1, "out_file", masked_cerebellum, "in_file")
 
     # NODE 16: Cerebellum mean value calculation
@@ -210,14 +210,14 @@ def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWork
     # NODE 20: Extension map mean value calculation
     extension_mean = Node(BinaryMaths(), name="%s_image_extension" % name)
     extension_mean.inputs.operation = "sub"
-    extension_mean.inputs.operand_file = SWANi_supplement.mean_extension
+    extension_mean.inputs.operand_file = swane_supplement.mean_extension
     extension_mean.inputs.out_file = "extension_image.nii.gz"
     workflow.connect(smoothed_image_extension, "out_file", extension_mean, "in_file")
     
     # NODE 21: Extension z-score calculation
     extension_z = Node(BinaryMaths(), name="%s_image_extensionz" % name)
     extension_z.inputs.operation = "div"
-    extension_z.inputs.operand_file = SWANi_supplement.std_final_extension
+    extension_z.inputs.operand_file = swane_supplement.std_final_extension
     extension_z.inputs.out_file = "extension_z.nii.gz"
     workflow.connect(extension_mean, "out_file", extension_z, "in_file")
 

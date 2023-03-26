@@ -49,8 +49,8 @@ Thumbs.db
 *.wmv
 
 .spyproject
-SWANi.egg-info
-swani.egg-info
+SWANe.egg-info
+swane.egg-info
 dist
 release
 build
