@@ -2,7 +2,7 @@ import os
 from multiprocessing import cpu_count
 from os.path import abspath
 
-import SWANi_supplement
+import swane_supplement
 
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 
@@ -67,7 +67,7 @@ class MainWorkflow(CustomWorkflow):
             sym = nonlinear_reg_workflow("sym", is_symmetric=True)
 
             sym_inputnode = sym.get_node("inputnode")
-            sym_template = SWANi_supplement.sym_template
+            sym_template = swane_supplement.sym_template
             sym_inputnode.inputs.atlas = sym_template
             self.connect(t1, "outputnode.ref_brain", sym, "inputnode.in_file")
 

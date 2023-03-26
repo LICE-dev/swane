@@ -6,7 +6,7 @@ def main():
     import os
     import psutil
     from swane import strings
-    import SWANi_supplement
+    import swane_supplement
     from PySide6.QtWidgets import QApplication, QMessageBox
     from PySide6.QtGui import QIcon, QPixmap
     from swane.ui.MainWindow import MainWindow
@@ -22,7 +22,7 @@ def main():
         else:
             app = QApplication.instance()
 
-        app.setWindowIcon(QIcon(QPixmap(SWANi_supplement.appIcon_file)))
+        app.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
         app.setApplicationDisplayName(strings.APPNAME)
 
         global_config = ConfigManager()
@@ -43,7 +43,7 @@ def main():
 
         # save MainWindow in a var to keep in memory and prevent crash
         widget = MainWindow(global_config)
-        widget.setWindowIcon(QIcon(QPixmap(SWANi_supplement.appIcon_file)))
+        widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
         current_exit_code = app.exec()
 
     sys.exit(current_exit_code)

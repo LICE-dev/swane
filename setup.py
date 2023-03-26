@@ -30,14 +30,14 @@ setup(name='swane',
           "configparser",
           "psutil",
           "pyshortcuts",
-          "SWANe_supplement>=0.0.5",
+          "swane_supplement>=0.1.0",
           "matplotlib",
           "nibabel"
       ],
       python_requires=">=3.7",
       entry_points={
           'gui_scripts': [
-              "SWANe = swane.__main__:main"
+              "swane = swane.__main__:main"
           ]
       }
 

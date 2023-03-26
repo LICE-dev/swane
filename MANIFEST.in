@@ -6,5 +6,5 @@ exclude dist
 exclude venv
 #exclude release
 exclude build
-exclude SWANi.spec
-exclude swani.spec
+exclude SWANe.spec
+exclude swane.spec

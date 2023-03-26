@@ -11,7 +11,7 @@ from swane.nipype_pipeline.nodes.Zscore import Zscore
 
 from nipype.interfaces.utility import IdentityInterface
 
-import SWANi_supplement
+import swane_supplement
 
 
 def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: bool, base_dir: str = "/") -> CustomWorkflow:
@@ -179,7 +179,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
             workflow.connect(zscore_surf_lh, "out_file", outputnode, "zscore_surf_%s" % side)
 
     if is_ai:
-        sym_template = SWANi_supplement.sym_template
+        sym_template = swane_supplement.sym_template
 
         # NODE 11: Nonlinear transformation of the images in symmetric atlas
         func_2_sym_warp = Node(ApplyWarp(), name='%s_2_sym_warp' % name)

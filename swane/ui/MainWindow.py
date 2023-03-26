@@ -15,7 +15,7 @@ from pyshortcuts.shortcut import Shortcut
 
 from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
-import SWANi_supplement
+import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.utils.DataInput import DataInputList
 from swane.slicer.SlicerCheckWorker import SlicerCheckWorker
@@ -30,13 +30,13 @@ class MainWindow(QMainWindow):
         self.global_config = global_config
 
         super(MainWindow, self).__init__()
-        self.setWindowIcon(QIcon(QPixmap(SWANi_supplement.appIcon_file)))
+        self.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
 
-        self.OK_ICON_FILE = SWANi_supplement.okIcon_file
-        self.ERROR_ICON_FILE = SWANi_supplement.errorIcon_file
-        self.WARNING_ICON_FILE = SWANi_supplement.warnIcon_file
-        self.LOADING_MOVIE_FILE = SWANi_supplement.loadingMovie_file
-        self.VOID_SVG_FILE = SWANi_supplement.voidsvg_file
+        self.OK_ICON_FILE = swane_supplement.okIcon_file
+        self.ERROR_ICON_FILE = swane_supplement.errorIcon_file
+        self.WARNING_ICON_FILE = swane_supplement.warnIcon_file
+        self.LOADING_MOVIE_FILE = swane_supplement.loadingMovie_file
+        self.VOID_SVG_FILE = swane_supplement.voidsvg_file
 
         self.OK_ICON = QPixmap(self.OK_ICON_FILE)
         self.ERROR_ICON = QPixmap(self.ERROR_ICON_FILE)
@@ -241,7 +241,7 @@ class MainWindow(QMainWindow):
             # brutal monkey patch
             setattr(pyshortcuts.shortcut, "shortcut", my_shortcut)
             
-            icon_file = SWANi_supplement.appIcon_file
+            icon_file = swane_supplement.appIcon_file
             setattr(pyshortcuts.linux, "shortcut", my_shortcut)
 
             scut = pyshortcuts.make_shortcut(
@@ -285,7 +285,7 @@ class MainWindow(QMainWindow):
         label_about4 = QLabel(strings.aboutwindow_python_libs)
 
         label_about_icon = QLabel()
-        icon = QPixmap(SWANi_supplement.appIcon_file)
+        icon = QPixmap(swane_supplement.appIcon_file)
 
         label_about_icon.setPixmap(icon.scaled(60, 60))
 
