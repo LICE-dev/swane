@@ -35,7 +35,6 @@ class PtTab(QTabWidget):
     DATATAB = 0
     EXECTAB = 1
     RESULTTAB = 2
-    NODE_HOLDER = 'customTreeWidgetItem'
     GRAPH_DIR_NAME = "graph"
     GRAPH_FILE_PREFIX = "graph_"
     GRAPH_FILE_EXT = "svg"
@@ -81,12 +80,12 @@ class PtTab(QTabWidget):
         if msg == WorkflowMonitorWorker.STOP:
             errors = False
             for key in self.node_list.keys():
-                self.node_list[key][PtTab.NODE_HOLDER].setExpanded(False)
-                if not self.node_list[key][PtTab.NODE_HOLDER].completed:
+                self.node_list[key].node_holder.setExpanded(False)
+                if not self.node_list[key].node_holder.completed:
                     errors = True
-                    for subkey in self.node_list[key].keys():
-                        if subkey != PtTab.NODE_HOLDER and self.node_list[key][subkey].art == self.main_window.ERROR_ICON_FILE:
-                            self.node_list[key][PtTab.NODE_HOLDER].setArt(self.main_window.ERROR_ICON_FILE)
+                    for subkey in self.node_list[key].node_list.keys():
+                        if self.node_list[key].node_list[subkey].node_holder.art == self.main_window.ERROR_ICON_FILE:
+                            self.node_list[key].node_holder.setArt(self.main_window.ERROR_ICON_FILE)
                             break
 
             self.setTabEnabled(PtTab.DATATAB, True)
@@ -120,26 +119,26 @@ class PtTab(QTabWidget):
         else:
             icon = self.main_window.ERROR_ICON_FILE
 
-        self.node_list[split[0]][split[1]].setArt(icon)
+        self.node_list[split[0]].node_list[split[1]].node_holder.setArt(icon)
 
-        self.node_list[split[0]][PtTab.NODE_HOLDER].setExpanded(True)
+        self.node_list[split[0]].node_holder.setExpanded(True)
 
         if icon == self.main_window.OK_ICON_FILE:
             completed = True
-            for key in self.node_list[split[0]].keys():
-                if key != PtTab.NODE_HOLDER and self.node_list[split[0]][key].art != self.main_window.OK_ICON_FILE:
+            for key in self.node_list[split[0]].node_list.keys():
+                if self.node_list[split[0]].node_list[key].node_holder.art != self.main_window.OK_ICON_FILE:
                     completed = False
                     break
             if completed:
-                self.node_list[split[0]][PtTab.NODE_HOLDER].setArt(self.main_window.OK_ICON_FILE)
-                self.node_list[split[0]][PtTab.NODE_HOLDER].setExpanded(False)
-                self.node_list[split[0]][PtTab.NODE_HOLDER].completed = True
+                self.node_list[split[0]].node_holder.setArt(self.main_window.OK_ICON_FILE)
+                self.node_list[split[0]].node_holder.setExpanded(False)
+                self.node_list[split[0]].node_holder.completed = True
 
     def remove_running_icon(self):
         for key1 in self.node_list.keys():
-            for key2 in self.node_list[key1].keys():
-                if self.node_list[key1][key2].art == self.main_window.LOADING_MOVIE_FILE:
-                    self.node_list[key1][key2].setArt(self.main_window.VOID_SVG_FILE)
+            for key2 in self.node_list[key1].node_list.keys():
+                if self.node_list[key1].node_list[key2].node_holder.art == self.main_window.LOADING_MOVIE_FILE:
+                    self.node_list[key1].node_list[key2].node_holder.setArt(self.main_window.VOID_SVG_FILE)
 
     def start_gen_wf_thread(self):
         # questa funzione serve a generare il wf in un thread a pare durante il caricamento del pz
@@ -382,19 +381,16 @@ class PtTab(QTabWidget):
         os.mkdir(graph_dir)
 
         for node in self.node_list.keys():
-            self.node_list[node][PtTab.NODE_HOLDER] = CustomTreeWidgetItem(self.node_list_treeWidget,
-                                                                          self.node_list_treeWidget, node)
-            if len(self.node_list[node].keys()) > 1:
+            self.node_list[node].node_holder = CustomTreeWidgetItem(self.node_list_treeWidget, self.node_list_treeWidget, self.node_list[node].long_name)
+            if len(self.node_list[node].node_list.keys()) > 0:
                 if self.main_window.graphviz:
                     thread = Thread(target=self.workflow.get_node(node).write_graph,
                                     kwargs={'graph2use': self.GRAPH_TYPE, 'format': PtTab.GRAPH_FILE_EXT,
                                             'dotfilename': os.path.join(graph_dir,
                                                                         PtTab.GRAPH_FILE_PREFIX + node + '.dot')})
                     thread.start()
-                for sub_node in self.node_list[node].keys():
-                    if sub_node != PtTab.NODE_HOLDER:
-                        self.node_list[node][sub_node] = CustomTreeWidgetItem(self.node_list[node][PtTab.NODE_HOLDER],
-                                                                              self.node_list_treeWidget, sub_node)
+                for sub_node in self.node_list[node].node_list.keys():
+                    self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(self.node_list[node].node_holder, self.node_list_treeWidget, self.node_list[node].node_list[sub_node].long_name)
         self.exec_button.setEnabled(True)
         self.exec_button.setText(strings.EXECBUTTONTEXT)
         self.node_button.setEnabled(False)

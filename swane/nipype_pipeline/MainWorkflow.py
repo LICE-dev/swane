@@ -57,6 +57,7 @@ class MainWorkflow(CustomWorkflow):
         # WORKFLOW 1: ELABORAZIONE T1 3D
         ref_dir = data_input_list.get_dicom_dir(DataInputList.T13D)
         t1 = ref_workflow(data_input_list[DataInputList.T13D].wf_name, ref_dir)
+        t1.long_name = "3D T1w analysis"
         self.add_nodes([t1])
 
         t1.sink_result(self.base_dir, "outputnode", 'ref', self.SCENE_DIR)
