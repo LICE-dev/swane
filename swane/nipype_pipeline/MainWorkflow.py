@@ -65,7 +65,8 @@ class MainWorkflow(CustomWorkflow):
 
         # WORKFLOW 3: REGISTRAZIONE AD ALTANTE SIMMETRICO PER EVENTUALI ASIMMETRY index
         if is_ai and (data_input_list[DataInputList.ASL].loaded or data_input_list[DataInputList.PET].loaded):
-            sym = nonlinear_reg_workflow("sym", is_symmetric=True)
+            sym = nonlinear_reg_workflow("sym")
+            sym.long_name = "Symmetric atlas registration"
 
             sym_inputnode = sym.get_node("inputnode")
             sym_template = swane_supplement.sym_template
@@ -76,6 +77,7 @@ class MainWorkflow(CustomWorkflow):
         if is_freesurfer:
 
             freesurfer = freesurfer_workflow("freesurfer", is_hippo_amyg_labels)
+            freesurfer.long_name = "Freesurfer analysis"
 
             freesurfer_inputnode = freesurfer.get_node("inputnode")
             freesurfer_inputnode.inputs.max_node_cpu = max_node_cpu
@@ -94,6 +96,7 @@ class MainWorkflow(CustomWorkflow):
         if data_input_list[DataInputList.FLAIR3D].loaded:
             flair_dir = data_input_list.get_dicom_dir(DataInputList.FLAIR3D)
             flair = linear_reg_workflow(data_input_list[DataInputList.FLAIR3D].wf_name, flair_dir)
+            flair.long_name = "3D FLAIR analysis"
             self.add_nodes([flair])
 
             flair_inputnode = flair.get_node("inputnode")
@@ -107,6 +110,7 @@ class MainWorkflow(CustomWorkflow):
         if is_domap:
             # WORKFLOW 6: REGISTRAZIONE AD ALTANTE MNI1mm (SERVE SOLO PER DOmap)
             mni1 = nonlinear_reg_workflow("mni1")
+            mni1.long_name = "MNI atlas registration"
 
             mni1_inputnode = mni1.get_node("inputnode")
             mni1_path = abspath(os.path.join(os.environ["FSLDIR"], 'data/standard/MNI152_T1_1mm_brain.nii.gz'))
@@ -115,6 +119,7 @@ class MainWorkflow(CustomWorkflow):
 
             # WORKFLOW 7: ELABORAZIONE script_DOmap
             domap = domap_workflow("DOmap", mni1_path)
+            domap.long_name = "DOmap analysis"
 
             self.connect(t1, "outputnode.ref_brain", domap, "inputnode.ref_brain")
             self.connect(flair, "outputnode.registered_file", domap, "inputnode.flair_brain")
@@ -129,6 +134,7 @@ class MainWorkflow(CustomWorkflow):
             if DataInputList.FLAIR2D+'_%s' % plane in data_input_list and data_input_list[DataInputList.FLAIR2D+'_%s' % plane].loaded:
                 flair_dir = data_input_list.get_dicom_dir(DataInputList.FLAIR2D+'_%s' % plane)
                 flair2d = linear_reg_workflow(data_input_list[DataInputList.FLAIR2D+'_%s' % plane].wf_name, flair_dir, is_volumetric=False)
+                flair2d.long_name = "2D %s FLAIR analysis" % plane
                 self.add_nodes([flair2d])
 
                 flair2d_tra_inputnode = flair2d.get_node("inputnode")
@@ -143,6 +149,7 @@ class MainWorkflow(CustomWorkflow):
         if data_input_list[DataInputList.MDC].loaded:
             mdc_dir = data_input_list.get_dicom_dir(DataInputList.MDC)
             mdc = linear_reg_workflow(data_input_list[DataInputList.MDC].wf_name, mdc_dir)
+            mdc.long_name = "Post-contrast 3D T1w analysis"
             self.add_nodes([mdc])
 
             mdc_inputnode = mdc.get_node("inputnode")
@@ -158,6 +165,7 @@ class MainWorkflow(CustomWorkflow):
 
             asl_dir = data_input_list.get_dicom_dir(DataInputList.ASL)
             asl = func_map_workflow(data_input_list[DataInputList.ASL].wf_name, asl_dir, is_freesurfer, is_ai)
+            asl.long_name = "Arterial Spin Labelling analysis"
 
             self.connect(t1, 'outputnode.ref_brain', asl, 'inputnode.reference')
             self.connect(t1, 'outputnode.ref_mask', asl, 'inputnode.brain_mask')
@@ -177,7 +185,6 @@ class MainWorkflow(CustomWorkflow):
 
             if is_ai:
                 self.connect(sym, 'outputnode.fieldcoeff_file', asl, 'inputnode.ref_2_sym_warp')
-                self.connect(sym, 'outputnode.fieldcoeff_sym', asl, 'inputnode.swap_2_sym_warp')
                 self.connect(sym, 'outputnode.inverse_warp', asl, 'inputnode.ref_2_sym_invwarp')
 
                 asl.sink_result(self.base_dir, "outputnode", 'ai', self.SCENE_DIR)
@@ -191,6 +198,7 @@ class MainWorkflow(CustomWorkflow):
 
             pet_dir = data_input_list.get_dicom_dir(DataInputList.PET)
             pet = func_map_workflow(data_input_list[DataInputList.PET].wf_name, pet_dir, is_freesurfer, is_ai)
+            pet.long_name = "Pet analysis"
 
             self.connect(t1, 'outputnode.ref', pet, 'inputnode.reference')
             self.connect(t1, 'outputnode.ref_mask', pet, 'inputnode.brain_mask')
@@ -210,7 +218,6 @@ class MainWorkflow(CustomWorkflow):
 
             if is_ai:
                 self.connect(sym, 'outputnode.fieldcoeff_file', pet, 'inputnode.ref_2_sym_warp')
-                self.connect(sym, 'outputnode.fieldcoeff_sym', pet, 'inputnode.swap_2_sym_warp')
                 self.connect(sym, 'outputnode.inverse_warp', pet, 'inputnode.ref_2_sym_invwarp')
 
                 pet.sink_result(self.base_dir, "outputnode", 'ai', self.SCENE_DIR)
@@ -226,6 +233,7 @@ class MainWorkflow(CustomWorkflow):
             if data_input_list[DataInputList.VENOUS2].loaded:
                 venous2_dir = data_input_list.get_dicom_dir(DataInputList.VENOUS2)
             venous = venous_workflow(data_input_list[DataInputList.VENOUS].wf_name, venous_dir, venous2_dir)
+            venous.long_name = "Venous MRA analysis"
 
             self.connect(t1, "outputnode.ref_brain", venous, "inputnode.ref_brain")
 
@@ -238,6 +246,7 @@ class MainWorkflow(CustomWorkflow):
             mni_dir = abspath(os.path.join(os.environ["FSLDIR"], 'data/standard/MNI152_T1_2mm_brain.nii.gz'))
 
             dti_preproc = dti_preproc_workflow(data_input_list[DataInputList.DTI].wf_name, dti_dir, mni_dir, is_tractography=is_tractography)
+            dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
             self.connect(t1, "outputnode.ref_brain", dti_preproc, "inputnode.ref_brain")
 
             dti_preproc.sink_result(self.base_dir, "outputnode", 'FA', self.SCENE_DIR)
@@ -248,6 +257,7 @@ class MainWorkflow(CustomWorkflow):
                         continue
                     
                     tract_workflow = xtract_workflow(tract, 5)
+                    tract_workflow.long_name = pt_config.TRACTS[tract][0] + " tractography"
                     if tract_workflow is not None:
                         self.connect(dti_preproc, "outputnode.fsamples", tract_workflow, "inputnode.fsamples")
                         self.connect(dti_preproc, "outputnode.nodiff_mask_file", tract_workflow, "inputnode.mask")
@@ -306,6 +316,7 @@ class MainWorkflow(CustomWorkflow):
 
                 dicom_dir = data_input_list.get_dicom_dir(DataInputList.FMRI+'_%d' % y)
                 fMRI = task_fMRI_workflow(data_input_list[DataInputList.FMRI+'_%d' % y].wf_name, dicom_dir, design_block, self.base_dir)
+                fMRI.long_name = "Task fMRI analysis - %d" % y
                 inputnode = fMRI.get_node("inputnode")
                 inputnode.inputs.TR = TR
                 inputnode.inputs.slice_timing = slice_timing

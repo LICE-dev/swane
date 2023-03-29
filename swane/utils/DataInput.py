@@ -63,7 +63,7 @@ class DataInputList(dict):
             self.append(DataInput(DataInputList.FLAIR2D+'_'+plane, '2D FLAIR '+DataInputList.PLANES[plane], optional=True))
 
         for x in range(DataInputList.FMRI_NUM):
-            self.append(DataInput(DataInputList.FMRI+'_%d' % x, 'Single Task fMRI - %d' % (x + 1)))
+            self.append(DataInput(DataInputList.FMRI+'_%d' % x, 'Task fMRI - %d' % (x + 1)))
 
     def append(self, data_input):
         self[data_input.name] = data_input

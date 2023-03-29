@@ -193,6 +193,7 @@ class PreferencesWindow(QDialog):
             self.new_inputs[x].input_field.stateChanged.connect(self.tractography_changed)
             grid2.addWidget(self.new_inputs[x].input_field, x, 0)
             grid2.addWidget(self.new_inputs[x].label, x, 1)
+            tract_x = x
             x += 1
 
             middle_layout.addWidget(group_box2)
@@ -291,7 +292,7 @@ class PreferencesWindow(QDialog):
         self.group_box3 = QGroupBox(strings.pref_window_tract_box_title)
         grid3 = QGridLayout()
         self.group_box3.setLayout(grid3)
-        if not self.my_config.global_config and not data_input_list[DataInputList.DTI].loaded:
+        if not self.my_config.global_config and (not data_input_list[DataInputList.DTI].loaded or not self.new_inputs[tract_x].input_field.isChecked()):
             self.group_box3.setEnabled(False)
 
         for index, key in enumerate(ConfigManager.TRACTS):
