@@ -123,6 +123,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         
         # NODE 2: Seed ROI nonlinear transformation in T13D reference space
         seed_2_ref = Node(ApplyWarp(), name="seed_2_ref_%s_%s" % (name, side))
+        seed_2_ref.long_name = side + " seed ROI %s"
         seed_2_ref.inputs.out_file = "r-seed_%s_%s.nii.gz" % (name, side)
         seed_2_ref.inputs.in_file = seed_file
         workflow.connect(inputnode, "ref_brain", seed_2_ref, "ref_file")
@@ -130,6 +131,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         
         # NODE 3: Seed ROI bynarization
         seed_bin = Node(ImageMaths(), name="seed_bin_%s_%s" % (name, side))
+        seed_bin.long_name = side + " seed ROI binarization"
         seed_bin.inputs.op_string = "-thr 0.1 -bin"
         seed_bin.inputs.out_data_type = "char"
         seed_bin.inputs.suffix = "_bin"
@@ -137,6 +139,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         
         # NODE 4: Target ROIs nonlinear transformation in T13D reference space
         targets_2_ref = Node(ApplyWarp(), name="targets_2_ref_%s_%s" % (name, side))
+        targets_2_ref.long_name = side + " target ROIs %s"
         if len(target_files) > 1:
             targets_2_ref.iterables = ("in_file", target_files)
         else:
@@ -146,6 +149,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         
         # NODE 5: Target ROIs bynarization
         targets_bin = Node(ImageMaths(), name="targets_bin_%s_%s" % (name, side))
+        targets_bin.long_name = side + " target ROIs binarization"
         targets_bin.inputs.op_string = "-thr 0.1 -bin"
         targets_bin.inputs.out_data_type = "char"
         targets_bin.inputs.suffix = "_bin"
@@ -153,6 +157,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         
         # NODE 10: Tractography
         probtrackx = MapNode(CustomProbTrackX2(), name="probtrackx_%s_%s" % (name, side), iterfield=["rseed"], mem_gb=4)
+        probtrackx.long_name = side + " %s"
         probtrackx.inputs.n_samples = n_samples
         probtrackx.inputs.loop_check = True
         probtrackx.inputs.wayorder = is_wayorder
@@ -174,6 +179,8 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         if len(target_files) > 1:
             merge_targets = JoinNode(MergeTargets(), name="merge_targets_%s_%s" % (name, side),
                                      joinsource=targets_2_ref, joinfield="target_files")
+            merge_targets.long_name = side + " targets ROI merging"
+
             workflow.connect(targets_bin, "out_file", merge_targets, "target_files")
 
             workflow.connect(merge_targets, "out_file", probtrackx, "waypoints")
@@ -184,6 +191,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         if is_invert:
             # NODE 11: Inverted tractography
             probtrackx_inverted = Node(CustomProbTrackX2(), name="probtrackx_inverted_%s_%s" % (name, side), mem_gb=4)
+            probtrackx_inverted.long_name = side + " inverse %s"
             probtrackx_inverted.inputs.n_samples = n_samples
             probtrackx_inverted.inputs.loop_check = True
             probtrackx_inverted.inputs.wayorder = is_wayorder
@@ -204,6 +212,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         if os.path.exists(exclude_file):
             # NODE 6: Exclusion ROI nonlinear transformation in T13D reference space
             exclude_2_ref = Node(ApplyWarp(), name="exclude_2_ref_%s_%s" % (name, side))
+            exclude_2_ref.long_name = side + " exclusion ROI %s"
             exclude_2_ref.inputs.out_file = "r-exclude_%s_%s.nii.gz" % (name, side)
             exclude_2_ref.inputs.in_file = exclude_file
             workflow.connect(inputnode, "ref_brain", exclude_2_ref, "ref_file")
@@ -211,6 +220,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
 
             # NODE 7: Exclusion ROI bynarization
             exclude_bin = Node(ImageMaths(), name="exclude_bin_%s_%s" % (name, side))
+            exclude_bin.long_name = side + " exclusion ROI binarization"
             exclude_bin.inputs.op_string = "-thr 0.1 -bin"
             exclude_bin.inputs.out_data_type = "char"
             exclude_bin.inputs.suffix = "_bin"
@@ -225,6 +235,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         if os.path.exists(stop_file):
             # NODE 8: stop ROI nonlinear transformation in T13D reference space
             stop_2_ref = Node(ApplyWarp(), name="stop_2_ref_%s_%s" % (name, side))
+            stop_2_ref.long_name = side + " stop ROI %s"
             stop_2_ref.inputs.out_file = "r-stop_%s_%s.nii.gz" % (name, side)
             stop_2_ref.inputs.in_file = stop_file
             workflow.connect(inputnode, "ref_brain", stop_2_ref, "ref_file")
@@ -232,6 +243,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
 
             # NODE 9: stop ROI bynarization
             stop_bin = Node(ImageMaths(), name="stop_bin_%s_%s" % (name, side))
+            stop_bin.long_name = side + " stop ROI binarization"
             stop_bin.inputs.op_string = "-thr 0.1 -bin"
             stop_bin.inputs.out_data_type = "char"
             stop_bin.inputs.suffix = "_bin"
@@ -244,16 +256,19 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
 
         # NODE 14: Sum tractography and inverted tractography results
         sum_multi_tracks = Node(SumMultiTracks(), name='sumTrack_%s_%s' % (name, side))
+        sum_multi_tracks.long_name = side + " %s"
         sum_multi_tracks.inputs.out_file = "%s_%s.nii.gz" % (name, side)
 
         if is_invert:
             # NODE 12: Merge tractography and inverted tractography fdt_paths
             merge_paths = Node(Merge(2), name="merge_paths_%s_%s" % (name, side))
+            merge_paths.long_name = side + " Direct and inverse tractography merging"
             workflow.connect(probtrackx, 'fdt_paths', merge_paths, 'in1')
             workflow.connect(probtrackx_inverted, 'fdt_paths', merge_paths, 'in2')
 
             # NODE 13: Merge tractography and inverted tractography way_total
             merge_waytotals = Node(Merge(2), name="merge_waytotals_%s_%s" % (name, side))
+            merge_waytotals.long_name = side + " Direct and inverse waytotal merging"
             workflow.connect(probtrackx, 'way_total', merge_waytotals, 'in1')
             workflow.connect(probtrackx_inverted, 'way_total', merge_waytotals, 'in2')
 

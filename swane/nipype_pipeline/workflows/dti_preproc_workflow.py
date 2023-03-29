@@ -1,4 +1,4 @@
-from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ConvertWarp, FNIRT)
+from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT)
 from nipype.pipeline.engine import Node
 import os
 
@@ -83,6 +83,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
 
     # NODE 2: b0 image extraction
     nodif = Node(ExtractROI(), name='dti_nodif')
+    nodif.long_name = "b0 extraction"
     nodif.inputs.t_min = 0
     nodif.inputs.t_size = 1
     nodif.inputs.roi_file = 'nodif.nii.gz'
@@ -102,8 +103,9 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
     eddy.inputs.out_file = "data.nii.gz"
     workflow.connect(reorient, "out_file", eddy, "in_file")
 
-    # NODE 5: DTI metrix calculation
+    # NODE 5: DTI metrics calculation
     dtifit = Node(DTIFit(), name='dti_dtifit')
+    dtifit.long_name = "DTI metrics calculation"
     workflow.connect(eddy, "eddy_corrected", dtifit, "dwi")
     workflow.connect(bet, "mask_file", dtifit, "mask")
     workflow.connect(conv, "bvecs", dtifit, "bvecs")
@@ -111,6 +113,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
 
     # NODE 6: b0 image linear registration in reference space
     flirt = Node(FLIRT(), name='diff2ref_FLIRT')
+    flirt.long_name = "%s to reference space"
     flirt.inputs.out_matrix_file = "diff2ref.mat"
     flirt.inputs.cost = "corratio"
     flirt.inputs.searchr_x = [-90, 90]
@@ -121,7 +124,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
     workflow.connect(inputnode, "ref_brain", flirt, "reference")
 
     # NODE 7: FA linear transformation in reference space
-    fa_2_ref_flirt = Node(FLIRT(), name='FA2ref_FLIRT')
+    fa_2_ref_flirt = Node(ApplyXFM(), name='FA2ref_FLIRT')
     fa_2_ref_flirt.inputs.out_file = "r-FA.nii.gz"
     fa_2_ref_flirt.inputs.interp = "trilinear"
     workflow.connect(dtifit, "FA", fa_2_ref_flirt, "in_file")
@@ -133,6 +136,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
     if is_tractography:
         # NODE 1: Linear registration
         mni_2_ref_flirt = Node(FLIRT(), name='mni_2_ref_flirt')
+        mni_2_ref_flirt.long_name = "atlas %s to diffusion space"
         mni_2_ref_flirt.inputs.searchr_x = [-90, 90]
         mni_2_ref_flirt.inputs.searchr_y = [-90, 90]
         mni_2_ref_flirt.inputs.searchr_z = [-90, 90]
@@ -145,6 +149,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
 
         # NODE 2: Nonlinear registration
         mni_2_ref_fnirt = Node(FNIRT(), name='mni_2_ref_fnirt', mem_gb=7)
+        mni_2_ref_fnirt.long_name = "atlas %s to diffusion space"
         mni_2_ref_fnirt.inputs.fieldcoeff_file = True
         mni_2_ref_fnirt.inputs.in_file = mni_dir
         workflow.connect(mni_2_ref_flirt, "out_matrix_file", mni_2_ref_fnirt, "affine_file")
@@ -164,6 +169,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
 
         # NODE 9: Linear transformation inverse matrix calculation from diffusion to reference space
         ref2diff_convert = Node(ConvertXFM(), name='ref2diff_convert')
+        ref2diff_convert.long_name = "inverse transformation from reference space"
         ref2diff_convert.inputs.invert_xfm = True
         ref2diff_convert.inputs.out_file = 'ref2diff.mat'
         workflow.connect(flirt, "out_matrix_file", ref2diff_convert, "in_file")

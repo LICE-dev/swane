@@ -61,6 +61,7 @@ def nonlinear_reg_workflow(name: str, base_dir: str = "/", is_symmetric: bool = 
 
     # NODE 1: Linear registration
     flirt = Node(FLIRT(), name='ref_2_%s_flirt' % name)
+    flirt.long_name = "%s to atlas"
     flirt.inputs.searchr_x = [-90, 90]
     flirt.inputs.searchr_y = [-90, 90]
     flirt.inputs.searchr_z = [-90, 90]
@@ -73,6 +74,7 @@ def nonlinear_reg_workflow(name: str, base_dir: str = "/", is_symmetric: bool = 
 
     # NODE 2: Nonlinear registration
     fnirt = Node(FNIRT(), name='ref_2_%s_fnirt' % name, mem_gb=7)
+    fnirt.long_name = "%s to atlas"
     fnirt.inputs.fieldcoeff_file = True
     workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
     workflow.connect(inputnode, 'in_file', fnirt, 'in_file')
@@ -80,6 +82,7 @@ def nonlinear_reg_workflow(name: str, base_dir: str = "/", is_symmetric: bool = 
 
     # NODE 3: Inverse matrix
     invwarp = Node(InvWarp(), name='ref_2_%s_invwarp' % name)
+    invwarp.long_name = "%s from atlas"
     workflow.connect(fnirt, "fieldcoeff_file", invwarp, "warp")
     workflow.connect(inputnode, 'in_file', invwarp, 'reference')
 

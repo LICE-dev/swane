@@ -49,7 +49,6 @@ def ref_workflow(name: str, dicom_dir: str, base_dir: str = "/") -> CustomWorkfl
 
     # NODE 1: Conversion dicom -> nifti
     ref_conv = Node(CustomDcm2niix(), name='%s_conv' % name)
-    ref_conv.long_name = "Nifti conversion"
     ref_conv.inputs.source_dir = dicom_dir
     ref_conv.inputs.crop = True
     ref_conv.inputs.out_filename = "ref"
