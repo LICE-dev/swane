@@ -8,7 +8,7 @@ voidsvg_file = os.path.join(os.path.dirname(__file__),"icons/void.svg")
 appIcon_file = os.path.join(os.path.dirname(__file__),"icons/swane.png")
 appIcns_file = os.path.join(os.path.dirname(__file__),"icons/swane.icns")
 
-sym_template = os.path.abspath(os.path.join(os.path.dirname(__file__),"resources/sym_brain.nii.gz"))
+sym_template = os.path.abspath(os.path.join(os.path.dirname(__file__),"resources/mni_icbm152_t1_tal_nlin_sym_09c_brain.nii.gz"))
 
 binary_cerebellum = os.path.abspath(os.path.join(os.path.dirname(__file__),"resources/doMAP_template/binary_cerebellum.nii.gz"))
 cortex_mas = os.path.abspath(os.path.join(os.path.dirname(__file__),"resources/doMAP_template/brain_cortex_mas_OK.nii.gz"))
