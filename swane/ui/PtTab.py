@@ -381,7 +381,7 @@ class PtTab(QTabWidget):
         os.mkdir(graph_dir)
 
         for node in self.node_list.keys():
-            self.node_list[node].node_holder = CustomTreeWidgetItem(self.node_list_treeWidget, self.node_list_treeWidget, self.node_list[node].long_name)
+            self.node_list[node].node_holder = CustomTreeWidgetItem(self.node_list_treeWidget, self.node_list_treeWidget, self.node_list[node].long_name[0].upper() + self.node_list[node].long_name[1:])
             if len(self.node_list[node].node_list.keys()) > 0:
                 if self.main_window.graphviz:
                     thread = Thread(target=self.workflow.get_node(node).write_graph,
@@ -390,7 +390,7 @@ class PtTab(QTabWidget):
                                                                         PtTab.GRAPH_FILE_PREFIX + node + '.dot')})
                     thread.start()
                 for sub_node in self.node_list[node].node_list.keys():
-                    self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(self.node_list[node].node_holder, self.node_list_treeWidget, self.node_list[node].node_list[sub_node].long_name)
+                    self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(self.node_list[node].node_holder, self.node_list_treeWidget, self.node_list[node].node_list[sub_node].long_name[0].upper() + self.node_list[node].node_list[sub_node].long_name[1:])
         self.exec_button.setEnabled(True)
         self.exec_button.setText(strings.EXECBUTTONTEXT)
         self.node_button.setEnabled(False)

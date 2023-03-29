@@ -79,6 +79,7 @@ def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volum
 
     # NODE 4: Linear registration to reference space
     flirt_2_ref = Node(FLIRT(), name='%s_2_ref' % name)
+    flirt_2_ref.long_name = "%s to reference space"
     flirt_2_ref.inputs.out_matrix_file = "%s_2_ref.mat" % name
 
     if is_volumetric:

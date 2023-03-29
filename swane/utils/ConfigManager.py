@@ -12,7 +12,10 @@ class ConfigManager(configparser.ConfigParser):
     SLICE_TIMING = ['Unknown', 'Regular up', 'Regular down', 'Interleaved']
     BLOCK_DESIGNS = ['rArA...', 'rArBrArB...']
 
-    XTRACT_DATA_DIR = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
+    try:
+        XTRACT_DATA_DIR = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
+    except:
+        XTRACT_DATA_DIR = ""
     DEFAULT_N_SAMPLES = 5000
 
     TRACTS = {"af": ['Arcuate Fasciculus', 'true', 0],

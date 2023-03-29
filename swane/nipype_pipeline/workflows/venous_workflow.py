@@ -1,4 +1,4 @@
-from nipype.interfaces.fsl import (BET, FLIRT, Split, ApplyMask, ImageStats, ImageMaths)
+from nipype.interfaces.fsl import (BET, FLIRT, Split, ApplyMask, ImageStats, ImageMaths, ApplyXFM)
 from nipype.interfaces.utility import Merge
 from nipype.pipeline.engine import Node
 
@@ -66,11 +66,13 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
     # NODE 4: Detect the venous phase from the anatomic phase
     veins_check = Node(VenousCheck(), name='veins_check')
+    veins_check.long_name = "angiographic phase detection"
 
     # If the phases are in the same sequence
     if venous2_dir is None:
         # NODE 3a: Divide the two phases from the phase contrast
         veins_split = Node(Split(), name='veins_split')
+        veins_split.long_name = "phase splitting"
         veins_split.inputs.dimension = 't'
         workflow.connect(veins_reOrient, "out_file", veins_split, "in_file")
 
@@ -87,6 +89,7 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
         # NODE 3b: Merge the two phases
         veins_merge = Node(Merge(2), name="veins_merge")
+        veins_merge.long_name = "phase merging"
         workflow.connect(veins_reOrient, "out_file", veins_merge, "in1")
         workflow.connect(veins2_reOrient, "out_file", veins_merge, "in2")
 
@@ -102,6 +105,7 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
     # NODE 6: Linear registration of anatomic phase to reference space
     anat_flirt = Node(FLIRT(), name='anat_flirt')
+    anat_flirt.long_name = "%s to reference space"
     anat_flirt.inputs.out_matrix_file = "veins2ref.mat"
     anat_flirt.inputs.cost = "mutualinfo"
     anat_flirt.inputs.searchr_x = [-90, 90]
@@ -114,11 +118,13 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
     # NODE 7: Apply in skull mask to venous phase
     veins_inskull_mask = Node(ApplyMask(), name='veins_inskull_mask')
+    veins_inskull_mask.long_name = "%s inskull veins"
     workflow.connect(veins_check, "out_file_veins", veins_inskull_mask, "in_file")
     workflow.connect(bet, "inskull_mask_file", veins_inskull_mask, "mask_file")
 
     # NODE 8: Linear transformation of in skull venous phase in reference space
-    veins_flirt = Node(FLIRT(), name='veins_flirt')
+    veins_flirt = Node(ApplyXFM(), name='veins_flirt')
+    veins_flirt.long_name = "%s to reference space"
     veins_flirt.inputs.out_file = "r-veins_inskull.nii.gz"
     veins_flirt.inputs.interp = "trilinear"
     workflow.connect(veins_inskull_mask, "out_file", veins_flirt, "in_file")
@@ -127,11 +133,13 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
     # NODE 9: Get the max value of venous phase
     veins_range = Node(ImageStats(), name="veins_range")
+    veins_range.long_name = "intensity range detection"
     veins_range.inputs.op_string = "-R"
     workflow.connect(veins_flirt, "out_file", veins_range, "in_file")
 
     # NODE 10: Venous phase rescaling in 0-100
     veins_rescale = Node(ImageMaths(), name="veins_rescale")
+    veins_rescale.long_name = "intensity normalization"
     veins_rescale.inputs.out_file = "r-veins_inskull.nii.gz"
     
     # Function to define the operation string
