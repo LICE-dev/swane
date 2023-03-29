@@ -163,7 +163,7 @@ class PreferencesWindow(QDialog):
             self.new_inputs[x] = PreferenceEntry(category, 'hippoAmygLabels', my_config, PreferenceEntry.CHECKBOX,
                                                  parent=self)
             self.new_inputs[x].set_label_text(strings.pref_window_wf_box_hippo)
-            if not self.my_config.is_freesurfer_matlab():
+            if not self.my_config.is_freesurfer_matlab() or not self.my_config.get_pt_wf_freesurfer():
                 self.new_inputs[x].disable(strings.pref_window_wf_box_hippo_disabled_tip)
             grid2.addWidget(self.new_inputs[x].input_field, x, 0)
             grid2.addWidget(self.new_inputs[x].label, x, 1)
@@ -344,11 +344,10 @@ class PreferencesWindow(QDialog):
         self.set_restart()
 
     def freesurfer_changed(self, checked, hippo_index):
-        if not checked:
-            self.new_inputs[hippo_index].input_field.setChecked(False)
-            self.new_inputs[hippo_index].input_field.setEnabled(False)
+        if not checked or not self.my_config.is_freesurfer_matlab():
+            self.new_inputs[hippo_index].disable()
         elif self.my_config.is_freesurfer_matlab():
-            self.new_inputs[hippo_index].input_field.setEnabled(True)
+            self.new_inputs[hippo_index].enable()
 
     def tractography_changed(self, checked):
         self.group_box3.setEnabled(checked)
