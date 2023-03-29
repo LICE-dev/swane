@@ -1,5 +1,5 @@
 from nipype.interfaces.freesurfer import SampleToSurface
-from nipype.interfaces.fsl import (FLIRT, IsotropicSmooth, ApplyWarp, ApplyMask, SwapDimensions)
+from nipype.interfaces.fsl import (FLIRT, IsotropicSmooth, ApplyWarp, ApplyMask, SwapDimensions, ApplyXFM)
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.workflows.xtract_workflow import SIDES
 
@@ -48,8 +48,6 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
         Basal ganglia and thalami ROI.
     ref_2_sym_warp : path
         Nonlinear registration warp from T13D to symmetric atlas.
-    swap_2_sym_warp : path
-        Nonlinear registration warp from swapped image to original image.
     ref_2_sym_invwarp : path
         Nonlinear registration inverse warp from symmetric atlas to T13D.
 
@@ -107,11 +105,13 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
 
     # NODE 3: Gaussian smoothing
     smooth = Node(IsotropicSmooth(), name='%s_smooth' % name)
+    smooth.long_name = "smoothing"
     smooth.inputs.sigma = 2
     workflow.connect(reorient, "out_file", smooth, "in_file")
 
     # NODE 4: Registration matrix calculation in reference space
     func_2_ref_flirt = Node(FLIRT(), name='%s_2_ref_flirt' % name)
+    func_2_ref_flirt.long_name = "%s to reference space"
     func_2_ref_flirt.inputs.cost = "mutualinfo"
     func_2_ref_flirt.inputs.searchr_x = [-90, 90]
     func_2_ref_flirt.inputs.searchr_y = [-90, 90]
@@ -122,7 +122,8 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
     workflow.connect(inputnode, "reference", func_2_ref_flirt, "reference")
 
     # NODE 5: Smooth volume linear transformation in reference space
-    smooth_2_ref_flirt = Node(FLIRT(), name='%s_smooth_2_ref_flirt' % name)
+    smooth_2_ref_flirt = Node(ApplyXFM(), name='%s_smooth_2_ref_flirt' % name)
+    smooth_2_ref_flirt.long_name = "%s to reference space"
     smooth_2_ref_flirt.inputs.out_file = "r-%s.nii.gz" % name
     smooth_2_ref_flirt.inputs.interp = "trilinear"
     workflow.connect(smooth, "out_file", smooth_2_ref_flirt, "in_file")
@@ -131,6 +132,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
 
     # NODE 6: Scalp removal
     mask = Node(ApplyMask(), name='%s_mask' % name)
+    mask.long_name = name + " %s"
     mask.inputs.out_file = 'r-%s.nii.gz' % name
     workflow.connect(smooth_2_ref_flirt, "out_file", mask, "in_file")
     workflow.connect(inputnode, "brain_mask", mask, "mask_file")
@@ -141,6 +143,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
         # NODE 7: Projection of the map on FreeSurfer pial surface
         for side in SIDES:
             func_surf = Node(SampleToSurface(), name='%s_surf_%s' % (name, side))
+            func_surf.long_name = side + " " + name + " %s"
             func_surf.inputs.hemi = side
             func_surf.inputs.out_file = "%s_surf_%s.mgz" % (name, side)
             func_surf.inputs.cortex_mask = True
@@ -156,6 +159,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
 
         # NODE 8: z-score calculation
         zscore = Node(Zscore(), name="%s_zscore" % name)
+        zscore.long_name = "internal zscore"
         zscore.inputs.out_file = "%s_zscore.nii.gz" % name
         workflow.connect(mask, "out_file", zscore, "in_file")
         workflow.connect(inputnode, "bgtROI", zscore, "ROI_file")
@@ -165,6 +169,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
         # NODE 10: Projection of z-score on FreeSurfer pial surface
         for side in SIDES:
             zscore_surf_lh = Node(SampleToSurface(), name='%s_zscore_surf_%s' % (name, side))
+            zscore_surf_lh.long_name = side + " zscore %s"
             zscore_surf_lh.inputs.hemi = side
             zscore_surf_lh.inputs.out_file = "%s_zscore_surf_%s.mgz" % (name, side)
             zscore_surf_lh.inputs.cortex_mask = True
@@ -183,30 +188,28 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
 
         # NODE 11: Nonlinear transformation of the images in symmetric atlas
         func_2_sym_warp = Node(ApplyWarp(), name='%s_2_sym_warp' % name)
+        func_2_sym_warp.long_name = "%s to symmetric atlas"
         func_2_sym_warp.inputs.ref_file = sym_template
         workflow.connect(mask, "out_file", func_2_sym_warp, "in_file")
         workflow.connect(inputnode, "ref_2_sym_warp", func_2_sym_warp, "field_file")
 
         # NODE 12: RL swap of image in symmetric atlas
         sym_swap = Node(SwapDimensions(), name='%s_sym_swap' % name)
+        sym_swap.long_name = "right-left flip"
         sym_swap.inputs.out_file = "%s_sym_swapped.nii.gz" % name
         sym_swap.inputs.new_dims = ("-x", "y", "z")
         workflow.connect(func_2_sym_warp, "out_file", sym_swap, "in_file")
 
-        # NODE 13: Nonlinear transformation of swapped image to unswapped image
-        swapped_warp = Node(ApplyWarp(), name='%s_swapped_warp' % name)
-        swapped_warp.inputs.ref_file = sym_template
-        workflow.connect(sym_swap, "out_file", swapped_warp, "in_file")
-        workflow.connect(inputnode, "swap_2_sym_warp", swapped_warp, "field_file")
-
-        # NODE 14: Asymmetry index calculation
+        # NODE 13: Asymmetry index calculation
         ai = Node(AsymmetryIndex(), name="%s_ai" % name)
+        ai.long_name = "asymmetry index"
         ai.inputs.out_file = "%s_ai.nii.gz" % name
-        workflow.connect(swapped_warp, "out_file", ai, "swapped_file")
-        workflow.connect(sym_swap, "out_file", ai, "in_file")
+        workflow.connect(func_2_sym_warp, "out_file", ai, "in_file")
+        workflow.connect(sym_swap, "out_file", ai, "swapped_file")
 
-        # NODE 15: AI Nonlinear transformation to reference space
+        # NODE 14: AI Nonlinear transformation to reference space
         ai_2_ref = Node(ApplyWarp(), name="%s_ai_2_ref" % name)
+        ai_2_ref.long_name = "asymmetry index %s from symmetric atlas"
         ai_2_ref.inputs.out_file = "r-%s_ai.nii.gz" % name
         workflow.connect(ai, "out_file", ai_2_ref, "in_file")
         workflow.connect(inputnode, "ref_2_sym_invwarp", ai_2_ref, "field_file")
@@ -216,8 +219,9 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
 
         if is_freesurfer:
             for side in SIDES:
-                # NODE 16: Projection of AI on FreeSurfer pial surface
+                # NODE 15: Projection of AI on FreeSurfer pial surface
                 ai_surf = Node(SampleToSurface(), name='%s_ai_surf_%s' % (name, side))
+                ai_surf.long_name = side + " asymmetry index %s"
                 ai_surf.inputs.hemi = side
                 ai_surf.inputs.out_file = "%s_ai_surf_%s.mgz" % (name, side)
                 ai_surf.inputs.cortex_mask = True

@@ -202,4 +202,5 @@ node_names["FEATModel"] = "design file generation"
 node_names["FILMGLS"] = "General-Linear-Model estimation"
 node_names["SmoothEstimate"] = "smoothness estimation"
 node_names["FslCluster"] = "cluster extraction"
+node_names["SampleToSurface"] = "surface projection"
 
