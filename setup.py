@@ -30,7 +30,7 @@ setup(name='swane',
           "configparser",
           "psutil",
           "pyshortcuts",
-          "swane_supplement>=0.1.0",
+          "swane_supplement>=0.1.1",
           "matplotlib",
           "nibabel"
       ],
