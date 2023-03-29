@@ -91,6 +91,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # NODE 2: Aparcaseg linear transformation in reference space
     aparaseg2Volmgz = Node(CustomLabel2Vol(), name="aparaseg2Volmgz")
+    aparaseg2Volmgz.long_name = "label %s to reference space"
     aparaseg2Volmgz.inputs.vol_label_file = "./r-aparc_aseg.mgz"
     workflow.connect(reconAll, "rawavg", aparaseg2Volmgz, "template_file")
     workflow.connect([(reconAll, aparaseg2Volmgz, [(('aparc_aseg', getn, 0), 'reg_header')])])
@@ -100,6 +101,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # NODE 3: Aparcaseg conversion mgz -> nifti
     aparaseg2Volnii = Node(CustomLabel2Vol(), name="aparaseg2Volnii")
+    aparaseg2Volnii.long_name = "label Nifti conversion"
     aparaseg2Volnii.inputs.vol_label_file = "r-aparc_aseg.nii.gz"
     workflow.connect(reconAll, "rawavg", aparaseg2Volnii, "template_file")
     workflow.connect([(reconAll, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'reg_header')])])
@@ -107,6 +109,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # NODE 4: Left cerebral white matter binary ROI
     lhwmROI = Node(ThrROI(), name='lhwmROI')
+    lhwmROI.long_name = "Lh white matter ROI"
     lhwmROI.inputs.seg_val_min = 2
     lhwmROI.inputs.seg_val_max = 2
     lhwmROI.inputs.out_file = "lhwmROI.nii.gz"
@@ -114,6 +117,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # NODE 5: Right cerebral white matter binary ROI
     rhwmROI = Node(ThrROI(), name='rhwmROI')
+    rhwmROI.long_name = "Rh white matter ROI"
     rhwmROI.inputs.seg_val_min = 41
     rhwmROI.inputs.seg_val_max = 41
     rhwmROI.inputs.out_file = "rhwmROI.nii.gz"
@@ -121,6 +125,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # NODE 4: Cerebral white matter binary ROI
     wmROI = Node(BinaryMaths(), name='wmROI')
+    wmROI.long_name = "white matter ROI"
     wmROI.inputs.operation = "add"
     wmROI.inputs.out_file = "wmROI.nii.gz"
     workflow.connect(lhwmROI, "out_file", wmROI, "in_file")
@@ -128,6 +133,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # NODE 7: Left basal ganglia and thalamus binary ROI
     lhbgtROI = Node(ThrROI(), name='lhbgtROI')
+    lhbgtROI.long_name = "Lh BGT ROI"
     lhbgtROI.inputs.seg_val_min = 10
     lhbgtROI.inputs.seg_val_max = 13
     lhbgtROI.inputs.out_file = "lhbgtROI.nii.gz"
@@ -135,6 +141,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # NODE 8: Right basal ganglia and thalamus binary ROI
     rhbgtROI = Node(ThrROI(), name='rhbgtROI')
+    rhbgtROI.long_name = "Rh BGT ROI"
     rhbgtROI.inputs.seg_val_min = 49
     rhbgtROI.inputs.seg_val_max = 52
     rhbgtROI.inputs.out_file = "rhbgtROI.nii.gz"
@@ -142,6 +149,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # NODE 9: Basal ganglia and thalami binary ROI
     bgtROI = Node(BinaryMaths(), name='bgtROI')
+    bgtROI.long_name = "BGT ROI"
     bgtROI.inputs.operation = "add"
     bgtROI.inputs.out_file = "bgtROI.nii.gz"
     workflow.connect(lhbgtROI, "out_file", bgtROI, "in_file")

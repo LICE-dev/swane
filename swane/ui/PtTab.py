@@ -8,7 +8,7 @@ import pydicom
 from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
 from PySide6.QtSvgWidgets import QSvgWidget
-from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel,
+from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeaderView,
                                QPushButton, QSizePolicy, QHBoxLayout,
                                QGroupBox, QVBoxLayout, QMessageBox, QListWidget,
                                QFileDialog, QTreeWidget, QErrorMessage, QFileSystemModel,
@@ -326,7 +326,13 @@ class PtTab(QTabWidget):
 
         self.node_list_treeWidget = QTreeWidget()
         self.node_list_treeWidget.setHeaderHidden(True)
-        self.node_list_treeWidget.setFixedWidth(320)
+        node_list_width = 320
+        self.node_list_treeWidget.setFixedWidth(node_list_width)
+        self.node_list_treeWidget.header().setMinimumSectionSize(node_list_width)
+        self.node_list_treeWidget.header().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.node_list_treeWidget.header().setStretchLastSection(False)
+        self.node_list_treeWidget.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.node_list_treeWidget.horizontalScrollBar().setEnabled(True)
 
         layout.addWidget(self.node_list_treeWidget, 2, 0)
         self.node_list_treeWidget.itemClicked.connect(self.tree_item_clicked)
@@ -383,23 +389,24 @@ class PtTab(QTabWidget):
         os.mkdir(graph_dir)
 
         for node in self.node_list.keys():
-            self.node_list[node].node_holder = CustomTreeWidgetItem(self.node_list_treeWidget, self.node_list_treeWidget, self.node_list[node].long_name[0].upper() + self.node_list[node].long_name[1:])
+            self.node_list[node].node_holder = CustomTreeWidgetItem(self.node_list_treeWidget, self.node_list_treeWidget, self.node_list[node].long_name)
             if len(self.node_list[node].node_list.keys()) > 0:
                 if self.main_window.graphviz:
+                    graph_name = self.node_list[node].long_name.lower().replace(" ", "_")
                     thread = Thread(target=self.workflow.get_node(node).write_graph,
                                     kwargs={'graph2use': self.GRAPH_TYPE, 'format': PtTab.GRAPH_FILE_EXT,
                                             'dotfilename': os.path.join(graph_dir,
-                                                                        PtTab.GRAPH_FILE_PREFIX + node + '.dot')})
+                                                                        PtTab.GRAPH_FILE_PREFIX + graph_name + '.dot')})
                     thread.start()
                 for sub_node in self.node_list[node].node_list.keys():
-                    self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(self.node_list[node].node_holder, self.node_list_treeWidget, self.node_list[node].node_list[sub_node].long_name[0].upper() + self.node_list[node].node_list[sub_node].long_name[1:])
+                    self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(self.node_list[node].node_holder, self.node_list_treeWidget, self.node_list[node].node_list[sub_node].long_name)
         self.exec_button.setEnabled(True)
         self.exec_button.setText(strings.EXECBUTTONTEXT)
         self.node_button.setEnabled(False)
 
     def tree_item_clicked(self, item, col):
         if self.main_window.graphviz and item.parent() is None:
-            file = os.path.join(self.pt_folder, PtTab.GRAPH_DIR_NAME, PtTab.GRAPH_FILE_PREFIX + item.getText() + '.'
+            file = os.path.join(self.pt_folder, PtTab.GRAPH_DIR_NAME, PtTab.GRAPH_FILE_PREFIX + item.getText().lower().replace(" ", "_") + '.'
                                 + PtTab.GRAPH_FILE_EXT)
             self.exec_graph.load(file)
             self.exec_graph.renderer().setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
