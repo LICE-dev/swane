@@ -143,6 +143,11 @@ class PreferenceEntry:
         if self.input_type == PreferenceEntry.CHECKBOX:
             self.input_field.setChecked(False)
 
+    def enable(self):
+        self.input_field.setEnabled(True)
+        self.label.setToolTip(None)
+        self.label.setStyleSheet("")
+
     def get_value(self):
         if self.input_type == PreferenceEntry.COMBO:
             value = str(self.input_field.currentIndex())

@@ -72,6 +72,7 @@ class MainWindow(QMainWindow):
     def open_pt_dir(self, folder_path):
         this_tab = PtTab(self.global_config, folder_path,
                          self, parent=self.main_tab)
+        this_tab.set_main_window(self)
         self.pt_tabs_array.append(this_tab)
 
         self.main_tab.addTab(this_tab, os.path.basename(folder_path))

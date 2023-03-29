@@ -75,6 +75,9 @@ class PtTab(QTabWidget):
         self.setTabEnabled(PtTab.EXECTAB, False)
         self.setTabEnabled(PtTab.RESULTTAB, False)
 
+    def set_main_window(self, main_window):
+        self.main_window = main_window
+
     def update_node_list(self, msg):
 
         if msg == WorkflowMonitorWorker.STOP:
@@ -160,8 +163,7 @@ class PtTab(QTabWidget):
             self.wf_type_combo.setEnabled(True)
             self.pt_config_button.setEnabled(True)
 
-            if self.data_input_list.is_ref_loaded():
-                self.setTabEnabled(PtTab.EXECTAB, True)
+            self.enable_exec_tab()
 
         except AttributeError:
             pass
@@ -606,7 +608,7 @@ class PtTab(QTabWidget):
 
         self.data_input_list[input_name].loaded = True
 
-        self.setTabEnabled(PtTab.EXECTAB, self.data_input_list.is_ref_loaded())
+        self.enable_exec_tab()
 
     def check_input_folder(self, input_name, progress=None):
         dicom_src_work = self.check_input_folder_step1(input_name)
@@ -631,7 +633,7 @@ class PtTab(QTabWidget):
 
         self.set_error(input_name, strings.pttab_no_dicom_error + src_path)
         self.data_input_list[input_name].loaded = False
-        self.setTabEnabled(PtTab.EXECTAB, self.data_input_list.is_ref_loaded())
+        self.enable_exec_tab()
 
         progress.accept()
         self.reset_workflow()
@@ -716,3 +718,7 @@ class PtTab(QTabWidget):
 
     def close_routine(self):
         self.pt_config.save()
+
+    def enable_exec_tab(self):
+        enable = self.data_input_list.is_ref_loaded() and self.main_window.fsl and self.main_window.dcm2niix
+        self.setTabEnabled(PtTab.EXECTAB, enable)
