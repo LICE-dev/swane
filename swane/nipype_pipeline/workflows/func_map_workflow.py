@@ -1,7 +1,7 @@
 from nipype.interfaces.freesurfer import SampleToSurface
 from nipype.interfaces.fsl import (FLIRT, IsotropicSmooth, ApplyWarp, ApplyMask, SwapDimensions, ApplyXFM)
 from nipype.pipeline.engine import Node
-from swane.nipype_pipeline.workflows.xtract_workflow import SIDES
+from swane.nipype_pipeline.workflows.tractography_workflow import SIDES
 
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
@@ -160,7 +160,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
         # NODE 8: z-score calculation
         zscore = Node(Zscore(), name="%s_zscore" % name)
         zscore.long_name = "internal zscore"
-        zscore.inputs.out_file = "%s_zscore.nii.gz" % name
+        zscore.inputs.out_file = "r-%s_zscore.nii.gz" % name
         workflow.connect(mask, "out_file", zscore, "in_file")
         workflow.connect(inputnode, "bgtROI", zscore, "ROI_file")
 
@@ -203,7 +203,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
         # NODE 13: Asymmetry index calculation
         ai = Node(AsymmetryIndex(), name="%s_ai" % name)
         ai.long_name = "asymmetry index"
-        ai.inputs.out_file = "%s_ai.nii.gz" % name
+        ai.inputs.out_file = "r-%s_ai.nii.gz" % name
         workflow.connect(func_2_sym_warp, "out_file", ai, "in_file")
         workflow.connect(sym_swap, "out_file", ai, "swapped_file")
 

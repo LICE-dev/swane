@@ -39,7 +39,7 @@ class DataInputList(dict):
     FLAIR2D = 'flair2d'
     FMRI = 'fmri'
 
-    PLANES = {'tra': 'axial',
+    PLANES = {'tra': 'transverse',
               'cor': 'coronal',
               'sag': 'sagittal',
               }
@@ -60,7 +60,7 @@ class DataInputList(dict):
         self.append(DataInput(DataInputList.PET, 'Pet', image_modality=DataInput.PET))
 
         for plane in DataInputList.PLANES:
-            self.append(DataInput(DataInputList.FLAIR2D+'_'+plane, '2D FLAIR '+DataInputList.PLANES[plane], optional=True))
+            self.append(DataInput(DataInputList.FLAIR2D+'_'+plane, '2D Flair '+DataInputList.PLANES[plane], optional=True))
 
         for x in range(DataInputList.FMRI_NUM):
             self.append(DataInput(DataInputList.FMRI+'_%d' % x, 'Task fMRI - %d' % (x + 1)))

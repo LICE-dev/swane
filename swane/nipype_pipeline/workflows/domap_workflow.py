@@ -147,7 +147,7 @@ def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWork
     # DOmap_wm_std.inputs.op_string="-S"
     # workflow.connect(DOmap_wmMask,"out_file",DOmap_wm_std,"in_file")
 
-    # NODE 13: Mask generation from with value between mean white matter and mean gray matter values
+    # NODE 13: Mask generation with values between mean white matter and mean gray matter values
     binary_flair = Node(ThrROI(), name='%s_binaryFLAIR' % name)
     binary_flair.inputs.out_file = "binary_flair.nii.gz"
     workflow.connect(cortex_mask, "out_file", binary_flair, "in_file")
@@ -222,7 +222,7 @@ def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWork
     workflow.connect(extension_mean, "out_file", extension_z, "in_file")
 
     # NODE 22: Cerebellum removal from extension z-score map
-    no_cereb_extension_z = Node(ApplyMask(), name="no_cereb_extension_z")
+    no_cereb_extension_z = Node(ApplyMask(), name="%s_no_cereb_extension_z" % name)
     no_cereb_extension_z.inputs.out_file = "no_cereb_extension_z.nii.gz"
     workflow.connect(extension_z, "out_file", no_cereb_extension_z, "in_file")
     workflow.connect(outliers_mask, "out_file", no_cereb_extension_z, "mask_file")
@@ -243,7 +243,7 @@ def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWork
 
     # NODE 25: Divided image nonlinear transformation in reference space
     binary_flair_2_ref = Node(ApplyWarp(), name="%s_binaryFLAIR2ref" % name)
-    binary_flair_2_ref.inputs.out_file = "r-binaryFLAIR.nii.gz"
+    binary_flair_2_ref.inputs.out_file = "r-binary_flair.nii.gz"
     workflow.connect(binary_flair, "out_file", binary_flair_2_ref, "in_file")
     workflow.connect(inputnode, "ref_2_mni1_inverse_warp", binary_flair_2_ref, "field_file")
     workflow.connect(inputnode, "ref_brain", binary_flair_2_ref, "ref_file")

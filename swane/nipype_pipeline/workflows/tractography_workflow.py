@@ -14,7 +14,7 @@ from swane.utils.ConfigManager import ConfigManager
 SIDES = ["lh", "rh"]
 
 
-def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkflow:
+def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
 
@@ -257,7 +257,7 @@ def xtract_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkf
         # NODE 14: Sum tractography and inverted tractography results
         sum_multi_tracks = Node(SumMultiTracks(), name='sumTrack_%s_%s' % (name, side))
         sum_multi_tracks.long_name = side + " %s"
-        sum_multi_tracks.inputs.out_file = "%s_%s.nii.gz" % (name, side)
+        sum_multi_tracks.inputs.out_file = "r-%s_%s.nii.gz" % (name, side)
 
         if is_invert:
             # NODE 12: Merge tractography and inverted tractography fdt_paths
