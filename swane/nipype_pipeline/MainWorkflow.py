@@ -15,7 +15,7 @@ from swane.nipype_pipeline.workflows.domap_workflow import domap_workflow
 from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_workflow import venous_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
-from swane.nipype_pipeline.workflows.xtract_workflow import xtract_workflow, SIDES
+from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow, SIDES
 from swane.utils.DataInput import DataInputList
 
 
@@ -96,7 +96,7 @@ class MainWorkflow(CustomWorkflow):
         if data_input_list[DataInputList.FLAIR3D].loaded:
             flair_dir = data_input_list.get_dicom_dir(DataInputList.FLAIR3D)
             flair = linear_reg_workflow(data_input_list[DataInputList.FLAIR3D].wf_name, flair_dir)
-            flair.long_name = "3D FLAIR analysis"
+            flair.long_name = "3D Flair analysis"
             self.add_nodes([flair])
 
             flair_inputnode = flair.get_node("inputnode")
@@ -256,7 +256,7 @@ class MainWorkflow(CustomWorkflow):
                     if not pt_config.getboolean('DEFAULTTRACTS', tract):
                         continue
                     
-                    tract_workflow = xtract_workflow(tract, 5)
+                    tract_workflow = tractography_workflow(tract, 5)
                     tract_workflow.long_name = pt_config.TRACTS[tract][0] + " tractography"
                     if tract_workflow is not None:
                         self.connect(dti_preproc, "outputnode.fsamples", tract_workflow, "inputnode.fsamples")
