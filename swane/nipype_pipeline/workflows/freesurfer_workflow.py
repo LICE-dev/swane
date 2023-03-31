@@ -166,7 +166,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     if is_hippo_amyg_labels:
         # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
-        segmentHA = Node(SegmentHA(), name="segmentHA_mo")
+        segmentHA = Node(SegmentHA(), name="segmentHA")
         workflow.connect(reconAll, "subjects_dir", segmentHA, "subjects_dir")
         workflow.connect(reconAll, "subject_id", segmentHA, "subject_id")
         workflow.connect(inputnode, "max_node_cpu", segmentHA, "num_threads")
