@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QTreeWidgetItem
+from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QTreeWidgetItem, QSpacerItem
 from PySide6.QtSvgWidgets import QSvgWidget
 
 
@@ -14,10 +14,12 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         self.artLabel.setFixedHeight(26)
         self.setArt(art)
         self.textLabel = QLabel(text)
+        self.resize_text_label()
         
         self.widget.layout().addWidget(self.artLabel)
-        self.widget.layout().addWidget(self.textLabel)  
-        
+        self.widget.layout().addWidget(self.textLabel)
+        self.widget.layout().addSpacerItem(QSpacerItem(25, 0))
+
         tree.setItemWidget(self, 0, self.widget)
         
         self.completed = False
@@ -25,6 +27,10 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         
     def setText(self, text):
         self.textLabel.setText(text)
+        self.resize_text_label()
+
+    def resize_text_label(self):
+        self.textLabel.setMinimumWidth(self.textLabel.fontMetrics().boundingRect(self.textLabel.text()).width() + 10)
         
     def getText(self):
         return self.textLabel.text()

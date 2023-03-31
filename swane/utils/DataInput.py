@@ -51,13 +51,13 @@ class DataInputList(dict):
         self.dicom_dir = dicom_dir
 
         self.append(DataInput(DataInputList.T13D, '3D T1w'))
-        self.append(DataInput(DataInputList.FLAIR3D, '3D FLAIR'))
+        self.append(DataInput(DataInputList.FLAIR3D, '3D Flair'))
         self.append(DataInput(DataInputList.MDC, 'Post-contrast 3D T1w'))
         self.append(DataInput(DataInputList.VENOUS, 'Venous MRA - Phase contrast'))
         self.append(DataInput(DataInputList.VENOUS2, 'Venous MRA - Second phase', wf_name='venous'))
         self.append(DataInput(DataInputList.DTI, 'Diffusion Tensor Imaging', wf_name='dti_preproc'))
         self.append(DataInput(DataInputList.ASL, 'Arterial Spin Labeling'))
-        self.append(DataInput(DataInputList.PET, 'Pet', image_modality=DataInput.PET))
+        self.append(DataInput(DataInputList.PET, 'PET', image_modality=DataInput.PET))
 
         for plane in DataInputList.PLANES:
             self.append(DataInput(DataInputList.FLAIR2D+'_'+plane, '2D Flair '+DataInputList.PLANES[plane], optional=True))
