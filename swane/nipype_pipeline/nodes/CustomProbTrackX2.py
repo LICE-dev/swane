@@ -8,8 +8,8 @@ from nipype.interfaces.base import traits
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.dti.ProbTrackX2InputSpec)  -*-
 class CustomProbTrackX2InputSpec(ProbTrackX2InputSpec):
     rseed = traits.Int(argstr="--rseed=%s", desc="random seed")
-    sample_random_points = traits.Int(
-        argstr="--sampvox=%d", desc=("sample random points within " "seed voxels")
+    sample_random_points = traits.Float(
+        argstr="--sampvox=%f", desc="sample random points within seed voxels"
     )
 
 
