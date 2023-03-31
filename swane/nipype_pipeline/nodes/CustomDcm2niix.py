@@ -29,7 +29,7 @@ class CustomDcm2niix(Dcm2niix):
         if len(self.bids) > 0:
             os.remove(self.bids[0])
             self.bids = []
-        if self.inputs.crop == True and os.path.exists(self.output_files[0]):
+        if self.inputs.crop is True and os.path.exists(self.output_files[0]):
             os.remove(self.output_files[0])
             os.rename(self.output_files[0].replace(".nii.gz", "_Crop_1.nii.gz"), self.output_files[0])
         return runtime
