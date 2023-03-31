@@ -133,8 +133,8 @@ class ConfigManager(configparser.ConfigParser):
             self['FMRI'] = {}
 
             for x in range(DataInputList.FMRI_NUM):
-                self['FMRI']['task_%d_name_a' % x] = 'Task1'
-                self['FMRI']['task_%d_name_b' % x] = 'Task2'
+                self['FMRI']['task_%d_name_a' % x] = 'TaskA'
+                self['FMRI']['task_%d_name_b' % x] = 'TaskB'
                 self['FMRI']['task_%d_duration' % x] = tmp_config['MAIN']['fmritaskduration']
                 self['FMRI']['rest_%d_duration' % x] = tmp_config['MAIN']['fmritaskduration']
                 self['FMRI']['task_%d_tr' % x] = 'auto'
