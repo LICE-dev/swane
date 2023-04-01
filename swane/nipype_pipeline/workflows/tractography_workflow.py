@@ -190,7 +190,7 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
         # Check if inverted run is required in protocol
         if is_invert:
             # NODE 11: Inverted tractography
-            probtrackx_inverted = Node(CustomProbTrackX2(), name="probtrackx_inverted_%s_%s" % (name, side), mem_gb=4)
+            probtrackx_inverted = MapNode(CustomProbTrackX2(), name="probtrackx_inverted_%s_%s" % (name, side), iterfield=["rseed"], mem_gb=4)
             probtrackx_inverted.long_name = side + " inverse %s"
             probtrackx_inverted.inputs.n_samples = n_samples
             probtrackx_inverted.inputs.loop_check = True
@@ -207,6 +207,7 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
             workflow.connect(inputnode, "diff2ref_mat", probtrackx_inverted, "inv_xfm")
             workflow.connect(targets_bin, "out_file", probtrackx_inverted, "seed")
             workflow.connect(seed_bin, "out_file", probtrackx_inverted, "waypoints")
+            workflow.connect(random_seed, "seeds", probtrackx_inverted, "rseed")
         
         # Check for exclusion ROI in protocol
         if os.path.exists(exclude_file):

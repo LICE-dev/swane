@@ -75,15 +75,16 @@ class SegmentHA(CommandLine):
         # ABILITO LA VARIABILE PER IL MULTITHREAD E IGNORO L'INPUT
         if isdefined(self.inputs.num_threads):
             skip = ["num_threads"]
+            self.n_procs = self.inputs.num_threads
             self.inputs.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = "%d" % self.inputs.num_threads
 
         parse = super(SegmentHA, self)._parse_inputs(skip)
 
         # se è rimasto il file di lock da precedente esecuzione, lo cancello
-        exPath = abspath(
+        ex_path = abspath(
             os.path.join(self.inputs.subjects_dir, self.inputs.subject_id, "scripts/IsRunningHPsubT1.lh+rh"))
 
-        if os.path.exists(exPath):
-            os.remove(exPath)
+        if os.path.exists(ex_path):
+            os.remove(ex_path)
 
         return parse
