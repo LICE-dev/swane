@@ -120,11 +120,11 @@ def load_vein(scene_dir):
 
 
 def tract_model(segmentation_node, dti_dir, tract, side):
-    tract_file = os.path.join(dti_dir, tract['name'] + "_" + side + ".nii.gz")
+    tract_file = os.path.join(dti_dir, "r-" + tract['name'] + "_" + side + ".nii.gz")
     if not os.path.exists(tract_file):
         return
 
-    waytotal_file = os.path.join(dti_dir, tract['name'] + "_" + side + "_waytotal")
+    waytotal_file = os.path.join(dti_dir, "r-" + tract['name'] + "_" + side + "_waytotal")
     waytotal = 0
     if os.path.exists(waytotal_file):
         try:
@@ -214,9 +214,9 @@ else:
 
         lesion_segment(sceneDir)
 
-        baseList = ['ref_brain', 'r-flair_brain', 'r-mdc_brain', 'r-pet', 'pet_ai', 'pet_zscore', 'r-asl',
-                    'asl_ai', 'asl_zscore', 'r-FA', 'r-flair2d_tra_brain', 'r-flair2d_cor_brain',
-                    'r-flair2d_sag_brain', 'r-binaryFLAIR', 'r-junction_z', 'r-extension_z']
+        baseList = ['ref_brain', 'r-flair_brain', 'r-mdc_brain', 'r-pet', 'r-pet_ai', 'r-pet_zscore', 'r-asl',
+                    'r-asl_ai', 'r-asl_zscore', 'r-FA', 'r-flair2d_tra_brain', 'r-flair2d_cor_brain',
+                    'r-flair2d_sag_brain', 'r-binary_flair', 'r-junction_z', 'r-extension_z']
 
         for volume in baseList:
             load_anat(sceneDir, volume)
