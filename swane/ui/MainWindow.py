@@ -10,6 +10,7 @@ import os
 import shutil
 import sys
 import pyshortcuts
+from distutils.dir_util import copy_tree
 from pyshortcuts.shortcut import shortcut as shcdef
 from pyshortcuts.shortcut import Shortcut
 
@@ -239,17 +240,27 @@ class MainWindow(QMainWindow):
     def toggle_shortcut(self):
         if self.global_config.get_shortcut_path() == "":
 
-            # brutal monkey patch
-            setattr(pyshortcuts.shortcut, "shortcut", my_shortcut)
-            
-            icon_file = swane_supplement.appIcon_file
-            setattr(pyshortcuts.linux, "shortcut", my_shortcut)
+            if sys.platform == "darwin":
+                desktop_path = os.path.join(os.path.join(os.environ['HOME']), 'Desktop', os.path.basename(swane_supplement.shortcut))
+                copy_tree(swane_supplement.shortcut, desktop_path)
+                targets = [desktop_path]
+                #TODO inserire il path dell'eseguile pyhon nel file
+                icns_dest = os.path.join(desktop_path, "Contents", "Resources", os.path.basename(swane_supplement.appIcns_file))
+                os.makedirs(os.path.dirname(icns_dest), exist_ok=True)
+                shutil.copyfile(swane_supplement.appIcns_file, icns_dest)
+            else:
+                #TODO utilizzare uno shortcut premade invece di pyshortcut
+                # brutal monkey patch
+                setattr(pyshortcuts.shortcut, "shortcut", my_shortcut)
 
-            scut = pyshortcuts.make_shortcut(
-                strings.APPNAME, name=strings.APPNAME, icon=icon_file, terminal=False,
-                executable=sys.executable + " -m")
-            targets = [os.path.join(f, scut.target)
-                       for f in (scut.desktop_dir, scut.startmenu_dir)]
+                icon_file = swane_supplement.appIcon_file
+                setattr(pyshortcuts.linux, "shortcut", my_shortcut)
+
+                scut = pyshortcuts.make_shortcut(
+                    strings.APPNAME, name=strings.APPNAME, icon=icon_file, terminal=False,
+                    executable=sys.executable + " -m")
+                targets = [os.path.join(f, scut.target)
+                           for f in (scut.desktop_dir, scut.startmenu_dir)]
             self.global_config.set_shortcut_path("|".join(targets))
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_shortcut_created)
@@ -336,10 +347,9 @@ class MainWindow(QMainWindow):
         file_menu.addAction(button_action3)
         tool_menu = menu.addMenu(strings.menu_tools_name)
         tool_menu.addAction(button_action4)
-        if pyshortcuts.platform.startswith('linux'):
-            button_action5 = QAction(strings.menu_shortcut, self)
-            button_action5.triggered.connect(self.toggle_shortcut)
-            tool_menu.addAction(button_action5)
+        button_action5 = QAction(strings.menu_shortcut, self)
+        button_action5.triggered.connect(self.toggle_shortcut)
+        tool_menu.addAction(button_action5)
         help_menu = menu.addMenu(strings.menu_help_name)
         help_menu.addAction(button_action6)
 
