@@ -91,6 +91,7 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
     # NODE 1: Conversion dicom -> nifti
     conv = Node(CustomDcm2niix(), name='%s_conv' % name)
     conv.inputs.out_filename = name
+    conv.inputs.bids_format = False
     conv.inputs.source_dir = dicom_dir
 
     # NODE 2: Get EPI volume numbers

@@ -58,6 +58,7 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
     # NODE 1a: Conversion dicom -> nifti
     veins_conv = Node(CustomDcm2niix(), name='veins_conv')
     veins_conv.inputs.source_dir = venous_dir
+    veins_conv.inputs.bids_format = False
     veins_conv.inputs.out_filename = "veins"
 
     # NODE 2a: Orienting in radiological convention
@@ -81,6 +82,7 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
         # NODE 1b: Conversion dicom -> nifti
         veins2_conv = Node(CustomDcm2niix(), name='veins2_conv')
         veins2_conv.inputs.source_dir = venous2_dir
+        veins2_conv.inputs.bids_format = False
         veins2_conv.inputs.out_filename = "veins2"
 
         # NODE 2b: Orienting in radiological convention

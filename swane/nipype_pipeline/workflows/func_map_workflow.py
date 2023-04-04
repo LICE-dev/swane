@@ -97,6 +97,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
     # NODE 1: Conversion dicom -> nifti
     conv = Node(CustomDcm2niix(), name='%s_conv' % name)
     conv.inputs.out_filename = name
+    conv.inputs.bids_format = False
     conv.inputs.source_dir = dicom_dir
 
     # NODE 2: Orienting in radiological convention

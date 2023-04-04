@@ -78,7 +78,10 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
     conv = Node(CustomDcm2niix(), name='dti_conv')
     conv.inputs.source_dir = dti_dir
     conv.inputs.out_filename = "dti"
-    reorient = Node(ForceOrient(),name='dti_reOrient')
+    conv.inputs.bids_format = False
+
+    # NODE 1b: Orienting in radiological convention
+    reorient = Node(ForceOrient(), name='dti_reOrient')
     workflow.connect(conv, "converted_files", reorient, "in_file")
 
     # NODE 2: b0 image extraction

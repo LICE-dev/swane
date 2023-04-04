@@ -64,6 +64,8 @@ def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volum
     # NODE 1: Conversion dicom -> nifti
     conversion = Node(CustomDcm2niix(), name='%s_conv' % name)
     conversion.inputs.source_dir = dicom_dir
+    conversion.inputs.bids_format = False
+    conversion.inputs.out_filename = name
     workflow.connect(inputnode, 'crop', conversion, 'crop')
 
     # NODE 2: Orienting in radiological convention

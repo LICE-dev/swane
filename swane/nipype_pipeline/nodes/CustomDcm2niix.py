@@ -22,14 +22,8 @@ class CustomDcm2niix(Dcm2niix):
 
     def _run_interface(self, runtime):
         self.inputs.args = "-w 1"
-        runtime = super(Dcm2niix, self)._run_interface(
-            runtime, correct_return_codes=(0, 1)
-        )
-        self._parse_files(self._parse_stdout(runtime.stdout))
-        if len(self.bids) > 0:
-            os.remove(self.bids[0])
-            self.bids = []
-        if self.inputs.crop is True and os.path.exists(self.output_files[0]):
+        runtime = super(CustomDcm2niix, self)._run_interface(runtime)
+        if self.inputs.crop is True and len(self.output_files) > 0 and os.path.exists(self.output_files[0].replace(".nii.gz", "_Crop_1.nii.gz")):
             os.remove(self.output_files[0])
             os.rename(self.output_files[0].replace(".nii.gz", "_Crop_1.nii.gz"), self.output_files[0])
         return runtime

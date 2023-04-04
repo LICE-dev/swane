@@ -20,7 +20,6 @@ from swane.nipype_pipeline.MainWorkflow import MainWorkflow
 from swane.ui.workers.WorkflowGeneratorWorker import WorkflowGeneratorWorker
 from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from swane.ui.workers.WorkflowProcess import WorkflowProcess
-from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
@@ -101,10 +100,10 @@ class PtTab(QTabWidget):
             self.enable_tab_if_result_dir()
             return
 
-        if msg == MonitoredMultiProcPlugin.WORKFLOW_INSUFFICIENT_RESOURCES:
-            msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_wf_insufficient_resources)
-            msg_box.exec()
+        # if msg == WorkflowProcess.WORKFLOW_INSUFFICIENT_RESOURCES:
+        #     msg_box = QMessageBox()
+        #     msg_box.setText(strings.pttab_wf_insufficient_resources)
+        #     msg_box.exec()
 
         split = msg.split(PtTab.NODE_MSG_DIVIDER)
 
@@ -115,9 +114,9 @@ class PtTab(QTabWidget):
         if len(split) < 3:
             return
 
-        if split[2] == MonitoredMultiProcPlugin.NODE_STARTED:
+        if split[2] == WorkflowProcess.NODE_STARTED:
             icon = self.main_window.LOADING_MOVIE_FILE
-        elif split[2] == MonitoredMultiProcPlugin.NODE_COMPLETED:
+        elif split[2] == WorkflowProcess.NODE_COMPLETED:
             icon = self.main_window.OK_ICON_FILE
         else:
             icon = self.main_window.ERROR_ICON_FILE
