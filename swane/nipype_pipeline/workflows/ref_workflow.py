@@ -51,6 +51,7 @@ def ref_workflow(name: str, dicom_dir: str, base_dir: str = "/") -> CustomWorkfl
     ref_conv = Node(CustomDcm2niix(), name='%s_conv' % name)
     ref_conv.inputs.source_dir = dicom_dir
     ref_conv.inputs.crop = True
+    ref_conv.inputs.bids_format = False
     ref_conv.inputs.out_filename = "ref"
 
     # NODE 2: Orienting in radiological convention

@@ -6,10 +6,13 @@ from multiprocessing import Process, Event
 from threading import Thread
 from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from nipype.external.cloghandler import ConcurrentRotatingFileHandler
-from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
+from nipype.pipeline.plugins.multiproc import MultiProcPlugin
 
 
 class WorkflowProcess(Process):
+    NODE_STARTED = "start"
+    NODE_COMPLETED = "end"
+    NODE_ERROR = "exception"
 
     LOG_CHANNELS = [
         "nipype.workflow",
@@ -18,10 +21,10 @@ class WorkflowProcess(Process):
         "nipype.interface",
     ]
 
-    def __init__(self, pt_name, wf, queue):
+    def __init__(self, pt_name, workflow, queue):
         super(WorkflowProcess, self).__init__()
         self.stop_event = Event()
-        self.wf = wf
+        self.workflow = workflow
         self.queue = queue
         self.pt_name = pt_name
 
@@ -35,19 +38,24 @@ class WorkflowProcess(Process):
         for channel in WorkflowProcess.LOG_CHANNELS:
             logging.getLogger(channel).addHandler(handler)
 
-    @staticmethod
-    def workflow_run_worker(workflow, stop_event, queue):
+    def workflow_run_worker(self):
         plugin_args = {
             'mp_context': 'fork',
-            'queue': queue,
+            'status_callback': self.callback_function
         }
-        if workflow.max_cpu > 0:
-            plugin_args['n_procs'] = workflow.max_cpu
+        if self.workflow.max_cpu > 0:
+            plugin_args['n_procs'] = self.workflow.max_cpu
         try:
-            workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args))
+            self.workflow.run(plugin=MultiProcPlugin(plugin_args=plugin_args))
         except:
             traceback.print_exc()
-        stop_event.set()
+        self.stop_event.set()
+
+    def callback_function(self, node, signal):
+        try:
+            self.queue.put(node.fullname + "." + signal)
+        except:
+            pass
 
     @staticmethod
     def kill_with_subprocess():
@@ -67,11 +75,11 @@ class WorkflowProcess(Process):
 
     def run(self):
         # gestione del file di log nella cartella del paziente
-        log_dir = os.path.join(self.wf.base_dir, "log/")
+        log_dir = os.path.join(self.workflow.base_dir, "log/")
         if not os.path.exists(log_dir):
             os.mkdir(log_dir)
 
-        self.wf.config["execution"]["crashdump_dir"] = log_dir
+        self.workflow.config["execution"]["crashdump_dir"] = log_dir
         log_filename = os.path.join(log_dir, "pypeline.log")
         file_handler = ConcurrentRotatingFileHandler(
             log_filename,
@@ -83,7 +91,7 @@ class WorkflowProcess(Process):
         WorkflowProcess.add_handlers(file_handler)
 
         # avvio il wf in un subhread
-        workflow_run_work = Thread(target=WorkflowProcess.workflow_run_worker, args=(self.wf, self.stop_event, self.queue))
+        workflow_run_work = Thread(target=self.workflow_run_worker)
         workflow_run_work.start()
 
         # l'evento può essere settato dal wf_run_worker (se il wf finisce spontaneamente) o dall'esterno per terminare il processo
