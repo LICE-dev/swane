@@ -1,5 +1,4 @@
 import os
-from sys import platform
 
 okIcon_file=os.path.join(os.path.dirname(__file__), "icons/ok.svg")
 errorIcon_file=os.path.join(os.path.dirname(__file__), "icons/error.svg")
@@ -17,8 +16,3 @@ mean_extension = os.path.abspath(os.path.join(os.path.dirname(__file__), "resour
 mean_flair = os.path.abspath(os.path.join(os.path.dirname(__file__), "resources/doMAP_template/mean_flair.nii.gz"))
 std_final_extension = os.path.abspath(os.path.join(os.path.dirname(__file__), "resources/doMAP_template/std_final_extension.nii.gz"))
 std_final_flair = os.path.abspath(os.path.join(os.path.dirname(__file__), "resources/doMAP_template/std_final_flair.nii.gz"))
-
-if platform == "darwin":
-    shortcut = os.path.abspath(os.path.join(os.path.dirname(__file__), "shortcuts/SWANe.app"))
-else:
-    shortcut = os.path.abspath(os.path.join(os.path.dirname(__file__), "shortcuts/SWANe"))
