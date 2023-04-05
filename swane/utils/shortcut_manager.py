@@ -60,6 +60,7 @@ def shortcut_manager(global_config):
             exec_file = os.path.join(package_path, 'Contents', 'MacOS', strings.APPNAME)
             with open(exec_file, 'w') as f:
                 f.write(os_exec_file_content)
+            os.chmod(exec_file, 493)
 
             os.makedirs(os.path.join(package_path, 'Contents', 'Resources'), exist_ok=True)
             icns_file = os.path.join(package_path, 'Contents', 'Resources', os.path.basename(swane_supplement.appIcns_file))

@@ -26,10 +26,10 @@ mainwindow_wf_executing_error_1 = "Cannot close a patient during workflow execut
 mainwindow_wf_executing_error_2 = "Cannot close " + APPNAME + " during workflow execution!"
 mainwindow_home_label1 = "Welcome to " + APPNAME + "!"
 mainwindow_home_label2 = APPNAME + " (" + app_acronym + ") is a graphic tools for modular neuroimaging processing. " \
-                        "With " + APPNAME + "you can easily import and organize DICOM files from multiple sources, " \
+                        "With " + APPNAME + " you can easily import and organize DICOM files from multiple sources, " \
                         "generate a pipeline based on available imaging modalities and export results in a " \
                         "multimodal scene."
-mainwindow_home_label3 = APPNAME + "does NOT implement processing software but integrates in a user-friendly " \
+mainwindow_home_label3 = APPNAME + " does NOT implement processing software but integrates in a user-friendly " \
                         "interface many external applications, so make sure the check the following dependencies."
 mainwindow_home_label4 = APPNAME + " is not meant for clinical use!\n"
 mainwindow_home_label5 = "\nExternal mandatory dependencies:"
