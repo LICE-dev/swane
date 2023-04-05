@@ -7,18 +7,13 @@ from PySide6.QtGui import QAction, QIcon, QPixmap, QFont
 from PySide6.QtCore import QCoreApplication, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
-import shutil
-import sys
-import pyshortcuts
-from distutils.dir_util import copy_tree
-from pyshortcuts.shortcut import shortcut as shcdef
-from pyshortcuts.shortcut import Shortcut
 
 from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.utils.DataInput import DataInputList
+from swane.utils.shortcut_manager import shortcut_manager
 from swane.slicer.SlicerCheckWorker import SlicerCheckWorker
 
 
@@ -237,48 +232,6 @@ class MainWindow(QMainWindow):
         for pt in self.pt_tabs_array:
             pt.reset_workflow()
 
-    def toggle_shortcut(self):
-        if self.global_config.get_shortcut_path() == "":
-
-            if sys.platform == "darwin":
-                desktop_path = os.path.join(os.path.join(os.environ['HOME']), 'Desktop', os.path.basename(swane_supplement.shortcut))
-                copy_tree(swane_supplement.shortcut, desktop_path)
-                targets = [desktop_path]
-                #TODO inserire il path dell'eseguile pyhon nel file
-                icns_dest = os.path.join(desktop_path, "Contents", "Resources", os.path.basename(swane_supplement.appIcns_file))
-                os.makedirs(os.path.dirname(icns_dest), exist_ok=True)
-                shutil.copyfile(swane_supplement.appIcns_file, icns_dest)
-            else:
-                #TODO utilizzare uno shortcut premade invece di pyshortcut
-                # brutal monkey patch
-                setattr(pyshortcuts.shortcut, "shortcut", my_shortcut)
-
-                icon_file = swane_supplement.appIcon_file
-                setattr(pyshortcuts.linux, "shortcut", my_shortcut)
-
-                scut = pyshortcuts.make_shortcut(
-                    strings.APPNAME, name=strings.APPNAME, icon=icon_file, terminal=False,
-                    executable=sys.executable + " -m")
-                targets = [os.path.join(f, scut.target)
-                           for f in (scut.desktop_dir, scut.startmenu_dir)]
-            self.global_config.set_shortcut_path("|".join(targets))
-            msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_shortcut_created)
-            msg_box.exec()
-        else:
-            targets = self.global_config.get_shortcut_path().split("|")
-            for fil in targets:
-                if strings.APPNAME in fil and os.path.exists(fil):
-                    if os.path.isdir(fil):
-                        shutil.rmtree(fil, ignore_errors=True)
-                    else:
-                        os.remove(fil)
-            self.global_config.set_shortcut_path("")
-            msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_shortcut_removed)
-            msg_box.exec()
-        self.global_config.save()
-
     def about(self):
         about_dialog = QDialog(parent=self)
         layout = QGridLayout()
@@ -348,7 +301,8 @@ class MainWindow(QMainWindow):
         tool_menu = menu.addMenu(strings.menu_tools_name)
         tool_menu.addAction(button_action4)
         button_action5 = QAction(strings.menu_shortcut, self)
-        button_action5.triggered.connect(self.toggle_shortcut)
+        button_action5.triggered.connect(lambda checked=None, global_config=self.global_config: shortcut_manager(global_config))
+
         tool_menu.addAction(button_action5)
         help_menu = menu.addMenu(strings.menu_help_name)
         help_menu.addAction(button_action6)
@@ -504,14 +458,3 @@ class MainWindow(QMainWindow):
         else:
             self.slicerlabel_icon.load(self.ERROR_ICON_FILE)
         self.slicerlabel.setText(msg)
-
-
-orig_shortcut = shcdef
-
-
-def my_shortcut(script, userfolders, name=None, description=None, folder=None, working_dir=None, icon=None):
-    r = orig_shortcut(script, userfolders, name=name, description=description,
-                      folder=folder, working_dir=working_dir, icon=icon)
-    return Shortcut(strings.APPNAME, strings.APPNAME, r.icon, r.target,
-                    working_dir, strings.APPNAME, strings.APPNAME, r.arguments,
-                    r.desktop_dir, r.startmenu_dir)
