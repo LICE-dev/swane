@@ -29,6 +29,11 @@ class FMRIGenSpecOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class FMRIGenSpec(BaseInterface):
+    """
+    Formats the fMRI parameters for FSL feat nodes.
+
+    """
+    
     input_spec = FMRIGenSpecInputSpec
     output_spec = FMRIGenSpecOutputSpec
 

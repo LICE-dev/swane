@@ -4,7 +4,6 @@ from nipype.interfaces.fsl.base import FSLCommand, FSLCommandInputSpec
 from nipype.interfaces.base import (traits, TraitedSpec, File, isdefined)
 
 
-# QUESTO NODO LEGGE IL TR DI UN NIFTI
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommandInputSpec)  -*-
 class GetNiftiTRInputSpec(FSLCommandInputSpec):
     in_file = File(exists=True, mandatory=True, argstr="%s pixdim4", position="1", desc='the input image')
@@ -18,6 +17,11 @@ class GetNiftiTROutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommand)  -*-
 class GetNiftiTR(FSLCommand):
+    """
+    Reads the time of repetition from a NIFTI file.
+
+    """
+    
     _cmd = 'fslval'
     input_spec = GetNiftiTRInputSpec
     output_spec = GetNiftiTROutputSpec

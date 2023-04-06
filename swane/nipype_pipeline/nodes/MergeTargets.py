@@ -4,7 +4,6 @@ from os.path import abspath
 from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, InputMultiPath, File, isdefined)
 
 
-# SOMMA UNA LISTA DI VOLUMI
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class MergeTargetsInputSpec(BaseInterfaceInputSpec):
     target_files = InputMultiPath(File(exists=True), mandatory=True, desc="list of path file to merge in txt")
@@ -18,6 +17,11 @@ class MergeTargetsOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class MergeTargets(BaseInterface):
+    """
+    Creates a .txt file from an array.
+
+    """
+    
     input_spec = MergeTargetsInputSpec
     output_spec = MergeTargetsOutputSpec
 

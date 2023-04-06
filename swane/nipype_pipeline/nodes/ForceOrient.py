@@ -8,7 +8,6 @@ from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, Trait
 from swane.nipype_pipeline.nodes.Orient import Orient
 
 
-# QUESTO NODO CONVERTE LE IMMAGINI IN RADIOLOGICAL E "RL","PA","IS"
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class ForceOrientInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='the input image')
@@ -22,6 +21,11 @@ class ForceOrientOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class ForceOrient(BaseInterface):
+    """
+    Converts an image in radiological convention and in RL PA IS orientation.
+
+    """
+    
     input_spec = ForceOrientInputSpec
     output_spec = ForceOrientOutputSpec
 

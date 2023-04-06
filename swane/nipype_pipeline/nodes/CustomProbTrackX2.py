@@ -15,4 +15,9 @@ class CustomProbTrackX2InputSpec(ProbTrackX2InputSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.ProbTrackX2)  -*-
 class CustomProbTrackX2(ProbTrackX2):
+    """
+    Custom implementation of ProbTrackX2 Nipype Node to support --rseed as Int and --sampvox as Float.
+
+    """
+    
     input_spec = CustomProbTrackX2InputSpec

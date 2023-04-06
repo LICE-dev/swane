@@ -5,7 +5,6 @@ import os
 from nipype.interfaces.base import traits
 
 
-# REIMPLEMENTAZIONE DI DCM2NIIX PER RINOMINARE I FILE CROPPATI
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.dcm2nii.Dcm2niixInputSpec)  -*-
 class CustomDcm2niixInputSpec(Dcm2niixInputSpec):
     merge_imgs = traits.Enum(
@@ -18,6 +17,11 @@ class CustomDcm2niixInputSpec(Dcm2niixInputSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.dcm2nii.Dcm2niix)  -*-
 class CustomDcm2niix(Dcm2niix):
+    """
+    Custom implementation of Dcm2niix Nipype Node to support crop and merge parameters.
+
+    """
+    
     input_spec = CustomDcm2niixInputSpec
 
     def _run_interface(self, runtime):

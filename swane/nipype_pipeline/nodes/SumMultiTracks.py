@@ -7,7 +7,6 @@ from nipype.interfaces.fsl import BinaryMaths
 from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, InputMultiPath, File, isdefined)
 
 
-# SOMMA UNA LISTA DI VOLUMI
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class SumMultiTracksInputSpec(BaseInterfaceInputSpec):
     path_files = InputMultiPath(File(exists=True), mandatory=True, desc="list of path file to sum togheter")
@@ -23,6 +22,11 @@ class SumMultiTracksOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class SumMultiTracks(BaseInterface):
+    """
+    Merges results from multiple tractography runs.
+
+    """
+    
     input_spec = SumMultiTracksInputSpec
     output_spec = SumMultiTracksOutputSpec
 
