@@ -6,7 +6,6 @@ import os
 from nipype.interfaces.base import (traits, BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File, isdefined)
 
 
-# NODO PER ESTRARRE UNA ROI DA UNA SEGMENTAZIONE CON UN DATO VALORE
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class ThrROIInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='the input image')
@@ -22,6 +21,11 @@ class ThrROIOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class ThrROI(BaseInterface):
+    """
+    Extracts a binary ROI from a segmentation using a min and a max value.
+
+    """
+    
     input_spec = ThrROIInputSpec
     output_spec = ThrROIOutputSpec
 

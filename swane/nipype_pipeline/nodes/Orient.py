@@ -4,7 +4,6 @@ from nipype.interfaces.fsl.base import FSLCommand, FSLCommandInputSpec
 from nipype.interfaces.base import (traits, TraitedSpec, File, isdefined)
 
 
-# QUESTO NODO RESTITUISCE L'ORIENTAMENTO DELLE IMMAGINI (NEUROLOGICAL/radiological)
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommandInputSpec)  -*-
 class OrientInputSpec(FSLCommandInputSpec):
     in_file = File(exists=True, mandatory=True, argstr="%s", position="2", desc="input image")
@@ -23,6 +22,11 @@ class OrientOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommand)  -*-
 class Orient(FSLCommand):
+    """
+    Returns the image orientation as neurological or radiological conventions.
+
+    """
+    
     _cmd = 'fslorient'
     input_spec = OrientInputSpec
     output_spec = OrientOutputSpec

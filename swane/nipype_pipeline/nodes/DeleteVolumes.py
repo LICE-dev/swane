@@ -8,7 +8,6 @@ import os
 from nipype.interfaces.base import (traits, TraitedSpec, BaseInterface, BaseInterfaceInputSpec, File)
 
 
-# APPLICA LA SLICE TIMING CORRECTION SE RICHIESTO
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class DeleteVolumesInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='the input image')
@@ -25,6 +24,11 @@ class DeleteVolumesOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class DeleteVolumes(BaseInterface):
+    """
+    Removes specified num. of volumes from start and end of a 4d NIFTI file.
+
+    """
+    
     input_spec = DeleteVolumesInputSpec
     output_spec = DeleteVolumesOutputSpec
 

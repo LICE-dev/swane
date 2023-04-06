@@ -8,9 +8,9 @@ import os
 from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File, isdefined)
 
 
-# NODO PER IL CALCOLO GENERICO DI UN ASIMMERY INDEX DATI I DUE FILE INVERTITI
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class AsymmetryIndexInputSpec(BaseInterfaceInputSpec):
+    
     in_file = File(exists=True, mandatory=True, desc='the input image')
     swapped_file = File(exists=True, mandatory=True, desc='the swapped input image')
     out_file = File(desc='the output image')
@@ -23,6 +23,11 @@ class AsymmetryIndexOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class AsymmetryIndex(BaseInterface):
+    """
+    Generate Asymmetry Index Map from an image and its RL swapped as subtraction/sum.
+
+    """
+    
     input_spec = AsymmetryIndexInputSpec
     output_spec = AsymmetryIndexOutputSpec
 

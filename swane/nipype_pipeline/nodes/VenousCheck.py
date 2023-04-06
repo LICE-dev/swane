@@ -7,7 +7,6 @@ from os.path import abspath
 from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File)
 
 
-# QUESO NODO DISCRIMINA LA FASE VENOSA DA QUELLA MORFOLOGICA DELLA PHASE CONTRAST
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class VenousCheckInputSpec(BaseInterfaceInputSpec):
     in_files = InputMultiObject(File(exists=True), desc="List of splitted file")
@@ -23,6 +22,11 @@ class VenousCheckOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class VenousCheck(BaseInterface):
+    """
+    Recognises the venous phase from the anatomic image of a phase contrast sequence based on its standard deviation.
+
+    """
+    
     input_spec = VenousCheckInputSpec
     output_spec = VenousCheckOutputSpec
 

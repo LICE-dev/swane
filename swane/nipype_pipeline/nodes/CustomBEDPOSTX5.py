@@ -7,7 +7,6 @@ import os
 from nipype.interfaces.base import (traits, isdefined)
 
 
-# REIMPLEMENTAZIONE DI BEDPOSTX PER IGNORARE STDERR E GESTIRE MULTITHREAD
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.dti.BEDPOSTX5InputSpec)  -*-
 class CustomBEDPOSTX5InputSpec(BEDPOSTX5InputSpec):
     num_threads = traits.Int(argstr="")
@@ -15,6 +14,11 @@ class CustomBEDPOSTX5InputSpec(BEDPOSTX5InputSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.BEDPOSTX5)  -*-
 class CustomBEDPOSTX5(BEDPOSTX5):
+    """
+    Custom implementation of BEDPOSTX subclass to ignore STDERR and multithreading management.
+
+    """
+    
     input_spec = CustomBEDPOSTX5InputSpec
 
     def _run_interface(self, runtime):
@@ -40,7 +44,11 @@ class CustomBEDPOSTX5(BEDPOSTX5):
         return retval
 
     def _parse_inputs(self, skip=None):
-        # ABILITO LA VARIABILE PER IL MULTITHREAD E IGNORO L'INPUT
+        """
+        Custom implementation of _parse_inputs func to manage multithreading.
+
+        """
+
         if isdefined(self.inputs.num_threads):
             skip = ["num_threads"]
             self.inputs.environ["FSLPARALLEL"] = "%d" % self.inputs.num_threads

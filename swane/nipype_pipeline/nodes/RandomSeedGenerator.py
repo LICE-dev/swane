@@ -3,7 +3,6 @@
 from nipype.interfaces.base import (traits, BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File)
 
 
-# QUESO NODO GENERA UNA LISTA DI SEED RANDOM
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class RandomSeedGeneratorInputSpec(BaseInterfaceInputSpec):
     seeds_n = traits.Int(mandatory=True, desc="The number of needed seeds")
@@ -17,6 +16,11 @@ class RandomSeedGeneratorOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class RandomSeedGenerator(BaseInterface):
+    """
+    Generates a list of random integers. Used to obtains a series of random seeds.
+
+    """
+    
     input_spec = RandomSeedGeneratorInputSpec
     output_spec = RandomSeedGeneratorOutputSpec
     seed_list = []

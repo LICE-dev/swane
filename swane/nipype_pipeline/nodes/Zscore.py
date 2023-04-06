@@ -21,6 +21,11 @@ class ZscoreOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class Zscore(BaseInterface):
+    """
+    Calculates the z-score index of an image compared with a ROI.
+
+    """
+    
     input_spec = ZscoreInputSpec
     output_spec = ZscoreOutputSpec
 

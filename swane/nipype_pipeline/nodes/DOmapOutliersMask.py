@@ -22,6 +22,11 @@ class DOmapOutliersMaskOutputSpec(TraitedSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class DOmapOutliersMask(BaseInterface):
+    """
+    Creates a mask that can be used to remove the outliers in DOmap workflow.
+
+    """
+    
     input_spec = DOmapOutliersMaskInputSpec
     output_spec = DOmapOutliersMaskOutputSpec
 
