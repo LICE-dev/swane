@@ -4,7 +4,6 @@ from nipype.pipeline.engine import Workflow
 from nipype import Node, logging
 from nipype.interfaces.utility import IdentityInterface
 from nipype.interfaces.io import DataSink
-from nipype.pipeline.engine.utils import get_print_name
 from swane.nipype_pipeline.engine.NodeListEntry import NodeListEntry
 from swane import strings
 
@@ -13,9 +12,18 @@ logger = logging.getLogger("nipype.workflow")
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.pipeline.engine.Workflow)  -*-
 class CustomWorkflow(Workflow):
+    """
+    Custom implementation of Workflow class with utility funcs.
 
+    """
+    
     @staticmethod
     def format_node_name(node):
+        """
+        Returns the explicit name of a Node.
+
+        """
+        
         default_node_name = None
         if hasattr(node, "interface") and type(node.interface).__name__ in strings.node_names:
             default_node_name = strings.node_names[type(node.interface).__name__]
@@ -32,7 +40,11 @@ class CustomWorkflow(Workflow):
         return formatted_name
 
     def get_node_array(self):
-        """List names of all nodes in a workflow"""
+        """
+        Returns a List of NodeListEntry objects for the Nodes in a Workflow.
+        
+        """
+        
         from networkx import topological_sort
 
         outlist = {}
@@ -47,7 +59,11 @@ class CustomWorkflow(Workflow):
         return outlist
 
     def sink_result(self, save_path, result_node, result_name, sub_folder, regexp_substitutions=None):
-
+        """
+        Creates a sink_result Node to save the output files of a Workflow.
+        
+        """
+        
         if isinstance(result_node, str):
             result_node = self.get_node(result_node)
 
@@ -63,7 +79,11 @@ class CustomWorkflow(Workflow):
     def _get_dot(
             self, prefix=None, hierarchy=None, colored=False, simple_form=True, level=0
     ):
-        """Create a dot file with connection info"""
+        """
+        Custom implementation of _get_dot Nipype func to support the long_name Node attribute.
+        
+        """
+        
         import networkx as nx
 
         if prefix is None:
