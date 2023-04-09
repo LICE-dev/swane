@@ -5,10 +5,16 @@ from pyshortcuts.linux import get_desktop, get_startmenu, get_homedir
 from swane import strings
 import swane_supplement
 import os
+import subprocess
+import __main__
 
-os_package_name = strings.APPNAME + ".app"
-os_info_file_name = "Info.plist"
-os_info_file_content = """<?xml version="1.0" encoding="UTF-8"?>
+main_module_name = os.path.basename(os.path.dirname(__main__.__file__))
+
+mac_package_name = strings.APPNAME + ".app"
+mac_shell_command = "dscl . -read ~/ UserShell | sed 's/UserShell: //'"
+mac_exec_file_content = sys.executable + " -m " + main_module_name
+mac_info_file_name = "Info.plist"
+mac_info_file_content = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN"
 "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -21,17 +27,7 @@ os_info_file_content = """<?xml version="1.0" encoding="UTF-8"?>
   </dict>
 </plist>"""
 
-os_exec_file_content = "#!" + os.environ.get("SHELL", "/bin/bash") + """
-osascript -e 'tell application "Terminal"
-   do script "
-export PYTHON_EXE=""" + sys.executable + """;
-   $PYTHON_EXE -m """ + strings.APPNAME.lower() + """
-   "
-end tell
-'"""
-
 linux_file_name = strings.APPNAME + ".desktop"
-
 linux_file_content = """[Desktop Entry]
 Name=""" + strings.APPNAME + """
 Type=Application
@@ -39,32 +35,41 @@ Path=""" + get_homedir() + """
 Comment=""" + strings.APPNAME + """
 Terminal=false
 Icon=""" + swane_supplement.appIcon_file + """
-Exec=""" + os.environ.get("SHELL", "bash") + " -i -c '" + sys.executable + " -m " + strings.APPNAME.lower() + "'"
+Exec=""" + os.environ.get("SHELL", "bash") + " -l -i -c '" + sys.executable + " -m " + main_module_name + "'"
 
 
 def shortcut_manager(global_config):
     if global_config.get_shortcut_path() == "":
 
         if sys.platform == "darwin":
-            package_path = os.path.join(get_desktop(), os_package_name)
+            package_path = os.path.join(get_desktop(), mac_package_name)
+            application_path = "/Applications"
+
+            # don't insert application path due to privilege issue in deleting
             targets = [package_path]
+
             shutil.rmtree(package_path, ignore_errors=True)
             os.makedirs(package_path, exist_ok=True)
 
             os.makedirs(os.path.join(package_path, 'Contents'), exist_ok=True)
-            info_file = os.path.join(package_path, 'Contents', os_info_file_name)
+            info_file = os.path.join(package_path, 'Contents', mac_info_file_name)
             with open(info_file, 'w') as f:
-                f.write(os_info_file_content)
+                f.write(mac_info_file_content)
 
             os.makedirs(os.path.join(package_path, 'Contents', 'MacOS'), exist_ok=True)
             exec_file = os.path.join(package_path, 'Contents', 'MacOS', strings.APPNAME)
+            user_shell = subprocess.run(mac_shell_command, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8').replace("\n", "")
+            this_content = "#!" + user_shell + " -i -l \n" + mac_exec_file_content
             with open(exec_file, 'w') as f:
-                f.write(os_exec_file_content)
+                f.write(this_content)
             os.chmod(exec_file, 493)
 
             os.makedirs(os.path.join(package_path, 'Contents', 'Resources'), exist_ok=True)
             icns_file = os.path.join(package_path, 'Contents', 'Resources', os.path.basename(swane_supplement.appIcns_file))
             shutil.copyfile(swane_supplement.appIcns_file, icns_file)
+
+            copy_cmd = "cp -fr " + package_path + " " + application_path
+            os.system("osascript -e 'do shell script \"%s\" with administrator privileges'" % copy_cmd)
 
         else:
             targets = [os.path.join(get_desktop(), linux_file_name), os.path.join(get_startmenu(), linux_file_name)]
