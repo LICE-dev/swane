@@ -7,7 +7,7 @@ import swane_supplement
 import os
 import subprocess
 import __main__
-from distutils.dir_util import copy_tree
+import time
 
 main_module_name = os.path.basename(os.path.dirname(__main__.__file__))
 
@@ -43,36 +43,36 @@ def shortcut_manager(global_config):
     if global_config.get_shortcut_path() == "":
 
         if sys.platform == "darwin":
-            package_path = os.path.join(get_desktop(), mac_package_name)
-            targets = [package_path]
+            mac_user_application_path = os.path.join(get_homedir(), "Applications")
+            os.makedirs(mac_user_application_path, exist_ok=True)
+            mac_package_path = os.path.join(mac_user_application_path, mac_package_name)
 
-            shutil.rmtree(package_path, ignore_errors=True)
-            os.makedirs(package_path, exist_ok=True)
+            shutil.rmtree(mac_package_path, ignore_errors=True)
+            os.makedirs(mac_package_path, exist_ok=True)
 
-            os.makedirs(os.path.join(package_path, 'Contents'), exist_ok=True)
-            info_file = os.path.join(package_path, 'Contents', mac_info_file_name)
+            os.makedirs(os.path.join(mac_package_path, 'Contents'), exist_ok=True)
+            info_file = os.path.join(mac_package_path, 'Contents', mac_info_file_name)
             with open(info_file, 'w') as f:
                 f.write(mac_info_file_content)
 
-            os.makedirs(os.path.join(package_path, 'Contents', 'MacOS'), exist_ok=True)
-            exec_file = os.path.join(package_path, 'Contents', 'MacOS', strings.APPNAME)
+            os.makedirs(os.path.join(mac_package_path, 'Contents', 'MacOS'), exist_ok=True)
+            exec_file = os.path.join(mac_package_path, 'Contents', 'MacOS', strings.APPNAME)
             user_shell = subprocess.run(mac_shell_command, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8').replace("\n", "")
             this_content = "#!" + user_shell + " -i -l \n" + mac_exec_file_content
             with open(exec_file, 'w') as f:
                 f.write(this_content)
             os.chmod(exec_file, 493)
 
-            os.makedirs(os.path.join(package_path, 'Contents', 'Resources'), exist_ok=True)
-            icns_file = os.path.join(package_path, 'Contents', 'Resources', os.path.basename(swane_supplement.appIcns_file))
+            os.makedirs(os.path.join(mac_package_path, 'Contents', 'Resources'), exist_ok=True)
+            icns_file = os.path.join(mac_package_path, 'Contents', 'Resources', os.path.basename(swane_supplement.appIcns_file))
             shutil.copyfile(swane_supplement.appIcns_file, icns_file)
 
-            mac_user_application_path = os.path.join(get_homedir(), "Applications")
-            os.makedirs(mac_user_application_path, exist_ok=True)
-            mac_user_application_package = os.path.join(mac_user_application_path, mac_package_name)
-            shutil.rmtree(mac_user_application_package, ignore_errors=True)
-            copy_tree(package_path, mac_user_application_package)
+            mac_desktop_link = os.path.join(get_desktop(), strings.APPNAME)
+            if os.path.exists(mac_desktop_link):
+                os.remove(mac_desktop_link)
+            os.symlink(mac_package_path, mac_desktop_link)
 
-            targets = [package_path, mac_user_application_package]
+            targets = [mac_package_path, mac_desktop_link]
         else:
             targets = [os.path.join(get_desktop(), linux_file_name), os.path.join(get_startmenu(), linux_file_name)]
             for file in targets:
@@ -87,7 +87,7 @@ def shortcut_manager(global_config):
     else:
         targets = global_config.get_shortcut_path().split("|")
         for fil in targets:
-            if strings.APPNAME in fil and os.path.exists(fil):
+            if strings.APPNAME in fil and (os.path.exists(fil) or os.path.islink(fil)):
                 if os.path.isdir(fil):
                     shutil.rmtree(fil, ignore_errors=True)
                 else:
