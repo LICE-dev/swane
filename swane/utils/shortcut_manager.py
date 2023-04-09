@@ -7,6 +7,7 @@ import swane_supplement
 import os
 import subprocess
 import __main__
+from distutils.dir_util import copy_tree
 
 main_module_name = os.path.basename(os.path.dirname(__main__.__file__))
 
@@ -43,9 +44,6 @@ def shortcut_manager(global_config):
 
         if sys.platform == "darwin":
             package_path = os.path.join(get_desktop(), mac_package_name)
-            application_path = "/Applications"
-
-            # don't insert application path due to privilege issue in deleting
             targets = [package_path]
 
             shutil.rmtree(package_path, ignore_errors=True)
@@ -68,9 +66,13 @@ def shortcut_manager(global_config):
             icns_file = os.path.join(package_path, 'Contents', 'Resources', os.path.basename(swane_supplement.appIcns_file))
             shutil.copyfile(swane_supplement.appIcns_file, icns_file)
 
-            copy_cmd = "cp -fr " + package_path + " " + application_path
-            os.system("osascript -e 'do shell script \"%s\" with administrator privileges'" % copy_cmd)
+            mac_user_application_path = os.path.join(get_homedir(), "Applications")
+            os.makedirs(mac_user_application_path, exist_ok=True)
+            mac_user_application_package = os.path.join(mac_user_application_path, mac_package_name)
+            shutil.rmtree(mac_user_application_package, ignore_errors=True)
+            copy_tree(package_path, mac_user_application_package)
 
+            targets = [package_path, mac_user_application_package]
         else:
             targets = [os.path.join(get_desktop(), linux_file_name), os.path.join(get_startmenu(), linux_file_name)]
             for file in targets:
