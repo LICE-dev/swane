@@ -1,0 +1,10 @@
+exclude .gitignore
+exclude .spyproject
+exclude makerealease.sh
+exclude pyarmor
+exclude dist
+exclude venv
+#exclude release
+exclude build
+exclude SWANe.spec
+exclude swane.spec
