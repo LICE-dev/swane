@@ -9,6 +9,11 @@ class SlicerCheckSignaler(QObject):
 
 
 class SlicerCheckWorker(QRunnable):
+    """
+    Spawn a thread for 3D Slicer dependency check 
+
+    """
+    
     def __init__(self, parent=None):
         super(SlicerCheckWorker, self).__init__(parent)
         self.signal = SlicerCheckSignaler()

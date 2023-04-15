@@ -8,6 +8,11 @@ class SlicerExportSignaler(QObject):
 
 
 class SlicerExportWorker(QRunnable):
+    """
+    Spawn a thread for 3D Slicer result export 
+
+    """
+    
     PROGRESS_MSG_PREFIX = 'SLICERLOADER: '
     END_MSG = "ENDLOADING"
 
