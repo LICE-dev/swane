@@ -1,9 +1,28 @@
+# slicerpython script for module checking
+# Warning: slicer library is not required beacuse the script is executed in Slicer environment
+
 import sys
 import os
 import subprocess
 
+def load_anat(scene_dir: str, volume_name: str):
+    """
+    Creates a scalar node from a NIFTI file.
 
-def load_anat(scene_dir, volume_name):
+    Parameters
+    ----------
+    scene_dir : str
+        The scene directory.
+    volume_name : str
+        The NIFTI file name (without extension).
+
+    Returns
+    -------
+    node : MRMLCore.vtkMRMLScalarVolumeNode
+        The scalar node generated from the NIFTI file.
+
+    """
+    
     file = os.path.join(scene_dir, volume_name + ".nii.gz")
     node = None
     if os.path.exists(file):
@@ -12,10 +31,25 @@ def load_anat(scene_dir, volume_name):
             node = slicer.util.loadVolume(file)
         except:
             pass
+        
     return node
 
 
-def lesion_segment(scene_dir):
+def lesion_segment(scene_dir: str):
+    """
+    Prepares an empty segment for optional manual segmentation.
+
+    Parameters
+    ----------
+    scene_dir : str
+        The scene directory.
+
+    Returns
+    -------
+    None.
+
+    """
+    
     file = os.path.join(scene_dir, "seg_lesions.seg.nrrd")
     if os.path.exists(file):
         print("SLICERLOADER: Loading existing lesion segment")
@@ -31,21 +65,62 @@ def lesion_segment(scene_dir):
         my_storage_node.WriteData(seg_node)
 
 
-def load_freesurfer_surf(scene_dir, node_name, ref_node):
+def load_freesurfer_surf(scene_dir: str, node_name: str, ref_node):
+    """
+    Loads the FreeSurfer surface.
+
+    Parameters
+    ----------
+    scene_dir : str
+        The scene directory.
+    node_name : str
+        The surface file.
+    ref_node : MRMLCore.vtkMRMLScalarVolumeNode
+        The reference node for surface positioning.
+
+    Returns
+    -------
+    #TODO specificare tipo di surf_node
+    surf_node : TYPE
+        The slicer node with loaded surface.
+
+    """
+    
     file = os.path.join(scene_dir, node_name)
+    surf_node = None
+    
     if os.path.exists(file):
         try:
             print("SLICERLOADER: Loading surface " + node_name)
             surf_node = slicer.util.loadNodeFromFile(file, 'FreeSurferModelFile',
                                                     {"referenceVolumeID": ref_node.GetID()})
             surf_node.GetDisplayNode().SetColor(0.82, 0.82, 0.82)
-            return surf_node
         except:
             pass
-    return None
+        
+    return surf_node
 
 
-def load_freesurfer_overlay(scene_dir, node_name, surf_node):
+def load_freesurfer_overlay(scene_dir: str, node_name: str, surf_node):
+    """
+    Applies an overlay on the FreeSurfer surface.
+
+    Parameters
+    ----------
+    scene_dir : str
+        The scene directory.
+    node_name : str
+        The surface file.
+    #TODO specificare tipo di surf_node
+    surf_node : TYPE
+        The slicer node with loaded surface.
+
+    Returns
+    -------
+    None.
+
+    """
+    
     file = os.path.join(scene_dir, node_name)
     if os.path.exists(file):
         try:
@@ -58,7 +133,21 @@ def load_freesurfer_overlay(scene_dir, node_name, surf_node):
             pass
 
 
-def load_freesurfer_segmentation_file(seg_file):
+def load_freesurfer_segmentation_file(seg_file: str):
+    """
+    Loads the FreeSurfer segmentation file.
+
+    Parameters
+    ----------
+    seg_file : str
+        The segmentation file name.
+
+    Returns
+    -------
+    None.
+
+    """
+    
     if os.path.exists(seg_file):
         try:
             slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
@@ -66,7 +155,23 @@ def load_freesurfer_segmentation_file(seg_file):
             pass
 
 
-def load_freesurfer(scene_dir, ref_node):
+def load_freesurfer(scene_dir: str, ref_node):
+    """
+    Loads the FreeSurfer output.
+
+    Parameters
+    ----------
+    scene_dir : str
+        The scene directory.
+    ref_node : MRMLCore.vtkMRMLScalarVolumeNode
+        The reference node for surface positioning.
+
+    Returns
+    -------
+    None.
+
+    """
+    
     seg_list = ["r-aparc_aseg.mgz", "segmentHA/lh.hippoAmygLabels.mgz", "segmentHA/rh.hippoAmygLabels.mgz"]
     for file in seg_list:
         seg_file = os.path.join(scene_dir, file)
@@ -85,7 +190,23 @@ def load_freesurfer(scene_dir, ref_node):
         load_freesurfer_overlay(scene_dir, overlay + "_rh.mgz", rh_pial)
 
 
-def load_vein(scene_dir, remove_vein=False):
+def load_vein(scene_dir: str, remove_vein: bool=False):
+    """
+    Loads the veins files and creates their 3d model.
+
+    Parameters
+    ----------
+    scene_dir : str
+        The scene directory.
+    remove_vein : bool, optional
+        True if the model must remove the original veins images. The default is False.
+
+    Returns
+    -------
+    None.
+
+    """
+    
     vein_volume_name = "r-veins_inskull"
     vein_node = load_anat(scene_dir, vein_volume_name)
     if vein_node is None:
@@ -121,7 +242,30 @@ def load_vein(scene_dir, remove_vein=False):
         slicer.mrmlScene.RemoveNode(vein_node)
 
 
-def tract_model(segmentation_node, dti_dir, tract, side):
+def tract_model(segmentation_node, dti_dir: str, tract: str, side: str):
+    """
+    Creates the 3d model of a tract.
+
+    Parameters
+    ----------
+    #TODO verificare tipo
+    segmentation_node : TYPE
+        DESCRIPTION.
+    dti_dir : str
+        The DTI directory.
+    tract : str
+        The name of the tract.
+    side : str
+        The side of the tract:
+            - LH for left side
+            - RH for right side
+
+    Returns
+    -------
+    None.
+
+    """
+    
     tract_file = os.path.join(dti_dir, "r-" + tract['name'] + "_" + side + ".nii.gz")
     if not os.path.exists(tract_file):
         return
@@ -155,6 +299,7 @@ def tract_model(segmentation_node, dti_dir, tract, side):
     # Create segment
     tract_segment_id = segmentation_node.GetSegmentation().AddEmptySegment(tract['name'], tract['name'], tract['color'])
     segment_editor_node.SetSelectedSegmentID(tract_segment_id)
+    
     # Fill by thresholding
     segment_editor_widget.setActiveEffectByName("Threshold")
     effect = segment_editor_widget.activeEffect()
@@ -167,7 +312,21 @@ def tract_model(segmentation_node, dti_dir, tract, side):
     slicer.mrmlScene.RemoveNode(tract_node)
 
 
-def load_fmri(scene_dir):
+def load_fmri(scene_dir: str):
+    """
+    Loads the fMRI results.
+
+    Parameters
+    ----------
+    scene_dir : str
+        The scene directory.
+
+    Returns
+    -------
+    None.
+
+    """
+    
     fmri_path = os.path.join(scene_dir, "fMRI")
     if not os.path.exists(fmri_path):
         return
@@ -179,7 +338,7 @@ def load_fmri(scene_dir):
                 func_node.GetDisplayNode().SetAndObserveColorNodeID('vtkMRMLPETProceduralColorNodePET-Rainbow2')
 
 
-def main_tract(dti_dir, scene_dir):
+def main_tract(dti_dir: str, scene_dir: str):
     sides = ["rh", "lh"]
     tracts = [
         {"name": "cst", "thr": "500", "color": [0, 1, 0]},
@@ -193,14 +352,18 @@ def main_tract(dti_dir, scene_dir):
         # Create segmentation
         segmentation_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode", "tracts_" + side)
         segmentation_node.CreateDefaultDisplayNodes()  # only needed for display
+        
         for tract in tracts:
             tract_model(segmentation_node, dti_dir, tract, side)
+            
         segmentation_node.CreateClosedSurfaceRepresentation()
         my_storage_node = segmentation_node.CreateDefaultStorageNode()
         my_storage_node.SetFileName(os.path.join(scene_dir, "tracts_" + side + ".seg.nrrd"))
         my_storage_node.WriteData(segmentation_node)
 
+###############################################################################
 
+# slicerpython execution code
 slicer.mrmlScene.Clear(0)
 sceneDir = os.path.join(os.getcwd(), "scene")
 
@@ -230,6 +393,8 @@ else:
         load_freesurfer(sceneDir, refNode)
 
         ext = "mrb"
+        
+        #TODO valutare
         # Saving in MRML doesn't work well, disable extension choice for now
         # if sys.argv[1] is not None and sys.argv[1] == "1":
         #     ext = "mrml"
