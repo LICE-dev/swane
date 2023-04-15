@@ -85,7 +85,7 @@ def load_freesurfer(scene_dir, ref_node):
         load_freesurfer_overlay(scene_dir, overlay + "_rh.mgz", rh_pial)
 
 
-def load_vein(scene_dir):
+def load_vein(scene_dir, remove_vein=False):
     vein_volume_name = "r-veins_inskull"
     vein_node = load_anat(scene_dir, vein_volume_name)
     if vein_node is None:
@@ -116,7 +116,9 @@ def load_vein(scene_dir):
     my_storage_node = vein_model.CreateDefaultStorageNode()
     my_storage_node.SetFileName(os.path.join(scene_dir, "veins.vtk"))
     my_storage_node.WriteData(vein_model)
-    slicer.mrmlScene.RemoveNode(vein_node)
+    
+    if remove_vein:
+        slicer.mrmlScene.RemoveNode(vein_node)
 
 
 def tract_model(segmentation_node, dti_dir, tract, side):
