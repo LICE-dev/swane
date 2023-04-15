@@ -205,4 +205,3 @@ node_names["FslCluster"] = "cluster extraction"
 node_names["SampleToSurface"] = "surface projection"
 node_names["FAST"] = "Tissue segmentation"
 node_names["DOmapOutliersMask"] = "outliers mask generation"
-
