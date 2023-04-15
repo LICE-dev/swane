@@ -4,6 +4,9 @@ from os.path import abspath
 
 import swane_supplement
 
+from swane.utils.ConfigManager import ConfigManager
+from swane.utils.DataInput import DataInputList
+
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -16,45 +19,55 @@ from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_workflow import venous_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow, SIDES
-from swane.utils.DataInput import DataInputList
 
 
 DEBUG = False
 
 
 # TODO implementazione error manager
-# todo valutare nome parlante per node
 class MainWorkflow(CustomWorkflow):
     SCENE_DIR = 'scene'
 
-    # TODO forse non serve, valutare eliminazione
-    def __init__(self, name, base_dir=None):
-        super(MainWorkflow, self).__init__(name, base_dir)
+    def add_input_folders(self, global_config: ConfigManager, pt_config: ConfigManager, data_input_list: DataInputList):
+        """
+        Create the Workflows and their sub-workflows based on the list of available data inputs 
 
-    def add_input_folders(self, global_config, pt_config, data_input_list):
+        Parameters
+        ----------
+        global_config : ConfigManager
+            The app global configurations.
+        pt_config : ConfigManager
+            The patient specific configurations.
+        data_input_list : DataInputList
+            The list of all available input data from the DICOM directory.
 
-        # global_config: configurazione globale dell'app
-        # pt_config: configurazione specifica del paziente
-        # data_input_list dictionary che ha come key tutte le possibili serie caricabili ciascuna con valore true/false
+        Returns
+        -------
+        None.
 
+        """
+        
         if not data_input_list.is_ref_loaded:
             return
 
-        # definizione dei boleani che saranno checkati prima della definizione dei specifici workflow
+        # Check for FreeSurfer requirement and request
         is_freesurfer = pt_config.is_freesurfer() and pt_config.get_pt_wf_freesurfer()
         is_hippo_amyg_labels = pt_config.is_freesurfer_matlab() and pt_config.get_pt_wf_hippo()
+        # Check for DOMap requirement and request
         is_domap = pt_config.getboolean('WF_OPTION', 'DOmap') and data_input_list[DataInputList.FLAIR3D].loaded
+        # Check for Asymmetry Index request
         is_ai = pt_config.getboolean('WF_OPTION', 'ai')
+        # Check for Tractography request
         is_tractography = pt_config.getboolean('WF_OPTION', 'tractography')
 
-        # definizione dei core assegnati al workflow e a ciascun nodo del workflow
+        # Core management
         self.max_cpu = global_config.getint('MAIN', 'maxPtCPU')
         if self.max_cpu > 0:
             max_node_cpu = max(int(self.max_cpu / 2), 1)
         else:
             max_node_cpu = max(int((cpu_count() - 2) / 2), 1)
 
-        # WORKFLOW 1: ELABORAZIONE T1 3D
+        # 3D T1w
         ref_dir = data_input_list.get_dicom_dir(DataInputList.T13D)
         t1 = ref_workflow(data_input_list[DataInputList.T13D].wf_name, ref_dir)
         t1.long_name = "3D T1w analysis"
@@ -63,8 +76,8 @@ class MainWorkflow(CustomWorkflow):
         t1.sink_result(self.base_dir, "outputnode", 'ref', self.SCENE_DIR)
         t1.sink_result(self.base_dir, "outputnode", 'ref_brain', self.SCENE_DIR)
 
-        # WORKFLOW 3: REGISTRAZIONE AD ALTANTE SIMMETRICO PER EVENTUALI ASIMMETRY index
         if is_ai and (data_input_list[DataInputList.ASL].loaded or data_input_list[DataInputList.PET].loaded):
+            # Non linear registration for Asymmetry Index
             sym = nonlinear_reg_workflow("sym")
             sym.long_name = "Symmetric atlas registration"
 
@@ -73,9 +86,8 @@ class MainWorkflow(CustomWorkflow):
             sym_inputnode.inputs.atlas = sym_template
             self.connect(t1, "outputnode.ref_brain", sym, "inputnode.in_file")
 
-        # WORKFLOW 4: ELABORAZIONE FREESURFER
         if is_freesurfer:
-
+            # FreeSurfer analysis
             freesurfer = freesurfer_workflow("freesurfer", is_hippo_amyg_labels)
             freesurfer.long_name = "Freesurfer analysis"
 
@@ -92,8 +104,8 @@ class MainWorkflow(CustomWorkflow):
                 freesurfer.sink_result(self.base_dir, "outputnode", 'lh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
                 freesurfer.sink_result(self.base_dir, "outputnode", 'rh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
 
-        # WORKFLOW 5: ELABORAZIONE FLAIR
         if data_input_list[DataInputList.FLAIR3D].loaded:
+            # 3D Flair analysis
             flair_dir = data_input_list.get_dicom_dir(DataInputList.FLAIR3D)
             flair = linear_reg_workflow(data_input_list[DataInputList.FLAIR3D].wf_name, flair_dir)
             flair.long_name = "3D Flair analysis"
@@ -108,7 +120,7 @@ class MainWorkflow(CustomWorkflow):
             flair.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
 
         if is_domap:
-            # WORKFLOW 6: REGISTRAZIONE AD ALTANTE MNI1mm (SERVE SOLO PER DOmap)
+            # Non linear registration to MNI1mm Atlas for DOmap
             mni1 = nonlinear_reg_workflow("mni1")
             mni1.long_name = "MNI atlas registration"
 
@@ -117,7 +129,7 @@ class MainWorkflow(CustomWorkflow):
             mni1_inputnode.inputs.atlas = mni1_path
             self.connect(t1, "outputnode.ref_brain", mni1, "inputnode.in_file")
 
-            # WORKFLOW 7: ELABORAZIONE script_DOmap
+            # DOmap analysis
             domap = domap_workflow("DOmap", mni1_path)
             domap.long_name = "DOmap analysis"
 
@@ -145,8 +157,8 @@ class MainWorkflow(CustomWorkflow):
 
                 flair2d.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
 
-        # WORKFLOW 11: ELABORAZIONE MDC
         if data_input_list[DataInputList.MDC].loaded:
+            # MDC analysis
             mdc_dir = data_input_list.get_dicom_dir(DataInputList.MDC)
             mdc = linear_reg_workflow(data_input_list[DataInputList.MDC].wf_name, mdc_dir)
             mdc.long_name = "Post-contrast 3D T1w analysis"
@@ -160,9 +172,8 @@ class MainWorkflow(CustomWorkflow):
 
             mdc.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
 
-        # ELABORAZIONE ASL
         if data_input_list[DataInputList.ASL].loaded:
-
+            # ASL analysis
             asl_dir = data_input_list.get_dicom_dir(DataInputList.ASL)
             asl = func_map_workflow(data_input_list[DataInputList.ASL].wf_name, asl_dir, is_freesurfer, is_ai)
             asl.long_name = "Arterial Spin Labelling analysis"
@@ -193,9 +204,8 @@ class MainWorkflow(CustomWorkflow):
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.SCENE_DIR)
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.SCENE_DIR)
 
-        # ELABORAZIONE PET
         if data_input_list[DataInputList.PET].loaded:  # and check_input['ct_brain']:
-
+            # PET analysis
             pet_dir = data_input_list.get_dicom_dir(DataInputList.PET)
             pet = func_map_workflow(data_input_list[DataInputList.PET].wf_name, pet_dir, is_freesurfer, is_ai)
             pet.long_name = "Pet analysis"
@@ -226,8 +236,8 @@ class MainWorkflow(CustomWorkflow):
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.SCENE_DIR)
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.SCENE_DIR)
 
-        # ELABORAZIONE VENOSA
         if data_input_list[DataInputList.VENOUS].loaded:
+            # Venous analysis
             venous_dir = data_input_list.get_dicom_dir(DataInputList.VENOUS)
             venous2_dir = None
             if data_input_list[DataInputList.VENOUS2].loaded:
@@ -239,9 +249,8 @@ class MainWorkflow(CustomWorkflow):
 
             venous.sink_result(self.base_dir, "outputnode", 'veins', self.SCENE_DIR)
 
-        # ELABORAZIONE DTI
         if data_input_list[DataInputList.DTI].loaded:
-
+            # DTI analysis
             dti_dir = data_input_list.get_dicom_dir(DataInputList.DTI)
             mni_dir = abspath(os.path.join(os.environ["FSLDIR"], 'data/standard/MNI152_T1_2mm_brain.nii.gz'))
 
@@ -274,7 +283,7 @@ class MainWorkflow(CustomWorkflow):
                             tract_workflow.sink_result(self.base_dir, "outputnode", "fdt_paths_%s" % side,
                                                              self.SCENE_DIR + ".dti")
 
-        # CONTROLLO SE SONO STATE CARICATE SEQUENZE FMRI ED EVENTUALMENTE LE ANALIZZO SINGOLARMENTE
+        # Check for Task FMRI sequences
         for y in range(DataInputList.FMRI_NUM):
 
             if data_input_list[DataInputList.FMRI+'_%d' % y].loaded:
