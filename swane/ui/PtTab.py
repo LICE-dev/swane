@@ -28,6 +28,7 @@ from swane.utils.ConfigManager import ConfigManager
 from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from swane.utils.DataInput import DataInput, DataInputList
+from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 
 
 class PtTab(QTabWidget):
@@ -114,9 +115,9 @@ class PtTab(QTabWidget):
         if len(split) < 3:
             return
 
-        if split[2] == WorkflowProcess.NODE_STARTED:
+        if split[2] == MonitoredMultiProcPlugin.NODE_STARTED:
             icon = self.main_window.LOADING_MOVIE_FILE
-        elif split[2] == WorkflowProcess.NODE_COMPLETED:
+        elif split[2] == MonitoredMultiProcPlugin.NODE_COMPLETED:
             icon = self.main_window.OK_ICON_FILE
         else:
             icon = self.main_window.ERROR_ICON_FILE
