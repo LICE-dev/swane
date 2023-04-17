@@ -79,6 +79,19 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
                                   'rh_hippoAmygLabels']),
         name='outputnode')
 
+    def check_fov_dim(nifti):
+        import subprocess
+        for x in range(1, 4, 1):
+            cmd = "echo $( echo $(fslval " + nifti + " dim" + str(x) + ") \\* $(fslval " + nifti + " pixdim" + str(x) + ") | bc)"
+            output = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
+            try:
+                fovdim = float(output)
+                if fovdim > 256:
+                    return "-cw256"
+            except:
+                pass
+        return ""
+
     # NODE 1: Freesurfer cortical reconstruction process
     reconAll = Node(ReconAll(), name='reconAll')
     reconAll.inputs.subject_id = FS_DIR
@@ -87,6 +100,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     workflow.add_nodes([reconAll])
     workflow.connect(inputnode, "max_node_cpu", reconAll, "openmp")
     workflow.connect(inputnode, "ref", reconAll, "T1_files")
+    workflow.connect(inputnode, ('ref', check_fov_dim), reconAll, 'flags')
     workflow.connect(inputnode, "subjects_dir", reconAll, "subjects_dir")
 
     # NODE 2: Aparcaseg linear transformation in reference space
