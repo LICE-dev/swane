@@ -45,7 +45,7 @@ class MainWindow(QMainWindow):
         while self.global_config.get_patients_folder() == "" or not os.path.exists(
                 self.global_config.get_patients_folder()):
             msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_chose_working_dir)
+            msg_box.setText(strings.mainwindow_choose_working_dir)
             msg_box.exec()
             self.set_patients_folder()
 
@@ -70,15 +70,14 @@ class MainWindow(QMainWindow):
                 self.global_config.set_shortcut_path(new_path)
                 self.global_config.save()
 
-
-    def open_pt_dir(self, folder_path):
+    def open_pt_dir(self, folder_path: str):
         """
-        
+        Load a checked and valid patient folder.
 
         Parameters
         ----------
-        folder_path : TYPE
-            DESCRIPTION.
+        folder_path : str
+            The patient folder path.
 
         Returns
         -------
@@ -93,9 +92,20 @@ class MainWindow(QMainWindow):
 
         self.main_tab.addTab(this_tab, os.path.basename(folder_path))
         self.main_tab.setCurrentWidget(this_tab)
+        
         this_tab.load_pt()
 
-    def check_pt_limit(self):
+    def check_pt_limit(self) -> bool:
+        """
+        Check if SWANe can open another patient tab without overcome the limit set by configuration.
+
+        Returns
+        -------
+        bool
+            True if SWANe can load another tab, otherwise False.
+
+        """
+        
         max_pt = self.global_config.get_max_pt()
         if max_pt <= 0:
             return True
@@ -108,15 +118,27 @@ class MainWindow(QMainWindow):
         return True
 
     def search_pt_dir(self):
+        """
+        Try to open a patient directory
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        # Guard to avoid the opening of patient tabs greater than the maximum allowed
         if not self.check_pt_limit():
             return
 
+        # Open the directory selection dialog 
         file_dialog = QFileDialog()
         file_dialog.setDirectory(self.global_config.get_patients_folder())
         folder_path = file_dialog.getExistingDirectory(self, strings.mainwindow_select_pt_folder)
         if not os.path.exists(folder_path):
             return
 
+        # Guard to avoid the opening of a directory outside the main patient folder
         if not os.path.abspath(folder_path).startswith(
                 os.path.abspath(self.global_config.get_patients_folder()) + os.sep):
             msg_box = QMessageBox()
@@ -125,6 +147,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
+        # Guard to avoid an already loaded patient directory
         for pt in self.pt_tabs_array:
             if pt.pt_folder == folder_path:
                 msg_box = QMessageBox()
@@ -133,6 +156,7 @@ class MainWindow(QMainWindow):
                 msg_box.exec()
                 return
 
+        # Check if selected folder is a valid patient folder
         if not self.check_pt_dir(folder_path):
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -147,16 +171,33 @@ class MainWindow(QMainWindow):
             msg_box2.button(QMessageBox.StandardButton.No).setText("No")
             msg_box2.setDefaultButton(QMessageBox.StandardButton.No)
             ret = msg_box2.exec()
+            
+            # A patient folder has a predefined folder tree.
+            # SWANe recognizes a patient folder checking its subfolders.
+            # If a selected folder is not valid, the user may force its conversion into a patient folder.
             if ret == QMessageBox.StandardButton.Yes:
                 self.update_pt_dir(folder_path)
             else:
                 return
+            
         self.open_pt_dir(folder_path)
 
-    def get_suggested_patient_name(self):
+    def get_suggested_patient_name(self) -> str:
+        """
+        Get a default name for the patient folder based the existing patient folders into the main patient directory.
+
+        Returns
+        -------
+        str
+            The suggested patient folder name.
+
+        """
+        
         import re
+        
         regex = re.compile('^' + self.global_config.get_patientsprefix() + '\d+$')
         file_list = []
+        
         for this_dir in os.listdir(self.global_config.get_patients_folder()):
             if regex.match(this_dir):
                 file_list.append(
@@ -164,9 +205,19 @@ class MainWindow(QMainWindow):
 
         if len(file_list) == 0:
             return self.global_config.get_patientsprefix() + "1"
+        
         return self.global_config.get_patientsprefix() + str(max(file_list) + 1)
 
-    def chose_new_pt_dir(self):
+    def choose_new_pt_dir(self):
+        """
+        Create a new patient folder. The user must specify its name.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         if not self.check_pt_limit():
             return
 
@@ -192,10 +243,9 @@ class MainWindow(QMainWindow):
 
         self.create_new_pt_dir(pt_name)
 
-
     def set_patients_folder(self):
         """
-        Generates the OS directory selection window to set the default patient folder
+        Generates the OS directory selection dialog to set the default patient folder
 
         Returns
         -------
@@ -203,7 +253,7 @@ class MainWindow(QMainWindow):
 
         """
         
-        folder_path = QFileDialog.getExistingDirectory(self, strings.mainwindow_chose_working_dir_title)
+        folder_path = QFileDialog.getExistingDirectory(self, strings.mainwindow_choose_working_dir_title)
         
         if not os.path.exists(folder_path):
             return
@@ -213,8 +263,21 @@ class MainWindow(QMainWindow):
         
         os.chdir(folder_path)
 
+    def create_new_pt_dir(self, pt_name: str):
+        """
+        Create a new patient folder and subfolders.
 
-    def create_new_pt_dir(self, pt_name):
+        Parameters
+        ----------
+        pt_name : str
+            The patient folder name.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         base_folder = os.path.abspath(os.path.join(
             self.global_config.get_patients_folder(), pt_name))
 
@@ -230,43 +293,114 @@ class MainWindow(QMainWindow):
 
         self.open_pt_dir(base_folder)
 
-    def check_pt_dir(self, dir_path):
+    def check_pt_dir(self, dir_path: str) -> bool:
+        """
+        Check if a directory is a valid patient folder
+
+        Parameters
+        ----------
+        dir_path : str
+            The directory path to check.
+
+        Returns
+        -------
+        bool
+            True if the directory is a valid patient folder, otherwise False.
+
+        """
+        
         for data_input in DataInputList().values():
             if not os.path.exists(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), data_input.name)):
                 return False
+            
         return True
 
-    def update_pt_dir(self, dir_path):
+    def update_pt_dir(self, dir_path: str):
+        """
+        Update an existing folder with the patient subfolder structure.
+
+        Parameters
+        ----------
+        dir_path : str
+            The directory path to update into a patient folder.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         for folder in self.global_config.get_default_folders():
             if not os.path.exists(os.path.join(dir_path, self.global_config.get_default_folders()[folder])):
                 os.makedirs(os.path.join(
-                    dir_path, self.global_config.get_default_folders()[folder]), exist_ok=True)
+                    dir_path, self.global_config.get_default_folders()[folder]), exist_ok=True)      
 
     def edit_config(self):
+        """
+        Open the Global Preferences Window.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         if self.check_running_workflows():
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_pref_disabled_error)
             msg_box.exec()
             return
+        
         preference_window = PreferencesWindow(self.global_config, self)
         ret = preference_window.exec()
+        
         if ret == EXIT_CODE_REBOOT:
             self.close()
             QCoreApplication.exit(EXIT_CODE_REBOOT)
+            
         if ret != 0:
             self.reset_workflows()
 
-    def check_running_workflows(self):
+    def check_running_workflows(self) -> bool:
+        """
+        Check if SWANe is executing a workflow in any open Patients tab.
+
+        Returns
+        -------
+        bool
+            True if SWANe is executing a workflow, otherwise False.
+
+        """
+        
         for pt in self.pt_tabs_array:
             if pt.is_workflow_process_alive():
                 return True
+            
         return False
 
     def reset_workflows(self):
+        """
+        Reset all the generated workflows that are not already running.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         for pt in self.pt_tabs_array:
             pt.reset_workflow()
 
     def about(self):
+        """
+        Open the About Window.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         about_dialog = QDialog(parent=self)
         layout = QGridLayout()
 
@@ -322,7 +456,7 @@ class MainWindow(QMainWindow):
         button_action2 = QAction(QIcon.fromTheme(
             "document-new"), strings.menu_new_pt, self)
         button_action2.setStatusTip(strings.menu_new_pt_tip)
-        button_action2.triggered.connect(self.chose_new_pt_dir)
+        button_action2.triggered.connect(self.choose_new_pt_dir)
 
         button_action3 = QAction(QIcon.fromTheme(
             "application-exit"), strings.menu_exit, self)
@@ -371,7 +505,6 @@ class MainWindow(QMainWindow):
 
         self.show()
 
-
     def close_pt(self, index: int):
         """
         Handle the PySide tab closing event for the Patient tab.
@@ -405,7 +538,6 @@ class MainWindow(QMainWindow):
         
         tab_item = None
 
-
     def closeEvent(self, event: QCloseEvent):
         """
         Prevent the closing of a running workflow tab
@@ -428,7 +560,6 @@ class MainWindow(QMainWindow):
             msg_box.setText(strings.mainwindow_wf_executing_error_2)
             msg_box.exec()
             event.ignore()
-
 
     def home_tab_ui(self):
         """
@@ -524,7 +655,6 @@ class MainWindow(QMainWindow):
 
         self.homeTab.setLayout(layout)
 
-
     def add_home_entry(self, gridlayout: QGridLayout, msg: str, icon: bool, x: int) -> int:
         """
         Generates a dependency check label, adding it to an existing layout
@@ -563,7 +693,6 @@ class MainWindow(QMainWindow):
         gridlayout.addWidget(label, x, 1)
         
         return x + 1
-
 
     def slicer_row(self, slicer_path: str, msg: str, found: bool):
         """

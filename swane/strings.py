@@ -10,8 +10,8 @@ PTCONFIGBUTTONTEXT = "Workflow preferences"
 main_multiple_instances_error = "Another instance of " + APPNAME + " is already running!"
 
 # Main Window
-mainwindow_chose_working_dir = "Choose the main working directory before start to use this application"
-mainwindow_chose_working_dir_title = 'Select the main working directory'
+mainwindow_choose_working_dir = "Choose the main working directory before start to use this application"
+mainwindow_choose_working_dir_title = 'Select the main working directory'
 mainwindow_select_pt_folder = 'Select a patient folder'
 mainwindow_ptfolder_outside_workingdir_error = "The selected folder is not in " + APPNAME + " main working directory!"
 mainwindow_pt_already_loaded_error = "The selected patient was already loaded in " + APPNAME + "!"
