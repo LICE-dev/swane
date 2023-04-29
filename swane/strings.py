@@ -1,9 +1,11 @@
+#%%
 APPNAME = "SWANe"
 app_acronym = "Standardized Workflow for Advanced Neuroimaging in Epilepsy"
 EXECBUTTONTEXT = "Execute " + APPNAME + " Workflow"
 EXECBUTTONTEXT_STOP = "Stop " + APPNAME + " Workflow"
 GENBUTTONTEXT = "Generate " + APPNAME + " Workflow"
 PTCONFIGBUTTONTEXT = "Workflow preferences"
+#%%
 
 main_multiple_instances_error = "Another instance of " + APPNAME + " is already running!"
 
