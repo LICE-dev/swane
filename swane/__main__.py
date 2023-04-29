@@ -13,27 +13,32 @@ def main():
     from swane.utils.ConfigManager import ConfigManager
     from swane import EXIT_CODE_REBOOT
 
+    # Exit Code definition for automatic reboot
     current_exit_code = EXIT_CODE_REBOOT
 
     while current_exit_code == EXIT_CODE_REBOOT:
-
+        
+        # Singleton for SWANe application
         if not QApplication.instance():
             app = QApplication(sys.argv)
         else:
             app = QApplication.instance()
 
+        # SWANe Icon definition
         app.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
+        # SWANe App Name definition
         app.setApplicationDisplayName(strings.APPNAME)
-
+        
+        # SWANe Configuration loading
         global_config = ConfigManager()
 
-        # single instance check
+        # Guard to prevent multiple SWANe instances launch
         last_pid = global_config.getint('MAIN', 'lastPID')
         if last_pid != os.getpid():
             try:
                 psutil.Process(last_pid)
                 msg_box = QMessageBox()
-                msg_box.setText("Another instance of " + strings.APPNAME + " is already running!")
+                msg_box.setText(strings.main_multiple_instances_error)
                 msg_box.exec()
                 break
 
@@ -41,7 +46,7 @@ def main():
                 global_config['MAIN']['lastPID'] = str(os.getpid())
                 global_config.save()
 
-        # save MainWindow in a var to keep in memory and prevent crash
+        # MainWindow in a varariable to prenvent garbage collector deletion (might cause crash)
         widget = MainWindow(global_config)
         widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
         current_exit_code = app.exec()
@@ -51,6 +56,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # before gui execution check for fsl/python/freesurfer error
+    # Before GUI execution check for fsl/python/freesurfer error
     if fsl_conflict_check():
         main()

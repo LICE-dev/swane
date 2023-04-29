@@ -5,6 +5,8 @@ EXECBUTTONTEXT_STOP = "Stop " + APPNAME + " Workflow"
 GENBUTTONTEXT = "Generate " + APPNAME + " Workflow"
 PTCONFIGBUTTONTEXT = "Workflow preferences"
 
+main_multiple_instances_error = "Another instance of " + APPNAME + " is already running!"
+
 mainwindow_chose_working_dir = "Choose the main working directory before start to use this application"
 mainwindow_chose_working_dir_title = 'Select the main working directory'
 mainwindow_select_pt_folder = 'Select a patient folder'
