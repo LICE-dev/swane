@@ -18,26 +18,30 @@ from swane.slicer.SlicerCheckWorker import SlicerCheckWorker
 
 
 class MainWindow(QMainWindow):
-    ptDirPath = ""
-    tabWidget = None
+    """
+    Custom implementation of PySide QMainWindow to define SWANe GUI.
 
+    """
+       
     def __init__(self, global_config):
 
+        # GUI configuration setting
         self.global_config = global_config
-
+        
         super(MainWindow, self).__init__()
+        
+        # GUI Icons setting
         self.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
-
         self.OK_ICON_FILE = swane_supplement.okIcon_file
         self.ERROR_ICON_FILE = swane_supplement.errorIcon_file
         self.WARNING_ICON_FILE = swane_supplement.warnIcon_file
         self.LOADING_MOVIE_FILE = swane_supplement.loadingMovie_file
         self.VOID_SVG_FILE = swane_supplement.voidsvg_file
-
         self.OK_ICON = QPixmap(self.OK_ICON_FILE)
         self.ERROR_ICON = QPixmap(self.ERROR_ICON_FILE)
         self.WARNING_ICON = QPixmap(self.WARNING_ICON_FILE)
 
+        # Patient folder configuration checking
         while self.global_config.get_patients_folder() == "" or not os.path.exists(
                 self.global_config.get_patients_folder()):
             msg_box = QMessageBox()
@@ -45,11 +49,12 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             self.set_patients_folder()
 
+        # Patient folder configuration setting
         os.chdir(self.global_config.get_patients_folder())
 
         self.initialize_ui()
 
-        # controllo che eventuali shortcut salvati esistano
+        # SWANe launching icon checking
         if self.global_config.get_shortcut_path() != '':
             targets = self.global_config.get_shortcut_path().split("|")
             new_path = ''
@@ -65,7 +70,22 @@ class MainWindow(QMainWindow):
                 self.global_config.set_shortcut_path(new_path)
                 self.global_config.save()
 
+
     def open_pt_dir(self, folder_path):
+        """
+        
+
+        Parameters
+        ----------
+        folder_path : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         this_tab = PtTab(self.global_config, folder_path,
                          self, parent=self.main_tab)
         this_tab.set_main_window(self)
@@ -172,13 +192,27 @@ class MainWindow(QMainWindow):
 
         self.create_new_pt_dir(pt_name)
 
+
     def set_patients_folder(self):
+        """
+        Generates the OS directory selection window to set the default patient folder
+
+        Returns
+        -------
+        None.
+
+        """
+        
         folder_path = QFileDialog.getExistingDirectory(self, strings.mainwindow_chose_working_dir_title)
+        
         if not os.path.exists(folder_path):
             return
+        
         self.global_config.set_patients_folder(os.path.abspath(folder_path))
         self.global_config.save()
+        
         os.chdir(folder_path)
+
 
     def create_new_pt_dir(self, pt_name):
         base_folder = os.path.abspath(os.path.join(
@@ -265,11 +299,21 @@ class MainWindow(QMainWindow):
         about_dialog.exec()
 
     def initialize_ui(self):
+        """
+        Generates the SWANE GUI
+
+        Returns
+        -------
+        None.
+
+        """
+        
         self.resize(800, 600)
         self.setWindowTitle(strings.APPNAME + " - " + strings.app_acronym)
 
         self.statusBar().showMessage('')
 
+        # Buttons definition
         button_action = QAction(QIcon.fromTheme(
             "document-open"), strings.menu_load_pt, self)
         button_action.setStatusTip(strings.menu_load_pt_tip)
@@ -292,6 +336,7 @@ class MainWindow(QMainWindow):
         button_action6 = QAction(strings.menu_about, self)
         button_action6.triggered.connect(self.about)
 
+        # Menu definition and population
         menu = self.menuBar()
         menu.setNativeMenuBar(False)
         file_menu = menu.addMenu(strings.menu_file_name)
@@ -306,27 +351,43 @@ class MainWindow(QMainWindow):
         tool_menu.addAction(button_action5)
         help_menu = menu.addMenu(strings.menu_help_name)
         help_menu.addAction(button_action6)
-
+        
+        # Tab definition
         self.main_tab = QTabWidget(parent=self)
         self.main_tab.setTabsClosable(True)
         self.main_tab.tabCloseRequested.connect(self.close_pt)
         self.setCentralWidget(self.main_tab)
         self.homeTab = QWidget()
-
         self.main_tab.addTab(self.homeTab, strings.mainwindow_home_tab_name)
 
-        # rimozione tasto chiusura da tab home, a destra o sinistra in base allo stile
+        # Tab closing option disabled
         self.main_tab.tabBar().setTabButton(0, QTabBar.ButtonPosition.LeftSide, None)
         self.main_tab.tabBar().setTabButton(0, QTabBar.ButtonPosition.RightSide, None)
-
+        
+        # Home Tab definition
         self.home_tab_ui()
-
+        
         self.pt_tabs_array = []
 
         self.show()
 
-    def close_pt(self, index):
-        if index == -1:
+
+    def close_pt(self, index: int):
+        """
+        Handle the PySide tab closing event for the Patient tab.
+
+        Parameters
+        ----------
+        index : int
+            The patient tab index into the GUI.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        if index <= 0:
             return
 
         tab_item = self.main_tab.widget(index)
@@ -337,9 +398,12 @@ class MainWindow(QMainWindow):
             return
 
         tab_item.close_routine()
+        
         self.pt_tabs_array.remove(tab_item)
         self.main_tab.removeTab(index)
+        
         tab_item = None
+
 
     def closeEvent(self, event):
         # evito la chiusura se il wf è in esecuzione
@@ -351,7 +415,17 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             event.ignore()
 
+
     def home_tab_ui(self):
+        """
+        Generates the Home Tab layout
+
+        Returns
+        -------
+        None.
+
+        """
+        
         layout = QGridLayout()
 
         bold_font = QFont()
@@ -379,6 +453,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(label_welcome4, x, 0, 1, 2)
         x += 1
 
+        # Main window dependency check
         label_main_dep = QLabel(strings.mainwindow_home_label5)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
@@ -399,7 +474,7 @@ class MainWindow(QMainWindow):
 
         msg, self.freesurfer = check_freesurfer()
         x = self.add_home_entry(layout, msg, self.freesurfer[0], x)
-
+        
         if self.global_config.get_slicer_path() == '' or not os.path.exists(self.global_config.get_slicer_path()):
             self.slicerlabel_icon = QSvgWidget()
             self.slicerlabel_icon.setFixedSize(25, 25)
@@ -435,26 +510,71 @@ class MainWindow(QMainWindow):
 
         self.homeTab.setLayout(layout)
 
-    def add_home_entry(self, gridlayout, msg, icon, x):
+
+    def add_home_entry(self, gridlayout: QGridLayout, msg: str, icon: bool, x: int) -> int:
+        """
+        Generates a dependency check label, adding it to an existing layout
+
+        Parameters
+        ----------
+        gridlayout : QGridLayout
+            The layout to populate with the generated label.
+        msg : str
+            The label text.
+        icon : bool
+            The label check icon.
+        x : int
+            The starting grid layout row index.
+
+        Returns
+        -------
+        int
+            The next grid layout row index.
+
+        """
+        
         label_icon = QLabel()
         label_icon.setFixedSize(25, 25)
         label_icon.setScaledContents(True)
+        
         if icon:
             label_icon.setPixmap(self.OK_ICON)
         else:
             label_icon.setPixmap(self.ERROR_ICON)
+            
         gridlayout.addWidget(label_icon, x, 0)
         label = QLabel(msg)
         label.setOpenExternalLinks(True)
         label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         gridlayout.addWidget(label, x, 1)
+        
         return x + 1
 
-    def slicer_row(self, cmd, msg, found):
+
+    def slicer_row(self, slicer_path: str, msg: str, found: bool):
+        """
+        Generates the Slicer dependency check label and path, if 3D Slicer is found.
+
+        Parameters
+        ----------
+        slicer_path : str
+            The local 3D Slicer path.
+        msg : str
+            The label message.
+        found : bool
+            True if 3d Slicer has been found locally, otherwise False.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         if found:
-            self.global_config.set_slicer_path(cmd)
+            self.global_config.set_slicer_path(slicer_path)
             self.global_config.save()
             self.slicerlabel_icon.load(self.OK_ICON_FILE)
         else:
             self.slicerlabel_icon.load(self.ERROR_ICON_FILE)
+            
         self.slicerlabel.setText(msg)
