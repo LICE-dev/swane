@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (QMainWindow, QMessageBox, QFileDialog, QInputDial
                                QSpacerItem, QWidget, QTabBar, QDialog)
 from swane.utils.check_dependency import (check_dcm2niix, check_fsl, check_freesurfer,
                                           check_graphviz)
-from PySide6.QtGui import QAction, QIcon, QPixmap, QFont
+from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
 from PySide6.QtCore import QCoreApplication, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
@@ -387,6 +387,7 @@ class MainWindow(QMainWindow):
 
         """
         
+        # Guard to prevent the Home Tab closing
         if index <= 0:
             return
 
@@ -405,10 +406,23 @@ class MainWindow(QMainWindow):
         tab_item = None
 
 
-    def closeEvent(self, event):
-        # evito la chiusura se il wf è in esecuzione
+    def closeEvent(self, event: QCloseEvent):
+        """
+        Prevent the closing of a running workflow tab
+
+        Parameters
+        ----------
+        event : QCloseEvent
+            PySide QCloseEvent.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         if not self.check_running_workflows():
-            return super(MainWindow, self).closeEvent(event)
+            event.accept()
         else:
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_wf_executing_error_2)
