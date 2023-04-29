@@ -88,7 +88,7 @@ class PtTab(QTabWidget):
                     errors = True
                     for subkey in self.node_list[key].node_list.keys():
                         if self.node_list[key].node_list[subkey].node_holder.art == self.main_window.ERROR_ICON_FILE:
-                            self.node_list[key].node_holder.setArt(self.main_window.ERROR_ICON_FILE)
+                            self.node_list[key].node_holder.set_art(self.main_window.ERROR_ICON_FILE)
                             break
 
             self.setTabEnabled(PtTab.DATATAB, True)
@@ -122,7 +122,7 @@ class PtTab(QTabWidget):
         else:
             icon = self.main_window.ERROR_ICON_FILE
 
-        self.node_list[split[0]].node_list[split[1]].node_holder.setArt(icon)
+        self.node_list[split[0]].node_list[split[1]].node_holder.set_art(icon)
 
         self.node_list[split[0]].node_holder.setExpanded(True)
 
@@ -133,7 +133,7 @@ class PtTab(QTabWidget):
                     completed = False
                     break
             if completed:
-                self.node_list[split[0]].node_holder.setArt(self.main_window.OK_ICON_FILE)
+                self.node_list[split[0]].node_holder.set_art(self.main_window.OK_ICON_FILE)
                 self.node_list[split[0]].node_holder.setExpanded(False)
                 self.node_list[split[0]].node_holder.completed = True
 
@@ -141,7 +141,7 @@ class PtTab(QTabWidget):
         for key1 in self.node_list.keys():
             for key2 in self.node_list[key1].node_list.keys():
                 if self.node_list[key1].node_list[key2].node_holder.art == self.main_window.LOADING_MOVIE_FILE:
-                    self.node_list[key1].node_list[key2].node_holder.setArt(self.main_window.VOID_SVG_FILE)
+                    self.node_list[key1].node_list[key2].node_holder.set_art(self.main_window.VOID_SVG_FILE)
 
     def start_gen_wf_thread(self):
         # questa funzione serve a generare il wf in un thread a pare durante il caricamento del pz
@@ -406,7 +406,7 @@ class PtTab(QTabWidget):
 
     def tree_item_clicked(self, item, col):
         if self.main_window.graphviz and item.parent() is None:
-            file = os.path.join(self.pt_folder, PtTab.GRAPH_DIR_NAME, PtTab.GRAPH_FILE_PREFIX + item.getText().lower().replace(" ", "_") + '.'
+            file = os.path.join(self.pt_folder, PtTab.GRAPH_DIR_NAME, PtTab.GRAPH_FILE_PREFIX + item.get_text().lower().replace(" ", "_") + '.'
                                 + PtTab.GRAPH_FILE_EXT)
             self.exec_graph.load(file)
             self.exec_graph.renderer().setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)

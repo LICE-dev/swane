@@ -16,7 +16,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         self.artLabel = QSvgWidget()
         self.artLabel.setFixedWidth(26)
         self.artLabel.setFixedHeight(26)
-        self.setArt(art)
+        self.set_art(art)
         self.textLabel = QLabel(text)
         self.resize_text_label()
         
@@ -28,7 +28,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         
         self.completed = False
         self.art = None
-        
+
     def setText(self, text: str):
         """
         Se the tree item text.
@@ -60,7 +60,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         
         self.textLabel.setMinimumWidth(self.textLabel.fontMetrics().boundingRect(self.textLabel.text()).width() + 10)
         
-    def getText(self) -> str:
+    def get_text(self) -> str:
         """
         Get the tree item text from its label.
 
@@ -73,7 +73,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         
         return self.textLabel.text()
     
-    def setArt(self, art: str):
+    def set_art(self, art: str):
         """
         Set the icon of the tree item.
 
