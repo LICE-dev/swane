@@ -3,6 +3,10 @@ from PySide6.QtCore import Qt
 
 
 class PersistentProgressDialog(QProgressDialog):
+    """
+    Custom implementation of PySide QProgressDialog to define a non-closable window.
+
+    """
 
     def __init__(self, label_text, minimum, maximum, parent=None):
         super(PersistentProgressDialog, self).__init__(label_text, None, minimum, maximum, parent, Qt.WindowFlags())
