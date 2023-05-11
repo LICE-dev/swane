@@ -31,7 +31,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
 
     def setText(self, text: str):
         """
-        Se the tree item text.
+        Set the tree item text.
 
         Parameters
         ----------
