@@ -65,14 +65,14 @@ class PreferencesWindow(QDialog):
             self.new_inputs[x] = PreferenceEntry(category, 'patientsfolder', my_config, PreferenceEntry.DIRECTORY,
                                                  parent=self)
             self.new_inputs[x].set_label_text(strings.pref_window_global_box_mwd)
-            self.new_inputs[x].set_box_text(strings.mainwindow_chose_working_dir_title)
+            self.new_inputs[x].set_box_text(strings.mainwindow_choose_working_dir_title)
             self.new_inputs[x].restart = True
             grid1.addWidget(self.new_inputs[x].label, x, 0)
             grid1.addWidget(self.new_inputs[x].input_field, x, 1)
             grid1.addWidget(self.new_inputs[x].button, x, 2)
             x += 1
 
-            self.new_inputs[x] = PreferenceEntry(category, 'slicerPath', my_config, PreferenceEntry.FILE, parent=self)
+            self.new_inputs[x] = PreferenceEntry(category, 'slicerPath', my_config, PreferenceEntry.FILE, parent=self, validate_on_change=True)
             self.new_inputs[x].set_label_text(strings.pref_window_global_box_slicer)
             self.new_inputs[x].set_box_text(strings.pref_window_select_slicer)
             self.new_inputs[x].restart = True
@@ -322,27 +322,27 @@ class PreferencesWindow(QDialog):
 
         self.setLayout(layout)
 
-    def chose_dir(self, edit, message):
-        folder_path = QFileDialog.getExistingDirectory(self, message)
-        if not os.path.exists(folder_path):
-            msg_box = QMessageBox()
-            msg_box.setIcon(QMessageBox.Icon.NoIcon)
-            msg_box.setText(strings.pref_window_dir_error)
-            msg_box.exec()
-            return
-        edit.setText(folder_path)
-        self.set_restart()
-
-    def chose_file(self, edit, message):
-        file_path, _ = QFileDialog.getOpenFileName(self, message)
-        if not os.path.exists(file_path):
-            msg_box = QMessageBox()
-            msg_box.setIcon(QMessageBox.Icon.NoIcon)
-            msg_box.setText(strings.pref_window_file_error)
-            msg_box.exec()
-            return
-        edit.setText(file_path)
-        self.set_restart()
+    # def choose_dir(self, edit, message):
+    #     folder_path = QFileDialog.getExistingDirectory(self, message)
+    #     if not os.path.exists(folder_path):
+    #         msg_box = QMessageBox()
+    #         msg_box.setIcon(QMessageBox.Icon.NoIcon)
+    #         msg_box.setText(strings.pref_window_dir_error)
+    #         msg_box.exec()
+    #         return
+    #     edit.setText(folder_path)
+    #     self.set_restart()
+    #
+    # def choose_file(self, edit, message):
+    #     file_path, _ = QFileDialog.getOpenFileName(self, message)
+    #     if not os.path.exists(file_path):
+    #         msg_box = QMessageBox()
+    #         msg_box.setIcon(QMessageBox.Icon.NoIcon)
+    #         msg_box.setText(strings.pref_window_file_error)
+    #         msg_box.exec()
+    #         return
+    #     edit.setText(file_path)
+    #     self.set_restart()
 
     def freesurfer_changed(self, checked, hippo_index):
         if not checked or not self.my_config.is_freesurfer_matlab():
@@ -353,12 +353,12 @@ class PreferencesWindow(QDialog):
     def tractography_changed(self, checked):
         self.group_box3.setEnabled(checked)
 
-    @staticmethod
-    def set_checkbox(checkbox, value):
-        if value:
-            checkbox.setCheckState(Qt.Checked)
-        else:
-            checkbox.setCheckState(Qt.Unchecked)
+    # @staticmethod
+    # def set_checkbox(checkbox, value):
+    #     if value:
+    #         checkbox.setCheckState(Qt.Checked)
+    #     else:
+    #         checkbox.setCheckState(Qt.Unchecked)
 
     def set_restart(self):
         self.restart = True

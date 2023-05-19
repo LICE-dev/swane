@@ -619,8 +619,19 @@ class MainWindow(QMainWindow):
 
         msg, self.freesurfer = check_freesurfer()
         x = self.add_home_entry(layout, msg, self.freesurfer[0], x)
-        
-        if self.global_config.get_slicer_path() == '' or not os.path.exists(self.global_config.get_slicer_path()):
+
+        check_slicer = False
+        current_slicer_path = self.global_config.get_slicer_path()
+        if current_slicer_path == '':
+            check_slicer = True
+        elif current_slicer_path[0] == "*":
+            current_slicer_path = current_slicer_path[1:]
+            check_slicer = True
+
+        if not os.path.exists(current_slicer_path):
+            current_slicer_path = ''
+
+        if check_slicer:
             self.slicerlabel_icon = QSvgWidget()
             self.slicerlabel_icon.setFixedSize(25, 25)
             self.slicerlabel_icon.load(self.LOADING_MOVIE_FILE)
@@ -633,7 +644,7 @@ class MainWindow(QMainWindow):
             x += 1
 
             self.global_config.set_slicer_path('')
-            check_slicer_work = SlicerCheckWorker(parent=self)
+            check_slicer_work = SlicerCheckWorker(current_slicer_path, parent=self)
             check_slicer_work.signal.slicer.connect(self.slicer_row)
             QThreadPool.globalInstance().start(check_slicer_work)
         else:
@@ -718,6 +729,8 @@ class MainWindow(QMainWindow):
             self.global_config.save()
             self.slicerlabel_icon.load(self.OK_ICON_FILE)
         else:
+            self.global_config.set_slicer_path('')
+            self.global_config.save()
             self.slicerlabel_icon.load(self.ERROR_ICON_FILE)
             
         self.slicerlabel.setText(msg)
