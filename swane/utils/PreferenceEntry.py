@@ -18,7 +18,7 @@ class PreferenceEntry:
     FILE = 4
     DIRECTORY = 5
 
-    def __init__(self, category, key, my_config, input_type=TEXT, parent=None, populate_combo=None):
+    def __init__(self, category, key, my_config, input_type=TEXT, parent=None, populate_combo=None, validate_on_change=False):
         self.restart = False
         self.category = category
         self.key = key
@@ -32,6 +32,7 @@ class PreferenceEntry:
         self.box_text = ''
         self.parent = parent
         self.changed = False
+        self.validate_on_change = validate_on_change
 
     def set_label_text(self, text):
         self.label.setText(text)
@@ -66,12 +67,11 @@ class PreferenceEntry:
             pixmap = getattr(QStyle, "SP_DirOpenIcon")
             icon_open_dir = button.style().standardIcon(pixmap)
             button.setIcon(icon_open_dir)
-            button.clicked.connect(self.chose_file)
+            button.clicked.connect(self.choose_file)
 
         return field, button
 
-    def chose_file(self, parent):
-        print("mah")
+    def choose_file(self):
         if self.input_type == PreferenceEntry.FILE:
             file_path, _ = QFileDialog.getOpenFileName(parent=self.parent, caption=self.box_text)
             error = strings.pref_window_file_error
@@ -90,6 +90,10 @@ class PreferenceEntry:
             msg_box.setText(error)
             msg_box.exec()
             return
+
+        if self.validate_on_change:
+            file_path = "*" + file_path
+
         self.set_value(file_path)
 
     def populate_combo(self, items):
