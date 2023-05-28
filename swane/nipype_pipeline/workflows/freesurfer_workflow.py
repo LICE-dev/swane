@@ -75,7 +75,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     # Output Node
     outputnode = Node(
         IdentityInterface(fields=['subject_id', 'subjects_dir', 'bgtROI', 'wmROI',
-                                  'pial', 'white', 'vol_label_file', 'lh_hippoAmygLabels',
+                                  'pial', 'white', 'vol_label_file', 'vol_label_file_nii', 'lh_hippoAmygLabels',
                                   'rh_hippoAmygLabels']),
         name='outputnode')
 
@@ -120,6 +120,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     workflow.connect(reconAll, "rawavg", aparaseg2Volnii, "template_file")
     workflow.connect([(reconAll, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'reg_header')])])
     workflow.connect([(reconAll, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'seg_file')])])
+    workflow.connect(aparaseg2Volnii, "vol_label_file", outputnode, "vol_label_file_nii")
 
     # NODE 4: Left cerebral white matter binary ROI
     lhwmROI = Node(ThrROI(), name='lhwmROI')
