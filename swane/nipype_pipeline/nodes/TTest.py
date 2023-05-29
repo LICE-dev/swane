@@ -32,10 +32,6 @@ class TTest(BaseInterface):
         except:
             self.t = 0
             self.p = 0
-        print("####################################################")
-        print(self.t)
-        print(self.p)
-        print("####################################################")
 
         return runtime
 

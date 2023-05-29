@@ -6,6 +6,7 @@ from nipype import Node, Merge
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.TTest import TTest
 from swane.nipype_pipeline.nodes.SumMultiVols import SumMultiVols
+from swane.nipype_pipeline.nodes.Zscore import Zscore
 
 from nipype.interfaces.utility import IdentityInterface
 
@@ -15,40 +16,40 @@ lh_labels = [
     18,      # Left-Amygdala                           103 255 255 0
     1000,    # ctx-lh-unknown                      25  5   25  0
     1001,    # ctx-lh-bankssts                     25  100 40  0
-    # 1002,    # ctx-lh-caudalanteriorcingulate      125 100 160 0
-    # 1003,    # ctx-lh-caudalmiddlefrontal          100 25  0   0
-    # 1004,    # ctx-lh-corpuscallosum               120 70  50  0
-    # 1005,    # ctx-lh-cuneus                       220 20  100 0
-    # 1006,    # ctx-lh-entorhinal                   220 20  10  0
-    # 1007,    # ctx-lh-fusiform                     180 220 140 0
-    # 1008,    # ctx-lh-inferiorparietal             220 60  220 0
-    # 1009,    # ctx-lh-inferiortemporal             180 40  120 0
-    # 1010,    # ctx-lh-isthmuscingulate             140 20  140 0
-    # 1011,    # ctx-lh-lateraloccipital             20  30  140 0
-    # 1012,    # ctx-lh-lateralorbitofrontal         35  75  50  0
-    # 1013,    # ctx-lh-lingual                      225 140 140 0
-    # 1014,    # ctx-lh-medialorbitofrontal          200 35  75  0
-    # 1015,    # ctx-lh-middletemporal               160 100 50  0
-    # 1016,    # ctx-lh-parahippocampal              20  220 60  0
-    # 1017,    # ctx-lh-paracentral                  60  220 60  0
-    # 1018,    # ctx-lh-parsopercularis              220 180 140 0
-    # 1019,    # ctx-lh-parsorbitalis                20  100 50  0
-    # 1020,    # ctx-lh-parstriangularis             220 60  20  0
-    # 1021,    # ctx-lh-pericalcarine                120 100 60  0
-    # 1022,    # ctx-lh-postcentral                  220 20  20  0
-    # 1023,    # ctx-lh-posteriorcingulate           220 180 220 0
-    # 1024,    # ctx-lh-precentral                   60  20  220 0
-    # 1025,    # ctx-lh-precuneus                    160 140 180 0
-    # 1026,    # ctx-lh-rostralanteriorcingulate     80  20  140 0
-    # 1027,    # ctx-lh-rostralmiddlefrontal         75  50  125 0
-    # 1028,    # ctx-lh-superiorfrontal              20  220 160 0
-    # 1029,    # ctx-lh-superiorparietal             20  180 140 0
-    # 1030,    # ctx-lh-superiortemporal             140 220 220 0
-    # 1031,    # ctx-lh-supramarginal                80  160 20  0
-    # 1032,    # ctx-lh-frontalpole                  100 0   100 0
-    # 1033,    # ctx-lh-temporalpole                 70  70  70  0
-    # 1034,    # ctx-lh-transversetemporal           150 150 200 0
-    # 1035,    # ctx-lh-insula                       255 192 32  0
+    1002,    # ctx-lh-caudalanteriorcingulate      125 100 160 0
+    1003,    # ctx-lh-caudalmiddlefrontal          100 25  0   0
+    1004,    # ctx-lh-corpuscallosum               120 70  50  0
+    1005,    # ctx-lh-cuneus                       220 20  100 0
+    1006,    # ctx-lh-entorhinal                   220 20  10  0
+    1007,    # ctx-lh-fusiform                     180 220 140 0
+    1008,    # ctx-lh-inferiorparietal             220 60  220 0
+    1009,    # ctx-lh-inferiortemporal             180 40  120 0
+    1010,    # ctx-lh-isthmuscingulate             140 20  140 0
+    1011,    # ctx-lh-lateraloccipital             20  30  140 0
+    1012,    # ctx-lh-lateralorbitofrontal         35  75  50  0
+    1013,    # ctx-lh-lingual                      225 140 140 0
+    1014,    # ctx-lh-medialorbitofrontal          200 35  75  0
+    1015,    # ctx-lh-middletemporal               160 100 50  0
+    1016,    # ctx-lh-parahippocampal              20  220 60  0
+    1017,    # ctx-lh-paracentral                  60  220 60  0
+    1018,    # ctx-lh-parsopercularis              220 180 140 0
+    1019,    # ctx-lh-parsorbitalis                20  100 50  0
+    1020,    # ctx-lh-parstriangularis             220 60  20  0
+    1021,    # ctx-lh-pericalcarine                120 100 60  0
+    1022,    # ctx-lh-postcentral                  220 20  20  0
+    1023,    # ctx-lh-posteriorcingulate           220 180 220 0
+    1024,    # ctx-lh-precentral                   60  20  220 0
+    1025,    # ctx-lh-precuneus                    160 140 180 0
+    1026,    # ctx-lh-rostralanteriorcingulate     80  20  140 0
+    1027,    # ctx-lh-rostralmiddlefrontal         75  50  125 0
+    1028,    # ctx-lh-superiorfrontal              20  220 160 0
+    1029,    # ctx-lh-superiorparietal             20  180 140 0
+    1030,    # ctx-lh-superiortemporal             140 220 220 0
+    1031,    # ctx-lh-supramarginal                80  160 20  0
+    1032,    # ctx-lh-frontalpole                  100 0   100 0
+    1033,    # ctx-lh-temporalpole                 70  70  70  0
+    1034,    # ctx-lh-transversetemporal           150 150 200 0
+    1035,    # ctx-lh-insula                       255 192 32  0
 ]
 
 labels_rh = [
@@ -143,10 +144,12 @@ def freesurfer_asymmetry_index_workflow(name: str, base_dir: str = "/") -> Custo
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=['asymmetry_index_file']),
+        IdentityInterface(fields=['asymmetry_t', 'asymmetry_p', 'asymmetry_z']),
         name='outputnode')
 
-    merge_node = Node(Merge(len(lh_labels)*2), name="merge_node")
+    merge_node_t = Node(Merge(len(lh_labels)*2), name="merge_node_t")
+    merge_node_p = Node(Merge(len(lh_labels) * 2), name="merge_node_p")
+    merge_node_z = Node(Merge(len(lh_labels) * 2), name="merge_node_z")
     index = 1
 
     for lh_label in lh_labels:
@@ -173,6 +176,10 @@ def freesurfer_asymmetry_index_workflow(name: str, base_dir: str = "/") -> Custo
         workflow.add_nodes([rh_mask])
         workflow.connect(inputnode, "seg_file", rh_mask, "in_file")
 
+        rh_mask_inv = Node(ImageMaths(), name='rh_mask_inv_%d' % rh_label)
+        rh_mask_inv.inputs.op_string = '-mul -1'
+        workflow.connect(rh_mask, "out_file", rh_mask_inv, "in_file")
+
         rh_apply_mask = Node(ApplyMask(), name="rh_applymask_%d" % rh_label)
         workflow.connect(inputnode, "in_file", rh_apply_mask, "in_file")
         workflow.connect(rh_mask, "out_file", rh_apply_mask, "mask_file")
@@ -185,24 +192,59 @@ def freesurfer_asymmetry_index_workflow(name: str, base_dir: str = "/") -> Custo
         workflow.connect(lh_stats, "out_stat", t_test, "stats_lh")
         workflow.connect(rh_stats, "out_stat", t_test, "stats_rh")
 
-        lh_value = Node(BinaryMaths(), name="lh_value_%d" % lh_label)
-        lh_value.inputs.operation = "mul"
-        workflow.connect(lh_mask, "out_file", lh_value, "in_file")
-        workflow.connect(t_test, "stat_t", lh_value, "operand_value")
+        lh_value_t = Node(BinaryMaths(), name="lh_value_t_%d" % lh_label)
+        lh_value_t.inputs.operation = "mul"
+        workflow.connect(lh_mask, "out_file", lh_value_t, "in_file")
+        workflow.connect(t_test, "stat_t", lh_value_t, "operand_value")
 
-        rh_value = Node(BinaryMaths(), name="rh_value_%d" % lh_label)
-        rh_value.inputs.operation = "mul"
-        workflow.connect(rh_mask, "out_file", rh_value, "in_file")
-        workflow.connect(t_test, "stat_t", rh_value, "operand_value")
+        rh_value_t = Node(BinaryMaths(), name="rh_value_t_%d" % lh_label)
+        rh_value_t.inputs.operation = "mul"
+        workflow.connect(rh_mask_inv, "out_file", rh_value_t, "in_file")
+        workflow.connect(t_test, "stat_t", rh_value_t, "operand_value")
 
-        workflow.connect(lh_value, "out_file", merge_node, 'in%d' % index)
+        lh_value_p = Node(BinaryMaths(), name="lh_value_p_%d" % lh_label)
+        lh_value_p.inputs.operation = "mul"
+        workflow.connect(lh_mask, "out_file", lh_value_p, "in_file")
+        workflow.connect(t_test, "stat_p", lh_value_p, "operand_value")
+
+        rh_value_p = Node(BinaryMaths(), name="rh_value_p_%d" % lh_label)
+        rh_value_p.inputs.operation = "mul"
+        workflow.connect(rh_mask_inv, "out_file", rh_value_p, "in_file")
+        workflow.connect(t_test, "stat_p", rh_value_p, "operand_value")
+
+        def get_z_op_string(stat_list):
+            return "-sub %f -div %f -mas" % (stat_list[0], stat_list[1])
+
+        lh_z = Node(ImageMaths(), name="lh_z_%d" % lh_label)
+        workflow.connect(inputnode, "in_file", lh_z, "in_file")
+        workflow.connect(rh_stats, ('out_stat', get_z_op_string), lh_z, 'op_string')
+        workflow.connect(lh_mask, "out_file", lh_z, "in_file2")
+
+        rh_z = Node(ImageMaths(), name="rh_z_%d" % rh_label)
+        workflow.connect(inputnode, "in_file", rh_z, "in_file")
+        workflow.connect(lh_stats, ('out_stat', get_z_op_string), rh_z, 'op_string')
+        workflow.connect(rh_mask, "out_file", rh_z, "in_file2")
+
+        workflow.connect(lh_value_t, "out_file", merge_node_t, 'in%d' % index)
+        workflow.connect(lh_value_p, "out_file", merge_node_p, 'in%d' % index)
+        workflow.connect(lh_z, "out_file", merge_node_z, 'in%d' % index)
         index += 1
-        workflow.connect(rh_value, "out_file", merge_node, 'in%d' % index)
+        workflow.connect(rh_value_t, "out_file", merge_node_t, 'in%d' % index)
+        workflow.connect(lh_value_p, "out_file", merge_node_p, 'in%d' % index)
+        workflow.connect(rh_z, "out_file", merge_node_z, 'in%d' % index)
         index += 1
 
-    sum_maks = Node(SumMultiVols(), name="sum_masks")
-    workflow.connect(merge_node, "out", sum_maks, "vol_files")
+    sum_masks_t = Node(SumMultiVols(), name="sum_masks_t")
+    workflow.connect(merge_node_t, "out", sum_masks_t, "vol_files")
 
-    workflow.connect(sum_maks, "out_file", outputnode, "asymmetry_index_file")
+    sum_masks_p = Node(SumMultiVols(), name="sum_masks_p")
+    workflow.connect(merge_node_p, "out", sum_masks_p, "vol_files")
+
+    sum_masks_z = Node(SumMultiVols(), name="sum_masks_z")
+    workflow.connect(merge_node_z, "out", sum_masks_z, "vol_files")
+
+    workflow.connect(sum_masks_t, "out_file", outputnode, "asymmetry_t")
+    workflow.connect(sum_masks_p, "out_file", outputnode, "asymmetry_p")
+    workflow.connect(sum_masks_z, "out_file", outputnode, "asymmetry_z")
 
     return workflow
