@@ -31,6 +31,7 @@ class SumMultiVols(ImageMaths):
             if first:
                 self.inputs.op_string = ""
                 self.inputs.in_file = vol
+                first = False
             else:
                 self.inputs.op_string += "-add " + vol + " "
 
