@@ -11,9 +11,11 @@ main_multiple_instances_error = "Another instance of " + APPNAME + " is already 
 
 # Main Window
 mainwindow_choose_working_dir = "Choose the main working directory before start to use this application"
+mainwindow_working_dir_space_error = "Blank spaces are not allowed in main working dir name or in its parent folder name"
 mainwindow_choose_working_dir_title = 'Select the main working directory'
 mainwindow_select_pt_folder = 'Select a patient folder'
 mainwindow_ptfolder_outside_workingdir_error = "The selected folder is not in " + APPNAME + " main working directory!"
+mainwindow_ptfolder_with_blank_spaces_error = "The selected folder name contains blank spaces!"
 mainwindow_pt_already_loaded_error = "The selected patient was already loaded in " + APPNAME + "!"
 mainwindow_invalid_folder_error = "The selected folder does not contains valid patient data!"
 mainwindow_force_dir_update = "If you are SURE you selected a patient folder, " + APPNAME + "can try to update " \
