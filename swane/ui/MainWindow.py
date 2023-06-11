@@ -138,6 +138,15 @@ class MainWindow(QMainWindow):
         if not os.path.exists(folder_path):
             return
 
+        # Guard to avoid the opening a directory containing blank spaces
+        if ' ' in folder_path:
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setText(strings.mainwindow_ptfolder_with_blank_spaces_error)
+            msg_box.exec()
+            return
+
+
         # Guard to avoid the opening of a directory outside the main patient folder
         if not os.path.abspath(folder_path).startswith(
                 os.path.abspath(self.global_config.get_patients_folder()) + os.sep):
@@ -241,7 +250,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
-        self.create_new_pt_dir(pt_name)
+        self.create_new_pt_dir(pt_name.replace(" ", "_"))
 
     def set_patients_folder(self):
         """
@@ -256,6 +265,12 @@ class MainWindow(QMainWindow):
         folder_path = QFileDialog.getExistingDirectory(self, strings.mainwindow_choose_working_dir_title)
         
         if not os.path.exists(folder_path):
+            return
+
+        if ' ' in folder_path:
+            msg_box = QMessageBox()
+            msg_box.setText(strings.mainwindow_working_dir_space_error)
+            msg_box.exec()
             return
         
         self.global_config.set_patients_folder(os.path.abspath(folder_path))
@@ -531,7 +546,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
-        tab_item.close_routine()
+        tab_item.pt_config.save()
         
         self.pt_tabs_array.remove(tab_item)
         self.main_tab.removeTab(index)
