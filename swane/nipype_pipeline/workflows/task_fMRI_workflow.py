@@ -399,7 +399,7 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
 
         # NODE 36: Perform clustering on statistical output
         cluster = Node(FslCluster(), name="%s_cluster_%d" % (name, cont))
-        cluster.long_name = "contrast " + str(cont) + " %"
+        cluster.long_name = "contrast " + str(cont) + " %s"
         cluster.inputs.threshold = 3.1
         cluster.inputs.connectivity = 26
         cluster.inputs.pthreshold = 0.05
