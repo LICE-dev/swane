@@ -5,7 +5,7 @@ import sys
 import os
 import subprocess
 
-def load_anat(scene_dir: str, volume_name: str):
+def load_anat(scene_dir: str, volume_name: str, color_node_ID:str=None):
     """
     Creates a scalar node from a NIFTI file.
 
@@ -31,6 +31,10 @@ def load_anat(scene_dir: str, volume_name: str):
             node = slicer.util.loadVolume(file)
         except:
             pass
+
+        if node is not None and color_node_ID is not None:
+            node.GetDisplayNode().SetAndObserveColorNodeID(color_node_ID)
+            return
         
     return node
 
@@ -333,10 +337,7 @@ def load_fmri(scene_dir: str):
     print("SLICERLOADER: Loading fMRI")
     for file in os.listdir(fmri_path):
         if file.endswith('.nii.gz'):
-            func_node = load_anat(fmri_path, file.replace(".nii.gz", ""))
-            if func_node is not None:
-                func_node.GetDisplayNode().SetAndObserveColorNodeID('vtkMRMLPETProceduralColorNodePET-Rainbow2')
-
+            func_node = load_anat(fmri_path, file.replace(".nii.gz", ""), 'vtkMRMLPETProceduralColorNodePET-Rainbow2')
 
 def main_tract(dti_dir: str, scene_dir: str):
     sides = ["rh", "lh"]
@@ -379,12 +380,19 @@ else:
 
         lesion_segment(sceneDir)
 
-        baseList = ['ref_brain', 'r-flair_brain', 'r-mdc_brain', 'r-pet', 'r-pet_ai', 'r-pet_zscore', 'r-asl',
-                    'r-asl_ai', 'r-asl_zscore', 'r-FA', 'r-flair2d_tra_brain', 'r-flair2d_cor_brain',
+        baseList = ['ref_brain', 'r-flair_brain', 'r-mdc_brain', 'r-pet', 'r-pet_zscore', 'r-asl',
+                    'r-asl_zscore', 'r-FA', 'r-flair2d_tra_brain', 'r-flair2d_cor_brain',
                     'r-flair2d_sag_brain', 'r-binary_flair', 'r-junction_z', 'r-extension_z']
 
         for volume in baseList:
             load_anat(sceneDir, volume)
+
+        colorList = [('r-asl_ai', 'vtkMRMLColorTableNodeFileDivergingBlueRed.txt'),
+                     ('r-pet_ai', 'vtkMRMLColorTableNodeFileDivergingBlueRed.txt'),
+                     ]
+
+        for volume in colorList:
+            load_anat(sceneDir, volume[0], volume[1])
 
         load_fmri(sceneDir)
 
