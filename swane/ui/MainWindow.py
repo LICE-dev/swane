@@ -344,11 +344,12 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
-        for folder in self.global_config.get_default_folders():
-            if not os.path.exists(os.path.join(dir_path, self.global_config.get_default_folders()[folder])):
-                os.makedirs(os.path.join(
-                    dir_path, self.global_config.get_default_folders()[folder]), exist_ok=True)      
+
+        for data_input in DataInputList().values():
+            if not os.path.exists(
+                    os.path.join(dir_path, self.global_config.get_default_dicom_folder(), data_input.name)):
+                os.makedirs(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), data_input.name),
+                            exist_ok=True)
 
     def edit_config(self):
         """
