@@ -226,10 +226,11 @@ class MainWorkflow(CustomWorkflow):
                 pet.sink_result(self.base_dir, "outputnode", 'zscore_surf_lh', self.SCENE_DIR)
                 pet.sink_result(self.base_dir, "outputnode", 'zscore_surf_rh', self.SCENE_DIR)
 
-                from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
-                pet_ai = freesurfer_asymmetry_index_workflow(name="pet_ai")
-                self.connect(pet, "outputnode.registered_file", pet_ai, "inputnode.in_file")
-                self.connect(freesurfer, "outputnode.vol_label_file_nii", pet_ai, "inputnode.seg_file")
+                # TODO work in progress for segmentation based asymmetry study
+                # from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
+                # pet_ai = freesurfer_asymmetry_index_workflow(name="pet_ai")
+                # self.connect(pet, "outputnode.registered_file", pet_ai, "inputnode.in_file")
+                # self.connect(freesurfer, "outputnode.vol_label_file_nii", pet_ai, "inputnode.seg_file")
 
             if is_ai:
                 self.connect(sym, 'outputnode.fieldcoeff_file', pet, 'inputnode.ref_2_sym_warp')
