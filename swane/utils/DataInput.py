@@ -54,7 +54,7 @@ class DataInputList(dict):
         self.append(DataInput(DataInputList.FLAIR3D, '3D Flair'))
         self.append(DataInput(DataInputList.MDC, 'Post-contrast 3D T1w'))
         self.append(DataInput(DataInputList.VENOUS, 'Venous MRA - Phase contrast'))
-        self.append(DataInput(DataInputList.VENOUS2, 'Venous MRA - Second phase', wf_name='venous'))
+        self.append(DataInput(DataInputList.VENOUS2, 'Venous MRA - Second phase (optional)', wf_name='venous'))
         self.append(DataInput(DataInputList.DTI, 'Diffusion Tensor Imaging', wf_name='dti_preproc'))
         self.append(DataInput(DataInputList.ASL, 'Arterial Spin Labeling'))
         self.append(DataInput(DataInputList.PET, 'PET', image_modality=DataInput.PET))
