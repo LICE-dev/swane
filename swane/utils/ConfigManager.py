@@ -64,7 +64,7 @@ class ConfigManager(configparser.ConfigParser):
         'wftype': '0',
         'freesurfer': 'true',
         'hippoAmygLabels': 'false',
-        'domap': 'false',
+        'FLAT1': 'false',
         'ai': 'false',
         'tractography': 'true',
     }
@@ -72,7 +72,7 @@ class ConfigManager(configparser.ConfigParser):
         'wftype': '1',
         'freesurfer': 'true',
         'hippoAmygLabels': 'true',
-        'domap': 'true',
+        'FLAT1': 'true',
         'ai': 'true',
         'tractography': 'false',
     }
