@@ -24,15 +24,15 @@ setup(name='swane',
       license='MIT',
       install_requires=[
           "networkx<3",
-          "nipype",
-          "Pyside6",
-          "pydicom",
-          "configparser",
-          "psutil",
-          "pyshortcuts",
+          "nipype=1.8.6",
+          "Pyside6=6.4.3",
+          "pydicom=2.3.1",
+          "configparser=5.3.0",
+          "psutil=5.9.4",
+          "pyshortcuts=1.8.3",
           "swane_supplement>=0.1.2",
-          "matplotlib",
-          "nibabel"
+          "matplotlib=3.5.2",
+          "nibabel=5.0.0"
       ],
       python_requires=">=3.7",
       entry_points={

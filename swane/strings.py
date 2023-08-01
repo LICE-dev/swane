@@ -86,8 +86,8 @@ pttab_multi_exam_error = "DICOM file from more than one examination in "
 pttab_multi_series_error = "DICOM file from more than one series in "
 pttab_missing_fsl_error = "FSL is required to generate " + APPNAME + " Workflow!"
 pttab_wf_gen_error = "Error generating the Workflow!"
-pttab_old_wf_found = "A previous execution of " + APPNAME + """ was detected. Do you want to resume execution or start 
-a new one?"""
+pttab_old_wf_found = "This patient has already been analyzed by " + APPNAME + """. Do you want to resume the previous analysis? If you want to delete all
+previous analyses and start over press NO, otherwise press YES"""
 pttab_old_wf_resume = "Resume execution"
 pttab_old_wf_reset = "New execution"
 pttab_old_fs_found = "An existing FreeSurfer folder was detected. Do you want to keep or delete the existing folder?"
