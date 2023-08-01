@@ -177,8 +177,8 @@ class PreferencesWindow(QDialog):
             grid2.addWidget(self.new_inputs[x].label, x, 1)
             x += 1
 
-            self.new_inputs[x] = PreferenceEntry(category, 'domap', my_config, PreferenceEntry.CHECKBOX, parent=self)
-            self.new_inputs[x].set_label_text(strings.pref_window_wf_box_domap)
+            self.new_inputs[x] = PreferenceEntry(category, 'FLAT1', my_config, PreferenceEntry.CHECKBOX, parent=self)
+            self.new_inputs[x].set_label_text(strings.pref_window_wf_box_FLAT1)
             if not data_input_list[DataInputList.FLAIR3D].loaded:
                 self.new_inputs[x].disable(strings.pref_window_wf_box_missing_flair3d)
             grid2.addWidget(self.new_inputs[x].input_field, x, 0)

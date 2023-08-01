@@ -7,28 +7,28 @@ import math
 from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File, isdefined)
 
 
-# nodo per rimozione outliers nel DOmap
+# nodo per rimozione outliers nel FLAT1
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
-class DOmapOutliersMaskInputSpec(BaseInterfaceInputSpec):
+class FLAT1OutliersMaskInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='the input image')
     mask_file = File(exists=True, mandatory=True, desc='the original mask image')
     out_file = File(desc='the output mask name')
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
-class DOmapOutliersMaskOutputSpec(TraitedSpec):
+class FLAT1OutliersMaskOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc='the output image')
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DOmapOutliersMask(BaseInterface):
+class FLAT1OutliersMask(BaseInterface):
     """
-    Creates a mask that can be used to remove the outliers in DOmap workflow.
+    Creates a mask that can be used to remove the outliers in FLAT1 workflow.
 
     """
     
-    input_spec = DOmapOutliersMaskInputSpec
-    output_spec = DOmapOutliersMaskOutputSpec
+    input_spec = FLAT1OutliersMaskInputSpec
+    output_spec = FLAT1OutliersMaskOutputSpec
 
     def _run_interface(self, runtime):
         self.inputs.out_file = self._gen_outfilename()

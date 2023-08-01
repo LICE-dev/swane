@@ -14,7 +14,7 @@ from swane.nipype_pipeline.workflows.task_fMRI_workflow import task_fMRI_workflo
 from swane.nipype_pipeline.workflows.nonlinear_reg_workflow import nonlinear_reg_workflow
 from swane.nipype_pipeline.workflows.ref_workflow import ref_workflow
 from swane.nipype_pipeline.workflows.freesurfer_workflow import freesurfer_workflow
-from swane.nipype_pipeline.workflows.domap_workflow import domap_workflow
+from swane.nipype_pipeline.workflows.FLAT1_workflow import FLAT1_workflow
 from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_workflow import venous_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
@@ -53,8 +53,8 @@ class MainWorkflow(CustomWorkflow):
         # Check for FreeSurfer requirement and request
         is_freesurfer = pt_config.is_freesurfer() and pt_config.get_pt_wf_freesurfer()
         is_hippo_amyg_labels = pt_config.is_freesurfer_matlab() and pt_config.get_pt_wf_hippo()
-        # Check for DOMap requirement and request
-        is_domap = pt_config.getboolean('WF_OPTION', 'DOmap') and data_input_list[DataInputList.FLAIR3D].loaded
+        # Check for FLAT1 requirement and request
+        is_FLAT1 = pt_config.getboolean('WF_OPTION', 'FLAT1') and data_input_list[DataInputList.FLAIR3D].loaded
         # Check for Asymmetry Index request
         is_ai = pt_config.getboolean('WF_OPTION', 'ai')
         # Check for Tractography request
@@ -119,8 +119,8 @@ class MainWorkflow(CustomWorkflow):
 
             flair.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
 
-        if is_domap:
-            # Non linear registration to MNI1mm Atlas for DOmap
+        if is_FLAT1:
+            # Non linear registration to MNI1mm Atlas for FLAT1
             mni1 = nonlinear_reg_workflow("mni1")
             mni1.long_name = "MNI atlas registration"
 
@@ -129,18 +129,18 @@ class MainWorkflow(CustomWorkflow):
             mni1_inputnode.inputs.atlas = mni1_path
             self.connect(t1, "outputnode.ref_brain", mni1, "inputnode.in_file")
 
-            # DOmap analysis
-            domap = domap_workflow("DOmap", mni1_path)
-            domap.long_name = "DOmap analysis"
+            # FLAT1 analysis
+            FLAT1 = FLAT1_workflow("FLAT1", mni1_path)
+            FLAT1.long_name = "FLAT1 analysis"
 
-            self.connect(t1, "outputnode.ref_brain", domap, "inputnode.ref_brain")
-            self.connect(flair, "outputnode.registered_file", domap, "inputnode.flair_brain")
-            self.connect(mni1, "outputnode.fieldcoeff_file", domap, "inputnode.ref_2_mni1_warp")
-            self.connect(mni1, "outputnode.inverse_warp", domap, "inputnode.ref_2_mni1_inverse_warp")
+            self.connect(t1, "outputnode.ref_brain", FLAT1, "inputnode.ref_brain")
+            self.connect(flair, "outputnode.registered_file", FLAT1, "inputnode.flair_brain")
+            self.connect(mni1, "outputnode.fieldcoeff_file", FLAT1, "inputnode.ref_2_mni1_warp")
+            self.connect(mni1, "outputnode.inverse_warp", FLAT1, "inputnode.ref_2_mni1_inverse_warp")
 
-            domap.sink_result(self.base_dir, "outputnode", "extension_z", self.SCENE_DIR)
-            domap.sink_result(self.base_dir, "outputnode", "junction_z", self.SCENE_DIR)
-            domap.sink_result(self.base_dir, "outputnode", "binary_flair", self.SCENE_DIR)
+            FLAT1.sink_result(self.base_dir, "outputnode", "extension_z", self.SCENE_DIR)
+            FLAT1.sink_result(self.base_dir, "outputnode", "junction_z", self.SCENE_DIR)
+            FLAT1.sink_result(self.base_dir, "outputnode", "binary_flair", self.SCENE_DIR)
 
         for plane in DataInputList.PLANES:
             if DataInputList.FLAIR2D+'_%s' % plane in data_input_list and data_input_list[DataInputList.FLAIR2D+'_%s' % plane].loaded:

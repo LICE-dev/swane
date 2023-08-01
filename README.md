@@ -36,7 +36,7 @@ A few of the analysis you can do with SWANi:
 * **2D Cor/Sag/Tra Flair**: generate 2D Flair NIFTI files and perform linear registration to reference space;
 * **Post-contrast 3D T1w**: generate post-contrast 3D T1w NIFTI files and perform linear registration to T13D reference space.
 * **FreeSurfer**: perform FreeSurfer cortical reconstruction and, if required, segmentation of the hippocampal substructures and the nuclei of the amygdala;
-* **DOmap**: create a junction and extension z-score map based on 3D T1w, 3D Flair and a mean template;
+* **FLAT1**: create a junction and extension z-score map based on 3D T1w, 3D Flair and a mean template;
 * **Diffusion Tensor Imaging processing**: DTI preprocessing workflow and fractinal anisotropy calculation;
 * **Tractography**: tractography execution for chosen tract using FSL xtract protocols;
 * **PET & Arterial Spin Analysis (ASL)**: analysis for registration to reference, z-score and asymmetry index maps, projection on FreeSurfer pial surface;
