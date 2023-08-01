@@ -156,7 +156,7 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
         workflow.connect(targets_2_ref, "out_file", targets_bin, "in_file")
         
         # NODE 10: Tractography
-        probtrackx = MapNode(CustomProbTrackX2(), name="probtrackx_%s_%s" % (name, side), iterfield=["rseed"], mem_gb=4)
+        probtrackx = MapNode(CustomProbTrackX2(), name="probtrackx_%s_%s" % (name, side), iterfield=["rseed"])
         probtrackx.long_name = side + " %s"
         probtrackx.inputs.n_samples = n_samples
         probtrackx.inputs.loop_check = True
@@ -190,7 +190,7 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
         # Check if inverted run is required in protocol
         if is_invert:
             # NODE 11: Inverted tractography
-            probtrackx_inverted = MapNode(CustomProbTrackX2(), name="probtrackx_inverted_%s_%s" % (name, side), iterfield=["rseed"], mem_gb=4)
+            probtrackx_inverted = MapNode(CustomProbTrackX2(), name="probtrackx_inverted_%s_%s" % (name, side), iterfield=["rseed"])
             probtrackx_inverted.long_name = side + " inverse %s"
             probtrackx_inverted.inputs.n_samples = n_samples
             probtrackx_inverted.inputs.loop_check = True

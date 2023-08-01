@@ -151,7 +151,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
         workflow.connect(inputnode, 'ref_brain', mni_2_ref_flirt, 'reference')
 
         # NODE 2: Nonlinear registration
-        mni_2_ref_fnirt = Node(FNIRT(), name='mni_2_ref_fnirt', mem_gb=7)
+        mni_2_ref_fnirt = Node(FNIRT(), name='mni_2_ref_fnirt')
         mni_2_ref_fnirt.long_name = "atlas %s to diffusion space"
         mni_2_ref_fnirt.inputs.fieldcoeff_file = True
         mni_2_ref_fnirt.inputs.in_file = mni_dir
