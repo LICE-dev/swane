@@ -5,7 +5,7 @@ import sys
 import os
 import subprocess
 
-def load_anat(scene_dir: str, volume_name: str, color_node_ID:str=None):
+def load_anat(scene_dir: str, volume_name: str, color_node_ID: str = None):
     """
     Creates a scalar node from a NIFTI file.
 
@@ -15,6 +15,8 @@ def load_anat(scene_dir: str, volume_name: str, color_node_ID:str=None):
         The scene directory.
     volume_name : str
         The NIFTI file name (without extension).
+    color_node_ID : str, optional
+        The colorNodeID to apply to Slicer node. The default is None.
 
     Returns
     -------
@@ -194,7 +196,7 @@ def load_freesurfer(scene_dir: str, ref_node):
         load_freesurfer_overlay(scene_dir, overlay + "_rh.mgz", rh_pial)
 
 
-def load_vein(scene_dir: str, remove_vein: bool=False):
+def load_vein(scene_dir: str, remove_vein: bool = False):
     """
     Loads the veins files and creates their 3d model.
 
@@ -246,7 +248,7 @@ def load_vein(scene_dir: str, remove_vein: bool=False):
         slicer.mrmlScene.RemoveNode(vein_node)
 
 
-def tract_model(segmentation_node, dti_dir: str, tract: str, side: str):
+def tract_model(segmentation_node, dti_dir: str, tract: [], side: str):
     """
     Creates the 3d model of a tract.
 
@@ -257,8 +259,8 @@ def tract_model(segmentation_node, dti_dir: str, tract: str, side: str):
         DESCRIPTION.
     dti_dir : str
         The DTI directory.
-    tract : str
-        The name of the tract.
+    tract : []
+        The array with the tract information.
     side : str
         The side of the tract:
             - LH for left side
@@ -380,8 +382,7 @@ else:
 
         lesion_segment(sceneDir)
 
-        baseList = ['ref_brain', 'r-flair_brain', 'r-mdc_brain', 'r-pet', 'r-pet_zscore', 'r-asl',
-                    'r-asl_zscore', 'r-FA', 'r-flair2d_tra_brain', 'r-flair2d_cor_brain',
+        baseList = ['ref_brain', 'r-flair_brain', 'r-mdc_brain', 'r-FA', 'r-flair2d_tra_brain', 'r-flair2d_cor_brain',
                     'r-flair2d_sag_brain', 'r-binary_flair', 'r-junction_z', 'r-extension_z']
 
         for volume in baseList:
@@ -389,6 +390,10 @@ else:
 
         colorList = [('r-asl_ai', 'vtkMRMLColorTableNodeFileDivergingBlueRed.txt'),
                      ('r-pet_ai', 'vtkMRMLColorTableNodeFileDivergingBlueRed.txt'),
+                     ('r-pet', 'vtkMRMLColorTableNodeFileColdToHotRainbow.txt'),
+                     ('r-pet_zscore', 'vtkMRMLColorTableNodeFileColdToHotRainbow.txt'),
+                     ('r-asl', 'vtkMRMLColorTableNodeFileColdToHotRainbow.txt'),
+                     ('r-asl_zscore', 'vtkMRMLColorTableNodeFileColdToHotRainbow.txt'),
                      ]
 
         for volume in colorList:
