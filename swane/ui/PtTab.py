@@ -274,6 +274,10 @@ class PtTab(QTabWidget):
                                              QPushButton(strings.pttab_clear_button)]
             self.input_report[data_input.name][0].load(self.main_window.ERROR_ICON_FILE)
             self.input_report[data_input.name][0].setFixedSize(25, 25)
+            if data_input.tooltip != "":
+                # Add tooltips and append ⓘ character to label
+                self.input_report[data_input.name][1].setText(data_input.label+" \u24D8")
+                self.input_report[data_input.name][1].setToolTip(data_input.tooltip)
             self.input_report[data_input.name][1].setFont(bold_font)
             self.input_report[data_input.name][1].setAlignment(Qt.AlignLeft | Qt.AlignBottom)
             self.input_report[data_input.name][2].setAlignment(Qt.AlignLeft | Qt.AlignTop)
