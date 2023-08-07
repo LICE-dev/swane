@@ -7,6 +7,7 @@ from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
 from PySide6.QtCore import QCoreApplication, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
+import sys
 
 from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
@@ -495,10 +496,11 @@ class MainWindow(QMainWindow):
         file_menu.addAction(button_action3)
         tool_menu = menu.addMenu(strings.menu_tools_name)
         tool_menu.addAction(button_action4)
-        button_action5 = QAction(strings.menu_shortcut, self)
-        button_action5.triggered.connect(lambda checked=None, global_config=self.global_config: shortcut_manager(global_config))
+        if sys.platform != "darwin":
+            button_action5 = QAction(strings.menu_shortcut, self)
+            button_action5.triggered.connect(lambda checked=None, global_config=self.global_config: shortcut_manager(global_config))
 
-        tool_menu.addAction(button_action5)
+            tool_menu.addAction(button_action5)
         help_menu = menu.addMenu(strings.menu_help_name)
         help_menu.addAction(button_action6)
         
