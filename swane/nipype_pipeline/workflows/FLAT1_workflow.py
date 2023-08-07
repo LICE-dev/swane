@@ -7,12 +7,12 @@ from swane.nipype_pipeline.nodes.utils import getn
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
 from swane.nipype_pipeline.nodes.CustomDilateImage import CustomDilateImage
-from swane.nipype_pipeline.nodes.DOmapOutliersMask import DOmapOutliersMask
+from swane.nipype_pipeline.nodes.FLAT1OutliersMask import FLAT1OutliersMask
 
 from nipype.interfaces.utility import IdentityInterface
 
 
-def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWorkflow:
+def FLAT1_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
     a mean template.
@@ -40,14 +40,21 @@ def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWork
     Returns
     -------
     workflow : CustomWorkflow
-        The domap workflow.
+        The FLAT1 workflow.
         
     Output Node Fields
     ----------
     extension_z : path
         Extension z-score map in T13D reference space.
+        Based on:
+        - Pascher et al. - Automated morphometric MRI analysis for the detection of PNH - Epilepsia 2013
     junction_z : path
         Junction z-score map in T13D reference space.
+        Based on:
+        - Huppertz et al. - Enhanced visualization of blurred gray-white matter junctions in focal cortical
+                            dysplasia by voxel-based 3D MRI analysis - Epilepsy Res 2005
+        - Huppertz et al. - Voxel-based 3D MRI analysis helps to detect subtle forms of subcortical band
+                            heterotopia - Epilepsia 2008
     binary_flair : path
         Divided image FLAIR/T13D.
 
@@ -114,7 +121,7 @@ def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWork
     workflow.connect(restore_2_mni1, "out_file", flair_div_ref, "operand_file")
 
     # NODE 7: Outliers removal from mask
-    outliers_mask = Node(DOmapOutliersMask(), name="%s_outliers_mask" % name)
+    outliers_mask = Node(FLAT1OutliersMask(), name="%s_outliers_mask" % name)
     outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
     workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
 
@@ -149,13 +156,13 @@ def domap_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWork
     workflow.connect(wm_mask, "out_file", wm_mean, "in_file")
 
     # TODO parametri per ora inutilizzati. Valutare in futuro la loro implementazione
-    # DOmap_gm_std = Node(ImageStats(), name="%s_gm_std")
-    # DOmap_gm_std.inputs.op_string="-S"
-    # workflow.connect(DOmap_gmMask,"out_file",DOmap_gm_std,"in_file")
+    # FLAT1_gm_std = Node(ImageStats(), name="%s_gm_std")
+    # FLAT1_gm_std.inputs.op_string="-S"
+    # workflow.connect(FLAT1_gmMask,"out_file",FLAT1_gm_std,"in_file")
 
-    # DOmap_wm_std = Node(ImageStats(), name="%s_wm_std")
-    # DOmap_wm_std.inputs.op_string="-S"
-    # workflow.connect(DOmap_wmMask,"out_file",DOmap_wm_std,"in_file")
+    # FLAT1_wm_std = Node(ImageStats(), name="%s_wm_std")
+    # FLAT1_wm_std.inputs.op_string="-S"
+    # workflow.connect(FLAT1_wmMask,"out_file",FLAT1_wm_std,"in_file")
 
     # NODE 13: Mask generation with values between mean white matter and mean gray matter values
     binary_flair = Node(ThrROI(), name='%s_binaryFLAIR' % name)

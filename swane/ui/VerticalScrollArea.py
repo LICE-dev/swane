@@ -3,6 +3,11 @@ from PySide6.QtCore import Qt, QEvent
 
 
 class VerticalScrollArea(QScrollArea):
+    """
+    Custom implementation of PySide QScrollArea to define a dynamic width scrollable area.
+
+    """
+    
     def __init__(self, parent=None):
         super(VerticalScrollArea, self).__init__(parent)
         self.setWidgetResizable(True)

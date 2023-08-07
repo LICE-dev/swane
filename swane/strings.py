@@ -1,3 +1,4 @@
+# General
 APPNAME = "SWANe"
 app_acronym = "Standardized Workflow for Advanced Neuroimaging in Epilepsy"
 EXECBUTTONTEXT = "Execute " + APPNAME + " Workflow"
@@ -5,10 +6,16 @@ EXECBUTTONTEXT_STOP = "Stop " + APPNAME + " Workflow"
 GENBUTTONTEXT = "Generate " + APPNAME + " Workflow"
 PTCONFIGBUTTONTEXT = "Workflow preferences"
 
-mainwindow_chose_working_dir = "Choose the main working directory before start to use this application"
-mainwindow_chose_working_dir_title = 'Select the main working directory'
+# Main
+main_multiple_instances_error = "Another instance of " + APPNAME + " is already running!"
+
+# Main Window
+mainwindow_choose_working_dir = "Choose the main working directory before start to use this application"
+mainwindow_working_dir_space_error = "Blank spaces are not allowed in main working dir name or in its parent folder name"
+mainwindow_choose_working_dir_title = 'Select the main working directory'
 mainwindow_select_pt_folder = 'Select a patient folder'
 mainwindow_ptfolder_outside_workingdir_error = "The selected folder is not in " + APPNAME + " main working directory!"
+mainwindow_ptfolder_with_blank_spaces_error = "The selected folder name contains blank spaces!"
 mainwindow_pt_already_loaded_error = "The selected patient was already loaded in " + APPNAME + "!"
 mainwindow_invalid_folder_error = "The selected folder does not contains valid patient data!"
 mainwindow_force_dir_update = "If you are SURE you selected a patient folder, " + APPNAME + "can try to update " \
@@ -39,7 +46,10 @@ mainwindow_home_label7 = "\nExternal optional dependencies:"
 mainwindow_dep_slicer_src = "Searching Slicer installation..."
 mainwindow_dep_slicer_found = "Slicer detected"
 mainwindow_pref_disabled_error = "Prefecences disabled during workflow execution!"
+aboutwindow_python_libs = "Python libraries dependencies: configparser, logging, matplotlib, nipype, pydicom, " \
+                          "pyshortcuts, PySide6, psutil"
 
+# Menu
 menu_load_pt = "Load existing patient"
 menu_load_pt_tip = "Load patient data from the main working directory"
 menu_new_pt = "Create new patient"
@@ -53,9 +63,7 @@ menu_file_name = "File"
 menu_tools_name = "Tools"
 menu_help_name = "Help"
 
-aboutwindow_python_libs = "Python libraries dependencies: configparser, logging, matplotlib, nipype, pydicom, " \
-                          "pyshortcuts, PySide6, psutil"
-
+# Patient Tab
 pttab_data_tab_name = "Data load"
 pttab_wf_tab_name = "Workflow execution"
 pttab_results_tab_name = "Results export"
@@ -78,8 +86,8 @@ pttab_multi_exam_error = "DICOM file from more than one examination in "
 pttab_multi_series_error = "DICOM file from more than one series in "
 pttab_missing_fsl_error = "FSL is required to generate " + APPNAME + " Workflow!"
 pttab_wf_gen_error = "Error generating the Workflow!"
-pttab_old_wf_found = "A previous execution of " + APPNAME + """ was detected. Do you want to resume execution or start 
-a new one?"""
+pttab_old_wf_found = "This patient has already been analyzed by " + APPNAME + """. Do you want to resume the previous analysis? If you want to delete all
+previous analyses and start over press NO, otherwise press YES"""
 pttab_old_wf_resume = "Resume execution"
 pttab_old_wf_reset = "New execution"
 pttab_old_fs_found = "An existing FreeSurfer folder was detected. Do you want to keep or delete the existing folder?"
@@ -92,9 +100,9 @@ pttab_exporting_prefix = "Exporting results into Slicer scene...\n"
 pttab_dicom_clearing = "Clearing DICOM files in: "
 pttab_wf_insufficient_resources = "Insufficient system resources (RAM or CPU) to execute workflows"
 
+# Preference Window
 pref_window_title_global = APPNAME + ' - Preferences'
 pref_window_title_user = ' - Workflow preferences'
-
 pref_window_global_box_title = "Global settings"
 pref_window_global_box_mwd = "Main working directory"
 pref_window_global_box_slicer = "3D Slicer path"
@@ -103,21 +111,18 @@ pref_window_global_box_default_task = "Default fMRI taks duration"
 pref_window_global_box_pt_limit = "Patient tab limit"
 pref_window_global_box_cpu_limit = "CPU per Patient limit"
 pref_window_global_box_default_ext = "Slicer scene extension"
-
 pref_window_global_box_optional_title = "Optional series settings"
-
 pref_window_wf_box_title = "Workflow settings"
-pref_window_wf_box_reconall = "FreeSurfer analisys"
+pref_window_wf_box_reconall = "FreeSurfer analysis"
 pref_window_wf_box_reconall_disabled_tip = "FreeSurfer not detected"
 pref_window_wf_box_hippo = "FreeSurfer hippocampal subfields"
 pref_window_wf_box_hippo_disabled_tip = "Matlab Runtime not detected"
 pref_window_wf_box_ai = "Asymmetry Index map for ASL and PET"
-pref_window_wf_box_domap = "DOmap analisys"
+pref_window_wf_box_FLAT1 = "FLAT1 analysis"
 pref_window_wf_box_tractography = "DTI tractography"
 pref_window_wf_box_missing_flair3d = "3D Flair missing"
 pref_window_wf_box_missing_dti = "DTI missing"
 pref_window_wf_box_missing_ai = "Asymmetry Index maps can be generated for PET or ASL data"
-
 pref_window_fmri_box_task_a_name = "Task A name"
 pref_window_fmri_box_task_b_name = "Task B name"
 pref_window_fmri_box_task_duration = "Task duration (sec)"
@@ -128,9 +133,7 @@ pref_window_fmri_box_st = "Slice timing"
 pref_window_fmri_box_blockdesign = "Block design"
 pref_window_fmri_box_del_start_vols = "Delete start volumes"
 pref_window_fmri_box_del_end_vols = "Delete end volumes"
-
 pref_window_tract_box_title = "Tractography settings"
-
 pref_window_save_button = "Save preferences"
 pref_window_save_restart_button = "Save preferences (" + APPNAME + " will close and restart)"
 pref_window_discard_button = "Discard changes"
@@ -138,6 +141,7 @@ pref_window_dir_error = "Directory does not exists!"
 pref_window_file_error = "File does not exists!"
 pref_window_select_slicer = "Select 3D Slicer executable"
 
+# Workflow
 check_dep_dcm2niix_error = "dcm2niix not detected (<a href='https://github.com/rordenlab/dcm2niix#Install" \
                            "'>installation info</a>)"
 check_dep_dcm2niix_found = "dcm2niix detected (%s)"
@@ -172,6 +176,7 @@ fsl_python_error_restart = "Restart with system Python"
 fsl_python_error_exit = "Copy fix line and Exit"
 generic_shell_file = "your shell configuration"
 
+# Nodes
 node_names = {}
 node_names["CustomDcm2niix"] = "nifti conversion"
 node_names["ForceOrient"] = "standard orientation"
@@ -204,5 +209,4 @@ node_names["SmoothEstimate"] = "smoothness estimation"
 node_names["FslCluster"] = "cluster extraction"
 node_names["SampleToSurface"] = "surface projection"
 node_names["FAST"] = "Tissue segmentation"
-node_names["DOmapOutliersMask"] = "outliers mask generation"
-
+node_names["FLAT1OutliersMask"] = "outliers mask generation"

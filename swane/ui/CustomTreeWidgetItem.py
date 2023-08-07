@@ -3,6 +3,10 @@ from PySide6.QtSvgWidgets import QSvgWidget
 
 
 class CustomTreeWidgetItem(QTreeWidgetItem):
+    """
+    Custom implementation of PySide QTreeWidgetItem to define the Workflows Tree items.
+
+    """
 
     def __init__(self, parent, tree, text, art=None):
         super(CustomTreeWidgetItem, self).__init__(parent)
@@ -12,7 +16,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         self.artLabel = QSvgWidget()
         self.artLabel.setFixedWidth(26)
         self.artLabel.setFixedHeight(26)
-        self.setArt(art)
+        self.set_art(art)
         self.textLabel = QLabel(text)
         self.resize_text_label()
         
@@ -24,18 +28,67 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         
         self.completed = False
         self.art = None
+
+    def setText(self, text: str):
+        """
+        Set the tree item text.
+
+        Parameters
+        ----------
+        text : str
+            The item text.
+
+        Returns
+        -------
+        None.
+
+        """
         
-    def setText(self, text):
         self.textLabel.setText(text)
         self.resize_text_label()
 
     def resize_text_label(self):
+        """
+        Resize the tree item label.
+        Allow the horizontal scroll when expanding subsection.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         self.textLabel.setMinimumWidth(self.textLabel.fontMetrics().boundingRect(self.textLabel.text()).width() + 10)
         
-    def getText(self):
+    def get_text(self) -> str:
+        """
+        Get the tree item text from its label.
+
+        Returns
+        -------
+        str
+            The item text.
+
+        """
+        
         return self.textLabel.text()
     
-    def setArt(self, art):
+    def set_art(self, art: str):
+        """
+        Set the icon of the tree item.
+
+        Parameters
+        ----------
+        art : str
+            The icon path of the tree item.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         self.art = art
+        
         if art is not None:
             self.artLabel.load(art)
