@@ -69,7 +69,7 @@ def nonlinear_reg_workflow(name: str, base_dir: str = "/") -> CustomWorkflow:
     workflow.connect(inputnode, 'atlas', flirt, 'reference')
 
     # NODE 2: Nonlinear registration
-    fnirt = Node(FNIRT(), name='ref_2_%s_fnirt' % name, mem_gb=7)
+    fnirt = Node(FNIRT(), name='ref_2_%s_fnirt' % name)
     fnirt.long_name = "%s to atlas"
     fnirt.inputs.fieldcoeff_file = True
     workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")

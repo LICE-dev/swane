@@ -6,13 +6,13 @@ from multiprocessing import Process, Event
 from threading import Thread
 from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from nipype.external.cloghandler import ConcurrentRotatingFileHandler
-from nipype.pipeline.plugins.multiproc import MultiProcPlugin
+from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 
 
 class WorkflowProcess(Process):
-    NODE_STARTED = "start"
-    NODE_COMPLETED = "end"
-    NODE_ERROR = "exception"
+    # NODE_STARTED = "start"
+    # NODE_COMPLETED = "end"
+    # NODE_ERROR = "exception"
 
     LOG_CHANNELS = [
         "nipype.workflow",
@@ -41,12 +41,14 @@ class WorkflowProcess(Process):
     def workflow_run_worker(self):
         plugin_args = {
             'mp_context': 'fork',
-            'status_callback': self.callback_function
+            'queue': self.queue
+            # 'status_callback': self.callback_function
         }
         if self.workflow.max_cpu > 0:
             plugin_args['n_procs'] = self.workflow.max_cpu
         try:
-            self.workflow.run(plugin=MultiProcPlugin(plugin_args=plugin_args))
+            # self.workflow.run(plugin=MultiProcPlugin(plugin_args=plugin_args))
+            self.workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args))
         except:
             traceback.print_exc()
         self.stop_event.set()

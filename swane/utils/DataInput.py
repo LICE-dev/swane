@@ -8,9 +8,10 @@ class DataInput:
         'PT': 'PET'
     }
 
-    def __init__(self, name, label, image_modality=RM, optional=False, wf_name=None):
+    def __init__(self, name, label, tooltip, image_modality=RM, optional=False, wf_name=None):
         self.name = name
         self.label = label
+        self.tooltip = tooltip
         self.image_modality = image_modality
         self.optional = optional
         self.loaded = False
@@ -39,6 +40,18 @@ class DataInputList(dict):
     FLAIR2D = 'flair2d'
     FMRI = 'fmri'
 
+    input_list_string = {}
+    input_list_string[T13D] = ['3D T1w', '']
+    input_list_string[FLAIR3D] = ['3D Flair', '']
+    input_list_string[MDC] = ['Post-contrast 3D T1w', '']
+    input_list_string[VENOUS] = ['Venous MRA - Phase contrast', 'If you have anatomic and venous phases in a single sequence, load it here. Otherwise, load one of the two phases (which one is not important)']
+    input_list_string[VENOUS2] = ['Venous MRA - Second phase (optional)', 'If you have anatomic and venous phases in two different sequences, load the remaining phase here. Otherwise, leave this slot empty']
+    input_list_string[DTI] = ['Diffusion Tensor Imaging', '']
+    input_list_string[ASL] = ['Arterial Spin Labeling', 'CBF images from an ASL sequence']
+    input_list_string[PET] = ['PET', '']
+    input_list_string[FLAIR2D] = ['2D Flair %s', '']
+    input_list_string[FMRI] = ['Task fMRI - %d', '']
+
     PLANES = {'tra': 'transverse',
               'cor': 'coronal',
               'sag': 'sagittal',
@@ -50,20 +63,20 @@ class DataInputList(dict):
 
         self.dicom_dir = dicom_dir
 
-        self.append(DataInput(DataInputList.T13D, '3D T1w'))
-        self.append(DataInput(DataInputList.FLAIR3D, '3D Flair'))
-        self.append(DataInput(DataInputList.MDC, 'Post-contrast 3D T1w'))
-        self.append(DataInput(DataInputList.VENOUS, 'Venous MRA - Phase contrast'))
-        self.append(DataInput(DataInputList.VENOUS2, 'Venous MRA - Second phase', wf_name='venous'))
-        self.append(DataInput(DataInputList.DTI, 'Diffusion Tensor Imaging', wf_name='dti_preproc'))
-        self.append(DataInput(DataInputList.ASL, 'Arterial Spin Labeling'))
-        self.append(DataInput(DataInputList.PET, 'PET', image_modality=DataInput.PET))
+        self.append(DataInput(DataInputList.T13D, DataInputList.input_list_string[DataInputList.T13D][0], DataInputList.input_list_string[DataInputList.T13D][1]))
+        self.append(DataInput(DataInputList.FLAIR3D, DataInputList.input_list_string[DataInputList.FLAIR3D][0], DataInputList.input_list_string[DataInputList.FLAIR3D][1]))
+        self.append(DataInput(DataInputList.MDC, DataInputList.input_list_string[DataInputList.MDC][0], DataInputList.input_list_string[DataInputList.MDC][1]))
+        self.append(DataInput(DataInputList.VENOUS, DataInputList.input_list_string[DataInputList.VENOUS][0], DataInputList.input_list_string[DataInputList.VENOUS][1]))
+        self.append(DataInput(DataInputList.VENOUS2, DataInputList.input_list_string[DataInputList.VENOUS2][0], DataInputList.input_list_string[DataInputList.VENOUS2][1], wf_name='venous'))
+        self.append(DataInput(DataInputList.DTI, DataInputList.input_list_string[DataInputList.DTI][0], DataInputList.input_list_string[DataInputList.DTI][1], wf_name='dti_preproc'))
+        self.append(DataInput(DataInputList.ASL, DataInputList.input_list_string[DataInputList.ASL][0], DataInputList.input_list_string[DataInputList.ASL][1]))
+        self.append(DataInput(DataInputList.PET, DataInputList.input_list_string[DataInputList.PET][0], DataInputList.input_list_string[DataInputList.PET][1], image_modality=DataInput.PET))
 
         for plane in DataInputList.PLANES:
-            self.append(DataInput(DataInputList.FLAIR2D+'_'+plane, '2D Flair '+DataInputList.PLANES[plane], optional=True))
+            self.append(DataInput(DataInputList.FLAIR2D+'_'+plane, DataInputList.input_list_string[DataInputList.FLAIR2D][0] % DataInputList.PLANES[plane], DataInputList.input_list_string[DataInputList.FLAIR2D][1], optional=True))
 
         for x in range(DataInputList.FMRI_NUM):
-            self.append(DataInput(DataInputList.FMRI+'_%d' % x, 'Task fMRI - %d' % (x + 1)))
+            self.append(DataInput(DataInputList.FMRI+'_%d' % x, DataInputList.input_list_string[DataInputList.FMRI][0] % (x + 1), DataInputList.input_list_string[DataInputList.FMRI][1]))
 
     def append(self, data_input):
         self[data_input.name] = data_input
