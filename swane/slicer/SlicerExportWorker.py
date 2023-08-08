@@ -1,6 +1,7 @@
 from PySide6.QtCore import QRunnable, Signal, QObject
 import os
 import subprocess
+from swane.utils import print_error
 
 
 class SlicerExportSignaler(QObject):
@@ -25,14 +26,17 @@ class SlicerExportWorker(QRunnable):
 
     def run(self):
 
-        cmd = self.slicer_path + " --no-splash --no-main-window --python-script " + os.path.join(
-            os.path.dirname(__file__), "slicer_script_result.py " + self.scene_ext)
+        try:
+            cmd = self.slicer_path + " --no-splash --no-main-window --python-script " + os.path.join(
+                os.path.dirname(__file__), "slicer_script_result.py " + self.scene_ext)
 
-        popen = subprocess.Popen(cmd, cwd=self.pt_folder, shell=True, stdout=subprocess.PIPE, universal_newlines=True)
-        for stdout_line in iter(popen.stdout.readline, ""):
-            print(stdout_line)
-            if stdout_line.startswith(self.PROGRESS_MSG_PREFIX):
-                self.signal.export.emit(stdout_line.replace(self.PROGRESS_MSG_PREFIX, '').replace('\n', ''))
-        popen.stdout.close()
-        popen.wait()
-        self.signal.export.emit(self.END_MSG)
+            popen = subprocess.Popen(cmd, cwd=self.pt_folder, shell=True, stdout=subprocess.PIPE, universal_newlines=True)
+            for stdout_line in iter(popen.stdout.readline, ""):
+                print(stdout_line)
+                if stdout_line.startswith(self.PROGRESS_MSG_PREFIX):
+                    self.signal.export.emit(stdout_line.replace(self.PROGRESS_MSG_PREFIX, '').replace('\n', ''))
+            popen.stdout.close()
+            popen.wait()
+            self.signal.export.emit(self.END_MSG)
+        except:
+            print_error()

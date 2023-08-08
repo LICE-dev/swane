@@ -78,11 +78,14 @@ class DataInputList(dict):
         for x in range(DataInputList.FMRI_NUM):
             self.append(DataInput(DataInputList.FMRI+'_%d' % x, DataInputList.input_list_string[DataInputList.FMRI][0] % (x + 1), DataInputList.input_list_string[DataInputList.FMRI][1]))
 
+
     def append(self, data_input):
         self[data_input.name] = data_input
 
+
     def is_ref_loaded(self):
         return self[DataInputList.T13D].loaded
+
 
     def get_dicom_dir(self, key):
         if key in self:
