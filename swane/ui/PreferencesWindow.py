@@ -354,7 +354,7 @@ class PreferencesWindow(QDialog):
 
     def freesurfer_changed(self, checked, hippo_index):
         if not checked or not self.my_config.is_freesurfer_matlab():
-            self.new_inputs[hippo_index].disable()
+            self.new_inputs[hippo_index].disable(strings.pref_window_wf_box_hippo_disabled_tip)
         elif self.my_config.is_freesurfer_matlab():
             self.new_inputs[hippo_index].enable()
 
