@@ -59,6 +59,8 @@ class MainWorkflow(CustomWorkflow):
         is_ai = pt_config.getboolean('WF_OPTION', 'ai')
         # Check for Tractography request
         is_tractography = pt_config.getboolean('WF_OPTION', 'tractography')
+        # Check if bias correction is enablet for T13D bet
+        is_bias_correction_bet = global_config.getboolean('MAIN', 'biasCorrectionBet')
 
         # Core management
         self.max_cpu = global_config.getint('MAIN', 'maxPtCPU')
@@ -69,7 +71,7 @@ class MainWorkflow(CustomWorkflow):
 
         # 3D T1w
         ref_dir = data_input_list.get_dicom_dir(DataInputList.T13D)
-        t1 = ref_workflow(data_input_list[DataInputList.T13D].wf_name, ref_dir)
+        t1 = ref_workflow(data_input_list[DataInputList.T13D].wf_name, ref_dir, is_bias_correction_bet)
         t1.long_name = "3D T1w analysis"
         self.add_nodes([t1])
 
