@@ -358,6 +358,8 @@ class PtTab(QTabWidget):
             if ret == QMessageBox.StandardButton.No:
                 return
 
+        # TODO: check if series has more volumes and max_volumes, improve modality and volumes in importable_series_list (save as [2] and [3]?
+
         copy_list = self.final_series_list[self.importable_series_list.currentRow()][1]
 
         progress = PersistentProgressDialog(strings.pttab_dicom_copy, 0, len(copy_list) + 1, self)
@@ -867,7 +869,7 @@ class PtTab(QTabWidget):
         
         return dicom_src_work
 
-    def check_input_folder_step2(self, input_name: str, dicom_src_work: DicomSearchWorker, progress: PersistentProgressDialog=None):
+    def check_input_folder_step2(self, input_name: str, dicom_src_work: DicomSearchWorker, progress: PersistentProgressDialog = None):
         """
         Starts the DICOM files scan Worker into the series folder on a new thread.
 
@@ -941,15 +943,24 @@ class PtTab(QTabWidget):
         
         if mod in DataInput.IMAGE_MODALITY_RENAME_LIST:
             mod = DataInput.IMAGE_MODALITY_RENAME_LIST[mod]
+
+        label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(len(image_list)) + " images"
+        if input_name == DataInputList.VENOUS or input_name == DataInputList.VENOUS2:
+            label += ", " + str(dicom_src_work.get_series_nvol(series_list[0])) + " "
+            if dicom_src_work.get_series_nvol(series_list[0]) > 1:
+                label += "phases"
+            else:
+                label += "phase"
             
-        self.set_ok(input_name, str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(
-            len(image_list)) + " images")
+        self.set_ok(input_name, label)
 
         self.data_input_list[input_name].loaded = True
+        self.data_input_list[input_name].volumes = dicom_src_work.get_series_nvol(series_list[0])
 
         self.enable_exec_tab()
+        self.check_venous_volumes()
 
-    def check_input_folder(self, input_name: str, progress: PersistentProgressDialog=None):
+    def check_input_folder(self, input_name: str, progress: PersistentProgressDialog = None):
         """
         Checks if the series folder labelled input_name contains DICOM files.
         If PersistentProgressDialog is not None, it will be used to show the scan progress.
@@ -1002,13 +1013,43 @@ class PtTab(QTabWidget):
 
         self.set_error(input_name, strings.pttab_no_dicom_error + src_path)
         self.data_input_list[input_name].loaded = False
+        self.data_input_list[input_name].volumes = 0
         self.enable_exec_tab()
 
         progress.accept()
         
         self.reset_workflow()
+        self.check_venous_volumes()
 
-    def reset_workflow(self, force: bool=False):
+        if input_name == DataInputList.VENOUS and self.data_input_list[DataInputList.VENOUS2].loaded:
+            self.clear_import_folder(DataInputList.VENOUS2)
+
+    def check_venous_volumes(self):
+        phases = self.data_input_list[DataInputList.VENOUS].volumes + self.data_input_list[DataInputList.VENOUS2].volumes
+        if phases == 0:
+            self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
+        elif phases == 1:
+            if self.data_input_list[DataInputList.VENOUS].loaded:
+                self.set_warn(DataInputList.VENOUS, "Series has only one phase, load the second phase below", False)
+                self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
+            if self.data_input_list[DataInputList.VENOUS2].loaded:
+                # this should not be possible!
+                self.set_warn(DataInputList.VENOUS2, "Series has only one phase, load the second phase above", False)
+        elif phases == 2:
+            if self.data_input_list[DataInputList.VENOUS].loaded:
+                self.set_ok(DataInputList.VENOUS, None)
+                self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
+            if self.data_input_list[DataInputList.VENOUS2].loaded:
+                self.set_ok(DataInputList.VENOUS2, None)
+        else:
+            # something gone wrong, more than 2 phases!
+            if self.data_input_list[DataInputList.VENOUS].loaded:
+                self.set_warn(DataInputList.VENOUS, "Too many venous phases loaded, delete some!", False)
+                self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
+            if self.data_input_list[DataInputList.VENOUS2].loaded:
+                self.set_warn(DataInputList.VENOUS2, "Too many venous phases loaded, delete some!", False)
+
+    def reset_workflow(self, force: bool = False):
         """
         Set the workflow var to None.
         Resets the UI.
@@ -1024,7 +1065,7 @@ class PtTab(QTabWidget):
         None.
 
         """
-        
+
         if self.workflow is None:
             return
         if not force and self.is_workflow_process_alive():
@@ -1086,15 +1127,21 @@ class PtTab(QTabWidget):
                 if mod in DataInput.IMAGE_MODALITY_RENAME_LIST:
                     mod = DataInput.IMAGE_MODALITY_RENAME_LIST[mod]
 
+                label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(
+                        len(image_list)) + " images, " + str(dicom_src_work.get_series_nvol(series)) + " "
+                if dicom_src_work.get_series_nvol(series) > 1:
+                    label += "volumes"
+                else:
+                    label += "volume"
+
                 self.final_series_list.append(
-                    [str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(
-                        len(image_list)) + " images", image_list])
+                    [label, image_list])
                 del image_list
 
         for series in self.final_series_list:
             self.importable_series_list.addItem(series[0])
 
-    def set_warn(self, input_name: str, msg: str):
+    def set_warn(self, input_name: str, msg: str, clear_text: bool = True):
         """
         Set a warning message and icon near a series label.
 
@@ -1104,6 +1151,8 @@ class PtTab(QTabWidget):
             The series label.
         msg : str
             The warning message.
+        clear_text : bool
+            If True delete the label text
 
         Returns
         -------
@@ -1116,7 +1165,8 @@ class PtTab(QTabWidget):
         self.input_report[input_name][0].setToolTip(msg)
         self.input_report[input_name][3].setEnabled(False)
         self.input_report[input_name][4].setEnabled(True)
-        self.input_report[input_name][2].setText("")
+        if clear_text:
+            self.input_report[input_name][2].setText("")
 
     def set_error(self, input_name: str, msg: str):
         """
@@ -1151,7 +1201,7 @@ class PtTab(QTabWidget):
         input_name : str
             The series label.
         msg : str
-            The success message.
+            The success message. If string is None keep the current text
 
         Returns
         -------
@@ -1164,7 +1214,8 @@ class PtTab(QTabWidget):
         self.input_report[input_name][0].setToolTip("")
         self.input_report[input_name][3].setEnabled(False)
         self.input_report[input_name][4].setEnabled(True)
-        self.input_report[input_name][2].setText(msg)
+        if msg is not None:
+            self.input_report[input_name][2].setText(msg)
 
     def enable_exec_tab(self):
         """

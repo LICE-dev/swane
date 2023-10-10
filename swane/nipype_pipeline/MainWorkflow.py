@@ -244,7 +244,7 @@ class MainWorkflow(CustomWorkflow):
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.SCENE_DIR)
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.SCENE_DIR)
 
-        if data_input_list[DataInputList.VENOUS].loaded:
+        if data_input_list[DataInputList.VENOUS].loaded and data_input_list[DataInputList.VENOUS].volumes + data_input_list[DataInputList.VENOUS2].volumes == 2:
             # Venous analysis
             venous_dir = data_input_list.get_dicom_dir(DataInputList.VENOUS)
             venous2_dir = None
