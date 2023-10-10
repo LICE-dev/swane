@@ -8,13 +8,15 @@ class DataInput:
         'PT': 'PET'
     }
 
-    def __init__(self, name, label, tooltip, image_modality=RM, optional=False, wf_name=None):
+    def __init__(self, name, label, tooltip, image_modality=RM, optional=False, wf_name=None, max_volumes=1):
         self.name = name
         self.label = label
         self.tooltip = tooltip
         self.image_modality = image_modality
         self.optional = optional
         self.loaded = False
+        self.volumes = 0
+        self.max_volumes = max_volumes
         if wf_name is None:
             self.wf_name = self.name
         else:
@@ -66,9 +68,9 @@ class DataInputList(dict):
         self.append(DataInput(DataInputList.T13D, DataInputList.input_list_string[DataInputList.T13D][0], DataInputList.input_list_string[DataInputList.T13D][1]))
         self.append(DataInput(DataInputList.FLAIR3D, DataInputList.input_list_string[DataInputList.FLAIR3D][0], DataInputList.input_list_string[DataInputList.FLAIR3D][1]))
         self.append(DataInput(DataInputList.MDC, DataInputList.input_list_string[DataInputList.MDC][0], DataInputList.input_list_string[DataInputList.MDC][1]))
-        self.append(DataInput(DataInputList.VENOUS, DataInputList.input_list_string[DataInputList.VENOUS][0], DataInputList.input_list_string[DataInputList.VENOUS][1]))
+        self.append(DataInput(DataInputList.VENOUS, DataInputList.input_list_string[DataInputList.VENOUS][0], DataInputList.input_list_string[DataInputList.VENOUS][1], max_volumes=2))
         self.append(DataInput(DataInputList.VENOUS2, DataInputList.input_list_string[DataInputList.VENOUS2][0], DataInputList.input_list_string[DataInputList.VENOUS2][1], wf_name='venous'))
-        self.append(DataInput(DataInputList.DTI, DataInputList.input_list_string[DataInputList.DTI][0], DataInputList.input_list_string[DataInputList.DTI][1], wf_name='dti_preproc'))
+        self.append(DataInput(DataInputList.DTI, DataInputList.input_list_string[DataInputList.DTI][0], DataInputList.input_list_string[DataInputList.DTI][1], wf_name='dti_preproc', max_volumes=-1))
         self.append(DataInput(DataInputList.ASL, DataInputList.input_list_string[DataInputList.ASL][0], DataInputList.input_list_string[DataInputList.ASL][1]))
         self.append(DataInput(DataInputList.PET, DataInputList.input_list_string[DataInputList.PET][0], DataInputList.input_list_string[DataInputList.PET][1], image_modality=DataInput.PET))
 
@@ -76,7 +78,7 @@ class DataInputList(dict):
             self.append(DataInput(DataInputList.FLAIR2D+'_'+plane, DataInputList.input_list_string[DataInputList.FLAIR2D][0] % DataInputList.PLANES[plane], DataInputList.input_list_string[DataInputList.FLAIR2D][1], optional=True))
 
         for x in range(DataInputList.FMRI_NUM):
-            self.append(DataInput(DataInputList.FMRI+'_%d' % x, DataInputList.input_list_string[DataInputList.FMRI][0] % (x + 1), DataInputList.input_list_string[DataInputList.FMRI][1]))
+            self.append(DataInput(DataInputList.FMRI+'_%d' % x, DataInputList.input_list_string[DataInputList.FMRI][0] % (x + 1), DataInputList.input_list_string[DataInputList.FMRI][1], max_volumes=-1))
 
     def append(self, data_input):
         self[data_input.name] = data_input
