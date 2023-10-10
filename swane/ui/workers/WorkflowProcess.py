@@ -82,6 +82,7 @@ class WorkflowProcess(Process):
             os.mkdir(log_dir)
 
         self.workflow.config["execution"]["crashdump_dir"] = log_dir
+        self.workflow.config['execution']['crashfile_format'] = 'txt'
         log_filename = os.path.join(log_dir, "pypeline.log")
         file_handler = ConcurrentRotatingFileHandler(
             log_filename,
