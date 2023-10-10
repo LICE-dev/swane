@@ -111,6 +111,7 @@ class ConfigManager(configparser.ConfigParser):
                 'lastPID': '-1',
                 'maxPt': '1',
                 'maxPtCPU': '-1',
+                'biasCorrectionBet': 'true',
                 'slicerSceneExt': '0',
                 'defaultWfType': '0',
                 'fmritaskduration': '30',

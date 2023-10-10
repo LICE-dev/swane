@@ -142,14 +142,17 @@ class PreferenceEntry:
         self.input_field.setEnabled(False)
         self.label.setStyleSheet("color: gray")
         if tooltip is not None:
-            self.input_field.setToolTip(tooltip)
-            self.label.setToolTip(tooltip)
+            self.set_tooltip(tooltip)
         if self.input_type == PreferenceEntry.CHECKBOX:
             self.input_field.setChecked(False)
 
+    def set_tooltip(self, tooltip):
+        self.input_field.setToolTip(tooltip)
+        self.label.setToolTip(tooltip)
+
     def enable(self):
         self.input_field.setEnabled(True)
-        self.label.setToolTip(None)
+        self.set_tooltip(None)
         self.label.setStyleSheet("")
 
     def get_value(self):

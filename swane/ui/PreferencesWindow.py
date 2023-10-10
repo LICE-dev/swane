@@ -88,6 +88,14 @@ class PreferencesWindow(QDialog):
             grid1.addWidget(self.new_inputs[x].input_field, x, 1)
             x += 1
 
+            self.new_inputs[x] = PreferenceEntry(category, 'biasCorrectionBet', my_config, PreferenceEntry.CHECKBOX,
+                                                 parent=self)
+            self.new_inputs[x].set_label_text(strings.pref_window_global_box_bias_corrected_bet)
+            self.new_inputs[x].set_tooltip(strings.pref_window_global_box_bias_corrected_bet_tip)
+            grid1.addWidget(self.new_inputs[x].label, x, 0)
+            grid1.addWidget(self.new_inputs[x].input_field, x, 1)
+            x += 1
+
             self.new_inputs[x] = PreferenceEntry(category, 'fmritaskduration', my_config, PreferenceEntry.NUMBER,
                                                  parent=self)
             self.new_inputs[x].set_label_text(strings.pref_window_global_box_default_task)
