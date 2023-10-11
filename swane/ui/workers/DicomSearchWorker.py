@@ -18,6 +18,7 @@ class DicomSearchWorker(QRunnable):
             self.unsorted_list = []
         self.signal = DicomSearchSignal()
         self.dicom_tree = {}
+        self.series_positions = {}
 
     @staticmethod
     def clean_text(string):
@@ -82,7 +83,10 @@ class DicomSearchWorker(QRunnable):
                 self.dicom_tree[patient_id][study_instance_uid] = {}
             if series_number not in self.dicom_tree[patient_id][study_instance_uid]:
                 self.dicom_tree[patient_id][study_instance_uid][series_number] = []
+                self.series_positions[series_number] = [ds.get("SliceLocation"), 0]
             self.dicom_tree[patient_id][study_instance_uid][series_number].append(dicom_loc)
+            if self.series_positions[series_number][0] == ds.get("SliceLocation"):
+                self.series_positions[series_number][1] += 1
 
             if DEBUG:
                 skip = True
@@ -103,6 +107,9 @@ class DicomSearchWorker(QRunnable):
         if exam not in self.dicom_tree[patient]:
             return []
         return list(self.dicom_tree[patient][exam].keys())
+
+    def get_series_nvol(self, series_number):
+        return self.series_positions[series_number][1]
 
     def get_series_files(self, patient, exam, series):
         if patient not in self.dicom_tree:
