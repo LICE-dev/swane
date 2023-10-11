@@ -7,7 +7,8 @@ from nipype.interfaces.utility import IdentityInterface
 
 from nipype import Node
 
-def ref_workflow(name: str, dicom_dir: str, base_dir: str = "/") -> CustomWorkflow:
+
+def ref_workflow(name: str, dicom_dir: str, biasCorrectionBet: bool, base_dir: str = "/") -> CustomWorkflow:
     """
     T13D workflow to use as reference.
 
@@ -17,6 +18,8 @@ def ref_workflow(name: str, dicom_dir: str, base_dir: str = "/") -> CustomWorkfl
         The workflow name.
     dicom_dir : path
         The file path of the DICOM files.
+    biasCorrectionBet: bool
+        If True use -B parameters for bet, otherwise use -R
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -60,10 +63,13 @@ def ref_workflow(name: str, dicom_dir: str, base_dir: str = "/") -> CustomWorkfl
 
     # NODE 3: Scalp removal
     ref_BET = Node(BET(), name='ref_BET')
-    ref_BET.inputs.frac = 0.5
+    ref_BET.inputs.frac = 0.3
     ref_BET.inputs.mask = True
-    ref_BET.inputs.robust = True
-    ref_BET.inputs.threshold = True
+    if biasCorrectionBet:
+        ref_BET.inputs.reduce_bias = True
+    else:
+        ref_BET.inputs.robust = True
+
     workflow.connect(ref_reOrient, "out_file", ref_BET, "in_file")
     
     workflow.connect(ref_reOrient, "out_file", outputnode, "ref")
