@@ -8,6 +8,7 @@ from swane import strings, EXIT_CODE_REBOOT
 from swane.utils.ConfigManager import ConfigManager
 from swane.utils.PreferenceEntry import PreferenceEntry
 from swane.utils.DataInput import DataInputList
+from swane.utils import print_error
 
 
 class PreferencesWindow(QDialog):
@@ -353,13 +354,22 @@ class PreferencesWindow(QDialog):
     #     self.set_restart()
 
     def freesurfer_changed(self, checked, hippo_index):
-        if not checked or not self.my_config.is_freesurfer_matlab():
-            self.new_inputs[hippo_index].disable(strings.pref_window_wf_box_hippo_disabled_tip)
-        elif self.my_config.is_freesurfer_matlab():
-            self.new_inputs[hippo_index].enable()
+        try:
+            if not checked or not self.my_config.is_freesurfer_matlab():
+                self.new_inputs[hippo_index].disable(strings.pref_window_wf_box_hippo_disabled_tip)
+            elif self.my_config.is_freesurfer_matlab():
+                self.new_inputs[hippo_index].enable()
+        except:
+            print_error()
+        
 
     def tractography_changed(self, checked):
-        self.group_box3.setEnabled(checked)
+        try:
+            self.group_box3.setEnabled(checked)
+
+        except:
+            print_error()
+
 
     # @staticmethod
     # def set_checkbox(checkbox, value):
@@ -369,20 +379,28 @@ class PreferencesWindow(QDialog):
     #         checkbox.setCheckState(Qt.Unchecked)
 
     def set_restart(self):
-        self.restart = True
-        self.saveButton.setText(strings.pref_window_save_restart_button)
+        try:
+            self.restart = True
+            self.saveButton.setText(strings.pref_window_save_restart_button)
+        except:
+            print_error()
 
     def save_preferences(self):
 
-        for pref_entry in self.new_inputs.values():
-            if pref_entry.changed:
-                self.my_config[pref_entry.category][pref_entry.key] = pref_entry.get_value()
+        try:
+            for pref_entry in self.new_inputs.values():
+                if pref_entry.changed:
+                    self.my_config[pref_entry.category][pref_entry.key] = pref_entry.get_value()
 
-        self.my_config.save()
+            self.my_config.save()
 
-        if self.restart:
-            ret_code = EXIT_CODE_REBOOT
-        else:
-            ret_code = 1
+            if self.restart:
+                ret_code = EXIT_CODE_REBOOT
+            else:
+                ret_code = 1
 
-        self.done(ret_code)
+            self.done(ret_code)
+        except:
+            print_error()
+
+        
