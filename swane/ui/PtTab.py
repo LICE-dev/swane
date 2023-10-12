@@ -344,12 +344,26 @@ class PtTab(QTabWidget):
         import shutil
         dest_path = os.path.join(self.pt_folder,
                                  self.global_config.get_default_dicom_folder(), input_name)
-        found_mod = self.final_series_list[self.importable_series_list.currentRow()][0].split("-")[1].upper()
 
+        # number of volumes check
+        vols = self.final_series_list[self.importable_series_list.currentRow()][3]
+        if self.data_input_list[input_name].max_volumes != -1 and vols > self.data_input_list[input_name].max_volumes:
+            msg_box = QMessageBox()
+            msg_box.setText(strings.pttab_wrong_max_vols_check_msg % (vols, self.data_input_list[input_name].max_volumes))
+            msg_box.exec()
+            return
+        if vols < self.data_input_list[input_name].min_volumes:
+            msg_box = QMessageBox()
+            msg_box.setText(strings.pttab_wrong_min_vols_check_msg % (vols, self.data_input_list[input_name].min_volumes))
+            msg_box.exec()
+            return
+
+        # modality check
+        found_mod = self.final_series_list[self.importable_series_list.currentRow()][2].upper()
         if not self.data_input_list[input_name].is_image_modality(found_mod):
             msg_box = QMessageBox()
             msg_box.setText(strings.pttab_wrong_type_check_msg % (found_mod, self.data_input_list[input_name].image_modality))
-            msg_box.setText(strings.pttab_wrong_type_check)
+            msg_box.setInformativeText(strings.pttab_wrong_type_check)
             msg_box.setIcon(QMessageBox.Icon.Warning)
             msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             msg_box.setDefaultButton(QMessageBox.StandardButton.No)
@@ -357,8 +371,6 @@ class PtTab(QTabWidget):
             
             if ret == QMessageBox.StandardButton.No:
                 return
-
-        # TODO: check if series has more volumes and max_volumes, improve modality and volumes in importable_series_list (save as [2] and [3]?
 
         copy_list = self.final_series_list[self.importable_series_list.currentRow()][1]
 
@@ -1123,19 +1135,20 @@ class PtTab(QTabWidget):
                     continue
 
                 mod = ds.Modality
+                vols = dicom_src_work.get_series_nvol(series)
 
                 if mod in DataInput.IMAGE_MODALITY_RENAME_LIST:
                     mod = DataInput.IMAGE_MODALITY_RENAME_LIST[mod]
 
                 label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(
-                        len(image_list)) + " images, " + str(dicom_src_work.get_series_nvol(series)) + " "
+                        len(image_list)) + " images, " + str(vols) + " "
                 if dicom_src_work.get_series_nvol(series) > 1:
                     label += "volumes"
                 else:
                     label += "volume"
 
                 self.final_series_list.append(
-                    [label, image_list])
+                    [label, image_list, mod, vols])
                 del image_list
 
         for series in self.final_series_list:
