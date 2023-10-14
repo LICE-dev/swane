@@ -66,7 +66,7 @@ def ref_workflow(name: str, dicom_dir: str, biasCorrectionBet: bool, base_dir: s
     ref_reScale = Node(CropFov(), name='%s_reScale' % name)
     ref_reScale.long_name = "Crop large FOV"
     ref_reScale.inputs.max_dim = 256
-    ref_reScale.inputs.out_file = "ref"
+    ref_reScale.inputs.out_file = "ref.nii.gz"
     workflow.connect(ref_reOrient, "out_file", ref_reScale, "in_file")
 
     # NODE 4: Scalp removal
