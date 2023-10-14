@@ -71,6 +71,9 @@ class PtTab(QTabWidget):
         self.directory_watcher = QFileSystemWatcher()
         self.directory_watcher.directoryChanged.connect(self.reset_workflow)
 
+        self.scan_directory_watcher = QFileSystemWatcher()
+        self.scan_directory_watcher.directoryChanged.connect(self.clear_scan_result)
+
         self.start_gen_wf_thread()
 
         self.data_tab_ui()
@@ -412,7 +415,7 @@ class PtTab(QTabWidget):
         dicom_src_work.load_dir()
 
         if dicom_src_work.get_files_len() > 0:
-            self.importable_series_list.clear()
+            self.clear_scan_result()
             self.final_series_list = []
             progress = PersistentProgressDialog(strings.pttab_dicom_scan, 0, 0, parent=self.parent())
             progress.show()
@@ -834,7 +837,7 @@ class PtTab(QTabWidget):
         self.setTabEnabled(PtTab.DATATAB, True)
         self.setCurrentWidget(self.data_tab)
 
-        self.importable_series_list.clear()
+        self.clear_scan_result()
         self.reset_workflow()
 
         self.enable_tab_if_result_dir()
@@ -1108,6 +1111,7 @@ class PtTab(QTabWidget):
         """
         
         folder_path = dicom_src_work.dicom_dir
+        self.scan_directory_watcher.addPath(folder_path)
         pt_list = dicom_src_work.get_patient_list()
 
         if len(pt_list) == 0:
@@ -1153,6 +1157,12 @@ class PtTab(QTabWidget):
 
         for series in self.final_series_list:
             self.importable_series_list.addItem(series[0])
+
+    def clear_scan_result(self):
+        self.importable_series_list.clear()
+        self.final_series_list = None
+        self.scan_directory_watcher.removePaths(self.scan_directory_watcher.directories())
+
 
     def set_warn(self, input_name: str, msg: str, clear_text: bool = True):
         """
