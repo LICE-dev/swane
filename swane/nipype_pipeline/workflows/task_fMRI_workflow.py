@@ -2,12 +2,11 @@ from nipype import Node, IdentityInterface, Merge, SelectFiles
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.algorithms.rapidart import ArtifactDetect
 from nipype.interfaces.fsl import ImageMaths, ExtractROI, MCFLIRT, BET, ImageStats, SUSAN, FLIRT, Level1Design, \
-    FEATModel, FILMGLS, SmoothEstimate
+    FEATModel, FILMGLS, SmoothEstimate, Cluster, ApplyXFM
 
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.FslNVols import FslNVols
-from swane.nipype_pipeline.nodes.FslCluster import FslCluster
 from swane.nipype_pipeline.nodes.FMRIGenSpec import FMRIGenSpec
 from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
 from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
@@ -398,7 +397,7 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
         workflow.connect(dilatemask, 'out_file', maskfunc4, 'in_file2')
 
         # NODE 36: Perform clustering on statistical output
-        cluster = Node(FslCluster(), name="%s_cluster_%d" % (name, cont))
+        cluster = Node(Cluster(), name="%s_cluster_%d" % (name, cont))
         cluster.long_name = "contrast " + str(cont) + " %s"
         cluster.inputs.threshold = 3.1
         cluster.inputs.connectivity = 26
@@ -414,9 +413,19 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
         workflow.connect(results_select, 'cope', cluster, 'cope_file')
         workflow.connect(smoothness, 'volume', cluster, 'volume')
         workflow.connect(smoothness, 'dlh', cluster, 'dlh')
-        workflow.connect(inputnode, "ref_BET", cluster, "std_space_file")
-        workflow.connect(flirt_2_ref, "out_matrix_file", cluster, "xfm_file")
+        #workflow.connect(inputnode, "ref_BET", cluster, "std_space_file")
+        #workflow.connect(flirt_2_ref, "out_matrix_file", cluster, "xfm_file")
 
-        workflow.connect(cluster, 'threshold_file', outputnode, 'threshold_file_%s' % cont)
+        # NODE 37: Transformation in ref space
+        cluster_2_ref = Node(ApplyXFM(), name="%s_cluster_%d_to_ref" % (name, cont))
+        cluster_2_ref.long_name = "contrast " + str(cont) + " %s in reference space"
+        cluster_2_ref.inputs.apply_xfm = True
+        workflow.connect(cluster, 'threshold_file', cluster_2_ref, 'in_file')
+        workflow.connect([(genSpec, cluster_2_ref, [(('contrasts', cluster_file_name, name, cont), 'out_file')])])
+        workflow.connect(inputnode, "ref_BET", cluster_2_ref, "reference")
+        workflow.connect(flirt_2_ref, "out_matrix_file", cluster_2_ref, "in_matrix_file")
+
+        # workflow.connect(cluster, 'threshold_file', outputnode, 'threshold_file_%s' % cont)
+        workflow.connect(cluster_2_ref, 'out_file', outputnode, 'threshold_file_%s' % cont)
 
     return workflow
