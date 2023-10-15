@@ -47,7 +47,7 @@ mainwindow_dep_slicer_src = "Searching Slicer installation..."
 mainwindow_dep_slicer_found = "Slicer detected"
 mainwindow_pref_disabled_error = "Prefecences disabled during workflow execution!"
 aboutwindow_python_libs = "Python libraries dependencies: configparser, logging, matplotlib, nipype, pydicom, " \
-                          "pyshortcuts, PySide6, psutil"
+                          "pyshortcuts, PySide6, psutil, nibabel, networkx"
 
 # Menu
 menu_load_pt = "Load existing patient"

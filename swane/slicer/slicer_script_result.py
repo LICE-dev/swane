@@ -131,8 +131,7 @@ def load_freesurfer_overlay(scene_dir: str, node_name: str, surf_node):
     if os.path.exists(file):
         try:
             print("SLICERLOADER: Loading surface overlay " + node_name)
-            overlay_node = slicer.util.loadNodeFromFile(file, 'FreeSurferScalarOverlayFile',
-                                                       {"modelNodeId": surf_node.GetID()})
+            overlay_node = slicer.util.loadNodeFromFile(file, 'FreeSurferScalarOverlayFile', {"modelNodeId": surf_node.GetID()})
             overlay_node.GetDisplayNode().SetAndObserveColorNodeID('vtkMRMLColorTableNodeFileColdToHotRainbow.txt')
             overlay_node.GetDisplayNode().SetScalarVisibility(False)
         except:
@@ -156,7 +155,8 @@ def load_freesurfer_segmentation_file(seg_file: str):
     
     if os.path.exists(seg_file):
         try:
-            slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
+            slicer.util.getModuleLogic('FreeSurferImporter').LoadFreeSurferSegmentation(seg_file)
+            # slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
         except:
             pass
 
@@ -177,7 +177,7 @@ def load_freesurfer(scene_dir: str, ref_node):
     None.
 
     """
-    
+
     seg_list = ["r-aparc_aseg.mgz", "segmentHA/lh.hippoAmygLabels.mgz", "segmentHA/rh.hippoAmygLabels.mgz"]
     for file in seg_list:
         seg_file = os.path.join(scene_dir, file)
