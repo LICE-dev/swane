@@ -1,5 +1,4 @@
-from nipype import logging, config
-from logging import Formatter
+from nipype import logging as nipype_log, config
 import os
 import traceback
 from multiprocessing import Process, Event
@@ -7,6 +6,8 @@ from threading import Thread
 from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from nipype.external.cloghandler import ConcurrentRotatingFileHandler
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
+import logging as orig_log
+from nipype.utils.profiler import log_nodes_cb
 
 
 class WorkflowProcess(Process):
@@ -31,33 +32,29 @@ class WorkflowProcess(Process):
     @staticmethod
     def remove_handlers(handler):
         for channel in WorkflowProcess.LOG_CHANNELS:
-            logging.getLogger(channel).removeHandler(handler)
+            nipype_log.getLogger(channel).removeHandler(handler)
 
     @staticmethod
     def add_handlers(handler):
         for channel in WorkflowProcess.LOG_CHANNELS:
-            logging.getLogger(channel).addHandler(handler)
+            nipype_log.getLogger(channel).addHandler(handler)
 
     def workflow_run_worker(self):
         plugin_args = {
             'mp_context': 'fork',
-            'queue': self.queue
-            # 'status_callback': self.callback_function
+            'queue': self.queue,
+            'status_callback': log_nodes_cb
         }
         if self.workflow.max_cpu > 0:
             plugin_args['n_procs'] = self.workflow.max_cpu
         try:
-            # self.workflow.run(plugin=MultiProcPlugin(plugin_args=plugin_args))
             self.workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args))
         except:
             traceback.print_exc()
-        self.stop_event.set()
 
-    def callback_function(self, node, signal):
-        try:
-            self.queue.put(node.fullname + "." + signal)
-        except:
-            pass
+        # TODO implement nipype.utils.draw_gantt_chart.generate_gantt_chart but maybe it's bugged
+
+        self.stop_event.set()
 
     @staticmethod
     def kill_with_subprocess():
@@ -89,9 +86,17 @@ class WorkflowProcess(Process):
             maxBytes=int(config.get("logging", "log_size")),
             backupCount=int(config.get("logging", "log_rotate")),
         )
-        formatter = Formatter(fmt=logging.fmt, datefmt=logging.datefmt)
+        formatter = orig_log.Formatter(fmt=nipype_log.fmt, datefmt=nipype_log.datefmt)
         file_handler.setFormatter(formatter)
         WorkflowProcess.add_handlers(file_handler)
+
+        # enable resource log
+        config.enable_resource_monitor()
+        resource_log_filename = os.path.join(log_dir, 'resource_monitor.log')
+        logger = orig_log.getLogger('callback')
+        logger.setLevel(orig_log.DEBUG)
+        handler = orig_log.FileHandler(resource_log_filename)
+        logger.addHandler(handler)
 
         # avvio il wf in un subhread
         workflow_run_work = Thread(target=self.workflow_run_worker)
