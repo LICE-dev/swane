@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QTreeWidgetItem, QSpacerItem
 from PySide6.QtSvgWidgets import QSvgWidget
-
+from swane.utils import print_error
 
 class CustomTreeWidgetItem(QTreeWidgetItem):
     """
@@ -29,6 +29,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         self.completed = False
         self.art = None
 
+
     def setText(self, text: str):
         """
         Set the tree item text.
@@ -44,8 +45,12 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
 
         """
         
-        self.textLabel.setText(text)
-        self.resize_text_label()
+        try:
+            self.textLabel.setText(text)
+            self.resize_text_label()
+        except:
+            print_error()
+
 
     def resize_text_label(self):
         """
@@ -58,8 +63,12 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
 
         """
         
-        self.textLabel.setMinimumWidth(self.textLabel.fontMetrics().boundingRect(self.textLabel.text()).width() + 10)
-        
+        try:
+            self.textLabel.setMinimumWidth(self.textLabel.fontMetrics().boundingRect(self.textLabel.text()).width() + 10)
+        except:
+            print_error()
+
+
     def get_text(self) -> str:
         """
         Get the tree item text from its label.
@@ -71,8 +80,12 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
 
         """
         
-        return self.textLabel.text()
+        try:
+            return self.textLabel.text()
+        except:
+            print_error()
     
+
     def set_art(self, art: str):
         """
         Set the icon of the tree item.
@@ -87,8 +100,11 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         None.
 
         """
-        
-        self.art = art
-        
-        if art is not None:
-            self.artLabel.load(art)
+
+        try:
+            self.art = art
+            
+            if art is not None:
+                self.artLabel.load(art)
+        except:
+            print_error()
