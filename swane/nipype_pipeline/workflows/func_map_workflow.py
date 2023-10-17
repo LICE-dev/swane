@@ -191,7 +191,8 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
         func_2_sym_warp = Node(ApplyWarp(), name='%s_2_sym_warp' % name)
         func_2_sym_warp.long_name = "%s to symmetric atlas"
         func_2_sym_warp.inputs.ref_file = sym_template
-        workflow.connect(mask, "out_file", func_2_sym_warp, "in_file")
+        #workflow.connect(mask, "out_file", func_2_sym_warp, "in_file")
+        workflow.connect(smooth_2_ref_flirt, "out_file", func_2_sym_warp, "in_file")
         workflow.connect(inputnode, "ref_2_sym_warp", func_2_sym_warp, "field_file")
 
         # NODE 12: RL swap of image in symmetric atlas
@@ -216,11 +217,18 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
         workflow.connect(inputnode, "ref_2_sym_invwarp", ai_2_ref, "field_file")
         workflow.connect(inputnode, "reference", ai_2_ref, "ref_file")
 
-        workflow.connect(ai_2_ref, "out_file", outputnode, "ai")
+        # NODE 15: AI scalp removal
+        ai_mask = Node(ApplyMask(), name='%s_ai_mask' % name)
+        ai_mask.long_name = name + "AI %s"
+        ai_mask.inputs.out_file = "r-%s_ai.nii.gz" % name
+        workflow.connect(ai_2_ref, "out_file", ai_mask, "in_file")
+        workflow.connect(inputnode, "brain_mask", ai_mask, "mask_file")
+
+        workflow.connect(ai_mask, "out_file", outputnode, "ai")
 
         if is_freesurfer:
             for side in SIDES:
-                # NODE 15: Projection of AI on FreeSurfer pial surface
+                # NODE 16: Projection of AI on FreeSurfer pial surface
                 ai_surf = Node(SampleToSurface(), name='%s_ai_surf_%s' % (name, side))
                 ai_surf.long_name = side + " asymmetry index %s"
                 ai_surf.inputs.hemi = side
@@ -230,7 +238,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
                 ai_surf.inputs.sampling_method = "point"
                 ai_surf.inputs.sampling_range = 0.5
                 ai_surf.inputs.sampling_units = "frac"
-                workflow.connect(ai_2_ref, "out_file", ai_surf, "source_file")
+                workflow.connect(ai_mask, "out_file", ai_surf, "source_file")
                 workflow.connect(inputnode, "freesurfer_subjects_dir", ai_surf, "subjects_dir")
                 workflow.connect(inputnode, "freesurfer_subject_id", ai_surf, "subject_id")
 
