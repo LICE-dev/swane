@@ -72,6 +72,9 @@ class PtTab(QTabWidget):
         self.directory_watcher = QFileSystemWatcher()
         self.directory_watcher.directoryChanged.connect(self.reset_workflow)
 
+        self.scan_directory_watcher = QFileSystemWatcher()
+        self.scan_directory_watcher.directoryChanged.connect(self.clear_scan_result)
+
         self.start_gen_wf_thread()
 
         self.data_tab_ui()
@@ -370,21 +373,33 @@ class PtTab(QTabWidget):
             import shutil
             dest_path = os.path.join(self.pt_folder,
                                      self.global_config.get_default_dicom_folder(), input_name)
-            found_mod = self.final_series_list[self.importable_series_list.currentRow()][0].split("-")[1].upper()
 
+            # number of volumes check
+            vols = self.final_series_list[self.importable_series_list.currentRow()][3]
+            if self.data_input_list[input_name].max_volumes != -1 and vols > self.data_input_list[input_name].max_volumes:
+                msg_box = QMessageBox()
+                msg_box.setText(strings.pttab_wrong_max_vols_check_msg % (vols, self.data_input_list[input_name].max_volumes))
+                msg_box.exec()
+                return
+            if vols < self.data_input_list[input_name].min_volumes:
+                msg_box = QMessageBox()
+                msg_box.setText(strings.pttab_wrong_min_vols_check_msg % (vols, self.data_input_list[input_name].min_volumes))
+                msg_box.exec()
+                return
+
+            # modality check
+            found_mod = self.final_series_list[self.importable_series_list.currentRow()][2].upper()
             if not self.data_input_list[input_name].is_image_modality(found_mod):
                 msg_box = QMessageBox()
                 msg_box.setText(strings.pttab_wrong_type_check_msg % (found_mod, self.data_input_list[input_name].image_modality))
-                msg_box.setText(strings.pttab_wrong_type_check)
+                msg_box.setInformativeText(strings.pttab_wrong_type_check)
                 msg_box.setIcon(QMessageBox.Icon.Warning)
                 msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 msg_box.setDefaultButton(QMessageBox.StandardButton.No)
                 ret = msg_box.exec()
-                
+
                 if ret == QMessageBox.StandardButton.No:
                     return
-
-            # TODO: check if series has more volumes and max_volumes, improve modality and volumes in importable_series_list (save as [2] and [3]?
 
             copy_list = self.final_series_list[self.importable_series_list.currentRow()][1]
 
@@ -431,7 +446,7 @@ class PtTab(QTabWidget):
             dicom_src_work.load_dir()
 
             if dicom_src_work.get_files_len() > 0:
-                self.importable_series_list.clear()
+                self.clear_scan_result()
                 self.final_series_list = []
                 progress = PersistentProgressDialog(strings.pttab_dicom_scan, 0, 0, parent=self.parent())
                 progress.show()
@@ -903,7 +918,7 @@ class PtTab(QTabWidget):
             self.setTabEnabled(PtTab.DATATAB, True)
             self.setCurrentWidget(self.data_tab)
 
-            self.importable_series_list.clear()
+            self.clear_scan_result()
             self.reset_workflow()
 
             self.enable_tab_if_result_dir()
@@ -1223,6 +1238,7 @@ class PtTab(QTabWidget):
         
         try:
             folder_path = dicom_src_work.dicom_dir
+            self.scan_directory_watcher.addPath(folder_path)
             pt_list = dicom_src_work.get_patient_list()
 
             if len(pt_list) == 0:
@@ -1230,47 +1246,48 @@ class PtTab(QTabWidget):
                 msg_box.setText(strings.pttab_no_dicom_error + folder_path)
                 msg_box.exec()
                 return
-            
+
             if len(pt_list) > 1:
                 msg_box = QMessageBox()
                 msg_box.setText(strings.pttab_multi_pt_error + folder_path)
                 msg_box.exec()
                 return
-            
+
             exam_list = dicom_src_work.get_exam_list(pt_list[0])
-            
+
             for exam in exam_list:
                 series_list = dicom_src_work.get_series_list(pt_list[0], exam)
                 for series in series_list:
                     image_list = dicom_src_work.get_series_files(pt_list[0], exam, series)
                     ds = pydicom.read_file(image_list[0], force=True)
-                    
+
                     # Excludes series with less than 10 images unless they are siemens mosaics series
                     if len(image_list) < 10 and hasattr(ds, 'ImageType') and "MOSAIC" not in ds.ImageType:
                         continue
 
                     mod = ds.Modality
+                    vols = dicom_src_work.get_series_nvol(series)
 
-                    if mod in DataInput.IMAGE_MODALITY_RENAME_LIST:
-                        mod = DataInput.IMAGE_MODALITY_RENAME_LIST[mod]
+                    mod = ds.Modality
 
                     label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(
-                            len(image_list)) + " images, " + str(dicom_src_work.get_series_nvol(series)) + " "
+                            len(image_list)) + " images, " + str(vols) + " "
                     if dicom_src_work.get_series_nvol(series) > 1:
                         label += "volumes"
                     else:
                         label += "volume"
 
                     self.final_series_list.append(
-                        [label, image_list])
+                        [label, image_list, mod, vols])
                     del image_list
-
-            for series in self.final_series_list:
-                self.importable_series_list.addItem(series[0])
         except:
             print_error()
 
-        
+    def clear_scan_result(self):
+        self.importable_series_list.clear()
+        self.final_series_list = None
+        self.scan_directory_watcher.removePaths(self.scan_directory_watcher.directories())
+
 
     def set_warn(self, input_name: str, msg: str, clear_text: bool = True):
         """
