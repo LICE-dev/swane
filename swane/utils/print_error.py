@@ -24,16 +24,12 @@ def print_error():
     """
 
     try:
-        _, _, exception_traceback = sys.exc_info()
         exception_type = repr(sys.exc_info()[1])
         caller = getframeinfo(stack()[1][0])
         function_name = caller.function
         file_name = caller.filename
-        line_number = exception_traceback.tb_lineno
-
+        line_number = caller.lineno
         message = f"\n\n{datetime.now().strftime('%Y/%m/%d, %H:%M:%S')} - File name: {file_name} - Func name: {function_name} - Exception type: {exception_type} at Line: {line_number}"
-
-        print(message)
 
         with open(ERROR_FILE, 'a+') as f:
             f.write(message)

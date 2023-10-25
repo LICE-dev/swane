@@ -6,7 +6,6 @@ from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMes
                                QComboBox, QStyle, QSizePolicy)
 
 from swane import strings
-from swane.utils import print_error
 from configparser import RawConfigParser
 
 
@@ -36,193 +35,138 @@ class PreferenceEntry:
         self.validate_on_change = validate_on_change
 
     def set_label_text(self, text):
-        try:
-            self.label.setText(text)
-
-        except:
-            print_error()
-        
+        self.label.setText(text)
 
     def set_box_text(self, text):
-        try:
-            self.box_text = text
-            
-        except:
-            print_error()
+        self.box_text = text
 
     def set_changed(self, **kwargs):
-        try:
-            self.changed = True
-            if self.restart and self.parent is not None:
-                self.parent.set_restart()
-
-        except:
-            print_error()
-        
+        self.changed = True
+        if self.restart and self.parent is not None:
+            self.parent.set_restart()
 
     def gen_input_field(self):
-        try:
-            button = None
+        button = None
 
-            if self.input_type == PreferenceEntry.CHECKBOX:
-                field = QCheckBox()
-                field.toggled.connect(self.set_changed)
-            elif self.input_type == PreferenceEntry.COMBO:
-                field = QComboBox()
-                field.currentIndexChanged.connect(self.set_changed)
-            else:
-                field = QLineEdit()
-                field.textChanged.connect(self.set_changed)
+        if self.input_type == PreferenceEntry.CHECKBOX:
+            field = QCheckBox()
+            field.toggled.connect(self.set_changed)
+        elif self.input_type == PreferenceEntry.COMBO:
+            field = QComboBox()
+            field.currentIndexChanged.connect(self.set_changed)
+        else:
+            field = QLineEdit()
+            field.textChanged.connect(self.set_changed)
 
-            if self.input_type == PreferenceEntry.NUMBER:
-                field.setValidator(QIntValidator(-1, 100))
+        if self.input_type == PreferenceEntry.NUMBER:
+            field.setValidator(QIntValidator(-1, 100))
 
-            if self.input_type == PreferenceEntry.FILE or self.input_type == PreferenceEntry.DIRECTORY:
-                field.setReadOnly(True)
-                button = QPushButton()
-                pixmap = getattr(QStyle, "SP_DirOpenIcon")
-                icon_open_dir = button.style().standardIcon(pixmap)
-                button.setIcon(icon_open_dir)
-                button.clicked.connect(self.choose_file)
+        if self.input_type == PreferenceEntry.FILE or self.input_type == PreferenceEntry.DIRECTORY:
+            field.setReadOnly(True)
+            button = QPushButton()
+            pixmap = getattr(QStyle, "SP_DirOpenIcon")
+            icon_open_dir = button.style().standardIcon(pixmap)
+            button.setIcon(icon_open_dir)
+            button.clicked.connect(self.choose_file)
 
-            return field, button
-
-        except:
-            print_error()
-
+        return field, button
 
     def choose_file(self):
-        try:
-            if self.input_type == PreferenceEntry.FILE:
-                file_path, _ = QFileDialog.getOpenFileName(parent=self.parent, caption=self.box_text)
-                error = strings.pref_window_file_error
-            elif self.input_type == PreferenceEntry.DIRECTORY:
-                file_path = QFileDialog.getExistingDirectory(parent=self.parent, caption=self.box_text)
-                error = strings.pref_window_dir_error
-            else:
-                return
+        if self.input_type == PreferenceEntry.FILE:
+            file_path, _ = QFileDialog.getOpenFileName(parent=self.parent, caption=self.box_text)
+            error = strings.pref_window_file_error
+        elif self.input_type == PreferenceEntry.DIRECTORY:
+            file_path = QFileDialog.getExistingDirectory(parent=self.parent, caption=self.box_text)
+            error = strings.pref_window_dir_error
+        else:
+            return
 
-            if file_path == '':
-                return
+        if file_path == '':
+            return
 
-            if not os.path.exists(file_path):
-                msg_box = QMessageBox()
-                msg_box.setIcon(QMessageBox.Warning)
-                msg_box.setText(error)
-                msg_box.exec()
-                return
+        if not os.path.exists(file_path):
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setText(error)
+            msg_box.exec()
+            return
 
-            if self.validate_on_change:
-                file_path = "*" + file_path
+        if self.validate_on_change:
+            file_path = "*" + file_path
 
-            self.set_value(file_path)
-
-        except:
-            print_error()
-
+        self.set_value(file_path)
 
     def populate_combo(self, items):
-        try:
-            if self.input_type != PreferenceEntry.COMBO:
-                return
-            for index, label in enumerate(items):
-                self.input_field.insertItem(index, label)
-        except:
-            print_error()
-        
+        if self.input_type != PreferenceEntry.COMBO:
+            return
+        for index, label in enumerate(items):
+            self.input_field.insertItem(index, label)
 
     def set_value_from_config(self, config):
         try:
             self.set_value(config[self.category][self.key])
         except:
-            print_error()
-
+            pass
 
     def set_range(self, min_value: int, max_value: int):
-        try:
-            if self.input_type != PreferenceEntry.NUMBER:
-                return
-            if min_value > max_value:
-                x = min_value
-                min_value = max_value
-                max_value = x
-            self.input_field.setValidator(QIntValidator(min_value, max_value))
-
-        except:
-            print_error()
-        
+        if self.input_type != PreferenceEntry.NUMBER:
+            return
+        if min_value > max_value:
+            x = min_value
+            min_value = max_value
+            max_value = x
+        self.input_field.setValidator(QIntValidator(min_value, max_value))
 
     def set_value(self, value, reset_change_state=False):
-        try:
-            if self.input_type == PreferenceEntry.CHECKBOX:
-                if value in RawConfigParser.BOOLEAN_STATES and RawConfigParser.BOOLEAN_STATES[value]:
-                    self.input_field.setCheckState(Qt.Checked)
-                else:
-                    self.input_field.setCheckState(Qt.Unchecked)
-            elif self.input_type == PreferenceEntry.COMBO:
-                try:
-                    self.input_field.setCurrentIndex(int(value))
-                except ValueError:
-                    index = self.input_field.findText(value)
-                    if index != -1:
-                        self.input_field.setCurrentIndex(index)
-                    else:
-                        return
-            else:
-                self.input_field.setText(value)
 
-            if reset_change_state:
-                self.changed = False
-            
-        except:
-            print_error()
-        
+        if self.input_type == PreferenceEntry.CHECKBOX:
+            if value in RawConfigParser.BOOLEAN_STATES and RawConfigParser.BOOLEAN_STATES[value]:
+                self.input_field.setCheckState(Qt.Checked)
+            else:
+                self.input_field.setCheckState(Qt.Unchecked)
+        elif self.input_type == PreferenceEntry.COMBO:
+            try:
+                self.input_field.setCurrentIndex(int(value))
+            except ValueError:
+                index = self.input_field.findText(value)
+                if index != -1:
+                    self.input_field.setCurrentIndex(index)
+                else:
+                    return
+        else:
+            self.input_field.setText(value)
+
+        if reset_change_state:
+            self.changed = False
 
     def disable(self, tooltip=None):
-        try:
-            self.input_field.setEnabled(False)
-            self.label.setStyleSheet("color: gray")
-            if tooltip is not None:
-                self.set_tooltip(tooltip)
-            if self.input_type == PreferenceEntry.CHECKBOX:
-                self.input_field.setChecked(False)
-
-        except:
-            print_error()
-        
+        self.input_field.setEnabled(False)
+        self.label.setStyleSheet("color: gray")
+        if tooltip is not None:
+            self.set_tooltip(tooltip)
+        if self.input_type == PreferenceEntry.CHECKBOX:
+            self.input_field.setChecked(False)
 
     def set_tooltip(self, tooltip):
-        try:
-            self.input_field.setToolTip(tooltip)
-            self.label.setToolTip(tooltip)
-
-        except:
-            print_error()
-
+        self.input_field.setToolTip(tooltip)
+        self.label.setToolTip(tooltip)
 
     def enable(self):
-        try:
-            self.input_field.setEnabled(True)
-            self.set_tooltip(None)
-            self.label.setStyleSheet("")
-
-        except:
-            print_error()
-        
+        self.input_field.setEnabled(True)
+        self.set_tooltip(None)
+        self.label.setStyleSheet("")
 
     def get_value(self):
-        try:
-            if self.input_type == PreferenceEntry.COMBO:
+
+        if self.input_type == PreferenceEntry.COMBO:
                 value = str(self.input_field.currentIndex())
-            elif self.input_type == PreferenceEntry.CHECKBOX:
-                if self.input_field.checkState() == Qt.Checked:
-                    value = 'true'
+        elif self.input_type == PreferenceEntry.CHECKBOX:
+            if self.input_field.checkState() == Qt.Checked:
+                value = 'true'
                 else:
                     value = "false"
-            else:
-                value = self.input_field.text()
+        else:
+            value = self.input_field.text()
 
-            return value
+        return value
 
-        except:
-            print_error()
