@@ -96,9 +96,10 @@ class PreferencesWindow(QDialog):
             grid1.addWidget(self.new_inputs[x].input_field, x, 1)
             x += 1
 
-            self.new_inputs[x] = PreferenceEntry(category, 'betThr', my_config, PreferenceEntry.NUMBER,
+            self.new_inputs[x] = PreferenceEntry(category, 'betThr', my_config, PreferenceEntry.FLOAT,
                                                  parent=self)
             self.new_inputs[x].set_label_text(strings.pref_window_global_box_thr_bet)
+            self.new_inputs[x].set_range(0.00, 1.00)
             grid1.addWidget(self.new_inputs[x].label, x, 0)
             grid1.addWidget(self.new_inputs[x].input_field, x, 1)
             x += 1
@@ -180,10 +181,11 @@ class PreferencesWindow(QDialog):
             grid2.addWidget(self.new_inputs[x].label, x, 1)
             x += 1
 
-            self.new_inputs[x] = PreferenceEntry(category, 'betThr', my_config, PreferenceEntry.NUMBER,
+            self.new_inputs[x] = PreferenceEntry(category, 'betThr', my_config, PreferenceEntry.FLOAT,
                                                  parent=self)
             self.new_inputs[x].set_label_text(strings.pref_window_global_box_thr_bet)
             self.new_inputs[x].input_field.setMaximumWidth(50)
+            self.new_inputs[x].set_range(0.00, 1.00)
             grid2.addWidget(self.new_inputs[x].input_field, x, 0)
             grid2.addWidget(self.new_inputs[x].label, x, 1)
             x += 1
