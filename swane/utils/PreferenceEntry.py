@@ -1,7 +1,7 @@
 import os
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIntValidator
+from PySide6.QtGui import QIntValidator, QDoubleValidator
 from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox,
                                QComboBox, QStyle, QSizePolicy)
 
@@ -17,6 +17,7 @@ class PreferenceEntry:
     COMBO = 3
     FILE = 4
     DIRECTORY = 5
+    FLOAT = 6
 
     def __init__(self, category, key, my_config, input_type=TEXT, parent=None, populate_combo=None, validate_on_change=False):
         self.restart = False
@@ -60,6 +61,9 @@ class PreferenceEntry:
 
         if self.input_type == PreferenceEntry.NUMBER:
             field.setValidator(QIntValidator(-1, 100))
+
+        if self.input_type == PreferenceEntry.FLOAT:
+            field.setValidator(QDoubleValidator(0, 100, 2).setNotation(QDoubleValidator.StandardNotation))
 
         if self.input_type == PreferenceEntry.FILE or self.input_type == PreferenceEntry.DIRECTORY:
             field.setReadOnly(True)
@@ -109,13 +113,16 @@ class PreferenceEntry:
             pass
 
     def set_range(self, min_value: int, max_value: int):
-        if self.input_type != PreferenceEntry.NUMBER:
+        if self.input_type != PreferenceEntry.NUMBER and self.input_type != PreferenceEntry.FLOAT:
             return
         if min_value > max_value:
             x = min_value
             min_value = max_value
             max_value = x
-        self.input_field.setValidator(QIntValidator(min_value, max_value))
+        if self.input_type == PreferenceEntry.NUMBER:
+            self.input_field.setValidator(QIntValidator(min_value, max_value))
+        elif self.input_type == PreferenceEntry.FLOAT:
+            self.input_field.setValidator(QDoubleValidator(min_value, max_value, 2).setNotation(QDoubleValidator.StandardNotation))
 
     def set_value(self, value, reset_change_state=False):
         if self.input_type == PreferenceEntry.CHECKBOX:
