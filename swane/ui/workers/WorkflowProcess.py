@@ -48,7 +48,12 @@ class WorkflowProcess(Process):
         if self.workflow.max_cpu > 0:
             plugin_args['n_procs'] = self.workflow.max_cpu
         try:
+
+            # this is useful to generate resource monitor files in patient directory
+            os.chdir(self.workflow.base_dir)
+
             self.workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args))
+
         except:
             traceback.print_exc()
 
@@ -90,13 +95,14 @@ class WorkflowProcess(Process):
         file_handler.setFormatter(formatter)
         WorkflowProcess.add_handlers(file_handler)
 
-        # enable resource log
-        config.enable_resource_monitor()
-        resource_log_filename = os.path.join(log_dir, 'resource_monitor.log')
-        logger = orig_log.getLogger('callback')
-        logger.setLevel(orig_log.DEBUG)
-        handler = orig_log.FileHandler(resource_log_filename)
-        logger.addHandler(handler)
+        # enable resource monitor if required
+        if self.workflow.is_resource_monitor:
+            config.enable_resource_monitor()
+            resource_log_filename = os.path.join(log_dir, 'resource_monitor.log')
+            logger = orig_log.getLogger('callback')
+            logger.setLevel(orig_log.DEBUG)
+            handler = orig_log.FileHandler(resource_log_filename)
+            logger.addHandler(handler)
 
         # avvio il wf in un subhread
         workflow_run_work = Thread(target=self.workflow_run_worker)

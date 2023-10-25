@@ -125,6 +125,13 @@ class PreferencesWindow(QDialog):
             grid1.addWidget(self.new_inputs[x].input_field, x, 1)
             x += 1
 
+            self.new_inputs[x] = PreferenceEntry(category, 'resourceMonitor', my_config, PreferenceEntry.CHECKBOX, parent=self)
+            self.new_inputs[x].set_label_text(strings.pref_window_global_box_resource_monitor)
+            self.new_inputs[x].set_range(-1, 40)
+            grid1.addWidget(self.new_inputs[x].label, x, 0)
+            grid1.addWidget(self.new_inputs[x].input_field, x, 1)
+            x += 1
+
             # Saving in MRML doesn't work well, disable extension choice for now
             # self.new_inputs[x] = PreferenceEntry(category, 'slicerSceneExt', my_config, PreferenceEntry.COMBO,
             #                                      parent=self, populate_combo=PreferencesWindow.SLICER_EXTENSIONS)
