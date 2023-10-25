@@ -1,6 +1,7 @@
 from swane.utils.fsl_conflict_handler import fsl_conflict_check
 from swane.utils.print_error import print_error
 
+
 def main():
 
     try:
