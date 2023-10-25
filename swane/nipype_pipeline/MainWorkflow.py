@@ -63,7 +63,8 @@ class MainWorkflow(CustomWorkflow):
         bet_bias_correction = pt_config.getboolean('WF_OPTION', 'betBiasCorrection')
         bet_thr = pt_config.getfloat('WF_OPTION', 'betThr')
 
-        # Core management
+        # CPU cores and memory management
+        self.is_resource_monitor = global_config.getboolean('MAIN', 'resourceMonitor')
         self.max_cpu = global_config.getint('MAIN', 'maxPtCPU')
         if self.max_cpu > 0:
             max_node_cpu = max(int(self.max_cpu / 2), 1)

@@ -116,7 +116,8 @@ class ConfigManager(configparser.ConfigParser):
                 'slicerSceneExt': '0',
                 'defaultWfType': '0',
                 'fmritaskduration': '30',
-                'defaultdicomfolder': 'dicom'
+                'defaultdicomfolder': 'dicom',
+                'resourceMonitor': 'false',
             }
 
             self['OPTIONAL_SERIES'] = {}
