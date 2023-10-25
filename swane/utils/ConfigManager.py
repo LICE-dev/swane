@@ -111,7 +111,8 @@ class ConfigManager(configparser.ConfigParser):
                 'lastPID': '-1',
                 'maxPt': '1',
                 'maxPtCPU': '-1',
-                'biasCorrectionBet': 'true',
+                'betBiasCorrection': 'true',
+                'betThr': '0.3',
                 'slicerSceneExt': '0',
                 'defaultWfType': '0',
                 'fmritaskduration': '30',
@@ -131,6 +132,10 @@ class ConfigManager(configparser.ConfigParser):
         else:
             tmp_config = ConfigManager()
             self.set_wf_option(tmp_config['MAIN']['defaultWfType'])
+
+            self['WF_OPTION']['betBiasCorrection'] = tmp_config['MAIN']['betBiasCorrection']
+            self['WF_OPTION']['betThr'] = tmp_config['MAIN']['betThr']
+
             self['FMRI'] = {}
 
             for x in range(DataInputList.FMRI_NUM):
