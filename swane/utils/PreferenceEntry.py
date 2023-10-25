@@ -155,10 +155,10 @@ class PreferenceEntry:
     def set_value(self, value, reset_change_state=False):
         try:
             if self.input_type == PreferenceEntry.CHECKBOX:
-            if value in RawConfigParser.BOOLEAN_STATES and RawConfigParser.BOOLEAN_STATES[value]:
-                self.input_field.setCheckState(Qt.Checked)
-            else:
-                self.input_field.setCheckState(Qt.Unchecked)
+                if value in RawConfigParser.BOOLEAN_STATES and RawConfigParser.BOOLEAN_STATES[value]:
+                    self.input_field.setCheckState(Qt.Checked)
+                else:
+                    self.input_field.setCheckState(Qt.Unchecked)
             elif self.input_type == PreferenceEntry.COMBO:
                 try:
                     self.input_field.setCurrentIndex(int(value))
@@ -213,7 +213,7 @@ class PreferenceEntry:
     def get_value(self):
         try:
             if self.input_type == PreferenceEntry.COMBO:
-            value = str(self.input_field.currentIndex())
+                value = str(self.input_field.currentIndex())
             elif self.input_type == PreferenceEntry.CHECKBOX:
                 if self.input_field.checkState() == Qt.Checked:
                     value = 'true'
