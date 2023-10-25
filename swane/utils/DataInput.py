@@ -110,14 +110,11 @@ class DataInputList(dict):
                                   max_volumes=-1,
                                   min_volumes=4))
 
-
     def append(self, data_input):
         self[data_input.name] = data_input
 
-
     def is_ref_loaded(self):
         return self[DataInputList.T13D].loaded
-
 
     def get_dicom_dir(self, key):
         if key in self:

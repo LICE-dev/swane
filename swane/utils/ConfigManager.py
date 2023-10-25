@@ -3,7 +3,6 @@ import os
 from swane import strings
 from swane.utils.DataInput import DataInputList
 
-from swane.utils import print_error
 
 # todo valutare di spostare le key delle configurazioni in file costanti esterno
 class ConfigManager(configparser.ConfigParser):
@@ -100,261 +99,160 @@ class ConfigManager(configparser.ConfigParser):
         self.save()
 
     def reload(self):
-
-        try:
-            self.read(self.config_file)
-
-        except:
-            print_error()
+        self.read(self.config_file)
 
     def create_default_config(self):
+        if self.global_config:
+            self['MAIN'] = {
+                'patientsfolder': '',
+                'patientsprefix': 'pt_',
+                'slicerPath': '',
+                'shortcutPath': '',
+                'lastPID': '-1',
+                'maxPt': '1',
+                'maxPtCPU': '-1',
+                'biasCorrectionBet': 'true',
+                'slicerSceneExt': '0',
+                'defaultWfType': '0',
+                'fmritaskduration': '30',
+                'defaultdicomfolder': 'dicom'
+            }
 
-        try:
-            if self.global_config:
-                self['MAIN'] = {
-                    'patientsfolder': '',
-                    'patientsprefix': 'pt_',
-                    'slicerPath': '',
-                    'shortcutPath': '',
-                    'lastPID': '-1',
-                    'maxPt': '1',
-                    'maxPtCPU': '-1',
-                    'biasCorrectionBet': 'true',
-                    'slicerSceneExt': '0',
-                    'defaultWfType': '0',
-                    'fmritaskduration': '30',
-                    'defaultdicomfolder': 'dicom'
-                }
+            self['OPTIONAL_SERIES'] = {}
 
-                self['OPTIONAL_SERIES'] = {}
+            for data_input in DataInputList().values():
+                if data_input.optional:
+                    self['OPTIONAL_SERIES'][data_input.name] = 'false'
 
-                for data_input in DataInputList().values():
-                    if data_input.optional:
-                        self['OPTIONAL_SERIES'][data_input.name] = 'false'
+            self['DEFAULTTRACTS'] = {}
 
-                self['DEFAULTTRACTS'] = {}
+            for index, key in enumerate(ConfigManager.TRACTS):
+                self['DEFAULTTRACTS'][key] = ConfigManager.TRACTS[key][1]
+        else:
+            tmp_config = ConfigManager()
+            self.set_wf_option(tmp_config['MAIN']['defaultWfType'])
+            self['FMRI'] = {}
 
-                for index, key in enumerate(ConfigManager.TRACTS):
-                    self['DEFAULTTRACTS'][key] = ConfigManager.TRACTS[key][1]
-            else:
-                tmp_config = ConfigManager()
-                self.set_wf_option(tmp_config['MAIN']['defaultWfType'])
-                self['FMRI'] = {}
+            for x in range(DataInputList.FMRI_NUM):
+                self['FMRI']['task_%d_name_a' % x] = 'TaskA'
+                self['FMRI']['task_%d_name_b' % x] = 'TaskB'
+                self['FMRI']['task_%d_duration' % x] = tmp_config['MAIN']['fmritaskduration']
+                self['FMRI']['rest_%d_duration' % x] = tmp_config['MAIN']['fmritaskduration']
+                self['FMRI']['task_%d_tr' % x] = 'auto'
+                self['FMRI']['task_%d_vols' % x] = 'auto'
+                self['FMRI']['task_%d_st' % x] = '0'
+                self['FMRI']['task_%d_blockdesign' % x] = '0'
+                self['FMRI']['task_%d_del_start_vols' % x] = '0'
+                self['FMRI']['task_%d_del_end_vols' % x] = '0'
 
-                for x in range(DataInputList.FMRI_NUM):
-                    self['FMRI']['task_%d_name_a' % x] = 'TaskA'
-                    self['FMRI']['task_%d_name_b' % x] = 'TaskB'
-                    self['FMRI']['task_%d_duration' % x] = tmp_config['MAIN']['fmritaskduration']
-                    self['FMRI']['rest_%d_duration' % x] = tmp_config['MAIN']['fmritaskduration']
-                    self['FMRI']['task_%d_tr' % x] = 'auto'
-                    self['FMRI']['task_%d_vols' % x] = 'auto'
-                    self['FMRI']['task_%d_st' % x] = '0'
-                    self['FMRI']['task_%d_blockdesign' % x] = '0'
-                    self['FMRI']['task_%d_del_start_vols' % x] = '0'
-                    self['FMRI']['task_%d_del_end_vols' % x] = '0'
-
-                self['DEFAULTTRACTS'] = tmp_config['DEFAULTTRACTS']
-        except:
-            print_error()
-        
+            self['DEFAULTTRACTS'] = tmp_config['DEFAULTTRACTS']
 
     def set_wf_option(self, wf):
-
-        try:
-            if self.global_config:
-                return
-            wf = str(wf)
-            self['WF_OPTION'] = ConfigManager.DEFAULT_WF[wf]
-            self.update_freesurfer_pref()
-        except:
-            print_error()
-        
+        if self.global_config:
+            return
+        wf = str(wf)
+        self['WF_OPTION'] = ConfigManager.DEFAULT_WF[wf]
+        self.update_freesurfer_pref()
 
     def update_freesurfer_pref(self):
-
-        try:
-            if not self.is_freesurfer():
-                self['WF_OPTION']['freesurfer'] = 'false'
-            if not self.is_freesurfer_matlab():
-                self['WF_OPTION']['hippoAmygLabels'] = 'false'
-                self['WF_OPTION']['hippoAmygLabels'] = 'false'
-        except:
-            print_error()
-
+        if not self.is_freesurfer():
+            self['WF_OPTION']['freesurfer'] = 'false'
+        if not self.is_freesurfer_matlab():
+            self['WF_OPTION']['hippoAmygLabels'] = 'false'
+            self['WF_OPTION']['hippoAmygLabels'] = 'false'
 
     def is_freesurfer(self):
-
-        try:
-            if self.global_config or self.freesurfer is None:
-                return False
-            return self.freesurfer[0]
-        except:
-            print_error()
-
+        if self.global_config or self.freesurfer is None:
+            return False
+        return self.freesurfer[0]
     
     def is_freesurfer_matlab(self):
-
-        try:
-            if self.global_config or self.freesurfer is None:
-                return False
-            return self.freesurfer[0]
-        except:
-            print_error()
-
+        if self.global_config or self.freesurfer is None:
+            return False
+        return self.freesurfer[0]
 
     def save(self):
-
-        try:
-            with open(self.config_file, "w") as openedFile:
-                self.write(openedFile)
-        except:
-            print_error()
-
+        with open(self.config_file, "w") as openedFile:
+            self.write(openedFile)
 
     def get_patients_folder(self):
-
-        try:
-            if self.global_config:
-                return self["MAIN"]["PatientsFolder"]
-            return ''
-        except:
-            print_error()
-
+        if self.global_config:
+            return self["MAIN"]["PatientsFolder"]
+        return ''
 
     def set_patients_folder(self, path):
-
-        try:
-            if self.global_config:
-                self["MAIN"]["PatientsFolder"] = path
-        except:
-            print_error()
-
+        if self.global_config:
+            self["MAIN"]["PatientsFolder"] = path
 
     def get_shortcut_path(self):
-
-        try:
-            if self.global_config:
-                return self['MAIN']['shortcutPath']
-            return ''
-        except:
-            print_error()
-
+        if self.global_config:
+            return self['MAIN']['shortcutPath']
+        return ''
 
     def set_shortcut_path(self, path):
-
-        try:
-            if self.global_config:
-                self['MAIN']['shortcutPath'] = path
-        except:
-            print_error()
-
+        if self.global_config:
+            self['MAIN']['shortcutPath'] = path
 
     def get_max_pt(self):
-        
+        if not self.global_config:
+            return 1
         try:
-            if not self.global_config:
-                return 1
             return self.getint('MAIN', 'maxPt')
         except:
             return 1
 
     def get_patientsprefix(self):
-
-        try:
-            if self.global_config:
-                return self['MAIN']['patientsprefix']
-            return ''
-        except:
-            print_error()
-        
+        if self.global_config:
+            return self['MAIN']['patientsprefix']
+        return ''
 
     def get_default_dicom_folder(self):
-
-        try:
-            if self.global_config:
-                return self['MAIN']['defaultdicomfolder']
-            return ''
-        except:
-            print_error()
-
+        if self.global_config:
+            return self['MAIN']['defaultdicomfolder']
+        return ''
 
     def get_slicer_path(self):
-
-        try:
-            if self.global_config:
-                return self['MAIN']['slicerPath']
-            return ''
-        except:
-            print_error()
-
+        if self.global_config:
+            return self['MAIN']['slicerPath']
+        return ''
 
     def set_slicer_path(self, path):
-
-        try:
-            if self.global_config:
-                self['MAIN']['slicerPath'] = path
-        except:
-            print_error()
-
+        if self.global_config:
+            self['MAIN']['slicerPath'] = path
 
     def is_optional_series_enabled(self, series_name):
-
-        try:
-            if self.global_config:
-                try:
-                    return self.getboolean('OPTIONAL_SERIES', series_name)
-                except:
-                    return False
-            return False
-        except:
-            print_error()
-
+        if self.global_config:
+            try:
+                return self.getboolean('OPTIONAL_SERIES', series_name)
+            except:
+                return False
+        return False
 
     def get_slicer_scene_ext(self):
-
-        try:
-            if self.global_config:
-                return self['MAIN']['slicerSceneExt']
-            return ''
-        except:
-            print_error()
-
+        if self.global_config:
+            return self['MAIN']['slicerSceneExt']
+        return ''
 
     def get_pt_wf_type(self):
-
-        try:
-            if not self.global_config:
-                try:
-                    return self['WF_OPTION'].getint('wfType')
-                except:
-                    return 0
-            return 0
-        except:
-            print_error()
-
+        if not self.global_config:
+            try:
+                return self['WF_OPTION'].getint('wfType')
+            except:
+                return 0
+        return 0
 
     def get_pt_wf_freesurfer(self):
-
-        try:
-            if not self.global_config:
-                try:
-                    return self.getboolean('WF_OPTION', 'freesurfer')
-                except:
-                    return False
-            return False
-        except:
-            print_error()
-
+        if not self.global_config:
+            try:
+                return self.getboolean('WF_OPTION', 'freesurfer')
+            except:
+                return False
+        return False
 
     def get_pt_wf_hippo(self):
-
-        try:
-            if not self.global_config:
-                try:
-                    return self.getboolean('WF_OPTION', 'hippoAmygLabels')
-                except:
-                    return False
-            return False
-
-        except:
-            print_error()
+        if not self.global_config:
+            try:
+                return self.getboolean('WF_OPTION', 'hippoAmygLabels')
+            except:
+                return False
+        return False
