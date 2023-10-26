@@ -219,7 +219,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
 
         # NODE 15: AI scalp removal
         ai_mask = Node(ApplyMask(), name='%s_ai_mask' % name)
-        ai_mask.long_name = name + "AI %s"
+        ai_mask.long_name = name + " AI %s"
         ai_mask.inputs.out_file = "r-%s_ai.nii.gz" % name
         workflow.connect(ai_2_ref, "out_file", ai_mask, "in_file")
         workflow.connect(inputnode, "brain_mask", ai_mask, "mask_file")
