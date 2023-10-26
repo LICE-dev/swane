@@ -1,3 +1,5 @@
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
+
 from nipype import logging as nipype_log, config
 import os
 import traceback
