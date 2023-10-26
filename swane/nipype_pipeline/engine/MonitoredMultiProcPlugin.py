@@ -1,8 +1,8 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 import os
-from nipype.pipeline.plugins.multiproc import MultiProcPlugin
 import traceback
+from nipype.pipeline.plugins.multiproc import MultiProcPlugin
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.pipeline.plugins.multiproc.MultiProcPlugin)  -*-
@@ -14,7 +14,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
     WORKFLOW_INSUFFICIENT_RESOURCES = "insufficientresources"
 
     def __init__(self,  plugin_args=None):
-        print(plugin_args)
+        self.task_list = {}
         if "queue" in plugin_args:
             self.queue = plugin_args["queue"]
         super(MonitoredMultiProcPlugin, self).__init__(plugin_args=plugin_args)
@@ -47,23 +47,18 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             traceback.print_exc()
         return super(MonitoredMultiProcPlugin, self)._submit_mapnode(jobid)
 
-    def _async_callback(self, args):
-
-        # This code create a report file for memory usage for each completed node if resource monitor is enabled
-        result = args.result()['result']
+    def _task_finished_cb(self, jobid, cached=False):
+        # Create a report file for memory usage for each completed node if resource monitor is enabled
+        result = self.procs[jobid].result
         if hasattr(result.runtime, 'mem_peak_gb'):
-
             mem_peak = getattr(result.runtime, 'mem_peak_gb')
             cpu_percent = getattr(result.runtime, 'cpu_percent')
-            interface = getattr(result.runtime, 'interface')
-            line = interface + ": mem_peak_gb " + str(mem_peak) + " - cpu_percent " + str(cpu_percent) + "\n"
+            line = self.procs[jobid].fullname + ": mem_peak_gb " + str(mem_peak) + " - cpu_percent " + str(cpu_percent) + "\n"
             file_name = os.path.join(os.getcwd(), ".node_resource_monitor")
             with open(file_name, 'a+') as f:
                 f.write(line)
-        return super(MonitoredMultiProcPlugin, self)._async_callback(args)
 
-    def _task_finished_cb(self, jobid, cached=False):
-        # This class implements signaling for generic node completion
+        # Implements signaling for generic node completion
         if jobid not in self.mapnodesubids:
             try:
                 self.queue.put(self.procs[jobid].fullname + "." + MonitoredMultiProcPlugin.NODE_COMPLETED)
@@ -78,3 +73,5 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         except RuntimeError:
             self.queue.put(MonitoredMultiProcPlugin.WORKFLOW_INSUFFICIENT_RESOURCES)
             raise RuntimeError("Insufficient resources available for job")
+
+

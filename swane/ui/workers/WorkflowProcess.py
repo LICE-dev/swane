@@ -7,7 +7,6 @@ from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from nipype.external.cloghandler import ConcurrentRotatingFileHandler
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 import logging as orig_log
-from nipype.utils.profiler import log_nodes_cb
 
 
 class WorkflowProcess(Process):
@@ -43,7 +42,7 @@ class WorkflowProcess(Process):
         plugin_args = {
             'mp_context': 'fork',
             'queue': self.queue,
-            'status_callback': log_nodes_cb
+            'status_callback': swane_log_nodes_cb
         }
         if self.workflow.max_cpu > 0:
             plugin_args['n_procs'] = self.workflow.max_cpu
@@ -121,3 +120,49 @@ class WorkflowProcess(Process):
         # se il thread è alive vuol dire che devo killare su richiesta della GUI
         if workflow_run_work.is_alive():
             WorkflowProcess.kill_with_subprocess()
+
+
+# Log node stats function
+def swane_log_nodes_cb(node, status):
+    """Function to record node run statistics to a log file as json
+    dictionaries
+
+    Parameters
+    ----------
+    node : nipype.pipeline.engine.Node
+        the node being logged
+    status : string
+        acceptable values are 'start', 'end'; otherwise it is
+        considered and error
+
+    Returns
+    -------
+    None
+        this function does not return any values, it logs the node
+        status info to the callback logger
+    """
+
+    if status != "end":
+        return
+
+    # Import packages
+    import logging
+    import json
+
+    status_dict = {
+        "name": node.name,
+        "id": node._id,
+        "start": getattr(node.result.runtime, "startTime", None),
+        "finish": getattr(node.result.runtime, "endTime", None),
+        "duration": getattr(node.result.runtime, "duration", None),
+        "runtime_threads": getattr(node.result.runtime, "cpu_percent", "N/A"),
+        "runtime_memory_gb": getattr(node.result.runtime, "mem_peak_gb", "N/A"),
+        "estimated_memory_gb": node.mem_gb,
+        "num_threads": node.n_procs,
+    }
+
+    if status_dict["start"] is None or status_dict["finish"] is None:
+        status_dict["error"] = True
+
+    # Dump string to log
+    logging.getLogger("callback").debug(json.dumps(status_dict))
