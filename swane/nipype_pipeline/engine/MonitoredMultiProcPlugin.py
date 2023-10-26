@@ -49,10 +49,9 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
 
     def _task_finished_cb(self, jobid, cached=False):
         # Create a report file for memory usage for each completed node if resource monitor is enabled
-        result = self.procs[jobid].result
-        if hasattr(result.runtime, 'mem_peak_gb'):
-            mem_peak = getattr(result.runtime, 'mem_peak_gb')
-            cpu_percent = getattr(result.runtime, 'cpu_percent')
+        if cached is False and hasattr(self.procs[jobid].result.runtime, 'mem_peak_gb'):
+            mem_peak = getattr(self.procs[jobid].result.runtime, 'mem_peak_gb', "N/A")
+            cpu_percent = getattr(self.procs[jobid].result.runtime, 'cpu_percent', "N/A")
             line = self.procs[jobid].fullname + ": mem_peak_gb " + str(mem_peak) + " - cpu_percent " + str(cpu_percent) + "\n"
             file_name = os.path.join(os.getcwd(), ".node_resource_monitor")
             with open(file_name, 'a+') as f:
