@@ -44,54 +44,57 @@ class DicomSearchWorker(QRunnable):
 
     def run(self):
 
-        if len(self.unsorted_list) == 0:
-            self.load_dir()
+        try:
+            if len(self.unsorted_list) == 0:
+                self.load_dir()
 
-        skip = False
+            skip = False
 
-        for dicom_loc in self.unsorted_list:
-            self.signal.sig_loop.emit(1)
+            for dicom_loc in self.unsorted_list:
+                self.signal.sig_loop.emit(1)
 
-            if skip:
-                continue
+                if skip:
+                    continue
 
-            # read the file
-            if not os.path.exists(dicom_loc):
-                continue
-            ds = pydicom.read_file(dicom_loc, force=True)
+                # read the file
+                if not os.path.exists(dicom_loc):
+                    continue
+                ds = pydicom.read_file(dicom_loc, force=True)
 
-            patient_id = self.clean_text(ds.get("PatientID", "NA"))
-            if patient_id == "na":
-                continue
+                patient_id = self.clean_text(ds.get("PatientID", "NA"))
+                if patient_id == "na":
+                    continue
 
-            series_number = ds.get("SeriesNumber", "NA")
-            study_instance_uid = ds.get("StudyInstanceUID", "NA")
+                series_number = ds.get("SeriesNumber", "NA")
+                study_instance_uid = ds.get("StudyInstanceUID", "NA")
 
-            # in GE la maggior parte delle ricostruzioni sono DERIVED\SECONDARY
-            if hasattr(ds, 'ImageType') and "DERIVED" in ds.ImageType and "SECONDARY" in ds.ImageType and "ASL" not in ds.ImageType:
-                continue
-            # in GE e SIEMENS l'immagine anatomica di ASL è ORIGINAL\PRIMARY\ASL
-            if hasattr(ds, 'ImageType') and "ORIGINAL" in ds.ImageType and "PRIMARY" in ds.ImageType and "ASL" in ds.ImageType:
-                continue
-            # in Philips e Siemens le ricostruzioni sono PROJECTION IMAGE
-            if hasattr(ds, 'ImageType') and "PROJECTION IMAGE" in ds.ImageType:
-                continue
+                # in GE la maggior parte delle ricostruzioni sono DERIVED\SECONDARY
+                if hasattr(ds, 'ImageType') and "DERIVED" in ds.ImageType and "SECONDARY" in ds.ImageType and "ASL" not in ds.ImageType:
+                    continue
+                # in GE e SIEMENS l'immagine anatomica di ASL è ORIGINAL\PRIMARY\ASL
+                if hasattr(ds, 'ImageType') and "ORIGINAL" in ds.ImageType and "PRIMARY" in ds.ImageType and "ASL" in ds.ImageType:
+                    continue
+                # in Philips e Siemens le ricostruzioni sono PROJECTION IMAGE
+                if hasattr(ds, 'ImageType') and "PROJECTION IMAGE" in ds.ImageType:
+                    continue
 
-            if patient_id not in self.dicom_tree:
-                self.dicom_tree[patient_id] = {}
-            if study_instance_uid not in self.dicom_tree[patient_id]:
-                self.dicom_tree[patient_id][study_instance_uid] = {}
-            if series_number not in self.dicom_tree[patient_id][study_instance_uid]:
-                self.dicom_tree[patient_id][study_instance_uid][series_number] = []
-                self.series_positions[series_number] = [ds.get("SliceLocation"), 0]
-            self.dicom_tree[patient_id][study_instance_uid][series_number].append(dicom_loc)
-            if self.series_positions[series_number][0] == ds.get("SliceLocation"):
-                self.series_positions[series_number][1] += 1
+                if patient_id not in self.dicom_tree:
+                    self.dicom_tree[patient_id] = {}
+                if study_instance_uid not in self.dicom_tree[patient_id]:
+                    self.dicom_tree[patient_id][study_instance_uid] = {}
+                if series_number not in self.dicom_tree[patient_id][study_instance_uid]:
+                    self.dicom_tree[patient_id][study_instance_uid][series_number] = []
+                    self.series_positions[series_number] = [ds.get("SliceLocation"), 0]
+                self.dicom_tree[patient_id][study_instance_uid][series_number].append(dicom_loc)
+                if self.series_positions[series_number][0] == ds.get("SliceLocation"):
+                    self.series_positions[series_number][1] += 1
 
-            if DEBUG:
-                skip = True
+                if DEBUG:
+                    skip = True
 
-        self.signal.sig_finish.emit(self)
+            self.signal.sig_finish.emit(self)
+        except:
+            self.signal.sig_finish.emit(self)
 
     def get_patient_list(self):
         return list(self.dicom_tree.keys())
