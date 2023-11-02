@@ -1161,7 +1161,8 @@ class PtTab(QTabWidget):
     def clear_scan_result(self):
         self.importable_series_list.clear()
         self.final_series_list = None
-        self.scan_directory_watcher.removePaths(self.scan_directory_watcher.directories())
+        if len(self.scan_directory_watcher.directories()) > 0:
+            self.scan_directory_watcher.removePaths(self.scan_directory_watcher.directories())
 
 
     def set_warn(self, input_name: str, msg: str, clear_text: bool = True):
