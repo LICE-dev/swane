@@ -10,7 +10,7 @@ from swane.nipype_pipeline.nodes.CustomBEDPOSTX5 import CustomBEDPOSTX5
 from nipype.interfaces.utility import IdentityInterface
 
 
-def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir: str = "/", is_tractography: bool = False) -> CustomWorkflow:
+def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir: str = "/", is_tractography: bool = False, max_node_cpu: int = 0) -> CustomWorkflow:
     """
     DTI preprocessing workflow with eddy current and motion artifact correction.
     Diffusion metrics calculation and, if needed, bayesian estimation of
@@ -165,6 +165,8 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
         bedpostx.inputs.sample_every = 25
         bedpostx.inputs.n_jumps = 1250
         bedpostx.inputs.burn_in = 1000
+        if max_node_cpu > 0:
+            bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_node_cpu)}
         workflow.connect(eddy, "eddy_corrected", bedpostx, "dwi")
         workflow.connect(bet, "mask_file", bedpostx, "mask")
         workflow.connect(conv, "bvecs", bedpostx, "bvecs")
