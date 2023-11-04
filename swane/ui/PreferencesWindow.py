@@ -1,8 +1,6 @@
 import os
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QDialog, QGridLayout, QVBoxLayout, QGroupBox, QPushButton, QFileDialog, QMessageBox,
-                               QHBoxLayout)
+from PySide6.QtWidgets import (QDialog, QGridLayout, QVBoxLayout, QGroupBox, QPushButton, QHBoxLayout, QLabel)
 
 from swane import strings, EXIT_CODE_REBOOT
 from swane.utils.ConfigManager import ConfigManager
@@ -124,6 +122,18 @@ class PreferencesWindow(QDialog):
             self.new_inputs[x].set_range(-1, 40)
             grid1.addWidget(self.new_inputs[x].label, x, 0)
             grid1.addWidget(self.new_inputs[x].input_field, x, 1)
+            x += 1
+
+            self.new_inputs[x] = PreferenceEntry(category, 'bedpostx_core', my_config, PreferenceEntry.COMBO,
+                                                 parent=self, populate_combo=ConfigManager.BEDPOSTX_CORES)
+            self.new_inputs[x].set_label_text(strings.pref_window_global_box_bedpostx_cores)
+            grid1.addWidget(self.new_inputs[x].label, x, 0)
+            grid1.addWidget(self.new_inputs[x].input_field, x, 1)
+            self.new_inputs[x].input_field.currentIndexChanged.connect(self.update_bedpostx_core_description)
+            x += 1
+            self.bedpostx_core_description = QLabel()
+            self.bedpostx_core_description.setText(strings.pref_window_global_box_bedpostx_description[self.new_inputs[x-1].input_field.currentIndex()])
+            grid1.addWidget(self.bedpostx_core_description, x, 0, 1, 2)
             x += 1
 
             self.new_inputs[x] = PreferenceEntry(category, 'resourceMonitor', my_config, PreferenceEntry.CHECKBOX, parent=self)
@@ -362,28 +372,6 @@ class PreferencesWindow(QDialog):
 
         self.setLayout(layout)
 
-    # def choose_dir(self, edit, message):
-    #     folder_path = QFileDialog.getExistingDirectory(self, message)
-    #     if not os.path.exists(folder_path):
-    #         msg_box = QMessageBox()
-    #         msg_box.setIcon(QMessageBox.Icon.NoIcon)
-    #         msg_box.setText(strings.pref_window_dir_error)
-    #         msg_box.exec()
-    #         return
-    #     edit.setText(folder_path)
-    #     self.set_restart()
-    #
-    # def choose_file(self, edit, message):
-    #     file_path, _ = QFileDialog.getOpenFileName(self, message)
-    #     if not os.path.exists(file_path):
-    #         msg_box = QMessageBox()
-    #         msg_box.setIcon(QMessageBox.Icon.NoIcon)
-    #         msg_box.setText(strings.pref_window_file_error)
-    #         msg_box.exec()
-    #         return
-    #     edit.setText(file_path)
-    #     self.set_restart()
-
     def freesurfer_changed(self, checked, hippo_index):
         if not checked or not self.my_config.is_freesurfer_matlab():
             self.new_inputs[hippo_index].disable(strings.pref_window_wf_box_hippo_disabled_tip)
@@ -393,16 +381,12 @@ class PreferencesWindow(QDialog):
     def tractography_changed(self, checked):
         self.group_box3.setEnabled(checked)
 
-    # @staticmethod
-    # def set_checkbox(checkbox, value):
-    #     if value:
-    #         checkbox.setCheckState(Qt.Checked)
-    #     else:
-    #         checkbox.setCheckState(Qt.Unchecked)
-
     def set_restart(self):
         self.restart = True
         self.saveButton.setText(strings.pref_window_save_restart_button)
+
+    def update_bedpostx_core_description(self, value):
+        self.bedpostx_core_description.setText(strings.pref_window_global_box_bedpostx_description[value])
 
     def save_preferences(self):
 

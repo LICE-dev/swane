@@ -66,10 +66,13 @@ class MainWorkflow(CustomWorkflow):
         # CPU cores and memory management
         self.is_resource_monitor = global_config.getboolean('MAIN', 'resourceMonitor')
         self.max_cpu = global_config.getint('MAIN', 'maxPtCPU')
-        if self.max_cpu > 0:
-            max_node_cpu = max(int(self.max_cpu / 2), 1)
-        else:
-            max_node_cpu = max(int((cpu_count() - 2) / 2), 1)
+        self.bedpostx_core = global_config.getint('MAIN', 'bedpostx_core')
+
+        if self.max_cpu < 1:
+            self.max_cpu = cpu_count()
+
+        max_node_cpu = max(int(self.max_cpu / 2), 1)
+
 
         # 3D T1w
         ref_dir = data_input_list.get_dicom_dir(DataInputList.T13D)
@@ -264,7 +267,7 @@ class MainWorkflow(CustomWorkflow):
             dti_dir = data_input_list.get_dicom_dir(DataInputList.DTI)
             mni_dir = abspath(os.path.join(os.environ["FSLDIR"], 'data/standard/MNI152_T1_2mm_brain.nii.gz'))
 
-            dti_preproc = dti_preproc_workflow(data_input_list[DataInputList.DTI].wf_name, dti_dir, mni_dir, is_tractography=is_tractography, max_node_cpu=max_node_cpu)
+            dti_preproc = dti_preproc_workflow(data_input_list[DataInputList.DTI].wf_name, dti_dir, mni_dir, is_tractography=is_tractography, max_cpu=self.max_cpu, bedpostx_core=self.bedpostx_core)
             dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
             self.connect(t1, "outputnode.ref_brain", dti_preproc, "inputnode.ref_brain")
 

@@ -114,7 +114,13 @@ pref_window_global_box_bias_corrected_bet_tip = "Increase time with better resul
 pref_window_global_box_thr_bet = "Threshold value for skull removal"
 pref_window_global_box_default_task = "Default fMRI taks duration"
 pref_window_global_box_pt_limit = "Patient tab limit"
-pref_window_global_box_cpu_limit = "CPU per Patient limit"
+pref_window_global_box_cpu_limit = "CPU core per Patient limit"
+pref_window_global_box_bedpostx_cores = "BedpostX (DTI) CPU core management"
+pref_window_global_box_bedpostx_description = [
+    "BedpostX will ignore the patient CPU core limit, using all available resources",
+    "BedpostX process will use double the patient CPU core limit",
+    "BedpostX will respect the patient CPU core limit"
+]
 pref_window_global_box_resource_monitor = "Enable resource monitor"
 pref_window_global_box_default_ext = "Slicer scene extension"
 pref_window_global_box_optional_title = "Optional series settings"
