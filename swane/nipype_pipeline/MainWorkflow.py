@@ -73,7 +73,6 @@ class MainWorkflow(CustomWorkflow):
 
         max_node_cpu = max(int(self.max_cpu / 2), 1)
 
-
         # 3D T1w
         ref_dir = data_input_list.get_dicom_dir(DataInputList.T13D)
         t1 = ref_workflow(data_input_list[DataInputList.T13D].wf_name, ref_dir, bet_bias_correction, bet_thr)
@@ -98,6 +97,7 @@ class MainWorkflow(CustomWorkflow):
             freesurfer = freesurfer_workflow("freesurfer", is_hippo_amyg_labels)
             freesurfer.long_name = "Freesurfer analysis"
 
+            # TODO: check freesurfer cpu usage and parallelization
             freesurfer_inputnode = freesurfer.get_node("inputnode")
             freesurfer_inputnode.inputs.max_node_cpu = max_node_cpu
             freesurfer_inputnode.inputs.subjects_dir = self.base_dir

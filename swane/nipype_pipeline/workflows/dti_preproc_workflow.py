@@ -178,7 +178,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
         elif bedpostx_core == 2:
             bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
             bedpostx.inputs.num_threads = max_cpu
-        
+
         workflow.connect(eddy, "eddy_corrected", bedpostx, "dwi")
         workflow.connect(bet, "mask_file", bedpostx, "mask")
         workflow.connect(conv, "bvecs", bedpostx, "bvecs")
