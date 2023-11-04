@@ -100,10 +100,10 @@ class WorkflowProcess(Process):
         if self.workflow.is_resource_monitor:
             config.enable_resource_monitor()
             resource_log_filename = os.path.join(log_dir, 'resource_monitor.log')
-            logger = orig_log.getLogger('callback')
-            logger.setLevel(orig_log.DEBUG)
-            handler = orig_log.FileHandler(resource_log_filename)
-            logger.addHandler(handler)
+            callback_logger = orig_log.getLogger('callback')
+            callback_logger.setLevel(orig_log.DEBUG)
+            resource_log_handler = orig_log.FileHandler(resource_log_filename)
+            callback_logger.addHandler(resource_log_handler)
 
         # avvio il wf in un subhread
         workflow_run_work = Thread(target=self.workflow_run_worker)
@@ -114,6 +114,8 @@ class WorkflowProcess(Process):
 
         # rimuovo gli handler di filelog e aggiornamento gui
         WorkflowProcess.remove_handlers(file_handler)
+        if self.workflow.is_resource_monitor:
+            callback_logger.removeHandler(resource_log_handler)
 
         # chiudo la queue del subprocess
         self.queue.put(WorkflowMonitorWorker.STOP)
