@@ -10,7 +10,7 @@ from swane.nipype_pipeline.nodes.CustomBEDPOSTX5 import CustomBEDPOSTX5
 from nipype.interfaces.utility import IdentityInterface
 
 
-def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir: str = "/", is_tractography: bool = False, max_node_cpu: int = 0) -> CustomWorkflow:
+def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir: str = "/", is_tractography: bool = False, max_cpu: int = 0, bedpostx_core: int = 0) -> CustomWorkflow:
     """
     DTI preprocessing workflow with eddy current and motion artifact correction.
     Diffusion metrics calculation and, if needed, bayesian estimation of
@@ -28,6 +28,13 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
         The base directory path relative to parent workflow. The default is "/".
     is_tractography : bool, optional
         Enable bayesian estimation of diffusion parameters. The default is False.
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of bedpostx. The default is 0.
+    bedpostx_core: int, optional
+        Preference for bedpostX core usage. The default il 0
+        0 -> no limit
+        1 -> soft cap
+        2 -> hard cap
         
     Input Node Fields
     ----------
@@ -165,9 +172,13 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
         bedpostx.inputs.sample_every = 25
         bedpostx.inputs.n_jumps = 1250
         bedpostx.inputs.burn_in = 1000
-        if max_node_cpu > 0:
-            bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_node_cpu)}
-            bedpostx.inputs.num_threads = max_node_cpu
+
+        if bedpostx_core == 1:
+            bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
+        elif bedpostx_core == 2:
+            bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
+            bedpostx.inputs.num_threads = max_cpu
+        
         workflow.connect(eddy, "eddy_corrected", bedpostx, "dwi")
         workflow.connect(bet, "mask_file", bedpostx, "mask")
         workflow.connect(conv, "bvecs", bedpostx, "bvecs")

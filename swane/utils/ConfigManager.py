@@ -8,6 +8,7 @@ from swane.utils.DataInput import DataInputList
 class ConfigManager(configparser.ConfigParser):
 
     WORKFLOW_TYPES = ["Structural Workflow", "Morpho-Functional Workflow"]
+    BEDPOSTX_CORES = ["No limit", "Soft cap", "Hard Cap"]
     SLICER_EXTENSIONS = ["mrb", "mrml"]
     SLICE_TIMING = ['Unknown', 'Regular up', 'Regular down', 'Interleaved']
     BLOCK_DESIGNS = ['rArA...', 'rArBrArB...']
@@ -118,6 +119,7 @@ class ConfigManager(configparser.ConfigParser):
                 'fmritaskduration': '30',
                 'defaultdicomfolder': 'dicom',
                 'resourceMonitor': 'false',
+                'bedpostx_core': '0',
             }
 
             self['OPTIONAL_SERIES'] = {}
