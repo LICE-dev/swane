@@ -155,8 +155,7 @@ def load_freesurfer_segmentation_file(seg_file: str):
     
     if os.path.exists(seg_file):
         try:
-            slicer.util.getModuleLogic('FreeSurferImporter').LoadFreeSurferSegmentation(seg_file)
-            # slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
+            slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
         except:
             pass
 
