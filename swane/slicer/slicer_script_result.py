@@ -155,7 +155,15 @@ def load_freesurfer_segmentation_file(seg_file: str):
     
     if os.path.exists(seg_file):
         try:
-            slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
+
+            # TODO: temporary fix for ubuntu crash
+            if "linux" in sys.platform:
+                slicer.util.loadVolume(seg_file, {"labelmap": True, "colorNodeID": "vtkMRMLColorTableNodeFile"})
+            else:
+                slicer.util.getModuleLogic('FreeSurferImporter').LoadFreeSurferSegmentation(seg_file)
+
+            # slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
+
         except:
             pass
 
