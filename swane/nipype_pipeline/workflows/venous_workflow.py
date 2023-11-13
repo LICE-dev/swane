@@ -67,13 +67,13 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
     # NODE 4: Detect the venous phase from the anatomic phase
     veins_check = Node(VenousCheck(), name='veins_check')
-    veins_check.long_name = "angiographic phase detection"
+    veins_check.long_name = "angiographic volume detection"
 
     # If the phases are in the same sequence
     if venous2_dir is None:
         # NODE 3a: Divide the two phases from the phase contrast
         veins_split = Node(Split(), name='veins_split')
-        veins_split.long_name = "phase splitting"
+        veins_split.long_name = "volumes splitting"
         veins_split.inputs.dimension = 't'
         workflow.connect(veins_reOrient, "out_file", veins_split, "in_file")
 
@@ -91,7 +91,7 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
         # NODE 3b: Merge the two phases
         veins_merge = Node(Merge(2), name="veins_merge")
-        veins_merge.long_name = "phase merging"
+        veins_merge.long_name = "volumes merging"
         workflow.connect(veins_reOrient, "out_file", veins_merge, "in1")
         workflow.connect(veins2_reOrient, "out_file", veins_merge, "in2")
 
