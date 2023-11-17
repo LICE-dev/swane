@@ -80,17 +80,31 @@ class DicomSearchWorker(QRunnable):
 
                 if patient_id not in self.dicom_tree:
                     self.dicom_tree[patient_id] = {}
+                    self.series_positions[patient_id] = {}
+                    if DEBUG:
+                        print("New patient: " + str(patient_id))
+
                 if study_instance_uid not in self.dicom_tree[patient_id]:
                     self.dicom_tree[patient_id][study_instance_uid] = {}
+                    self.series_positions[patient_id][study_instance_uid] = {}
+                    if DEBUG:
+                        print("New study: " + str(study_instance_uid))
+
                 if series_number not in self.dicom_tree[patient_id][study_instance_uid]:
                     self.dicom_tree[patient_id][study_instance_uid][series_number] = []
-                    self.series_positions[series_number] = [ds.get("SliceLocation"), 0]
-                self.dicom_tree[patient_id][study_instance_uid][series_number].append(dicom_loc)
-                if self.series_positions[series_number][0] == ds.get("SliceLocation"):
-                    self.series_positions[series_number][1] += 1
+                    self.series_positions[patient_id][study_instance_uid][series_number] = [ds.get("SliceLocation"), 0]
+                    if DEBUG:
+                        print("New series: " + str(series_number) + " " + ds.SeriesDescription)
 
-                if DEBUG:
-                    skip = True
+                self.dicom_tree[patient_id][study_instance_uid][series_number].append(dicom_loc)
+
+                if self.series_positions[patient_id][study_instance_uid][series_number][0] == ds.get("SliceLocation"):
+                    self.series_positions[patient_id][study_instance_uid][series_number][1] += 1
+                    if DEBUG:
+                        print("New volume for series: " + str(series_number))
+
+                # if DEBUG:
+                #     skip = True
 
             self.signal.sig_finish.emit(self)
         except:
@@ -111,8 +125,8 @@ class DicomSearchWorker(QRunnable):
             return []
         return list(self.dicom_tree[patient][exam].keys())
 
-    def get_series_nvol(self, series_number):
-        return self.series_positions[series_number][1]
+    def get_series_nvol(self, patient, exam, series):
+        return self.series_positions[patient][exam][series][1]
 
     def get_series_files(self, patient, exam, series):
         if patient not in self.dicom_tree:

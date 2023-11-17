@@ -961,8 +961,8 @@ class PtTab(QTabWidget):
 
         label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(len(image_list)) + " images"
         if input_name == DataInputList.VENOUS or input_name == DataInputList.VENOUS2:
-            label += ", " + str(dicom_src_work.get_series_nvol(series_list[0])) + " "
-            if dicom_src_work.get_series_nvol(series_list[0]) > 1:
+            label += ", " + str(dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])) + " "
+            if dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0]) > 1:
                 label += "phases"
             else:
                 label += "phase"
@@ -970,7 +970,7 @@ class PtTab(QTabWidget):
         self.set_ok(input_name, label)
 
         self.data_input_list[input_name].loaded = True
-        self.data_input_list[input_name].volumes = dicom_src_work.get_series_nvol(series_list[0])
+        self.data_input_list[input_name].volumes = dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])
 
         self.enable_exec_tab()
         self.check_venous_volumes()
@@ -1139,14 +1139,14 @@ class PtTab(QTabWidget):
                     continue
 
                 mod = ds.Modality
-                vols = dicom_src_work.get_series_nvol(series)
+                vols = dicom_src_work.get_series_nvol(pt_list[0], exam, series)
 
                 if mod in DataInput.IMAGE_MODALITY_RENAME_LIST:
                     mod = DataInput.IMAGE_MODALITY_RENAME_LIST[mod]
 
                 label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(
                         len(image_list)) + " images, " + str(vols) + " "
-                if dicom_src_work.get_series_nvol(series) > 1:
+                if dicom_src_work.get_series_nvol(pt_list[0], exam, series) > 1:
                     label += "volumes"
                 else:
                     label += "volume"
