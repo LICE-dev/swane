@@ -23,6 +23,7 @@ from swane.ui.workers.WorkflowProcess import WorkflowProcess
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
+from swane.ui.WfPreferencesWindow import WfPreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.utils.ConfigManager import ConfigManager
 from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
@@ -494,7 +495,8 @@ class PtTab(QTabWidget):
 
         """
         
-        preference_window = PreferencesWindow(self.pt_config, self.data_input_list, self)
+        # preference_window = PreferencesWindow(self.pt_config, self.data_input_list, self)
+        preference_window = WfPreferencesWindow(self.pt_config, self.data_input_list, self)
         ret = preference_window.exec()
         if ret != 0:
             self.reset_workflow()

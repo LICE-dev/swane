@@ -11,6 +11,7 @@ import sys
 
 from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
+from swane.ui.WfPreferencesWindow import WfPreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.utils.DataInput import DataInputList
@@ -378,6 +379,28 @@ class MainWindow(QMainWindow):
         if ret != 0:
             self.reset_workflows()
 
+    def edit_wf_config(self):
+        """
+        Open the Default Workflow Settings Window.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        if self.check_running_workflows():
+            msg_box = QMessageBox()
+            msg_box.setText(strings.mainwindow_pref_disabled_error)
+            msg_box.exec()
+            return
+
+        wf_preference_window = WfPreferencesWindow(self.global_config, data_input_list=DataInputList())
+        ret = wf_preference_window.exec()
+
+        if ret != 0:
+            self.reset_workflows()
+
     def check_running_workflows(self) -> bool:
         """
         Check if SWANe is executing a workflow in any open Patients tab.
@@ -484,8 +507,12 @@ class MainWindow(QMainWindow):
         button_action4.setStatusTip(strings.menu_pref_tip)
         button_action4.triggered.connect(self.edit_config)
 
-        button_action6 = QAction(strings.menu_about, self)
-        button_action6.triggered.connect(self.about)
+        button_action5 = QAction(QIcon.fromTheme(
+            "preferences-other"), strings.menu_wf_pref, self)
+        button_action5.triggered.connect(self.edit_wf_config)
+
+        button_action7 = QAction(strings.menu_about, self)
+        button_action7.triggered.connect(self.about)
 
         # Menu definition and population
         menu = self.menuBar()
@@ -496,13 +523,14 @@ class MainWindow(QMainWindow):
         file_menu.addAction(button_action3)
         tool_menu = menu.addMenu(strings.menu_tools_name)
         tool_menu.addAction(button_action4)
+        tool_menu.addAction(button_action5)
         if sys.platform != "darwin":
-            button_action5 = QAction(strings.menu_shortcut, self)
-            button_action5.triggered.connect(lambda checked=None, global_config=self.global_config: shortcut_manager(global_config))
+            button_action6 = QAction(strings.menu_shortcut, self)
+            button_action6.triggered.connect(lambda checked=None, global_config=self.global_config: shortcut_manager(global_config))
 
-            tool_menu.addAction(button_action5)
+            tool_menu.addAction(button_action6)
         help_menu = menu.addMenu(strings.menu_help_name)
-        help_menu.addAction(button_action6)
+        help_menu.addAction(button_action7)
         
         # Tab definition
         self.main_tab = QTabWidget(parent=self)
@@ -637,6 +665,7 @@ class MainWindow(QMainWindow):
 
         msg, self.freesurfer = check_freesurfer()
         x = self.add_home_entry(layout, msg, self.freesurfer[0], x)
+        self.global_config.freesurfer = self.freesurfer
 
         check_slicer = False
         current_slicer_path = self.global_config.get_slicer_path()

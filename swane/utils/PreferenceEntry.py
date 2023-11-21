@@ -27,7 +27,7 @@ class PreferenceEntry:
         self.label = QLabel()
         self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.input_field, self.button = self.gen_input_field()
-        if input_type == PreferenceEntry.COMBO and populate_combo is not None:
+        if input_type == PreferenceEntry.COMBO:
             self.populate_combo(populate_combo)
         self.set_value_from_config(my_config)
         self.box_text = ''
@@ -101,12 +101,14 @@ class PreferenceEntry:
         self.set_value(file_path)
 
     def populate_combo(self, items):
-        if self.input_type != PreferenceEntry.COMBO:
+        if self.input_type != PreferenceEntry.COMBO or items is None:
             return
         for index, label in enumerate(items):
             self.input_field.insertItem(index, label)
 
     def set_value_from_config(self, config):
+        if config is None:
+            return
         try:
             self.set_value(config[self.category][self.key])
         except:
