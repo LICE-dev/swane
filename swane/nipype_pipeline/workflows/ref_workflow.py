@@ -2,6 +2,7 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
+from configparser import SectionProxy
 
 from nipype.interfaces.fsl import BET
 from nipype.interfaces.utility import IdentityInterface
@@ -9,7 +10,7 @@ from nipype.interfaces.utility import IdentityInterface
 from nipype import Node
 
 
-def ref_workflow(name: str, dicom_dir: str, betBiasCorrection: bool, betThr: float, base_dir: str = "/") -> CustomWorkflow:
+def ref_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
     T13D workflow to use as reference.
 
@@ -19,10 +20,8 @@ def ref_workflow(name: str, dicom_dir: str, betBiasCorrection: bool, betThr: flo
         The workflow name.
     dicom_dir : path
         The file path of the DICOM files.
-    betBiasCorrection: bool
-        If True use -B parameters for bet, otherwise use -R
-    betThr: float
-        The numeric value for bet thresholding
+    config: SectionProxy
+        workflow settings
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -45,7 +44,7 @@ def ref_workflow(name: str, dicom_dir: str, betBiasCorrection: bool, betThr: flo
         Brain mask from T13D bet command.
 
     """
-    
+
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
     
     # Output Node
@@ -73,9 +72,9 @@ def ref_workflow(name: str, dicom_dir: str, betBiasCorrection: bool, betThr: flo
 
     # NODE 4: Scalp removal
     ref_BET = Node(BET(), name='ref_BET')
-    ref_BET.inputs.frac = betThr
+    ref_BET.inputs.frac = config.getfloat('bet_thr')
     ref_BET.inputs.mask = True
-    if betBiasCorrection:
+    if config.getboolean('bet_bias_correction'):
         ref_BET.inputs.reduce_bias = True
     else:
         ref_BET.inputs.robust = True

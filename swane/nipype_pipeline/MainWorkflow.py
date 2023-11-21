@@ -54,14 +54,11 @@ class MainWorkflow(CustomWorkflow):
         is_freesurfer = pt_config.is_freesurfer() and pt_config.get_pt_wf_freesurfer()
         is_hippo_amyg_labels = pt_config.is_freesurfer_matlab() and pt_config.get_pt_wf_hippo()
         # Check for FLAT1 requirement and request
-        is_FLAT1 = pt_config.getboolean('WF_OPTION', 'FLAT1') and data_input_list[DataInputList.FLAIR3D].loaded
+        is_FLAT1 = pt_config.getboolean(DataInputList.T13D, 'flat1') and data_input_list[DataInputList.FLAIR3D].loaded
         # Check for Asymmetry Index request
-        is_ai = pt_config.getboolean('WF_OPTION', 'ai')
+        is_ai = pt_config.getboolean(DataInputList.PET, 'ai') or pt_config.getboolean(DataInputList.ASL, 'ai')
         # Check for Tractography request
-        is_tractography = pt_config.getboolean('WF_OPTION', 'tractography')
-        # Check if bias correction is enablet for T13D bet
-        bet_bias_correction = pt_config.getboolean('WF_OPTION', 'betBiasCorrection')
-        bet_thr = pt_config.getfloat('WF_OPTION', 'betThr')
+        is_tractography = pt_config.getboolean(DataInputList.DTI, 'tractography')
 
         # CPU cores and memory management
         self.is_resource_monitor = global_config.getboolean('MAIN', 'resourceMonitor')
@@ -75,7 +72,7 @@ class MainWorkflow(CustomWorkflow):
 
         # 3D T1w
         ref_dir = data_input_list.get_dicom_dir(DataInputList.T13D)
-        t1 = ref_workflow(data_input_list[DataInputList.T13D].wf_name, ref_dir, bet_bias_correction, bet_thr)
+        t1 = ref_workflow(data_input_list[DataInputList.T13D].wf_name, ref_dir, pt_config[DataInputList.T13D])
         t1.long_name = "3D T1w analysis"
         self.add_nodes([t1])
 
