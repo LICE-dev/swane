@@ -29,7 +29,6 @@ setup(name='swane',
           "pydicom==2.3.1",
           "configparser==5.3.0",
           "psutil==5.9.4",
-          "pyshortcuts==1.8.3",
           "swane_supplement>=0.1.2",
           "matplotlib==3.5.2",
           "nibabel==5.0.0"

@@ -15,7 +15,6 @@ from swane.ui.WfPreferencesWindow import WfPreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.utils.DataInput import DataInputList
-from swane.utils.shortcut_manager import shortcut_manager
 from swane.slicer.SlicerCheckWorker import SlicerCheckWorker
 
 
@@ -55,22 +54,6 @@ class MainWindow(QMainWindow):
         os.chdir(self.global_config.get_patients_folder())
 
         self.initialize_ui()
-
-        # SWANe launching icon checking
-        if self.global_config.get_shortcut_path() != '':
-            targets = self.global_config.get_shortcut_path().split("|")
-            new_path = ''
-            change = False
-            for fil in targets:
-                if strings.APPNAME in fil and os.path.exists(fil):
-                    if new_path != '':
-                        new_path = new_path + "|"
-                    new_path = new_path + fil
-                else:
-                    change = True
-            if change:
-                self.global_config.set_shortcut_path(new_path)
-                self.global_config.save()
 
     def open_pt_dir(self, folder_path: str):
         """
@@ -524,11 +507,6 @@ class MainWindow(QMainWindow):
         tool_menu = menu.addMenu(strings.menu_tools_name)
         tool_menu.addAction(button_action4)
         tool_menu.addAction(button_action5)
-        if sys.platform != "darwin":
-            button_action6 = QAction(strings.menu_shortcut, self)
-            button_action6.triggered.connect(lambda checked=None, global_config=self.global_config: shortcut_manager(global_config))
-
-            tool_menu.addAction(button_action6)
         help_menu = menu.addMenu(strings.menu_help_name)
         help_menu.addAction(button_action7)
         

@@ -74,7 +74,6 @@ class ConfigManager(configparser.ConfigParser):
                 'patientsfolder': '',
                 'patientsprefix': 'pt_',
                 'slicerPath': '',
-                'shortcutPath': '',
                 'lastPID': '-1',
                 'maxPt': '1',
                 'maxPtCPU': '-1',
@@ -147,15 +146,6 @@ class ConfigManager(configparser.ConfigParser):
     def set_patients_folder(self, path):
         if self.global_config:
             self["MAIN"]["PatientsFolder"] = path
-
-    def get_shortcut_path(self):
-        if self.global_config:
-            return self['MAIN']['shortcutPath']
-        return ''
-
-    def set_shortcut_path(self, path):
-        if self.global_config:
-            self['MAIN']['shortcutPath'] = path
 
     def get_max_pt(self):
         if not self.global_config:
