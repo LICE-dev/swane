@@ -1,5 +1,5 @@
 from nipype.interfaces.freesurfer import SampleToSurface
-from nipype.interfaces.fsl import (FLIRT, IsotropicSmooth, ApplyWarp, ApplyMask, SwapDimensions, ApplyXFM)
+from nipype.interfaces.fsl import (FLIRT, IsotropicSmooth, ApplyWarp, ApplyMask, SwapDimensions, ApplyXFM, ImageMaths)
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.workflows.tractography_workflow import SIDES
 
@@ -213,15 +213,24 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
         workflow.connect(func_2_sym_warp, "out_file", ai, "in_file")
         workflow.connect(sym_swap, "out_file", ai, "swapped_file")
 
-        # NODE 14: AI Nonlinear transformation to reference space
+        # NODE 14: AI thresholding
+        ai_threshold = Node(ImageMaths(), name='%s_ai_threshold' % name)
+        try:
+            threshold = abs(config.getint("ai_threshold")/100)
+        except:
+            threshold = 0.85
+        ai_threshold.inputs.op_string = "-thr %f -uthr %f" % (-threshold, threshold)
+        workflow.connect(ai, "out_file", ai_threshold, "in_file")
+
+        # NODE 15: AI Nonlinear transformation to reference space
         ai_2_ref = Node(ApplyWarp(), name="%s_ai_2_ref" % name)
         ai_2_ref.long_name = "asymmetry index %s from symmetric atlas"
         ai_2_ref.inputs.out_file = "r-%s_ai.nii.gz" % name
-        workflow.connect(ai, "out_file", ai_2_ref, "in_file")
+        workflow.connect(ai_threshold, "out_file", ai_2_ref, "in_file")
         workflow.connect(inputnode, "ref_2_sym_invwarp", ai_2_ref, "field_file")
         workflow.connect(inputnode, "reference", ai_2_ref, "ref_file")
 
-        # NODE 15: AI scalp removal
+        # NODE 16: AI scalp removal
         ai_mask = Node(ApplyMask(), name='%s_ai_mask' % name)
         ai_mask.long_name = name + " AI %s"
         ai_mask.inputs.out_file = "r-%s_ai.nii.gz" % name
@@ -232,7 +241,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
 
         if is_freesurfer:
             for side in SIDES:
-                # NODE 16: Projection of AI on FreeSurfer pial surface
+                # NODE 17: Projection of AI on FreeSurfer pial surface
                 ai_surf = Node(SampleToSurface(), name='%s_ai_surf_%s' % (name, side))
                 ai_surf.long_name = side + " asymmetry index %s"
                 ai_surf.inputs.hemi = side

@@ -24,6 +24,7 @@ class PreferenceEntry:
         self.category = category
         self.key = key
         self.input_type = input_type
+        self.tooltip = ""
         self.label = QLabel()
         self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.input_field, self.button = self.gen_input_field()
@@ -150,18 +151,21 @@ class PreferenceEntry:
     def disable(self, tooltip=None):
         self.input_field.setEnabled(False)
         self.label.setStyleSheet("color: gray")
-        if tooltip is not None:
-            self.set_tooltip(tooltip)
+        self.set_tooltip(tooltip)
         if self.input_type == PreferenceEntry.CHECKBOX:
             self.input_field.setChecked(False)
 
     def set_tooltip(self, tooltip):
+        if tooltip != "" and self.tooltip == "":
+            self.tooltip = tooltip
+        if tooltip == "" and self.tooltip != "":
+            tooltip = self.tooltip
         self.input_field.setToolTip(tooltip)
         self.label.setToolTip(tooltip)
 
     def enable(self):
         self.input_field.setEnabled(True)
-        self.set_tooltip(None)
+        self.set_tooltip(self.tooltip)
         self.label.setStyleSheet("")
 
     def get_value(self):
