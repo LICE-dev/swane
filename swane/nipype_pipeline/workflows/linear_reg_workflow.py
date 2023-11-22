@@ -6,9 +6,10 @@ from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface
+from configparser import SectionProxy
 
 
-def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volumetric: bool = True) -> CustomWorkflow:
+def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/", is_volumetric: bool = True) -> CustomWorkflow:
     """
     Transforms input images in a reference space through a linear registration.
 
@@ -18,6 +19,8 @@ def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volum
         The workflow name.
     dicom_dir : path
         The file path of the DICOM files.
+    config: SectionProxy
+        workflow settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
     is_volumetric : bool, optional
@@ -74,8 +77,20 @@ def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volum
 
     # NODE 3: Scalp removal
     bet = Node(BET(), '%s_BET' % name)
-    bet.inputs.robust = True
-    bet.inputs.threshold = True
+    # bet.inputs.threshold = True
+    try:
+        bet.inputs.frac = config.getfloat('bet_thr')
+    except:
+        bet.inputs.frac = 0.5
+    try:
+        if config.getboolean('bet_bias_correction', fallback=False):
+            bet.inputs.reduce_bias = True
+        else:
+            bet.inputs.robust = True
+    except:
+        bet.inputs.robust = True
+
+    bet.inputs.mask = True
     workflow.connect(reorient, "out_file", bet, "in_file")
     workflow.connect(inputnode, "frac", bet, "frac")
 

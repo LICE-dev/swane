@@ -1,7 +1,7 @@
 import os
 import glob
 
-from nipype import Node, IdentityInterface, MapNode, JoinNode, Merge, Rename
+from nipype import Node, IdentityInterface, MapNode, JoinNode, Merge
 from nipype.interfaces.fsl import ApplyWarp, ImageMaths
 
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
@@ -9,7 +9,7 @@ from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
 from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
-from swane.utils.ConfigManager import ConfigManager
+from swane.utils.wf_preferences import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
 
 SIDES = ["lh", "rh"]
 
@@ -67,11 +67,11 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
     """
 
     # Check if tract is in configuration list
-    if name not in ConfigManager.TRACTS:
+    if name not in TRACTS:
         return None
 
     # Check for existance of xtract data directory and protocol name dicrectory
-    if not os.path.exists(os.path.join(ConfigManager.XTRACT_DATA_DIR, name + "_l")):
+    if not os.path.exists(os.path.join(XTRACT_DATA_DIR, name + "_l")):
         return None
 
     workflow = CustomWorkflow(name='tract_' + name, base_dir=base_dir)
@@ -92,13 +92,13 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
     workflow.connect(inputnode, "mask", random_seed, "mask")
 
     try:
-        n_samples = int(ConfigManager.TRACTS[name][2] / threads)
+        n_samples = int(TRACTS[name][2] / threads)
     except:
-        n_samples = int(ConfigManager.DEFAULT_N_SAMPLES / threads)
+        n_samples = int(DEFAULT_N_SAMPLES / threads)
 
     for side in SIDES:
         # Xtract protocol loading
-        protocol_dir = os.path.join(ConfigManager.XTRACT_DATA_DIR, name + "_" + side[0])
+        protocol_dir = os.path.join(XTRACT_DATA_DIR, name + "_" + side[0])
 
         seed_file = os.path.join(protocol_dir, "seed.nii.gz")
         exclude_file = os.path.join(protocol_dir, "exclude.nii.gz")

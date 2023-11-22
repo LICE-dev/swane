@@ -12,7 +12,7 @@ from swane.nipype_pipeline.nodes.FLAT1OutliersMask import FLAT1OutliersMask
 from nipype.interfaces.utility import IdentityInterface
 
 
-def FLAT1_workflow(name: str, mni1_dir: str, base_dir: str = "/")  -> CustomWorkflow:
+def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
     a mean template.

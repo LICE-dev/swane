@@ -10,55 +10,7 @@ class ConfigManager(configparser.ConfigParser):
 
     WORKFLOW_TYPES = ["Structural Workflow", "Morpho-Functional Workflow"]
     BEDPOSTX_CORES = ["No limit", "Soft cap", "Hard Cap"]
-    # SLICER_EXTENSIONS = ["mrb", "mrml"]
-    # SLICE_TIMING = ['Unknown', 'Regular up', 'Regular down', 'Interleaved']
-    # BLOCK_DESIGNS = ['rArA...', 'rArBrArB...']
-
-    # try:
-    #     XTRACT_DATA_DIR = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
-    # except:
-    #     XTRACT_DATA_DIR = ""
-    # DEFAULT_N_SAMPLES = 5000
-    #
-    # TRACTS = {"af": ['Arcuate Fasciculus', 'true', 0],
-    #           "ar": ['Acoustic Radiation', 'false', 0],
-    #           "atr": ['Anterior Thalamic Radiation', 'false', 0],
-    #           "cbd": ['Cingulum subsection : Dorsal', 'false', 0],
-    #           "cbp": ['Cingulum subsection : Peri-genual', 'false', 0],
-    #           "cbt": ['Cingulum subsection : Temporal', 'false', 0],
-    #           "cst": ['Corticospinal Tract', 'true', 0],
-    #           "fa": ['Frontal Aslant', 'false', 0],
-    #           "fma": ['Forceps Major', 'false', 0],
-    #           "fmi": ['Forceps Minor', 'false', 0],
-    #           "fx": ['Fornix', 'false', 0],
-    #           "ilf": ['Inferior Longitudinal Fasciculus', 'false', 0],
-    #           "ifo": ['Inferior Fronto-Occipital Fasciculus', 'false', 0],
-    #           "mcp": ['Middle Cerebellar Peduncle', 'false', 0],
-    #           "mdlf": ['Middle Longitudinal Fasciculus', 'false', 0],
-    #           "or": ['Optic Radiation', 'true', 0],
-    #           "str": ['Superior Thalamic Radiation', 'false', 0],
-    #           "ac": ['Anterior Commissure', 'false', 0],
-    #           "uf": ['Uncinate Fasciculus', 'false', 0],
-    #           "vof": ['Vertical Occipital Fasciculus', 'false', 0],
-    #           }
-    #
-    # structure_file = os.path.join(XTRACT_DATA_DIR, "structureList")
-    # if os.path.exists(structure_file):
-    #     with open(structure_file, 'r') as file:
-    #         for line in file.readlines():
-    #             split = line.split(" ")
-    #             tract_name = split[0][:-2]
-    #             if tract_name in tuple(TRACTS.keys()):
-    #                 try:
-    #                     TRACTS[tract_name][2] = int(float(split[1])*1000)
-    #                 except:
-    #                     TRACTS[tract_name][2] = DEFAULT_N_SAMPLES
-    #
-    # for k in list(TRACTS.keys()):
-    #     if TRACTS[k][2] == 0:
-    #         del TRACTS[k]
-
-
+    SLICER_EXTENSIONS = ["mrb", "mrml"]
 
     DEFAULT_WF = {}
     DEFAULT_WF['0'] = {
@@ -99,7 +51,7 @@ class ConfigManager(configparser.ConfigParser):
             # NEL CASO STIA GESTENDO LE IMPOSTAZIONI SPECIFICHE DI UN UTENTE COPIO ALCUNI VALORI DALLE IMPOSTAZIONI GLOBALI
             self.global_config = False
             self.config_file = os.path.join(os.path.join(pt_folder, ".config"))
-            self.freesurfer=freesurfer
+            self.freesurfer = freesurfer
         else:
             # NEL CASO STIA GESTENDO LE IMPOSTAZIONI GLOBALI DELL'APP
             self.global_config = True
@@ -126,11 +78,8 @@ class ConfigManager(configparser.ConfigParser):
                 'lastPID': '-1',
                 'maxPt': '1',
                 'maxPtCPU': '-1',
-                # 'betBiasCorrection': 'true',
-                # 'betThr': '0.3',
                 'slicerSceneExt': '0',
                 'defaultWfType': '0',
-                # 'fmritaskduration': '30',
                 'defaultdicomfolder': 'dicom',
                 'resourceMonitor': 'false',
                 'bedpostx_core': '0',
@@ -150,10 +99,6 @@ class ConfigManager(configparser.ConfigParser):
                         else:
                             self[data_input.name][pref] = str(wf_preferences[data_input.name][pref]['default'])
 
-            # self['DEFAULTTRACTS'] = {}
-            #
-            # for index, key in enumerate(ConfigManager.TRACTS):
-            #     self['DEFAULTTRACTS'][key] = ConfigManager.TRACTS[key][1]
         else:
             tmp_config = ConfigManager()
 
@@ -162,25 +107,6 @@ class ConfigManager(configparser.ConfigParser):
                     self[data_input.name] = tmp_config[data_input.name]
 
             self.set_wf_option(tmp_config['MAIN']['defaultWfType'])
-
-            # self['WF_OPTION']['betBiasCorrection'] = tmp_config['MAIN']['betBiasCorrection']
-            # self['WF_OPTION']['betThr'] = tmp_config['MAIN']['betThr']
-            #
-            # self['FMRI'] = {}
-            #
-            # for x in range(DataInputList.FMRI_NUM):
-            #     self['FMRI']['task_%d_name_a' % x] = 'TaskA'
-            #     self['FMRI']['task_%d_name_b' % x] = 'TaskB'
-            #     self['FMRI']['task_%d_duration' % x] = tmp_config['MAIN']['fmritaskduration']
-            #     self['FMRI']['rest_%d_duration' % x] = tmp_config['MAIN']['fmritaskduration']
-            #     self['FMRI']['task_%d_tr' % x] = 'auto'
-            #     self['FMRI']['task_%d_vols' % x] = 'auto'
-            #     self['FMRI']['task_%d_st' % x] = '0'
-            #     self['FMRI']['task_%d_blockdesign' % x] = '0'
-            #     self['FMRI']['task_%d_del_start_vols' % x] = '0'
-            #     self['FMRI']['task_%d_del_end_vols' % x] = '0'
-            #
-            # self['DEFAULTTRACTS'] = tmp_config['DEFAULTTRACTS']
 
     def set_wf_option(self, wf):
         if self.global_config:

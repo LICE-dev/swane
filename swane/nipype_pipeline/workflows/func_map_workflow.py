@@ -10,11 +10,11 @@ from swane.nipype_pipeline.nodes.AsymmetryIndex import AsymmetryIndex
 from swane.nipype_pipeline.nodes.Zscore import Zscore
 
 from nipype.interfaces.utility import IdentityInterface
-
+from configparser import SectionProxy
 import swane_supplement
 
 
-def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: bool, base_dir: str = "/") -> CustomWorkflow:
+def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
     Analysis for PET or ASL:
         - registration to reference;
@@ -29,8 +29,8 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
         The file path of the DICOM files.
     is_freesurfer : bool
         True if the reconall is available.
-    is_ai : bool
-        Enables the asymmetry index map calculation.
+    config: SectionProxy
+        workflow settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
         
@@ -184,6 +184,11 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
 
             workflow.connect(zscore_surf_lh, "out_file", outputnode, "zscore_surf_%s" % side)
 
+    try:
+        is_ai = config.getboolean("ai")
+    except:
+        is_ai = False
+
     if is_ai:
         sym_template = swane_supplement.sym_template
 
@@ -191,7 +196,6 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, is_ai: boo
         func_2_sym_warp = Node(ApplyWarp(), name='%s_2_sym_warp' % name)
         func_2_sym_warp.long_name = "%s to symmetric atlas"
         func_2_sym_warp.inputs.ref_file = sym_template
-        #workflow.connect(mask, "out_file", func_2_sym_warp, "in_file")
         workflow.connect(smooth_2_ref_flirt, "out_file", func_2_sym_warp, "in_file")
         workflow.connect(inputnode, "ref_2_sym_warp", func_2_sym_warp, "field_file")
 

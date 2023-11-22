@@ -31,7 +31,7 @@ wf_preferences[category]['hippo_amyg_labels'] = {
     'default': 'false',
     'dependency': 'is_freesurfer_matlab',
     'dependency_fail_tooltip': "Matlab Runtime not detected",
-    'pref_requirement': {DataInputList.T13D: ['freesurfer']},
+    'pref_requirement': {DataInputList.T13D: [('freesurfer', True)]},
     'pref_requirement_fail_tooltip': "Requires Freesurfer analysis",
 }
 wf_preferences[category]['flat1'] = {
@@ -45,18 +45,32 @@ wf_preferences[category]['flat1'] = {
 category = DataInputList.FLAIR3D
 wf_preferences[category] = {}
 wf_preferences[category]['bet_bias_correction'] = wf_preferences[DataInputList.T13D]['bet_bias_correction']
-wf_preferences[category]['bet_thr'] = wf_preferences[DataInputList.T13D]['bet_thr']
+wf_preferences[category]['bet_thr'] = {
+    'input_type': PreferenceEntry.FLOAT,
+    'label': "Threshold value for skull removal",
+    'default': 0.5,
+    'range': [0, 1],
+}
 
 category = DataInputList.MDC
 wf_preferences[category] = {}
 wf_preferences[category]['bet_bias_correction'] = wf_preferences[DataInputList.T13D]['bet_bias_correction']
-wf_preferences[category]['bet_thr'] = wf_preferences[DataInputList.T13D]['bet_thr']
+wf_preferences[category]['bet_thr'] = {
+    'input_type': PreferenceEntry.FLOAT,
+    'label': "Threshold value for skull removal",
+    'default': 0.5,
+    'range': [0, 1],
+}
 
 category = DataInputList.VENOUS
 wf_preferences[category] = {}
-wf_preferences[category]['bet_bias_correction'] = wf_preferences[DataInputList.T13D]['bet_bias_correction']
-wf_preferences[category]['bet_thr'] = wf_preferences[DataInputList.T13D]['bet_thr']
-wf_preferences[category]['veindetectionmode'] = {
+wf_preferences[category]['bet_thr'] = {
+    'input_type': PreferenceEntry.FLOAT,
+    'label': "Threshold value for skull removal",
+    'default': 0.4,
+    'range': [0, 1],
+}
+wf_preferences[category]['vein_detection_mode'] = {
     'input_type': PreferenceEntry.COMBO,
     'label': "Venous volume detection mode",
     'default': ['Automatic (standard deviation)', 'Automatic (mean value)', 'Always first volume', 'Always second volume'],
@@ -68,7 +82,7 @@ wf_preferences[category]['ai'] = {
     'input_type': PreferenceEntry.CHECKBOX,
     'label': "Asymmetry Index map for ASL",
     'default': 'true',
-    'pref_requirement': {DataInputList.T13D: ['freesurfer']},
+    'pref_requirement': {DataInputList.T13D: [('freesurfer', True)]},
     'pref_requirement_fail_tooltip': "Requires Freesurfer analysis",
 }
 
@@ -130,7 +144,7 @@ for tract in TRACTS.keys():
         'input_type': PreferenceEntry.CHECKBOX,
         'label': TRACTS[tract][0],
         'default': TRACTS[tract][0],
-        'pref_requirement': {DataInputList.DTI: ['tractography']},
+        'pref_requirement': {DataInputList.DTI: [('tractography', True)]},
         'pref_requirement_fail_tooltip': "Tractography disabled",
     }
 
@@ -142,10 +156,17 @@ wf_preferences[category]['task_a_name'] = {
     'label': "Task A name",
     'default': "Task A",
 }
+wf_preferences[category]['block_design'] = {
+    'input_type': PreferenceEntry.COMBO,
+    'label': "Block design",
+    'default': ['rArA...', 'rArBrArB...'],
+}
 wf_preferences[category]['task_b_name'] = {
     'input_type': PreferenceEntry.TEXT,
     'label': "Task B name",
     'default': "Task B",
+    'pref_requirement': {DataInputList.FMRI+"_0": [('block_design', 1)]},
+    'pref_requirement_fail_tooltip': "Requires rArBrArB... block design",
 }
 wf_preferences[category]['task_duration'] = {
     'input_type': PreferenceEntry.NUMBER,
@@ -164,20 +185,15 @@ wf_preferences[category]['tr'] = {
     'label': "Repetition Time (TR)",
     'default': "auto",
 }
-wf_preferences[category]['vols'] = {
+wf_preferences[category]['n_vols'] = {
     'input_type': PreferenceEntry.TEXT,
     'label': "Task B duration",
     'default': "auto",
 }
-wf_preferences[category]['slicetiming'] = {
+wf_preferences[category]['slice_timing'] = {
     'input_type': PreferenceEntry.COMBO,
     'label': "Slice timing",
     'default': ['Unknown', 'Regular up', 'Regular down', 'Interleaved'],
-}
-wf_preferences[category]['blockdesign'] = {
-    'input_type': PreferenceEntry.COMBO,
-    'label': "Block design",
-    'default': ['rArA...', 'rArBrArB...'],
 }
 wf_preferences[category]['del_start_vols'] = {
     'input_type': PreferenceEntry.NUMBER,

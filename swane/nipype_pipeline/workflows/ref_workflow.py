@@ -21,7 +21,7 @@ def ref_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str 
     dicom_dir : path
         The file path of the DICOM files.
     config: SectionProxy
-        workflow settings
+        workflow settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -72,11 +72,17 @@ def ref_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str 
 
     # NODE 4: Scalp removal
     ref_BET = Node(BET(), name='ref_BET')
-    ref_BET.inputs.frac = config.getfloat('bet_thr')
     ref_BET.inputs.mask = True
-    if config.getboolean('bet_bias_correction'):
-        ref_BET.inputs.reduce_bias = True
-    else:
+    try:
+        ref_BET.inputs.frac = config.getfloat('bet_thr')
+    except:
+        ref_BET.inputs.frac = 0.3
+    try:
+        if config.getboolean('bet_bias_correction', fallback=False):
+            ref_BET.inputs.reduce_bias = True
+        else:
+            ref_BET.inputs.robust = True
+    except:
         ref_BET.inputs.robust = True
 
     workflow.connect(ref_reScale, "out_file", ref_BET, "in_file")

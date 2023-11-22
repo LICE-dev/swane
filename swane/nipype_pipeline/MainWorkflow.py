@@ -14,12 +14,12 @@ from swane.nipype_pipeline.workflows.task_fMRI_workflow import task_fMRI_workflo
 from swane.nipype_pipeline.workflows.nonlinear_reg_workflow import nonlinear_reg_workflow
 from swane.nipype_pipeline.workflows.ref_workflow import ref_workflow
 from swane.nipype_pipeline.workflows.freesurfer_workflow import freesurfer_workflow
-from swane.nipype_pipeline.workflows.FLAT1_workflow import FLAT1_workflow
+from swane.nipype_pipeline.workflows.flat1_workflow import flat1_workflow
 from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_workflow import venous_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow, SIDES
-
+from swane.utils.wf_preferences import TRACTS
 
 DEBUG = False
 
@@ -51,19 +51,43 @@ class MainWorkflow(CustomWorkflow):
             return
 
         # Check for FreeSurfer requirement and request
-        is_freesurfer = pt_config.is_freesurfer() and pt_config.get_pt_wf_freesurfer()
-        is_hippo_amyg_labels = pt_config.is_freesurfer_matlab() and pt_config.get_pt_wf_hippo()
+        try:
+            is_freesurfer = pt_config.is_freesurfer() and pt_config.get_pt_wf_freesurfer()
+        except:
+            is_freesurfer = False
+        try:
+            is_hippo_amyg_labels = pt_config.is_freesurfer_matlab() and pt_config.get_pt_wf_hippo()
+        except:
+            is_hippo_amyg_labels = False
         # Check for FLAT1 requirement and request
-        is_FLAT1 = pt_config.getboolean(DataInputList.T13D, 'flat1') and data_input_list[DataInputList.FLAIR3D].loaded
+        try:
+            is_flat1 = pt_config.getboolean(DataInputList.T13D, 'flat1') and data_input_list[DataInputList.FLAIR3D].loaded
+        except:
+            is_flat1 = False
         # Check for Asymmetry Index request
-        is_ai = pt_config.getboolean(DataInputList.PET, 'ai') or pt_config.getboolean(DataInputList.ASL, 'ai')
+        try:
+            is_ai = pt_config.getboolean(DataInputList.PET, 'ai') or pt_config.getboolean(DataInputList.ASL, 'ai')
+        except:
+            is_ai = False
         # Check for Tractography request
-        is_tractography = pt_config.getboolean(DataInputList.DTI, 'tractography')
+        try:
+            is_tractography = pt_config.getboolean(DataInputList.DTI, 'tractography')
+        except:
+            is_tractography = False
 
         # CPU cores and memory management
-        self.is_resource_monitor = global_config.getboolean('MAIN', 'resourceMonitor')
-        self.max_cpu = global_config.getint('MAIN', 'maxPtCPU')
-        self.bedpostx_core = global_config.getint('MAIN', 'bedpostx_core')
+        try:
+            self.is_resource_monitor = global_config.getboolean('MAIN', 'resourceMonitor')
+        except:
+            self.is_resource_monitor = False
+        try:
+            self.max_cpu = global_config.getint('MAIN', 'maxPtCPU')
+        except:
+            self.max_cpu = -1
+        try:
+            self.bedpostx_core = global_config.getint('MAIN', 'bedpostx_core')
+        except:
+            self.bedpostx_core = 0
 
         if self.max_cpu < 1:
             self.max_cpu = cpu_count()
@@ -111,7 +135,7 @@ class MainWorkflow(CustomWorkflow):
         if data_input_list[DataInputList.FLAIR3D].loaded:
             # 3D Flair analysis
             flair_dir = data_input_list.get_dicom_dir(DataInputList.FLAIR3D)
-            flair = linear_reg_workflow(data_input_list[DataInputList.FLAIR3D].wf_name, flair_dir)
+            flair = linear_reg_workflow(data_input_list[DataInputList.FLAIR3D].wf_name, flair_dir, pt_config[DataInputList.FLAIR3D])
             flair.long_name = "3D Flair analysis"
             self.add_nodes([flair])
 
@@ -123,7 +147,7 @@ class MainWorkflow(CustomWorkflow):
 
             flair.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
 
-        if is_FLAT1:
+        if is_flat1:
             # Non linear registration to MNI1mm Atlas for FLAT1
             mni1 = nonlinear_reg_workflow("mni1")
             mni1.long_name = "MNI atlas registration"
@@ -134,17 +158,17 @@ class MainWorkflow(CustomWorkflow):
             self.connect(t1, "outputnode.ref_brain", mni1, "inputnode.in_file")
 
             # FLAT1 analysis
-            FLAT1 = FLAT1_workflow("FLAT1", mni1_path)
-            FLAT1.long_name = "FLAT1 analysis"
+            flat1 = flat1_workflow("FLAT1", mni1_path)
+            flat1.long_name = "FLAT1 analysis"
 
-            self.connect(t1, "outputnode.ref_brain", FLAT1, "inputnode.ref_brain")
-            self.connect(flair, "outputnode.registered_file", FLAT1, "inputnode.flair_brain")
-            self.connect(mni1, "outputnode.fieldcoeff_file", FLAT1, "inputnode.ref_2_mni1_warp")
-            self.connect(mni1, "outputnode.inverse_warp", FLAT1, "inputnode.ref_2_mni1_inverse_warp")
+            self.connect(t1, "outputnode.ref_brain", flat1, "inputnode.ref_brain")
+            self.connect(flair, "outputnode.registered_file", flat1, "inputnode.flair_brain")
+            self.connect(mni1, "outputnode.fieldcoeff_file", flat1, "inputnode.ref_2_mni1_warp")
+            self.connect(mni1, "outputnode.inverse_warp", flat1, "inputnode.ref_2_mni1_inverse_warp")
 
-            FLAT1.sink_result(self.base_dir, "outputnode", "extension_z", self.SCENE_DIR)
-            FLAT1.sink_result(self.base_dir, "outputnode", "junction_z", self.SCENE_DIR)
-            FLAT1.sink_result(self.base_dir, "outputnode", "binary_flair", self.SCENE_DIR)
+            flat1.sink_result(self.base_dir, "outputnode", "extension_z", self.SCENE_DIR)
+            flat1.sink_result(self.base_dir, "outputnode", "junction_z", self.SCENE_DIR)
+            flat1.sink_result(self.base_dir, "outputnode", "binary_flair", self.SCENE_DIR)
 
         for plane in DataInputList.PLANES:
             if DataInputList.FLAIR2D+'_%s' % plane in data_input_list and data_input_list[DataInputList.FLAIR2D+'_%s' % plane].loaded:
@@ -164,7 +188,7 @@ class MainWorkflow(CustomWorkflow):
         if data_input_list[DataInputList.MDC].loaded:
             # MDC analysis
             mdc_dir = data_input_list.get_dicom_dir(DataInputList.MDC)
-            mdc = linear_reg_workflow(data_input_list[DataInputList.MDC].wf_name, mdc_dir)
+            mdc = linear_reg_workflow(data_input_list[DataInputList.MDC].wf_name, mdc_dir, pt_config[DataInputList.MDC])
             mdc.long_name = "Post-contrast 3D T1w analysis"
             self.add_nodes([mdc])
 
@@ -179,7 +203,7 @@ class MainWorkflow(CustomWorkflow):
         if data_input_list[DataInputList.ASL].loaded:
             # ASL analysis
             asl_dir = data_input_list.get_dicom_dir(DataInputList.ASL)
-            asl = func_map_workflow(data_input_list[DataInputList.ASL].wf_name, asl_dir, is_freesurfer, is_ai)
+            asl = func_map_workflow(data_input_list[DataInputList.ASL].wf_name, asl_dir, is_freesurfer, pt_config[DataInputList.ASL])
             asl.long_name = "Arterial Spin Labelling analysis"
 
             self.connect(t1, 'outputnode.ref_brain', asl, 'inputnode.reference')
@@ -211,7 +235,7 @@ class MainWorkflow(CustomWorkflow):
         if data_input_list[DataInputList.PET].loaded:  # and check_input['ct_brain']:
             # PET analysis
             pet_dir = data_input_list.get_dicom_dir(DataInputList.PET)
-            pet = func_map_workflow(data_input_list[DataInputList.PET].wf_name, pet_dir, is_freesurfer, is_ai)
+            pet = func_map_workflow(data_input_list[DataInputList.PET].wf_name, pet_dir, is_freesurfer, pt_config[DataInputList.PET])
             pet.long_name = "Pet analysis"
 
             self.connect(t1, 'outputnode.ref', pet, 'inputnode.reference')
@@ -252,7 +276,7 @@ class MainWorkflow(CustomWorkflow):
             venous2_dir = None
             if data_input_list[DataInputList.VENOUS2].loaded:
                 venous2_dir = data_input_list.get_dicom_dir(DataInputList.VENOUS2)
-            venous = venous_workflow(data_input_list[DataInputList.VENOUS].wf_name, venous_dir, venous2_dir)
+            venous = venous_workflow(data_input_list[DataInputList.VENOUS].wf_name, venous_dir, pt_config[DataInputList.VENOUS], venous2_dir)
             venous.long_name = "Venous MRA analysis"
 
             self.connect(t1, "outputnode.ref_brain", venous, "inputnode.ref_brain")
@@ -271,12 +295,15 @@ class MainWorkflow(CustomWorkflow):
             dti_preproc.sink_result(self.base_dir, "outputnode", 'FA', self.SCENE_DIR)
 
             if is_tractography:
-                for tract in pt_config['DEFAULTTRACTS'].keys():
-                    if not pt_config.getboolean('DEFAULTTRACTS', tract):
+                for tract in TRACTS.keys():
+                    try:
+                        if not pt_config.getboolean(DataInputList.DTI, tract):
+                            continue
+                    except:
                         continue
                     
                     tract_workflow = tractography_workflow(tract, 5)
-                    tract_workflow.long_name = pt_config.TRACTS[tract][0] + " tractography"
+                    tract_workflow.long_name = TRACTS[tract][0] + " tractography"
                     if tract_workflow is not None:
                         self.connect(dti_preproc, "outputnode.fsamples", tract_workflow, "inputnode.fsamples")
                         self.connect(dti_preproc, "outputnode.nodiff_mask_file", tract_workflow, "inputnode.mask")
@@ -298,38 +325,53 @@ class MainWorkflow(CustomWorkflow):
 
             if data_input_list[DataInputList.FMRI+'_%d' % y].loaded:
 
-                task_a_name = pt_config['FMRI']["task_%d_name_a" % y]
-                task_b_name = pt_config['FMRI']["task_%d_name_b" % y]
-                task_duration = pt_config['FMRI'].getint('task_%d_duration' % y)
-                rest_duration = pt_config['FMRI'].getint('rest_%d_duration' % y)
+                try:
+                    task_a_name = pt_config[DataInputList.FMRI+'_%d' % y]["task_a_name"]
+                except:
+                    task_a_name = "Task A"
 
                 try:
-                    TR = pt_config['FMRI'].getfloat('task_%d_tr' % y)
+                    task_b_name = pt_config[DataInputList.FMRI+'_%d' % y]["task_b_name"]
+                except:
+                    task_b_name = "Task B"
+
+                try:
+                    task_duration = pt_config[DataInputList.FMRI+'_%d' % y].getint('task_duration')
+                except:
+                    task_duration = 30
+
+                try:
+                    rest_duration = pt_config[DataInputList.FMRI+'_%d' % y].getint('rest_duration')
+                except:
+                    rest_duration = 30
+
+                try:
+                    TR = pt_config[DataInputList.FMRI+'_%d' % y].getfloat('tr')
                 except:
                     TR = -1
 
                 try:
-                    slice_timing = pt_config['FMRI'].getint('task_%d_st' % y)
+                    slice_timing = pt_config[DataInputList.FMRI+'_%d' % y].getint('slice_timing')
                 except:
                     slice_timing = 0
 
                 try:
-                    nvols = pt_config['FMRI'].getint('task_%d_vols' % y)
+                    n_vols = pt_config[DataInputList.FMRI+'_%d' % y].getint('n_vols')
                 except:
-                    nvols = -1
+                    n_vols = -1
 
                 try:
-                    del_start_vols = pt_config['FMRI'].getint('task_%d_del_start_vols' % y)
+                    del_start_vols = pt_config[DataInputList.FMRI+'_%d' % y].getint('del_start_vols')
                 except:
                     del_start_vols = 0
 
                 try:
-                    del_end_vols = pt_config['FMRI'].getint('task_%d_del_end_vols' % y)
+                    del_end_vols = pt_config[DataInputList.FMRI+'_%d' % y].getint('del_end_vols')
                 except:
                     del_end_vols = 0
 
                 try:
-                    design_block = pt_config['FMRI'].getint('task_%d_blockdesign' % y)
+                    design_block = pt_config[DataInputList.FMRI+'_%d' % y].getint('block_design')
                 except:
                     design_block = 0
 
@@ -339,7 +381,7 @@ class MainWorkflow(CustomWorkflow):
                 inputnode = fMRI.get_node("inputnode")
                 inputnode.inputs.TR = TR
                 inputnode.inputs.slice_timing = slice_timing
-                inputnode.inputs.nvols = nvols
+                inputnode.inputs.nvols = n_vols
                 inputnode.inputs.task_a_name = task_a_name
                 inputnode.inputs.task_b_name = task_b_name
                 inputnode.inputs.task_duration = task_duration
