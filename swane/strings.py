@@ -26,8 +26,6 @@ mainwindow_new_pt_title = 'New patient'
 mainwindow_new_pt_created = "New patient created in: "
 mainwindow_new_pt_name_error = "Invalid name: "
 mainwindow_pt_exists_error = "This patient already exists: "
-mainwindow_shortcut_created = "Shortcut created!"
-mainwindow_shortcut_removed = "Shortcut removed!"
 mainwindow_home_tab_name = "Home"
 mainwindow_wf_executing_error_1 = "Cannot close a patient during workflow execution!"
 mainwindow_wf_executing_error_2 = "Cannot close " + APPNAME + " during workflow execution!"
@@ -47,7 +45,7 @@ mainwindow_dep_slicer_src = "Searching Slicer installation..."
 mainwindow_dep_slicer_found = "Slicer detected"
 mainwindow_pref_disabled_error = "Prefecences disabled during workflow execution!"
 aboutwindow_python_libs = "Python libraries dependencies: configparser, logging, matplotlib, nipype, pydicom, " \
-                          "pyshortcuts, PySide6, psutil, nibabel, networkx"
+                          "PySide6, psutil, nibabel, networkx"
 
 # Menu
 menu_load_pt = "Load existing patient"
@@ -58,7 +56,6 @@ menu_exit = "Exit " + APPNAME
 menu_pref = "Preferences"
 menu_pref_tip = "Edit " + APPNAME + " preferences"
 menu_wf_pref = "Default Workflow settings"
-menu_shortcut = "Toggle shortcuts"
 menu_about = "About " + APPNAME + "..."
 menu_file_name = "File"
 menu_tools_name = "Tools"

@@ -494,7 +494,7 @@ class PtTab(QTabWidget):
         None.
 
         """
-        
+
         preference_window = WfPreferencesWindow(self.pt_config, self.data_input_list, self)
         ret = preference_window.exec()
         if ret != 0:
