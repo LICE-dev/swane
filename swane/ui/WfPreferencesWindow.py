@@ -29,7 +29,6 @@ class WfPreferencesWindow(QDialog):
         layout = QVBoxLayout()
 
         tab_widget = HorizontalTabWidget(200, 25)
-        tabs = {}
 
         x = 0
 
@@ -42,10 +41,10 @@ class WfPreferencesWindow(QDialog):
             category = data_input.name
             self.input_keys[category] = {}
 
-            tabs[data_input.name] = QGroupBox()
-            tab_widget.addTab(tabs[data_input.name], data_input.label)
+            tab = QGroupBox()
+            tab_widget.addTab(tab, data_input.label)
             grid = QGridLayout()
-            tabs[data_input.name].setLayout(grid)
+            tab.setLayout(grid)
 
             for key in my_config[category].keys():
                 if key not in wf_preferences[data_input.name]:
@@ -69,13 +68,17 @@ class WfPreferencesWindow(QDialog):
                         if pref_cat not in my_config:
                             continue
                         for pref_req in wf_preferences[data_input.name][key]["pref_requirement"][pref_cat]:
-                            if pref_req not in my_config[pref_cat]:
+                            if pref_req[0] not in my_config[pref_cat]:
                                 continue
 
-                            target_x = self.input_keys[pref_cat][pref_req]
-                            self.inputs[target_x].input_field.stateChanged.connect(lambda checked, my_cat=data_input.name, my_key=key: self.requirement_changed(checked, my_cat, my_key))
-
-                            if not my_config.getboolean(pref_cat, pref_req):
+                            target_x = self.input_keys[pref_cat][pref_req[0]]
+                            if self.inputs[target_x].input_type == PreferenceEntry.CHECKBOX:
+                                self.inputs[target_x].input_field.stateChanged.connect(lambda checked, my_cat=data_input.name, my_key=key: self.requirement_changed(checked, my_cat, my_key))
+                            elif self.inputs[target_x].input_type == PreferenceEntry.COMBO:
+                                self.inputs[target_x].input_field.currentIndexChanged.connect(lambda checked, my_cat=data_input.name, my_key=key: self.requirement_changed(checked, my_cat, my_key))
+                            else:
+                                self.inputs[target_x].input_field.textChanged.connect(lambda checked, my_cat=data_input.name, my_key=key: self.requirement_changed(checked, my_cat, my_key))
+                            if not my_config.getboolean(pref_cat, pref_req[0]):
                                 self.inputs[x].disable(wf_preferences[data_input.name][key]["pref_requirement_fail_tooltip"])
                                 break
                 if not my_config.global_config and 'input_requirement' in wf_preferences[data_input.name][key]:
@@ -91,7 +94,6 @@ class WfPreferencesWindow(QDialog):
             vertical_spacer = QSpacerItem(
                 20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
             grid.addItem(vertical_spacer, x, 0, 1, 2)
-
 
         layout.addWidget(tab_widget)
 
@@ -113,15 +115,21 @@ class WfPreferencesWindow(QDialog):
             if req_cat not in self.input_keys:
                 continue
             for req_key in pref_requirement[req_cat]:
-                if req_key not in self.input_keys[req_cat]:
+                if req_key[0] not in self.input_keys[req_cat]:
                     continue
-                req_x = self.input_keys[req_cat][req_key]
-                if not self.inputs[req_x].input_field.isChecked():
+                req_x = self.input_keys[req_cat][req_key[0]]
 
+                if self.inputs[req_x].input_type == PreferenceEntry.CHECKBOX:
+                    check = req_key[1] == self.inputs[req_x].input_field.isChecked()
+                elif self.inputs[req_x].input_type == PreferenceEntry.COMBO:
+                    check = req_key[1] == self.inputs[req_x].input_field.currentIndex()
+                else:
+                    check = req_key[1] == self.inputs[req_x].input_field.get_value()
+
+                if not check:
                     self.inputs[my_x].disable(wf_preferences[my_cat][my_key]["pref_requirement_fail_tooltip"])
                     return
         self.inputs[my_x].enable()
-
 
     def save_preferences(self):
         for pref_entry in self.inputs.values():
