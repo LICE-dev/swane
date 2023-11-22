@@ -85,9 +85,34 @@ wf_preferences[category]['ai'] = {
     'pref_requirement': {DataInputList.T13D: [('freesurfer', True)]},
     'pref_requirement_fail_tooltip': "Requires Freesurfer analysis",
 }
+wf_preferences[category]['ai_threshold'] = {
+    'input_type': PreferenceEntry.NUMBER,
+    'label': "Thresold for Asymmetry Index map outliers removal",
+    'tooltip': "100 for no thresholding, suggested 80-90",
+    'default': '85',
+    'range': [0, 100],
+    'pref_requirement': {DataInputList.ASL: [('ai', True)]},
+    'pref_requirement_fail_tooltip': "Requires ASL Asymmetry Index",
+}
 
-wf_preferences[DataInputList.PET] = wf_preferences[DataInputList.ASL]
-
+category = DataInputList.PET
+wf_preferences[category] = {}
+wf_preferences[category]['ai'] = {
+    'input_type': PreferenceEntry.CHECKBOX,
+    'label': "Asymmetry Index map for PET",
+    'default': 'true',
+    'pref_requirement': {DataInputList.T13D: [('freesurfer', True)]},
+    'pref_requirement_fail_tooltip': "Requires Freesurfer analysis",
+}
+wf_preferences[category]['ai_threshold'] = {
+    'input_type': PreferenceEntry.NUMBER,
+    'label': "Thresold for Asymmetry Index map outliers removal",
+    'tooltip': "100 for no thresholding, suggested 80-90",
+    'default': '85',
+    'range': [0, 100],
+    'pref_requirement': {DataInputList.PET: [('ai', True)]},
+    'pref_requirement_fail_tooltip': "Requires PET Asymmetry Index",
+}
 category = DataInputList.DTI
 wf_preferences[category] = {}
 wf_preferences[category]['tractography'] = {
