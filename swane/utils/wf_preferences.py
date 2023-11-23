@@ -28,6 +28,7 @@ wf_preferences[category]['freesurfer'] = {
 wf_preferences[category]['hippo_amyg_labels'] = {
     'input_type': PreferenceEntry.CHECKBOX,
     'label': "FreeSurfer hippocampal and amygdala subfields",
+    'tooltip': '',
     'default': 'false',
     'dependency': 'is_freesurfer_matlab',
     'dependency_fail_tooltip': "Matlab Runtime not detected",
@@ -168,6 +169,7 @@ for tract in TRACTS.keys():
     wf_preferences[category][tract] = {
         'input_type': PreferenceEntry.CHECKBOX,
         'label': TRACTS[tract][0],
+        'tooltip': '',
         'default': TRACTS[tract][0],
         'pref_requirement': {DataInputList.DTI: [('tractography', True)]},
         'pref_requirement_fail_tooltip': "Tractography disabled",
@@ -190,6 +192,7 @@ wf_preferences[category]['task_b_name'] = {
     'input_type': PreferenceEntry.TEXT,
     'label': "Task B name",
     'default': "Task B",
+    'tooltip': '',
     'pref_requirement': {DataInputList.FMRI+"_0": [('block_design', 1)]},
     'pref_requirement_fail_tooltip': "Requires rArBrArB... block design",
 }

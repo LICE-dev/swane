@@ -24,7 +24,7 @@ class PreferenceEntry:
         self.category = category
         self.key = key
         self.input_type = input_type
-        self.tooltip = ""
+        self.tooltip = None
         self.label = QLabel()
         self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.input_field, self.button = self.gen_input_field()
@@ -156,15 +156,15 @@ class PreferenceEntry:
             self.input_field.setChecked(False)
 
     def set_tooltip(self, tooltip):
-        if tooltip != "" and self.tooltip == "":
+        if self.tooltip is None:
             self.tooltip = tooltip
         if tooltip == "" and self.tooltip != "":
             tooltip = self.tooltip
         self.input_field.setToolTip(tooltip)
         self.label.setToolTip(tooltip)
-        if tooltip == "" and self.label.text().endswith("\u24D8"):
-            self.label.setText(self.label.text()[:-2])
-        elif tooltip != "" and not self.label.text().endswith("\u24D8"):
+        if tooltip == "":
+            self.label.setText(self.label.text().replace(" \u24D8", ""))
+        elif not self.label.text().endswith("\u24D8"):
             self.label.setText(self.label.text()+" \u24D8")
 
     def enable(self):
