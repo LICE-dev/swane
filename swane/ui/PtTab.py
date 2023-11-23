@@ -12,17 +12,17 @@ from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeader
                                QPushButton, QSizePolicy, QHBoxLayout,
                                QGroupBox, QVBoxLayout, QMessageBox, QListWidget,
                                QFileDialog, QTreeWidget, QErrorMessage, QFileSystemModel,
-                               QTreeView, QComboBox)
+                               QTreeView, QComboBox, QSpacerItem)
 
 from swane import strings
 from swane.slicer.SlicerExportWorker import SlicerExportWorker
+from swane.slicer.SlicerViewerWorker import SlicerViewerWorker
 from swane.nipype_pipeline.MainWorkflow import MainWorkflow
 from swane.ui.workers.WorkflowGeneratorWorker import WorkflowGeneratorWorker
 from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from swane.ui.workers.WorkflowProcess import WorkflowProcess
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
-from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.WfPreferencesWindow import WfPreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.utils.ConfigManager import ConfigManager
@@ -499,6 +499,9 @@ class PtTab(QTabWidget):
         ret = preference_window.exec()
         if ret != 0:
             self.reset_workflow()
+        if ret == -1:
+            self.pt_config.load_default_wf_settings(save=True)
+            self.edit_pt_config()
 
     def on_wf_type_changed(self, index: int):
         """
@@ -745,17 +748,31 @@ class PtTab(QTabWidget):
 
         self.export_results_button = QPushButton(strings.pttab_results_button)
         self.export_results_button.clicked.connect(self.slicer_thread)
+        self.export_results_button.setToolTip(strings.pttab_results_button_tooltip)
         self.export_results_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         
         if self.global_config.get_slicer_path() == '' or not os.path.exists(self.global_config.get_slicer_path()):
             self.export_results_button.setEnabled(False)
         slicer_tab_layout.addWidget(self.export_results_button, 0, 0)
 
+        self.open_results_button = QPushButton(strings.pttab_open_results_button)
+        self.open_results_button.clicked.connect(self.slicer_open_result)
+        self.open_results_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        horizontal_spacer = QSpacerItem(
+            20, 40, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        slicer_tab_layout.addItem(horizontal_spacer, 0, 1, 1, 1)
+
+        if self.global_config.get_slicer_path() == '' or not os.path.exists(self.global_config.get_slicer_path()):
+            self.open_results_button.setEnabled(False)
+        slicer_tab_layout.addWidget(self.open_results_button, 0, 2)
+
         self.results_model = QFileSystemModel()
         self.result_tree = QTreeView(parent=self)
+        self.result_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.result_tree.setModel(self.results_model)
 
-        slicer_tab_layout.addWidget(self.result_tree, 1, 0)
+        slicer_tab_layout.addWidget(self.result_tree, 1, 0, 1, 3)
 
     def slicer_thread(self):
         """
@@ -796,6 +813,20 @@ class PtTab(QTabWidget):
             progress.done(1)
         else:
             progress.setLabelText(strings.pttab_exporting_prefix + msg)
+
+    def slicer_open_result(self):
+        """
+        Visualize the workflow results into 3D Slicer.
+
+        Returns
+        -------
+        None.
+
+        """
+        scene_path = os.path.join(self.pt_folder, "scene", "scene."+ConfigManager.SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
+        if os.path.exists(scene_path):
+            slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), scene_path, parent=self)
+            QThreadPool.globalInstance().start(slicer_open_thread)
 
     def load_pt(self):
         """

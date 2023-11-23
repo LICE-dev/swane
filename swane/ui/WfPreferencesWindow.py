@@ -1,6 +1,6 @@
 import os
 from PySide6.QtWidgets import (QDialog,  QGridLayout, QVBoxLayout, QGroupBox, QPushButton, QSpacerItem,
-                               QSizePolicy)
+                               QSizePolicy, QMessageBox)
 from swane import strings
 from swane.utils.PreferenceEntry import PreferenceEntry
 from swane.utils.wf_preferences import wf_preferences
@@ -100,11 +100,15 @@ class WfPreferencesWindow(QDialog):
         self.saveButton = QPushButton(strings.pref_window_save_button)
         self.saveButton.clicked.connect(self.save_preferences)
 
-        discard_button = QPushButton("Discard changes")
+        discard_button = QPushButton(strings.pref_window_discard_button)
         discard_button.clicked.connect(self.close)
+
+        reset_button = QPushButton(strings.pref_window_reset_button)
+        reset_button.clicked.connect(self.reset)
 
         layout.addWidget(self.saveButton)
         layout.addWidget(discard_button)
+        layout.addWidget(reset_button)
 
         self.setLayout(layout)
 
@@ -138,3 +142,17 @@ class WfPreferencesWindow(QDialog):
 
         self.my_config.save()
         self.done(1)
+
+    def reset(self):
+        msg_box = QMessageBox()
+        if self.my_config.global_config:
+            msg_box.setText(strings.pref_window_reset_global)
+        else:
+            msg_box.setText(strings.pref_window_reset_pt)
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        ret2 = msg_box.exec()
+
+        if ret2 == QMessageBox.StandardButton.Yes:
+            self.done(-1)

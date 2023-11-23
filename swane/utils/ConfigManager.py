@@ -90,22 +90,7 @@ class ConfigManager(configparser.ConfigParser):
                 if data_input.optional:
                     self['OPTIONAL_SERIES'][data_input.name] = 'false'
 
-                if data_input.name in wf_preferences:
-                    self[data_input.name] = {}
-                    for pref in wf_preferences[data_input.name]:
-                        if isinstance(wf_preferences[data_input.name][pref]['default'], list):
-                            self[data_input.name][pref] = "0"
-                        else:
-                            self[data_input.name][pref] = str(wf_preferences[data_input.name][pref]['default'])
-
-        else:
-            tmp_config = ConfigManager()
-
-            for data_input in DataInputList().values():
-                if data_input.name in wf_preferences:
-                    self[data_input.name] = tmp_config[data_input.name]
-
-            self.set_wf_option(tmp_config['MAIN']['defaultWfType'])
+        self.load_default_wf_settings(save=False)
 
     def set_wf_option(self, wf):
         if self.global_config:
@@ -210,3 +195,23 @@ class ConfigManager(configparser.ConfigParser):
             except:
                 return False
         return False
+
+    def load_default_wf_settings(self, save=True):
+        if self.global_config:
+            for data_input in DataInputList().values():
+                if data_input.name in wf_preferences:
+                    self[data_input.name] = {}
+                    for pref in wf_preferences[data_input.name]:
+                        if isinstance(wf_preferences[data_input.name][pref]['default'], list):
+                            self[data_input.name][pref] = "0"
+                        else:
+                            self[data_input.name][pref] = str(wf_preferences[data_input.name][pref]['default'])
+        else:
+            tmp_config = ConfigManager()
+            for data_input in DataInputList().values():
+                if data_input.name in wf_preferences:
+                    self[data_input.name] = tmp_config[data_input.name]
+
+            self.set_wf_option(tmp_config['MAIN']['defaultWfType'])
+        if save:
+            self.save()

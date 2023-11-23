@@ -381,8 +381,9 @@ class MainWindow(QMainWindow):
         wf_preference_window = WfPreferencesWindow(self.global_config, data_input_list=DataInputList())
         ret = wf_preference_window.exec()
 
-        if ret != 0:
-            self.reset_workflows()
+        if ret == -1:
+            self.global_config.load_default_wf_settings(save=True)
+            self.edit_wf_config()
 
     def check_running_workflows(self) -> bool:
         """

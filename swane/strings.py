@@ -94,7 +94,9 @@ pttab_old_fs_found = "An existing FreeSurfer folder was detected. Do you want to
 pttab_old_fs_resume = "Keep folder"
 pttab_old_fs_reset = "Delete folder"
 pttab_wf_stop = "Do you REALLY want to stop " + APPNAME + " Workflow execution?"
-pttab_results_button = "Export results into Slicer scene"
+pttab_results_button = "Create/Update Slicer scene \u24D8"
+pttab_results_button_tooltip = "In case of a new analysis remember to update the Slicer scene"
+pttab_open_results_button = "Visualize scene into Slicer"
 pttab_exporting_start = "Exporting results into Slicer scene...\nLoading Slicer environment"
 pttab_exporting_prefix = "Exporting results into Slicer scene...\n"
 pttab_dicom_clearing = "Clearing DICOM files in: "
@@ -108,11 +110,13 @@ wf_pref_window_title_user = ' - Workflow Settings'
 pref_window_title_global = APPNAME + ' - Preferences'
 pref_window_title_user = ' - Workflow preferences'
 pref_window_global_box_title = "Global settings"
+pref_window_performance_box_title = "Resource management"
 pref_window_global_box_mwd = "Main working directory"
 pref_window_global_box_slicer = "3D Slicer path"
 pref_window_global_box_default_wf = "Default workflow"
 pref_window_global_box_pt_limit = "Patient tab limit"
 pref_window_global_box_cpu_limit = "CPU core per Patient limit"
+pref_window_global_box_cpu_limit_tip = "To use all CPU cores set value equal to -1"
 pref_window_global_box_bedpostx_cores = "BedpostX (DTI) CPU core management"
 pref_window_global_box_bedpostx_description = [
     "BedpostX will ignore the patient CPU core limit, using all available resources",
@@ -129,6 +133,9 @@ pref_window_discard_button = "Discard changes"
 pref_window_dir_error = "Directory does not exists!"
 pref_window_file_error = "File does not exists!"
 pref_window_select_slicer = "Select 3D Slicer executable"
+pref_window_reset_button = "Reset settings to default"
+pref_window_reset_global = "Do you really want to reset global workflow settings to application default?"
+pref_window_reset_pt = "Do you really want to reset this patient workflow settings to your default settings?"
 
 # Workflow
 check_dep_dcm2niix_error = "dcm2niix not detected (<a href='https://github.com/rordenlab/dcm2niix#Install" \

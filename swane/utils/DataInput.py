@@ -53,7 +53,7 @@ class DataInputList(dict):
     input_list_string[ASL] = ['Arterial Spin Labeling', 'CBF images from an ASL sequence']
     input_list_string[PET] = ['PET', '']
     input_list_string[FLAIR2D] = ['2D Flair %s', '']
-    input_list_string[FMRI] = ['Task fMRI - %d', '']
+    input_list_string[FMRI] = ['Task fMRI - Sequence %d', '']
 
     PLANES = {'tra': 'transverse',
               'cor': 'coronal',
