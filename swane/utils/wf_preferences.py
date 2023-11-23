@@ -27,7 +27,7 @@ wf_preferences[category]['freesurfer'] = {
 }
 wf_preferences[category]['hippo_amyg_labels'] = {
     'input_type': PreferenceEntry.CHECKBOX,
-    'label': "FreeSurfer hippocampal subfields",
+    'label': "FreeSurfer hippocampal and amygdala subfields",
     'default': 'false',
     'dependency': 'is_freesurfer_matlab',
     'dependency_fail_tooltip': "Matlab Runtime not detected",
