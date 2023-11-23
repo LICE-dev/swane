@@ -147,6 +147,12 @@ class MainWorkflow(CustomWorkflow):
 
             flair.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
 
+            # if is_freesurfer:
+            #     from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
+            #     flair_ai = freesurfer_asymmetry_index_workflow(name="flair_ai")
+            #     self.connect(flair, "outputnode.registered_file", flair_ai, "inputnode.in_file")
+            #     self.connect(freesurfer, "outputnode.vol_label_file_nii", flair_ai, "inputnode.seg_file")
+
         if is_flat1:
             # Non linear registration to MNI1mm Atlas for FLAT1
             mni1 = nonlinear_reg_workflow("mni1")
@@ -214,7 +220,7 @@ class MainWorkflow(CustomWorkflow):
             if is_freesurfer:
                 self.connect(freesurfer, 'outputnode.subjects_dir', asl, 'inputnode.freesurfer_subjects_dir')
                 self.connect(freesurfer, 'outputnode.subject_id', asl, 'inputnode.freesurfer_subject_id')
-                self.connect(freesurfer, 'outputnode.bgtROI', asl, 'inputnode.bgtROI')
+                self.connect(freesurfer, 'outputnode.bgROI', asl, 'inputnode.bgROI')
 
                 asl.sink_result(self.base_dir, "outputnode", 'surf_lh', self.SCENE_DIR)
                 asl.sink_result(self.base_dir, "outputnode", 'surf_rh', self.SCENE_DIR)
@@ -246,7 +252,7 @@ class MainWorkflow(CustomWorkflow):
             if is_freesurfer:
                 self.connect(freesurfer, 'outputnode.subjects_dir', pet, 'inputnode.freesurfer_subjects_dir')
                 self.connect(freesurfer, 'outputnode.subject_id', pet, 'inputnode.freesurfer_subject_id')
-                self.connect(freesurfer, 'outputnode.bgtROI', pet, 'inputnode.bgtROI')
+                self.connect(freesurfer, 'outputnode.bgROI', pet, 'inputnode.bgROI')
 
                 pet.sink_result(self.base_dir, "outputnode", 'surf_lh', self.SCENE_DIR)
                 pet.sink_result(self.base_dir, "outputnode", 'surf_rh', self.SCENE_DIR)

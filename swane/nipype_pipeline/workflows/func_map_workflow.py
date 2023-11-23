@@ -44,7 +44,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
         The directory from FreeSurfer analysis.
     freesurfer_subject_id : 
         The subject id from FreeSurfer analysis.
-    bgtROI : path
+    bgROI : path
         Basal ganglia and thalami ROI.
     ref_2_sym_warp : path
         Nonlinear registration warp from T13D to symmetric atlas.
@@ -65,7 +65,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
     surf_rh : path
         If FreeSurfer is available, functional map projection on RH pial surface.
     zscore : path
-        If FreeSurfer is available, internal z-score statistics compared to bgt.
+        If FreeSurfer is available, internal z-score statistics compared to basal ganglia.
     zscore_surf_lh : list of strings
         If FreeSurfer is available, z-score projection on LH pial surface.
     zscore_surf_rh : list of strings
@@ -84,7 +84,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
     # Input Node
     inputnode = Node(
         IdentityInterface(fields=['reference', 'brain_mask', 'freesurfer_subjects_dir',
-                                  'freesurfer_subject_id', 'bgtROI', 'ref_2_sym_warp',
+                                  'freesurfer_subject_id', 'bgROI', 'ref_2_sym_warp',
                                   'swap_2_sym_warp', 'ref_2_sym_invwarp']),
         name='inputnode')
     
@@ -163,7 +163,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
         zscore.long_name = "internal zscore"
         zscore.inputs.out_file = "r-%s_zscore.nii.gz" % name
         workflow.connect(mask, "out_file", zscore, "in_file")
-        workflow.connect(inputnode, "bgtROI", zscore, "ROI_file")
+        workflow.connect(inputnode, "bgROI", zscore, "ROI_file")
 
         workflow.connect(zscore, "out_file", outputnode, "zscore")
 
