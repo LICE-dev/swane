@@ -48,7 +48,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
         Subject name for Freesurfer (defined as FS_DIR="FS").
     subjects_dir : path
         Directory for Freesurfer analysis.
-    bgtROI : path
+    bgROI : path
         Binary ROI for basal ganglia and thalamus.
     wmROI : path
         Binary ROI for cerebral white matter.
@@ -74,7 +74,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=['subject_id', 'subjects_dir', 'bgtROI', 'wmROI',
+        IdentityInterface(fields=['subject_id', 'subjects_dir', 'bgROI', 'wmROI',
                                   'pial', 'white', 'vol_label_file', 'vol_label_file_nii', 'lh_hippoAmygLabels',
                                   'rh_hippoAmygLabels']),
         name='outputnode')
@@ -149,30 +149,30 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     workflow.connect(rhwmROI, "out_file", wmROI, "operand_file")
 
     # NODE 7: Left basal ganglia and thalamus binary ROI
-    lhbgtROI = Node(ThrROI(), name='lhbgtROI')
-    lhbgtROI.long_name = "Lh BGT ROI"
-    lhbgtROI.inputs.seg_val_min = 10
-    lhbgtROI.inputs.seg_val_max = 13
-    lhbgtROI.inputs.out_file = "lhbgtROI.nii.gz"
-    workflow.connect(aparaseg2Volnii, "vol_label_file", lhbgtROI, "in_file")
+    lhbgROI = Node(ThrROI(), name='lhbgROI')
+    lhbgROI.long_name = "Lh Basal ganglia ROI"
+    lhbgROI.inputs.seg_val_min = 11
+    lhbgROI.inputs.seg_val_max = 13
+    lhbgROI.inputs.out_file = "lhbgROI.nii.gz"
+    workflow.connect(aparaseg2Volnii, "vol_label_file", lhbgROI, "in_file")
 
     # NODE 8: Right basal ganglia and thalamus binary ROI
-    rhbgtROI = Node(ThrROI(), name='rhbgtROI')
-    rhbgtROI.long_name = "Rh BGT ROI"
-    rhbgtROI.inputs.seg_val_min = 49
-    rhbgtROI.inputs.seg_val_max = 52
-    rhbgtROI.inputs.out_file = "rhbgtROI.nii.gz"
-    workflow.connect(aparaseg2Volnii, "vol_label_file", rhbgtROI, "in_file")
+    rhbgROI = Node(ThrROI(), name='rhbgROI')
+    rhbgROI.long_name = "Rh Basal ganglia ROI"
+    rhbgROI.inputs.seg_val_min = 50
+    rhbgROI.inputs.seg_val_max = 52
+    rhbgROI.inputs.out_file = "rhbgROI.nii.gz"
+    workflow.connect(aparaseg2Volnii, "vol_label_file", rhbgROI, "in_file")
 
     # NODE 9: Basal ganglia and thalami binary ROI
-    bgtROI = Node(BinaryMaths(), name='bgtROI')
-    bgtROI.long_name = "BGT ROI"
-    bgtROI.inputs.operation = "add"
-    bgtROI.inputs.out_file = "bgtROI.nii.gz"
-    workflow.connect(lhbgtROI, "out_file", bgtROI, "in_file")
-    workflow.connect(rhbgtROI, "out_file", bgtROI, "operand_file")
+    bgROI = Node(BinaryMaths(), name='bgROI')
+    bgROI.long_name = "Basal ganglia ROI"
+    bgROI.inputs.operation = "add"
+    bgROI.inputs.out_file = "bgROI.nii.gz"
+    workflow.connect(lhbgROI, "out_file", bgROI, "in_file")
+    workflow.connect(rhbgROI, "out_file", bgROI, "operand_file")
 
-    workflow.connect(bgtROI, "out_file", outputnode, "bgtROI")
+    workflow.connect(bgROI, "out_file", outputnode, "bgROI")
     # TODO wmROI work in progress - Not used for now. Maybe useful for SUPERFLAIR
     workflow.connect(wmROI, "out_file", outputnode, "wmROI")
     workflow.connect(reconAll, "pial", outputnode, "pial")
