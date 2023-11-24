@@ -1,5 +1,5 @@
 import os
-from PySide6.QtWidgets import (QDialog,  QGridLayout, QVBoxLayout, QGroupBox, QPushButton, QSpacerItem,
+from PySide6.QtWidgets import (QDialog,  QGridLayout, QVBoxLayout, QWidget, QPushButton, QSpacerItem,
                                QSizePolicy, QMessageBox)
 from swane import strings
 from swane.utils.PreferenceEntry import PreferenceEntry
@@ -41,7 +41,7 @@ class WfPreferencesWindow(QDialog):
             category = data_input.name
             self.input_keys[category] = {}
 
-            tab = QGroupBox()
+            tab = QWidget()
             tab_widget.addTab(tab, data_input.label)
             grid = QGridLayout()
             tab.setLayout(grid)

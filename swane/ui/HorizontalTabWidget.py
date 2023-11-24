@@ -5,25 +5,43 @@ from PySide6 import QtCore
 class HorizontalTabWidget(QTabWidget):
     def __init__(self, width, height):
         super(HorizontalTabWidget, self).__init__()
-        self.setTabBar(HorizontalTabBar(width=width, height=height))
+        # self.setTabBar(HorizontalTabBar(width=width, height=height))
+        self.setTabBar(HorizontalTabBar())
         self.setTabPosition(QTabWidget.West)
 
 
-class HorizontalTabBar(QTabBar):
-    def __init__(self, *args, **kwargs):
-        self.tabSize = QtCore.QSize(kwargs.pop('width'), kwargs.pop('height'))
-        super(HorizontalTabBar, self).__init__(*args, **kwargs)
+# class HorizontalTabBar(QTabBar):
+#     def __init__(self, *args, **kwargs):
+#         self.tabSize = QtCore.QSize(kwargs.pop('width'), kwargs.pop('height'))
+#         super(HorizontalTabBar, self).__init__(*args, **kwargs)
+#
+#     def paintEvent(self, event):
+#         painter = QStylePainter(self)
+#         option = QStyleOptionTab()
+#
+#         for index in range(self.count()):
+#             self.initStyleOption(option, index)
+#             tabRect = self.tabRect(index)
+#             tabRect.moveLeft(10)
+#             painter.drawControl(QStyle.CE_TabBarTabShape, option)
+#             painter.drawText(tabRect, QtCore.Qt.AlignVCenter | QtCore.Qt.TextDontClip, self.tabText(index))
+#
+#     def tabSizeHint(self, index):
+#         return self.tabSize
 
+class HorizontalTabBar(QTabBar):
     def paintEvent(self, event):
         painter = QStylePainter(self)
         option = QStyleOptionTab()
-
         for index in range(self.count()):
             self.initStyleOption(option, index)
-            tabRect = self.tabRect(index)
-            tabRect.moveLeft(10)
             painter.drawControl(QStyle.CE_TabBarTabShape, option)
-            painter.drawText(tabRect, QtCore.Qt.AlignVCenter | QtCore.Qt.TextDontClip, self.tabText(index))
+            painter.drawText(self.tabRect(index),
+                             QtCore.Qt.AlignCenter | QtCore.Qt.TextDontClip,
+                             self.tabText(index))
 
     def tabSizeHint(self, index):
-        return self.tabSize
+        size = QTabBar.tabSizeHint(self, index)
+        if size.width() < size.height():
+            size.transpose()
+        return size
