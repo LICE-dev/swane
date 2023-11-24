@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import (QTabBar, QStylePainter, QStyle, QStyleOptionTab, QTabWidget)
+from PySide6.QtWidgets import (QTabBar, QStylePainter, QStyle, QStyleOptionTab, QTabWidget, QProxyStyle)
 from PySide6 import QtCore
 
 
@@ -6,9 +6,9 @@ class HorizontalTabWidget(QTabWidget):
     def __init__(self, width, height):
         super(HorizontalTabWidget, self).__init__()
         # self.setTabBar(HorizontalTabBar(width=width, height=height))
-        self.setTabBar(HorizontalTabBar())
+        #self.setTabBar(HorizontalTabBar())
+        self.tabBar().setStyle(CustomTabStyle())
         self.setTabPosition(QTabWidget.West)
-
 
 # class HorizontalTabBar(QTabBar):
 #     def __init__(self, *args, **kwargs):
@@ -28,6 +28,24 @@ class HorizontalTabWidget(QTabWidget):
 #
 #     def tabSizeHint(self, index):
 #         return self.tabSize
+
+
+class CustomTabStyle(QProxyStyle):
+    def sizeFromContents(self, ctype, option, size, widget=None):
+        s = super(CustomTabStyle, self).sizeFromContents(ctype, option, size, widget)
+        if ctype == QStyle.CT_TabBarTab:
+            s.transpose()
+        return s
+
+    def drawControl(self, element, option, painter, widget=None):
+        if element == QStyle.CE_TabBarTabLabel:
+            my_style_option_tab = QStyleOptionTab(option)
+            if my_style_option_tab:
+                my_style_option_tab.shape = QTabBar.RoundedNorth
+                super(CustomTabStyle, self).drawControl(element, my_style_option_tab, painter, widget)
+            return
+        super(CustomTabStyle, self).drawControl(element, option, painter, widget)
+
 
 class HorizontalTabBar(QTabBar):
     def paintEvent(self, event):
