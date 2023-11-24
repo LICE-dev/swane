@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QDialog,  QGridLayout, QVBoxLayout, QWidget, QPus
 from swane import strings
 from swane.utils.PreferenceEntry import PreferenceEntry
 from swane.utils.wf_preferences import wf_preferences
-from swane.ui.HorizontalTabWidget import HorizontalTabWidget
+from swane.ui.VerticalTabWidget import VerticalTabWidget
 
 
 class WfPreferencesWindow(QDialog):
@@ -28,7 +28,7 @@ class WfPreferencesWindow(QDialog):
 
         layout = QVBoxLayout()
 
-        tab_widget = HorizontalTabWidget(200, 25)
+        tab_widget = VerticalTabWidget(200, 25)
 
         x = 0
 
