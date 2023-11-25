@@ -164,6 +164,8 @@ check_dep_slicer_error1 = "Slicer not detected (<a href='https://slicer.readthed
 check_dep_slicer_error2 = "Slicer detected but without SlicerFreeSurfer extension (<a " \
                           "href='https://slicer.readthedocs.io/en/latest/user_guide/extensions_manager.html?highlight" \
                           "=extension%20manager'>Exstensions Manager info</a>)"
+check_dep_slicer_wrong_version = "Slicer version outdated (found %s, required %s). Please " \
+                              "<a href='https://slicer.readthedocs.io/en/latest/user_guide'>update</a>"
 check_dep_slicer_found = "Slicer detected"
 
 fsl_python_error = APPNAME + " has been executed using fsl Python instead of system Python.\nThis may depend " \

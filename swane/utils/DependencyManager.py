@@ -9,6 +9,7 @@ class DependencyManager:
 
     MIN_FSL_VERSION = "6.0.6"
     MIN_FREESURFER_VERSION = "7.3.2"
+    MIN_SLICER_VERSION = "5.8.0"
 
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
@@ -27,6 +28,12 @@ class DependencyManager:
 
     def is_freesurfer(self):
         return [self.freesurfer.state != Dependence.MISSING, self.freesurfer.state2 != Dependence.MISSING]
+
+    @staticmethod
+    def check_slicer_version(slicer_version):
+        if slicer_version is None or slicer_version == "":
+            return False
+        return version.parse(slicer_version) >= version.parse(DependencyManager.MIN_SLICER_VERSION)
 
     @staticmethod
     def check_dcm2niix():
@@ -52,9 +59,9 @@ class DependencyManager:
 
     @staticmethod
     def check_freesurfer():
-        freesurfer_version = str(freesurfer.base.Info.looseversion())
-        if freesurfer_version is None:
+        if freesurfer.base.Info.version() is None:
             return Dependence(Dependence.MISSING, strings.check_dep_fs_error1, Dependence.MISSING)
+        freesurfer_version = str(freesurfer.base.Info.looseversion())
         if "FREESURFER_HOME" not in os.environ:
             return Dependence(Dependence.MISSING, strings.check_dep_fs_error2 % freesurfer_version, Dependence.MISSING)
         file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
