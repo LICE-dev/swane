@@ -205,7 +205,7 @@ class PtTab(QTabWidget):
 
         """
         
-        if not self.main_window.fsl:
+        if not self.main_window.dependency_manager.is_fsl():
             return
         
         workflow_generator_work = WorkflowGeneratorWorker(self.pt_folder)
@@ -534,7 +534,7 @@ class PtTab(QTabWidget):
 
         """
         
-        if not self.main_window.fsl:
+        if not self.main_window.dependency_manager.is_fsl():
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.pttab_missing_fsl_error)
             return
@@ -842,7 +842,7 @@ class PtTab(QTabWidget):
         total_files = 0
 
         # Config import absed on nipype_pipeline
-        self.pt_config = ConfigManager(self.pt_folder, self.main_window.freesurfer)
+        self.pt_config = ConfigManager(self.pt_folder, self.main_window.dependency_manager.is_freesurfer())
         self.wf_type_combo.setCurrentIndex(self.pt_config.get_pt_wf_type())
         # Set after patient loading to prevent the onchanged fire on previous line command
         self.wf_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)
