@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import (QTabBar, QStylePainter, QStyle, QStyleOptionTab, QTabWidget, QProxyStyle, QStyleOptionTabWidgetFrame)
+from PySide6.QtWidgets import (QTabBar, QStylePainter, QStyle, QStyleOptionTab, QTabWidget, QProxyStyle,
+                               QStyleOptionTabWidgetFrame, QApplication)
 from PySide6 import QtCore
 
 
@@ -28,10 +29,25 @@ class VerticalTabBar(QTabBar):
 
     def initStyleOption(self, option, index):
         super(VerticalTabBar, self).initStyleOption(option, index)
-        option.shape = QTabBar.RoundedNorth
-        option.position = QStyleOptionTab.Middle
+        if QApplication.style().objectName() != "fusion":
+            option.shape = QTabBar.RoundedNorth
+            option.position = QStyleOptionTab.Beginning
 
     def tabSizeHint(self, index):
         sizeHint = super(VerticalTabBar, self).tabSizeHint(index)
         sizeHint.transpose()
         return sizeHint
+
+    def paintEvent(self, event):
+        if QApplication.style().objectName() == "fusion":
+            painter = QStylePainter(self)
+            option = QStyleOptionTab()
+            for index in range(self.count()):
+                self.initStyleOption(option, index)
+                painter.drawControl(QStyle.CE_TabBarTabShape, option)
+                painter.drawText(self.tabRect(index),
+                                 QtCore.Qt.AlignCenter | QtCore.Qt.TextDontClip,
+                                 self.tabText(index))
+        else:
+            super(VerticalTabBar, self).paintEvent(event)
+
