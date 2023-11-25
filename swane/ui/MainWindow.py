@@ -673,7 +673,8 @@ class MainWindow(QMainWindow):
             check_slicer_work.signal.slicer.connect(self.slicer_row)
             QThreadPool.globalInstance().start(check_slicer_work)
         else:
-            self.add_home_entry(home_grid_layout, Dependence(Dependence.DETECTED, strings.mainwindow_dep_slicer_found), x)
+            label = strings.check_dep_slicer_found % self.global_config.get_slicer_version()
+            self.add_home_entry(home_grid_layout, Dependence(Dependence.DETECTED, label), x)
         x += 1
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
