@@ -104,10 +104,9 @@ class ConfigManager(configparser.ConfigParser):
 
     def update_freesurfer_pref(self):
         if not self.is_freesurfer():
-            self['WF_OPTION']['freesurfer'] = 'false'
+            self[DataInputList.T13D]['freesurfer'] = 'false'
         if not self.is_freesurfer_matlab():
-            self['WF_OPTION']['hippoAmygLabels'] = 'false'
-            self['WF_OPTION']['hippoAmygLabels'] = 'false'
+            self[DataInputList.T13D]['hippo_amyg_labels'] = 'false'
 
     def is_freesurfer(self):
         if self.freesurfer is None:
