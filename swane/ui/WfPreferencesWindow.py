@@ -8,6 +8,10 @@ from PySide6_VerticalQTabWidget import VerticalQTabWidget
 
 
 class WfPreferencesWindow(QDialog):
+    """
+    Custom implementation of PySide QDialog to show SWANe workflow preferences.
+
+    """
 
     def __init__(self, my_config, data_input_list=None, parent=None):
         super(WfPreferencesWindow, self).__init__(parent)
@@ -109,7 +113,19 @@ class WfPreferencesWindow(QDialog):
 
         self.setLayout(layout)
 
-    def check_dependency(self, category, key, x):
+    def check_dependency(self, category: str, key: str, x: int):
+        """
+        Check an external dependence to test if a preference can be enabled.
+        Parameters
+        ----------
+        category: str
+            The category of the preference to be tested.
+        key: str
+            The name of the preference to be tested.
+        x: int
+            The index of the preference to be tested in the input field list.
+
+        """
         if "dependency" in wf_preferences[category][key]:
             dep_check = getattr(self.my_config, wf_preferences[category][key]["dependency"], None)
             if callable(dep_check) and not dep_check():
@@ -117,7 +133,19 @@ class WfPreferencesWindow(QDialog):
                 return False
         return True
 
-    def requirement_changed(self, checked, my_cat, my_key):
+    def requirement_changed(self, checked, my_cat: str, my_key: str):
+        """
+        Called if the user change a preference that is a requirement for another preference.
+        Parameters
+        ----------
+        checked:
+            Unused but passed by the event connection.
+        my_cat: str
+            The category of the preference to be tested.
+        my_key: str
+            The name of the preference to be tested.
+
+        """
         my_x = self.input_keys[my_cat][my_key]
         if not self.check_dependency(my_cat, my_key, my_x):
             return
@@ -143,6 +171,10 @@ class WfPreferencesWindow(QDialog):
         self.inputs[my_x].enable()
 
     def save_preferences(self):
+        """
+        Loop all input fields and save values to configuration file.
+
+        """
         for pref_entry in self.inputs.values():
             if pref_entry.changed:
                 self.my_config[pref_entry.category][pref_entry.key] = pref_entry.get_value()
@@ -151,6 +183,10 @@ class WfPreferencesWindow(QDialog):
         self.done(1)
 
     def reset(self):
+        """
+        Load default workflow settings and save them to the configuration file
+
+        """
         msg_box = QMessageBox()
         if self.my_config.global_config:
             msg_box.setText(strings.pref_window_reset_global)
