@@ -9,7 +9,7 @@ class DependencyManager:
 
     MIN_FSL_VERSION = "6.0.6"
     MIN_FREESURFER_VERSION = "7.3.2"
-    MIN_SLICER_VERSION = "5.8.0"
+    MIN_SLICER_VERSION = "5.2.0"
 
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()

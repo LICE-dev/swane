@@ -21,14 +21,7 @@ class VerticalTabWidget(QTabWidget):
 class VerticalTabBar(QTabBar):
     def __init__(self, *args, **kwargs):
         super(VerticalTabBar, self).__init__(*args, **kwargs)
-        #self.setDrawBase(False)
-        #self.setElideMode(QtCore.Qt.ElideNone)
-
-    # def initStyleOption(self, option, index):
-    #     super(VerticalTabBar, self).initStyleOption(option, index)
-    #     if QApplication.style().objectName() == "macos":
-    #         option.shape = QTabBar.RoundedNorth
-    #         option.position = QStyleOptionTab.Beginning
+        self.setElideMode(QtCore.Qt.ElideNone)
 
     def tabSizeHint(self, index):
         sizeHint = super(VerticalTabBar, self).tabSizeHint(index)
@@ -48,4 +41,3 @@ class VerticalTabBar(QTabBar):
             painter.drawControl(QStyle.CE_TabBarTabShape, option)
             option.shape = QTabBar.RoundedNorth
             painter.drawControl(QStyle.CE_TabBarTabLabel, option)
-
