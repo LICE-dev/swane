@@ -42,7 +42,7 @@ class Dependence:
         state2: int
             A value in Dependence.STATES describing a subdependence status
         """
-        
+
         if state in Dependence.STATES:
             self.state = state
             self.label = label

@@ -9,8 +9,12 @@ from swane.utils.DataInput import DataInputList
 
 
 class PreferencesWindow(QDialog):
+    """
+    Custom implementation of PySide QDialog to show SWANe global preferences.
 
-    def __init__(self, my_config, data_input_list=None, parent=None):
+    """
+
+    def __init__(self, my_config, parent=None):
         super(PreferencesWindow, self).__init__(parent)
 
         self.my_config = my_config
@@ -121,9 +125,7 @@ class PreferencesWindow(QDialog):
             # grid1.addWidget(self.new_inputs[x].input_field, x, 1)
             # x += 1
 
-
             layout.addWidget(group_box_performance)
-
 
             group_box_optional = QGroupBox(strings.pref_window_global_box_optional_title)
             grid_optional = QGridLayout()
@@ -159,13 +161,28 @@ class PreferencesWindow(QDialog):
         self.setLayout(main_layout)
 
     def set_restart(self):
+        """
+        Called when user change a settings that require SWANe restart.
+
+        """
         self.restart = True
         self.saveButton.setText(strings.pref_window_save_restart_button)
 
-    def update_bedpostx_core_description(self, value):
+    def update_bedpostx_core_description(self, value: int):
+        """
+        Update the bedpostx core usage setting label if the user change the setting value.
+        Parameters
+        ----------
+        value: int
+            The index of the setting combo
+        """
         self.bedpostx_core_description.setText(strings.pref_window_global_box_bedpostx_description[value])
 
     def save_preferences(self):
+        """
+        Loop all input fields and save values to configuration file.
+
+        """
         for pref_entry in self.new_inputs.values():
             if pref_entry.changed:
                 self.my_config[pref_entry.category][pref_entry.key] = pref_entry.get_value()
