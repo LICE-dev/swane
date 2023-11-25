@@ -116,7 +116,7 @@ class ConfigManager(configparser.ConfigParser):
     def is_freesurfer_matlab(self):
         if self.freesurfer is None:
             return False
-        return self.freesurfer[0]
+        return self.freesurfer[1]
 
     def save(self):
         with open(self.config_file, "w") as openedFile:

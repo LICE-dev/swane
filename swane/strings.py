@@ -138,11 +138,14 @@ pref_window_reset_global = "Do you really want to reset global workflow settings
 pref_window_reset_pt = "Do you really want to reset this patient workflow settings to your default settings?"
 
 # Workflow
+check_dep_generic_error = "Dependecy check error"
 check_dep_dcm2niix_error = "dcm2niix not detected (<a href='https://github.com/rordenlab/dcm2niix#Install" \
                            "'>installation info</a>)"
 check_dep_dcm2niix_found = "dcm2niix detected (%s)"
 check_dep_fsl_error = "FSL not detected (<a href='https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation" \
                       "'>installation info</a>)"
+check_dep_fsl_wrong_version = "FSL version outdated (found %s, required %s). Please " \
+                              "<a href='https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation'>update</a>"
 check_dep_fsl_found = "FSL detected (%s)"
 check_dep_fs_found = "FreeSurfer detected (%s)"
 check_dep_fs_error1 = "FreeSurfer not detected (<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall" \
@@ -152,6 +155,8 @@ check_dep_fs_error3 = "FreeSurfer detected (%s). Matlab Runtime is not installed
                       "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>registration instruction</a>)"
 check_dep_fs_error4 = "FreeSurfer detected (%s). License key missing (<a " \
                       "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instruction</a>)"
+check_dep_fs_wrong_version = "FreeSurfer version outdated (found %s, required %s). Please " \
+                              "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a>"
 check_dep_graph_error = "Graphviz not detected (<a href='https://graphviz.org/download/'>Installation info</a>)"
 check_dep_graph_found = "Graphviz detected"
 check_dep_slicer_error1 = "Slicer not detected (<a href='https://slicer.readthedocs.io/en/latest/user_guide" \

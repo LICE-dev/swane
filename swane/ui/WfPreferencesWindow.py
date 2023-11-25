@@ -59,10 +59,7 @@ class WfPreferencesWindow(QDialog):
                     self.inputs[x].set_tooltip(wf_preferences[data_input.name][key]["tooltip"])
                 if "range" in wf_preferences[data_input.name][key]:
                     self.inputs[x].set_range(wf_preferences[data_input.name][key]["range"][0], wf_preferences[data_input.name][key]["range"][1])
-                if "dependency" in wf_preferences[data_input.name][key]:
-                    dep_check = getattr(my_config, wf_preferences[data_input.name][key]["dependency"], None)
-                    if callable(dep_check) and not dep_check():
-                        self.inputs[x].disable(wf_preferences[data_input.name][key]["dependency_fail_tooltip"])
+                self.check_dependency(data_input.name, key, x)
                 if "pref_requirement" in wf_preferences[data_input.name][key]:
                     for pref_cat in wf_preferences[data_input.name][key]["pref_requirement"]:
                         if pref_cat not in my_config:
@@ -112,8 +109,18 @@ class WfPreferencesWindow(QDialog):
 
         self.setLayout(layout)
 
+    def check_dependency(self, category, key, x):
+        if "dependency" in wf_preferences[category][key]:
+            dep_check = getattr(self.my_config, wf_preferences[category][key]["dependency"], None)
+            if callable(dep_check) and not dep_check():
+                self.inputs[x].disable(wf_preferences[category][key]["dependency_fail_tooltip"])
+                return False
+        return True
+
     def requirement_changed(self, checked, my_cat, my_key):
         my_x = self.input_keys[my_cat][my_key]
+        if not self.check_dependency(my_cat, my_key, my_x):
+            return
         pref_requirement = wf_preferences[my_cat][my_key]["pref_requirement"]
         for req_cat in pref_requirement:
             if req_cat not in self.input_keys:

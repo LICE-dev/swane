@@ -1283,5 +1283,5 @@ class PtTab(QTabWidget):
 
         """
         
-        enable = self.data_input_list.is_ref_loaded() and self.main_window.fsl and self.main_window.dcm2niix
+        enable = self.data_input_list.is_ref_loaded() and self.main_window.dependency_manager.is_fsl() and self.main_window.dependency_manager.is_dcm2niix()
         self.setTabEnabled(PtTab.EXECTAB, enable)
