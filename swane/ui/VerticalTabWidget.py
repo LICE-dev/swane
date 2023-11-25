@@ -9,9 +9,6 @@ class VerticalTabWidget(QTabWidget):
         self.setTabBar(VerticalTabBar())
         self.setTabPosition(QTabWidget.West)
 
-    def initStyleOption(self, option):
-        super(VerticalTabWidget, self).initStyleOption(option)
-
     def paintEvent(self, event):
         painter = QStylePainter(self)
         option = QStyleOptionTabWidgetFrame()
@@ -24,8 +21,8 @@ class VerticalTabWidget(QTabWidget):
 class VerticalTabBar(QTabBar):
     def __init__(self, *args, **kwargs):
         super(VerticalTabBar, self).__init__(*args, **kwargs)
-        self.setDrawBase(False)
-        self.setElideMode(QtCore.Qt.ElideNone)
+        #self.setDrawBase(False)
+        #self.setElideMode(QtCore.Qt.ElideNone)
 
     # def initStyleOption(self, option, index):
     #     super(VerticalTabBar, self).initStyleOption(option, index)
