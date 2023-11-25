@@ -74,6 +74,7 @@ class ConfigManager(configparser.ConfigParser):
                 'patientsfolder': '',
                 'patientsprefix': 'pt_',
                 'slicerPath': '',
+                'slicer_version': '',
                 'lastPID': '-1',
                 'maxPt': '1',
                 'maxPtCPU': '-1',
@@ -157,6 +158,14 @@ class ConfigManager(configparser.ConfigParser):
     def set_slicer_path(self, path):
         if self.global_config:
             self['MAIN']['slicerPath'] = path
+
+    def get_slicer_version(self):
+        if self.global_config:
+            return self['MAIN']['slicer_version']
+
+    def set_slicer_version(self, slicer_version):
+        if self.global_config:
+            self['MAIN']['slicer_version'] = slicer_version
 
     def is_optional_series_enabled(self, series_name):
         if self.global_config:

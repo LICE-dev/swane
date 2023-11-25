@@ -2,10 +2,11 @@ import os
 import subprocess
 from PySide6.QtCore import QRunnable, Signal, QObject
 from swane import strings
+from swane.utils.DependencyManager import Dependence, DependencyManager
 
 
 class SlicerCheckSignaler(QObject):
-    slicer = Signal(str, str, bool)
+    slicer = Signal(str, str, str, int)
 
 
 class SlicerCheckWorker(QRunnable):
@@ -22,6 +23,7 @@ class SlicerCheckWorker(QRunnable):
     def run(self):
 
         repeat = True
+        slicer_version = ""
 
         while repeat:
             if not os.path.exists(self.current_slicer_path):
@@ -48,7 +50,7 @@ class SlicerCheckWorker(QRunnable):
                                     stdout=subprocess.PIPE).stdout.decode('utf-8')
             split = output.split("\n")
             cmd = ''
-            found = False
+            state = Dependence.MISSING
             for entry in split:
                 if entry == '':
                     continue
@@ -60,20 +62,28 @@ class SlicerCheckWorker(QRunnable):
                     self.current_slicer_path = ''
                 else:
                     repeat = False
-                msg = strings.check_dep_slicer_error1
+                label = strings.check_dep_slicer_error1
             else:
                 repeat = False
-                cmd2 = cmd + " --no-splash --no-main-window --python-script " + \
-                       os.path.join(os.path.dirname(__file__), "slicer_script_freesurfer_module_check.py")
+                cmd2 = cmd + " --version"
                 output2 = subprocess.run(
                     cmd2, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
-                if 'MODULE FOUND' in output2:
-                    found = True
-                    msg = strings.check_dep_slicer_found
+                slicer_version = output2.replace("Slicer ", "").replace("\n","")
+                if not DependencyManager.check_slicer_version(slicer_version):
+                    label = strings.check_dep_slicer_wrong_version % (slicer_version, DependencyManager.MIN_SLICER_VERSION)
+                    state = Dependence.WARNING
                 else:
-                    msg = strings.check_dep_slicer_error2
+                    cmd3 = cmd + " --no-splash --no-main-window --python-script " + \
+                           os.path.join(os.path.dirname(__file__), "slicer_script_freesurfer_module_check.py")
+                    output3 = subprocess.run(
+                        cmd3, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
+                    if 'MODULE FOUND' in output3:
+                        state = Dependence.DETECTED
+                        label = strings.check_dep_slicer_found
+                    else:
+                        label = strings.check_dep_slicer_error2
 
-        self.signal.slicer.emit(cmd, msg, found)
+        self.signal.slicer.emit(cmd, slicer_version, label, state)
 
     def terminate(self):
         return

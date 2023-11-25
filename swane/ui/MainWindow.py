@@ -595,7 +595,7 @@ class MainWindow(QMainWindow):
 
         """
         
-        layout = QGridLayout()
+        home_grid_layout = QGridLayout()
 
         bold_font = QFont()
         bold_font.setBold(True)
@@ -613,33 +613,33 @@ class MainWindow(QMainWindow):
         label_welcome4 = QLabel(strings.mainwindow_home_label4)
         label_welcome4.setFont(bold_font)
 
-        layout.addWidget(label_welcome1, x, 0, 1, 2)
+        home_grid_layout.addWidget(label_welcome1, x, 0, 1, 2)
         x += 1
-        layout.addWidget(label_welcome2, x, 0, 1, 2)
+        home_grid_layout.addWidget(label_welcome2, x, 0, 1, 2)
         x += 1
-        layout.addWidget(label_welcome3, x, 0, 1, 2)
+        home_grid_layout.addWidget(label_welcome3, x, 0, 1, 2)
         x += 1
-        layout.addWidget(label_welcome4, x, 0, 1, 2)
+        home_grid_layout.addWidget(label_welcome4, x, 0, 1, 2)
         x += 1
 
         # Main window dependency check
         label_main_dep = QLabel(strings.mainwindow_home_label5)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        layout.addWidget(label_main_dep, x, 0, 1, 2)
+        home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
         x += 1
 
-        x = self.add_home_entry(layout, self.dependency_manager.dcm2niix, x)
+        x = self.add_home_entry(home_grid_layout, self.dependency_manager.dcm2niix, x)
 
-        x = self.add_home_entry(layout, self.dependency_manager.fsl, x)
+        x = self.add_home_entry(home_grid_layout, self.dependency_manager.fsl, x)
 
         label_main_dep = QLabel(strings.mainwindow_home_label6)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        layout.addWidget(label_main_dep, x, 0, 1, 2)
+        home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
         x += 1
 
-        x = self.add_home_entry(layout, self.dependency_manager.freesurfer, x)
+        x = self.add_home_entry(home_grid_layout, self.dependency_manager.freesurfer, x)
         self.global_config.freesurfer = self.dependency_manager.is_freesurfer()
 
         check_slicer = False
@@ -653,16 +653,19 @@ class MainWindow(QMainWindow):
         if not os.path.exists(current_slicer_path):
             current_slicer_path = ''
 
+        if not DependencyManager.check_slicer_version(self.global_config.get_slicer_version()):
+            check_slicer = True
+
         if check_slicer:
             self.slicerlabel_icon = QSvgWidget()
             self.slicerlabel_icon.setFixedSize(25, 25)
             self.slicerlabel_icon.load(self.LOADING_MOVIE_FILE)
-            layout.addWidget(self.slicerlabel_icon, x, 0)
+            home_grid_layout.addWidget(self.slicerlabel_icon, x, 0)
             self.slicerlabel = QLabel(strings.mainwindow_dep_slicer_src)
             self.slicerlabel.setOpenExternalLinks(True)
             self.slicerlabel.setSizePolicy(
                 QSizePolicy.Minimum, QSizePolicy.Minimum)
-            layout.addWidget(self.slicerlabel, x, 1)
+            home_grid_layout.addWidget(self.slicerlabel, x, 1)
             x += 1
 
             self.global_config.set_slicer_path('')
@@ -670,22 +673,22 @@ class MainWindow(QMainWindow):
             check_slicer_work.signal.slicer.connect(self.slicer_row)
             QThreadPool.globalInstance().start(check_slicer_work)
         else:
-            self.add_home_entry(layout, Dependence(Dependence.DETECTED, strings.mainwindow_dep_slicer_found), x)
+            self.add_home_entry(home_grid_layout, Dependence(Dependence.DETECTED, strings.mainwindow_dep_slicer_found), x)
         x += 1
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        layout.addWidget(label_main_dep, x, 0, 1, 2)
+        home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
         x += 1
 
-        x = self.add_home_entry(layout, self.dependency_manager.graphviz, x)
+        x = self.add_home_entry(home_grid_layout, self.dependency_manager.graphviz, x)
 
         vertical_spacer = QSpacerItem(
             20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        layout.addItem(vertical_spacer, x, 0, 1, 2)
+        home_grid_layout.addItem(vertical_spacer, x, 0, 1, 2)
 
-        self.homeTab.setLayout(layout)
+        self.homeTab.setLayout(home_grid_layout)
 
     def add_home_entry(self, gridlayout: QGridLayout, dep: Dependence, x: int) -> int:
         """
@@ -726,7 +729,7 @@ class MainWindow(QMainWindow):
         
         return x + 1
 
-    def slicer_row(self, slicer_path: str, msg: str, found: bool):
+    def slicer_row(self, slicer_path: str, slicer_version: str, msg: str, state: int):
         """
         Generates the Slicer dependency check label and path, if 3D Slicer is found.
 
@@ -734,10 +737,12 @@ class MainWindow(QMainWindow):
         ----------
         slicer_path : str
             The local 3D Slicer path.
+        slicer_version: str
+            The Slicer version found
         msg : str
             The label message.
-        found : bool
-            True if 3d Slicer has been found locally, otherwise False.
+        state: int
+            A state from Dependence.STATES.
 
         Returns
         -------
@@ -745,13 +750,16 @@ class MainWindow(QMainWindow):
 
         """
         
-        if found:
-            self.global_config.set_slicer_path(slicer_path)
-            self.global_config.save()
-            self.slicerlabel_icon.load(self.OK_ICON_FILE)
-        else:
+        if state == Dependence.MISSING:
             self.global_config.set_slicer_path('')
-            self.global_config.save()
             self.slicerlabel_icon.load(self.ERROR_ICON_FILE)
-            
+        else:
+            self.global_config.set_slicer_path(slicer_path)
+            self.global_config.set_slicer_version(slicer_version)
+            if state == Dependence.DETECTED:
+                self.slicerlabel_icon.load(self.OK_ICON_FILE)
+            else:
+                self.slicerlabel_icon.load(self.WARNING_ICON_FILE)
+
+        self.global_config.save()
         self.slicerlabel.setText(msg)
