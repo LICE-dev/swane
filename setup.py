@@ -33,6 +33,7 @@ setup(name='swane',
           "matplotlib==3.5.2",
           "nibabel==5.0.0",
           "packaging",
+          "PySide6_VerticalQTabWidget",
       ],
       python_requires=">=3.7",
       entry_points={
