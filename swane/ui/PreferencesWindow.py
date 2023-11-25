@@ -100,13 +100,13 @@ class PreferencesWindow(QDialog):
 
             self.new_inputs[x] = PreferenceEntry(category, 'bedpostx_core', my_config, PreferenceEntry.COMBO,
                                                  parent=self, populate_combo=ConfigManager.BEDPOSTX_CORES)
-            self.new_inputs[x].set_label_text(strings.pref_window_global_box_bedpostx_cores)
+            self.new_inputs[x].set_label_text(strings.pref_window_global_box_multi_cores)
             grid_performance.addWidget(self.new_inputs[x].label, x, 0)
             grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
             self.new_inputs[x].input_field.currentIndexChanged.connect(self.update_bedpostx_core_description)
             x += 1
             self.bedpostx_core_description = QLabel()
-            self.bedpostx_core_description.setText(strings.pref_window_global_box_bedpostx_description[self.new_inputs[x-1].input_field.currentIndex()])
+            self.bedpostx_core_description.setText(strings.pref_window_global_box_multi_cores_description[self.new_inputs[x - 1].input_field.currentIndex()])
             grid_performance.addWidget(self.bedpostx_core_description, x, 0, 1, 2)
             x += 1
 
@@ -176,7 +176,7 @@ class PreferencesWindow(QDialog):
         value: int
             The index of the setting combo
         """
-        self.bedpostx_core_description.setText(strings.pref_window_global_box_bedpostx_description[value])
+        self.bedpostx_core_description.setText(strings.pref_window_global_box_multi_cores_description[value])
 
     def save_preferences(self):
         """

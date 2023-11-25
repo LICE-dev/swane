@@ -294,7 +294,7 @@ class MainWorkflow(CustomWorkflow):
             dti_dir = data_input_list.get_dicom_dir(DataInputList.DTI)
             mni_dir = abspath(os.path.join(os.environ["FSLDIR"], 'data/standard/MNI152_T1_2mm_brain.nii.gz'))
 
-            dti_preproc = dti_preproc_workflow(data_input_list[DataInputList.DTI].wf_name, dti_dir, mni_dir, is_tractography=is_tractography, max_cpu=self.max_cpu, bedpostx_core=self.bedpostx_core)
+            dti_preproc = dti_preproc_workflow(data_input_list[DataInputList.DTI].wf_name, dti_dir, pt_config[DataInputList.DTI], mni_dir, max_cpu=self.max_cpu, bedpostx_core=self.bedpostx_core)
             dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
             self.connect(t1, "outputnode.ref_brain", dti_preproc, "inputnode.ref_brain")
 

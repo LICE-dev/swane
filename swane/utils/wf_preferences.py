@@ -116,6 +116,11 @@ wf_preferences[category]['ai_threshold'] = {
 }
 category = DataInputList.DTI
 wf_preferences[category] = {}
+wf_preferences[category]['cuda'] = {
+    'input_type': PreferenceEntry.CHECKBOX,
+    'label': "Use GPU computation when possible",
+    'default': 'false',
+}
 wf_preferences[category]['tractography'] = {
     'input_type': PreferenceEntry.CHECKBOX,
     'label': "DTI tractography",
