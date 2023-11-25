@@ -3,7 +3,7 @@ import shutil
 import traceback
 from multiprocessing import Queue
 from threading import Thread
-
+import sys
 import pydicom
 from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
@@ -75,6 +75,9 @@ class PtTab(QTabWidget):
         self.scan_directory_watcher = QFileSystemWatcher()
         self.scan_directory_watcher.directoryChanged.connect(self.clear_scan_result)
 
+        self.result_directory_watcher = QFileSystemWatcher()
+        self.result_directory_watcher.directoryChanged.connect(self.result_directory_changed)
+
         self.start_gen_wf_thread()
 
         self.data_tab_ui()
@@ -129,14 +132,17 @@ class PtTab(QTabWidget):
                             break
 
             self.setTabEnabled(PtTab.DATATAB, True)
-            
+
+            self.exec_button_setEnabled(False)
+
             if errors:
-                self.exec_button.setText(strings.pttab_wf_executed_with_error)
                 self.node_button.setEnabled(True)
+                self.exec_button.setText(strings.pttab_wf_executed_with_error)
+                self.exec_button.setToolTip("")
             else:
                 self.exec_button.setText(strings.pttab_wf_executed)
-                
-            self.exec_button.setEnabled(False)
+                self.exec_button.setToolTip("")
+
             self.enable_tab_if_result_dir()
             
             return
@@ -477,7 +483,7 @@ class PtTab(QTabWidget):
 
         self.exec_button = QPushButton(strings.EXECBUTTONTEXT)
         self.exec_button.clicked.connect(self.start_workflow_thread)
-        self.exec_button.setEnabled(False)
+        self.exec_button_setEnabled(False)
 
         layout.addWidget(self.exec_button, 1, 1)
         self.exec_graph = QSvgWidget()
@@ -564,7 +570,7 @@ class PtTab(QTabWidget):
         for node in self.node_list.keys():
             self.node_list[node].node_holder = CustomTreeWidgetItem(self.node_list_treeWidget, self.node_list_treeWidget, self.node_list[node].long_name)
             if len(self.node_list[node].node_list.keys()) > 0:
-                if self.main_window.graphviz:
+                if self.main_window.dependency_manager.is_graphviz():
                     graph_name = self.node_list[node].long_name.lower().replace(" ", "_")
                     thread = Thread(target=self.workflow.get_node(node).write_graph,
                                     kwargs={'graph2use': self.GRAPH_TYPE, 'format': PtTab.GRAPH_FILE_EXT,
@@ -576,8 +582,7 @@ class PtTab(QTabWidget):
                     self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(self.node_list[node].node_holder, self.node_list_treeWidget, self.node_list[node].node_list[sub_node].long_name)
         
         # UI updating
-        self.exec_button.setEnabled(True)
-        self.exec_button.setText(strings.EXECBUTTONTEXT)
+        self.exec_button_setEnabled(True)
         self.node_button.setEnabled(False)
 
     def tree_item_clicked(self, item, col: int):
@@ -598,7 +603,7 @@ class PtTab(QTabWidget):
 
         """
         
-        if self.main_window.graphviz and item.parent() is None:
+        if self.main_window.dependency_manager.is_graphviz() and item.parent() is None:
             file = os.path.join(self.pt_folder, PtTab.GRAPH_DIR_NAME, PtTab.GRAPH_FILE_PREFIX + item.get_text().lower().replace(" ", "_") + '.'
                                 + PtTab.GRAPH_FILE_EXT)
             self.exec_graph.load(file)
@@ -733,6 +738,21 @@ class PtTab(QTabWidget):
             self.reset_workflow(force=True)
             self.enable_tab_if_result_dir()
 
+    def open_results_directory(self):
+        import subprocess
+        results_dir = os.path.join(self.pt_folder, "scene")
+        if sys.platform == 'win32':
+            os.startfile(results_dir)
+
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', results_dir])
+
+        else:
+            try:
+                subprocess.Popen(['xdg-open', results_dir])
+            except OSError:
+                pass
+
     def slicer_tab_ui(self):
         """
         Generates the Results tab UI.
@@ -767,12 +787,17 @@ class PtTab(QTabWidget):
             self.open_results_button.setEnabled(False)
         slicer_tab_layout.addWidget(self.open_results_button, 0, 2)
 
+        self.open_results_directory_button = QPushButton(strings.pttab_open_results_directory)
+        self.open_results_directory_button.clicked.connect(self.open_results_directory)
+        self.open_results_directory_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        slicer_tab_layout.addWidget(self.open_results_directory_button, 0, 3)
+
         self.results_model = QFileSystemModel()
         self.result_tree = QTreeView(parent=self)
         self.result_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.result_tree.setModel(self.results_model)
 
-        slicer_tab_layout.addWidget(self.result_tree, 1, 0, 1, 3)
+        slicer_tab_layout.addWidget(self.result_tree, 1, 0, 1, 4)
 
     def slicer_thread(self):
         """
@@ -890,8 +915,23 @@ class PtTab(QTabWidget):
             self.results_model.setRootPath(scene_dir)
             index_root = self.results_model.index(self.results_model.rootPath())
             self.result_tree.setRootIndex(index_root)
+            self.result_directory_watcher.addPath(scene_dir)
+            self.enable_button_if_scene_exists()
         else:
             self.setTabEnabled(PtTab.RESULTTAB, False)
+            self.result_directory_watcher.removePaths([scene_dir])
+
+    def enable_button_if_scene_exists(self):
+        scene_path = os.path.join(self.pt_folder, "scene", "scene." + ConfigManager.SLICER_EXTENSIONS[
+            int(self.global_config.get_slicer_scene_ext())])
+        if os.path.exists(scene_path):
+            self.open_results_button.setEnabled(True)
+            self.open_results_button.setToolTip("")
+            self.open_results_button.setText(strings.pttab_open_results_button)
+        else:
+            self.open_results_button.setEnabled(False)
+            self.open_results_button.setToolTip(strings.pttab_open_results_button_tooltip)
+            self.open_results_button.setText(strings.pttab_open_results_button+" \u24D8")
 
     def check_input_folder_step1(self, input_name: str) -> DicomSearchWorker:
         """
@@ -1096,6 +1136,16 @@ class PtTab(QTabWidget):
             if self.data_input_list[DataInputList.VENOUS2].loaded:
                 self.set_warn(DataInputList.VENOUS2, "Too many venous phases loaded, delete some!", False)
 
+    def exec_button_setEnabled(self, enabled):
+        if enabled:
+            self.exec_button.setEnabled(True)
+            self.exec_button.setToolTip("")
+            self.exec_button.setText(strings.EXECBUTTONTEXT)
+        else:
+            self.exec_button.setEnabled(False)
+            self.exec_button.setToolTip(strings.EXECBUTTONTEXT_disabled_tooltip)
+            self.exec_button.setText(strings.EXECBUTTONTEXT + "  \u24D8")
+
     def reset_workflow(self, force: bool = False):
         """
         Set the workflow var to None.
@@ -1121,11 +1171,14 @@ class PtTab(QTabWidget):
         self.workflow = None
         self.node_list_treeWidget.clear()
         self.exec_graph.load(self.main_window.VOID_SVG_FILE)
-        self.exec_button.setEnabled(False)
-        self.exec_button.setText(strings.EXECBUTTONTEXT)
+        self.exec_button_setEnabled(False)
         self.node_button.setEnabled(True)
         self.wf_type_combo.setEnabled(True)
         self.pt_config_button.setEnabled(True)
+
+    def result_directory_changed(self):
+        self.enable_tab_if_result_dir()
+        self.enable_button_if_scene_exists()
 
     def show_scan_result(self, dicom_src_work: DicomSearchWorker):
         """
