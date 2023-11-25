@@ -31,7 +31,8 @@ setup(name='swane',
           "psutil==5.9.4",
           "swane_supplement>=0.1.2",
           "matplotlib==3.5.2",
-          "nibabel==5.0.0"
+          "nibabel==5.0.0",
+          "packaging",
       ],
       python_requires=">=3.7",
       entry_points={

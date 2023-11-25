@@ -1,14 +1,12 @@
 from PySide6.QtWidgets import (QMainWindow, QMessageBox, QFileDialog, QInputDialog,
                                QLineEdit, QTabWidget, QGridLayout, QLabel, QSizePolicy,
                                QSpacerItem, QWidget, QTabBar, QDialog)
-from swane.utils.check_dependency import (check_dcm2niix, check_fsl, check_freesurfer,
-                                          check_graphviz)
 from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
 from PySide6.QtCore import QCoreApplication, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
-import sys
 
+from swane.utils.DependencyManager import DependencyManager, Dependence
 from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.WfPreferencesWindow import WfPreferencesWindow
@@ -28,6 +26,7 @@ class MainWindow(QMainWindow):
 
         # GUI configuration setting
         self.global_config = global_config
+        self.dependency_manager = DependencyManager()
         
         super(MainWindow, self).__init__()
         
@@ -630,11 +629,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(label_main_dep, x, 0, 1, 2)
         x += 1
 
-        msg, self.dcm2niix = check_dcm2niix()
-        x = self.add_home_entry(layout, msg, self.dcm2niix, x)
+        x = self.add_home_entry(layout, self.dependency_manager.dcm2niix, x)
 
-        msg, self.fsl = check_fsl()
-        x = self.add_home_entry(layout, msg, self.fsl, x)
+        x = self.add_home_entry(layout, self.dependency_manager.fsl, x)
 
         label_main_dep = QLabel(strings.mainwindow_home_label6)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -642,9 +639,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(label_main_dep, x, 0, 1, 2)
         x += 1
 
-        msg, self.freesurfer = check_freesurfer()
-        x = self.add_home_entry(layout, msg, self.freesurfer[0], x)
-        self.global_config.freesurfer = self.freesurfer
+        x = self.add_home_entry(layout, self.dependency_manager.freesurfer, x)
+        self.global_config.freesurfer = self.dependency_manager.is_freesurfer()
 
         check_slicer = False
         current_slicer_path = self.global_config.get_slicer_path()
@@ -674,7 +670,7 @@ class MainWindow(QMainWindow):
             check_slicer_work.signal.slicer.connect(self.slicer_row)
             QThreadPool.globalInstance().start(check_slicer_work)
         else:
-            self.add_home_entry(layout, strings.mainwindow_dep_slicer_found, True, x)
+            self.add_home_entry(layout, Dependence(Dependence.DETECTED, strings.mainwindow_dep_slicer_found), x)
         x += 1
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
@@ -683,8 +679,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(label_main_dep, x, 0, 1, 2)
         x += 1
 
-        msg, self.graphviz = check_graphviz()
-        x = self.add_home_entry(layout, msg, self.graphviz, x)
+        x = self.add_home_entry(layout, self.dependency_manager.graphviz, x)
 
         vertical_spacer = QSpacerItem(
             20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
@@ -692,7 +687,7 @@ class MainWindow(QMainWindow):
 
         self.homeTab.setLayout(layout)
 
-    def add_home_entry(self, gridlayout: QGridLayout, msg: str, icon: bool, x: int) -> int:
+    def add_home_entry(self, gridlayout: QGridLayout, dep: Dependence, x: int) -> int:
         """
         Generates a dependency check label, adding it to an existing layout
 
@@ -700,10 +695,8 @@ class MainWindow(QMainWindow):
         ----------
         gridlayout : QGridLayout
             The layout to populate with the generated label.
-        msg : str
-            The label text.
-        icon : bool
-            The label check icon.
+        dep : Dependence
+            A Dependence object to be parsed.
         x : int
             The starting grid layout row index.
 
@@ -718,13 +711,15 @@ class MainWindow(QMainWindow):
         label_icon.setFixedSize(25, 25)
         label_icon.setScaledContents(True)
         
-        if icon:
+        if dep.state == Dependence.DETECTED:
             label_icon.setPixmap(self.OK_ICON)
+        elif dep.state == Dependence.WARNING:
+            label_icon.setPixmap(self.WARNING_ICON)
         else:
             label_icon.setPixmap(self.ERROR_ICON)
             
         gridlayout.addWidget(label_icon, x, 0)
-        label = QLabel(msg)
+        label = QLabel(dep.label)
         label.setOpenExternalLinks(True)
         label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         gridlayout.addWidget(label, x, 1)
