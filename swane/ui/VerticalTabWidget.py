@@ -27,11 +27,11 @@ class VerticalTabBar(QTabBar):
         self.setDrawBase(False)
         self.setElideMode(QtCore.Qt.ElideNone)
 
-    def initStyleOption(self, option, index):
-        super(VerticalTabBar, self).initStyleOption(option, index)
-        if QApplication.style().objectName() != "fusion":
-            option.shape = QTabBar.RoundedNorth
-            option.position = QStyleOptionTab.Beginning
+    # def initStyleOption(self, option, index):
+    #     super(VerticalTabBar, self).initStyleOption(option, index)
+    #     if QApplication.style().objectName() == "macos":
+    #         option.shape = QTabBar.RoundedNorth
+    #         option.position = QStyleOptionTab.Beginning
 
     def tabSizeHint(self, index):
         sizeHint = super(VerticalTabBar, self).tabSizeHint(index)
@@ -39,15 +39,16 @@ class VerticalTabBar(QTabBar):
         return sizeHint
 
     def paintEvent(self, event):
-        if QApplication.style().objectName() == "fusion":
-            painter = QStylePainter(self)
-            option = QStyleOptionTab()
-            for index in range(self.count()):
-                self.initStyleOption(option, index)
-                painter.drawControl(QStyle.CE_TabBarTabShape, option)
-                painter.drawText(self.tabRect(index),
-                                 QtCore.Qt.AlignCenter | QtCore.Qt.TextDontClip,
-                                 self.tabText(index))
-        else:
-            super(VerticalTabBar, self).paintEvent(event)
+        painter = QStylePainter(self)
+        option = QStyleOptionTab()
+        for index in range(self.count()):
+            self.initStyleOption(option, index)
+            if QApplication.style().objectName() == "macos":
+                option.shape = QTabBar.RoundedNorth
+                option.position = QStyleOptionTab.Beginning
+            else:
+                option.shape = QTabBar.RoundedWest
+            painter.drawControl(QStyle.CE_TabBarTabShape, option)
+            option.shape = QTabBar.RoundedNorth
+            painter.drawControl(QStyle.CE_TabBarTabLabel, option)
 
