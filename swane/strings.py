@@ -117,13 +117,14 @@ pref_window_global_box_mwd = "Main working directory"
 pref_window_global_box_slicer = "3D Slicer path"
 pref_window_global_box_default_wf = "Default workflow"
 pref_window_global_box_pt_limit = "Patient tab limit"
-pref_window_global_box_cpu_limit = "CPU core per Patient limit"
+pref_window_global_box_cpu_limit = "CPU core limit per patient"
 pref_window_global_box_cpu_limit_tip = "To use all CPU cores set value equal to -1"
-pref_window_global_box_bedpostx_cores = "BedpostX (DTI) CPU core management"
-pref_window_global_box_bedpostx_description = [
-    "BedpostX will ignore the patient CPU core limit, using all available resources",
-    "BedpostX process will use double the patient CPU core limit",
-    "BedpostX will respect the patient CPU core limit"
+pref_window_global_box_multi_cores = "CPU management for multi-core steps"
+pref_window_global_box_multi_cores_tooltip = "FreeSurfer segmentations, Fsl BedpostX and Eddy"
+pref_window_global_box_multi_cores_description = [
+    "Multi-core steps ignore the patient CPU core limit, using all available resources",
+    "Multi-core steps use up to twice the patient CPU core limit",
+    "Multi-core steps strictly respect the patient CPU core limit"
 ]
 pref_window_global_box_resource_monitor = "Enable resource monitor"
 pref_window_global_box_default_ext = "Slicer scene extension"
