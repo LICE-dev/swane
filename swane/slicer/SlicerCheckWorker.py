@@ -79,7 +79,7 @@ class SlicerCheckWorker(QRunnable):
                         cmd3, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
                     if 'MODULE FOUND' in output3:
                         state = Dependence.DETECTED
-                        label = strings.check_dep_slicer_found
+                        label = strings.check_dep_slicer_found % slicer_version
                     else:
                         label = strings.check_dep_slicer_error2
 

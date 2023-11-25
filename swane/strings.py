@@ -42,7 +42,6 @@ mainwindow_home_label6 = "\nExternal recommended dependencies:"
 mainwindow_home_label7 = "\nExternal optional dependencies:"
 
 mainwindow_dep_slicer_src = "Searching Slicer installation..."
-mainwindow_dep_slicer_found = "Slicer detected"
 mainwindow_pref_disabled_error = "Prefecences disabled during workflow execution!"
 aboutwindow_python_libs = "Python libraries dependencies: configparser, logging, matplotlib, nipype, pydicom, " \
                           "PySide6, psutil, nibabel, networkx"
@@ -166,7 +165,7 @@ check_dep_slicer_error2 = "Slicer detected but without SlicerFreeSurfer extensio
                           "=extension%20manager'>Exstensions Manager info</a>)"
 check_dep_slicer_wrong_version = "Slicer version outdated (found %s, required %s). Please " \
                               "<a href='https://slicer.readthedocs.io/en/latest/user_guide'>update</a>"
-check_dep_slicer_found = "Slicer detected"
+check_dep_slicer_found = "Slicer detected (%s)"
 
 fsl_python_error = APPNAME + " has been executed using fsl Python instead of system Python.\nThis may depend " \
                     "on a conflict in FSL(>=6.0.6) and FreeSurfer(<=7.3.2) configurations in your %s file that " \
