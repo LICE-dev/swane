@@ -122,7 +122,8 @@ wf_preferences[category]['old_eddy_correct'] = {
 }
 wf_preferences[category]['cuda'] = {
     'input_type': PreferenceEntry.CHECKBOX,
-    'label': "Enable CUDA (NVIDIA GPU computation) when possible",
+    'label': "Enable CUDA for GPUable commands",
+    'tooltip': 'NVIDIA GPU-based computation',
     'default': 'false',
     'dependency': 'is_cuda',
     'dependency_fail_tooltip': "GPU does not support CUDA",

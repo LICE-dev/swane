@@ -1,9 +1,8 @@
 import os
 import glob
-
 from nipype import Node, IdentityInterface, MapNode, JoinNode, Merge
 from nipype.interfaces.fsl import ApplyWarp, ImageMaths
-
+from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
 from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
@@ -14,7 +13,7 @@ from swane.utils.wf_preferences import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DI
 SIDES = ["lh", "rh"]
 
 
-def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkflow:
+def tractography_workflow(name: str, threads: int, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
 
@@ -85,6 +84,14 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
     outputnode = Node(
         IdentityInterface(fields=['fdt_paths_rh', 'fdt_paths_lh', 'waytotal_rh', 'waytotal_lh']),
         name='outputnode')
+
+    try:
+        is_cuda = config.getboolean('cuda')
+    except:
+        is_cuda = False
+
+    if is_cuda:
+        threads = 1
 
     # NODE 1: Random seed genration for cache preservation
     random_seed = Node(RandomSeedGenerator(), name='random_seed')
@@ -163,6 +170,7 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
         probtrackx.inputs.wayorder = is_wayorder
         probtrackx.inputs.rand_fib = 1
         probtrackx.inputs.sample_random_points = 1
+        probtrackx.inputs.use_gpu = is_cuda
         # TODO argomento --ompl che fa??
         probtrackx.inputs.opd = True
         workflow.connect(inputnode, "fsamples", probtrackx, "fsamples")
@@ -198,6 +206,7 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
             probtrackx_inverted.inputs.rand_fib = 1
             probtrackx_inverted.inputs.sample_random_points = 1
             probtrackx_inverted.inputs.opd = True
+            probtrackx_inverted.inputs.use_gpu = is_cuda
             workflow.connect(inputnode, "fsamples", probtrackx_inverted, "fsamples")
             workflow.connect(inputnode, "mask", probtrackx_inverted, "mask")
             workflow.connect(inputnode, "ref_brain", probtrackx_inverted, "seed_ref")
