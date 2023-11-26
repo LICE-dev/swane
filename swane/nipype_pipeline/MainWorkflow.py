@@ -302,7 +302,7 @@ class MainWorkflow(CustomWorkflow):
                     except:
                         continue
                     
-                    tract_workflow = tractography_workflow(tract, 5)
+                    tract_workflow = tractography_workflow(tract, 5, pt_config[DataInputList.DTI])
                     tract_workflow.long_name = TRACTS[tract][0] + " tractography"
                     if tract_workflow is not None:
                         self.connect(dti_preproc, "outputnode.fsamples", tract_workflow, "inputnode.fsamples")

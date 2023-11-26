@@ -1,6 +1,5 @@
 from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT, Eddy)
 from nipype.pipeline.engine import Node
-import os
 
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
@@ -82,6 +81,11 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
                                   ]),
         name='outputnode')
 
+    try:
+        is_cuda = config.getboolean('cuda')
+    except:
+        is_cuda = False
+
     # NODE 1: Conversion dicom -> nifti
     conv = Node(CustomDcm2niix(), name='dti_conv')
     conv.inputs.source_dir = dti_dir
@@ -127,10 +131,6 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
 
         # NODE 4: Eddy current and motion artifact correction
         interface = Eddy()
-        try:
-            is_cuda = config.getboolean('cuda')
-        except:
-            is_cuda = False
         if not is_cuda:
             interface._cmd = "eddy_cpu"
         eddy = Node(interface, name="dti_eddy")
@@ -213,6 +213,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         bedpostx.inputs.sample_every = 25
         bedpostx.inputs.n_jumps = 1250
         bedpostx.inputs.burn_in = 1000
+        bedpostx.inputs.use_gpu = is_cuda
 
         if bedpostx_core == 1:
             bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
