@@ -1,11 +1,10 @@
-from PySide6.QtWidgets import (QMainWindow, QMessageBox, QFileDialog, QInputDialog,
+from PySide6.QtWidgets import (QMainWindow, QMessageBox, QFileDialog, QInputDialog, QStyle,
                                QLineEdit, QTabWidget, QGridLayout, QLabel, QSizePolicy,
-                               QSpacerItem, QWidget, QTabBar, QDialog)
+                               QSpacerItem, QWidget, QTabBar, QDialog, QPushButton, QStyleOptionButton)
 from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
-from PySide6.QtCore import QCoreApplication, QThreadPool
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
-
 from swane.utils.DependencyManager import DependencyManager, Dependence
 from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
@@ -13,7 +12,6 @@ from swane.ui.WfPreferencesWindow import WfPreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.utils.DataInput import DataInputList
-from swane.slicer.SlicerCheckWorker import SlicerCheckWorker
 
 
 class MainWindow(QMainWindow):
@@ -40,6 +38,7 @@ class MainWindow(QMainWindow):
         self.OK_ICON = QPixmap(self.OK_ICON_FILE)
         self.ERROR_ICON = QPixmap(self.ERROR_ICON_FILE)
         self.WARNING_ICON = QPixmap(self.WARNING_ICON_FILE)
+        self.NON_UNICODE_BUTTON_HEIGHT = MainWindow.get_non_unicode_height()
 
         # Patient folder configuration checking
         while self.global_config.get_patients_folder() == "" or not os.path.exists(
@@ -53,6 +52,14 @@ class MainWindow(QMainWindow):
         os.chdir(self.global_config.get_patients_folder())
 
         self.initialize_ui()
+
+    @staticmethod
+    def get_non_unicode_height():
+        button = QPushButton("a")
+        opt = QStyleOptionButton()
+        opt.initFrom(button)
+        text_size = button.fontMetrics().size(Qt.TextShowMnemonic, button.text())
+        return button.style().sizeFromContents(QStyle.CT_PushButton, opt, text_size, button).height()
 
     def open_pt_dir(self, folder_path: str):
         """
@@ -595,7 +602,7 @@ class MainWindow(QMainWindow):
 
         """
         
-        home_grid_layout = QGridLayout()
+        self.home_grid_layout = QGridLayout()
 
         bold_font = QFont()
         bold_font.setBold(True)
@@ -613,92 +620,62 @@ class MainWindow(QMainWindow):
         label_welcome4 = QLabel(strings.mainwindow_home_label4)
         label_welcome4.setFont(bold_font)
 
-        home_grid_layout.addWidget(label_welcome1, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome1, x, 0, 1, 2)
         x += 1
-        home_grid_layout.addWidget(label_welcome2, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome2, x, 0, 1, 2)
         x += 1
-        home_grid_layout.addWidget(label_welcome3, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome3, x, 0, 1, 2)
         x += 1
-        home_grid_layout.addWidget(label_welcome4, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome4, x, 0, 1, 2)
         x += 1
 
         # Main window dependency check
         label_main_dep = QLabel(strings.mainwindow_home_label5)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
         x += 1
 
-        x = self.add_home_entry(home_grid_layout, self.dependency_manager.dcm2niix, x)
+        x = self.add_home_entry(self.dependency_manager.dcm2niix, x)
 
-        x = self.add_home_entry(home_grid_layout, self.dependency_manager.fsl, x)
+        x = self.add_home_entry(self.dependency_manager.fsl, x)
 
         label_main_dep = QLabel(strings.mainwindow_home_label6)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
         x += 1
 
-        x = self.add_home_entry(home_grid_layout, self.dependency_manager.freesurfer, x)
+        x = self.add_home_entry(self.dependency_manager.freesurfer, x)
         self.global_config.freesurfer = self.dependency_manager.is_freesurfer()
 
-        check_slicer = False
-        current_slicer_path = self.global_config.get_slicer_path()
-        if current_slicer_path == '':
-            check_slicer = True
-        elif current_slicer_path[0] == "*":
-            current_slicer_path = current_slicer_path[1:]
-            check_slicer = True
-
-        if not os.path.exists(current_slicer_path):
-            current_slicer_path = ''
-
-        if not DependencyManager.check_slicer_version(self.global_config.get_slicer_version()):
-            check_slicer = True
-
-        if check_slicer:
-            self.slicerlabel_icon = QSvgWidget()
-            self.slicerlabel_icon.setFixedSize(25, 25)
-            self.slicerlabel_icon.load(self.LOADING_MOVIE_FILE)
-            home_grid_layout.addWidget(self.slicerlabel_icon, x, 0)
-            self.slicerlabel = QLabel(strings.mainwindow_dep_slicer_src)
-            self.slicerlabel.setOpenExternalLinks(True)
-            self.slicerlabel.setSizePolicy(
-                QSizePolicy.Minimum, QSizePolicy.Minimum)
-            home_grid_layout.addWidget(self.slicerlabel, x, 1)
-            x += 1
-
-            self.global_config.set_slicer_path('')
-            check_slicer_work = SlicerCheckWorker(current_slicer_path, parent=self)
-            check_slicer_work.signal.slicer.connect(self.slicer_row)
-            QThreadPool.globalInstance().start(check_slicer_work)
+        if DependencyManager.need_slicer_check(self.global_config):
+            self.slicer_x = x
+            x = self.add_home_entry(Dependence(Dependence.CHECKING, strings.mainwindow_dep_slicer_src), x)
+            DependencyManager.check_slicer(self.global_config.get_slicer_path(), self.slicer_row)
         else:
             label = strings.check_dep_slicer_found % self.global_config.get_slicer_version()
-            self.add_home_entry(home_grid_layout, Dependence(Dependence.DETECTED, label), x)
-        x += 1
+            x = self.add_home_entry(Dependence(Dependence.DETECTED, label), x)
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
         x += 1
 
-        x = self.add_home_entry(home_grid_layout, self.dependency_manager.graphviz, x)
+        x = self.add_home_entry(self.dependency_manager.graphviz, x)
 
-        vertical_spacer = QSpacerItem(
-            20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        home_grid_layout.addItem(vertical_spacer, x, 0, 1, 2)
+        vertical_spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.home_grid_layout.addItem(vertical_spacer, x, 0, 1, 2)
 
-        self.homeTab.setLayout(home_grid_layout)
+        self.homeTab.setLayout(self.home_grid_layout)
 
-    def add_home_entry(self, gridlayout: QGridLayout, dep: Dependence, x: int) -> int:
+    def add_home_entry(self, dep: Dependence, x: int) -> int:
         """
         Generates a dependency check label, adding it to an existing layout
 
         Parameters
         ----------
-        gridlayout : QGridLayout
-            The layout to populate with the generated label.
         dep : Dependence
             A Dependence object to be parsed.
         x : int
@@ -712,21 +689,35 @@ class MainWindow(QMainWindow):
         """
         
         label_icon = QLabel()
-        label_icon.setFixedSize(25, 25)
         label_icon.setScaledContents(True)
-        
+
         if dep.state == Dependence.DETECTED:
             label_icon.setPixmap(self.OK_ICON)
         elif dep.state == Dependence.WARNING:
             label_icon.setPixmap(self.WARNING_ICON)
+        elif dep.state == Dependence.CHECKING:
+            label_icon = QSvgWidget()
+            label_icon.load(self.LOADING_MOVIE_FILE)
         else:
             label_icon.setPixmap(self.ERROR_ICON)
-            
-        gridlayout.addWidget(label_icon, x, 0)
+
+        label_icon.setFixedSize(25, 25)
+
+        old_icon_layout = self.home_grid_layout.itemAtPosition(x, 0)
+        if old_icon_layout is not None:
+            old_icon_layout.widget().deleteLater()
+            self.home_grid_layout.removeItem(old_icon_layout)
+        self.home_grid_layout.addWidget(label_icon, x, 0)
+
         label = QLabel(dep.label)
         label.setOpenExternalLinks(True)
         label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-        gridlayout.addWidget(label, x, 1)
+
+        old_label_layout = self.home_grid_layout.itemAtPosition(x, 1)
+        if old_label_layout is not None:
+            old_label_layout.widget().deleteLater()
+            self.home_grid_layout.removeItem(old_label_layout)
+        self.home_grid_layout.addWidget(label, x, 1)
         
         return x + 1
 
@@ -751,16 +742,12 @@ class MainWindow(QMainWindow):
 
         """
         
-        if state == Dependence.MISSING:
-            self.global_config.set_slicer_path('')
-            self.slicerlabel_icon.load(self.ERROR_ICON_FILE)
-        else:
-            self.global_config.set_slicer_path(slicer_path)
-            self.global_config.set_slicer_version(slicer_version)
-            if state == Dependence.DETECTED:
-                self.slicerlabel_icon.load(self.OK_ICON_FILE)
-            else:
-                self.slicerlabel_icon.load(self.WARNING_ICON_FILE)
+        self.add_home_entry(Dependence(state, msg), self.slicer_x)
 
+        self.global_config.set_slicer_path(slicer_path)
+        self.global_config.set_slicer_version(slicer_version)
         self.global_config.save()
-        self.slicerlabel.setText(msg)
+
+        for tab in self.pt_tabs_array:
+            tab.export_results_button_update_state()
+            tab.load_scene_button_update_state()

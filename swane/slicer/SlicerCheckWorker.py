@@ -3,6 +3,7 @@ import subprocess
 from PySide6.QtCore import QRunnable, Signal, QObject
 from swane import strings
 from swane.utils.DependencyManager import Dependence, DependencyManager
+import platform
 
 
 class SlicerCheckSignaler(QObject):
@@ -15,14 +16,16 @@ class SlicerCheckWorker(QRunnable):
 
     """
     
-    def __init__(self, current_slicer_path, parent=None):
-        super(SlicerCheckWorker, self).__init__(parent)
+    def __init__(self, current_slicer_path):
+        super(SlicerCheckWorker, self).__init__()
         self.signal = SlicerCheckSignaler()
         self.current_slicer_path = current_slicer_path
 
     def run(self):
-
         repeat = True
+        cmd = ""
+        state = Dependence.MISSING
+        label = ""
         slicer_version = ""
 
         while repeat:
@@ -31,7 +34,6 @@ class SlicerCheckWorker(QRunnable):
             elif os.path.isfile(self.current_slicer_path):
                 self.current_slicer_path = os.path.dirname(self.current_slicer_path)
 
-            import platform
             if platform.system() == "Darwin":
                 if self.current_slicer_path == '':
                     src_path = "/Applications"
@@ -49,8 +51,6 @@ class SlicerCheckWorker(QRunnable):
             output = subprocess.run(find_cmd, shell=True,
                                     stdout=subprocess.PIPE).stdout.decode('utf-8')
             split = output.split("\n")
-            cmd = ''
-            state = Dependence.MISSING
             for entry in split:
                 if entry == '':
                     continue

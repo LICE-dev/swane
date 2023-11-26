@@ -6,6 +6,7 @@ EXECBUTTONTEXT_disabled_tooltip = "Generate Workflow first"
 EXECBUTTONTEXT_STOP = "Stop " + APPNAME + " Workflow"
 GENBUTTONTEXT = "Generate " + APPNAME + " Workflow"
 PTCONFIGBUTTONTEXT = "Workflow preferences"
+INFOCHAR = "\u24D8"
 
 # Main
 main_multiple_instances_error = "Another instance of " + APPNAME + " is already running!"
@@ -94,8 +95,9 @@ pttab_old_fs_found = "An existing FreeSurfer folder was detected. Do you want to
 pttab_old_fs_resume = "Keep folder"
 pttab_old_fs_reset = "Delete folder"
 pttab_wf_stop = "Do you REALLY want to stop " + APPNAME + " Workflow execution?"
-pttab_results_button = "Create/Update Slicer scene \u24D8"
+pttab_results_button = "Create/Update Slicer scene " + INFOCHAR
 pttab_results_button_tooltip = "In case of a new analysis remember to update the Slicer scene"
+pttab_results_button_disabled_tooltip = "Slicer not detected"
 pttab_open_results_button = "Visualize scene into Slicer"
 pttab_open_results_button_tooltip = "Create a Slicer scene first"
 pttab_open_results_directory = "Open result folder"
