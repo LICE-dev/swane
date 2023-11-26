@@ -44,14 +44,13 @@ class ConfigManager(configparser.ConfigParser):
         },
     }
 
-    def __init__(self, pt_folder=None, freesurfer=None):
+    def __init__(self, pt_folder=None):
         super(ConfigManager, self).__init__()
 
         if pt_folder is not None:
             # NEL CASO STIA GESTENDO LE IMPOSTAZIONI SPECIFICHE DI UN UTENTE COPIO ALCUNI VALORI DALLE IMPOSTAZIONI GLOBALI
             self.global_config = False
             self.config_file = os.path.join(os.path.join(pt_folder, ".config"))
-            self.freesurfer = freesurfer
         else:
             # NEL CASO STIA GESTENDO LE IMPOSTAZIONI GLOBALI DELL'APP
             self.global_config = True
@@ -69,6 +68,8 @@ class ConfigManager(configparser.ConfigParser):
         self.read(self.config_file)
 
     def create_default_config(self):
+        self.load_default_wf_settings(save=False)
+
         if self.global_config:
             self['MAIN'] = {
                 'patientsfolder': '',
@@ -86,12 +87,29 @@ class ConfigManager(configparser.ConfigParser):
             }
 
             self['OPTIONAL_SERIES'] = {}
-
             for data_input in DataInputList().values():
                 if data_input.optional:
                     self['OPTIONAL_SERIES'][data_input.name] = 'false'
 
-        self.load_default_wf_settings(save=False)
+    def load_default_wf_settings(self, save=True):
+        if self.global_config:
+            for data_input in DataInputList().values():
+                if data_input.name in wf_preferences:
+                    self[data_input.name] = {}
+                    for pref in wf_preferences[data_input.name]:
+                        if isinstance(wf_preferences[data_input.name][pref]['default'], list):
+                            self[data_input.name][pref] = "0"
+                        else:
+                            self[data_input.name][pref] = str(wf_preferences[data_input.name][pref]['default'])
+        else:
+            tmp_config = ConfigManager()
+            for data_input in DataInputList().values():
+                if data_input.name in wf_preferences:
+                    self[data_input.name] = tmp_config[data_input.name]
+
+            self.set_wf_option(tmp_config['MAIN']['defaultWfType'])
+        if save:
+            self.save()
 
     def set_wf_option(self, wf):
         if self.global_config:
@@ -100,24 +118,6 @@ class ConfigManager(configparser.ConfigParser):
         for category in self.DEFAULT_WF[wf]:
             for key in self.DEFAULT_WF[wf][category]:
                 self[category][key] = self.DEFAULT_WF[wf][category][key]
-
-        self.update_freesurfer_pref()
-
-    def update_freesurfer_pref(self):
-        if not self.is_freesurfer():
-            self[DataInputList.T13D]['freesurfer'] = 'false'
-        if not self.is_freesurfer_matlab():
-            self[DataInputList.T13D]['hippo_amyg_labels'] = 'false'
-
-    def is_freesurfer(self):
-        if self.freesurfer is None:
-            return False
-        return self.freesurfer[0]
-    
-    def is_freesurfer_matlab(self):
-        if self.freesurfer is None:
-            return False
-        return self.freesurfer[1]
 
     def save(self):
         with open(self.config_file, "w") as openedFile:
@@ -196,30 +196,19 @@ class ConfigManager(configparser.ConfigParser):
                 return False
         return False
 
-    def get_pt_wf_hippo(self):
-        if not self.global_config:
-            try:
-                return self.getboolean(DataInputList.T13D, 'hippo_amyg_labels')
-            except:
-                return False
-        return False
+    def get_wf_hippo_pref(self):
+        try:
+            return self.getboolean(DataInputList.T13D, 'hippo_amyg_labels')
+        except:
+            return False
 
-    def load_default_wf_settings(self, save=True):
-        if self.global_config:
-            for data_input in DataInputList().values():
-                if data_input.name in wf_preferences:
-                    self[data_input.name] = {}
-                    for pref in wf_preferences[data_input.name]:
-                        if isinstance(wf_preferences[data_input.name][pref]['default'], list):
-                            self[data_input.name][pref] = "0"
-                        else:
-                            self[data_input.name][pref] = str(wf_preferences[data_input.name][pref]['default'])
-        else:
-            tmp_config = ConfigManager()
-            for data_input in DataInputList().values():
-                if data_input.name in wf_preferences:
-                    self[data_input.name] = tmp_config[data_input.name]
+    def get_wf_freesurfer_pref(self):
+        try:
+            return self.getboolean(DataInputList.T13D, 'freesurfer')
+        except:
+            return False
 
-            self.set_wf_option(tmp_config['MAIN']['defaultWfType'])
-        if save:
-            self.save()
+    def update_freesurfer_prefs(self, dependency_manager):
+        self[DataInputList.T13D]['freesurfer'] = str(self.get_wf_freesurfer_pref and dependency_manager.is_freesurfer()).lower()
+        self[DataInputList.T13D]['hippo_amyg_labels'] = str(self.get_wf_hippo_pref and dependency_manager.is_freesurfer_matlab()).lower()
+        self.save()

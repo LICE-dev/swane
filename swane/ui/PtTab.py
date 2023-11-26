@@ -18,7 +18,6 @@ from swane import strings
 from swane.slicer.SlicerExportWorker import SlicerExportWorker
 from swane.slicer.SlicerViewerWorker import SlicerViewerWorker
 from swane.nipype_pipeline.MainWorkflow import MainWorkflow
-from swane.ui.workers.WorkflowGeneratorWorker import WorkflowGeneratorWorker
 from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from swane.ui.workers.WorkflowProcess import WorkflowProcess
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
@@ -80,14 +79,14 @@ class PtTab(QTabWidget):
         self.result_directory_watcher = QFileSystemWatcher()
         self.result_directory_watcher.directoryChanged.connect(self.result_directory_changed)
 
-        self.start_gen_wf_thread()
-
         self.data_tab_ui()
         self.exec_tab_ui()
         self.slicer_tab_ui()
 
         self.setTabEnabled(PtTab.EXECTAB, False)
         self.setTabEnabled(PtTab.RESULTTAB, False)
+
+        self.set_wf()
 
     def set_main_window(self, main_window):
         """
@@ -139,6 +138,7 @@ class PtTab(QTabWidget):
 
             if errors:
                 self.node_button.setEnabled(True)
+                self.workflow = None
                 self.exec_button.setText(strings.pttab_wf_executed_with_error)
                 self.exec_button.setToolTip("")
             else:
@@ -201,26 +201,7 @@ class PtTab(QTabWidget):
                 if self.node_list[key1].node_list[key2].node_holder.art == self.main_window.LOADING_MOVIE_FILE:
                     self.node_list[key1].node_list[key2].node_holder.set_art(self.main_window.VOID_SVG_FILE)
 
-    def start_gen_wf_thread(self):
-        """
-        Generates the workflow object in its thread during the patient loading.
-        The first workflow generation can be heavy because SWANe needs to load nypipe modules.
-        If repeated, the operation is faster and therefore executed in the main thread.
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        if not self.main_window.dependency_manager.is_fsl():
-            return
-        
-        workflow_generator_work = WorkflowGeneratorWorker(self.pt_folder)
-        workflow_generator_work.signal.workflow.connect(self.set_wf)
-        QThreadPool.globalInstance().start(workflow_generator_work)
-
-    def set_wf(self, wf: MainWorkflow):
+    def set_wf(self):
         """
         Saves the specified workflow into Main Thread and updates the UI.
 
@@ -235,7 +216,7 @@ class PtTab(QTabWidget):
 
         """
         
-        self.workflow = wf
+        self.workflow = MainWorkflow(name=self.pt_name + strings.WF_DIR_SUFFIX, base_dir=self.pt_folder)
 
         try:
             self.node_button.setEnabled(True)
@@ -509,7 +490,7 @@ class PtTab(QTabWidget):
 
         """
 
-        preference_window = WfPreferencesWindow(self.pt_config, self.data_input_list, self)
+        preference_window = WfPreferencesWindow(self.pt_config, self.main_window.dependency_manager, self.data_input_list, self)
         ret = preference_window.exec()
         if ret != 0:
             self.reset_workflow()
@@ -555,11 +536,11 @@ class PtTab(QTabWidget):
 
         # Main Workflow generation
         if self.workflow is None:
-            self.workflow = MainWorkflow(name=self.pt_name + WorkflowGeneratorWorker.WF_DIR_SUFFIX, base_dir=self.pt_folder)
+            self.workflow = MainWorkflow(name=self.pt_name + strings.WF_DIR_SUFFIX, base_dir=self.pt_folder)
         
         # Node List population
         try:
-            self.workflow.add_input_folders(self.global_config, self.pt_config, self.data_input_list)
+            self.workflow.add_input_folders(self.global_config, self.pt_config, self.main_window.dependency_manager, self.data_input_list)
         except:
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.pttab_wf_gen_error)
@@ -668,7 +649,7 @@ class PtTab(QTabWidget):
         
         # Workflow not started
         if not self.is_workflow_process_alive():
-            workflow_dir = os.path.join(self.pt_folder, self.pt_name + WorkflowGeneratorWorker.WF_DIR_SUFFIX)
+            workflow_dir = os.path.join(self.pt_folder, self.pt_name + strings.WF_DIR_SUFFIX)
             # Checks for a previous workflow execution
             if os.path.exists(workflow_dir):
                 # If yes, asks for workflow resume or reset
@@ -901,8 +882,9 @@ class PtTab(QTabWidget):
         dicom_scanners = {}
         total_files = 0
 
-        # Config import absed on nipype_pipeline
-        self.pt_config = ConfigManager(self.pt_folder, self.main_window.dependency_manager.is_freesurfer())
+        # Config import based on nipype_pipeline
+        self.pt_config = ConfigManager(self.pt_folder)
+        self.pt_config.update_freesurfer_prefs(self.main_window.dependency_manager)
         self.wf_type_combo.setCurrentIndex(self.pt_config.get_pt_wf_type())
         # Set after patient loading to prevent the onchanged fire on previous line command
         self.wf_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)
@@ -1117,7 +1099,7 @@ class PtTab(QTabWidget):
         os.makedirs(src_path, exist_ok=True)
 
         # Reset the workflows related to the deleted DICOM images
-        src_path = os.path.join(self.pt_folder, self.pt_name + WorkflowGeneratorWorker.WF_DIR_SUFFIX,
+        src_path = os.path.join(self.pt_folder, self.pt_name + strings.WF_DIR_SUFFIX,
                                 self.data_input_list[input_name].wf_name)
         shutil.rmtree(src_path, ignore_errors=True)
 

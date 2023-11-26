@@ -13,10 +13,11 @@ class WfPreferencesWindow(QDialog):
 
     """
 
-    def __init__(self, my_config, data_input_list=None, parent=None):
+    def __init__(self, my_config, dependency_manager, data_input_list=None, parent=None):
         super(WfPreferencesWindow, self).__init__(parent)
 
         self.my_config = my_config
+        self.dependency_manager = dependency_manager
         self.restart = False
 
         if self.my_config.global_config:
@@ -61,6 +62,8 @@ class WfPreferencesWindow(QDialog):
                     self.inputs[x].set_value_from_config(my_config)
                 if "tooltip" in wf_preferences[data_input.name][key]:
                     self.inputs[x].set_tooltip(wf_preferences[data_input.name][key]["tooltip"])
+                else:
+                    self.inputs[x].set_tooltip("")
                 if "range" in wf_preferences[data_input.name][key]:
                     self.inputs[x].set_range(wf_preferences[data_input.name][key]["range"][0], wf_preferences[data_input.name][key]["range"][1])
                 self.check_dependency(data_input.name, key, x)
@@ -71,7 +74,6 @@ class WfPreferencesWindow(QDialog):
                         for pref_req in wf_preferences[data_input.name][key]["pref_requirement"][pref_cat]:
                             if pref_req[0] not in my_config[pref_cat]:
                                 continue
-
                             target_x = self.input_keys[pref_cat][pref_req[0]]
                             if self.inputs[target_x].input_type == PreferenceEntry.CHECKBOX:
                                 self.inputs[target_x].input_field.stateChanged.connect(lambda checked, my_cat=data_input.name, my_key=key: self.requirement_changed(checked, my_cat, my_key))
@@ -113,7 +115,7 @@ class WfPreferencesWindow(QDialog):
 
         self.setLayout(layout)
 
-    def check_dependency(self, category: str, key: str, x: int):
+    def check_dependency(self, category: str, key: str, x: int) -> bool:
         """
         Check an external dependence to test if a preference can be enabled.
         Parameters
@@ -125,10 +127,13 @@ class WfPreferencesWindow(QDialog):
         x: int
             The index of the preference to be tested in the input field list.
 
+        Return
+        ----------
+        True if external dependence is satisfied
         """
         if "dependency" in wf_preferences[category][key]:
-            dep_check = getattr(self.my_config, wf_preferences[category][key]["dependency"], None)
-            if callable(dep_check) and not dep_check():
+            dep_check = getattr(self.dependency_manager, wf_preferences[category][key]["dependency"], None)
+            if dep_check is None or not callable(dep_check) or not dep_check():
                 self.inputs[x].disable(wf_preferences[category][key]["dependency_fail_tooltip"])
                 return False
         return True

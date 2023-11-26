@@ -25,6 +25,7 @@ class MainWindow(QMainWindow):
         # GUI configuration setting
         self.global_config = global_config
         self.dependency_manager = DependencyManager()
+        self.global_config.update_freesurfer_prefs(self.dependency_manager)
         
         super(MainWindow, self).__init__()
         
@@ -384,7 +385,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
-        wf_preference_window = WfPreferencesWindow(self.global_config, data_input_list=DataInputList())
+        wf_preference_window = WfPreferencesWindow(self.global_config, self.dependency_manager, data_input_list=DataInputList())
         ret = wf_preference_window.exec()
 
         if ret == -1:

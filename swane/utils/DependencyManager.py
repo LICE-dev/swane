@@ -5,6 +5,7 @@ from swane import strings
 from packaging import version
 from swane.utils.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
+import subprocess
 
 
 class Dependence:
@@ -98,15 +99,23 @@ class DependencyManager:
         """
         return self.graphviz.state == Dependence.DETECTED
 
-    def is_freesurfer(self) -> [bool, bool]:
+    def is_freesurfer(self) -> bool:
         """
         Returns
         -------
-        The first bool is True if freesurfer is detected and configured (even if outdated).
-        The second bool is True if freesurfer matlab runtime is detected.
+       True if freesurfer is detected and configured (even if outdated).
 
         """
-        return [self.freesurfer.state != Dependence.MISSING, self.freesurfer.state2 != Dependence.MISSING]
+        return self.freesurfer.state != Dependence.MISSING
+
+    def is_freesurfer_matlab(self) -> bool:
+        """
+        Returns
+        -------
+        True if freesurfer matlab runtime is detected.
+
+        """
+        return self.freesurfer.state2 != Dependence.MISSING
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -269,4 +278,10 @@ class DependencyManager:
             return Dependence(Dependence.WARNING, strings.check_dep_fs_error3 % freesurfer_version, Dependence.MISSING)
         return Dependence(Dependence.DETECTED, strings.check_dep_fs_found % freesurfer_version, Dependence.DETECTED)
 
-
+    @staticmethod
+    def is_cuda():
+        try:
+            output = subprocess.run("nvidia-smi", shell=True,stdout=subprocess.PIPE).stdout.decode('utf-8')
+            return "CUDA Version" in output
+        except:
+            return False

@@ -7,6 +7,7 @@ EXECBUTTONTEXT_STOP = "Stop " + APPNAME + " Workflow"
 GENBUTTONTEXT = "Generate " + APPNAME + " Workflow"
 PTCONFIGBUTTONTEXT = "Workflow preferences"
 INFOCHAR = "\u24D8"
+WF_DIR_SUFFIX = "_nipype"
 
 # Main
 main_multiple_instances_error = "Another instance of " + APPNAME + " is already running!"
@@ -197,6 +198,7 @@ node_names["InvWarp"] = "inverse transformation"
 node_names["DataSink"] = "saving"
 node_names["ApplyMask"] = "masking"
 node_names["EddyCorrect"] = "eddy current correction"
+node_names["Eddy"] = node_names["EddyCorrect"]
 node_names["CustomBEDPOSTX5"] = "diffusion bayesian estimation"
 node_names["RandomSeedGenerator"] = "random seeds generation"
 node_names["CustomProbTrackX2"] = "probabilistic tractography"
