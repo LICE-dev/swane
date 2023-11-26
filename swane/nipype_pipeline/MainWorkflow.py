@@ -6,9 +6,7 @@ import swane_supplement
 
 from swane.utils.ConfigManager import ConfigManager
 from swane.utils.DataInput import DataInputList
-
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
 from swane.nipype_pipeline.workflows.task_fMRI_workflow import task_fMRI_workflow
 from swane.nipype_pipeline.workflows.nonlinear_reg_workflow import nonlinear_reg_workflow
@@ -20,6 +18,7 @@ from swane.nipype_pipeline.workflows.venous_workflow import venous_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow, SIDES
 from swane.utils.wf_preferences import TRACTS
+from swane.utils.DependencyManager import DependencyManager
 
 DEBUG = False
 
@@ -28,7 +27,7 @@ DEBUG = False
 class MainWorkflow(CustomWorkflow):
     SCENE_DIR = 'scene'
 
-    def add_input_folders(self, global_config: ConfigManager, pt_config: ConfigManager, data_input_list: DataInputList):
+    def add_input_folders(self, global_config: ConfigManager, pt_config: ConfigManager, dependency_manager: DependencyManager, data_input_list: DataInputList):
         """
         Create the Workflows and their sub-workflows based on the list of available data inputs 
 
@@ -51,14 +50,9 @@ class MainWorkflow(CustomWorkflow):
             return
 
         # Check for FreeSurfer requirement and request
-        try:
-            is_freesurfer = pt_config.is_freesurfer() and pt_config.get_pt_wf_freesurfer()
-        except:
-            is_freesurfer = False
-        try:
-            is_hippo_amyg_labels = pt_config.is_freesurfer_matlab() and pt_config.get_pt_wf_hippo()
-        except:
-            is_hippo_amyg_labels = False
+        is_freesurfer = dependency_manager.is_freesurfer() and pt_config.get_pt_wf_freesurfer()
+        is_hippo_amyg_labels = dependency_manager.is_freesurfer_matlab() and pt_config.get_wf_hippo_pref()
+
         # Check for FLAT1 requirement and request
         try:
             is_flat1 = pt_config.getboolean(DataInputList.T13D, 'flat1') and data_input_list[DataInputList.FLAIR3D].loaded
