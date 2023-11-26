@@ -25,7 +25,7 @@ class MainWindow(QMainWindow):
         # GUI configuration setting
         self.global_config = global_config
         self.dependency_manager = DependencyManager()
-        self.global_config.update_freesurfer_prefs(self.dependency_manager)
+        self.global_config.check_dependencies(self.dependency_manager)
         
         super(MainWindow, self).__init__()
         

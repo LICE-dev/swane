@@ -884,7 +884,7 @@ class PtTab(QTabWidget):
 
         # Config import based on nipype_pipeline
         self.pt_config = ConfigManager(self.pt_folder)
-        self.pt_config.update_freesurfer_prefs(self.main_window.dependency_manager)
+        self.pt_config.check_dependencies(self.main_window.dependency_manager)
         self.wf_type_combo.setCurrentIndex(self.pt_config.get_pt_wf_type())
         # Set after patient loading to prevent the onchanged fire on previous line command
         self.wf_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)

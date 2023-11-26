@@ -122,8 +122,10 @@ wf_preferences[category]['old_eddy_correct'] = {
 }
 wf_preferences[category]['cuda'] = {
     'input_type': PreferenceEntry.CHECKBOX,
-    'label': "Enable GPU computation when possible",
+    'label': "Enable CUDA (NVIDIA GPU computation) when possible",
     'default': 'false',
+    'dependency': 'is_cuda',
+    'dependency_fail_tooltip': "GPU does not support CUDA",
 }
 wf_preferences[category]['tractography'] = {
     'input_type': PreferenceEntry.CHECKBOX,

@@ -215,7 +215,7 @@ class DependencyManager:
         """
         Returns
         -------
-        A Dependence object with dcm2niix informations.
+        A Dependence object with dcm2niix information.
         """
         dcm2niix_version = dcm2nii.Info.version()
         if dcm2niix_version is None:
@@ -227,7 +227,7 @@ class DependencyManager:
         """
         Returns
         -------
-        A Dependence object with fsl informations.
+        A Dependence object with fsl information.
         """
         fsl_version = fsl.base.Info.version()
         if fsl_version is None:
@@ -245,7 +245,7 @@ class DependencyManager:
         """
         Returns
         -------
-        A Dependence object with graphviz informations.
+        A Dependence object with graphviz information.
         """
         if which("dot") is None:
             return Dependence(Dependence.WARNING, strings.check_dep_graph_error)
@@ -256,7 +256,7 @@ class DependencyManager:
         """
         Returns
         -------
-        A Dependence object with freesurfer and freesurfer matlab runtime informations.
+        A Dependence object with freesurfer and freesurfer matlab runtime information.
         """
         if freesurfer.base.Info.version() is None:
             return Dependence(Dependence.MISSING, strings.check_dep_fs_error1, Dependence.MISSING)
@@ -281,7 +281,7 @@ class DependencyManager:
     @staticmethod
     def is_cuda():
         try:
-            output = subprocess.run("nvidia-smi", shell=True,stdout=subprocess.PIPE).stdout.decode('utf-8')
+            output = subprocess.run("nvidia-smi", shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
             return "CUDA Version" in output
         except:
             return False
