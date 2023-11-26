@@ -108,40 +108,51 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     bet.inputs.mask = True
     workflow.connect(nodif, "roi_file", bet, "in_file")
 
-    # NODE 4a: Generate Eddy files
-    eddy_files = Node(GenEddyFiles(), name="dty_eddy_files")
-    workflow.connect(conv, "bvals", eddy_files, "bval")
-
-    # NODE 4: Eddy current and motion artifact correction
-    interface = Eddy()
     try:
-        is_cuda = config.getboolean('cuda')
+        old_eddy_correct = config.getboolean("old_eddy_correct")
     except:
-        is_cuda = False
-    if not is_cuda:
-        interface._cmd = "eddy_cpu"
-    eddy = Node(interface, name="dti_eddy")
-    if bedpostx_core == 1:
-        eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
-    elif bedpostx_core == 2:
-        eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
-        eddy.inputs.num_threads = max_cpu
-    workflow.connect(reorient, "out_file", eddy, "in_file")
-    workflow.connect(conv, "bvals", eddy, "in_bval")
-    workflow.connect(conv, "bvecs", eddy, "in_bvec")
-    workflow.connect(eddy_files, "acqp", eddy, "in_acqp")
-    workflow.connect(eddy_files, "index", eddy, "in_index")
-    workflow.connect(bet, "mask_file", eddy, "in_mask")
+        old_eddy_correct = False
 
-    # eddy = Node(EddyCorrect(), name='dti_eddy')
-    # eddy.inputs.ref_num = 0
-    # eddy.inputs.out_file = "data.nii.gz"
-    # workflow.connect(reorient, "out_file", eddy, "in_file")
+    if old_eddy_correct:
+        eddy = Node(EddyCorrect(), name='dti_eddy')
+        eddy.inputs.ref_num = 0
+        eddy.inputs.out_file = "data.nii.gz"
+        workflow.connect(reorient, "out_file", eddy, "in_file")
+        eddy_output_name = "eddy_corrected"
+    else:
+
+        # NODE 4a: Generate Eddy files
+        eddy_files = Node(GenEddyFiles(), name="dty_eddy_files")
+        workflow.connect(conv, "bvals", eddy_files, "bval")
+
+        # NODE 4: Eddy current and motion artifact correction
+        interface = Eddy()
+        try:
+            is_cuda = config.getboolean('cuda')
+        except:
+            is_cuda = False
+        if not is_cuda:
+            interface._cmd = "eddy_cpu"
+        eddy = Node(interface, name="dti_eddy")
+        if bedpostx_core == 1:
+            eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
+        elif bedpostx_core == 2:
+            eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
+            eddy.inputs.num_threads = max_cpu
+        workflow.connect(reorient, "out_file", eddy, "in_file")
+        workflow.connect(conv, "bvals", eddy, "in_bval")
+        workflow.connect(conv, "bvecs", eddy, "in_bvec")
+        workflow.connect(eddy_files, "acqp", eddy, "in_acqp")
+        workflow.connect(eddy_files, "index", eddy, "in_index")
+        workflow.connect(bet, "mask_file", eddy, "in_mask")
+        eddy_output_name = "out_corrected"
+
+
 
     # NODE 5: DTI metrics calculation
     dtifit = Node(DTIFit(), name='dti_dtifit')
     dtifit.long_name = "DTI metrics calculation"
-    workflow.connect(eddy, "out_corrected", dtifit, "dwi")
+    workflow.connect(eddy, eddy_output_name, dtifit, "dwi")
     workflow.connect(bet, "mask_file", dtifit, "mask")
     workflow.connect(conv, "bvecs", dtifit, "bvecs")
     workflow.connect(conv, "bvals", dtifit, "bvals")
@@ -209,7 +220,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
             bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
             bedpostx.inputs.num_threads = max_cpu
 
-        workflow.connect(eddy, "out_corrected", bedpostx, "dwi")
+        workflow.connect(eddy, eddy_output_name, bedpostx, "dwi")
         workflow.connect(bet, "mask_file", bedpostx, "mask")
         workflow.connect(conv, "bvecs", bedpostx, "bvecs")
         workflow.connect(conv, "bvals", bedpostx, "bvals")
