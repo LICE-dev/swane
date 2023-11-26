@@ -163,9 +163,9 @@ class PreferenceEntry:
         self.input_field.setToolTip(tooltip)
         self.label.setToolTip(tooltip)
         if tooltip == "":
-            self.label.setText(self.label.text().replace(" \u24D8", ""))
-        elif not self.label.text().endswith("\u24D8"):
-            self.label.setText(self.label.text()+" \u24D8")
+            self.label.setText(self.label.text().replace(" "+strings.INFOCHAR, ""))
+        elif not self.label.text().endswith(strings.INFOCHAR):
+            self.label.setText(self.label.text()+" "+strings.INFOCHAR)
 
     def enable(self):
         self.input_field.setEnabled(True)

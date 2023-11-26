@@ -9,10 +9,10 @@ from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeaderView,
-                               QPushButton, QSizePolicy, QHBoxLayout,
+                               QPushButton, QSizePolicy, QHBoxLayout, QSpacerItem,
                                QGroupBox, QVBoxLayout, QMessageBox, QListWidget,
                                QFileDialog, QTreeWidget, QErrorMessage, QFileSystemModel,
-                               QTreeView, QComboBox, QSpacerItem)
+                               QTreeView, QComboBox)
 
 from swane import strings
 from swane.slicer.SlicerExportWorker import SlicerExportWorker
@@ -30,6 +30,7 @@ from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from swane.utils.DataInput import DataInput, DataInputList
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
+from swane.utils.DependencyManager import DependencyManager
 
 
 class PtTab(QTabWidget):
@@ -46,6 +47,7 @@ class PtTab(QTabWidget):
     GRAPH_FILE_EXT = "svg"
     GRAPH_TYPE = "colored"
     NODE_MSG_DIVIDER = '.'
+
 
     def __init__(self, global_config, pt_folder, main_window, parent=None):
         super(PtTab, self).__init__(parent)
@@ -286,7 +288,7 @@ class PtTab(QTabWidget):
             self.input_report[data_input.name][0].setFixedSize(25, 25)
             if data_input.tooltip != "":
                 # Add tooltips and append ⓘ character to label
-                self.input_report[data_input.name][1].setText(data_input.label+" \u24D8")
+                self.input_report[data_input.name][1].setText(data_input.label+" "+strings.INFOCHAR)
                 self.input_report[data_input.name][1].setToolTip(data_input.tooltip)
             self.input_report[data_input.name][1].setFont(bold_font)
             self.input_report[data_input.name][1].setAlignment(Qt.AlignLeft | Qt.AlignBottom)
@@ -457,6 +459,8 @@ class PtTab(QTabWidget):
         layout.addWidget(self.wf_type_combo, 0, 0)
 
         self.node_button = QPushButton(strings.GENBUTTONTEXT)
+        self.node_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.node_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         self.node_button.clicked.connect(self.gen_wf)
         if self.workflow is None:
             self.node_button.setEnabled(False)
@@ -478,10 +482,14 @@ class PtTab(QTabWidget):
 
         # Second Column: Graphviz Graph Layout
         self.pt_config_button = QPushButton(strings.PTCONFIGBUTTONTEXT)
+        self.pt_config_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.pt_config_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         self.pt_config_button.clicked.connect(self.edit_pt_config)
         layout.addWidget(self.pt_config_button, 0, 1)
 
         self.exec_button = QPushButton(strings.EXECBUTTONTEXT)
+        self.exec_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.exec_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         self.exec_button.clicked.connect(self.start_workflow_thread)
         self.exec_button_setEnabled(False)
 
@@ -753,6 +761,36 @@ class PtTab(QTabWidget):
             except OSError:
                 pass
 
+    def export_results_button_update_state(self):
+        try:
+            if not DependencyManager.is_slicer(self.global_config):
+                self.export_results_button.setEnabled(False)
+                self.export_results_button.setToolTip(strings.pttab_results_button_disabled_tooltip)
+            else:
+                self.export_results_button.setEnabled(True)
+                self.export_results_button.setToolTip(strings.pttab_results_button_tooltip)
+        except:
+            pass
+
+    def load_scene_button_update_state(self):
+        try:
+            scene_path = os.path.join(self.pt_folder, "scene", "scene." + ConfigManager.SLICER_EXTENSIONS[
+                int(self.global_config.get_slicer_scene_ext())])
+            if not DependencyManager.is_slicer(self.global_config):
+                self.load_scene_button.setEnabled(False)
+                self.load_scene_button.setText(strings.pttab_open_results_button + " " + strings.INFOCHAR)
+                self.load_scene_button.setToolTip(strings.pttab_results_button_disabled_tooltip)
+            elif os.path.exists(scene_path):
+                self.load_scene_button.setEnabled(True)
+                self.load_scene_button.setToolTip("")
+                self.load_scene_button.setText(strings.pttab_open_results_button)
+            else:
+                self.load_scene_button.setEnabled(False)
+                self.load_scene_button.setToolTip(strings.pttab_open_results_button_tooltip)
+                self.load_scene_button.setText(strings.pttab_open_results_button + " " + strings.INFOCHAR)
+        except:
+            pass
+
     def slicer_tab_ui(self):
         """
         Generates the Results tab UI.
@@ -768,28 +806,25 @@ class PtTab(QTabWidget):
 
         self.export_results_button = QPushButton(strings.pttab_results_button)
         self.export_results_button.clicked.connect(self.slicer_thread)
-        self.export_results_button.setToolTip(strings.pttab_results_button_tooltip)
+        self.export_results_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.export_results_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        
-        if self.global_config.get_slicer_path() == '' or not os.path.exists(self.global_config.get_slicer_path()):
-            self.export_results_button.setEnabled(False)
+        self.export_results_button_update_state()
         slicer_tab_layout.addWidget(self.export_results_button, 0, 0)
 
-        self.open_results_button = QPushButton(strings.pttab_open_results_button)
-        self.open_results_button.clicked.connect(self.slicer_open_result)
-        self.open_results_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-
-        horizontal_spacer = QSpacerItem(
-            20, 40, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        horizontal_spacer = QSpacerItem(20, 40, QSizePolicy.Expanding, QSizePolicy.Minimum)
         slicer_tab_layout.addItem(horizontal_spacer, 0, 1, 1, 1)
 
-        if self.global_config.get_slicer_path() == '' or not os.path.exists(self.global_config.get_slicer_path()):
-            self.open_results_button.setEnabled(False)
-        slicer_tab_layout.addWidget(self.open_results_button, 0, 2)
+        self.load_scene_button = QPushButton(strings.pttab_open_results_button)
+        self.load_scene_button.clicked.connect(self.slicer_open_result)
+        self.load_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.load_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.load_scene_button_update_state()
+        slicer_tab_layout.addWidget(self.load_scene_button, 0, 2)
 
         self.open_results_directory_button = QPushButton(strings.pttab_open_results_directory)
         self.open_results_directory_button.clicked.connect(self.open_results_directory)
         self.open_results_directory_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.open_results_directory_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         slicer_tab_layout.addWidget(self.open_results_directory_button, 0, 3)
 
         self.results_model = QFileSystemModel()
@@ -916,22 +951,10 @@ class PtTab(QTabWidget):
             index_root = self.results_model.index(self.results_model.rootPath())
             self.result_tree.setRootIndex(index_root)
             self.result_directory_watcher.addPath(scene_dir)
-            self.enable_button_if_scene_exists()
+            self.load_scene_button_update_state()
         else:
             self.setTabEnabled(PtTab.RESULTTAB, False)
             self.result_directory_watcher.removePaths([scene_dir])
-
-    def enable_button_if_scene_exists(self):
-        scene_path = os.path.join(self.pt_folder, "scene", "scene." + ConfigManager.SLICER_EXTENSIONS[
-            int(self.global_config.get_slicer_scene_ext())])
-        if os.path.exists(scene_path):
-            self.open_results_button.setEnabled(True)
-            self.open_results_button.setToolTip("")
-            self.open_results_button.setText(strings.pttab_open_results_button)
-        else:
-            self.open_results_button.setEnabled(False)
-            self.open_results_button.setToolTip(strings.pttab_open_results_button_tooltip)
-            self.open_results_button.setText(strings.pttab_open_results_button+" \u24D8")
 
     def check_input_folder_step1(self, input_name: str) -> DicomSearchWorker:
         """
@@ -1144,7 +1167,7 @@ class PtTab(QTabWidget):
         else:
             self.exec_button.setEnabled(False)
             self.exec_button.setToolTip(strings.EXECBUTTONTEXT_disabled_tooltip)
-            self.exec_button.setText(strings.EXECBUTTONTEXT + "  \u24D8")
+            self.exec_button.setText(strings.EXECBUTTONTEXT + "  " + strings.INFOCHAR)
 
     def reset_workflow(self, force: bool = False):
         """
@@ -1178,7 +1201,7 @@ class PtTab(QTabWidget):
 
     def result_directory_changed(self):
         self.enable_tab_if_result_dir()
-        self.enable_button_if_scene_exists()
+        self.load_scene_button_update_state()
 
     def show_scan_result(self, dicom_src_work: DicomSearchWorker):
         """
@@ -1248,7 +1271,6 @@ class PtTab(QTabWidget):
         self.final_series_list = None
         if len(self.scan_directory_watcher.directories()) > 0:
             self.scan_directory_watcher.removePaths(self.scan_directory_watcher.directories())
-
 
     def set_warn(self, input_name: str, msg: str, clear_text: bool = True):
         """

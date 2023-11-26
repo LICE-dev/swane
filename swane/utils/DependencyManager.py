@@ -3,6 +3,8 @@ from shutil import which
 from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane import strings
 from packaging import version
+from swane.utils.ConfigManager import ConfigManager
+from PySide6.QtCore import QThreadPool
 
 
 class Dependence:
@@ -12,7 +14,8 @@ class Dependence:
     DETECTED = 1
     WARNING = 0
     MISSING = -1
-    STATES = [DETECTED, WARNING, MISSING]
+    CHECKING = -2
+    STATES = [DETECTED, WARNING, MISSING, CHECKING]
 
     def __init__(self, state: int, label: str, state2: int = MISSING):
         """
@@ -106,6 +109,55 @@ class DependencyManager:
         return [self.freesurfer.state != Dependence.MISSING, self.freesurfer.state2 != Dependence.MISSING]
 
     @staticmethod
+    def is_slicer(config: ConfigManager) -> bool:
+        """
+        Parameters
+        ----------
+        config: ConfigManager
+            The global application preferences
+
+        Returns
+        -------
+        True if the application preference has a valide Slicer path
+        """
+
+        if config is None or not config.global_config:
+            return False
+
+        current_slicer_path = config.get_slicer_path()
+        if current_slicer_path == '' or not os.path.exists(current_slicer_path):
+            return False
+
+        return True
+
+
+    @staticmethod
+    def need_slicer_check(config: ConfigManager) -> bool:
+        """
+        Parameters
+        ----------
+        config: ConfigManager
+            The global application preferences
+
+        Returns
+        -------
+        check_slicer: bool
+            True if the application needs to check for Slicer dependency
+        """
+
+        if config is None or not config.global_config:
+            return False
+
+        check_slicer = False
+        if not DependencyManager.is_slicer(config):
+            check_slicer = True
+
+        if not DependencyManager.check_slicer_version(config.get_slicer_version()):
+            check_slicer = True
+
+        return check_slicer
+
+    @staticmethod
     def check_slicer_version(slicer_version: str) -> bool:
         """
 
@@ -121,7 +173,33 @@ class DependencyManager:
         """
         if slicer_version is None or slicer_version == "":
             return False
-        return version.parse(slicer_version) >= version.parse(DependencyManager.MIN_SLICER_VERSION)
+        try:
+            return version.parse(slicer_version) >= version.parse(DependencyManager.MIN_SLICER_VERSION)
+        except:
+            return False
+
+    @staticmethod
+    def check_slicer(current_slicer_path: str, callback_func: callable):
+        """
+        Start a thread to scan the computer for Slicer
+        Parameters
+        ----------
+        current_slicer_path: ConfigManager
+            Current Slicer executable path
+        callback_func: callable
+            The UI function to call after the check thread
+        """
+        from swane.slicer.SlicerCheckWorker import SlicerCheckWorker
+
+        # if user set manually a Slicer path it is saved with a * as first character to force check that folder
+        if current_slicer_path != '' and current_slicer_path[0] == "*":
+            current_slicer_path = current_slicer_path[1:]
+        if not os.path.exists(current_slicer_path):
+            current_slicer_path = ''
+
+        check_slicer_work = SlicerCheckWorker(current_slicer_path)
+        check_slicer_work.signal.slicer.connect(callback_func)
+        QThreadPool.globalInstance().start(check_slicer_work)
 
     @staticmethod
     def check_dcm2niix() -> Dependence:
@@ -145,7 +223,11 @@ class DependencyManager:
         fsl_version = fsl.base.Info.version()
         if fsl_version is None:
             return Dependence(Dependence.MISSING, strings.check_dep_fsl_error)
-        if version.parse(fsl_version) < version.parse(DependencyManager.MIN_FSL_VERSION):
+        try:
+            found_version = version.parse(fsl_version)
+        except:
+            found_version = version.parse("0")
+        if found_version < version.parse(DependencyManager.MIN_FSL_VERSION):
             return Dependence(Dependence.WARNING, strings.check_dep_fsl_wrong_version % (fsl_version, DependencyManager.MIN_FSL_VERSION))
         return Dependence(Dependence.DETECTED, strings.check_dep_fsl_found % fsl_version)
 
@@ -175,7 +257,11 @@ class DependencyManager:
         file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
         if not os.path.exists(file):
             return Dependence(Dependence.MISSING, strings.check_dep_fs_error4 % freesurfer_version, Dependence.MISSING)
-        if version.parse(freesurfer_version) < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
+        try:
+            found_version = version.parse(freesurfer_version)
+        except:
+            found_version = version.parse("0")
+        if found_version < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
             return Dependence(Dependence.WARNING, strings.check_dep_fs_wrong_version % (freesurfer_version, DependencyManager.MIN_FSL_VERSION))
         mrc = os.system("checkMCR.sh")
         if mrc != 0:
