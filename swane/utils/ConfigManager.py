@@ -208,7 +208,15 @@ class ConfigManager(configparser.ConfigParser):
         except:
             return False
 
-    def update_freesurfer_prefs(self, dependency_manager):
-        self[DataInputList.T13D]['freesurfer'] = str(self.get_wf_freesurfer_pref and dependency_manager.is_freesurfer()).lower()
-        self[DataInputList.T13D]['hippo_amyg_labels'] = str(self.get_wf_hippo_pref and dependency_manager.is_freesurfer_matlab()).lower()
-        self.save()
+    def check_dependencies(self, dependency_manager):
+        changed = False
+        for category in wf_preferences:
+            for key in wf_preferences[category]:
+                if "dependency" in wf_preferences[category][key]:
+                    dep_check = getattr(dependency_manager, wf_preferences[category][key]["dependency"], None)
+                    if dep_check is None or not callable(dep_check) or not dep_check():
+                        self[category][key] = "false"
+                        changed = True
+        if changed:
+            self.save()
+
