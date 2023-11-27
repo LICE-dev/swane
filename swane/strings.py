@@ -114,31 +114,11 @@ wf_pref_window_title_user = ' - Workflow Settings'
 # Preference Window
 pref_window_title_global = APPNAME + ' - Preferences'
 pref_window_title_user = ' - Workflow preferences'
-pref_window_global_box_title = "Global settings"
-pref_window_performance_box_title = "Resource management"
-pref_window_global_box_mwd = "Main working directory"
-pref_window_global_box_slicer = "3D Slicer path"
-pref_window_global_box_default_wf = "Default workflow"
-pref_window_global_box_pt_limit = "Patient tab limit"
-pref_window_global_box_cpu_limit = "CPU core limit per patient"
-pref_window_global_box_cpu_limit_tip = "To use all CPU cores set value equal to -1"
-pref_window_global_box_multi_cores = "CPU management for multi-core steps"
-pref_window_global_box_multi_cores_tooltip = "FreeSurfer segmentations, Fsl BedpostX and Eddy"
-pref_window_global_box_multi_cores_description = [
-    "Multi-core steps ignore the patient CPU core limit, using all available resources",
-    "Multi-core steps use up to twice the patient CPU core limit",
-    "Multi-core steps strictly respect the patient CPU core limit"
-]
-pref_window_global_box_resource_monitor = "Enable resource monitor"
-pref_window_global_box_default_ext = "Slicer scene extension"
-pref_window_global_box_optional_title = "Optional series settings"
-pref_window_wf_box_title = "Workflow settings"
 pref_window_save_button = "Save preferences"
 pref_window_save_restart_button = "Save preferences (" + APPNAME + " will close and restart)"
 pref_window_discard_button = "Discard changes"
 pref_window_dir_error = "Directory does not exists!"
 pref_window_file_error = "File does not exists!"
-pref_window_select_slicer = "Select 3D Slicer executable"
 pref_window_reset_button = "Reset settings to default"
 pref_window_reset_global = "Do you really want to reset global workflow settings to application default?"
 pref_window_reset_pt = "Do you really want to reset this patient workflow settings to your default settings?"

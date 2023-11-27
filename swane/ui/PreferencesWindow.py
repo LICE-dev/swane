@@ -1,184 +1,263 @@
 import os
-
-from PySide6.QtWidgets import (QDialog, QGridLayout, QVBoxLayout, QGroupBox, QPushButton, QHBoxLayout, QLabel)
-
+from PySide6.QtWidgets import (QDialog,  QGridLayout, QVBoxLayout, QWidget, QPushButton, QSpacerItem,
+                               QSizePolicy, QMessageBox, QLabel)
 from swane import strings, EXIT_CODE_REBOOT
-from swane.utils.ConfigManager import ConfigManager
 from swane.utils.PreferenceEntry import PreferenceEntry
-from swane.utils.DataInput import DataInputList
-from swane.utils.DependencyManager import DependencyManager
+from swane.utils.preference_list import WF_PREFERENCES, GLOBAL_PREFERENCES
+from PySide6_VerticalQTabWidget import VerticalQTabWidget
 
 
 class PreferencesWindow(QDialog):
     """
-    Custom implementation of PySide QDialog to show SWANe global preferences.
+    Custom implementation of PySide QDialog to show SWANe workflow preferences.
 
     """
 
-    def __init__(self, my_config, parent=None):
+    def __init__(self, my_config, dependency_manager, categories=None, parent=None):
         super(PreferencesWindow, self).__init__(parent)
 
         self.my_config = my_config
+        self.dependency_manager = dependency_manager
         self.restart = False
 
         if self.my_config.global_config:
-            title = strings.pref_window_title_global
+            try:
+                first_cat = next(iter(categories))
+            except:
+                first_cat = None
+            if hasattr(first_cat, "name"):
+                title = strings.wf_pref_window_title_global
+                self.preferences = WF_PREFERENCES
+            else:
+                title = strings.pref_window_title_global
+                self.preferences = GLOBAL_PREFERENCES
         else:
+            self.preferences = WF_PREFERENCES
             title = os.path.basename(os.path.dirname(
-                self.my_config.config_file)) + strings.pref_window_title_user
+                self.my_config.config_file)) + strings.wf_pref_window_title_user
 
         self.setWindowTitle(title)
 
         self.inputs = {}
-        self.new_inputs = {}
+        self.input_keys = {}
 
-        main_layout = QHBoxLayout()
-
-        pane = QGroupBox()
-        pane.setObjectName("pane")
         layout = QVBoxLayout()
-        pane.setLayout(layout)
-        pane.setFlat(True)
-        pane.setStyleSheet("QGroupBox#pane {border:none;}")
+
+        tab_widget = VerticalQTabWidget()
 
         x = 0
-        if self.my_config.global_config:
 
-            group_global = QGroupBox(strings.pref_window_global_box_title)
-            grid_global = QGridLayout()
-            group_global.setLayout(grid_global)
-            x = 0
-
-            category = "MAIN"
-
-            self.new_inputs[x] = PreferenceEntry(category, 'patientsfolder', my_config, PreferenceEntry.DIRECTORY,
-                                                 parent=self)
-            self.new_inputs[x].set_label_text(strings.pref_window_global_box_mwd)
-            self.new_inputs[x].set_box_text(strings.mainwindow_choose_working_dir_title)
-            self.new_inputs[x].restart = True
-            grid_global.addWidget(self.new_inputs[x].label, x, 0)
-            grid_global.addWidget(self.new_inputs[x].input_field, x, 1)
-            grid_global.addWidget(self.new_inputs[x].button, x, 2)
-            x += 1
-
-            self.new_inputs[x] = PreferenceEntry(category, 'slicerPath', my_config, PreferenceEntry.FILE, parent=self, validate_on_change=True)
-            self.new_inputs[x].set_label_text(strings.pref_window_global_box_slicer)
-            self.new_inputs[x].set_box_text(strings.pref_window_select_slicer)
-            self.new_inputs[x].restart = True
-            grid_global.addWidget(self.new_inputs[x].label, x, 0)
-            grid_global.addWidget(self.new_inputs[x].input_field, x, 1)
-            grid_global.addWidget(self.new_inputs[x].button, x, 2)
-            x += 1
-
-            self.new_inputs[x] = PreferenceEntry(category, 'defaultWfType', my_config, PreferenceEntry.COMBO,
-                                                 parent=self, populate_combo=ConfigManager.WORKFLOW_TYPES)
-            self.new_inputs[x].set_label_text(strings.pref_window_global_box_default_wf)
-            grid_global.addWidget(self.new_inputs[x].label, x, 0)
-            grid_global.addWidget(self.new_inputs[x].input_field, x, 1)
-            x += 1
-
-            layout.addWidget(group_global)
-
-            group_box_performance = QGroupBox(strings.pref_window_performance_box_title)
-            grid_performance = QGridLayout()
-            group_box_performance.setLayout(grid_performance)
-            x = 0
-
-            self.new_inputs[x] = PreferenceEntry(category, 'maxPt', my_config, PreferenceEntry.NUMBER, parent=self)
-            self.new_inputs[x].set_label_text(strings.pref_window_global_box_pt_limit)
-            self.new_inputs[x].set_range(1, 5)
-            grid_performance.addWidget(self.new_inputs[x].label, x, 0)
-            grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
-            x += 1
-
-            self.new_inputs[x] = PreferenceEntry(category, 'maxPtCPU', my_config, PreferenceEntry.NUMBER, parent=self)
-            self.new_inputs[x].set_label_text(strings.pref_window_global_box_cpu_limit)
-            self.new_inputs[x].set_tooltip(strings.pref_window_global_box_cpu_limit_tip)
-            self.new_inputs[x].set_range(-1, 40)
-            grid_performance.addWidget(self.new_inputs[x].label, x, 0)
-            grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
-            x += 1
-
-            self.new_inputs[x] = PreferenceEntry(category, 'cuda', my_config, PreferenceEntry.CHECKBOX, parent=self)
-            self.new_inputs[x].set_label_text("Enable CUDA for GPUable commands " + strings.INFOCHAR)
-            self.new_inputs[x].set_tooltip('NVIDIA GPU-based computation')
-            if not DependencyManager.is_cuda():
-                self.new_inputs[x].disable("GPU does not support CUDA")
-            grid_performance.addWidget(self.new_inputs[x].label, x, 0)
-            grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
-            x += 1
-
-            self.new_inputs[x] = PreferenceEntry(category, 'maxPtGPU', my_config, PreferenceEntry.NUMBER, parent=self)
-            self.new_inputs[x].set_label_text("GPU proc limit per patient " + strings.INFOCHAR)
-            self.new_inputs[x].set_tooltip("The limit should be equal or lesser than the number of physical GPU")
-            if not DependencyManager.is_cuda():
-                self.new_inputs[x].disable("GPU does not support CUDA")
-            self.new_inputs[x].set_range(0, 5)
-            grid_performance.addWidget(self.new_inputs[x].label, x, 0)
-            grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
-            x += 1
-
-            self.new_inputs[x] = PreferenceEntry(category, 'bedpostx_core', my_config, PreferenceEntry.COMBO,
-                                                 parent=self, populate_combo=ConfigManager.BEDPOSTX_CORES)
-            self.new_inputs[x].set_label_text(strings.pref_window_global_box_multi_cores)
-            grid_performance.addWidget(self.new_inputs[x].label, x, 0)
-            grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
-            self.new_inputs[x].input_field.currentIndexChanged.connect(self.update_bedpostx_core_description)
-            x += 1
-            self.bedpostx_core_description = QLabel()
-            self.bedpostx_core_description.setText(strings.pref_window_global_box_multi_cores_description[self.new_inputs[x - 1].input_field.currentIndex()])
-            grid_performance.addWidget(self.bedpostx_core_description, x, 0, 1, 2)
-            x += 1
-
-            self.new_inputs[x] = PreferenceEntry(category, 'resourceMonitor', my_config, PreferenceEntry.CHECKBOX, parent=self)
-            self.new_inputs[x].set_label_text(strings.pref_window_global_box_resource_monitor)
-            self.new_inputs[x].set_range(-1, 40)
-            grid_performance.addWidget(self.new_inputs[x].label, x, 0)
-            grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
-            x += 1
-
-            # Saving in MRML doesn't work well, disable extension choice for now
-            # self.new_inputs[x] = PreferenceEntry(category, 'slicerSceneExt', my_config, PreferenceEntry.COMBO,
-            #                                      parent=self, populate_combo=PreferencesWindow.SLICER_EXTENSIONS)
-            # self.new_inputs[x].set_label_text(strings.pref_window_global_box_default_ext)
-            # grid1.addWidget(self.new_inputs[x].label, x, 0)
-            # grid1.addWidget(self.new_inputs[x].input_field, x, 1)
-            # x += 1
-
-            layout.addWidget(group_box_performance)
-
-            group_box_optional = QGroupBox(strings.pref_window_global_box_optional_title)
-            grid_optional = QGridLayout()
-            group_box_optional.setLayout(grid_optional)
-
-            category = 'OPTIONAL_SERIES'
-            data_input_list = DataInputList()
-
-            for optional_series in my_config[category].keys():
-                if optional_series not in data_input_list:
+        for category_holder in categories:
+            if hasattr(category_holder, "name"):
+                category = category_holder.name
+                cat_label = category_holder.label
+                if category not in my_config:
                     continue
+                if not my_config.global_config and not category_holder.loaded:
+                    continue
+            else:
+                category = category_holder[0]
+                cat_label = category_holder[1]
 
-                self.new_inputs[x] = PreferenceEntry(category, optional_series, my_config, PreferenceEntry.CHECKBOX,
-                                                     parent=self)
-                self.new_inputs[x].set_label_text(data_input_list[optional_series].label)
-                self.new_inputs[x].restart = True
-                grid_optional.addWidget(self.new_inputs[x].label, x, 0)
-                grid_optional.addWidget(self.new_inputs[x].input_field, x, 1)
+            self.input_keys[category] = {}
+
+            tab = QWidget()
+            tab_widget.addTab(tab, cat_label)
+            grid = QGridLayout()
+            tab.setLayout(grid)
+
+            for key in my_config[category].keys():
+                if key not in self.preferences[category]:
+                    continue
+                if self.preferences[category][key]["input_type"] == PreferenceEntry.HIDDEN:
+                    continue
+                self.input_keys[category][key] = x
+                self.inputs[x] = PreferenceEntry(category, key, my_config, self.preferences[category][key]["input_type"], parent=self)
+
+                # Label and Tooltip
+                self.inputs[x].set_label_text(self.preferences[category][key]["label"])
+                if "tooltip" in self.preferences[category][key]:
+                    self.inputs[x].set_tooltip(self.preferences[category][key]["tooltip"])
+                else:
+                    self.inputs[x].set_tooltip("")
+
+                # Some global preference need application restart
+                if "restart" in self.preferences[category][key]:
+                    self.inputs[x].restart = self.preferences[category][key]["restart"]
+
+                # Input type-related controls
+                if self.preferences[category][key]["input_type"] == PreferenceEntry.COMBO:
+                    self.inputs[x].populate_combo(self.preferences[category][key]["default"])
+                    self.inputs[x].set_value_from_config(my_config)
+                elif self.preferences[category][key]["input_type"] == PreferenceEntry.FILE or self.preferences[category][key]["input_type"] == PreferenceEntry.DIRECTORY:
+                    grid.addWidget(self.inputs[x].button, x, 2)
+                    # path validation for folders and file
+                    if "validate_on_change" in self.preferences[category][key]:
+                        self.inputs[x].validate_on_change = self.preferences[category][key]["validate_on_change"]
+
+                # Range application
+                if "range" in self.preferences[category][key]:
+                    self.inputs[x].set_range(self.preferences[category][key]["range"][0], self.preferences[category][key]["range"][1])
+
+                # External dependence check
+                self.check_dependency(category, key, x)
+
+                # Other preference requirement
+                if "pref_requirement" in self.preferences[category][key]:
+                    for pref_cat in self.preferences[category][key]["pref_requirement"]:
+                        if pref_cat not in my_config:
+                            continue
+                        for pref_req in self.preferences[category][key]["pref_requirement"][pref_cat]:
+                            if pref_req[0] not in my_config[pref_cat]:
+                                continue
+                            target_x = self.input_keys[pref_cat][pref_req[0]]
+                            if self.inputs[target_x].input_type == PreferenceEntry.CHECKBOX:
+                                self.inputs[target_x].input_field.stateChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
+                            elif self.inputs[target_x].input_type == PreferenceEntry.COMBO:
+                                self.inputs[target_x].input_field.currentIndexChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
+                            else:
+                                self.inputs[target_x].input_field.textChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
+                            if not my_config.getboolean(pref_cat, pref_req[0]):
+                                self.inputs[x].disable(self.preferences[category][key]["pref_requirement_fail_tooltip"])
+                                break
+                if not my_config.global_config and 'input_requirement' in self.preferences[category][key]:
+                    for input_req in self.preferences[category][key]['input_requirement']:
+                        for cat_check in categories:
+                            if cat_check.name == input_req and not cat_check.loaded:
+                                self.inputs[x].disable(self.preferences[category][key]["input_requirement_fail_tooltip"])
+                                break
+
+                grid.addWidget(self.inputs[x].label, x, 0)
+                grid.addWidget(self.inputs[x].input_field, x, 1)
                 x += 1
 
-            layout.addWidget(group_box_optional)
+                # Informative text displayed in next row
+                if "informative_text" in self.preferences[category][key]:
+                    informative_text_label = QLabel()
+                    informative_text_label.setText(self.preferences[category][key]["informative_text"][
+                                                               self.inputs[x - 1].input_field.currentIndex()])
+                    grid.addWidget(informative_text_label, x, 0, 1, 2)
+                    self.inputs[x-1].input_field.currentIndexChanged.connect(lambda value,
+                                                                                    q_label=informative_text_label,
+                                                                                    labels=self.preferences[category][key]["informative_text"]:
+                                                                             PreferencesWindow.update_informative_text(value, q_label, labels))
+                    x += 1
+
+            vertical_spacer = QSpacerItem(
+                20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            grid.addItem(vertical_spacer, x, 0, 1, 2)
+
+        layout.addWidget(tab_widget)
 
         self.saveButton = QPushButton(strings.pref_window_save_button)
         self.saveButton.clicked.connect(self.save_preferences)
-
-        discard_button = QPushButton("Discard changes")
-        discard_button.clicked.connect(self.close)
-
         layout.addWidget(self.saveButton)
+
+        discard_button = QPushButton(strings.pref_window_discard_button)
+        discard_button.clicked.connect(self.close)
         layout.addWidget(discard_button)
 
-        main_layout.addWidget(pane)
-        self.setLayout(main_layout)
+        if self.preferences != GLOBAL_PREFERENCES:
+            reset_button = QPushButton(strings.pref_window_reset_button)
+            reset_button.clicked.connect(self.reset)
+            layout.addWidget(reset_button)
+
+        self.setLayout(layout)
+
+    def check_dependency(self, category: str, key: str, x: int) -> bool:
+        """
+        Check an external dependence to test if a preference can be enabled.
+        Parameters
+        ----------
+        category: str
+            The category of the preference to be tested.
+        key: str
+            The name of the preference to be tested.
+        x: int
+            The index of the preference to be tested in the input field list.
+
+        Return
+        ----------
+        True if external dependence is satisfied
+        """
+        if "dependency" in self.preferences[category][key]:
+            dep_check = getattr(self.dependency_manager, self.preferences[category][key]["dependency"], None)
+            if dep_check is None or not callable(dep_check) or not dep_check():
+                self.inputs[x].disable(self.preferences[category][key]["dependency_fail_tooltip"])
+                return False
+        return True
+
+    def requirement_changed(self, checked, my_cat: str, my_key: str):
+        """
+        Called if the user change a preference that is a requirement for another preference.
+        Parameters
+        ----------
+        checked:
+            Unused but passed by the event connection.
+        my_cat: str
+            The category of the preference to be tested.
+        my_key: str
+            The name of the preference to be tested.
+
+        """
+        my_x = self.input_keys[my_cat][my_key]
+        if not self.check_dependency(my_cat, my_key, my_x):
+            return
+        pref_requirement = self.preferences[my_cat][my_key]["pref_requirement"]
+        for req_cat in pref_requirement:
+            if req_cat not in self.input_keys:
+                continue
+            for req_key in pref_requirement[req_cat]:
+                if req_key[0] not in self.input_keys[req_cat]:
+                    continue
+                req_x = self.input_keys[req_cat][req_key[0]]
+
+                if self.inputs[req_x].input_type == PreferenceEntry.CHECKBOX:
+                    check = req_key[1] == self.inputs[req_x].input_field.isChecked()
+                elif self.inputs[req_x].input_type == PreferenceEntry.COMBO:
+                    check = req_key[1] == self.inputs[req_x].input_field.currentIndex()
+                else:
+                    check = req_key[1] == self.inputs[req_x].input_field.get_value()
+
+                if not check:
+                    self.inputs[my_x].disable(self.preferences[my_cat][my_key]["pref_requirement_fail_tooltip"])
+                    return
+        self.inputs[my_x].enable()
+
+    def save_preferences(self):
+        """
+        Loop all input fields and save values to configuration file.
+
+        """
+        for pref_entry in self.inputs.values():
+            if pref_entry.changed:
+                self.my_config[pref_entry.category][pref_entry.key] = pref_entry.get_value()
+
+        self.my_config.save()
+        if self.restart:
+            ret_code = EXIT_CODE_REBOOT
+        else:
+            ret_code = 1
+
+        self.done(ret_code)
+
+    def reset(self):
+        """
+        Load default workflow settings and save them to the configuration file
+
+        """
+        msg_box = QMessageBox()
+        if self.my_config.global_config:
+            msg_box.setText(strings.pref_window_reset_global)
+        else:
+            msg_box.setText(strings.pref_window_reset_pt)
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        ret2 = msg_box.exec()
+
+        if ret2 == QMessageBox.StandardButton.Yes:
+            self.done(-1)
 
     def set_restart(self):
         """
@@ -188,30 +267,17 @@ class PreferencesWindow(QDialog):
         self.restart = True
         self.saveButton.setText(strings.pref_window_save_restart_button)
 
-    def update_bedpostx_core_description(self, value: int):
+    @staticmethod
+    def update_informative_text(value: int, q_label: QLabel, labels: list):
         """
         Update the bedpostx core usage setting label if the user change the setting value.
         Parameters
         ----------
         value: int
             The index of the setting combo
+        q_label: int
+            The QLabel to update
+        labels: list
+            The list of possible labels
         """
-        self.bedpostx_core_description.setText(strings.pref_window_global_box_multi_cores_description[value])
-
-    def save_preferences(self):
-        """
-        Loop all input fields and save values to configuration file.
-
-        """
-        for pref_entry in self.new_inputs.values():
-            if pref_entry.changed:
-                self.my_config[pref_entry.category][pref_entry.key] = pref_entry.get_value()
-
-        self.my_config.save()
-
-        if self.restart:
-            ret_code = EXIT_CODE_REBOOT
-        else:
-            ret_code = 1
-
-        self.done(ret_code)
+        q_label.setText(labels[value])

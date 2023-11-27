@@ -101,8 +101,6 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     workflow.add_nodes([reconAll])
     workflow.connect(inputnode, "max_node_cpu", reconAll, "openmp")
     workflow.connect(inputnode, "ref", reconAll, "T1_files")
-    # TODO: the following line was used to enable cw256 flag, this shpuld not be necessary any more after introducing of t13d crop
-    # workflow.connect(inputnode, ('ref', check_fov_dim), reconAll, 'flags')
     workflow.connect(inputnode, "subjects_dir", reconAll, "subjects_dir")
 
     # NODE 2: Aparcaseg linear transformation in reference space
