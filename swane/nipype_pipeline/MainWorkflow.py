@@ -188,7 +188,7 @@ class MainWorkflow(CustomWorkflow):
         for plane in DataInputList.PLANES:
             if DataInputList.FLAIR2D+'_%s' % plane in data_input_list and data_input_list[DataInputList.FLAIR2D+'_%s' % plane].loaded:
                 flair_dir = data_input_list.get_dicom_dir(DataInputList.FLAIR2D+'_%s' % plane)
-                flair2d = linear_reg_workflow(data_input_list[DataInputList.FLAIR2D+'_%s' % plane].wf_name, flair_dir, is_volumetric=False)
+                flair2d = linear_reg_workflow(data_input_list[DataInputList.FLAIR2D+'_%s' % plane].wf_name, flair_dir, None, is_volumetric=False)
                 flair2d.long_name = "2D %s FLAIR analysis" % plane
                 self.add_nodes([flair2d])
 
