@@ -26,7 +26,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             self.queue = plugin_args["queue"]
 
         # GPU found on syste
-        self.n_gpus_visible = self.gpu_count()
+        self.n_gpus_visible = MonitoredMultiProcPlugin.gpu_count()
         # proc per GPU set by user
         self.n_gpu_proc = plugin_args.get('n_gpu_proc', 1)
 
@@ -49,7 +49,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             tasks_gpu_th = []
 
             for node in graph.nodes():
-                if self.is_gpu_node(node):
+                if MonitoredMultiProcPlugin.is_gpu_node(node):
                     tasks_gpu_th.append(node.n_procs)
 
             if np.any(np.array(tasks_gpu_th) > self.n_gpu_proc):
@@ -66,7 +66,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         free_memory_gb, free_processors = super()._check_resources(running_tasks)
         free_gpu_slots = self.n_gpu_proc
         for _, jobid in running_tasks:
-            if self.is_gpu_node(self.procs[jobid]):
+            if MonitoredMultiProcPlugin.is_gpu_node(self.procs[jobid]):
                 free_gpu_slots -= min(self.procs[jobid].n_procs, free_gpu_slots)
         return free_memory_gb, free_processors, free_gpu_slots
 
@@ -161,7 +161,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             next_job_th = min(self.procs[jobid].n_procs, self.processors)
             next_job_gpu_th = min(self.procs[jobid].n_procs, self.n_gpu_proc)
 
-            is_gpu_node = self.is_gpu_node(self.procs[jobid])
+            is_gpu_node = MonitoredMultiProcPlugin.is_gpu_node(self.procs[jobid])
 
             # If node does not fit, skip at this moment
             if (next_job_th > free_processors or next_job_gb > free_memory_gb
@@ -239,13 +239,13 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             # Display stats next loop
             self._stats = None
 
-    def _sort_jobs(self, jobids, scheduler="tsort"):
-        if scheduler == "mem_thread":
-            return sorted(
-                jobids,
-                key=lambda item: (self.procs[item].mem_gb, self.procs[item].n_procs),
-            )
-        return jobids
+    # def _sort_jobs(self, jobids, scheduler="tsort"):
+    #     if scheduler == "mem_thread":
+    #         return sorted(
+    #             jobids,
+    #             key=lambda item: (self.procs[item].mem_gb, self.procs[item].n_procs),
+    #         )
+    #     return jobids
 
     def _report_crash(self, node, result=None):
         # This class implements signaling for generic node error
@@ -281,7 +281,8 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 traceback.print_exc()
         return super(MonitoredMultiProcPlugin, self)._task_finished_cb(jobid, cached)
 
-    def gpu_count(self):
+    @staticmethod
+    def gpu_count():
         n_gpus = 1
         try:
             import GPUtil
@@ -289,6 +290,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         except ImportError:
             return n_gpus
 
-    def is_gpu_node(self, node):
+    @staticmethod
+    def is_gpu_node(node):
         return ((hasattr(node.interface.inputs, 'use_cuda') and node.interface.inputs.use_cuda)
                 or (hasattr(node.interface.inputs, 'use_gpu') and node.interface.inputs.use_gpu))
