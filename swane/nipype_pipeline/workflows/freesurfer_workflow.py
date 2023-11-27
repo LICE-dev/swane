@@ -79,47 +79,34 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
                                   'rh_hippoAmygLabels']),
         name='outputnode')
 
-    # TODO: the following function was used to enable cw256 flag, this shpuld not be necessary any more after introducing of t13d crop
-    # def check_fov_dim(nifti):
-    #     import subprocess
-    #     for x in range(1, 4, 1):
-    #         cmd = "echo $( echo $(fslval " + nifti + " dim" + str(x) + ") \\* $(fslval " + nifti + " pixdim" + str(x) + ") | bc)"
-    #         output = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
-    #         try:
-    #             fovdim = float(output)
-    #             if fovdim > 256:
-    #                 return "-cw256"
-    #         except:
-    #             pass
-    #     return ""
-
     # NODE 1: Freesurfer cortical reconstruction process
-    reconAll = Node(ReconAll(), name='reconAll')
-    reconAll.inputs.subject_id = FS_DIR
-    reconAll.inputs.parallel = True
-    reconAll.inputs.directive = 'all'
-    workflow.add_nodes([reconAll])
-    workflow.connect(inputnode, "max_node_cpu", reconAll, "openmp")
-    workflow.connect(inputnode, "ref", reconAll, "T1_files")
-    workflow.connect(inputnode, "subjects_dir", reconAll, "subjects_dir")
+    recon_all = Node(ReconAll(), name='reconAll')
+    recon_all.inputs.subject_id = FS_DIR
+    recon_all.inputs.parallel = True
+    recon_all.inputs.directive = 'all'
+    recon_all.inputs.args = "-no-isrunning"
+    workflow.add_nodes([recon_all])
+    workflow.connect(inputnode, "max_node_cpu", recon_all, "openmp")
+    workflow.connect(inputnode, "ref", recon_all, "T1_files")
+    workflow.connect(inputnode, "subjects_dir", recon_all, "subjects_dir")
 
     # NODE 2: Aparcaseg linear transformation in reference space
     aparaseg2Volmgz = Node(CustomLabel2Vol(), name="aparaseg2Volmgz")
     aparaseg2Volmgz.long_name = "label %s to reference space"
     aparaseg2Volmgz.inputs.vol_label_file = "./r-aparc_aseg.mgz"
-    workflow.connect(reconAll, "rawavg", aparaseg2Volmgz, "template_file")
-    workflow.connect([(reconAll, aparaseg2Volmgz, [(('aparc_aseg', getn, 0), 'reg_header')])])
-    workflow.connect([(reconAll, aparaseg2Volmgz, [(('aparc_aseg', getn, 0), 'seg_file')])])
-    workflow.connect(reconAll, "subjects_dir", aparaseg2Volmgz, "subjects_dir")
-    workflow.connect(reconAll, "subject_id", aparaseg2Volmgz, "subject_id")
+    workflow.connect(recon_all, "rawavg", aparaseg2Volmgz, "template_file")
+    workflow.connect([(recon_all, aparaseg2Volmgz, [(('aparc_aseg', getn, 0), 'reg_header')])])
+    workflow.connect([(recon_all, aparaseg2Volmgz, [(('aparc_aseg', getn, 0), 'seg_file')])])
+    workflow.connect(recon_all, "subjects_dir", aparaseg2Volmgz, "subjects_dir")
+    workflow.connect(recon_all, "subject_id", aparaseg2Volmgz, "subject_id")
 
     # NODE 3: Aparcaseg conversion mgz -> nifti
     aparaseg2Volnii = Node(CustomLabel2Vol(), name="aparaseg2Volnii")
     aparaseg2Volnii.long_name = "label Nifti conversion"
     aparaseg2Volnii.inputs.vol_label_file = "r-aparc_aseg.nii.gz"
-    workflow.connect(reconAll, "rawavg", aparaseg2Volnii, "template_file")
-    workflow.connect([(reconAll, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'reg_header')])])
-    workflow.connect([(reconAll, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'seg_file')])])
+    workflow.connect(recon_all, "rawavg", aparaseg2Volnii, "template_file")
+    workflow.connect([(recon_all, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'reg_header')])])
+    workflow.connect([(recon_all, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'seg_file')])])
     workflow.connect(aparaseg2Volnii, "vol_label_file", outputnode, "vol_label_file_nii")
 
     # NODE 4: Left cerebral white matter binary ROI
@@ -173,17 +160,17 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     workflow.connect(bgROI, "out_file", outputnode, "bgROI")
     # TODO wmROI work in progress - Not used for now. Maybe useful for SUPERFLAIR
     workflow.connect(wmROI, "out_file", outputnode, "wmROI")
-    workflow.connect(reconAll, "pial", outputnode, "pial")
-    workflow.connect(reconAll, "white", outputnode, "white")
-    workflow.connect(reconAll, "subject_id", outputnode, "subject_id")
-    workflow.connect(reconAll, "subjects_dir", outputnode, "subjects_dir")
+    workflow.connect(recon_all, "pial", outputnode, "pial")
+    workflow.connect(recon_all, "white", outputnode, "white")
+    workflow.connect(recon_all, "subject_id", outputnode, "subject_id")
+    workflow.connect(recon_all, "subjects_dir", outputnode, "subjects_dir")
     workflow.connect(aparaseg2Volmgz, "vol_label_file", outputnode, "vol_label_file")
 
     if is_hippo_amyg_labels:
         # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
         segmentHA = Node(SegmentHA(), name="segmentHA")
-        workflow.connect(reconAll, "subjects_dir", segmentHA, "subjects_dir")
-        workflow.connect(reconAll, "subject_id", segmentHA, "subject_id")
+        workflow.connect(recon_all, "subjects_dir", segmentHA, "subjects_dir")
+        workflow.connect(recon_all, "subject_id", segmentHA, "subject_id")
         workflow.connect(inputnode, "max_node_cpu", segmentHA, "num_threads")
 
         workflow.connect(segmentHA, "lh_hippoAmygLabels", outputnode, "lh_hippoAmygLabels")
