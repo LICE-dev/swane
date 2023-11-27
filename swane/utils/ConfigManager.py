@@ -79,6 +79,8 @@ class ConfigManager(configparser.ConfigParser):
                 'lastPID': '-1',
                 'maxPt': '1',
                 'maxPtCPU': '-1',
+                'cuda': 'false',
+                'maxPtGPU': '1',
                 'slicerSceneExt': '0',
                 'defaultWfType': '0',
                 'defaultdicomfolder': 'dicom',

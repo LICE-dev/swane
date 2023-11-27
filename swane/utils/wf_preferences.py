@@ -120,18 +120,26 @@ wf_preferences[category]['old_eddy_correct'] = {
     'label': "Use older but faster fsl eddy_correct",
     'default': 'false',
 }
-wf_preferences[category]['cuda'] = {
-    'input_type': PreferenceEntry.CHECKBOX,
-    'label': "Enable CUDA for GPUable commands",
-    'tooltip': 'NVIDIA GPU-based computation',
-    'default': 'false',
-    'dependency': 'is_cuda',
-    'dependency_fail_tooltip': "GPU does not support CUDA",
-}
+# wf_preferences[category]['cuda'] = {
+#     'input_type': PreferenceEntry.CHECKBOX,
+#     'label': "Enable CUDA for GPUable commands",
+#     'tooltip': 'NVIDIA GPU-based computation',
+#     'default': 'false',
+#     'dependency': 'is_cuda',
+#     'dependency_fail_tooltip': "GPU does not support CUDA",
+# }
 wf_preferences[category]['tractography'] = {
     'input_type': PreferenceEntry.CHECKBOX,
     'label': "DTI tractography",
     'default': 'true',
+}
+wf_preferences[category]['track_procs'] = {
+    'input_type': PreferenceEntry.NUMBER,
+    'label': "Parallel processes for each side tractography",
+    'default': '5',
+    'range': [1, 10],
+    'pref_requirement': {DataInputList.DTI: [('tractography', True)]},
+    'pref_requirement_fail_tooltip': "Tractography disabled",
 }
 
 try:

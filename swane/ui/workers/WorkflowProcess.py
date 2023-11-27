@@ -44,12 +44,14 @@ class WorkflowProcess(Process):
         plugin_args = {
             'mp_context': 'fork',
             'queue': self.queue,
-            'status_callback': swane_log_nodes_cb
+            'status_callback': swane_log_nodes_cb,
         }
         if self.workflow.max_cpu > 0:
             plugin_args['n_procs'] = self.workflow.max_cpu
-        try:
+        if self.workflow.max_gpu > 0:
+            plugin_args['n_gpu_proc'] = self.workflow.max_gpu
 
+        try:
             # this is useful to generate resource monitor files in patient directory
             os.chdir(self.workflow.base_dir)
 

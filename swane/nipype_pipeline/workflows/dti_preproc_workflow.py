@@ -1,6 +1,6 @@
 from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT, Eddy)
 from nipype.pipeline.engine import Node
-
+from shutil import which
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -132,13 +132,18 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         # NODE 4: Eddy current and motion artifact correction
         interface = Eddy()
         if not is_cuda:
-            interface._cmd = "eddy_cpu"
+            # newer fsl version automatically use eddy_gpu if cuda is available, those version use eddy_cpu for cpu
+            # older version has no automatic cuda usage and eddy_cpu did not exist
+            if which("eddy_cpu") is not None:
+                interface._cmd = "eddy_cpu"
         eddy = Node(interface, name="dti_eddy")
-        if bedpostx_core == 1:
-            eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
-        elif bedpostx_core == 2:
-            eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
-            eddy.inputs.num_threads = max_cpu
+        if not is_cuda:
+            # if cuda is enabled only 1 process is launched
+            if bedpostx_core == 1:
+                eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
+            elif bedpostx_core == 2:
+                eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
+                eddy.inputs.num_threads = max_cpu
         workflow.connect(reorient, "out_file", eddy, "in_file")
         workflow.connect(conv, "bvals", eddy, "in_bval")
         workflow.connect(conv, "bvecs", eddy, "in_bvec")
@@ -214,12 +219,13 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         bedpostx.inputs.n_jumps = 1250
         bedpostx.inputs.burn_in = 1000
         bedpostx.inputs.use_gpu = is_cuda
-
-        if bedpostx_core == 1:
-            bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
-        elif bedpostx_core == 2:
-            bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
-            bedpostx.inputs.num_threads = max_cpu
+        if not is_cuda:
+            # if cuda is enabled only 1 process is launched
+            if bedpostx_core == 1:
+                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
+            elif bedpostx_core == 2:
+                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
+                bedpostx.inputs.num_threads = max_cpu
 
         workflow.connect(eddy, eddy_output_name, bedpostx, "dwi")
         workflow.connect(bet, "mask_file", bedpostx, "mask")

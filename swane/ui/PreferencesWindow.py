@@ -6,6 +6,7 @@ from swane import strings, EXIT_CODE_REBOOT
 from swane.utils.ConfigManager import ConfigManager
 from swane.utils.PreferenceEntry import PreferenceEntry
 from swane.utils.DataInput import DataInputList
+from swane.utils.DependencyManager import DependencyManager
 
 
 class PreferencesWindow(QDialog):
@@ -94,6 +95,25 @@ class PreferencesWindow(QDialog):
             self.new_inputs[x].set_label_text(strings.pref_window_global_box_cpu_limit)
             self.new_inputs[x].set_tooltip(strings.pref_window_global_box_cpu_limit_tip)
             self.new_inputs[x].set_range(-1, 40)
+            grid_performance.addWidget(self.new_inputs[x].label, x, 0)
+            grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
+            x += 1
+
+            self.new_inputs[x] = PreferenceEntry(category, 'cuda', my_config, PreferenceEntry.CHECKBOX, parent=self)
+            self.new_inputs[x].set_label_text("Enable CUDA for GPUable commands " + strings.INFOCHAR)
+            self.new_inputs[x].set_tooltip('NVIDIA GPU-based computation')
+            if not DependencyManager.is_cuda():
+                self.new_inputs[x].disable("GPU does not support CUDA")
+            grid_performance.addWidget(self.new_inputs[x].label, x, 0)
+            grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
+            x += 1
+
+            self.new_inputs[x] = PreferenceEntry(category, 'maxPtGPU', my_config, PreferenceEntry.NUMBER, parent=self)
+            self.new_inputs[x].set_label_text("GPU proc limit per patient " + strings.INFOCHAR)
+            self.new_inputs[x].set_tooltip("The limit should be equal or lesser than the number of physical GPU")
+            if not DependencyManager.is_cuda():
+                self.new_inputs[x].disable("GPU does not support CUDA")
+            self.new_inputs[x].set_range(0, 5)
             grid_performance.addWidget(self.new_inputs[x].label, x, 0)
             grid_performance.addWidget(self.new_inputs[x].input_field, x, 1)
             x += 1
