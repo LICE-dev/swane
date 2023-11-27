@@ -12,6 +12,7 @@ def main():
     from swane.ui.MainWindow import MainWindow
     from swane.utils.ConfigManager import ConfigManager
     from swane import EXIT_CODE_REBOOT
+    from swane.utils.preference_list import MAIN
 
     # Exit Code definition for automatic reboot
     current_exit_code = EXIT_CODE_REBOOT
@@ -33,7 +34,11 @@ def main():
         global_config = ConfigManager()
 
         # Guard to prevent multiple SWANe instances launch
-        last_pid = global_config.getint('MAIN', 'lastPID')
+        try:
+            last_pid = global_config.getint(MAIN, 'last_pid')
+        except:
+            last_pid = 0
+
         if last_pid != os.getpid():
             try:
                 psutil.Process(last_pid)
@@ -43,7 +48,7 @@ def main():
                 break
 
             except (psutil.NoSuchProcess, ValueError):
-                global_config['MAIN']['lastPID'] = str(os.getpid())
+                global_config[MAIN]['last_pid'] = str(os.getpid())
                 global_config.save()
 
         # MainWindow in a varariable to prenvent garbage collector deletion (might cause crash)

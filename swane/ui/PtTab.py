@@ -22,7 +22,7 @@ from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from swane.ui.workers.WorkflowProcess import WorkflowProcess
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
-from swane.ui.WfPreferencesWindow import WfPreferencesWindow
+from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.utils.ConfigManager import ConfigManager
 from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
@@ -30,6 +30,7 @@ from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from swane.utils.DataInput import DataInput, DataInputList
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 from swane.utils.DependencyManager import DependencyManager
+from swane.utils.preference_list import SLICER_EXTENSIONS, WORKFLOW_TYPES
 
 
 class PtTab(QTabWidget):
@@ -434,7 +435,7 @@ class PtTab(QTabWidget):
         # First Column: NODE LIST
         self.wf_type_combo = QComboBox(self)
 
-        for index, label in enumerate(ConfigManager.WORKFLOW_TYPES):
+        for index, label in enumerate(WORKFLOW_TYPES):
             self.wf_type_combo.insertItem(index, label)
 
         layout.addWidget(self.wf_type_combo, 0, 0)
@@ -490,7 +491,7 @@ class PtTab(QTabWidget):
 
         """
 
-        preference_window = WfPreferencesWindow(self.pt_config, self.main_window.dependency_manager, self.data_input_list, self)
+        preference_window = PreferencesWindow(self.pt_config, self.main_window.dependency_manager, self.data_input_list.values(), self)
         ret = preference_window.exec()
         if ret != 0:
             self.reset_workflow()
@@ -755,7 +756,7 @@ class PtTab(QTabWidget):
 
     def load_scene_button_update_state(self):
         try:
-            scene_path = os.path.join(self.pt_folder, "scene", "scene." + ConfigManager.SLICER_EXTENSIONS[
+            scene_path = os.path.join(self.pt_folder, "scene", "scene." + SLICER_EXTENSIONS[
                 int(self.global_config.get_slicer_scene_ext())])
             if not DependencyManager.is_slicer(self.global_config):
                 self.load_scene_button.setEnabled(False)
@@ -864,7 +865,7 @@ class PtTab(QTabWidget):
         None.
 
         """
-        scene_path = os.path.join(self.pt_folder, "scene", "scene."+ConfigManager.SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
+        scene_path = os.path.join(self.pt_folder, "scene", "scene."+SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
         if os.path.exists(scene_path):
             slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), scene_path, parent=self)
             QThreadPool.globalInstance().start(slicer_open_thread)

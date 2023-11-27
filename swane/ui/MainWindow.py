@@ -8,10 +8,10 @@ import os
 from swane.utils.DependencyManager import DependencyManager, Dependence
 from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
-from swane.ui.WfPreferencesWindow import WfPreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.utils.DataInput import DataInputList
+from swane.utils.preference_list import GLOBAL_PREF_KEYS
 
 
 class MainWindow(QMainWindow):
@@ -196,18 +196,18 @@ class MainWindow(QMainWindow):
         
         import re
         
-        regex = re.compile('^' + self.global_config.get_patientsprefix() + '\d+$')
+        regex = re.compile('^' + self.global_config.get_patients_prefix() + '\d+$')
         file_list = []
         
         for this_dir in os.listdir(self.global_config.get_patients_folder()):
             if regex.match(this_dir):
                 file_list.append(
-                    int(this_dir.replace(self.global_config.get_patientsprefix(), "")))
+                    int(this_dir.replace(self.global_config.get_patients_prefix(), "")))
 
         if len(file_list) == 0:
-            return self.global_config.get_patientsprefix() + "1"
+            return self.global_config.get_patients_prefix() + "1"
         
-        return self.global_config.get_patientsprefix() + str(max(file_list) + 1)
+        return self.global_config.get_patients_prefix() + str(max(file_list) + 1)
 
     def choose_new_pt_dir(self):
         """
@@ -358,8 +358,8 @@ class MainWindow(QMainWindow):
             msg_box.setText(strings.mainwindow_pref_disabled_error)
             msg_box.exec()
             return
-        
-        preference_window = PreferencesWindow(self.global_config, self)
+
+        preference_window = PreferencesWindow(self.global_config, self.dependency_manager, categories=GLOBAL_PREF_KEYS)
         ret = preference_window.exec()
         
         if ret == EXIT_CODE_REBOOT:
@@ -385,7 +385,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
-        wf_preference_window = WfPreferencesWindow(self.global_config, self.dependency_manager, data_input_list=DataInputList())
+        wf_preference_window = PreferencesWindow(self.global_config, self.dependency_manager, categories=DataInputList().values())
         ret = wf_preference_window.exec()
 
         if ret == -1:

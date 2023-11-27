@@ -18,6 +18,7 @@ class PreferenceEntry:
     FILE = 4
     DIRECTORY = 5
     FLOAT = 6
+    HIDDEN = 7
 
     def __init__(self, category, key, my_config, input_type=TEXT, parent=None, populate_combo=None, validate_on_change=False):
         self.restart = False

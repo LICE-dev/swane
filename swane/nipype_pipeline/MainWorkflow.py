@@ -17,8 +17,9 @@ from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_workflow import venous_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow, SIDES
-from swane.utils.wf_preferences import TRACTS
+from swane.utils.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
+from swane.utils.preference_list import MAIN, PERFORMANCE, OPTIONAL_SERIES
 
 DEBUG = False
 
@@ -71,11 +72,11 @@ class MainWorkflow(CustomWorkflow):
 
         # CPU cores and memory management
         try:
-            self.is_resource_monitor = global_config.getboolean('MAIN', 'resourceMonitor')
+            self.is_resource_monitor = global_config.getboolean(PERFORMANCE, 'resourceMonitor')
         except:
             self.is_resource_monitor = False
         try:
-            self.max_cpu = global_config.getint('MAIN', 'maxPtCPU')
+            self.max_cpu = global_config.getint(PERFORMANCE, 'max_pt_cpu')
         except:
             self.max_cpu = -1
 
@@ -83,11 +84,11 @@ class MainWorkflow(CustomWorkflow):
             self.max_cpu = cpu_count()
 
         try:
-            self.bedpostx_core = global_config.getint('MAIN', 'bedpostx_core')
+            self.bedpostx_core = global_config.getint(PERFORMANCE, 'bedpostx_core')
         except:
             self.bedpostx_core = 0
         try:
-            self.max_gpu = global_config.getint('MAIN', 'maxPtGPU')
+            self.max_gpu = global_config.getint(MAIN, 'max_pt_gpu')
             if self.max_gpu < 0:
                 self.max_gpu = 1
         except:

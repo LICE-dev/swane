@@ -1,48 +1,11 @@
 import configparser
-import os
 from swane import strings
-from swane.utils.DataInput import DataInputList
-from swane.utils.wf_preferences import wf_preferences
+from swane.utils.preference_list import *
 
 
 # todo valutare di spostare le key delle configurazioni in file costanti esterno
 class ConfigManager(configparser.ConfigParser):
 
-    WORKFLOW_TYPES = ["Structural Workflow", "Morpho-Functional Workflow"]
-    BEDPOSTX_CORES = ["No limit", "Soft cap", "Hard Cap"]
-    SLICER_EXTENSIONS = ["mrb", "mrml"]
-
-    DEFAULT_WF = {}
-    DEFAULT_WF['0'] = {
-        DataInputList.T13D: {
-            'hippo_amyg_labels': 'false',
-            'flat1': 'false',
-        },
-        DataInputList.DTI: {
-            'tractography': 'true',
-        },
-        DataInputList.ASL: {
-            'ai': 'false'
-        },
-        DataInputList.PET: {
-            'ai': 'false'
-        },
-    }
-    DEFAULT_WF['1'] = {
-        DataInputList.T13D: {
-            'hippo_amyg_labels': 'true',
-            'flat1': 'true',
-        },
-        DataInputList.DTI: {
-            'tractography': 'false',
-        },
-        DataInputList.ASL: {
-            'ai': 'true'
-        },
-        DataInputList.PET: {
-            'ai': 'true'
-        },
-    }
 
     def __init__(self, pt_folder=None):
         super(ConfigManager, self).__init__()
@@ -57,7 +20,7 @@ class ConfigManager(configparser.ConfigParser):
             self.config_file = os.path.abspath(os.path.join(
                 os.path.expanduser("~"), "." + strings.APPNAME))
 
-        self.create_default_config()
+        self.load_default_wf_settings(save=False)
 
         if os.path.exists(self.config_file):
             self.read(self.config_file)
@@ -67,49 +30,33 @@ class ConfigManager(configparser.ConfigParser):
     def reload(self):
         self.read(self.config_file)
 
-    def create_default_config(self):
-        self.load_default_wf_settings(save=False)
-
+    def load_default_wf_settings(self, save):
         if self.global_config:
-            self['MAIN'] = {
-                'patientsfolder': '',
-                'patientsprefix': 'pt_',
-                'slicerPath': '',
-                'slicer_version': '',
-                'lastPID': '-1',
-                'maxPt': '1',
-                'maxPtCPU': '-1',
-                'cuda': 'false',
-                'maxPtGPU': '1',
-                'slicerSceneExt': '0',
-                'defaultWfType': '0',
-                'defaultdicomfolder': 'dicom',
-                'resourceMonitor': 'false',
-                'bedpostx_core': '0',
-            }
+            for category_holder in GLOBAL_PREF_KEYS:
+                if not save:
+                    category = category_holder[0]
+                    self[category] = {}
+                    for pref in GLOBAL_PREFERENCES[category]:
+                        if isinstance(GLOBAL_PREFERENCES[category][pref]['default'], list):
+                            self[category][pref] = "0"
+                        else:
+                            self[category][pref] = str(GLOBAL_PREFERENCES[category][pref]['default'])
 
-            self['OPTIONAL_SERIES'] = {}
             for data_input in DataInputList().values():
-                if data_input.optional:
-                    self['OPTIONAL_SERIES'][data_input.name] = 'false'
-
-    def load_default_wf_settings(self, save=True):
-        if self.global_config:
-            for data_input in DataInputList().values():
-                if data_input.name in wf_preferences:
+                if data_input.name in WF_PREFERENCES:
                     self[data_input.name] = {}
-                    for pref in wf_preferences[data_input.name]:
-                        if isinstance(wf_preferences[data_input.name][pref]['default'], list):
+                    for pref in WF_PREFERENCES[data_input.name]:
+                        if isinstance(WF_PREFERENCES[data_input.name][pref]['default'], list):
                             self[data_input.name][pref] = "0"
                         else:
-                            self[data_input.name][pref] = str(wf_preferences[data_input.name][pref]['default'])
+                            self[data_input.name][pref] = str(WF_PREFERENCES[data_input.name][pref]['default'])
         else:
             tmp_config = ConfigManager()
             for data_input in DataInputList().values():
-                if data_input.name in wf_preferences:
+                if data_input.name in WF_PREFERENCES:
                     self[data_input.name] = tmp_config[data_input.name]
 
-            self.set_wf_option(tmp_config['MAIN']['defaultWfType'])
+            self.set_wf_option(tmp_config[MAIN]['default_wf_type'])
         if save:
             self.save()
 
@@ -117,9 +64,10 @@ class ConfigManager(configparser.ConfigParser):
         if self.global_config:
             return
         wf = str(wf)
-        for category in self.DEFAULT_WF[wf]:
-            for key in self.DEFAULT_WF[wf][category]:
-                self[category][key] = self.DEFAULT_WF[wf][category][key]
+        self[DataInputList.T13D]['wf_type'] = wf
+        for category in DEFAULT_WF[wf]:
+            for key in DEFAULT_WF[wf][category]:
+                self[category][key] = DEFAULT_WF[wf][category][key]
 
     def save(self):
         with open(self.config_file, "w") as openedFile:
@@ -127,65 +75,65 @@ class ConfigManager(configparser.ConfigParser):
 
     def get_patients_folder(self):
         if self.global_config:
-            return self["MAIN"]["PatientsFolder"]
+            return self[MAIN]["patients_folder"]
         return ''
 
     def set_patients_folder(self, path):
         if self.global_config:
-            self["MAIN"]["PatientsFolder"] = path
+            self[MAIN]["patients_folder"] = path
 
     def get_max_pt(self):
         if not self.global_config:
             return 1
         try:
-            return self.getint('MAIN', 'maxPt')
+            return self.getint(PERFORMANCE, 'max_pt')
         except:
             return 1
 
-    def get_patientsprefix(self):
+    def get_patients_prefix(self):
         if self.global_config:
-            return self['MAIN']['patientsprefix']
+            return self[MAIN]['patients_prefix']
         return ''
 
     def get_default_dicom_folder(self):
         if self.global_config:
-            return self['MAIN']['defaultdicomfolder']
+            return self[MAIN]['default_dicom_folder']
         return ''
 
     def get_slicer_path(self):
         if self.global_config:
-            return self['MAIN']['slicerPath']
+            return self[MAIN]['slicer_path']
         return ''
 
     def set_slicer_path(self, path):
         if self.global_config:
-            self['MAIN']['slicerPath'] = path
+            self[MAIN]['slicer_path'] = path
 
     def get_slicer_version(self):
         if self.global_config:
-            return self['MAIN']['slicer_version']
+            return self[MAIN]['slicer_version']
 
     def set_slicer_version(self, slicer_version):
         if self.global_config:
-            self['MAIN']['slicer_version'] = slicer_version
+            self[MAIN]['slicer_version'] = slicer_version
 
     def is_optional_series_enabled(self, series_name):
         if self.global_config:
             try:
-                return self.getboolean('OPTIONAL_SERIES', series_name)
+                return self.getboolean(OPTIONAL_SERIES, series_name)
             except:
                 return False
         return False
 
     def get_slicer_scene_ext(self):
         if self.global_config:
-            return self['MAIN']['slicerSceneExt']
+            return self[MAIN]['slicer_scene_ext']
         return ''
 
     def get_pt_wf_type(self):
         if not self.global_config:
             try:
-                return self['WF_OPTION'].getint('wfType')
+                return self[DataInputList.T13D].getint('wf_type')
             except:
                 return 0
         return 0
@@ -212,10 +160,10 @@ class ConfigManager(configparser.ConfigParser):
 
     def check_dependencies(self, dependency_manager):
         changed = False
-        for category in wf_preferences:
-            for key in wf_preferences[category]:
-                if "dependency" in wf_preferences[category][key]:
-                    dep_check = getattr(dependency_manager, wf_preferences[category][key]["dependency"], None)
+        for category in WF_PREFERENCES:
+            for key in WF_PREFERENCES[category]:
+                if "dependency" in WF_PREFERENCES[category][key]:
+                    dep_check = getattr(dependency_manager, WF_PREFERENCES[category][key]["dependency"], None)
                     if dep_check is None or not callable(dep_check) or not dep_check():
                         self[category][key] = "false"
                         changed = True
