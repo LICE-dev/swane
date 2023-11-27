@@ -78,13 +78,27 @@ class MainWorkflow(CustomWorkflow):
             self.max_cpu = global_config.getint('MAIN', 'maxPtCPU')
         except:
             self.max_cpu = -1
+
+        if self.max_cpu < 1:
+            self.max_cpu = cpu_count()
+
         try:
             self.bedpostx_core = global_config.getint('MAIN', 'bedpostx_core')
         except:
             self.bedpostx_core = 0
-
-        if self.max_cpu < 1:
-            self.max_cpu = cpu_count()
+        try:
+            self.max_gpu = global_config.getint('MAIN', 'maxPtGPU')
+            if self.max_gpu < 0:
+                self.max_gpu = 1
+        except:
+            self.max_gpu = 1
+        try:
+            if not dependency_manager.is_cuda():
+                pt_config[DataInputList.DTI]["cuda"] = "false"
+            else:
+                pt_config[DataInputList.DTI]["cuda"] = global_config["MAIN"]["cuda"]
+        except:
+            pt_config[DataInputList.DTI]["cuda"] = "false"
 
         max_node_cpu = max(int(self.max_cpu / 2), 1)
 
@@ -302,7 +316,7 @@ class MainWorkflow(CustomWorkflow):
                     except:
                         continue
                     
-                    tract_workflow = tractography_workflow(tract, 5, pt_config[DataInputList.DTI])
+                    tract_workflow = tractography_workflow(tract, pt_config[DataInputList.DTI])
                     tract_workflow.long_name = TRACTS[tract][0] + " tractography"
                     if tract_workflow is not None:
                         self.connect(dti_preproc, "outputnode.fsamples", tract_workflow, "inputnode.fsamples")

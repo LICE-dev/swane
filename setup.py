@@ -34,6 +34,8 @@ setup(name='swane',
           "nibabel==5.0.0",
           "packaging",
           "PySide6_VerticalQTabWidget",
+          "GPUtil==1.4.0",
+          "numpy"
       ],
       python_requires=">=3.7",
       entry_points={

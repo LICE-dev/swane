@@ -13,7 +13,7 @@ from swane.utils.wf_preferences import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DI
 SIDES = ["lh", "rh"]
 
 
-def tractography_workflow(name: str, threads: int, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
+def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
 
@@ -21,8 +21,8 @@ def tractography_workflow(name: str, threads: int, config: SectionProxy, base_di
     ----------
     name : str
         The workflow and tract name.
-    threads : int
-        The number of parallel threads to use for the analysis.
+    config: SectionProxy
+        The patient workflow preferences.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -90,7 +90,13 @@ def tractography_workflow(name: str, threads: int, config: SectionProxy, base_di
     except:
         is_cuda = False
 
+    try:
+        threads = config.getint('track_procs')
+    except:
+        threads = 5
+
     if is_cuda:
+        # if cuda is enabled only 1 process is launched
         threads = 1
 
     # NODE 1: Random seed genration for cache preservation
