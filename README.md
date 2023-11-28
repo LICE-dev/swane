@@ -4,9 +4,7 @@
     <img alt="SWANe" title="SWANe" src="https://github.com/LICE-dev/swane_supplement/blob/main/swane_supplement/icons/swane.png">
   </a>
 </p>
-<p align="center">
-__Standardized Workflow for Advanced Neuroimaging in Epilepsy__
-</p>
+<h3 align="center"> Standardized Workflow for Advanced Neuroimaging in Epilepsy</h3>
 
 
 ## Table of Contents
