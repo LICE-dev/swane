@@ -5,7 +5,7 @@
   </a>
 </p>
 <p align="center">
-**Standardized Workflow for Advanced Neuroimaging in Epilepsy**
+__Standardized Workflow for Advanced Neuroimaging in Epilepsy__
 </p>
 
 
