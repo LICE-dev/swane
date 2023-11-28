@@ -14,9 +14,11 @@
 - [Introduction](#introduction)
 - [Features](#features)
 - [Getting Started](#gettingstarted)
-- [Contributors](#contributors)
+- [Troubleshots](#throubleshots)
+- [SWANe on Windows](#swaneonwindows)
 - [Authors](#authors)
-- [Acknowledgments](#acknowledgments)
+- [Feedback](#feedback)
+- [License](#license)
 
 
 ## Introduction
