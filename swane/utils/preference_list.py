@@ -307,7 +307,7 @@ GLOBAL_PREFERENCES[category]['slicer_version'] = {
 }
 GLOBAL_PREFERENCES[category]['last_pid'] = {
     'input_type': PreferenceEntry.HIDDEN,
-    'default': "0",
+    'default': "-1",
 }
 GLOBAL_PREFERENCES[category]['slicer_scene_ext'] = {
     'input_type': PreferenceEntry.HIDDEN,
