@@ -88,7 +88,7 @@ class MainWorkflow(CustomWorkflow):
         except:
             self.multicore_node_limit = 0
         try:
-            self.max_gpu = global_config.getint(MAIN, 'max_pt_gpu')
+            self.max_gpu = global_config.getint(PERFORMANCE, 'max_pt_gpu')
             if self.max_gpu < 0:
                 self.max_gpu = 1
         except:

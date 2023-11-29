@@ -3,6 +3,7 @@
 import sys
 import traceback
 from nipype.pipeline.plugins.multiproc import MultiProcPlugin
+from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport
 import gc
 from copy import deepcopy
 from nipype.pipeline.plugins.multiproc import logger, indent
@@ -18,11 +19,6 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
     Custom reimplementation of MultiProcPlugin to support UI signaling and GPU queue
     """
 
-    NODE_STARTED = "start"
-    NODE_COMPLETED = "end"
-    NODE_ERROR = "exception"
-    WORKFLOW_INSUFFICIENT_RESOURCES = "insufficientresources"
-
     def __init__(self,  plugin_args=None):
 
         # self.task_list = {}
@@ -37,7 +33,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         # total no. of processes allowed on all gpus
         if self.n_gpu_proc > self.n_gpus_visible:
             logger.info(
-                'Total number of GPUs proc requested (%d) exceeds the available number of GPUs (%d) on the system. Using requested GPU slots at your own risk!!!.' % (
+                'Total number of GPUs proc requested (%d) exceeds the available number of GPUs (%d) on the system. Using requested GPU slots at your own risk!' % (
                 self.n_gpu_proc, self.n_gpus_visible))
 
         super().__init__(plugin_args=plugin_args)
@@ -63,7 +59,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 if self.raise_insufficient:
                     raise RuntimeError('Insufficient GPU resources available for job')
         except RuntimeError:
-            self.queue.put(MonitoredMultiProcPlugin.WORKFLOW_INSUFFICIENT_RESOURCES)
+            self.queue.put(WorkflowReport(signal_type=WorkflowReport.WORKFLOW_INSUFFICIENT_RESOURCES))
             raise RuntimeError("Insufficient resources available for job")
 
     def _check_resources(self, running_tasks):
@@ -254,30 +250,28 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
     def _report_crash(self, node, result=None):
         # This class implements signaling for generic node error
         try:
-            self.queue.put(node.fullname + "." + MonitoredMultiProcPlugin.NODE_ERROR)
+            self.queue.put(WorkflowReport(long_name=node.fullname, signal_type=WorkflowReport.NODE_ERROR))
         except:
             traceback.print_exc()
+        for line in result['traceback']:
+            if "out of memory" in line:
+                print("###################################outofmemory!###############################")
         return super(MonitoredMultiProcPlugin, self)._report_crash(node, result)
 
     def _submit_job(self, node, updatehash=False):
         # This class implements signaling for generic node start
         if node.name[0] != "_":
             try:
-                self.queue.put(node.fullname + "." + MonitoredMultiProcPlugin.NODE_STARTED)
+                self.queue.put(WorkflowReport(long_name=node.fullname, signal_type=WorkflowReport.NODE_STARTED))
             except:
                 traceback.print_exc()
-        try:
-            return super(MonitoredMultiProcPlugin, self)._submit_job(node, updatehash)
-        except:
-            print("###########################################")
-            print("###########################################")
-            print("###########################################")
 
+        return super(MonitoredMultiProcPlugin, self)._submit_job(node, updatehash)
 
     def _submit_mapnode(self, jobid):
         # This class implements signaling for mapnode start
         try:
-            self.queue.put(self.procs[jobid].fullname + "." + MonitoredMultiProcPlugin.NODE_STARTED)
+            self.queue.put(WorkflowReport(long_name=self.procs[jobid].fullname, signal_type=WorkflowReport.NODE_STARTED))
         except:
             traceback.print_exc()
         return super(MonitoredMultiProcPlugin, self)._submit_mapnode(jobid)
@@ -286,7 +280,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         # Implements signaling for generic node completion
         if jobid not in self.mapnodesubids:
             try:
-                self.queue.put(self.procs[jobid].fullname + "." + MonitoredMultiProcPlugin.NODE_COMPLETED)
+                self.queue.put(WorkflowReport(long_name=self.procs[jobid].fullname, signal_type=WorkflowReport.NODE_COMPLETED))
             except:
                 traceback.print_exc()
         return super(MonitoredMultiProcPlugin, self)._task_finished_cb(jobid, cached)
