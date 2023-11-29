@@ -19,7 +19,7 @@ from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_wor
 from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow, SIDES
 from swane.utils.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
-from swane.utils.preference_list import MAIN, PERFORMANCE, OPTIONAL_SERIES
+from swane.utils.preference_list import MAIN, PERFORMANCE
 
 DEBUG = False
 
