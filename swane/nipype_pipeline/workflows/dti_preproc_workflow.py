@@ -10,7 +10,7 @@ from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
 
 
-def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir: str = None, base_dir: str = "/", max_cpu: int = 0, bedpostx_core: int = 0) -> CustomWorkflow:
+def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir: str = None, base_dir: str = "/", max_cpu: int = 0, multicore_node_limit: int = 0) -> CustomWorkflow:
     """
     DTI preprocessing workflow with eddy current and motion artifact correction.
     Diffusion metrics calculation and, if needed, bayesian estimation of
@@ -30,7 +30,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         workflow settings.
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
-    bedpostx_core: int, optional
+    multicore_node_limit: int, optional
         Preference for bedpostX core usage. The default il 0
         0 -> no limit
         1 -> soft cap
@@ -86,6 +86,9 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     except:
         is_cuda = False
 
+    print("#####################")
+    print(is_cuda)
+
     # NODE 1: Conversion dicom -> nifti
     conv = Node(CustomDcm2niix(), name='dti_conv')
     conv.inputs.source_dir = dti_dir
@@ -126,7 +129,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     else:
 
         # NODE 4a: Generate Eddy files
-        eddy_files = Node(GenEddyFiles(), name="dty_eddy_files")
+        eddy_files = Node(GenEddyFiles(), name="dti_eddy_files")
         workflow.connect(conv, "bvals", eddy_files, "bval")
 
         # NODE 4: Eddy current and motion artifact correction
@@ -139,9 +142,9 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         eddy = Node(interface, name="dti_eddy")
         if not is_cuda:
             # if cuda is enabled only 1 process is launched
-            if bedpostx_core == 1:
+            if multicore_node_limit == 1:
                 eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
-            elif bedpostx_core == 2:
+            elif multicore_node_limit == 2:
                 eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
                 eddy.inputs.num_threads = max_cpu
         workflow.connect(reorient, "out_file", eddy, "in_file")
@@ -221,9 +224,9 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         bedpostx.inputs.use_gpu = is_cuda
         if not is_cuda:
             # if cuda is enabled only 1 process is launched
-            if bedpostx_core == 1:
+            if multicore_node_limit == 1:
                 bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
-            elif bedpostx_core == 2:
+            elif multicore_node_limit == 2:
                 bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
                 bedpostx.inputs.num_threads = max_cpu
 

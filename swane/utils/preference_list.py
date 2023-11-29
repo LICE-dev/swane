@@ -359,7 +359,7 @@ GLOBAL_PREFERENCES[category]['resourceMonitor'] = {
     'label': "Enable resource monitor",
     'default': 'false',
 }
-GLOBAL_PREFERENCES[category]['bedpostx_core'] = {
+GLOBAL_PREFERENCES[category]['multicore_node_limit'] = {
     'input_type': PreferenceEntry.COMBO,
     'label': "CPU management for multi-core steps",
     'default': ["No limit", "Soft cap", "Hard Cap"],
