@@ -5,17 +5,13 @@ import os
 import traceback
 from multiprocessing import Process, Event
 from threading import Thread
-from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
+from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport
 from nipype.external.cloghandler import ConcurrentRotatingFileHandler
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 import logging as orig_log
 
 
 class WorkflowProcess(Process):
-    # NODE_STARTED = "start"
-    # NODE_COMPLETED = "end"
-    # NODE_ERROR = "exception"
-
     LOG_CHANNELS = [
         "nipype.workflow",
         "nipype.utils",
@@ -120,7 +116,7 @@ class WorkflowProcess(Process):
             callback_logger.removeHandler(resource_log_handler)
 
         # chiudo la queue del subprocess
-        self.queue.put(WorkflowMonitorWorker.STOP)
+        self.queue.put(WorkflowReport(signal_type=WorkflowReport.WORKFLOW_STOP))
         self.queue.close()
 
         # se il thread è alive vuol dire che devo killare su richiesta della GUI

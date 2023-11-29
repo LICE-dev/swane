@@ -28,9 +28,9 @@ from swane.utils.ConfigManager import ConfigManager
 from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from swane.utils.DataInput import DataInput, DataInputList
-from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.preference_list import SLICER_EXTENSIONS, WORKFLOW_TYPES
+from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport
 
 
 class PtTab(QTabWidget):
@@ -46,8 +46,6 @@ class PtTab(QTabWidget):
     GRAPH_FILE_PREFIX = "graph_"
     GRAPH_FILE_EXT = "svg"
     GRAPH_TYPE = "colored"
-    NODE_MSG_DIVIDER = '.'
-
 
     def __init__(self, global_config, pt_folder, main_window, parent=None):
         super(PtTab, self).__init__(parent)
@@ -106,14 +104,14 @@ class PtTab(QTabWidget):
         
         self.main_window = main_window
 
-    def update_node_list(self, msg: str):
+    def update_node_list(self, wf_report: WorkflowReport):
         """
         Searches for the node linked to the msg arg.
         Uses the parsed msng arg to update the node status.
 
         Parameters
         ----------
-        msg : str
+        wf_report : WorkflowReport
             Workflow Monitor Worker message to parse.
 
         Returns
@@ -122,7 +120,7 @@ class PtTab(QTabWidget):
 
         """
         
-        if msg == WorkflowMonitorWorker.STOP:
+        if wf_report.signal_type == WorkflowReport.WORKFLOW_STOP:
             errors = False
             for key in self.node_list.keys():
                 self.node_list[key].node_holder.setExpanded(False)
@@ -156,36 +154,27 @@ class PtTab(QTabWidget):
         #     msg_box.setText(strings.pttab_wf_insufficient_resources)
         #     msg_box.exec()
 
-        split = msg.split(PtTab.NODE_MSG_DIVIDER)
-
-        # For every message starts by "nipype_pt_x.", remove the prefix
-        split.pop(0)
-
-        # Remaining message must be like: workflow_name.node_name.message_type
-        if len(split) < 3:
-            return
-
-        if split[2] == MonitoredMultiProcPlugin.NODE_STARTED:
+        if wf_report.signal_type == WorkflowReport.NODE_STARTED:
             icon = self.main_window.LOADING_MOVIE_FILE
-        elif split[2] == MonitoredMultiProcPlugin.NODE_COMPLETED:
+        elif wf_report.signal_type == WorkflowReport.NODE_COMPLETED:
             icon = self.main_window.OK_ICON_FILE
         else:
             icon = self.main_window.ERROR_ICON_FILE
 
-        self.node_list[split[0]].node_list[split[1]].node_holder.set_art(icon)
+        self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder.set_art(icon)
 
-        self.node_list[split[0]].node_holder.setExpanded(True)
+        self.node_list[wf_report.workflow_name].node_holder.setExpanded(True)
 
         if icon == self.main_window.OK_ICON_FILE:
             completed = True
-            for key in self.node_list[split[0]].node_list.keys():
-                if self.node_list[split[0]].node_list[key].node_holder.art != self.main_window.OK_ICON_FILE:
+            for key in self.node_list[wf_report.workflow_name].node_list.keys():
+                if self.node_list[wf_report.workflow_name].node_list[key].node_holder.art != self.main_window.OK_ICON_FILE:
                     completed = False
                     break
             if completed:
-                self.node_list[split[0]].node_holder.set_art(self.main_window.OK_ICON_FILE)
-                self.node_list[split[0]].node_holder.setExpanded(False)
-                self.node_list[split[0]].node_holder.completed = True
+                self.node_list[wf_report.workflow_name].node_holder.set_art(self.main_window.OK_ICON_FILE)
+                self.node_list[wf_report.workflow_name].node_holder.setExpanded(False)
+                self.node_list[wf_report.workflow_name].node_holder.completed = True
 
     def remove_running_icon(self):
         """
