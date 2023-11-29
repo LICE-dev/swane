@@ -1,6 +1,7 @@
 import os
 from swane.utils.DataInput import DataInputList
 from swane.utils.PreferenceEntry import PreferenceEntry
+from swane import __version__
 
 try:
     XTRACT_DATA_DIR = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
@@ -47,6 +48,15 @@ for k in list(TRACTS.keys()):
 
 WORKFLOW_TYPES = ["Structural Workflow", "Morpho-Functional Workflow"]
 SLICER_EXTENSIONS = ["mrb", "mrml"]
+
+# GLOBAL PREFERENCE LIST
+MAIN = "main"
+PERFORMANCE = "performance"
+OPTIONAL_SERIES = "optional_series"
+GLOBAL_PREF_KEYS = [[MAIN, "Global settings"],
+                    [PERFORMANCE, 'Performance'],
+                    [OPTIONAL_SERIES, 'Optional series']
+                    ]
 
 #WORKFLOWS PREFERENCE LIST
 WF_PREFERENCES = {}
@@ -261,14 +271,7 @@ WF_PREFERENCES[DataInputList.FMRI + "_1"] = WF_PREFERENCES[DataInputList.FMRI + 
 WF_PREFERENCES[DataInputList.FMRI + "_2"] = WF_PREFERENCES[DataInputList.FMRI + "_0"]
 
 
-# GLOBAL PREFERENCE LIST
-MAIN = "main"
-PERFORMANCE = "performance"
-OPTIONAL_SERIES = "optional_series"
-GLOBAL_PREF_KEYS = [[MAIN, "Global settings"],
-                    [PERFORMANCE, 'Performance'],
-                    [OPTIONAL_SERIES, 'Optional series']
-                    ]
+
 
 GLOBAL_PREFERENCES = {}
 
@@ -300,6 +303,14 @@ GLOBAL_PREFERENCES[category]['slicer_version'] = {
 GLOBAL_PREFERENCES[category]['last_pid'] = {
     'input_type': PreferenceEntry.HIDDEN,
     'default': "-1",
+}
+GLOBAL_PREFERENCES[category]['last_swane_version'] = {
+    'input_type': PreferenceEntry.HIDDEN,
+    'default': __version__,
+}
+GLOBAL_PREFERENCES[category]['force_pref_reset'] = {
+    'input_type': PreferenceEntry.HIDDEN,
+    'default': "false",
 }
 GLOBAL_PREFERENCES[category]['slicer_scene_ext'] = {
     'input_type': PreferenceEntry.HIDDEN,

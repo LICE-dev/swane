@@ -1,5 +1,5 @@
 import configparser
-from swane import strings
+from swane import strings, __version__
 from swane.utils.preference_list import *
 
 
@@ -10,6 +10,7 @@ class ConfigManager(configparser.ConfigParser):
     def __init__(self, pt_folder=None):
         super(ConfigManager, self).__init__()
 
+        # First set some internal values differentiating global from patient pref objects
         if pt_folder is not None:
             # NEL CASO STIA GESTENDO LE IMPOSTAZIONI SPECIFICHE DI UN UTENTE COPIO ALCUNI VALORI DALLE IMPOSTAZIONI GLOBALI
             self.global_config = False
@@ -20,10 +21,33 @@ class ConfigManager(configparser.ConfigParser):
             self.config_file = os.path.abspath(os.path.join(
                 os.path.expanduser("~"), "." + strings.APPNAME))
 
+        # Load default pref from pref list
         self.load_default_wf_settings(save=False)
 
-        if os.path.exists(self.config_file):
+        # check if this version need pref reset
+        try:
+            force_pref_reset = self.getboolean(MAIN, 'force_pref_reset')
+        except:
+            force_pref_reset = False
+
+
+        reset_pref = False
+
+        # if version need pref reset, load olg config file in a temp variable to get just last_swane_version
+        try:
+            if force_pref_reset:
+                temp_config = configparser.ConfigParser()
+                temp_config.read(self.config_file)
+                if __version__ != temp_config[MAIN]['last_swane_version']:
+                    reset_pref = True
+        except:
+            pass
+
+        if not reset_pref and os.path.exists(self.config_file):
             self.read(self.config_file)
+            if MAIN not in self:
+                self[MAIN] = {}
+            self[MAIN]['last_swane_version'] = __version__
 
         self.save()
 
@@ -55,6 +79,9 @@ class ConfigManager(configparser.ConfigParser):
             for data_input in DataInputList().values():
                 if data_input.name in WF_PREFERENCES:
                     self[data_input.name] = tmp_config[data_input.name]
+            self[MAIN] = {}
+            self[MAIN]['last_swane_version'] = tmp_config[MAIN]['last_swane_version']
+            self[MAIN]['force_pref_reset'] = tmp_config[MAIN]['force_pref_reset']
 
             self.set_wf_option(tmp_config[MAIN]['default_wf_type'])
         if save:

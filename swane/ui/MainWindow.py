@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (QMainWindow, QMessageBox, QFileDialog, QInputDial
                                QLineEdit, QTabWidget, QGridLayout, QLabel, QSizePolicy,
                                QSpacerItem, QWidget, QTabBar, QDialog, QPushButton, QStyleOptionButton)
 from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
-from PySide6.QtCore import QCoreApplication, Qt
+from PySide6.QtCore import QCoreApplication, Qt, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.utils.DependencyManager import DependencyManager, Dependence
@@ -12,6 +12,8 @@ import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.utils.DataInput import DataInputList
 from swane.utils.preference_list import GLOBAL_PREF_KEYS
+from swane.ui.workers.UpdateCheckWorker import UpdateCheckWorker
+from packaging import version
 
 
 class MainWindow(QMainWindow):
@@ -53,6 +55,20 @@ class MainWindow(QMainWindow):
         os.chdir(self.global_config.get_patients_folder())
 
         self.initialize_ui()
+
+        update_thread = UpdateCheckWorker()
+        update_thread.signal.last_available.connect(lambda pip_version: self.update_available(pip_version))
+        QThreadPool.globalInstance().start(update_thread)
+
+    def update_available(self, pip_version):
+        try:
+            if version.parse(pip_version) > version.parse(__version__):
+                msg_box = QMessageBox(parent=self)
+                msg_box.setIcon(QMessageBox.Icon.Information)
+                msg_box.setText(strings.mainwindow_update_available % pip_version)
+                msg_box.exec()
+        except:
+            pass
 
     @staticmethod
     def get_non_unicode_height():

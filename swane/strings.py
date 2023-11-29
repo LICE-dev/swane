@@ -24,6 +24,7 @@ mainwindow_invalid_folder_error = "The selected folder does not contains valid p
 mainwindow_force_dir_update = "If you are SURE you selected a patient folder, " + APPNAME + "can try to update " \
                               "it.\nDo you want to update selected patient folder?"
 mainwindow_max_pt_error = "Max patient tab limit reached!"
+mainwindow_update_available = "New version available (%s). We recommend you to update " + APPNAME + " with:<br><b><center>pip3 install --upgrade swane"
 mainwindow_new_pt_name = 'Write the name of the new patient:'
 mainwindow_new_pt_title = 'New patient'
 mainwindow_new_pt_created = "New patient created in: "
