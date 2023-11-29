@@ -54,7 +54,7 @@ class CustomWorkflow(Workflow):
 
             outlist[node.name] = NodeListEntry()
             outlist[node.name].long_name = self.format_node_name(node)
-            if isinstance(node, Workflow):
+            if isinstance(node, CustomWorkflow):
                 outlist[node.name].node_list = node.get_node_array()
         return outlist
 

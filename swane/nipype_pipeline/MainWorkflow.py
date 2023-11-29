@@ -84,9 +84,9 @@ class MainWorkflow(CustomWorkflow):
             self.max_cpu = cpu_count()
 
         try:
-            self.bedpostx_core = global_config.getint(PERFORMANCE, 'bedpostx_core')
+            self.multicore_node_limit = global_config.getint(PERFORMANCE, 'multicore_node_limit')
         except:
-            self.bedpostx_core = 0
+            self.multicore_node_limit = 0
         try:
             self.max_gpu = global_config.getint(MAIN, 'max_pt_gpu')
             if self.max_gpu < 0:
@@ -97,7 +97,7 @@ class MainWorkflow(CustomWorkflow):
             if not dependency_manager.is_cuda():
                 pt_config[DataInputList.DTI]["cuda"] = "false"
             else:
-                pt_config[DataInputList.DTI]["cuda"] = global_config["MAIN"]["cuda"]
+                pt_config[DataInputList.DTI]["cuda"] = global_config[PERFORMANCE]["cuda"]
         except:
             pt_config[DataInputList.DTI]["cuda"] = "false"
 
@@ -303,7 +303,7 @@ class MainWorkflow(CustomWorkflow):
             dti_dir = data_input_list.get_dicom_dir(DataInputList.DTI)
             mni_dir = abspath(os.path.join(os.environ["FSLDIR"], 'data/standard/MNI152_T1_2mm_brain.nii.gz'))
 
-            dti_preproc = dti_preproc_workflow(data_input_list[DataInputList.DTI].wf_name, dti_dir, pt_config[DataInputList.DTI], mni_dir, max_cpu=self.max_cpu, bedpostx_core=self.bedpostx_core)
+            dti_preproc = dti_preproc_workflow(data_input_list[DataInputList.DTI].wf_name, dti_dir, pt_config[DataInputList.DTI], mni_dir, max_cpu=self.max_cpu, multicore_node_limit=self.multicore_node_limit)
             dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
             self.connect(t1, "outputnode.ref_brain", dti_preproc, "inputnode.ref_brain")
 

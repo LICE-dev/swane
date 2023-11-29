@@ -14,6 +14,9 @@ from logging import INFO
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.pipeline.plugins.multiproc.MultiProcPlugin)  -*-
 class MonitoredMultiProcPlugin(MultiProcPlugin):
+    """
+    Custom reimplementation of MultiProcPlugin to support UI signaling and GPU queue
+    """
 
     NODE_STARTED = "start"
     NODE_COMPLETED = "end"
@@ -21,6 +24,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
     WORKFLOW_INSUFFICIENT_RESOURCES = "insufficientresources"
 
     def __init__(self,  plugin_args=None):
+
         # self.task_list = {}
         if "queue" in plugin_args:
             self.queue = plugin_args["queue"]
@@ -262,7 +266,13 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 self.queue.put(node.fullname + "." + MonitoredMultiProcPlugin.NODE_STARTED)
             except:
                 traceback.print_exc()
-        return super(MonitoredMultiProcPlugin, self)._submit_job(node, updatehash)
+        try:
+            return super(MonitoredMultiProcPlugin, self)._submit_job(node, updatehash)
+        except:
+            print("###########################################")
+            print("###########################################")
+            print("###########################################")
+
 
     def _submit_mapnode(self, jobid):
         # This class implements signaling for mapnode start
