@@ -110,7 +110,8 @@ pttab_wf_invalid_signal = "Signaling error, workflow will be stopped. Report thi
 pttab_wf_error_oom_gpu = "Process killed: Out of Memory (GPU). Try to reduce GPU process limit in performance preferences"
 pttab_wf_error_oom = "Process killed: Out of Memory. Try to reduce CPU core limit in performance preferences"
 pttab_tabtooltip_exec_disabled = "A 3D T1w series is required to enable workflow execution"
-pttab_tabtooltip_result_disabled = "Result folder is missing, execute a workflow first"
+pttab_tabtooltip_result_disabled = "Complete a workflow first"
+pttab_tabtooltip_data_disabled = "Cannot change patient data during workflow execution"
 
 # Wf Preference Window
 wf_pref_window_title_global = 'Default Workflow Settings'
