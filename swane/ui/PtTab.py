@@ -1345,3 +1345,19 @@ class PtTab(QTabWidget):
         
         enable = self.data_input_list.is_ref_loaded() and self.main_window.dependency_manager.is_fsl() and self.main_window.dependency_manager.is_dcm2niix()
         self.setTabEnabled(PtTab.EXECTAB, enable)
+
+    def setTabEnabled(self, index, enabled):
+        if index == PtTab.EXECTAB and not enabled:
+            self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled)
+        elif index == PtTab.RESULTTAB and not enabled:
+            self.setTabToolTip(index, strings.pttab_tabtooltip_result_disabled)
+        else:
+            self.setTabToolTip(index, "")
+        super().setTabEnabled(index, enabled)
+
+    def setTabToolTip(self, index, tip):
+        super().setTabToolTip(index, tip)
+        if tip == "" and self.tabText(index).endswith(strings.INFOCHAR):
+            self.setTabText(index, self.tabText(index).replace(" "+strings.INFOCHAR, ""))
+        elif tip != "" and not self.tabText(index).endswith(strings.INFOCHAR):
+            self.setTabText(index, self.tabText(index) + " " + strings.INFOCHAR)
