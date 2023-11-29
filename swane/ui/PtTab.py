@@ -30,7 +30,7 @@ from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from swane.utils.DataInput import DataInput, DataInputList
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.preference_list import SLICER_EXTENSIONS, WORKFLOW_TYPES
-from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport
+from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 
 
 class PtTab(QTabWidget):
@@ -120,7 +120,7 @@ class PtTab(QTabWidget):
 
         """
         
-        if wf_report.signal_type == WorkflowReport.WORKFLOW_STOP:
+        if wf_report.signal_type == WorkflowSignals.WORKFLOW_STOP:
             errors = False
             for key in self.node_list.keys():
                 self.node_list[key].node_holder.setExpanded(False)
@@ -147,6 +147,16 @@ class PtTab(QTabWidget):
             self.enable_tab_if_result_dir()
             
             return
+        elif wf_report.signal_type == WorkflowSignals.INVALID_SIGNAL:
+            # Invalid signal sent from WF to UI, code error intercept
+            try:
+                self.workflow_process.stop_event.set()
+            except:
+                pass
+            msg_box = QMessageBox()
+            msg_box.setText(strings.pttab_wf_invalid_signal)
+            msg_box.exec()
+
 
         # TODO - To be implemented for RAM usage info by each workflow
         # if msg == WorkflowProcess.WORKFLOW_INSUFFICIENT_RESOURCES:
@@ -154,14 +164,17 @@ class PtTab(QTabWidget):
         #     msg_box.setText(strings.pttab_wf_insufficient_resources)
         #     msg_box.exec()
 
-        if wf_report.signal_type == WorkflowReport.NODE_STARTED:
+        if wf_report.signal_type == WorkflowSignals.NODE_STARTED:
             icon = self.main_window.LOADING_MOVIE_FILE
-        elif wf_report.signal_type == WorkflowReport.NODE_COMPLETED:
+        elif wf_report.signal_type == WorkflowSignals.NODE_COMPLETED:
             icon = self.main_window.OK_ICON_FILE
         else:
             icon = self.main_window.ERROR_ICON_FILE
 
         self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder.set_art(icon)
+
+        if wf_report.info is not None:
+            self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder.setToolTip(0, wf_report.info)
 
         self.node_list[wf_report.workflow_name].node_holder.setExpanded(True)
 

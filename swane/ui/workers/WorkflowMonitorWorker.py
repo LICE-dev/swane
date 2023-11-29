@@ -1,5 +1,5 @@
 from PySide6.QtCore import Signal, QObject, QRunnable
-from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport
+from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 
 
 class LogReceiverSignal(QObject):
@@ -23,5 +23,5 @@ class WorkflowMonitorWorker(QRunnable):
             # report
             self.signal.log_msg.emit(wf_report)
             # check for stop
-            if wf_report.signal_type == WorkflowReport.WORKFLOW_STOP:
+            if wf_report.signal_type == WorkflowSignals.WORKFLOW_STOP:
                 break
