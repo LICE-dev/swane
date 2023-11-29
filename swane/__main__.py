@@ -37,7 +37,7 @@ def main():
         try:
             last_pid = global_config.getint(MAIN, 'last_pid')
         except:
-            last_pid = 0
+            last_pid = -1
 
         if last_pid != os.getpid():
             try:
