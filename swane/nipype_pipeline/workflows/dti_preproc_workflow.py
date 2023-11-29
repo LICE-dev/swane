@@ -6,8 +6,10 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CustomBEDPOSTX5 import CustomBEDPOSTX5
 from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
+from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
+from multiprocessing import cpu_count
 
 
 def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir: str = None, base_dir: str = "/", max_cpu: int = 0, multicore_node_limit: int = 0) -> CustomWorkflow:
@@ -86,9 +88,6 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     except:
         is_cuda = False
 
-    print("#####################")
-    print(is_cuda)
-
     # NODE 1: Conversion dicom -> nifti
     conv = Node(CustomDcm2niix(), name='dti_conv')
     conv.inputs.source_dir = dti_dir
@@ -133,20 +132,20 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         workflow.connect(conv, "bvals", eddy_files, "bval")
 
         # NODE 4: Eddy current and motion artifact correction
-        interface = Eddy()
-        if not is_cuda:
-            # newer fsl version automatically use eddy_gpu if cuda is available, those version use eddy_cpu for cpu
-            # older version has no automatic cuda usage and eddy_cpu did not exist
-            if which("eddy_cpu") is not None:
-                interface._cmd = "eddy_cpu"
-        eddy = Node(interface, name="dti_eddy")
-        if not is_cuda:
-            # if cuda is enabled only 1 process is launched
-            if multicore_node_limit == 1:
-                eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
-            elif multicore_node_limit == 2:
-                eddy.inputs.environ = {'OMP_NUM_THREADS': str(max_cpu), 'FSL_SKIP_GLOBAL': '1'}
+        eddy = Node(CustomEddy(), name="dti_eddy")
+        if is_cuda:
+            eddy.inputs.use_gpu = True
+        else:
+            eddy.inputs.use_gpu = False
+            if multicore_node_limit == 2:
+                eddy_cpu = max_cpu
                 eddy.inputs.num_threads = max_cpu
+            elif multicore_node_limit == 1:
+                eddy_cpu = max_cpu
+            else:
+                eddy_cpu = cpu_count()
+            eddy.inputs.environ = {'OMP_NUM_THREADS': str(eddy_cpu), 'FSL_SKIP_GLOBAL': '1'}
+
         workflow.connect(reorient, "out_file", eddy, "in_file")
         workflow.connect(conv, "bvals", eddy, "in_bval")
         workflow.connect(conv, "bvecs", eddy, "in_bvec")
@@ -179,6 +178,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
 
     # NODE 7: FA linear transformation in reference space
     fa_2_ref_flirt = Node(ApplyXFM(), name='FA2ref_FLIRT')
+    fa_2_ref_flirt.long_name = "FA %s in reference space"
     fa_2_ref_flirt.inputs.out_file = "r-FA.nii.gz"
     fa_2_ref_flirt.inputs.interp = "trilinear"
     workflow.connect(dtifit, "FA", fa_2_ref_flirt, "in_file")
