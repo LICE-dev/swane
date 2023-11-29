@@ -63,11 +63,11 @@ class PtTab(QTabWidget):
 
         self.data_tab = QWidget()
         self.exec_tab = QWidget()
-        self.slicer_tab = QWidget()
+        self.result_tab = QWidget()
 
         self.addTab(self.data_tab, strings.pttab_data_tab_name)
         self.addTab(self.exec_tab, strings.pttab_wf_tab_name)
-        self.addTab(self.slicer_tab, strings.pttab_results_tab_name)
+        self.addTab(self.result_tab, strings.pttab_results_tab_name)
 
         self.directory_watcher = QFileSystemWatcher()
         self.directory_watcher.directoryChanged.connect(self.reset_workflow)
@@ -80,7 +80,7 @@ class PtTab(QTabWidget):
 
         self.data_tab_ui()
         self.exec_tab_ui()
-        self.slicer_tab_ui()
+        self.result_tab_ui()
 
         self.setTabEnabled(PtTab.EXECTAB, False)
         self.setTabEnabled(PtTab.RESULTTAB, False)
@@ -775,7 +775,7 @@ class PtTab(QTabWidget):
         except:
             pass
 
-    def slicer_tab_ui(self):
+    def result_tab_ui(self):
         """
         Generates the Results tab UI.
 
@@ -785,38 +785,38 @@ class PtTab(QTabWidget):
 
         """
         
-        slicer_tab_layout = QGridLayout()
-        self.slicer_tab.setLayout(slicer_tab_layout)
+        result_tab_layout = QGridLayout()
+        self.result_tab.setLayout(result_tab_layout)
 
         self.export_results_button = QPushButton(strings.pttab_results_button)
         self.export_results_button.clicked.connect(self.slicer_thread)
         self.export_results_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.export_results_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.export_results_button_update_state()
-        slicer_tab_layout.addWidget(self.export_results_button, 0, 0)
+        result_tab_layout.addWidget(self.export_results_button, 0, 0)
 
         horizontal_spacer = QSpacerItem(20, 40, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        slicer_tab_layout.addItem(horizontal_spacer, 0, 1, 1, 1)
+        result_tab_layout.addItem(horizontal_spacer, 0, 1, 1, 1)
 
         self.load_scene_button = QPushButton(strings.pttab_open_results_button)
         self.load_scene_button.clicked.connect(self.slicer_open_result)
         self.load_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.load_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.load_scene_button_update_state()
-        slicer_tab_layout.addWidget(self.load_scene_button, 0, 2)
+        result_tab_layout.addWidget(self.load_scene_button, 0, 2)
 
         self.open_results_directory_button = QPushButton(strings.pttab_open_results_directory)
         self.open_results_directory_button.clicked.connect(self.open_results_directory)
         self.open_results_directory_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.open_results_directory_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
-        slicer_tab_layout.addWidget(self.open_results_directory_button, 0, 3)
+        result_tab_layout.addWidget(self.open_results_directory_button, 0, 3)
 
         self.results_model = QFileSystemModel()
         self.result_tree = QTreeView(parent=self)
         self.result_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.result_tree.setModel(self.results_model)
 
-        slicer_tab_layout.addWidget(self.result_tree, 1, 0, 1, 4)
+        result_tab_layout.addWidget(self.result_tree, 1, 0, 1, 4)
 
     def slicer_thread(self):
         """
@@ -1186,7 +1186,6 @@ class PtTab(QTabWidget):
 
     def result_directory_changed(self):
         self.enable_tab_if_result_dir()
-        self.load_scene_button_update_state()
 
     def show_scan_result(self, dicom_src_work: DicomSearchWorker):
         """
@@ -1351,6 +1350,8 @@ class PtTab(QTabWidget):
             self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled)
         elif index == PtTab.RESULTTAB and not enabled:
             self.setTabToolTip(index, strings.pttab_tabtooltip_result_disabled)
+        elif index == PtTab.DATATAB and not enabled:
+            self.setTabToolTip(index, strings.pttab_tabtooltip_data_disabled)
         else:
             self.setTabToolTip(index, "")
         super().setTabEnabled(index, enabled)
