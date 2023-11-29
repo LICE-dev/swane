@@ -144,8 +144,6 @@ WF_PREFERENCES[category]['ai'] = {
     'input_type': PreferenceEntry.CHECKBOX,
     'label': "Asymmetry Index map for ASL",
     'default': 'true',
-    'pref_requirement': {DataInputList.T13D: [('freesurfer', True)]},
-    'pref_requirement_fail_tooltip': "Requires Freesurfer analysis",
 }
 WF_PREFERENCES[category]['ai_threshold'] = {
     'input_type': PreferenceEntry.NUMBER,
@@ -163,8 +161,6 @@ WF_PREFERENCES[category]['ai'] = {
     'input_type': PreferenceEntry.CHECKBOX,
     'label': "Asymmetry Index map for PET",
     'default': 'true',
-    'pref_requirement': {DataInputList.T13D: [('freesurfer', True)]},
-    'pref_requirement_fail_tooltip': "Requires Freesurfer analysis",
 }
 WF_PREFERENCES[category]['ai_threshold'] = {
     'input_type': PreferenceEntry.NUMBER,
