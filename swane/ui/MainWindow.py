@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def get_non_unicode_height():
-        button = QPushButton("a")
+        button = QPushButton()
         opt = QStyleOptionButton()
         opt.initFrom(button)
         text_size = button.fontMetrics().size(Qt.TextShowMnemonic, button.text())

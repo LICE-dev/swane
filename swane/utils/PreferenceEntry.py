@@ -3,7 +3,7 @@ import os
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIntValidator, QDoubleValidator
 from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox,
-                               QComboBox, QStyle, QSizePolicy)
+                               QComboBox, QStyle, QSizePolicy, QStyleOption)
 
 from swane import strings
 from configparser import RawConfigParser
@@ -27,6 +27,11 @@ class PreferenceEntry:
         self.input_type = input_type
         self.tooltip = None
         self.label = QLabel()
+        opt = QStyleOption()
+        opt.initFrom(self.label)
+        text_size = self.label.fontMetrics().size(Qt.TextShowMnemonic, self.label.text())
+        height = self.label.style().sizeFromContents(QStyle.CT_PushButton, opt, text_size, self.label).height()
+        self.label.setMaximumHeight(height)
         self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.input_field, self.button = self.gen_input_field()
         if input_type == PreferenceEntry.COMBO:
