@@ -172,14 +172,6 @@ WF_PREFERENCES[category]['old_eddy_correct'] = {
     'label': "Use older but faster fsl eddy_correct",
     'default': 'false',
 }
-# wf_preferences[category]['cuda'] = {
-#     'input_type': PreferenceEntry.CHECKBOX,
-#     'label': "Enable CUDA for GPUable commands",
-#     'tooltip': 'NVIDIA GPU-based computation',
-#     'default': 'false',
-#     'dependency': 'is_cuda',
-#     'dependency_fail_tooltip': "GPU does not support CUDA",
-# }
 WF_PREFERENCES[category]['tractography'] = {
     'input_type': PreferenceEntry.CHECKBOX,
     'label': "DTI tractography",
@@ -347,7 +339,7 @@ GLOBAL_PREFERENCES[category]['cuda'] = {
 }
 GLOBAL_PREFERENCES[category]['max_pt_gpu'] = {
     'input_type': PreferenceEntry.NUMBER,
-    'label': "GPU proc limit per patient",
+    'label': "GPU process limit per patient",
     'tooltip': "The limit should be equal or lesser than the number of physical GPU",
     'default': "1",
     'range': [1, 5],

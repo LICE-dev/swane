@@ -106,6 +106,9 @@ pttab_exporting_start = "Exporting results into Slicer scene...\nLoading Slicer 
 pttab_exporting_prefix = "Exporting results into Slicer scene...\n"
 pttab_dicom_clearing = "Clearing DICOM files in: "
 pttab_wf_insufficient_resources = "Insufficient system resources (RAM or CPU) to execute workflows"
+pttab_wf_invalid_signal = "Signaling error, workflow will be stopped. Report this error."
+pttab_wf_error_oom_gpu = "Process killed: Out of Memory (GPU). Try to reduce GPU process limit in performance preferences"
+pttab_wf_error_oom = "Process killed: Out of Memory. Try to reduce CPU core limit in performance preferences"
 
 # Wf Preference Window
 wf_pref_window_title_global = 'Default Workflow Settings'

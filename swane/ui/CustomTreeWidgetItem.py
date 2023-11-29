@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QTreeWidgetItem, QSpacerItem
 from PySide6.QtSvgWidgets import QSvgWidget
+from swane import strings
 
 
 class CustomTreeWidgetItem(QTreeWidgetItem):
@@ -28,6 +29,17 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         
         self.completed = False
         self.art = None
+
+    def setToolTip(self, column, toolTip):
+        """
+        Reinplement base method to add info character .
+
+        """
+        if toolTip == "" and self.get_text().endswith(strings.INFOCHAR):
+            self.setText(self.get_text()[:-2])
+        elif toolTip != "" and not self.get_text().endswith(strings.INFOCHAR):
+            self.setText(self.get_text() + " " + strings.INFOCHAR)
+        super().setToolTip(column, toolTip)
 
     def setText(self, text: str):
         """
