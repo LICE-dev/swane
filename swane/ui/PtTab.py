@@ -1347,7 +1347,10 @@ class PtTab(QTabWidget):
 
     def setTabEnabled(self, index, enabled):
         if index == PtTab.EXECTAB and not enabled:
-            self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled)
+            if not self.main_window.dependency_manager.is_fsl() or not self.main_window.dependency_manager.is_dcm2niix():
+                self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled_dependency)
+            else:
+                self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled_series)
         elif index == PtTab.RESULTTAB and not enabled:
             self.setTabToolTip(index, strings.pttab_tabtooltip_result_disabled)
         elif index == PtTab.DATATAB and not enabled:
