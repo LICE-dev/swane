@@ -2,6 +2,9 @@ import os
 from swane.utils.DataInput import DataInputList
 from swane.utils.PreferenceEntry import PreferenceEntry
 from swane import __version__
+from multiprocessing import cpu_count
+from nipype.utils.profiler import get_system_total_memory_gb
+from math import ceil
 
 try:
     XTRACT_DATA_DIR = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
@@ -192,8 +195,6 @@ WF_PREFERENCES[category]['track_procs'] = {
     'pref_requirement_fail_tooltip': "Tractography disabled",
 }
 
-
-
 for tract in TRACTS.keys():
     WF_PREFERENCES[category][tract] = {
         'input_type': PreferenceEntry.CHECKBOX,
@@ -266,9 +267,6 @@ WF_PREFERENCES[category]['del_end_vols'] = {
 WF_PREFERENCES[DataInputList.FMRI + "_1"] = WF_PREFERENCES[DataInputList.FMRI + "_0"]
 WF_PREFERENCES[DataInputList.FMRI + "_2"] = WF_PREFERENCES[DataInputList.FMRI + "_0"]
 
-
-
-
 GLOBAL_PREFERENCES = {}
 
 category = MAIN
@@ -329,11 +327,15 @@ GLOBAL_PREFERENCES[category]['max_pt'] = {
     'default': "1",
     'range': [0, 5],
 }
+try:
+    suggested_max_cpu = max(ceil(min(cpu_count()/2, get_system_total_memory_gb()/3)), 1)
+except:
+    suggested_max_cpu = 1
 GLOBAL_PREFERENCES[category]['max_pt_cpu'] = {
     'input_type': PreferenceEntry.NUMBER,
     'label': "CPU core limit per patient",
     'tooltip': "To use all CPU cores set value equal to -1",
-    'default': "-1",
+    'default': str(suggested_max_cpu),
     'range': [-1, 30],
 }
 GLOBAL_PREFERENCES[category]['cuda'] = {
