@@ -6,19 +6,22 @@ from packaging import version
 from swane.utils.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 import subprocess
+from enum import IntEnum
+
+
+class DependenceStatus(IntEnum):
+    DETECTED = 1
+    WARNING = 0
+    MISSING = -1
+    CHECKING = -2
 
 
 class Dependence:
     """
     An object with a dependence information
     """
-    DETECTED = 1
-    WARNING = 0
-    MISSING = -1
-    CHECKING = -2
-    STATES = [DETECTED, WARNING, MISSING, CHECKING]
 
-    def __init__(self, state: int, label: str, state2: int = MISSING):
+    def __init__(self, state: DependenceStatus, label: str, state2: DependenceStatus = DependenceStatus.MISSING):
         """
         Parameters
         ----------
@@ -31,29 +34,29 @@ class Dependence:
         """
 
         self.state = None
-        self.state2 = Dependence.MISSING
+        self.state2 = DependenceStatus.MISSING
         self.label = None
         self.update(state, label, state2)
 
-    def update(self, state: int, label: str, state2: int = MISSING):
+    def update(self, state: DependenceStatus, label: str, state2: DependenceStatus = DependenceStatus.MISSING):
         """
         Parameters
         ----------
         state: int
-            A value in Dependence.STATES describing the dependence status
+            A value in DependenceStatus describing the dependence status
         label: str
             A string to inform the user about the depence status
         state2: int
-            A value in Dependence.STATES describing a subdependence status
+            A value in DependenceStatus describing a subdependence status
         """
 
-        if state in Dependence.STATES:
+        if state in DependenceStatus:
             self.state = state
             self.label = label
             self.state2 = state2
         else:
-            self.state = Dependence.MISSING
-            self.state2 = Dependence.MISSING
+            self.state = DependenceStatus.MISSING
+            self.state2 = DependenceStatus.MISSING
             self.label = strings.check_dep_generic_error
 
 
@@ -79,7 +82,7 @@ class DependencyManager:
         True if fsl is detected (even if outdated).
 
         """
-        return self.fsl.state != Dependence.MISSING
+        return self.fsl.state != DependenceStatus.MISSING
 
     def is_dcm2niix(self) -> bool:
         """
@@ -88,7 +91,7 @@ class DependencyManager:
         True if dcm2niix is detected.
 
         """
-        return self.dcm2niix.state == Dependence.DETECTED
+        return self.dcm2niix.state == DependenceStatus.DETECTED
 
     def is_graphviz(self) -> bool:
         """
@@ -97,7 +100,7 @@ class DependencyManager:
         True if graphviz is detected.
 
         """
-        return self.graphviz.state == Dependence.DETECTED
+        return self.graphviz.state == DependenceStatus.DETECTED
 
     def is_freesurfer(self) -> bool:
         """
@@ -106,7 +109,7 @@ class DependencyManager:
        True if freesurfer is detected and configured (even if outdated).
 
         """
-        return self.freesurfer.state != Dependence.MISSING
+        return self.freesurfer.state != DependenceStatus.MISSING
 
     def is_freesurfer_matlab(self) -> bool:
         """
@@ -115,7 +118,7 @@ class DependencyManager:
         True if freesurfer matlab runtime is detected.
 
         """
-        return self.freesurfer.state2 != Dependence.MISSING
+        return self.freesurfer.state2 != DependenceStatus.MISSING
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -138,7 +141,6 @@ class DependencyManager:
             return False
 
         return True
-
 
     @staticmethod
     def need_slicer_check(config: ConfigManager) -> bool:
@@ -219,8 +221,8 @@ class DependencyManager:
         """
         dcm2niix_version = dcm2nii.Info.version()
         if dcm2niix_version is None:
-            return Dependence(Dependence.MISSING, strings.check_dep_dcm2niix_error)
-        return Dependence(Dependence.DETECTED, strings.check_dep_dcm2niix_found % str(dcm2niix_version))
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_dcm2niix_error)
+        return Dependence(DependenceStatus.DETECTED, strings.check_dep_dcm2niix_found % str(dcm2niix_version))
 
     @staticmethod
     def check_fsl() -> Dependence:
@@ -231,14 +233,14 @@ class DependencyManager:
         """
         fsl_version = fsl.base.Info.version()
         if fsl_version is None:
-            return Dependence(Dependence.MISSING, strings.check_dep_fsl_error)
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_error)
         try:
             found_version = version.parse(fsl_version)
         except:
             found_version = version.parse("0")
         if found_version < version.parse(DependencyManager.MIN_FSL_VERSION):
-            return Dependence(Dependence.WARNING, strings.check_dep_fsl_wrong_version % (fsl_version, DependencyManager.MIN_FSL_VERSION))
-        return Dependence(Dependence.DETECTED, strings.check_dep_fsl_found % fsl_version)
+            return Dependence(DependenceStatus.WARNING, strings.check_dep_fsl_wrong_version % (fsl_version, DependencyManager.MIN_FSL_VERSION))
+        return Dependence(DependenceStatus.DETECTED, strings.check_dep_fsl_found % fsl_version)
 
     @staticmethod
     def check_graphviz() -> Dependence:
@@ -248,8 +250,8 @@ class DependencyManager:
         A Dependence object with graphviz information.
         """
         if which("dot") is None:
-            return Dependence(Dependence.WARNING, strings.check_dep_graph_error)
-        return Dependence(Dependence.DETECTED, strings.check_dep_graph_found)
+            return Dependence(DependenceStatus.WARNING, strings.check_dep_graph_error)
+        return Dependence(DependenceStatus.DETECTED, strings.check_dep_graph_found)
 
     @staticmethod
     def check_freesurfer() -> Dependence:
@@ -259,24 +261,24 @@ class DependencyManager:
         A Dependence object with freesurfer and freesurfer matlab runtime information.
         """
         if freesurfer.base.Info.version() is None:
-            return Dependence(Dependence.MISSING, strings.check_dep_fs_error1, Dependence.MISSING)
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error1, DependenceStatus.MISSING)
         freesurfer_version = str(freesurfer.base.Info.looseversion())
         if "FREESURFER_HOME" not in os.environ:
-            return Dependence(Dependence.MISSING, strings.check_dep_fs_error2 % freesurfer_version, Dependence.MISSING)
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error2 % freesurfer_version, DependenceStatus.MISSING)
         file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
         if not os.path.exists(file):
-            return Dependence(Dependence.MISSING, strings.check_dep_fs_error4 % freesurfer_version, Dependence.MISSING)
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error4 % freesurfer_version, DependenceStatus.MISSING)
         try:
             found_version = version.parse(freesurfer_version)
         except:
             found_version = version.parse("0")
         if found_version < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
-            return Dependence(Dependence.WARNING, strings.check_dep_fs_wrong_version % (freesurfer_version, DependencyManager.MIN_FSL_VERSION))
+            return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_wrong_version % (freesurfer_version, DependencyManager.MIN_FSL_VERSION))
         mrc = os.system("checkMCR.sh")
         if mrc != 0:
             # TODO: facciamo un parse dell'output del comando per dare all'utente il comando di installazione? o forse è meglio non basarsi sul formato attuale dell'output e linkare direttamente la pagina ufficiale?
-            return Dependence(Dependence.WARNING, strings.check_dep_fs_error3 % freesurfer_version, Dependence.MISSING)
-        return Dependence(Dependence.DETECTED, strings.check_dep_fs_found % freesurfer_version, Dependence.DETECTED)
+            return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_error3 % freesurfer_version, DependenceStatus.MISSING)
+        return Dependence(DependenceStatus.DETECTED, strings.check_dep_fs_found % freesurfer_version, DependenceStatus.DETECTED)
 
     @staticmethod
     def is_cuda():

@@ -5,7 +5,7 @@ from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
 from PySide6.QtCore import QCoreApplication, Qt, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
-from swane.utils.DependencyManager import DependencyManager, Dependence
+from swane.utils.DependencyManager import DependencyManager, Dependence, DependenceStatus
 from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
 import swane_supplement
@@ -668,11 +668,11 @@ class MainWindow(QMainWindow):
 
         if DependencyManager.need_slicer_check(self.global_config):
             self.slicer_x = x
-            x = self.add_home_entry(Dependence(Dependence.CHECKING, strings.mainwindow_dep_slicer_src), x)
+            x = self.add_home_entry(Dependence(DependenceStatus.CHECKING, strings.mainwindow_dep_slicer_src), x)
             DependencyManager.check_slicer(self.global_config.get_slicer_path(), self.slicer_row)
         else:
             label = strings.check_dep_slicer_found % self.global_config.get_slicer_version()
-            x = self.add_home_entry(Dependence(Dependence.DETECTED, label), x)
+            x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, label), x)
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -708,11 +708,11 @@ class MainWindow(QMainWindow):
         label_icon = QLabel()
         label_icon.setScaledContents(True)
 
-        if dep.state == Dependence.DETECTED:
+        if dep.state == DependenceStatus.DETECTED:
             label_icon.setPixmap(self.OK_ICON)
-        elif dep.state == Dependence.WARNING:
+        elif dep.state == DependenceStatus.WARNING:
             label_icon.setPixmap(self.WARNING_ICON)
-        elif dep.state == Dependence.CHECKING:
+        elif dep.state == DependenceStatus.CHECKING:
             label_icon = QSvgWidget()
             label_icon.load(self.LOADING_MOVIE_FILE)
         else:
@@ -738,7 +738,7 @@ class MainWindow(QMainWindow):
         
         return x + 1
 
-    def slicer_row(self, slicer_path: str, slicer_version: str, msg: str, state: int):
+    def slicer_row(self, slicer_path: str, slicer_version: str, msg: str, state: DependenceStatus):
         """
         Generates the Slicer dependency check label and path, if 3D Slicer is found.
 
@@ -750,8 +750,8 @@ class MainWindow(QMainWindow):
             The Slicer version found
         msg : str
             The label message.
-        state: int
-            A state from Dependence.STATES.
+        state: DependenceStatus
+            A state from DependenceStatus.
 
         Returns
         -------
