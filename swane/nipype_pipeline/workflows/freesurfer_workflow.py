@@ -103,7 +103,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     else:
         # for hard cap we use half of max_cpu setting, but at least 1
         recon_all.inputs.openmp = max(trunc(max_cpu/2), 1)
-        recon_all.n_procs = max_cpu
+        recon_all.n_procs = recon_all.inputs.openmp * 2
 
     recon_all.inputs.directive = 'all'
     recon_all.inputs.args = "-no-isrunning"
