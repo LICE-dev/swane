@@ -61,19 +61,19 @@ class ConfigManager(configparser.ConfigParser):
                     category = category_holder[0]
                     self[category] = {}
                     for pref in GLOBAL_PREFERENCES[category]:
-                        if isinstance(GLOBAL_PREFERENCES[category][pref]['default'], list):
+                        if isinstance(GLOBAL_PREFERENCES[category][pref].default, list):
                             self[category][pref] = "0"
                         else:
-                            self[category][pref] = str(GLOBAL_PREFERENCES[category][pref]['default'])
+                            self[category][pref] = str(GLOBAL_PREFERENCES[category][pref].default)
 
             for data_input in DataInputList().values():
                 if data_input.name in WF_PREFERENCES:
                     self[data_input.name] = {}
                     for pref in WF_PREFERENCES[data_input.name]:
-                        if isinstance(WF_PREFERENCES[data_input.name][pref]['default'], list):
+                        if isinstance(WF_PREFERENCES[data_input.name][pref].default, list):
                             self[data_input.name][pref] = "0"
                         else:
-                            self[data_input.name][pref] = str(WF_PREFERENCES[data_input.name][pref]['default'])
+                            self[data_input.name][pref] = str(WF_PREFERENCES[data_input.name][pref].default)
         else:
             tmp_config = ConfigManager()
             for data_input in DataInputList().values():
@@ -189,8 +189,8 @@ class ConfigManager(configparser.ConfigParser):
         changed = False
         for category in WF_PREFERENCES:
             for key in WF_PREFERENCES[category]:
-                if "dependency" in WF_PREFERENCES[category][key]:
-                    dep_check = getattr(dependency_manager, WF_PREFERENCES[category][key]["dependency"], None)
+                if WF_PREFERENCES[category][key].dependency is not None:
+                    dep_check = getattr(dependency_manager, WF_PREFERENCES[category][key].dependency, None)
                     if dep_check is None or not callable(dep_check) or not dep_check():
                         self[category][key] = "false"
                         changed = True

@@ -2,9 +2,10 @@ import os
 from PySide6.QtWidgets import (QDialog,  QGridLayout, QVBoxLayout, QWidget, QPushButton, QSpacerItem,
                                QSizePolicy, QMessageBox, QLabel)
 from swane import strings, EXIT_CODE_REBOOT
-from swane.utils.PreferenceEntry import PreferenceEntry
+from swane.ui.PreferenceUIEntry import PreferenceUIEntry
 from swane.utils.preference_list import WF_PREFERENCES, GLOBAL_PREFERENCES
 from PySide6_VerticalQTabWidget import VerticalQTabWidget
+from swane.utils.PreferenceEntry import InputTypes
 
 
 class PreferencesWindow(QDialog):
@@ -69,62 +70,57 @@ class PreferencesWindow(QDialog):
             for key in my_config[category].keys():
                 if key not in self.preferences[category]:
                     continue
-                if self.preferences[category][key]["input_type"] == PreferenceEntry.HIDDEN:
+                if self.preferences[category][key].input_type == InputTypes.HIDDEN:
                     continue
                 self.input_keys[category][key] = x
-                self.inputs[x] = PreferenceEntry(category, key, my_config, self.preferences[category][key]["input_type"], parent=self)
+                self.inputs[x] = PreferenceUIEntry(category, key, my_config, self.preferences[category][key].input_type, parent=self)
 
                 # Label and Tooltip
-                self.inputs[x].set_label_text(self.preferences[category][key]["label"])
-                if "tooltip" in self.preferences[category][key]:
-                    self.inputs[x].set_tooltip(self.preferences[category][key]["tooltip"])
-                else:
-                    self.inputs[x].set_tooltip("")
+                self.inputs[x].set_label_text(self.preferences[category][key].label)
+                self.inputs[x].set_tooltip(self.preferences[category][key].tooltip)
 
                 # Some global preference need application restart
-                if "restart" in self.preferences[category][key]:
-                    self.inputs[x].restart = self.preferences[category][key]["restart"]
+                self.inputs[x].restart = self.preferences[category][key].restart
 
                 # Input type-related controls
-                if self.preferences[category][key]["input_type"] == PreferenceEntry.COMBO:
-                    self.inputs[x].populate_combo(self.preferences[category][key]["default"])
+                if self.preferences[category][key].input_type == InputTypes.COMBO:
+                    self.inputs[x].populate_combo(self.preferences[category][key].default)
                     self.inputs[x].set_value_from_config(my_config)
-                elif self.preferences[category][key]["input_type"] == PreferenceEntry.FILE or self.preferences[category][key]["input_type"] == PreferenceEntry.DIRECTORY:
+                elif self.preferences[category][key].input_type == InputTypes.FILE or self.preferences[category][key].input_type == InputTypes.DIRECTORY:
                     grid.addWidget(self.inputs[x].button, x, 2)
                     # path validation for folders and file
-                    if "validate_on_change" in self.preferences[category][key]:
-                        self.inputs[x].validate_on_change = self.preferences[category][key]["validate_on_change"]
+                    self.inputs[x].validate_on_change = self.preferences[category][key].validate_on_change
 
                 # Range application
-                if "range" in self.preferences[category][key]:
-                    self.inputs[x].set_range(self.preferences[category][key]["range"][0], self.preferences[category][key]["range"][1])
+                if self.preferences[category][key].range is not None:
+                    self.inputs[x].set_range(self.preferences[category][key].range[0], self.preferences[category][key].range[1])
 
                 # External dependence check
                 self.check_dependency(category, key, x)
 
                 # Other preference requirement
-                if "pref_requirement" in self.preferences[category][key]:
-                    for pref_cat in self.preferences[category][key]["pref_requirement"]:
+                if self.preferences[category][key].pref_requirement is not None:
+                    for pref_cat in self.preferences[category][key].pref_requirement:
                         if pref_cat not in my_config:
                             continue
-                        for pref_req in self.preferences[category][key]["pref_requirement"][pref_cat]:
+                        for pref_req in self.preferences[category][key].pref_requirement[pref_cat]:
                             if pref_req[0] not in my_config[pref_cat]:
                                 continue
                             target_x = self.input_keys[pref_cat][pref_req[0]]
-                            if self.inputs[target_x].input_type == PreferenceEntry.CHECKBOX:
+                            if self.inputs[target_x].input_type == InputTypes.CHECKBOX:
                                 self.inputs[target_x].input_field.stateChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
-                            elif self.inputs[target_x].input_type == PreferenceEntry.COMBO:
+                            elif self.inputs[target_x].input_type == InputTypes.COMBO:
                                 self.inputs[target_x].input_field.currentIndexChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
                             else:
                                 self.inputs[target_x].input_field.textChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
                             if not my_config.getboolean(pref_cat, pref_req[0]):
-                                self.inputs[x].disable(self.preferences[category][key]["pref_requirement_fail_tooltip"])
+                                self.inputs[x].disable(self.preferences[category][key].pref_requirement_fail_tooltip)
                                 break
-                if not my_config.global_config and 'input_requirement' in self.preferences[category][key]:
-                    for input_req in self.preferences[category][key]['input_requirement']:
+                if not my_config.global_config and self.preferences[category][key].input_requirement is not None:
+                    for input_req in self.preferences[category][key].input_requirement:
                         for cat_check in categories:
                             if cat_check.name == input_req and not cat_check.loaded:
-                                self.inputs[x].disable(self.preferences[category][key]["input_requirement_fail_tooltip"])
+                                self.inputs[x].disable(self.preferences[category][key].input_requirement_fail_tooltip)
                                 break
 
                 grid.addWidget(self.inputs[x].label, x, 0)
@@ -132,14 +128,14 @@ class PreferencesWindow(QDialog):
                 x += 1
 
                 # Informative text displayed in next row
-                if "informative_text" in self.preferences[category][key]:
+                if self.preferences[category][key].informative_text is not None:
                     informative_text_label = QLabel()
-                    informative_text_label.setText(self.preferences[category][key]["informative_text"][
+                    informative_text_label.setText(self.preferences[category][key].informative_text[
                                                                self.inputs[x - 1].input_field.currentIndex()])
                     grid.addWidget(informative_text_label, x, 0, 1, 2)
                     self.inputs[x-1].input_field.currentIndexChanged.connect(lambda value,
                                                                                     q_label=informative_text_label,
-                                                                                    labels=self.preferences[category][key]["informative_text"]:
+                                                                                    labels=self.preferences[category][key].informative_text:
                                                                              PreferencesWindow.update_informative_text(value, q_label, labels))
                     x += 1
 
@@ -180,10 +176,10 @@ class PreferencesWindow(QDialog):
         ----------
         True if external dependence is satisfied
         """
-        if "dependency" in self.preferences[category][key]:
-            dep_check = getattr(self.dependency_manager, self.preferences[category][key]["dependency"], None)
+        if self.preferences[category][key].dependency is not None:
+            dep_check = getattr(self.dependency_manager, self.preferences[category][key].dependency, None)
             if dep_check is None or not callable(dep_check) or not dep_check():
-                self.inputs[x].disable(self.preferences[category][key]["dependency_fail_tooltip"])
+                self.inputs[x].disable(self.preferences[category][key].dependency_fail_tooltip)
                 return False
         return True
 
@@ -203,7 +199,7 @@ class PreferencesWindow(QDialog):
         my_x = self.input_keys[my_cat][my_key]
         if not self.check_dependency(my_cat, my_key, my_x):
             return
-        pref_requirement = self.preferences[my_cat][my_key]["pref_requirement"]
+        pref_requirement = self.preferences[my_cat][my_key].pref_requirement
         for req_cat in pref_requirement:
             if req_cat not in self.input_keys:
                 continue
@@ -212,15 +208,15 @@ class PreferencesWindow(QDialog):
                     continue
                 req_x = self.input_keys[req_cat][req_key[0]]
 
-                if self.inputs[req_x].input_type == PreferenceEntry.CHECKBOX:
+                if self.inputs[req_x].input_type == InputTypes.CHECKBOX:
                     check = req_key[1] == self.inputs[req_x].input_field.isChecked()
-                elif self.inputs[req_x].input_type == PreferenceEntry.COMBO:
+                elif self.inputs[req_x].input_type == InputTypes.COMBO:
                     check = req_key[1] == self.inputs[req_x].input_field.currentIndex()
                 else:
                     check = req_key[1] == self.inputs[req_x].input_field.get_value()
 
                 if not check:
-                    self.inputs[my_x].disable(self.preferences[my_cat][my_key]["pref_requirement_fail_tooltip"])
+                    self.inputs[my_x].disable(self.preferences[my_cat][my_key].pref_requirement_fail_tooltip)
                     return
         self.inputs[my_x].enable()
 
