@@ -19,7 +19,7 @@ from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_wor
 from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow, SIDES
 from swane.utils.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
-from swane.utils.preference_list import MAIN, PERFORMANCE
+from swane.utils.preference_list import PERFORMANCE
 
 DEBUG = False
 
@@ -124,12 +124,10 @@ class MainWorkflow(CustomWorkflow):
 
         if is_freesurfer:
             # FreeSurfer analysis
-            freesurfer = freesurfer_workflow("freesurfer", is_hippo_amyg_labels)
+            freesurfer = freesurfer_workflow("freesurfer", is_hippo_amyg_labels, max_cpu=self.max_cpu, multicore_node_limit=self.multicore_node_limit)
             freesurfer.long_name = "Freesurfer analysis"
 
-            # TODO: check freesurfer cpu usage and parallelization
             freesurfer_inputnode = freesurfer.get_node("inputnode")
-            freesurfer_inputnode.inputs.max_node_cpu = max_node_cpu
             freesurfer_inputnode.inputs.subjects_dir = self.base_dir
             self.connect(t1, "outputnode.ref", freesurfer, "inputnode.ref")
 

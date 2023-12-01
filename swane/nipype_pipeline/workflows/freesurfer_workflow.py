@@ -1,8 +1,8 @@
 from nipype.interfaces.freesurfer import ReconAll
 from nipype.interfaces.fsl import BinaryMaths
-
+from multiprocessing import cpu_count
 from nipype.pipeline.engine import Node
-
+from math import trunc
 from swane.nipype_pipeline.nodes.utils import getn
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SegmentHA import SegmentHA
@@ -14,7 +14,7 @@ from nipype.interfaces.utility import IdentityInterface
 FS_DIR = "FS"
 
 
-def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "/")  -> CustomWorkflow:
+def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "/", max_cpu: int = 0, multicore_node_limit: int = 0) -> CustomWorkflow:
     """
     Freesurfer cortical reconstruction, white matter ROI, basal ganglia and thalami ROI.
     If needed, segmentation of the hippocampal substructures and the nuclei of the amygdala.
@@ -27,11 +27,16 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
         Enable segmentation of the hippocampal substructures and the nuclei of the amygdala.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of bedpostx. The default is 0.
+    multicore_node_limit: int, optional
+        Preference for bedpostX core usage. The default il 0
+        0 -> no limit
+        1 -> soft cap
+        2 -> hard cap
         
     Input Node Fields
     ----------
-    max_node_cpu : int
-        Max number of cpu to use for the workflow.
     ref : path
         T13D reference file.
     subjects_dir : path
@@ -69,7 +74,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=['max_node_cpu', 'ref', 'subjects_dir']),
+        IdentityInterface(fields=['ref', 'subjects_dir']),
         name='inputnode')
     
     # Output Node
@@ -82,11 +87,27 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     # NODE 1: Freesurfer cortical reconstruction process
     recon_all = Node(ReconAll(), name='reconAll')
     recon_all.inputs.subject_id = FS_DIR
-    recon_all.inputs.parallel = True
+
+    # parallel option split some steps in right and left
+    if max_cpu > 1:
+        recon_all.inputs.parallel = True
+
+    # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
+    if multicore_node_limit == 0:
+        # no limit
+        recon_all.inputs.openmp = cpu_count()
+    elif multicore_node_limit == 1:
+        # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
+        recon_all.inputs.openmp = max_cpu
+        recon_all.n_procs = recon_all.inputs.openmp
+    else:
+        # for hard cap we use half of max_cpu setting, but at least 1
+        recon_all.inputs.openmp = max(trunc(max_cpu/2), 1)
+        recon_all.n_procs = max_cpu
+
     recon_all.inputs.directive = 'all'
     recon_all.inputs.args = "-no-isrunning"
     workflow.add_nodes([recon_all])
-    workflow.connect(inputnode, "max_node_cpu", recon_all, "openmp")
     workflow.connect(inputnode, "ref", recon_all, "T1_files")
     workflow.connect(inputnode, "subjects_dir", recon_all, "subjects_dir")
 
@@ -169,10 +190,15 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     if is_hippo_amyg_labels:
         # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
         segmentHA = Node(SegmentHA(), name="segmentHA")
+        if multicore_node_limit == 0:
+            segmentHA.inputs.num_threads = cpu_count()
+        elif multicore_node_limit == 1:
+            segmentHA.inputs.num_threads = max_cpu
+        else:
+            segmentHA.inputs.num_threads = max_cpu
+            segmentHA.n_procs = segmentHA.inputs.num_threads
         workflow.connect(recon_all, "subjects_dir", segmentHA, "subjects_dir")
         workflow.connect(recon_all, "subject_id", segmentHA, "subject_id")
-        workflow.connect(inputnode, "max_node_cpu", segmentHA, "num_threads")
-
         workflow.connect(segmentHA, "lh_hippoAmygLabels", outputnode, "lh_hippoAmygLabels")
         workflow.connect(segmentHA, "rh_hippoAmygLabels", outputnode, "rh_hippoAmygLabels")
 
