@@ -1,4 +1,5 @@
 from enum import IntEnum
+from swane.utils.DataInput import DataInputList
 
 
 class InputTypes(IntEnum):
@@ -31,7 +32,31 @@ class PreferenceEntry:
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
-            if hasattr(self, key):
+            if hasattr(self, key) and PreferenceEntry.check_type(key, value):
                 setattr(self, key, value)
+
+    @staticmethod
+    def check_type(key, value):
+        types = {
+                'input_type': InputTypes,
+                "label": str,
+                "tooltip": str,
+                "range": [],
+                "dependency": str,
+                "dependency_fail_tooltip": str,
+                "pref_requirement": dict,
+                "pref_requirement_fail_tooltip": str,
+                "input_requirement": DataInputList,
+                "input_requirement_fail_tooltip": str,
+                "restart": bool,
+                "validate_on_change": bool,
+                "informative_text": [],
+                "box_text": str,
+
+        }
+        if key in types:
+            return type(value) is types[key]
+        return True
+
 
 
