@@ -150,7 +150,7 @@ WF_PREFERENCES[category]['ai'] = PreferenceEntry(
 )
 WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
     input_type=InputTypes.NUMBER,
-    label="Thresold for Asymmetry Index map outliers removal",
+    label="Threshold for Asymmetry Index map outliers removal",
     tooltip="100 for no thresholding, suggested 80-90",
     default='85',
     range=[0, 100],
@@ -167,7 +167,7 @@ WF_PREFERENCES[category]['ai'] = PreferenceEntry(
 )
 WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
     input_type=InputTypes.NUMBER,
-    label="Thresold for Asymmetry Index map outliers removal",
+    label="Threshold for Asymmetry Index map outliers removal",
     tooltip="100 for no thresholding, suggested 80-90",
     default='85',
     range=[0, 100],

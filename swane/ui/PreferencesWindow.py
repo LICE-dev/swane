@@ -154,7 +154,11 @@ class PreferencesWindow(QDialog):
         layout.addWidget(discard_button)
 
         if self.preferences != GLOBAL_PREFERENCES:
-            reset_button = QPushButton(strings.pref_window_reset_button)
+            reset_button = QPushButton()
+            if self.my_config.global_config:
+                reset_button.setText(strings.pref_window_reset_global_button)
+            else:
+                reset_button.setText(strings.pref_window_reset_pt_button)
             reset_button.clicked.connect(self.reset)
             layout.addWidget(reset_button)
 
@@ -244,9 +248,9 @@ class PreferencesWindow(QDialog):
         """
         msg_box = QMessageBox()
         if self.my_config.global_config:
-            msg_box.setText(strings.pref_window_reset_global)
+            msg_box.setText(strings.pref_window_reset_global_box)
         else:
-            msg_box.setText(strings.pref_window_reset_pt)
+            msg_box.setText(strings.pref_window_reset_pt_box)
         msg_box.setIcon(QMessageBox.Icon.Warning)
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         msg_box.setDefaultButton(QMessageBox.StandardButton.No)
