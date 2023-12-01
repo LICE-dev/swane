@@ -46,7 +46,7 @@ mainwindow_home_label6 = "\nExternal recommended dependencies:"
 mainwindow_home_label7 = "\nExternal optional dependencies:"
 
 mainwindow_dep_slicer_src = "Searching Slicer installation..."
-mainwindow_pref_disabled_error = "Prefecences disabled during workflow execution!"
+mainwindow_pref_disabled_error = "Preferences disabled during workflow execution!"
 aboutwindow_python_libs = "Python libraries dependencies: configparser, logging, matplotlib, nipype, pydicom, " \
                           "PySide6, psutil, nibabel, networkx"
 
@@ -127,12 +127,14 @@ pref_window_save_restart_button = "Save preferences (" + APPNAME + " will close 
 pref_window_discard_button = "Discard changes"
 pref_window_dir_error = "Directory does not exists!"
 pref_window_file_error = "File does not exists!"
-pref_window_reset_button = "Reset settings to default"
-pref_window_reset_global = "Do you really want to reset global workflow settings to application default?"
-pref_window_reset_pt = "Do you really want to reset this patient workflow settings to your default settings?"
+
+pref_window_reset_global_button = "Reset workflow settings to default"
+pref_window_reset_global_box = "Do you really want to reset global workflow settings to application default?"
+pref_window_reset_pt_button = "Apply default workflow settings"
+pref_window_reset_pt_box = "Do you really want to apply default workflow settings to this patient?"
 
 # Workflow
-check_dep_generic_error = "Dependecy check error"
+check_dep_generic_error = "Dependency check error"
 check_dep_dcm2niix_error = "dcm2niix not detected (<a href='https://github.com/rordenlab/dcm2niix#Install" \
                            "'>installation info</a>)"
 check_dep_dcm2niix_found = "dcm2niix detected (%s)"
