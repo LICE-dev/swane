@@ -1,16 +1,24 @@
 import os
+from enum import StrEnum, Enum
+from swane.config.PrefCategory import PrefCategory
+
+FMRI_NUM = 3
 
 
-class DataInput:
+class ImageModality(StrEnum):
     RM = 'mr'
-    PET = 'pet'
-    IMAGE_MODALITY_RENAME_LIST = {
-        'PT': 'PET'
-    }
+    PET = 'pt'
 
-    def __init__(self, name, label, tooltip, image_modality=RM, optional=False, wf_name=None, max_volumes=1, min_volumes=1):
-        self.name = name
-        self.label = label
+
+class PLANES(Enum):
+    TRA = 'transverse'
+    COR = 'coronal'
+    SAG = 'sagittal'
+
+
+class DataInput(PrefCategory):
+    def __init__(self, name: str, label: str = "", tooltip: str = "", image_modality: ImageModality = ImageModality.RM, optional: bool = False, wf_name: str = None, max_volumes: int = 1, min_volumes: int = 1):
+        super().__init__(name, label)
         self.tooltip = tooltip
         self.image_modality = image_modality
         self.optional = optional
@@ -24,105 +32,88 @@ class DataInput:
             self.wf_name = wf_name
 
     def is_image_modality(self, image_modality_found):
-        if image_modality_found in DataInput.IMAGE_MODALITY_RENAME_LIST:
-            image_modality_found = DataInput.IMAGE_MODALITY_RENAME_LIST[image_modality_found]
+        try:
+            return self.image_modality == image_modality_found or self.image_modality.value.lower() == str(image_modality_found).lower()
+        except:
+            return False
 
-        return self.image_modality.lower() == image_modality_found.lower()
+
+class DataInputList(Enum):
+    T13D = DataInput(
+        name='t13d',
+        label='3D T1w'
+    )
+    FLAIR3D = DataInput(
+        name='flair3d',
+        label='3D Flair'
+    )
+    MDC = DataInput(
+        name='mdc',
+        label='Post-contrast 3D T1w'
+    )
+    VENOUS = DataInput(
+        name='venous',
+        label='Venous MRA - Phase contrast',
+        tooltip='If you have anatomic and venous volumes in a single sequence, load it here. Otherwise, load one of the two volume (which one is not important)',
+        max_volumes=2
+    )
+    VENOUS2 = DataInput(
+        name=VENOUS.name+"2",
+        label='Venous MRA - Second volume (optional)',
+        tooltip='If you have anatomic and venous volumes in two different sequences, load the remaining volume here. Otherwise, leave this slot empty',
+        wf_name='venous')
+    DTI = DataInput(
+        name='dti',
+        label='Diffusion Tensor Imaging',
+        max_volumes=-1,
+        min_volumes=4
+    )
+    ASL = DataInput(
+        name='asl',
+        label='Arterial Spin Labeling',
+        tooltip='CBF images from an ASL sequence'
+    )
+    PET = DataInput(
+        name='pet',
+        label='PET',
+        image_modality=ImageModality.PET
+    )
+
+    _ignore_ = 'DataInputList i'
+    DataInputList = vars()
+
+    for i in PLANES:
+        DataInputList["FLAIR2D_%s" % i.name] = DataInput(
+            name='flair2d_%s' % i.name.lower(),
+            label='2D Flair %s' % i.value,
+            optional=True
+        )
+
+    for i in range(FMRI_NUM):
+        DataInputList['FMRI_%d' % i] = DataInput(
+            name='fmri_%d' % i,
+            label='Task fMRI - Sequence %d' % (i+1),
+            max_volumes=-1,
+            min_volumes=4
+        )
+
+    def __str__(self):
+        return self.value.name
 
 
-class DataInputList(dict):
-
-    T13D = 't13d'
-    FLAIR3D = 'flair3d'
-    MDC = 'mdc'
-    VENOUS = 'venous'
-    VENOUS2 = VENOUS+"2"
-    DTI = 'dti'
-    ASL = 'asl'
-    PET = 'pet'
-    FLAIR2D = 'flair2d'
-    FMRI = 'fmri'
-
-    input_list_string = {}
-    input_list_string[T13D] = ['3D T1w', '']
-    input_list_string[FLAIR3D] = ['3D Flair', '']
-    input_list_string[MDC] = ['Post-contrast 3D T1w', '']
-    input_list_string[VENOUS] = ['Venous MRA - Phase contrast', 'If you have anatomic and venous volumes in a single sequence, load it here. Otherwise, load one of the two volume (which one is not important)']
-    input_list_string[VENOUS2] = ['Venous MRA - Second volume (optional)', 'If you have anatomic and venous volumes in two different sequences, load the remaining volume here. Otherwise, leave this slot empty']
-    input_list_string[DTI] = ['Diffusion Tensor Imaging', '']
-    input_list_string[ASL] = ['Arterial Spin Labeling', 'CBF images from an ASL sequence']
-    input_list_string[PET] = ['PET', '']
-    input_list_string[FLAIR2D] = ['2D Flair %s', '']
-    input_list_string[FMRI] = ['Task fMRI - Sequence %d', '']
-
-    PLANES = {'tra': 'transverse',
-              'cor': 'coronal',
-              'sag': 'sagittal',
-              }
-    FMRI_NUM = 3
+class PatientInputState(dict):
 
     def __init__(self, dicom_dir=None):
-        super(DataInputList, self).__init__()
-
+        super().__init__()
         self.dicom_dir = dicom_dir
-
-        self.append(DataInput(DataInputList.T13D,
-                              DataInputList.input_list_string[DataInputList.T13D][0],
-                              DataInputList.input_list_string[DataInputList.T13D][1]))
-        self.append(DataInput(DataInputList.FLAIR3D,
-                              DataInputList.input_list_string[DataInputList.FLAIR3D][0],
-                              DataInputList.input_list_string[DataInputList.FLAIR3D][1]))
-        self.append(DataInput(DataInputList.MDC,
-                              DataInputList.input_list_string[DataInputList.MDC][0],
-                              DataInputList.input_list_string[DataInputList.MDC][1]))
-        self.append(DataInput(DataInputList.VENOUS,
-                              DataInputList.input_list_string[DataInputList.VENOUS][0],
-                              DataInputList.input_list_string[DataInputList.VENOUS][1],
-                              max_volumes=2))
-        self.append(DataInput(DataInputList.VENOUS2,
-                              DataInputList.input_list_string[DataInputList.VENOUS2][0],
-                              DataInputList.input_list_string[DataInputList.VENOUS2][1],
-                              wf_name='venous'))
-        self.append(DataInput(DataInputList.DTI,
-                              DataInputList.input_list_string[DataInputList.DTI][0],
-                              DataInputList.input_list_string[DataInputList.DTI][1],
-                              wf_name='dti_preproc',
-                              max_volumes=-1,
-                              min_volumes=4))
-        self.append(DataInput(DataInputList.ASL,
-                              DataInputList.input_list_string[DataInputList.ASL][0],
-                              DataInputList.input_list_string[DataInputList.ASL][1]))
-        self.append(DataInput(DataInputList.PET,
-                              DataInputList.input_list_string[DataInputList.PET][0],
-                              DataInputList.input_list_string[DataInputList.PET][1],
-                              image_modality=DataInput.PET))
-
-        for plane in DataInputList.PLANES:
-            self.append(DataInput(DataInputList.FLAIR2D+'_'+plane,
-                                  DataInputList.input_list_string[DataInputList.FLAIR2D][0] % DataInputList.PLANES[plane],
-                                  DataInputList.input_list_string[DataInputList.FLAIR2D][1],
-                                  optional=True))
-
-        for x in range(DataInputList.FMRI_NUM):
-            self.append(DataInput(DataInputList.FMRI+'_%d' % x,
-                                  DataInputList.input_list_string[DataInputList.FMRI][0] % (x + 1),
-                                  DataInputList.input_list_string[DataInputList.FMRI][1],
-                                  max_volumes=-1,
-                                  min_volumes=4))
-
-    def append(self, data_input):
-        self[data_input.name] = data_input
+        for data_input in DataInputList:
+            self[data_input] = {
+                'loaded': False,
+                'volumes': 0
+            }
 
     def is_ref_loaded(self):
-        return self[DataInputList.T13D].loaded
+        return self[DataInputList.T13D]['loaded']
 
-    def get_dicom_dir(self, key):
-        if key in self:
-            return os.path.join(self.dicom_dir, key)
-        return None
-
-
-
-
-
-
+    def get_dicom_dir(self, data_input: DataInputList):
+        return os.path.join(self.dicom_dir, str(data_input))

@@ -1,11 +1,22 @@
 import configparser
 from swane import strings, __version__
-from swane.utils.preference_list import *
+from swane.config.preference_list import *
 
 
 # todo valutare di spostare le key delle configurazioni in file costanti esterno
 class ConfigManager(configparser.ConfigParser):
 
+    def __getitem__(self, key):
+        return super().__getitem__(str(key))
+
+    def __setitem__(self, key, value):
+        super().__setitem__(str(key), value)
+
+    def getboolean(self, section, option, **kwargs):
+        return super().getboolean(str(section), option, **kwargs)
+
+    def getint(self, section, option, **kwargs):
+        return super().getint(str(section), option, **kwargs)
 
     def __init__(self, pt_folder=None):
         super(ConfigManager, self).__init__()
@@ -26,7 +37,7 @@ class ConfigManager(configparser.ConfigParser):
 
         # check if this version need pref reset
         try:
-            force_pref_reset = self.getboolean(MAIN, 'force_pref_reset')
+            force_pref_reset = self.getboolean(GlobalPrefCategoryList.MAIN, 'force_pref_reset')
         except:
             force_pref_reset = False
 
@@ -38,16 +49,16 @@ class ConfigManager(configparser.ConfigParser):
             if force_pref_reset:
                 temp_config = configparser.ConfigParser()
                 temp_config.read(self.config_file)
-                if __version__ != temp_config[MAIN]['last_swane_version']:
+                if __version__ != temp_config[GlobalPrefCategoryList.MAIN]['last_swane_version']:
                     reset_pref = True
         except:
             pass
 
         if not reset_pref and os.path.exists(self.config_file):
             self.read(self.config_file)
-            if MAIN not in self:
-                self[MAIN] = {}
-            self[MAIN]['last_swane_version'] = __version__
+            if str(GlobalPrefCategoryList.MAIN) not in self:
+                self[GlobalPrefCategoryList.MAIN] = {}
+            self[GlobalPrefCategoryList.MAIN]['last_swane_version'] = __version__
 
         self.save()
 
@@ -56,9 +67,8 @@ class ConfigManager(configparser.ConfigParser):
 
     def load_default_wf_settings(self, save):
         if self.global_config:
-            for category_holder in GLOBAL_PREF_KEYS:
+            for category in GlobalPrefCategoryList:
                 if not save:
-                    category = category_holder[0]
                     self[category] = {}
                     for pref in GLOBAL_PREFERENCES[category]:
                         if isinstance(GLOBAL_PREFERENCES[category][pref].default, list):
@@ -66,24 +76,24 @@ class ConfigManager(configparser.ConfigParser):
                         else:
                             self[category][pref] = str(GLOBAL_PREFERENCES[category][pref].default)
 
-            for data_input in DataInputList().values():
-                if data_input.name in WF_PREFERENCES:
-                    self[data_input.name] = {}
-                    for pref in WF_PREFERENCES[data_input.name]:
-                        if isinstance(WF_PREFERENCES[data_input.name][pref].default, list):
-                            self[data_input.name][pref] = "0"
+            for data_input in DataInputList:
+                if data_input in WF_PREFERENCES:
+                    self[data_input] = {}
+                    for pref in WF_PREFERENCES[data_input]:
+                        if isinstance(WF_PREFERENCES[data_input][pref].default, list):
+                            self[data_input][pref] = "0"
                         else:
-                            self[data_input.name][pref] = str(WF_PREFERENCES[data_input.name][pref].default)
+                            self[data_input][pref] = str(WF_PREFERENCES[data_input][pref].default)
         else:
             tmp_config = ConfigManager()
-            for data_input in DataInputList().values():
-                if data_input.name in WF_PREFERENCES:
-                    self[data_input.name] = tmp_config[data_input.name]
-            self[MAIN] = {}
-            self[MAIN]['last_swane_version'] = tmp_config[MAIN]['last_swane_version']
-            self[MAIN]['force_pref_reset'] = tmp_config[MAIN]['force_pref_reset']
+            for data_input in DataInputList:
+                if data_input in WF_PREFERENCES:
+                    self[data_input] = tmp_config[data_input]
+            self[GlobalPrefCategoryList.MAIN] = {}
+            self[GlobalPrefCategoryList.MAIN]['last_swane_version'] = tmp_config[GlobalPrefCategoryList.MAIN]['last_swane_version']
+            self[GlobalPrefCategoryList.MAIN]['force_pref_reset'] = tmp_config[GlobalPrefCategoryList.MAIN]['force_pref_reset']
 
-            self.set_wf_option(tmp_config[MAIN]['default_wf_type'])
+            self.set_wf_option(tmp_config[GlobalPrefCategoryList.MAIN]['default_wf_type'])
         if save:
             self.save()
 
@@ -102,59 +112,59 @@ class ConfigManager(configparser.ConfigParser):
 
     def get_patients_folder(self):
         if self.global_config:
-            return self[MAIN]["patients_folder"]
+            return self[GlobalPrefCategoryList.MAIN]["patients_folder"]
         return ''
 
     def set_patients_folder(self, path):
         if self.global_config:
-            self[MAIN]["patients_folder"] = path
+            self[GlobalPrefCategoryList.MAIN]["patients_folder"] = path
 
     def get_max_pt(self):
         if not self.global_config:
             return 1
         try:
-            return self.getint(PERFORMANCE, 'max_pt')
+            return self.getint(GlobalPrefCategoryList.PERFORMANCE, 'max_pt')
         except:
             return 1
 
     def get_patients_prefix(self):
         if self.global_config:
-            return self[MAIN]['patients_prefix']
+            return self[GlobalPrefCategoryList.MAIN]['patients_prefix']
         return ''
 
     def get_default_dicom_folder(self):
         if self.global_config:
-            return self[MAIN]['default_dicom_folder']
+            return self[GlobalPrefCategoryList.MAIN]['default_dicom_folder']
         return ''
 
     def get_slicer_path(self):
         if self.global_config:
-            return self[MAIN]['slicer_path']
+            return self[GlobalPrefCategoryList.MAIN]['slicer_path']
         return ''
 
     def set_slicer_path(self, path):
         if self.global_config:
-            self[MAIN]['slicer_path'] = path
+            self[GlobalPrefCategoryList.MAIN]['slicer_path'] = path
 
     def get_slicer_version(self):
         if self.global_config:
-            return self[MAIN]['slicer_version']
+            return self[GlobalPrefCategoryList.MAIN]['slicer_version']
 
     def set_slicer_version(self, slicer_version):
         if self.global_config:
-            self[MAIN]['slicer_version'] = slicer_version
+            self[GlobalPrefCategoryList.MAIN]['slicer_version'] = slicer_version
 
     def is_optional_series_enabled(self, series_name):
         if self.global_config:
             try:
-                return self.getboolean(OPTIONAL_SERIES, series_name)
+                return self.getboolean(GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name))
             except:
                 return False
         return False
 
     def get_slicer_scene_ext(self):
         if self.global_config:
-            return self[MAIN]['slicer_scene_ext']
+            return self[GlobalPrefCategoryList.MAIN]['slicer_scene_ext']
         return ''
 
     def get_pt_wf_type(self):

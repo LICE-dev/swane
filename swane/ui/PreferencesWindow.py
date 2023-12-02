@@ -3,9 +3,12 @@ from PySide6.QtWidgets import (QDialog,  QGridLayout, QVBoxLayout, QWidget, QPus
                                QSizePolicy, QMessageBox, QLabel)
 from swane import strings, EXIT_CODE_REBOOT
 from swane.ui.PreferenceUIEntry import PreferenceUIEntry
-from swane.utils.preference_list import WF_PREFERENCES, GLOBAL_PREFERENCES
+from swane.config.preference_list import WF_PREFERENCES, GLOBAL_PREFERENCES
+from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
 from PySide6_VerticalQTabWidget import VerticalQTabWidget
-from swane.utils.PreferenceEntry import InputTypes
+from swane.config.config_enums import InputTypes
+from swane.utils.DataInput import DataInputList
+from enum import Enum
 
 
 class PreferencesWindow(QDialog):
@@ -14,7 +17,7 @@ class PreferencesWindow(QDialog):
 
     """
 
-    def __init__(self, my_config, dependency_manager, categories=None, parent=None):
+    def __init__(self, my_config, dependency_manager, is_workflow: bool, parent=None):
         super(PreferencesWindow, self).__init__(parent)
 
         self.my_config = my_config
@@ -22,11 +25,7 @@ class PreferencesWindow(QDialog):
         self.restart = False
 
         if self.my_config.global_config:
-            try:
-                first_cat = next(iter(categories))
-            except:
-                first_cat = None
-            if hasattr(first_cat, "name"):
+            if is_workflow:
                 title = strings.wf_pref_window_title_global
                 self.preferences = WF_PREFERENCES
             else:
@@ -36,6 +35,11 @@ class PreferencesWindow(QDialog):
             self.preferences = WF_PREFERENCES
             title = os.path.basename(os.path.dirname(
                 self.my_config.config_file)) + strings.wf_pref_window_title_user
+
+        if is_workflow:
+            default_pref_list = DataInputList
+        else:
+            default_pref_list = GlobalPrefCategoryList
 
         self.setWindowTitle(title)
 
@@ -48,17 +52,15 @@ class PreferencesWindow(QDialog):
 
         x = 0
 
-        for category_holder in categories:
-            if hasattr(category_holder, "name"):
-                category = category_holder.name
-                cat_label = category_holder.label
-                if category not in my_config:
-                    continue
-                if not my_config.global_config and not category_holder.loaded:
-                    continue
-            else:
-                category = category_holder[0]
-                cat_label = category_holder[1]
+        for category in default_pref_list:
+
+            if str(category) not in my_config:
+                continue
+
+            if is_workflow and not my_config.global_config and not self.parent().data_input_status[category]['loaded']:
+                continue
+
+            cat_label = category.value.label
 
             self.input_keys[category] = {}
 
@@ -101,10 +103,10 @@ class PreferencesWindow(QDialog):
                 # Other preference requirement
                 if self.preferences[category][key].pref_requirement is not None:
                     for pref_cat in self.preferences[category][key].pref_requirement:
-                        if pref_cat not in my_config:
+                        if str(pref_cat) not in my_config:
                             continue
                         for pref_req in self.preferences[category][key].pref_requirement[pref_cat]:
-                            if pref_req[0] not in my_config[pref_cat]:
+                            if str(pref_req[0]) not in my_config[pref_cat]:
                                 continue
                             target_x = self.input_keys[pref_cat][pref_req[0]]
                             if self.inputs[target_x].input_type == InputTypes.CHECKBOX:
@@ -118,8 +120,10 @@ class PreferencesWindow(QDialog):
                                 break
                 if not my_config.global_config and self.preferences[category][key].input_requirement is not None:
                     for input_req in self.preferences[category][key].input_requirement:
-                        for cat_check in categories:
-                            if cat_check.name == input_req and not cat_check.loaded:
+                        print(input_req)
+                        for cat_check in default_pref_list:
+                            print(cat_check)
+                            if cat_check == input_req and not self.parent().data_input_status[cat_check]['loaded']:
                                 self.inputs[x].disable(self.preferences[category][key].input_requirement_fail_tooltip)
                                 break
 
@@ -164,12 +168,12 @@ class PreferencesWindow(QDialog):
 
         self.setLayout(layout)
 
-    def check_dependency(self, category: str, key: str, x: int) -> bool:
+    def check_dependency(self, category: Enum, key: str, x: int) -> bool:
         """
         Check an external dependence to test if a preference can be enabled.
         Parameters
         ----------
-        category: str
+        category: Enum
             The category of the preference to be tested.
         key: str
             The name of the preference to be tested.

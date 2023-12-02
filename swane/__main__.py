@@ -10,9 +10,9 @@ def main():
     from PySide6.QtWidgets import QApplication, QMessageBox
     from PySide6.QtGui import QIcon, QPixmap
     from swane.ui.MainWindow import MainWindow
-    from swane.utils.ConfigManager import ConfigManager
+    from swane.config.ConfigManager import ConfigManager
     from swane import EXIT_CODE_REBOOT
-    from swane.utils.preference_list import MAIN
+    from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
 
     # Exit Code definition for automatic reboot
     current_exit_code = EXIT_CODE_REBOOT
@@ -35,7 +35,7 @@ def main():
 
         # Guard to prevent multiple SWANe instances launch
         try:
-            last_pid = global_config.getint(MAIN, 'last_pid')
+            last_pid = global_config.getint(GlobalPrefCategoryList.MAIN, 'last_pid')
         except:
             last_pid = -1
 
@@ -48,7 +48,7 @@ def main():
                 break
 
             except (psutil.NoSuchProcess, ValueError):
-                global_config[MAIN]['last_pid'] = str(os.getpid())
+                global_config[GlobalPrefCategoryList.MAIN]['last_pid'] = str(os.getpid())
                 global_config.save()
 
         # MainWindow in a varariable to prenvent garbage collector deletion (might cause crash)

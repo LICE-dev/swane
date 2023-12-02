@@ -1,10 +1,13 @@
 import os
-from swane.utils.DataInput import DataInputList
+from swane.utils.DataInput import DataInputList, FMRI_NUM
 from swane import __version__
 from multiprocessing import cpu_count
 from nipype.utils.profiler import get_system_total_memory_gb
 from math import ceil
-from swane.utils.PreferenceEntry import PreferenceEntry, InputTypes
+
+from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
+from swane.config.PreferenceEntry import PreferenceEntry
+from swane.config.config_enums import InputTypes
 
 try:
     XTRACT_DATA_DIR=os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
@@ -51,15 +54,6 @@ for k in list(TRACTS.keys()):
 
 WORKFLOW_TYPES = ["Structural Workflow", "Morpho-Functional Workflow"]
 SLICER_EXTENSIONS = ["mrb", "mrml"]
-
-# GLOBAL PREFERENCE LIST
-MAIN = "main"
-PERFORMANCE = "performance"
-OPTIONAL_SERIES = "optional_series"
-GLOBAL_PREF_KEYS = [[MAIN, "Global settings"],
-                    [PERFORMANCE, 'Performance'],
-                    [OPTIONAL_SERIES, 'Optional series']
-                    ]
 
 # WORKFLOWS PREFERENCE LIST
 WF_PREFERENCES = {}
@@ -204,72 +198,69 @@ for tract in TRACTS.keys():
         pref_requirement_fail_tooltip="Tractography disabled",
     )
 
-
-category = DataInputList.FMRI+"_0"
-WF_PREFERENCES[category] = {}
-WF_PREFERENCES[category]['task_a_name'] = PreferenceEntry(
-    input_type=InputTypes.TEXT,
-    label="Task A name",
-    default="Task A",
-)
-WF_PREFERENCES[category]['block_design'] = PreferenceEntry(
-    input_type=InputTypes.COMBO,
-    label="Block design",
-    default=['rArA...', 'rArBrArB...'],
-)
-WF_PREFERENCES[category]['task_b_name'] = PreferenceEntry(
-    input_type=InputTypes.TEXT,
-    label="Task B name",
-    default="Task B",
-    pref_requirement={DataInputList.FMRI+"_0": [('block_design', 1)]},
-    pref_requirement_fail_tooltip="Requires rArBrArB... block design",
-)
-WF_PREFERENCES[category]['task_duration'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
-    label="Tasks duration (sec)",
-    default="30",
-    range=[1, 500],
-)
-WF_PREFERENCES[category]['rest_duration'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
-    label="Rest duration (sec)",
-    default="30",
-    range=[1, 500],
-)
-WF_PREFERENCES[category]['tr'] = PreferenceEntry(
-    input_type=InputTypes.TEXT,
-    label="Repetition Time (TR)",
-    default="auto",
-)
-WF_PREFERENCES[category]['n_vols'] = PreferenceEntry(
-    input_type=InputTypes.TEXT,
-    label="Task B duration",
-    default="auto",
-)
-WF_PREFERENCES[category]['slice_timing'] = PreferenceEntry(
-    input_type=InputTypes.COMBO,
-    label="Slice timing",
-    default=['Unknown', 'Regular up', 'Regular down', 'Interleaved'],
-)
-WF_PREFERENCES[category]['del_start_vols'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
-    label="Delete start volumes",
-    default="0",
-    range=[1, 500],
-)
-WF_PREFERENCES[category]['del_end_vols'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
-    label="Delete end volumes",
-    default="0",
-    range=[1, 500],
-)
-
-WF_PREFERENCES[DataInputList.FMRI + "_1"] = WF_PREFERENCES[DataInputList.FMRI + "_0"]
-WF_PREFERENCES[DataInputList.FMRI + "_2"] = WF_PREFERENCES[DataInputList.FMRI + "_0"]
+for x in range(FMRI_NUM):
+    category = DataInputList['FMRI'+"_%s" % x]
+    WF_PREFERENCES[category] = {}
+    WF_PREFERENCES[category]['task_a_name'] = PreferenceEntry(
+        input_type=InputTypes.TEXT,
+        label="Task A name",
+        default="Task A",
+    )
+    WF_PREFERENCES[category]['block_design'] = PreferenceEntry(
+        input_type=InputTypes.COMBO,
+        label="Block design",
+        default=['rArA...', 'rArBrArB...'],
+    )
+    WF_PREFERENCES[category]['task_b_name'] = PreferenceEntry(
+        input_type=InputTypes.TEXT,
+        label="Task B name",
+        default="Task B",
+        pref_requirement={DataInputList['FMRI'+"_%s" % x]: [('block_design', 1)]},
+        pref_requirement_fail_tooltip="Requires rArBrArB... block design",
+    )
+    WF_PREFERENCES[category]['task_duration'] = PreferenceEntry(
+        input_type=InputTypes.NUMBER,
+        label="Tasks duration (sec)",
+        default="30",
+        range=[1, 500],
+    )
+    WF_PREFERENCES[category]['rest_duration'] = PreferenceEntry(
+        input_type=InputTypes.NUMBER,
+        label="Rest duration (sec)",
+        default="30",
+        range=[1, 500],
+    )
+    WF_PREFERENCES[category]['tr'] = PreferenceEntry(
+        input_type=InputTypes.TEXT,
+        label="Repetition Time (TR)",
+        default="auto",
+    )
+    WF_PREFERENCES[category]['n_vols'] = PreferenceEntry(
+        input_type=InputTypes.TEXT,
+        label="Task B duration",
+        default="auto",
+    )
+    WF_PREFERENCES[category]['slice_timing'] = PreferenceEntry(
+        input_type=InputTypes.COMBO,
+        label="Slice timing",
+        default=['Unknown', 'Regular up', 'Regular down', 'Interleaved'],
+    )
+    WF_PREFERENCES[category]['del_start_vols'] = PreferenceEntry(
+        input_type=InputTypes.NUMBER,
+        label="Delete start volumes",
+        default="0",
+        range=[1, 500],
+    )
+    WF_PREFERENCES[category]['del_end_vols'] = PreferenceEntry(
+        input_type=InputTypes.NUMBER,
+        label="Delete end volumes",
+        default="0",
+        range=[1, 500],
+    )
 
 GLOBAL_PREFERENCES = {}
 
-category = MAIN
+category = GlobalPrefCategoryList.MAIN
 GLOBAL_PREFERENCES[category] = {}
 GLOBAL_PREFERENCES[category]['patients_folder'] = PreferenceEntry(
     input_type=InputTypes.DIRECTORY,
@@ -319,7 +310,7 @@ GLOBAL_PREFERENCES[category]['default_wf_type'] = PreferenceEntry(
     label="Default workflow",
     default=WORKFLOW_TYPES,
 )
-category = PERFORMANCE
+category = GlobalPrefCategoryList.PERFORMANCE
 GLOBAL_PREFERENCES[category] = {}
 GLOBAL_PREFERENCES[category]['max_pt'] = PreferenceEntry(
     input_type=InputTypes.NUMBER,
@@ -352,7 +343,7 @@ GLOBAL_PREFERENCES[category]['max_pt_gpu'] = PreferenceEntry(
     tooltip="The limit should be equal or lesser than the number of physical GPU",
     default="1",
     range=[1, 5],
-    pref_requirement={PERFORMANCE: [('cuda', True)]},
+    pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [('cuda', True)]},
     pref_requirement_fail_tooltip="Requires CUDA",
 )
 GLOBAL_PREFERENCES[category]['resourceMonitor'] = PreferenceEntry(
@@ -370,13 +361,13 @@ GLOBAL_PREFERENCES[category]['multicore_node_limit'] = PreferenceEntry(
         "Multi-core steps strictly respect the patient CPU core limit",
     ]
 )
-category = OPTIONAL_SERIES
+category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}
-for data_input in DataInputList().values():
-    if data_input.optional:
-        GLOBAL_PREFERENCES[category][data_input.name] = PreferenceEntry(
+for data_input in DataInputList:
+    if data_input.value.optional:
+        GLOBAL_PREFERENCES[category][data_input.value.name] = PreferenceEntry(
             input_type=InputTypes.CHECKBOX,
-            label=data_input.label,
+            label=data_input.value.label,
             default='false',
             restart=True,
         )

@@ -11,7 +11,6 @@ from swane.ui.PreferencesWindow import PreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.utils.DataInput import DataInputList
-from swane.utils.preference_list import GLOBAL_PREF_KEYS
 from swane.ui.workers.UpdateCheckWorker import UpdateCheckWorker
 from packaging import version
 
@@ -306,9 +305,9 @@ class MainWindow(QMainWindow):
 
         dicom_folder = os.path.join(base_folder, self.global_config.get_default_dicom_folder())
 
-        for data_input in DataInputList().values():
+        for data_input in DataInputList:
             os.makedirs(os.path.join(
-                dicom_folder, data_input.name), exist_ok=True)
+                dicom_folder, str(data_input)), exist_ok=True)
 
         msg_box = QMessageBox()
         msg_box.setText(strings.mainwindow_new_pt_created + base_folder)
@@ -332,8 +331,8 @@ class MainWindow(QMainWindow):
 
         """
         
-        for data_input in DataInputList().values():
-            if not os.path.exists(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), data_input.name)):
+        for data_input in DataInputList:
+            if not os.path.exists(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input))):
                 return False
             
         return True
@@ -353,10 +352,10 @@ class MainWindow(QMainWindow):
 
         """
 
-        for data_input in DataInputList().values():
+        for data_input in DataInputList:
             if not os.path.exists(
-                    os.path.join(dir_path, self.global_config.get_default_dicom_folder(), data_input.name)):
-                os.makedirs(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), data_input.name),
+                    os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input))):
+                os.makedirs(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input)),
                             exist_ok=True)
 
     def edit_config(self):
@@ -375,7 +374,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
-        preference_window = PreferencesWindow(self.global_config, self.dependency_manager, categories=GLOBAL_PREF_KEYS)
+        preference_window = PreferencesWindow(self.global_config, self.dependency_manager, False)
         ret = preference_window.exec()
         
         if ret == EXIT_CODE_REBOOT:
@@ -401,7 +400,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
-        wf_preference_window = PreferencesWindow(self.global_config, self.dependency_manager, categories=DataInputList().values())
+        wf_preference_window = PreferencesWindow(self.global_config, self.dependency_manager, True)
         ret = wf_preference_window.exec()
 
         if ret == -1:
