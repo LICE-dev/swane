@@ -1,16 +1,4 @@
-from enum import IntEnum
-from swane.utils.DataInput import DataInputList
-
-
-class InputTypes(IntEnum):
-    TEXT = 0
-    NUMBER = 1
-    CHECKBOX = 2
-    COMBO = 3
-    FILE = 4
-    DIRECTORY = 5
-    FLOAT = 6
-    HIDDEN = 7
+from swane.config.config_enums import InputTypes
 
 
 class PreferenceEntry:
@@ -41,16 +29,16 @@ class PreferenceEntry:
                 'input_type': InputTypes,
                 "label": str,
                 "tooltip": str,
-                "range": [],
+                "range": list,
                 "dependency": str,
                 "dependency_fail_tooltip": str,
                 "pref_requirement": dict,
                 "pref_requirement_fail_tooltip": str,
-                "input_requirement": DataInputList,
+                "input_requirement": list,
                 "input_requirement_fail_tooltip": str,
                 "restart": bool,
                 "validate_on_change": bool,
-                "informative_text": [],
+                "informative_text": list,
                 "box_text": str,
 
         }

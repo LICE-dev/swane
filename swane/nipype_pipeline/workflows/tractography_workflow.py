@@ -8,7 +8,7 @@ from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
 from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
-from swane.utils.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
+from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
 
 SIDES = ["lh", "rh"]
 

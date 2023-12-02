@@ -3,7 +3,7 @@ from shutil import which
 from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane import strings
 from packaging import version
-from swane.utils.ConfigManager import ConfigManager
+from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 import subprocess
 from enum import IntEnum

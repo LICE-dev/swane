@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMes
 
 from swane import strings
 from configparser import RawConfigParser
-from swane.utils.PreferenceEntry import InputTypes
+from swane.config.config_enums import InputTypes
 
 
 class PreferenceUIEntry:
