@@ -10,7 +10,7 @@ from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
-from swane.utils.DataInput import DataInputList
+from swane.utils.DataInputList import DataInputList
 from swane.ui.workers.UpdateCheckWorker import UpdateCheckWorker
 from packaging import version
 

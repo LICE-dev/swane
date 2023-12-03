@@ -27,7 +27,8 @@ from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.config.ConfigManager import ConfigManager
 from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
-from swane.utils.DataInput import DataInputList, PatientInputState
+from swane.utils.PatientInputStateList import PatientInputStateList
+from swane.utils.DataInputList import DataInputList
 from swane.utils.DependencyManager import DependencyManager
 from swane.config.preference_list import SLICER_EXTENSIONS, WORKFLOW_TYPES
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
@@ -59,7 +60,7 @@ class PtTab(QTabWidget):
         self.node_list = None
 
         dicom_dir = os.path.join(self.pt_folder, self.global_config.get_default_dicom_folder())
-        self.data_input_status = PatientInputState(dicom_dir)
+        self.patient_input_state_list = PatientInputStateList(dicom_dir)
 
         self.data_tab = QWidget()
         self.exec_tab = QWidget()
@@ -297,7 +298,7 @@ class PtTab(QTabWidget):
             x += 1
 
         for to_remove in remove_list:
-            self.data_input_status.pop(to_remove)
+            self.patient_input_state_list.pop(to_remove)
 
         # Second Column: Series to be imported
         import_group_box = QGroupBox()
@@ -543,7 +544,7 @@ class PtTab(QTabWidget):
         
         # Node List population
         try:
-            self.workflow.add_input_folders(self.global_config, self.pt_config, self.main_window.dependency_manager, self.data_input_status)
+            self.workflow.add_input_folders(self.global_config, self.pt_config, self.main_window.dependency_manager, self.patient_input_state_list)
         except:
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.pttab_wf_gen_error)
@@ -1046,8 +1047,8 @@ class PtTab(QTabWidget):
             
         self.set_ok(input_name, label)
 
-        self.data_input_status[input_name]['loaded'] = True
-        self.data_input_status[input_name]['volumes'] = dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])
+        self.patient_input_state_list[input_name].loaded = True
+        self.patient_input_state_list[input_name].volumes = dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])
 
         self.enable_exec_tab()
         self.check_venous_volumes()
@@ -1104,8 +1105,8 @@ class PtTab(QTabWidget):
         shutil.rmtree(src_path, ignore_errors=True)
 
         self.set_error(input_name, strings.pttab_no_dicom_error + src_path)
-        self.data_input_status[input_name]['loaded'] = False
-        self.data_input_status[input_name]['volumes'] = 0
+        self.patient_input_state_list[input_name].loaded = False
+        self.patient_input_state_list[input_name].volumes = 0
         self.enable_exec_tab()
 
         progress.accept()
@@ -1113,32 +1114,32 @@ class PtTab(QTabWidget):
         self.reset_workflow()
         self.check_venous_volumes()
 
-        if input_name == DataInputList.VENOUS and self.data_input_status[DataInputList.VENOUS2]['loaded']:
+        if input_name == DataInputList.VENOUS and self.patient_input_state_list[DataInputList.VENOUS2].loaded:
             self.clear_import_folder(DataInputList.VENOUS2)
 
     def check_venous_volumes(self):
-        phases = self.data_input_status[DataInputList.VENOUS]['volumes'] + self.data_input_status[DataInputList.VENOUS2]['volumes']
+        phases = self.patient_input_state_list[DataInputList.VENOUS].volumes + self.patient_input_state_list[DataInputList.VENOUS2].volumes
         if phases == 0:
             self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
         elif phases == 1:
-            if self.data_input_status[DataInputList.VENOUS]['loaded']:
+            if self.patient_input_state_list[DataInputList.VENOUS].loaded:
                 self.set_warn(DataInputList.VENOUS, "Series has only one phase, load the second phase below", False)
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.data_input_status[DataInputList.VENOUS2]['loaded']:
+            if self.patient_input_state_list[DataInputList.VENOUS2].loaded:
                 # this should not be possible!
                 self.set_warn(DataInputList.VENOUS2, "Series has only one phase, load the second phase above", False)
         elif phases == 2:
-            if self.data_input_status[DataInputList.VENOUS]['loaded']:
+            if self.patient_input_state_list[DataInputList.VENOUS].loaded:
                 self.set_ok(DataInputList.VENOUS, None)
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
-            if self.data_input_status[DataInputList.VENOUS2]['loaded']:
+            if self.patient_input_state_list[DataInputList.VENOUS2].loaded:
                 self.set_ok(DataInputList.VENOUS2, None)
         else:
             # something gone wrong, more than 2 phases!
-            if self.data_input_status[DataInputList.VENOUS]['loaded']:
+            if self.patient_input_state_list[DataInputList.VENOUS].loaded:
                 self.set_warn(DataInputList.VENOUS, "Too many venous phases loaded, delete some!", False)
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.data_input_status[DataInputList.VENOUS2]['loaded']:
+            if self.patient_input_state_list[DataInputList.VENOUS2].loaded:
                 self.set_warn(DataInputList.VENOUS2, "Too many venous phases loaded, delete some!", False)
 
     def exec_button_setEnabled(self, enabled):
@@ -1336,7 +1337,7 @@ class PtTab(QTabWidget):
 
         """
         
-        enable = self.data_input_status.is_ref_loaded() and self.main_window.dependency_manager.is_fsl() and self.main_window.dependency_manager.is_dcm2niix()
+        enable = self.patient_input_state_list.is_ref_loaded() and self.main_window.dependency_manager.is_fsl() and self.main_window.dependency_manager.is_dcm2niix()
         self.setTabEnabled(PtTab.EXECTAB, enable)
 
     def setTabEnabled(self, index, enabled):

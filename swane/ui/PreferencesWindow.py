@@ -7,7 +7,7 @@ from swane.config.preference_list import WF_PREFERENCES, GLOBAL_PREFERENCES
 from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
 from PySide6_VerticalQTabWidget import VerticalQTabWidget
 from swane.config.config_enums import InputTypes
-from swane.utils.DataInput import DataInputList
+from swane.utils.DataInputList import DataInputList
 from enum import Enum
 
 
@@ -57,7 +57,7 @@ class PreferencesWindow(QDialog):
             if str(category) not in my_config:
                 continue
 
-            if is_workflow and not my_config.global_config and not self.parent().data_input_status[category]['loaded']:
+            if is_workflow and not my_config.global_config and not self.parent().patient_input_state_list[category].loaded:
                 continue
 
             cat_label = category.value.label
@@ -120,10 +120,9 @@ class PreferencesWindow(QDialog):
                                 break
                 if not my_config.global_config and self.preferences[category][key].input_requirement is not None:
                     for input_req in self.preferences[category][key].input_requirement:
-                        print(input_req)
                         for cat_check in default_pref_list:
                             print(cat_check)
-                            if cat_check == input_req and not self.parent().data_input_status[cat_check]['loaded']:
+                            if cat_check == input_req and not self.parent().patient_input_state_list[cat_check].loaded:
                                 self.inputs[x].disable(self.preferences[category][key].input_requirement_fail_tooltip)
                                 break
 

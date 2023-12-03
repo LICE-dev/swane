@@ -1,11 +1,12 @@
 import configparser
 from swane import strings, __version__
 from swane.config.preference_list import *
+from swane.utils.DataInputList import DataInputList
 
 
-# todo valutare di spostare le key delle configurazioni in file costanti esterno
 class ConfigManager(configparser.ConfigParser):
 
+    # Overrides to accept non-str stringable object as section keys
     def __getitem__(self, key):
         return super().__getitem__(str(key))
 
@@ -18,7 +19,14 @@ class ConfigManager(configparser.ConfigParser):
     def getint(self, section, option, **kwargs):
         return super().getint(str(section), option, **kwargs)
 
-    def __init__(self, pt_folder=None):
+    def __init__(self, pt_folder: str = None):
+        """
+
+        Parameters
+        ----------
+        pt_folder: str
+            The patient folder path. Non in global all configuration
+        """
         super(ConfigManager, self).__init__()
 
         # First set some internal values differentiating global from patient pref objects
@@ -40,7 +48,6 @@ class ConfigManager(configparser.ConfigParser):
             force_pref_reset = self.getboolean(GlobalPrefCategoryList.MAIN, 'force_pref_reset')
         except:
             force_pref_reset = False
-
 
         reset_pref = False
 
