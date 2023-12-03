@@ -12,7 +12,7 @@ import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.utils.DataInputList import DataInputList
 from swane.ui.workers.UpdateCheckWorker import UpdateCheckWorker
-from packaging import version
+from swane.utils.PatientFolder import PatientFolder, PatientRet
 
 
 class MainWindow(QMainWindow):
@@ -23,13 +23,13 @@ class MainWindow(QMainWindow):
        
     def __init__(self, global_config):
 
+        super(MainWindow, self).__init__()
+
         # GUI configuration setting
         self.global_config = global_config
         self.dependency_manager = DependencyManager()
         self.global_config.check_dependencies(self.dependency_manager)
-        
-        super(MainWindow, self).__init__()
-        
+
         # GUI Icons setting
         self.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
         self.OK_ICON_FILE = swane_supplement.okIcon_file
@@ -43,8 +43,7 @@ class MainWindow(QMainWindow):
         self.NON_UNICODE_BUTTON_HEIGHT = MainWindow.get_non_unicode_height()
 
         # Patient folder configuration checking
-        while self.global_config.get_patients_folder() == "" or not os.path.exists(
-                self.global_config.get_patients_folder()):
+        while self.global_config.get_patients_folder() == "":
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_choose_working_dir)
             msg_box.exec()
@@ -55,19 +54,23 @@ class MainWindow(QMainWindow):
 
         self.initialize_ui()
 
+        # Check for update
         update_thread = UpdateCheckWorker()
         update_thread.signal.last_available.connect(lambda pip_version: self.update_available(pip_version))
         QThreadPool.globalInstance().start(update_thread)
 
-    def update_available(self, pip_version):
-        try:
-            if version.parse(pip_version) > version.parse(__version__):
-                msg_box = QMessageBox(parent=self)
-                msg_box.setIcon(QMessageBox.Icon.Information)
-                msg_box.setText(strings.mainwindow_update_available % pip_version)
-                msg_box.exec()
-        except:
-            pass
+    def update_available(self, pip_version: str):
+        """
+        Called if UpdateCheckWorker detect a newer version on pip
+        Parameters
+        ----------
+        pip_version: str
+            The version of the update available on pip
+        """
+        msg_box = QMessageBox(parent=self)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setText(strings.mainwindow_update_available % pip_version)
+        msg_box.exec()
 
     @staticmethod
     def get_non_unicode_height():
@@ -124,9 +127,16 @@ class MainWindow(QMainWindow):
             return False
         return True
 
-    def search_pt_dir(self):
+    def search_pt_dir(self, button_state: bool = False, folder_path: str = None):
         """
         Try to open a patient directory
+
+        Parameters
+        ----------
+        button_state: bool
+            Not used, passed by QPushButton. Default is False
+        folder_path: str
+            The folder to load. Default is None
 
         Returns
         -------
@@ -138,30 +148,13 @@ class MainWindow(QMainWindow):
         if not self.check_pt_limit():
             return
 
-        # Open the directory selection dialog 
-        file_dialog = QFileDialog()
-        file_dialog.setDirectory(self.global_config.get_patients_folder())
-        folder_path = file_dialog.getExistingDirectory(self, strings.mainwindow_select_pt_folder)
-        if not os.path.exists(folder_path):
-            return
+        if folder_path is None:
+            # Open the directory selection dialog if a path is not provided
+            file_dialog = QFileDialog()
+            file_dialog.setDirectory(self.global_config.get_patients_folder())
+            folder_path = file_dialog.getExistingDirectory(self, strings.mainwindow_select_pt_folder)
 
-        # Guard to avoid the opening a directory containing blank spaces
-        if ' ' in folder_path:
-            msg_box = QMessageBox()
-            msg_box.setIcon(QMessageBox.Icon.Critical)
-            msg_box.setText(strings.mainwindow_ptfolder_with_blank_spaces_error)
-            msg_box.exec()
-            return
-
-
-        # Guard to avoid the opening of a directory outside the main patient folder
-        if not os.path.abspath(folder_path).startswith(
-                os.path.abspath(self.global_config.get_patients_folder()) + os.sep):
-            msg_box = QMessageBox()
-            msg_box.setIcon(QMessageBox.Icon.Critical)
-            msg_box.setText(strings.mainwindow_ptfolder_outside_workingdir_error)
-            msg_box.exec()
-            return
+        patient_folder = PatientFolder(self.global_config.get_patients_folder(), self.global_config.get_default_dicom_folder())
 
         # Guard to avoid an already loaded patient directory
         for pt in self.pt_tabs_array:
@@ -172,8 +165,33 @@ class MainWindow(QMainWindow):
                 msg_box.exec()
                 return
 
-        # Check if selected folder is a valid patient folder
-        if not self.check_pt_dir(folder_path):
+        patient_load_ret = patient_folder.load(folder_path)
+
+        if patient_load_ret == PatientRet.ValidFolder:
+            self.open_pt_dir(folder_path)
+        elif patient_load_ret == PatientRet.FolderNotFound:
+            # Should not be possible
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setText(strings.mainwindow_ptfolder_not_found_error)
+            msg_box.exec()
+            return
+        elif patient_load_ret == PatientRet.PathBlankSpaces:
+            # Guard to avoid the opening a directory containing blank spaces
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setText(strings.mainwindow_ptfolder_with_blank_spaces_error)
+            msg_box.exec()
+            return
+        elif patient_load_ret == PatientRet.FolderOutsideMain:
+            # Guard to avoid the opening of a directory outside the main patient folder
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setText(strings.mainwindow_ptfolder_outside_workingdir_error)
+            msg_box.exec()
+            return
+        elif patient_load_ret == PatientRet.InvalidFolderTree:
+            # Check if selected folder is a valid patient folder
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Icon.Warning)
             msg_box.setText(strings.mainwindow_invalid_folder_error)
@@ -187,16 +205,16 @@ class MainWindow(QMainWindow):
             msg_box2.button(QMessageBox.StandardButton.No).setText("No")
             msg_box2.setDefaultButton(QMessageBox.StandardButton.No)
             ret = msg_box2.exec()
-            
+
             # A patient folder has a predefined folder tree.
             # SWANe recognizes a patient folder checking its subfolders.
             # If a selected folder is not valid, the user may force its conversion into a patient folder.
             if ret == QMessageBox.StandardButton.Yes:
-                self.update_pt_dir(folder_path)
-            else:
-                return
+                patient_folder.update_pt_dir(folder_path)
+                self.search_pt_dir(folder_path=folder_path)
+            return
             
-        self.open_pt_dir(folder_path)
+        return
 
     def get_suggested_patient_name(self) -> str:
         """
@@ -315,48 +333,48 @@ class MainWindow(QMainWindow):
 
         self.open_pt_dir(base_folder)
 
-    def check_pt_dir(self, dir_path: str) -> bool:
-        """
-        Check if a directory is a valid patient folder
+    # def check_pt_dir(self, dir_path: str) -> bool:
+    #     """
+    #     Check if a directory is a valid patient folder
+    #
+    #     Parameters
+    #     ----------
+    #     dir_path : str
+    #         The directory path to check.
+    #
+    #     Returns
+    #     -------
+    #     bool
+    #         True if the directory is a valid patient folder, otherwise False.
+    #
+    #     """
+    #
+    #     for data_input in DataInputList:
+    #         if not os.path.exists(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input))):
+    #             return False
+    #
+    #     return True
 
-        Parameters
-        ----------
-        dir_path : str
-            The directory path to check.
-
-        Returns
-        -------
-        bool
-            True if the directory is a valid patient folder, otherwise False.
-
-        """
-        
-        for data_input in DataInputList:
-            if not os.path.exists(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input))):
-                return False
-            
-        return True
-
-    def update_pt_dir(self, dir_path: str):
-        """
-        Update an existing folder with the patient subfolder structure.
-
-        Parameters
-        ----------
-        dir_path : str
-            The directory path to update into a patient folder.
-
-        Returns
-        -------
-        None.
-
-        """
-
-        for data_input in DataInputList:
-            if not os.path.exists(
-                    os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input))):
-                os.makedirs(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input)),
-                            exist_ok=True)
+    # def update_pt_dir(self, dir_path: str):
+    #     """
+    #     Update an existing folder with the patient subfolder structure.
+    #
+    #     Parameters
+    #     ----------
+    #     dir_path : str
+    #         The directory path to update into a patient folder.
+    #
+    #     Returns
+    #     -------
+    #     None.
+    #
+    #     """
+    #
+    #     for data_input in DataInputList:
+    #         if not os.path.exists(
+    #                 os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input))):
+    #             os.makedirs(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input)),
+    #                         exist_ok=True)
 
     def edit_config(self):
         """

@@ -118,8 +118,11 @@ class ConfigManager(configparser.ConfigParser):
             self.write(openedFile)
 
     def get_patients_folder(self):
-        if self.global_config:
-            return self[GlobalPrefCategoryList.MAIN]["patients_folder"]
+        try:
+            if self.global_config and os.path.exists(self[GlobalPrefCategoryList.MAIN]["patients_folder"]):
+                return self[GlobalPrefCategoryList.MAIN]["patients_folder"]
+        except:
+            pass
         return ''
 
     def set_patients_folder(self, path):
@@ -213,4 +216,11 @@ class ConfigManager(configparser.ConfigParser):
                         changed = True
         if changed:
             self.save()
+
+    def get_last_pid(self):
+        try:
+            return self.getint(GlobalPrefCategoryList.MAIN, 'last_pid')
+        except:
+            pass
+        return -1
 
