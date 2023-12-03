@@ -1,5 +1,5 @@
 from PySide6.QtCore import QRunnable, Signal, QObject
-import os
+from packaging import version
 import subprocess
 import sys
 from swane import __version__
@@ -27,5 +27,17 @@ class UpdateCheckWorker(QRunnable):
             regex_pattern = "^swane \((.+)\)$"
             match = re.match(regex_pattern, stdout_line)
             if match:
-                self.signal.last_available.emit(match.group(1))
+                pip_version = match.group(1)
+                if UpdateCheckWorker.is_newer_version(pip_version):
+                    self.signal.last_available.emit(pip_version)
+                    break
+
+    @staticmethod
+    def is_newer_version(pip_version):
+        try:
+            if version.parse(pip_version) > version.parse(__version__):
+                return True
+        except:
+            pass
+        return False
 

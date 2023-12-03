@@ -17,6 +17,7 @@ mainwindow_choose_working_dir = "Choose the main working directory before start 
 mainwindow_working_dir_space_error = "Blank spaces are not allowed in main working dir name or in its parent folder name"
 mainwindow_choose_working_dir_title = 'Select the main working directory'
 mainwindow_select_pt_folder = 'Select a patient folder'
+mainwindow_ptfolder_not_found_error = "Cannot find the selected folder"
 mainwindow_ptfolder_outside_workingdir_error = "The selected folder is not in " + APPNAME + " main working directory!"
 mainwindow_ptfolder_with_blank_spaces_error = "The selected folder name contains blank spaces!"
 mainwindow_pt_already_loaded_error = "The selected patient was already loaded in " + APPNAME + "!"
