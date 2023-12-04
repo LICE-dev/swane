@@ -27,11 +27,11 @@ from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.config.ConfigManager import ConfigManager
 from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
-from swane.utils.PatientInputStateList import PatientInputStateList
 from swane.utils.DataInputList import DataInputList
 from swane.utils.DependencyManager import DependencyManager
 from swane.config.preference_list import SLICER_EXTENSIONS, WORKFLOW_TYPES
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
+from swane.utils.Patient import Patient
 
 
 class PtTab(QTabWidget):
@@ -48,19 +48,15 @@ class PtTab(QTabWidget):
     GRAPH_FILE_EXT = "svg"
     GRAPH_TYPE = "colored"
 
-    def __init__(self, global_config, pt_folder, main_window, parent=None):
+    def __init__(self, global_config: ConfigManager, patient: Patient, main_window: MainWorkflow, parent=None):
         super(PtTab, self).__init__(parent)
         self.global_config = global_config
-        self.pt_folder = pt_folder
-        self.pt_name = os.path.basename(pt_folder)
+        self.patient = patient
         self.main_window = main_window
 
         self.workflow = None
         self.workflow_process = None
         self.node_list = None
-
-        dicom_dir = os.path.join(self.pt_folder, self.global_config.get_default_dicom_folder())
-        self.patient_input_state_list = PatientInputStateList(dicom_dir)
 
         self.data_tab = QWidget()
         self.exec_tab = QWidget()
@@ -87,23 +83,6 @@ class PtTab(QTabWidget):
         self.setTabEnabled(PtTab.RESULTTAB, False)
 
         self.set_wf()
-
-    def set_main_window(self, main_window):
-        """
-        Set the Main Window.
-
-        Parameters
-        ----------
-        main_window : MainWindow
-            The Main Window.
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        self.main_window = main_window
 
     def update_node_list(self, wf_report: WorkflowReport):
         """
@@ -220,7 +199,7 @@ class PtTab(QTabWidget):
 
         """
         
-        self.workflow = MainWorkflow(name=self.pt_name + strings.WF_DIR_SUFFIX, base_dir=self.pt_folder)
+        self.workflow = MainWorkflow(name=self.patient.name + strings.WF_DIR_SUFFIX, base_dir=self.patient.folder)
 
         try:
             self.node_button.setEnabled(True)
@@ -256,14 +235,7 @@ class PtTab(QTabWidget):
 
         self.input_report = {}
 
-        remove_list = []
-
-        for data_input in DataInputList:
-
-            if data_input.value.optional and not self.global_config.is_optional_series_enabled(data_input):
-                remove_list.append(data_input)
-                continue
-
+        for data_input in self.patient.input_state_list:
             self.input_report[data_input] = [QSvgWidget(self),
                                              QLabel(data_input.value.label),
                                              QLabel(""),
@@ -296,9 +268,6 @@ class PtTab(QTabWidget):
 
             folder_layout.addWidget(self.input_report[data_input][2], (x * 2) + 1, 1, 1, 3)
             x += 1
-
-        for to_remove in remove_list:
-            self.patient_input_state_list.pop(to_remove)
 
         # Second Column: Series to be imported
         import_group_box = QGroupBox()
@@ -338,8 +307,7 @@ class PtTab(QTabWidget):
             msg_box.exec()
             return
 
-        import shutil
-        dest_path = os.path.join(self.pt_folder,
+        dest_path = os.path.join(self.patient.folder,
                                  self.global_config.get_default_dicom_folder(), str(input_name))
 
         # number of volumes check
@@ -540,11 +508,11 @@ class PtTab(QTabWidget):
 
         # Main Workflow generation
         if self.workflow is None:
-            self.workflow = MainWorkflow(name=self.pt_name + strings.WF_DIR_SUFFIX, base_dir=self.pt_folder)
+            self.workflow = MainWorkflow(name=self.patient.name + strings.WF_DIR_SUFFIX, base_dir=self.patient.folder)
         
         # Node List population
         try:
-            self.workflow.add_input_folders(self.global_config, self.pt_config, self.main_window.dependency_manager, self.patient_input_state_list)
+            self.workflow.add_input_folders(self.global_config, self.pt_config, self.main_window.dependency_manager, self.patient.input_state_list)
         except:
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.pttab_wf_gen_error)
@@ -555,7 +523,7 @@ class PtTab(QTabWidget):
         self.node_list = self.workflow.get_node_array()
         self.node_list_treeWidget.clear()
 
-        graph_dir = os.path.join(self.pt_folder, PtTab.GRAPH_DIR_NAME)
+        graph_dir = os.path.join(self.patient.folder, PtTab.GRAPH_DIR_NAME)
         shutil.rmtree(graph_dir, ignore_errors=True)
         os.mkdir(graph_dir)
         
@@ -597,7 +565,7 @@ class PtTab(QTabWidget):
         """
         
         if self.main_window.dependency_manager.is_graphviz() and item.parent() is None:
-            file = os.path.join(self.pt_folder, PtTab.GRAPH_DIR_NAME, PtTab.GRAPH_FILE_PREFIX + item.get_text().lower().replace(" ", "_") + '.'
+            file = os.path.join(self.patient.folder, PtTab.GRAPH_DIR_NAME, PtTab.GRAPH_FILE_PREFIX + item.get_text().lower().replace(" ", "_") + '.'
                                 + PtTab.GRAPH_FILE_EXT)
             self.exec_graph.load(file)
             self.exec_graph.renderer().setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
@@ -653,7 +621,7 @@ class PtTab(QTabWidget):
         
         # Workflow not started
         if not self.is_workflow_process_alive():
-            workflow_dir = os.path.join(self.pt_folder, self.pt_name + strings.WF_DIR_SUFFIX)
+            workflow_dir = os.path.join(self.patient.folder, self.patient.name + strings.WF_DIR_SUFFIX)
             # Checks for a previous workflow execution
             if os.path.exists(workflow_dir):
                 # If yes, asks for workflow resume or reset
@@ -671,7 +639,7 @@ class PtTab(QTabWidget):
                 if ret == QMessageBox.StandardButton.No:
                     shutil.rmtree(workflow_dir, ignore_errors=True)
 
-            fsdir = os.path.join(self.pt_folder, FS_DIR)
+            fsdir = os.path.join(self.patient.folder, FS_DIR)
             # Checks for a previous workflow FreeSurfer execution
             if self.pt_config.get_pt_wf_freesurfer() and os.path.exists(fsdir):
                 # If yes, asks for workflow resume or reset
@@ -697,7 +665,7 @@ class PtTab(QTabWidget):
             QThreadPool.globalInstance().start(workflow_monitor_work)
             
             # Starts the workflow on a new process
-            self.workflow_process = WorkflowProcess(self.pt_name, self.workflow, queue)
+            self.workflow_process = WorkflowProcess(self.patient.name, self.workflow, queue)
             self.workflow_process.start()
             
             # UI updating
@@ -733,7 +701,7 @@ class PtTab(QTabWidget):
 
     def open_results_directory(self):
         import subprocess
-        results_dir = os.path.join(self.pt_folder, "scene")
+        results_dir = os.path.join(self.patient.folder, "scene")
         if sys.platform == 'win32':
             os.startfile(results_dir)
 
@@ -759,7 +727,7 @@ class PtTab(QTabWidget):
 
     def load_scene_button_update_state(self):
         try:
-            scene_path = os.path.join(self.pt_folder, "scene", "scene." + SLICER_EXTENSIONS[
+            scene_path = os.path.join(self.patient.folder, "scene", "scene." + SLICER_EXTENSIONS[
                 int(self.global_config.get_slicer_scene_ext())])
             if not DependencyManager.is_slicer(self.global_config):
                 self.load_scene_button.setEnabled(False)
@@ -832,7 +800,7 @@ class PtTab(QTabWidget):
         progress = PersistentProgressDialog(strings.pttab_exporting_start, 0, 0, parent=self)
         progress.show()
 
-        slicer_thread = SlicerExportWorker(self.global_config.get_slicer_path(), self.pt_folder,
+        slicer_thread = SlicerExportWorker(self.global_config.get_slicer_path(), self.patient.folder,
                                            self.global_config.get_slicer_scene_ext(), parent=self)
         slicer_thread.signal.export.connect(lambda msg: self.slicer_thread_signal(msg, progress))
         QThreadPool.globalInstance().start(slicer_thread)
@@ -868,7 +836,7 @@ class PtTab(QTabWidget):
         None.
 
         """
-        scene_path = os.path.join(self.pt_folder, "scene", "scene."+SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
+        scene_path = os.path.join(self.patient.folder, "scene", "scene."+SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
         if os.path.exists(scene_path):
             slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), scene_path, parent=self)
             QThreadPool.globalInstance().start(slicer_open_thread)
@@ -887,7 +855,7 @@ class PtTab(QTabWidget):
         total_files = 0
 
         # Config import based on nipype_pipeline
-        self.pt_config = ConfigManager(self.pt_folder)
+        self.pt_config = ConfigManager(self.patient.folder)
         self.pt_config.check_dependencies(self.main_window.dependency_manager)
         self.wf_type_combo.setCurrentIndex(self.pt_config.get_pt_wf_type())
         # Set after patient loading to prevent the onchanged fire on previous line command
@@ -910,7 +878,7 @@ class PtTab(QTabWidget):
                 self.input_report[data_input][0].load(self.main_window.LOADING_MOVIE_FILE)
                 self.check_input_folder_step2(data_input, dicom_scanners[data_input], progress)
                 self.directory_watcher.addPath(
-                    os.path.join(self.pt_folder, self.global_config.get_default_dicom_folder(), str(data_input)))
+                    os.path.join(self.patient.folder, self.global_config.get_default_dicom_folder(), str(data_input)))
 
         self.setTabEnabled(PtTab.DATATAB, True)
         self.setCurrentWidget(self.data_tab)
@@ -929,7 +897,7 @@ class PtTab(QTabWidget):
         None.
 
         """
-        scene_dir = os.path.join(self.pt_folder, MainWorkflow.SCENE_DIR)
+        scene_dir = os.path.join(self.patient.folder, MainWorkflow.SCENE_DIR)
         
         if os.path.exists(scene_dir):
             self.setTabEnabled(PtTab.RESULTTAB, True)
@@ -958,7 +926,7 @@ class PtTab(QTabWidget):
 
         """
         
-        src_path = os.path.join(self.pt_folder,
+        src_path = os.path.join(self.patient.folder,
                                 self.global_config.get_default_dicom_folder(), str(input_name))
         dicom_src_work = DicomSearchWorker(src_path)
         dicom_src_work.load_dir()
@@ -1047,8 +1015,8 @@ class PtTab(QTabWidget):
             
         self.set_ok(input_name, label)
 
-        self.patient_input_state_list[input_name].loaded = True
-        self.patient_input_state_list[input_name].volumes = dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])
+        self.patient.input_state_list[input_name].loaded = True
+        self.patient.input_state_list[input_name].volumes = dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])
 
         self.enable_exec_tab()
         self.check_venous_volumes()
@@ -1089,24 +1057,23 @@ class PtTab(QTabWidget):
 
         """
 
-        src_path = os.path.join(self.pt_folder,
+        src_path = os.path.join(self.patient.folder,
                                 self.global_config.get_default_dicom_folder(), str(input_name))
 
         progress = PersistentProgressDialog(strings.pttab_dicom_clearing + src_path, 0, 0, self)
         progress.show()
 
-        import shutil
         shutil.rmtree(src_path, ignore_errors=True)
         os.makedirs(src_path, exist_ok=True)
 
         # Reset the workflows related to the deleted DICOM images
-        src_path = os.path.join(self.pt_folder, self.pt_name + strings.WF_DIR_SUFFIX,
+        src_path = os.path.join(self.patient.folder, self.patient.name + strings.WF_DIR_SUFFIX,
                                 input_name.value.wf_name)
         shutil.rmtree(src_path, ignore_errors=True)
 
         self.set_error(input_name, strings.pttab_no_dicom_error + src_path)
-        self.patient_input_state_list[input_name].loaded = False
-        self.patient_input_state_list[input_name].volumes = 0
+        self.patient.input_state_list[input_name].loaded = False
+        self.patient.input_state_list[input_name].volumes = 0
         self.enable_exec_tab()
 
         progress.accept()
@@ -1114,32 +1081,32 @@ class PtTab(QTabWidget):
         self.reset_workflow()
         self.check_venous_volumes()
 
-        if input_name == DataInputList.VENOUS and self.patient_input_state_list[DataInputList.VENOUS2].loaded:
+        if input_name == DataInputList.VENOUS and self.patient.input_state_list[DataInputList.VENOUS2].loaded:
             self.clear_import_folder(DataInputList.VENOUS2)
 
     def check_venous_volumes(self):
-        phases = self.patient_input_state_list[DataInputList.VENOUS].volumes + self.patient_input_state_list[DataInputList.VENOUS2].volumes
+        phases = self.patient.input_state_list[DataInputList.VENOUS].volumes + self.patient.input_state_list[DataInputList.VENOUS2].volumes
         if phases == 0:
             self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
         elif phases == 1:
-            if self.patient_input_state_list[DataInputList.VENOUS].loaded:
+            if self.patient.input_state_list[DataInputList.VENOUS].loaded:
                 self.set_warn(DataInputList.VENOUS, "Series has only one phase, load the second phase below", False)
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.patient_input_state_list[DataInputList.VENOUS2].loaded:
+            if self.patient.input_state_list[DataInputList.VENOUS2].loaded:
                 # this should not be possible!
                 self.set_warn(DataInputList.VENOUS2, "Series has only one phase, load the second phase above", False)
         elif phases == 2:
-            if self.patient_input_state_list[DataInputList.VENOUS].loaded:
+            if self.patient.input_state_list[DataInputList.VENOUS].loaded:
                 self.set_ok(DataInputList.VENOUS, None)
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
-            if self.patient_input_state_list[DataInputList.VENOUS2].loaded:
+            if self.patient.input_state_list[DataInputList.VENOUS2].loaded:
                 self.set_ok(DataInputList.VENOUS2, None)
         else:
             # something gone wrong, more than 2 phases!
-            if self.patient_input_state_list[DataInputList.VENOUS].loaded:
+            if self.patient.input_state_list[DataInputList.VENOUS].loaded:
                 self.set_warn(DataInputList.VENOUS, "Too many venous phases loaded, delete some!", False)
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.patient_input_state_list[DataInputList.VENOUS2].loaded:
+            if self.patient.input_state_list[DataInputList.VENOUS2].loaded:
                 self.set_warn(DataInputList.VENOUS2, "Too many venous phases loaded, delete some!", False)
 
     def exec_button_setEnabled(self, enabled):
@@ -1337,7 +1304,7 @@ class PtTab(QTabWidget):
 
         """
         
-        enable = self.patient_input_state_list.is_ref_loaded() and self.main_window.dependency_manager.is_fsl() and self.main_window.dependency_manager.is_dcm2niix()
+        enable = self.patient.input_state_list.is_ref_loaded() and self.main_window.dependency_manager.is_fsl() and self.main_window.dependency_manager.is_dcm2niix()
         self.setTabEnabled(PtTab.EXECTAB, enable)
 
     def setTabEnabled(self, index, enabled):
