@@ -10,9 +10,8 @@ from swane.ui.PtTab import PtTab
 from swane.ui.PreferencesWindow import PreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
-from swane.utils.DataInputList import DataInputList
 from swane.ui.workers.UpdateCheckWorker import UpdateCheckWorker
-from swane.utils.PatientFolder import PatientFolder, PatientRet
+from swane.utils.Patient import Patient, PatientRet
 
 
 class MainWindow(QMainWindow):
@@ -80,14 +79,14 @@ class MainWindow(QMainWindow):
         text_size = button.fontMetrics().size(Qt.TextShowMnemonic, button.text())
         return button.style().sizeFromContents(QStyle.CT_PushButton, opt, text_size, button).height()
 
-    def open_pt_dir(self, folder_path: str):
+    def open_pt_tab(self, patient: Patient):
         """
         Load a checked and valid patient folder.
 
         Parameters
         ----------
-        folder_path : str
-            The patient folder path.
+        patient : str
+            The patient to load in the tab.
 
         Returns
         -------
@@ -95,12 +94,10 @@ class MainWindow(QMainWindow):
 
         """
         
-        this_tab = PtTab(self.global_config, folder_path,
-                         self, parent=self.main_tab)
-        this_tab.set_main_window(self)
+        this_tab = PtTab(self.global_config, patient, main_window=self, parent=self.main_tab)
         self.pt_tabs_array.append(this_tab)
 
-        self.main_tab.addTab(this_tab, os.path.basename(folder_path))
+        self.main_tab.addTab(this_tab, os.path.basename(patient.name))
         self.main_tab.setCurrentWidget(this_tab)
         
         this_tab.load_pt()
@@ -154,7 +151,7 @@ class MainWindow(QMainWindow):
             file_dialog.setDirectory(self.global_config.get_patients_folder())
             folder_path = file_dialog.getExistingDirectory(self, strings.mainwindow_select_pt_folder)
 
-        patient_folder = PatientFolder(self.global_config.get_patients_folder(), self.global_config.get_default_dicom_folder())
+        patient = Patient(self.global_config)
 
         # Guard to avoid an already loaded patient directory
         for pt in self.pt_tabs_array:
@@ -165,10 +162,10 @@ class MainWindow(QMainWindow):
                 msg_box.exec()
                 return
 
-        patient_load_ret = patient_folder.load(folder_path)
+        patient_load_ret = patient.load(folder_path)
 
         if patient_load_ret == PatientRet.ValidFolder:
-            self.open_pt_dir(folder_path)
+            self.open_pt_tab(patient)
         elif patient_load_ret == PatientRet.FolderNotFound:
             # Should not be possible
             msg_box = QMessageBox()
@@ -210,7 +207,7 @@ class MainWindow(QMainWindow):
             # SWANe recognizes a patient folder checking its subfolders.
             # If a selected folder is not valid, the user may force its conversion into a patient folder.
             if ret == QMessageBox.StandardButton.Yes:
-                patient_folder.update_pt_dir(folder_path)
+                patient.update_pt_dir(folder_path)
                 self.search_pt_dir(folder_path=folder_path)
             return
             
@@ -299,7 +296,6 @@ class MainWindow(QMainWindow):
             return
         
         self.global_config.set_patients_folder(os.path.abspath(folder_path))
-        self.global_config.save()
         
         os.chdir(folder_path)
 
@@ -317,64 +313,13 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
-        base_folder = os.path.abspath(os.path.join(
-            self.global_config.get_patients_folder(), pt_name))
 
-        dicom_folder = os.path.join(base_folder, self.global_config.get_default_dicom_folder())
-
-        for data_input in DataInputList:
-            os.makedirs(os.path.join(
-                dicom_folder, str(data_input)), exist_ok=True)
-
-        msg_box = QMessageBox()
-        msg_box.setText(strings.mainwindow_new_pt_created + base_folder)
-        msg_box.exec()
-
-        self.open_pt_dir(base_folder)
-
-    # def check_pt_dir(self, dir_path: str) -> bool:
-    #     """
-    #     Check if a directory is a valid patient folder
-    #
-    #     Parameters
-    #     ----------
-    #     dir_path : str
-    #         The directory path to check.
-    #
-    #     Returns
-    #     -------
-    #     bool
-    #         True if the directory is a valid patient folder, otherwise False.
-    #
-    #     """
-    #
-    #     for data_input in DataInputList:
-    #         if not os.path.exists(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input))):
-    #             return False
-    #
-    #     return True
-
-    # def update_pt_dir(self, dir_path: str):
-    #     """
-    #     Update an existing folder with the patient subfolder structure.
-    #
-    #     Parameters
-    #     ----------
-    #     dir_path : str
-    #         The directory path to update into a patient folder.
-    #
-    #     Returns
-    #     -------
-    #     None.
-    #
-    #     """
-    #
-    #     for data_input in DataInputList:
-    #         if not os.path.exists(
-    #                 os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input))):
-    #             os.makedirs(os.path.join(dir_path, self.global_config.get_default_dicom_folder(), str(data_input)),
-    #                         exist_ok=True)
+        patient = Patient(self.global_config)
+        if patient.create_new_pt_dir(pt_name):
+            msg_box = QMessageBox()
+            msg_box.setText(strings.mainwindow_new_pt_created + pt_name)
+            msg_box.exec()
+            self.open_pt_tab(patient)
 
     def edit_config(self):
         """
@@ -554,7 +499,7 @@ class MainWindow(QMainWindow):
         # Tab definition
         self.main_tab = QTabWidget(parent=self)
         self.main_tab.setTabsClosable(True)
-        self.main_tab.tabCloseRequested.connect(self.close_pt)
+        self.main_tab.tabCloseRequested.connect(self.close_pt_tab)
         self.setCentralWidget(self.main_tab)
         self.homeTab = QWidget()
         self.main_tab.addTab(self.homeTab, strings.mainwindow_home_tab_name)
@@ -570,7 +515,7 @@ class MainWindow(QMainWindow):
 
         self.show()
 
-    def close_pt(self, index: int):
+    def close_pt_tab(self, index: int):
         """
         Handle the PySide tab closing event for the Patient tab.
 
@@ -600,8 +545,6 @@ class MainWindow(QMainWindow):
         
         self.pt_tabs_array.remove(tab_item)
         self.main_tab.removeTab(index)
-        
-        tab_item = None
 
     def closeEvent(self, event: QCloseEvent):
         """

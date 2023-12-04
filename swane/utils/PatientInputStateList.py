@@ -1,15 +1,17 @@
 import os
-
+from swane.config.ConfigManager import ConfigManager
 from swane.utils.DataInputList import DataInputList
 from swane.utils.PatientInputState import PatientInputState
 
 
 class PatientInputStateList(dict):
 
-    def __init__(self, dicom_dir=None):
+    def __init__(self, dicom_dir: str, global_config: ConfigManager):
         super().__init__()
         self.dicom_dir = dicom_dir
         for data_input in DataInputList:
+            if data_input.value.optional and not global_config.is_optional_series_enabled(data_input):
+                continue
             self[data_input] = PatientInputState()
 
     def is_ref_loaded(self):

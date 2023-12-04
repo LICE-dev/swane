@@ -128,6 +128,7 @@ class ConfigManager(configparser.ConfigParser):
     def set_patients_folder(self, path):
         if self.global_config:
             self[GlobalPrefCategoryList.MAIN]["patients_folder"] = path
+            self.save()
 
     def get_max_pt(self):
         if not self.global_config:
