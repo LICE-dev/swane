@@ -8,6 +8,13 @@ from swane.utils.DependencyManager import DependencyManager
 from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
 from PySide6.QtCore import QThreadPool
 from swane import strings
+from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+import traceback
+from threading import Thread
+from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
+from multiprocessing import Queue
+from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
+from swane.ui.workers.WorkflowProcess import WorkflowProcess
 
 
 class PatientRet(Enum):
@@ -27,16 +34,31 @@ class PatientRet(Enum):
     DataImportErrorModality = auto()
     DataImportErrorCopy = auto()
     DataImportCompleted = auto()
+    GenWfMissingFSL = auto()
+    GenWfError = auto()
+    GenWfCompleted = auto()
+    ExecWfResume = auto()
+    ExecWfResumeFreesurfer = auto()
+    ExecWfStarted = auto()
+    ExecWfStopped = auto()
+    ExecWfStatusError = auto()
 
 
 class Patient:
+    GRAPH_DIR_NAME = "graph"
+    GRAPH_FILE_PREFIX = "graph_"
+    GRAPH_FILE_EXT = "svg"
+    GRAPH_TYPE = "colored"
 
     def __init__(self, global_config: ConfigManager):
-        self.folder = None
-        self.name = None
         self.global_config = global_config
+        self.folder = None
+        self.name = None        
         self.input_state_list = None
         self.config = None
+        self.dependency_manager = None
+        self.workflow = None
+        self.workflow_process = None
 
     def load(self, pt_folder: str, dependency_manager: DependencyManager) -> PatientRet:
         # Load patient information from a folder, generate patient configuration and
@@ -47,6 +69,7 @@ class Patient:
         self.folder = pt_folder
         self.name = os.path.basename(pt_folder)
         self.input_state_list = PatientInputStateList(self.dicom_folder(), self.global_config)
+        self.dependency_manager = dependency_manager
         self.create_config(dependency_manager)
         return PatientRet.ValidFolder
 
@@ -179,12 +202,9 @@ class Patient:
         if len(series_list) != 1:
             status_callback(data_input, PatientRet.DataInputWarningMultiSeries, dicom_src_work)
             return
-
-        status_callback(data_input, PatientRet.DataInputValid, dicom_src_work)
-
         self.input_state_list[data_input].loaded = True
-        self.input_state_list[data_input].volumes = dicom_src_work.get_series_nvol(pt_list[0], exam_list[0],
-                                                                                   series_list[0])
+        self.input_state_list[data_input].volumes = dicom_src_work.get_series_nvol(pt_list[0], exam_list[0],series_list[0])
+        status_callback(data_input, PatientRet.DataInputValid, dicom_src_work)
 
     def dicom_import_to_folder(self, data_input: DataInputList, copy_list: list, vols: int, mod: str, force_modality: bool, progress_callback: callable) -> PatientRet:
         """
@@ -347,6 +367,137 @@ class Patient:
         except:
             return False
 
+    def can_generate_workflow(self):
+        return self.input_state_list.is_ref_loaded() and self.dependency_manager.is_fsl() and self.dependency_manager.is_dcm2niix()
 
+    def generate_workflow(self):
+        """
+        Generates and populates the Main Workflow.
+        Generates the graphviz analysis graphs on a new thread.
 
+        Returns
+        -------
+        PatientRet corresponging to succes or failure
+
+        """
+
+        if not self.dependency_manager.is_fsl():
+            return PatientRet.GenWfMissingFSL
+
+        # Main Workflow generation
+        if self.workflow is None:
+            self.workflow = MainWorkflow(name=self.name + strings.WF_DIR_SUFFIX, base_dir=self.folder)
+
+        # Node List population
+        try:
+            self.workflow.add_input_folders(self.global_config, self.config,
+                                            self.dependency_manager, self.input_state_list)
+        except:
+            traceback.print_exc()
+            # TODO: generiamo un file crash nella cartella log?
+            return PatientRet.GenWfError
+
+        graph_dir = os.path.join(self.folder, Patient.GRAPH_DIR_NAME)
+        shutil.rmtree(graph_dir, ignore_errors=True)
+        os.mkdir(graph_dir)
+
+        node_list = self.workflow.get_node_array()
+
+        # Graphviz analysis graphs drawing
+        for node in node_list.keys():
+            if len(node_list[node].node_list.keys()) > 0:
+                if self.dependency_manager.is_graphviz():
+                    graph_name = node_list[node].long_name.lower().replace(" ", "_")
+                    thread = Thread(target=self.workflow.get_node(node).write_graph,
+                                    kwargs={'graph2use': self.GRAPH_TYPE, 'format': Patient.GRAPH_FILE_EXT,
+                                            'dotfilename': os.path.join(graph_dir,
+                                                                        Patient.GRAPH_FILE_PREFIX + graph_name + '.dot')})
+                    thread.start()
+
+        return PatientRet.GenWfCompleted
+
+    def is_workflow_process_alive(self) -> bool:
+        """
+        Checks if a workflow is in execution.
+
+        Returns
+        -------
+        bool
+            True if the workflow is executing, elsewise False.
+
+        """
+
+        try:
+            if self.workflow_process is None:
+                return False
+            return self.workflow_process.is_alive()
+        except AttributeError:
+            return False
+
+    def workflow_dir(self):
+        return os.path.join(self.folder, self.name + strings.WF_DIR_SUFFIX)
+
+    def start_workflow(self, resume: bool = None, resume_freesurfer: bool = None, update_node_callback: callable = None) -> PatientRet:
+        # Already executing workflow
+        if self.is_workflow_process_alive():
+            return PatientRet.ExecWfStatusError
+        workflow_dir = self.workflow_dir()
+        # Checks for a previous workflow execution
+        if os.path.exists(workflow_dir):
+            if resume is None:
+                return PatientRet.ExecWfResume
+            elif not resume:
+                shutil.rmtree(workflow_dir, ignore_errors=True)
+
+        fsdir = os.path.join(self.folder, FS_DIR)
+        # Checks for a previous workflow FreeSurfer execution
+        if self.config.get_pt_wf_freesurfer() and os.path.exists(fsdir):
+            if resume_freesurfer is None:
+                return PatientRet.ExecWfResumeFreesurfer
+            elif not resume_freesurfer:
+                shutil.rmtree(fsdir, ignore_errors=True)
+
+        queue = Queue(maxsize=500)
+
+        # Generates a Monitor Worker to receive workflows notifications
+        workflow_monitor_work = WorkflowMonitorWorker(queue)
+        if update_node_callback is not None:
+            workflow_monitor_work.signal.log_msg.connect(update_node_callback)
+        QThreadPool.globalInstance().start(workflow_monitor_work)
+
+        # Starts the workflow on a new process
+        self.workflow_process = WorkflowProcess(self.name, self.workflow, queue)
+        self.workflow_process.start()
+        return PatientRet.ExecWfStarted
+
+    def stop_workflow(self) -> PatientRet:
+        if not self.is_workflow_process_alive():
+            return PatientRet.ExecWfStatusError
+        # Workflow killing
+        self.workflow_process.stop_event.set()
+
+    def reset_workflow(self, force: bool = False):
+        """
+        Set the workflow var to None.
+        Resets the UI.
+        Works only if the worklow is not in execution or if force var is True.
+
+        Parameters
+        ----------
+        force : bool, optional
+            Force the usage of this function during workflow execution. The default is False.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        if self.workflow is None:
+            return False
+        if not force and self.is_workflow_process_alive():
+            return False
+
+        self.workflow = None
+        return True
 
