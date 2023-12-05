@@ -382,7 +382,7 @@ class MainWindow(QMainWindow):
         """
         
         for pt in self.pt_tabs_array:
-            if pt.is_workflow_process_alive():
+            if pt.patient.is_workflow_process_alive():
                 return True
             
         return False
@@ -535,7 +535,7 @@ class MainWindow(QMainWindow):
             return
 
         tab_item = self.main_tab.widget(index)
-        if tab_item.is_workflow_process_alive():
+        if tab_item.patient.is_workflow_process_alive():
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_wf_executing_error_1)
             msg_box.exec()

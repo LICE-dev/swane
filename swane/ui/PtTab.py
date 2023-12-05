@@ -1,9 +1,5 @@
 import os
-import shutil
-import traceback
-from multiprocessing import Queue
-from threading import Thread
-import sys
+from sys import platform
 import pydicom
 from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
@@ -18,15 +14,12 @@ from swane import strings
 from swane.slicer.SlicerExportWorker import SlicerExportWorker
 from swane.slicer.SlicerViewerWorker import SlicerViewerWorker
 from swane.nipype_pipeline.MainWorkflow import MainWorkflow
-from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
-from swane.ui.workers.WorkflowProcess import WorkflowProcess
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.config.ConfigManager import ConfigManager
 from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
-from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from swane.utils.DataInputList import DataInputList
 from swane.utils.DependencyManager import DependencyManager
 from swane.config.preference_list import SLICER_EXTENSIONS, WORKFLOW_TYPES
@@ -43,10 +36,7 @@ class PtTab(QTabWidget):
     DATATAB = 0
     EXECTAB = 1
     RESULTTAB = 2
-    GRAPH_DIR_NAME = "graph"
-    GRAPH_FILE_PREFIX = "graph_"
-    GRAPH_FILE_EXT = "svg"
-    GRAPH_TYPE = "colored"
+    
 
     def __init__(self, global_config: ConfigManager, patient: Patient, main_window: MainWorkflow, parent=None):
         super(PtTab, self).__init__(parent)
@@ -54,7 +44,6 @@ class PtTab(QTabWidget):
         self.patient = patient
         self.main_window = main_window
 
-        self.workflow = None
         self.workflow_process = None
         self.node_list = None
 
@@ -81,8 +70,6 @@ class PtTab(QTabWidget):
 
         self.setTabEnabled(PtTab.EXECTAB, False)
         self.setTabEnabled(PtTab.RESULTTAB, False)
-
-        self.set_wf()
 
     def update_node_list(self, wf_report: WorkflowReport):
         """
@@ -117,7 +104,7 @@ class PtTab(QTabWidget):
 
             if errors:
                 self.node_button.setEnabled(True)
-                self.workflow = None
+                self.patient.workflow = None
                 self.exec_button.setText(strings.pttab_wf_executed_with_error)
                 self.exec_button.setToolTip("")
             else:
@@ -183,33 +170,6 @@ class PtTab(QTabWidget):
             for key2 in self.node_list[key1].node_list.keys():
                 if self.node_list[key1].node_list[key2].node_holder.art == self.main_window.LOADING_MOVIE_FILE:
                     self.node_list[key1].node_list[key2].node_holder.set_art(self.main_window.VOID_SVG_FILE)
-
-    def set_wf(self):
-        """
-        Saves the specified workflow into Main Thread and updates the UI.
-
-        Parameters
-        ----------
-        wf : MainWorkflow
-            The workflow passed to the Main Thread.
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        self.workflow = MainWorkflow(name=self.patient.name + strings.WF_DIR_SUFFIX, base_dir=self.patient.folder)
-
-        try:
-            self.node_button.setEnabled(True)
-            self.wf_type_combo.setEnabled(True)
-            self.patient.config_button.setEnabled(True)
-
-            self.enable_exec_tab()
-
-        except AttributeError:
-            pass
 
     def data_tab_ui(self):
         """
@@ -412,8 +372,6 @@ class PtTab(QTabWidget):
         self.node_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.node_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         self.node_button.clicked.connect(self.gen_wf)
-        if self.workflow is None:
-            self.node_button.setEnabled(False)
 
         layout.addWidget(self.node_button, 1, 0)
 
@@ -431,16 +389,16 @@ class PtTab(QTabWidget):
         self.node_list_treeWidget.itemClicked.connect(self.tree_item_clicked)
 
         # Second Column: Graphviz Graph Layout
-        self.patient.config_button = QPushButton(strings.PTCONFIGBUTTONTEXT)
-        self.patient.config_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
-        self.patient.config_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        self.patient.config_button.clicked.connect(self.edit_pt_config)
-        layout.addWidget(self.patient.config_button, 0, 1)
+        self.patient_config_button = QPushButton(strings.PTCONFIGBUTTONTEXT)
+        self.patient_config_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.patient_config_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.patient_config_button.clicked.connect(self.edit_pt_config)
+        layout.addWidget(self.patient_config_button, 0, 1)
 
         self.exec_button = QPushButton(strings.EXECBUTTONTEXT)
         self.exec_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.exec_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        self.exec_button.clicked.connect(self.start_workflow_thread)
+        self.exec_button.clicked.connect(self.toggle_workflow_execution)
         self.exec_button_setEnabled(False)
 
         layout.addWidget(self.exec_button, 1, 1)
@@ -498,44 +456,24 @@ class PtTab(QTabWidget):
 
         """
         
-        if not self.main_window.dependency_manager.is_fsl():
+        generate_workflow_return = self.patient.generate_workflow()
+        
+        if generate_workflow_return == PatientRet.GenWfMissingFSL:
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.pttab_missing_fsl_error)
             return
-
-        # Main Workflow generation
-        if self.workflow is None:
-            self.workflow = MainWorkflow(name=self.patient.name + strings.WF_DIR_SUFFIX, base_dir=self.patient.folder)
-        
-        # Node List population
-        try:
-            self.workflow.add_input_folders(self.global_config, self.patient.config, self.main_window.dependency_manager, self.patient.input_state_list)
-        except:
+        elif generate_workflow_return == PatientRet.GenWfError:
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.pttab_wf_gen_error)
-            traceback.print_exc()
-            # TODO: generiamo un file crash nella cartella log?
             return
         
-        self.node_list = self.workflow.get_node_array()
         self.node_list_treeWidget.clear()
-
-        graph_dir = os.path.join(self.patient.folder, PtTab.GRAPH_DIR_NAME)
-        shutil.rmtree(graph_dir, ignore_errors=True)
-        os.mkdir(graph_dir)
+        self.node_list = self.patient.workflow.get_node_array()
         
         # Graphviz analysis graphs drawing
         for node in self.node_list.keys():
             self.node_list[node].node_holder = CustomTreeWidgetItem(self.node_list_treeWidget, self.node_list_treeWidget, self.node_list[node].long_name)
-            if len(self.node_list[node].node_list.keys()) > 0:
-                if self.main_window.dependency_manager.is_graphviz():
-                    graph_name = self.node_list[node].long_name.lower().replace(" ", "_")
-                    thread = Thread(target=self.workflow.get_node(node).write_graph,
-                                    kwargs={'graph2use': self.GRAPH_TYPE, 'format': PtTab.GRAPH_FILE_EXT,
-                                            'dotfilename': os.path.join(graph_dir,
-                                                                        PtTab.GRAPH_FILE_PREFIX + graph_name + '.dot')})
-                    thread.start()
-                    
+            if len(self.node_list[node].node_list.keys()) > 0:                    
                 for sub_node in self.node_list[node].node_list.keys():
                     self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(self.node_list[node].node_holder, self.node_list_treeWidget, self.node_list[node].node_list[sub_node].long_name)
         
@@ -561,9 +499,9 @@ class PtTab(QTabWidget):
 
         """
         
-        if self.main_window.dependency_manager.is_graphviz() and item.parent() is None:
-            file = os.path.join(self.patient.folder, PtTab.GRAPH_DIR_NAME, PtTab.GRAPH_FILE_PREFIX + item.get_text().lower().replace(" ", "_") + '.'
-                                + PtTab.GRAPH_FILE_EXT)
+        if self.patient.dependency_manager.is_graphviz() and item.parent() is None:
+            file = os.path.join(self.patient.folder, Patient.GRAPH_DIR_NAME, Patient.GRAPH_FILE_PREFIX + item.get_text().lower().replace(" ", "_") + '.'
+                                + Patient.GRAPH_FILE_EXT)
             self.exec_graph.load(file)
             self.exec_graph.renderer().setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
 
@@ -585,27 +523,7 @@ class PtTab(QTabWidget):
         
         event.ignore()
 
-    def is_workflow_process_alive(self) -> bool:
-        """
-        Checks if a workflow is in execution.
-
-        Returns
-        -------
-        bool
-            True if the workflow is executing, elsewise False.
-
-        """
-        
-        try:
-            if self.workflow_process is None:
-                return False
-            
-            return self.workflow_process.is_alive()
-        
-        except AttributeError:
-            return False
-
-    def start_workflow_thread(self):
+    def toggle_workflow_execution(self, resume: bool = None, resume_freesurfer: bool = None):
         """
         If the workflow is not started, executes it.
         If the workflow is executing, kills it.
@@ -617,11 +535,9 @@ class PtTab(QTabWidget):
         """
         
         # Workflow not started
-        if not self.is_workflow_process_alive():
-            workflow_dir = os.path.join(self.patient.folder, self.patient.name + strings.WF_DIR_SUFFIX)
-            # Checks for a previous workflow execution
-            if os.path.exists(workflow_dir):
-                # If yes, asks for workflow resume or reset
+        if not self.patient.is_workflow_process_alive():
+            workflow_start_ret = self.patient.start_workflow(resume=resume, resume_freesurfer=resume_freesurfer, update_node_callback=self.update_node_list)
+            if workflow_start_ret == PatientRet.ExecWfResume:
                 msg_box = QMessageBox()
                 msg_box.setText(strings.pttab_old_wf_found)
                 msg_box.setIcon(QMessageBox.Icon.Question)
@@ -632,14 +548,9 @@ class PtTab(QTabWidget):
                 msg_box.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
                 msg_box.closeEvent = self.no_close_event
                 ret = msg_box.exec()
-                
-                if ret == QMessageBox.StandardButton.No:
-                    shutil.rmtree(workflow_dir, ignore_errors=True)
-
-            fsdir = os.path.join(self.patient.folder, FS_DIR)
-            # Checks for a previous workflow FreeSurfer execution
-            if self.patient.config.get_pt_wf_freesurfer() and os.path.exists(fsdir):
-                # If yes, asks for workflow resume or reset
+                resume = ret == QMessageBox.StandardButton.Yes
+                self.toggle_workflow_execution(resume=resume, resume_freesurfer=resume_freesurfer)
+            elif workflow_start_ret == PatientRet.ExecWfResumeFreesurfer:
                 msg_box = QMessageBox()
                 msg_box.setText(strings.pttab_old_fs_found)
                 msg_box.setIcon(QMessageBox.Icon.Question)
@@ -650,27 +561,18 @@ class PtTab(QTabWidget):
                 msg_box.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
                 msg_box.closeEvent = self.no_close_event
                 ret = msg_box.exec()
-                
-                if ret == QMessageBox.StandardButton.No:
-                    shutil.rmtree(fsdir, ignore_errors=True)
-
-            queue = Queue(maxsize=500)
-            
-            # Generates a Monitor Worker to receive workflows notifications
-            workflow_monitor_work = WorkflowMonitorWorker(queue)
-            workflow_monitor_work.signal.log_msg.connect(self.update_node_list)
-            QThreadPool.globalInstance().start(workflow_monitor_work)
-            
-            # Starts the workflow on a new process
-            self.workflow_process = WorkflowProcess(self.patient.name, self.workflow, queue)
-            self.workflow_process.start()
-            
-            # UI updating
-            self.exec_button.setText(strings.EXECBUTTONTEXT_STOP)
-            self.setTabEnabled(PtTab.DATATAB, False)
-            self.setTabEnabled(PtTab.RESULTTAB, False)
-            self.wf_type_combo.setEnabled(False)
-            self.patient.config_button.setEnabled(False)
+                resume_freesurfer = ret == QMessageBox.StandardButton.Yes
+                self.toggle_workflow_execution(resume=resume, resume_freesurfer=resume_freesurfer)
+            elif workflow_start_ret == PatientRet.ExecWfStatusError:
+                # Already running, should not be possible
+                pass
+            else:
+                # UI updating
+                self.exec_button.setText(strings.EXECBUTTONTEXT_STOP)
+                self.setTabEnabled(PtTab.DATATAB, False)
+                self.setTabEnabled(PtTab.RESULTTAB, False)
+                self.wf_type_combo.setEnabled(False)
+                self.patient_config_button.setEnabled(False)
 
         # Workflow executing
         else:
@@ -685,24 +587,26 @@ class PtTab(QTabWidget):
             
             if ret == QMessageBox.StandardButton.No:
                 return
-            
-            # Workflow killing
-            self.workflow_process.stop_event.set()
-            
-            # UI updating
-            self.remove_running_icon()
-            self.exec_button.setText(strings.EXECBUTTONTEXT)
-            self.setTabEnabled(PtTab.DATATAB, True)
-            self.reset_workflow(force=True)
-            self.enable_tab_if_result_dir()
+
+            workflow_stop_ret = self.patient.stop_workflow()
+            if workflow_stop_ret == PatientRet.ExecWfStatusError:
+                # Not running, should not be possible
+                pass
+            else:
+                # UI updating
+                self.remove_running_icon()
+                self.exec_button.setText(strings.EXECBUTTONTEXT)
+                self.setTabEnabled(PtTab.DATATAB, True)
+                self.reset_workflow(force=True)
+                self.enable_tab_if_result_dir()
 
     def open_results_directory(self):
         import subprocess
         results_dir = os.path.join(self.patient.folder, "scene")
-        if sys.platform == 'win32':
+        if platform == 'win32':
             os.startfile(results_dir)
 
-        elif sys.platform == 'darwin':
+        elif platform == 'darwin':
             subprocess.Popen(['open', results_dir])
 
         else:
@@ -1015,18 +919,13 @@ class PtTab(QTabWidget):
 
         """
 
-        if self.workflow is None:
-            return
-        if not force and self.is_workflow_process_alive():
-            return
-
-        self.workflow = None
-        self.node_list_treeWidget.clear()
-        self.exec_graph.load(self.main_window.VOID_SVG_FILE)
-        self.exec_button_setEnabled(False)
-        self.node_button.setEnabled(True)
-        self.wf_type_combo.setEnabled(True)
-        self.patient.config_button.setEnabled(True)
+        if self.patient.reset_workflow(force):
+            self.node_list_treeWidget.clear()
+            self.exec_graph.load(self.main_window.VOID_SVG_FILE)
+            self.exec_button_setEnabled(False)
+            self.node_button.setEnabled(True)
+            self.wf_type_combo.setEnabled(True)
+            self.patient_config_button.setEnabled(True)
 
     def result_directory_changed(self):
         self.enable_tab_if_result_dir()
@@ -1210,12 +1109,12 @@ class PtTab(QTabWidget):
 
         """
         
-        enable = self.patient.input_state_list.is_ref_loaded() and self.main_window.dependency_manager.is_fsl() and self.main_window.dependency_manager.is_dcm2niix()
+        enable = self.patient.can_generate_workflow()
         self.setTabEnabled(PtTab.EXECTAB, enable)
 
     def setTabEnabled(self, index, enabled):
         if index == PtTab.EXECTAB and not enabled:
-            if not self.main_window.dependency_manager.is_fsl() or not self.main_window.dependency_manager.is_dcm2niix():
+            if not self.patient.dependency_manager.is_fsl() or not self.patient.dependency_manager.is_dcm2niix():
                 self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled_dependency)
             else:
                 self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled_series)
