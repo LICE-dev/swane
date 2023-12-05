@@ -37,6 +37,14 @@ setup(name='swane',
           "GPUtil==1.4.0",
           "numpy"
       ],
+      extras_require={
+          'dev': [
+              'pytest',
+              'pytest-pep8',
+              'pytest-cov',
+              'unittest',
+          ]
+      },
       python_requires=">=3.7",
       entry_points={
           'gui_scripts': [
