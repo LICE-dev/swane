@@ -5,9 +5,8 @@ from os.path import abspath
 import swane_supplement
 
 from swane.config.ConfigManager import ConfigManager
-from swane.utils.DataInput import FMRI_NUM
 from swane.utils.PatientInputStateList import PatientInputStateList
-from swane.utils.DataInputList import DataInputList as DIL
+from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
 from swane.config.config_enums import PLANES
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow

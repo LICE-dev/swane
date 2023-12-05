@@ -1,6 +1,5 @@
 import os
-from swane.utils.DataInput import FMRI_NUM
-from swane.utils.DataInputList import DataInputList
+from swane.utils.DataInputList import DataInputList, FMRI_NUM
 from swane import __version__
 from multiprocessing import cpu_count
 from nipype.utils.profiler import get_system_total_memory_gb
