@@ -33,7 +33,7 @@ class TestPatient:
     TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "subjects")
     TEST_PATIENT_NAME = "pt_01"
 
-    def test_patient(self, monkeypatch, global_config, dependency_manager):
+    def test_patient(self, global_config, dependency_manager):
         assert global_config.get_main_working_directory() == TestPatient.TEST_MAIN_WORKING_DIRECTORY, "Bad global config fixture"
 
         # Testing creation of new patient
@@ -60,6 +60,8 @@ class TestPatient:
         # Test restoring a corrupted patient subtree with fix_patient_folder_subtree
         test_patient.fix_patient_folder_subtree(path_without_subtree)
         assert test_patient.check_patient_folder(path_without_subtree) == PatientRet.ValidFolder, "Error fixing patient subtree"
+
+        # Load patient and import
 
 
 

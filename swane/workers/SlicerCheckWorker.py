@@ -74,7 +74,7 @@ class SlicerCheckWorker(QRunnable):
                     state = DependenceStatus.WARNING
                 else:
                     cmd3 = cmd + " --no-splash --no-main-window --python-script " + \
-                           os.path.join(os.path.dirname(__file__), "../slicer/slicer_script_freesurfer_module_check.py")
+                           os.path.join(os.path.dirname(__file__), "slicer_script_freesurfer_module_check.py")
                     output3 = subprocess.run(
                         cmd3, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
                     if 'MODULE FOUND' in output3:
