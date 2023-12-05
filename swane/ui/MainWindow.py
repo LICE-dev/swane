@@ -6,11 +6,11 @@ from PySide6.QtCore import QCoreApplication, Qt, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.utils.DependencyManager import DependencyManager, Dependence, DependenceStatus
-from swane.ui.PtTab import PtTab
+from swane.ui.PatientTab import PatientTab
 from swane.ui.PreferencesWindow import PreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
-from swane.ui.workers.UpdateCheckWorker import UpdateCheckWorker
+from swane.workers.UpdateCheckWorker import UpdateCheckWorker
 from swane.utils.Patient import Patient, PatientRet
 
 
@@ -94,13 +94,13 @@ class MainWindow(QMainWindow):
 
         """
         
-        this_tab = PtTab(self.global_config, patient, main_window=self, parent=self.main_tab)
+        this_tab = PatientTab(self.global_config, patient, main_window=self, parent=self.main_tab)
         self.pt_tabs_array.append(this_tab)
 
         self.main_tab.addTab(this_tab, os.path.basename(patient.name))
         self.main_tab.setCurrentWidget(this_tab)
         
-        this_tab.load_pt()
+        this_tab.load_patient()
 
     def check_pt_limit(self) -> bool:
         """

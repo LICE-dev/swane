@@ -1,7 +1,6 @@
 import os
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DataInputList import DataInputList
-from swane.utils.PatientInputState import PatientInputState
 
 
 class PatientInputStateList(dict):
@@ -19,3 +18,10 @@ class PatientInputStateList(dict):
 
     def get_dicom_dir(self, data_input: DataInputList):
         return os.path.join(self.dicom_dir, str(data_input))
+
+
+class PatientInputState:
+
+    def __init__(self):
+        self.loaded = False
+        self.volumes = 0

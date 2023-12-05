@@ -5,7 +5,7 @@ from enum import Enum, auto
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.PatientInputStateList import PatientInputStateList
 from swane.utils.DependencyManager import DependencyManager
-from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
+from swane.workers.DicomSearchWorker import DicomSearchWorker
 from PySide6.QtCore import QThreadPool
 from swane import strings
 from swane.nipype_pipeline.MainWorkflow import MainWorkflow
@@ -13,8 +13,10 @@ import traceback
 from threading import Thread
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from multiprocessing import Queue
-from swane.ui.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
-from swane.ui.workers.WorkflowProcess import WorkflowProcess
+from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
+from swane.workers import WorkflowProcess
+from swane.config.preference_list import SLICER_EXTENSIONS
+from swane.workers.SlicerExportWorker import SlicerExportWorker
 
 
 class PatientRet(Enum):
@@ -370,6 +372,34 @@ class Patient:
     def can_generate_workflow(self):
         return self.input_state_list.is_ref_loaded() and self.dependency_manager.is_fsl() and self.dependency_manager.is_dcm2niix()
 
+    def graph_dir(self):
+        return os.path.join(self.folder, Patient.GRAPH_DIR_NAME)
+
+    def graph_file(self, long_name: str, svg: bool = False):
+        """
+
+        Parameters
+        ----------
+        long_name: str
+            The workflow complete name
+        svg: bool
+            If True, return the extension .svg insteda .dot. Default is Fase
+        Returns
+        -------
+
+        """
+        ext = ".dot"
+        if svg:
+            ext = ".svg"
+        graph_name = long_name.lower().replace(" ", "_")
+        return os.path.join(self.graph_dir(), Patient.GRAPH_FILE_PREFIX + graph_name + ext)
+
+    def result_dir(self):
+        return os.path.join(self.folder, MainWorkflow.SCENE_DIR)
+
+    def scene_path(self):
+        return os.path.join(self.result_dir(), "scene." + SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
+
     def generate_workflow(self):
         """
         Generates and populates the Main Workflow.
@@ -397,7 +427,7 @@ class Patient:
             # TODO: generiamo un file crash nella cartella log?
             return PatientRet.GenWfError
 
-        graph_dir = os.path.join(self.folder, Patient.GRAPH_DIR_NAME)
+        graph_dir = self.graph_dir()
         shutil.rmtree(graph_dir, ignore_errors=True)
         os.mkdir(graph_dir)
 
@@ -407,11 +437,10 @@ class Patient:
         for node in node_list.keys():
             if len(node_list[node].node_list.keys()) > 0:
                 if self.dependency_manager.is_graphviz():
-                    graph_name = node_list[node].long_name.lower().replace(" ", "_")
                     thread = Thread(target=self.workflow.get_node(node).write_graph,
                                     kwargs={'graph2use': self.GRAPH_TYPE, 'format': Patient.GRAPH_FILE_EXT,
-                                            'dotfilename': os.path.join(graph_dir,
-                                                                        Patient.GRAPH_FILE_PREFIX + graph_name + '.dot')})
+                                            'dotfilename': self.graph_file(node_list[node].long_name, Patient.GRAPH_FILE_EXT),
+                                            })
                     thread.start()
 
         return PatientRet.GenWfCompleted
@@ -437,25 +466,38 @@ class Patient:
     def workflow_dir(self):
         return os.path.join(self.folder, self.name + strings.WF_DIR_SUFFIX)
 
+    def workflow_dir_exists(self):
+        return os.path.exists(self.workflow_dir())
+
+    def delete_workflow_dir(self):
+        shutil.rmtree(self.workflow_dir(), ignore_errors=True)
+
+    def freesurfer_dir(self):
+        return os.path.join(self.folder, FS_DIR)
+
+    def freesurfer_dir_exists(self):
+        return os.path.exists(self.freesurfer_dir())
+
+    def delete_freesurfer_dir(self):
+        shutil.rmtree(self.freesurfer_dir(), ignore_errors=True)
+
     def start_workflow(self, resume: bool = None, resume_freesurfer: bool = None, update_node_callback: callable = None) -> PatientRet:
         # Already executing workflow
         if self.is_workflow_process_alive():
             return PatientRet.ExecWfStatusError
-        workflow_dir = self.workflow_dir()
         # Checks for a previous workflow execution
-        if os.path.exists(workflow_dir):
+        if self.workflow_dir_exists():
             if resume is None:
                 return PatientRet.ExecWfResume
             elif not resume:
-                shutil.rmtree(workflow_dir, ignore_errors=True)
+                self.delete_workflow_dir()
 
-        fsdir = os.path.join(self.folder, FS_DIR)
         # Checks for a previous workflow FreeSurfer execution
-        if self.config.get_pt_wf_freesurfer() and os.path.exists(fsdir):
+        if self.config.get_pt_wf_freesurfer() and self.freesurfer_dir_exists():
             if resume_freesurfer is None:
                 return PatientRet.ExecWfResumeFreesurfer
             elif not resume_freesurfer:
-                shutil.rmtree(fsdir, ignore_errors=True)
+                self.delete_freesurfer_dir()
 
         queue = Queue(maxsize=500)
 
@@ -500,4 +542,22 @@ class Patient:
 
         self.workflow = None
         return True
+
+    def generate_scene(self, progress_callback: callable = None):
+        """
+        Exports the workflow results into 3D Slicer using a new thread.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        slicer_thread = SlicerExportWorker(self.global_config.get_slicer_path(), self.folder,
+                                           self.global_config.get_slicer_scene_ext(), parent=self)
+        if progress_callback is not None:
+            slicer_thread.signal.export.connect(progress_callback)
+        QThreadPool.globalInstance().start(slicer_thread)
+
+
 

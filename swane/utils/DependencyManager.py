@@ -200,7 +200,7 @@ class DependencyManager:
         callback_func: callable
             The UI function to call after the check thread
         """
-        from swane.slicer.SlicerCheckWorker import SlicerCheckWorker
+        from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 
         # if user set manually a Slicer path it is saved with a * as first character to force check that folder
         if current_slicer_path != '' and current_slicer_path[0] == "*":

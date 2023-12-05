@@ -1,5 +1,4 @@
 import os
-from sys import platform
 import pydicom
 from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
@@ -11,23 +10,23 @@ from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeader
                                QTreeView, QComboBox)
 
 from swane import strings
-from swane.slicer.SlicerExportWorker import SlicerExportWorker
-from swane.slicer.SlicerViewerWorker import SlicerViewerWorker
-from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+from swane.workers.SlicerExportWorker import SlicerExportWorker
+from swane.workers.SlicerViewerWorker import load_scene
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.config.ConfigManager import ConfigManager
-from swane.ui.workers.DicomSearchWorker import DicomSearchWorker
+from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.DataInputList import DataInputList
 from swane.utils.DependencyManager import DependencyManager
-from swane.config.preference_list import SLICER_EXTENSIONS, WORKFLOW_TYPES
+from swane.config.preference_list import WORKFLOW_TYPES
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.utils.Patient import Patient, PatientRet
+from swane.slicer.open_results_directory import open_results_directory
 
 
-class PtTab(QTabWidget):
+class PatientTab(QTabWidget):
     """
     Custom implementation of PySide QTabWidget to define a patient tab widget.
 
@@ -36,16 +35,12 @@ class PtTab(QTabWidget):
     DATATAB = 0
     EXECTAB = 1
     RESULTTAB = 2
-    
 
-    def __init__(self, global_config: ConfigManager, patient: Patient, main_window: MainWorkflow, parent=None):
-        super(PtTab, self).__init__(parent)
+    def __init__(self, global_config: ConfigManager, patient: Patient, main_window, parent=None):
+        super(PatientTab, self).__init__(parent)
         self.global_config = global_config
         self.patient = patient
         self.main_window = main_window
-
-        self.workflow_process = None
-        self.node_list = None
 
         self.data_tab = QWidget()
         self.exec_tab = QWidget()
@@ -64,12 +59,29 @@ class PtTab(QTabWidget):
         self.result_directory_watcher = QFileSystemWatcher()
         self.result_directory_watcher.directoryChanged.connect(self.result_directory_changed)
 
+        self.workflow_process = None
+        self.node_list = None
+        self.input_report = {}
+        self.dicom_scan_series_list = []
+        self.importable_series_list = QListWidget()
+        self.wf_type_combo = None
+        self.node_button = None
+        self.node_list_treeWidget = None
+        self.patient_config_button = None
+        self.exec_button = None
+        self.exec_graph = None
+        self.load_scene_button = None
+        self.open_results_directory_button = None
+        self.results_model = None
+        self.result_tree = None
+        self.generate_scene_button = None
+
         self.data_tab_ui()
         self.exec_tab_ui()
         self.result_tab_ui()
 
-        self.setTabEnabled(PtTab.EXECTAB, False)
-        self.setTabEnabled(PtTab.RESULTTAB, False)
+        self.setTabEnabled(PatientTab.EXECTAB, False)
+        self.setTabEnabled(PatientTab.RESULTTAB, False)
 
     def update_node_list(self, wf_report: WorkflowReport):
         """
@@ -98,7 +110,7 @@ class PtTab(QTabWidget):
                             self.node_list[key].node_holder.set_art(self.main_window.ERROR_ICON_FILE)
                             break
 
-            self.setTabEnabled(PtTab.DATATAB, True)
+            self.setTabEnabled(PatientTab.DATATAB, True)
 
             self.exec_button_setEnabled(False)
 
@@ -193,8 +205,6 @@ class PtTab(QTabWidget):
         bold_font.setBold(True)
         x = 0
 
-        self.input_report = {}
-
         for data_input in self.patient.input_state_list:
             self.input_report[data_input] = [QSvgWidget(self),
                                              QLabel(data_input.value.label),
@@ -234,7 +244,6 @@ class PtTab(QTabWidget):
         scan_dicom_folder_button = QPushButton(strings.pttab_scan_dicom_button)
         scan_dicom_folder_button.clicked.connect(self.scan_dicom_folder)
 
-        self.importable_series_list = QListWidget()
         import_layout.addWidget(scan_dicom_folder_button)
         import_layout.addWidget(self.importable_series_list)
 
@@ -271,14 +280,14 @@ class PtTab(QTabWidget):
         found_mod = self.dicom_scan_series_list[self.importable_series_list.currentRow()][2].upper()
 
         progress = PersistentProgressDialog(strings.pttab_dicom_copy, 0, len(copy_list) + 1, self)
-        self.set_loading(data_input, "")
+        self.set_loading(data_input)
 
         # Copy files and check for return
         import_ret = self.patient.dicom_import_to_folder(data_input=data_input,
                                                          copy_list=copy_list,
                                                          vols=vols,
                                                          mod=found_mod,
-                                                         force_modality=False,
+                                                         force_modality=force_mod,
                                                          progress_callback=progress.increase_value
                                                          )
         if import_ret != PatientRet.DataImportCompleted:
@@ -417,7 +426,7 @@ class PtTab(QTabWidget):
 
         """
 
-        preference_window = PreferencesWindow(self.patient.config, self.main_window.dependency_manager, True, self)
+        preference_window = PreferencesWindow(self.patient.config, self.patient.dependency_manager, True, self)
         ret = preference_window.exec()
         if ret != 0:
             self.reset_workflow()
@@ -499,11 +508,11 @@ class PtTab(QTabWidget):
 
         """
         
-        if self.patient.dependency_manager.is_graphviz() and item.parent() is None:
-            file = os.path.join(self.patient.folder, Patient.GRAPH_DIR_NAME, Patient.GRAPH_FILE_PREFIX + item.get_text().lower().replace(" ", "_") + '.'
-                                + Patient.GRAPH_FILE_EXT)
-            self.exec_graph.load(file)
-            self.exec_graph.renderer().setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        if item.parent() is None:
+            graph_file = self.patient.graph_file(item.get_text(), svg=True)
+            if os.path.exists(graph_file):
+                self.exec_graph.load(graph_file)
+                self.exec_graph.renderer().setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
 
     @staticmethod
     def no_close_event(event):
@@ -569,8 +578,8 @@ class PtTab(QTabWidget):
             else:
                 # UI updating
                 self.exec_button.setText(strings.EXECBUTTONTEXT_STOP)
-                self.setTabEnabled(PtTab.DATATAB, False)
-                self.setTabEnabled(PtTab.RESULTTAB, False)
+                self.setTabEnabled(PatientTab.DATATAB, False)
+                self.setTabEnabled(PatientTab.RESULTTAB, False)
                 self.wf_type_combo.setEnabled(False)
                 self.patient_config_button.setEnabled(False)
 
@@ -596,45 +605,28 @@ class PtTab(QTabWidget):
                 # UI updating
                 self.remove_running_icon()
                 self.exec_button.setText(strings.EXECBUTTONTEXT)
-                self.setTabEnabled(PtTab.DATATAB, True)
+                self.setTabEnabled(PatientTab.DATATAB, True)
                 self.reset_workflow(force=True)
                 self.enable_tab_if_result_dir()
-
-    def open_results_directory(self):
-        import subprocess
-        results_dir = os.path.join(self.patient.folder, "scene")
-        if platform == 'win32':
-            os.startfile(results_dir)
-
-        elif platform == 'darwin':
-            subprocess.Popen(['open', results_dir])
-
-        else:
-            try:
-                subprocess.Popen(['xdg-open', results_dir])
-            except OSError:
-                pass
 
     def export_results_button_update_state(self):
         try:
             if not DependencyManager.is_slicer(self.global_config):
-                self.export_results_button.setEnabled(False)
-                self.export_results_button.setToolTip(strings.pttab_results_button_disabled_tooltip)
+                self.generate_scene_button.setEnabled(False)
+                self.generate_scene_button.setToolTip(strings.pttab_results_button_disabled_tooltip)
             else:
-                self.export_results_button.setEnabled(True)
-                self.export_results_button.setToolTip(strings.pttab_results_button_tooltip)
+                self.generate_scene_button.setEnabled(True)
+                self.generate_scene_button.setToolTip(strings.pttab_results_button_tooltip)
         except:
             pass
 
     def load_scene_button_update_state(self):
         try:
-            scene_path = os.path.join(self.patient.folder, "scene", "scene." + SLICER_EXTENSIONS[
-                int(self.global_config.get_slicer_scene_ext())])
             if not DependencyManager.is_slicer(self.global_config):
                 self.load_scene_button.setEnabled(False)
                 self.load_scene_button.setText(strings.pttab_open_results_button + " " + strings.INFOCHAR)
                 self.load_scene_button.setToolTip(strings.pttab_results_button_disabled_tooltip)
-            elif os.path.exists(scene_path):
+            elif os.path.exists(self.patient.scene_path()):
                 self.load_scene_button.setEnabled(True)
                 self.load_scene_button.setToolTip("")
                 self.load_scene_button.setText(strings.pttab_open_results_button)
@@ -658,25 +650,29 @@ class PtTab(QTabWidget):
         result_tab_layout = QGridLayout()
         self.result_tab.setLayout(result_tab_layout)
 
-        self.export_results_button = QPushButton(strings.pttab_results_button)
-        self.export_results_button.clicked.connect(self.slicer_thread)
-        self.export_results_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
-        self.export_results_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.generate_scene_button = QPushButton(strings.pttab_results_button)
+        self.generate_scene_button.clicked.connect(self.generate_scene)
+        self.generate_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.generate_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.export_results_button_update_state()
-        result_tab_layout.addWidget(self.export_results_button, 0, 0)
+        result_tab_layout.addWidget(self.generate_scene_button, 0, 0)
 
         horizontal_spacer = QSpacerItem(20, 40, QSizePolicy.Expanding, QSizePolicy.Minimum)
         result_tab_layout.addItem(horizontal_spacer, 0, 1, 1, 1)
 
         self.load_scene_button = QPushButton(strings.pttab_open_results_button)
-        self.load_scene_button.clicked.connect(self.slicer_open_result)
+        self.load_scene_button.clicked.connect(
+            lambda pushed=False, slicer_path=self.global_config.get_slicer_path(), scene_path=self.patient.scene_path(): load_scene(pushed, slicer_path, scene_path)
+        )
         self.load_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.load_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.load_scene_button_update_state()
         result_tab_layout.addWidget(self.load_scene_button, 0, 2)
 
         self.open_results_directory_button = QPushButton(strings.pttab_open_results_directory)
-        self.open_results_directory_button.clicked.connect(self.open_results_directory)
+        self.open_results_directory_button.clicked.connect(
+            lambda pushed=False, results_dir=self.patient.result_dir(): open_results_directory(pushed, results_dir)
+        )
         self.open_results_directory_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.open_results_directory_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         result_tab_layout.addWidget(self.open_results_directory_button, 0, 3)
@@ -688,7 +684,7 @@ class PtTab(QTabWidget):
 
         result_tab_layout.addWidget(self.result_tree, 1, 0, 1, 4)
 
-    def slicer_thread(self):
+    def generate_scene(self):
         """
         Exports the workflow results into 3D Slicer using a new thread.
 
@@ -700,13 +696,10 @@ class PtTab(QTabWidget):
         
         progress = PersistentProgressDialog(strings.pttab_exporting_start, 0, 0, parent=self)
         progress.show()
+        self.patient.generate_scene(lambda msg: PatientTab.slicer_thread_signal(msg, progress))
 
-        slicer_thread = SlicerExportWorker(self.global_config.get_slicer_path(), self.patient.folder,
-                                           self.global_config.get_slicer_scene_ext(), parent=self)
-        slicer_thread.signal.export.connect(lambda msg: self.slicer_thread_signal(msg, progress))
-        QThreadPool.globalInstance().start(slicer_thread)
-
-    def slicer_thread_signal(self, msg: str, progress: PersistentProgressDialog):
+    @staticmethod
+    def slicer_thread_signal(msg: str, progress: PersistentProgressDialog):
         """
         Updates the Progress Dialog text to inform the user of the loading status.
 
@@ -728,20 +721,6 @@ class PtTab(QTabWidget):
         else:
             progress.setLabelText(strings.pttab_exporting_prefix + msg)
 
-    def slicer_open_result(self):
-        """
-        Visualize the workflow results into 3D Slicer.
-
-        Returns
-        -------
-        None.
-
-        """
-        scene_path = os.path.join(self.patient.folder, "scene", "scene."+SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
-        if os.path.exists(scene_path):
-            slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), scene_path, parent=self)
-            QThreadPool.globalInstance().start(slicer_open_thread)
-
     def input_check_update(self, data_input: DataInputList, state: PatientRet, dicom_src_work: DicomSearchWorker = None):
         if data_input not in self.input_report:
             return
@@ -754,7 +733,7 @@ class PtTab(QTabWidget):
         elif state == PatientRet.DataInputWarningMultiSeries:
             self.set_warn(data_input, strings.pttab_multi_series_error + dicom_src_work.dicom_dir)
         elif state == PatientRet.DataInputLoading:
-            self.set_loading(data_input, "")
+            self.set_loading(data_input)
         elif state == PatientRet.DataInputValid:
 
             pt_list = dicom_src_work.get_patient_list()
@@ -778,7 +757,7 @@ class PtTab(QTabWidget):
             self.enable_exec_tab()
             self.check_venous_volumes()
 
-    def load_pt(self):
+    def load_patient(self):
         """
         Loads the Patient configuration and folder.
 
@@ -802,7 +781,7 @@ class PtTab(QTabWidget):
             self.patient.execute_scan_dicom_folders(dicom_scanners, self.input_check_update, progress.increase_value)
 
         # Update UI after loading dicom
-        self.setTabEnabled(PtTab.DATATAB, True)
+        self.setTabEnabled(PatientTab.DATATAB, True)
         self.setCurrentWidget(self.data_tab)
 
         self.clear_scan_result()
@@ -819,17 +798,17 @@ class PtTab(QTabWidget):
         None.
 
         """
-        scene_dir = os.path.join(self.patient.folder, MainWorkflow.SCENE_DIR)
+        scene_dir = self.patient.result_dir()
         
         if os.path.exists(scene_dir):
-            self.setTabEnabled(PtTab.RESULTTAB, True)
+            self.setTabEnabled(PatientTab.RESULTTAB, True)
             self.results_model.setRootPath(scene_dir)
             index_root = self.results_model.index(self.results_model.rootPath())
             self.result_tree.setRootIndex(index_root)
             self.result_directory_watcher.addPath(scene_dir)
             self.load_scene_button_update_state()
         else:
-            self.setTabEnabled(PtTab.RESULTTAB, False)
+            self.setTabEnabled(PatientTab.RESULTTAB, False)
             self.result_directory_watcher.removePaths([scene_dir])
 
     def clear_import_folder(self, data_input: DataInputList):
@@ -996,7 +975,34 @@ class PtTab(QTabWidget):
         if len(self.scan_directory_watcher.directories()) > 0:
             self.scan_directory_watcher.removePaths(self.scan_directory_watcher.directories())
 
-    def set_warn(self, data_input: DataInputList, msg: str, clear_text: bool = True):
+    def update_input_report(self, data_input: DataInputList, icon: str, tooltip: str, import_enable: bool, clear_enable: bool, text: str = None):
+        """
+        Generic update function for series labels.
+
+        Parameters
+        ----------
+        data_input: DataInputList
+            The series label.
+        icon: str
+            The icon file to set near the label
+        tooltip: str
+            Mouse over tooltip:
+        import_enable: bool
+            The enable status of the import series button
+        clear_enable: bool
+            The enable status of the clear series button
+        text: str
+            The text to show under the label, if not None. Default is None
+        """
+        self.input_report[data_input][0].load(icon)
+        self.input_report[data_input][0].setFixedSize(25, 25)
+        self.input_report[data_input][0].setToolTip(tooltip)
+        self.input_report[data_input][3].setEnabled(import_enable)
+        self.input_report[data_input][4].setEnabled(clear_enable)
+        if text is not None:
+            self.input_report[data_input][2].setText(text)
+
+    def set_warn(self, data_input: DataInputList, tooltip: str, clear_text: bool = True):
         """
         Set a warning message and icon near a series label.
 
@@ -1004,7 +1010,7 @@ class PtTab(QTabWidget):
         ----------
         data_input : DataInputList
             The series label.
-        msg : str
+        tooltip : str
             The warning message.
         clear_text : bool
             If True delete the label text
@@ -1014,16 +1020,20 @@ class PtTab(QTabWidget):
         None.
 
         """
-        
-        self.input_report[data_input][0].load(self.main_window.WARNING_ICON_FILE)
-        self.input_report[data_input][0].setFixedSize(25, 25)
-        self.input_report[data_input][0].setToolTip(msg)
-        self.input_report[data_input][3].setEnabled(False)
-        self.input_report[data_input][4].setEnabled(True)
+        text = None
         if clear_text:
-            self.input_report[data_input][2].setText("")
+            text = ""
 
-    def set_error(self, data_input: DataInputList, msg: str):
+        self.update_input_report(
+            data_input=data_input,
+            icon=self.main_window.WARNING_ICON_FILE,
+            tooltip=tooltip,
+            import_enable=True,
+            clear_enable=False,
+            text=text
+        )
+
+    def set_error(self, data_input: DataInputList, tooltip: str):
         """
         Set an error message and icon near a series label.
 
@@ -1031,23 +1041,20 @@ class PtTab(QTabWidget):
         ----------
         data_input : DataInputList
             The series label.
-        msg : str
+        tooltip : str
             The error message.
-
-        Returns
-        -------
-        None.
-
         """
-        
-        self.input_report[data_input][0].load(self.main_window.ERROR_ICON_FILE)
-        self.input_report[data_input][0].setFixedSize(25, 25)
-        self.input_report[data_input][0].setToolTip(msg)
-        self.input_report[data_input][3].setEnabled(True)
-        self.input_report[data_input][4].setEnabled(False)
-        self.input_report[data_input][2].setText("")
 
-    def set_ok(self, data_input: DataInputList, msg: str):
+        self.update_input_report(
+            data_input=data_input,
+            icon=self.main_window.ERROR_ICON_FILE,
+            tooltip=tooltip,
+            import_enable=True,
+            clear_enable=False,
+            text=""
+        )
+
+    def set_ok(self, data_input: DataInputList, text: str):
         """
         Set a success message and icon near a series label.
 
@@ -1055,24 +1062,19 @@ class PtTab(QTabWidget):
         ----------
         data_input : DataInputList
             The series label.
-        msg : str
+        text : str
             The success message. If string is None keep the current text
-
-        Returns
-        -------
-        None.
-
         """
-        
-        self.input_report[data_input][0].load(self.main_window.OK_ICON_FILE)
-        self.input_report[data_input][0].setFixedSize(25, 25)
-        self.input_report[data_input][0].setToolTip("")
-        self.input_report[data_input][3].setEnabled(False)
-        self.input_report[data_input][4].setEnabled(True)
-        if msg is not None:
-            self.input_report[data_input][2].setText(msg)
+        self.update_input_report(
+            data_input=data_input,
+            icon=self.main_window.OK_ICON_FILE,
+            tooltip="",
+            import_enable=False,
+            clear_enable=True,
+            text=text,
+        )
 
-    def set_loading(self, data_input: DataInputList, msg: str, clear_text: bool = True):
+    def set_loading(self, data_input: DataInputList):
         """
         Set a loading message and icon near a series label.
 
@@ -1080,24 +1082,15 @@ class PtTab(QTabWidget):
         ----------
         data_input : DataInputList
             The series label.
-        msg : str
-            The warning message.
-        clear_text : bool
-            If True delete the label text
-
-        Returns
-        -------
-        None.
-
         """
-
-        self.input_report[data_input][0].load(self.main_window.LOADING_MOVIE_FILE)
-        self.input_report[data_input][0].setFixedSize(25, 25)
-        self.input_report[data_input][0].setToolTip(msg)
-        self.input_report[data_input][3].setEnabled(False)
-        self.input_report[data_input][4].setEnabled(False)
-        if clear_text:
-            self.input_report[data_input][2].setText("")
+        self.update_input_report(
+            data_input=data_input,
+            icon=self.main_window.LOADING_MOVIE_FILE,
+            tooltip="",
+            import_enable=False,
+            clear_enable=False,
+            text=None,
+        )
 
     def enable_exec_tab(self):
         """
@@ -1110,17 +1103,17 @@ class PtTab(QTabWidget):
         """
         
         enable = self.patient.can_generate_workflow()
-        self.setTabEnabled(PtTab.EXECTAB, enable)
+        self.setTabEnabled(PatientTab.EXECTAB, enable)
 
     def setTabEnabled(self, index, enabled):
-        if index == PtTab.EXECTAB and not enabled:
+        if index == PatientTab.EXECTAB and not enabled:
             if not self.patient.dependency_manager.is_fsl() or not self.patient.dependency_manager.is_dcm2niix():
                 self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled_dependency)
             else:
                 self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled_series)
-        elif index == PtTab.RESULTTAB and not enabled:
+        elif index == PatientTab.RESULTTAB and not enabled:
             self.setTabToolTip(index, strings.pttab_tabtooltip_result_disabled)
-        elif index == PtTab.DATATAB and not enabled:
+        elif index == PatientTab.DATATAB and not enabled:
             self.setTabToolTip(index, strings.pttab_tabtooltip_data_disabled)
         else:
             self.setTabToolTip(index, "")
