@@ -53,8 +53,8 @@ class MainWorkflow(CustomWorkflow):
             return
 
         # Check for FreeSurfer requirement and request
-        is_freesurfer = dependency_manager.is_freesurfer() and pt_config.get_pt_wf_freesurfer()
-        is_hippo_amyg_labels = dependency_manager.is_freesurfer_matlab() and pt_config.get_wf_hippo_pref()
+        is_freesurfer = dependency_manager.is_freesurfer() and pt_config.get_patient_workflow_freesurfer()
+        is_hippo_amyg_labels = dependency_manager.is_freesurfer_matlab() and pt_config.get_workflow_hippo_pref()
 
         # Check for FLAT1 requirement and request
         try:

@@ -1,4 +1,4 @@
-from enum import IntEnum, StrEnum, Enum
+from enum import IntEnum, Enum
 
 
 class InputTypes(IntEnum):

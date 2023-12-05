@@ -262,7 +262,7 @@ GLOBAL_PREFERENCES = {}
 
 category = GlobalPrefCategoryList.MAIN
 GLOBAL_PREFERENCES[category] = {}
-GLOBAL_PREFERENCES[category]['patients_folder'] = PreferenceEntry(
+GLOBAL_PREFERENCES[category]['main_working_directory'] = PreferenceEntry(
     input_type=InputTypes.DIRECTORY,
     label="Main working directory",
     box_text='Select the main working directory',

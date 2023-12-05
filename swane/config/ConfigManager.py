@@ -19,29 +19,30 @@ class ConfigManager(configparser.ConfigParser):
     def getint(self, section, option, **kwargs):
         return super().getint(str(section), option, **kwargs)
 
-    def __init__(self, pt_folder: str = None):
+    def __init__(self, patient_folder: str = None, global_base_folder: str = None):
         """
 
         Parameters
         ----------
-        pt_folder: str
-            The patient folder path. Non in global all configuration
+        patient_folder: str
+            The patient folder path. None in global all configuration
         """
         super(ConfigManager, self).__init__()
 
         # First set some internal values differentiating global from patient pref objects
-        if pt_folder is not None:
+        if patient_folder is not None:
             # NEL CASO STIA GESTENDO LE IMPOSTAZIONI SPECIFICHE DI UN UTENTE COPIO ALCUNI VALORI DALLE IMPOSTAZIONI GLOBALI
             self.global_config = False
-            self.config_file = os.path.join(os.path.join(pt_folder, ".config"))
+            self.config_file = os.path.join(os.path.join(patient_folder, ".config"))
         else:
+            if global_base_folder is None or not os.path.exists(global_base_folder):
+                global_base_folder = os.path.expanduser("~")
             # NEL CASO STIA GESTENDO LE IMPOSTAZIONI GLOBALI DELL'APP
             self.global_config = True
-            self.config_file = os.path.abspath(os.path.join(
-                os.path.expanduser("~"), "." + strings.APPNAME))
+            self.config_file = os.path.abspath(os.path.join(global_base_folder, "." + strings.APPNAME))
 
         # Load default pref from pref list
-        self.load_default_wf_settings(save=False)
+        self.load_default_workflow_settings(save=False)
 
         # check if this version need pref reset
         try:
@@ -54,9 +55,13 @@ class ConfigManager(configparser.ConfigParser):
         # if version need pref reset, load olg config file in a temp variable to get just last_swane_version
         try:
             if force_pref_reset:
-                temp_config = configparser.ConfigParser()
-                temp_config.read(self.config_file)
-                if __version__ != temp_config[GlobalPrefCategoryList.MAIN]['last_swane_version']:
+                if self.global_config:
+                    last_swane_version = self[GlobalPrefCategoryList.MAIN]['last_swane_version']
+                else:
+                    temp_config = configparser.ConfigParser()
+                    temp_config.read(self.config_file)
+                    last_swane_version = temp_config[GlobalPrefCategoryList.MAIN]['last_swane_version']
+                if __version__ != last_swane_version:
                     reset_pref = True
         except:
             pass
@@ -72,7 +77,7 @@ class ConfigManager(configparser.ConfigParser):
     def reload(self):
         self.read(self.config_file)
 
-    def load_default_wf_settings(self, save):
+    def load_default_workflow_settings(self, save):
         if self.global_config:
             for category in GlobalPrefCategoryList:
                 if not save:
@@ -100,37 +105,37 @@ class ConfigManager(configparser.ConfigParser):
             self[GlobalPrefCategoryList.MAIN]['last_swane_version'] = tmp_config[GlobalPrefCategoryList.MAIN]['last_swane_version']
             self[GlobalPrefCategoryList.MAIN]['force_pref_reset'] = tmp_config[GlobalPrefCategoryList.MAIN]['force_pref_reset']
 
-            self.set_wf_option(tmp_config[GlobalPrefCategoryList.MAIN]['default_wf_type'])
+            self.set_workflow_option(tmp_config[GlobalPrefCategoryList.MAIN]['default_wf_type'])
         if save:
             self.save()
 
-    def set_wf_option(self, wf):
+    def set_workflow_option(self, workflow_type):
         if self.global_config:
             return
-        wf = str(wf)
-        self[DataInputList.T13D]['wf_type'] = wf
-        for category in DEFAULT_WF[wf]:
-            for key in DEFAULT_WF[wf][category]:
-                self[category][key] = DEFAULT_WF[wf][category][key]
+        workflow_type = str(workflow_type)
+        self[DataInputList.T13D]['wf_type'] = workflow_type
+        for category in DEFAULT_WF[workflow_type]:
+            for key in DEFAULT_WF[workflow_type][category]:
+                self[category][key] = DEFAULT_WF[workflow_type][category][key]
 
     def save(self):
         with open(self.config_file, "w") as openedFile:
             self.write(openedFile)
 
-    def get_patients_folder(self):
+    def get_main_working_directory(self):
         try:
-            if self.global_config and os.path.exists(self[GlobalPrefCategoryList.MAIN]["patients_folder"]):
-                return self[GlobalPrefCategoryList.MAIN]["patients_folder"]
+            if self.global_config and os.path.exists(self[GlobalPrefCategoryList.MAIN]["main_working_directory"]):
+                return self[GlobalPrefCategoryList.MAIN]["main_working_directory"]
         except:
             pass
         return ''
 
-    def set_patients_folder(self, path):
+    def set_main_working_directory(self, path):
         if self.global_config:
-            self[GlobalPrefCategoryList.MAIN]["patients_folder"] = path
+            self[GlobalPrefCategoryList.MAIN]["main_working_directory"] = path
             self.save()
 
-    def get_max_pt(self):
+    def get_max_patient_tabs(self):
         if not self.global_config:
             return 1
         try:
@@ -178,7 +183,7 @@ class ConfigManager(configparser.ConfigParser):
             return self[GlobalPrefCategoryList.MAIN]['slicer_scene_ext']
         return ''
 
-    def get_pt_wf_type(self):
+    def get_patient_workflow_type(self):
         if not self.global_config:
             try:
                 return self[DataInputList.T13D].getint('wf_type')
@@ -186,7 +191,7 @@ class ConfigManager(configparser.ConfigParser):
                 return 0
         return 0
 
-    def get_pt_wf_freesurfer(self):
+    def get_patient_workflow_freesurfer(self):
         if not self.global_config:
             try:
                 return self.getboolean(DataInputList.T13D, 'freesurfer')
@@ -194,13 +199,13 @@ class ConfigManager(configparser.ConfigParser):
                 return False
         return False
 
-    def get_wf_hippo_pref(self):
+    def get_workflow_hippo_pref(self):
         try:
             return self.getboolean(DataInputList.T13D, 'hippo_amyg_labels')
         except:
             return False
 
-    def get_wf_freesurfer_pref(self):
+    def get_workflow_freesurfer_pref(self):
         try:
             return self.getboolean(DataInputList.T13D, 'freesurfer')
         except:
