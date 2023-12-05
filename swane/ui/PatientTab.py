@@ -431,7 +431,7 @@ class PatientTab(QTabWidget):
         if ret != 0:
             self.reset_workflow()
         if ret == -1:
-            self.patient.config.load_default_wf_settings(save=True)
+            self.patient.config.load_default_workflow_settings(save=True)
             self.edit_pt_config()
 
     def on_wf_type_changed(self, index: int):
@@ -449,7 +449,7 @@ class PatientTab(QTabWidget):
 
         """
         
-        self.patient.config.set_wf_option(index)
+        self.patient.config.set_workflow_option(index)
         self.patient.config.save()
         self.reset_workflow()
 
@@ -767,7 +767,7 @@ class PatientTab(QTabWidget):
 
         """
 
-        self.wf_type_combo.setCurrentIndex(self.patient.config.get_pt_wf_type())
+        self.wf_type_combo.setCurrentIndex(self.patient.config.get_patient_workflow_type())
         # Set after patient loading to prevent the onchanged fire on previous line command
         self.wf_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)
 

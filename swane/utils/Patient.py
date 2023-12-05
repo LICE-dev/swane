@@ -14,7 +14,7 @@ from threading import Thread
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from multiprocessing import Queue
 from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
-from swane.workers import WorkflowProcess
+from swane.workers.WorkflowProcess import WorkflowProcess
 from swane.config.preference_list import SLICER_EXTENSIONS
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 
@@ -23,6 +23,7 @@ class PatientRet(Enum):
     FolderNotFound = auto()
     PathBlankSpaces = auto()
     FolderOutsideMain = auto()
+    FolderAlreadyExists = auto()
     InvalidFolderTree = auto()
     ValidFolder = auto()
     DataInputLoading = auto()
@@ -52,27 +53,26 @@ class Patient:
     GRAPH_FILE_EXT = "svg"
     GRAPH_TYPE = "colored"
 
-    def __init__(self, global_config: ConfigManager):
+    def __init__(self, global_config: ConfigManager, dependency_manager: DependencyManager):
         self.global_config = global_config
         self.folder = None
         self.name = None        
         self.input_state_list = None
         self.config = None
-        self.dependency_manager = None
+        self.dependency_manager = dependency_manager
         self.workflow = None
         self.workflow_process = None
 
-    def load(self, pt_folder: str, dependency_manager: DependencyManager) -> PatientRet:
+    def load(self, patient_folder: str) -> PatientRet:
         # Load patient information from a folder, generate patient configuration and
-        check = self.check_pt_folder(pt_folder)
+        check = self.check_patient_folder(patient_folder)
         if check != PatientRet.ValidFolder:
             return check
 
-        self.folder = pt_folder
-        self.name = os.path.basename(pt_folder)
+        self.folder = patient_folder
+        self.name = os.path.basename(patient_folder)
         self.input_state_list = PatientInputStateList(self.dicom_folder(), self.global_config)
-        self.dependency_manager = dependency_manager
-        self.create_config(dependency_manager)
+        self.create_config(self.dependency_manager)
         return PatientRet.ValidFolder
 
     def prepare_scan_dicom_folders(self) -> tuple[dict[DataInputList, DicomSearchWorker], int]:
@@ -183,29 +183,29 @@ class Patient:
 
         """
 
-        pt_list = dicom_src_work.get_patient_list()
+        patient_list = dicom_src_work.get_patient_list()
 
-        if len(pt_list) == 0:
+        if len(patient_list) == 0:
             status_callback(data_input, PatientRet.DataInputWarningNoDicom, dicom_src_work)
             return
 
-        if len(pt_list) > 1:
+        if len(patient_list) > 1:
             status_callback(data_input, PatientRet.DataInputWarningMultiPt, dicom_src_work)
             return
 
-        exam_list = dicom_src_work.get_exam_list(pt_list[0])
+        exam_list = dicom_src_work.get_exam_list(patient_list[0])
 
         if len(exam_list) != 1:
             status_callback(data_input, PatientRet.DataInputWarningMultiExam, dicom_src_work)
             return
 
-        series_list = dicom_src_work.get_series_list(pt_list[0], exam_list[0])
+        series_list = dicom_src_work.get_series_list(patient_list[0], exam_list[0])
 
         if len(series_list) != 1:
             status_callback(data_input, PatientRet.DataInputWarningMultiSeries, dicom_src_work)
             return
         self.input_state_list[data_input].loaded = True
-        self.input_state_list[data_input].volumes = dicom_src_work.get_series_nvol(pt_list[0], exam_list[0],series_list[0])
+        self.input_state_list[data_input].volumes = dicom_src_work.get_series_nvol(patient_list[0], exam_list[0],series_list[0])
         status_callback(data_input, PatientRet.DataInputValid, dicom_src_work)
 
     def dicom_import_to_folder(self, data_input: DataInputList, copy_list: list, vols: int, mod: str, force_modality: bool, progress_callback: callable) -> PatientRet:
@@ -253,17 +253,17 @@ class Patient:
     def dicom_folder(self):
         return os.path.join(self.folder, self.global_config.get_default_dicom_folder())
 
-    def check_pt_folder(self, pt_folder: str):
-        if not os.path.exists(pt_folder):
+    def check_patient_folder(self, patient_folder: str):
+        if not os.path.exists(patient_folder):
             return PatientRet.FolderNotFound
 
-        if ' ' in pt_folder:
+        if ' ' in patient_folder:
             return PatientRet.PathBlankSpaces
 
-        if not os.path.abspath(pt_folder).startswith(os.path.abspath(self.global_config.get_patients_folder() + os.sep)):
+        if not os.path.abspath(patient_folder).startswith(os.path.abspath(self.global_config.get_main_working_directory() + os.sep)):
             return PatientRet.FolderOutsideMain
 
-        if not self.check_pt_dir(pt_folder):
+        if not self.check_patient_subtree(patient_folder):
             return PatientRet.InvalidFolderTree
 
         return PatientRet.ValidFolder
@@ -296,13 +296,13 @@ class Patient:
         except:
             return False
 
-    def check_pt_dir(self, pt_folder: str) -> bool:
+    def check_patient_subtree(self, patient_folder: str) -> bool:
         """
         Check if a directory is a valid patient folder
 
         Parameters
         ----------
-        pt_folder : str
+        patient_folder : str
             The directory path to check.
 
         Returns
@@ -313,18 +313,18 @@ class Patient:
         """
 
         for data_input in DataInputList:
-            if not os.path.exists(os.path.join(pt_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
+            if not os.path.exists(os.path.join(patient_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
                 return False
 
         return True
 
-    def update_pt_dir(self, pt_folder: str):
+    def fix_patient_folder_subtree(self, patient_folder: str):
         """
         Update an existing folder with the patient subfolder structure.
 
         Parameters
         ----------
-        pt_folder : str
+        patient_folder : str
             The directory path to update into a patient folder.
 
         Returns
@@ -335,17 +335,17 @@ class Patient:
 
         for data_input in DataInputList:
             if not os.path.exists(
-                    os.path.join(pt_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
-                os.makedirs(os.path.join(pt_folder, self.global_config.get_default_dicom_folder(), str(data_input)),
+                    os.path.join(patient_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
+                os.makedirs(os.path.join(patient_folder, self.global_config.get_default_dicom_folder(), str(data_input)),
                             exist_ok=True)
 
-    def create_new_pt_dir(self, pt_name: str) -> bool:
+    def create_new_patient_dir(self, patient_name: str) -> PatientRet:
         """
         Create a new patient folder and subfolders.
 
         Parameters
         ----------
-        pt_name : str
+        patient_name : str
             The patient folder name.
 
         Returns
@@ -353,21 +353,23 @@ class Patient:
         True if no Exception raised.
 
         """
+        invalid_chars = r'\/:*?<>|'
 
-        try:
-            base_folder = os.path.abspath(os.path.join(
-                self.global_config.get_patients_folder(), pt_name))
-
-            dicom_folder = os.path.join(base_folder, self.global_config.get_default_dicom_folder())
-            for data_input in DataInputList:
-                os.makedirs(os.path.join(
-                    dicom_folder, str(data_input)), exist_ok=True)
-            if self.load(base_folder) == PatientRet.ValidFolder:
-                return True
-            else:
-                return False
-        except:
-            return False
+        if patient_name is None or patient_name == "":
+            return PatientRet.FolderNotFound
+        elif any(char in invalid_chars for char in patient_name) or patient_name.isspace() or ' ' in patient_name:
+            return PatientRet.PathBlankSpaces
+        elif os.path.exists(os.path.join(self.global_config.get_main_working_directory(), patient_name)):
+            return PatientRet.FolderAlreadyExists
+        else:
+            try:
+                base_folder = os.path.abspath(os.path.join(self.global_config.get_main_working_directory(), patient_name))
+                dicom_folder = os.path.join(base_folder, self.global_config.get_default_dicom_folder())
+                for data_input in DataInputList:
+                    os.makedirs(os.path.join(dicom_folder, str(data_input)), exist_ok=True)
+                return self.load(base_folder)
+            except:
+                return PatientRet.FolderNotFound
 
     def can_generate_workflow(self):
         return self.input_state_list.is_ref_loaded() and self.dependency_manager.is_fsl() and self.dependency_manager.is_dcm2niix()
@@ -493,7 +495,7 @@ class Patient:
                 self.delete_workflow_dir()
 
         # Checks for a previous workflow FreeSurfer execution
-        if self.config.get_pt_wf_freesurfer() and self.freesurfer_dir_exists():
+        if self.config.get_patient_workflow_freesurfer() and self.freesurfer_dir_exists():
             if resume_freesurfer is None:
                 return PatientRet.ExecWfResumeFreesurfer
             elif not resume_freesurfer:

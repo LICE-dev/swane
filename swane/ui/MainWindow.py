@@ -42,14 +42,14 @@ class MainWindow(QMainWindow):
         self.NON_UNICODE_BUTTON_HEIGHT = MainWindow.get_non_unicode_height()
 
         # Patient folder configuration checking
-        while self.global_config.get_patients_folder() == "":
+        while self.global_config.get_main_working_directory() == "":
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_choose_working_dir)
             msg_box.exec()
-            self.set_patients_folder()
+            self.set_main_working_directory()
 
         # Patient folder configuration setting
-        os.chdir(self.global_config.get_patients_folder())
+        os.chdir(self.global_config.get_main_working_directory())
 
         self.initialize_ui()
 
@@ -113,7 +113,7 @@ class MainWindow(QMainWindow):
 
         """
         
-        max_pt = self.global_config.get_max_pt()
+        max_pt = self.global_config.get_max_patient_tabs()
         if max_pt <= 0:
             return True
         if len(self.pt_tabs_array) >= max_pt:
@@ -148,10 +148,10 @@ class MainWindow(QMainWindow):
         if folder_path is None:
             # Open the directory selection dialog if a path is not provided
             file_dialog = QFileDialog()
-            file_dialog.setDirectory(self.global_config.get_patients_folder())
+            file_dialog.setDirectory(self.global_config.get_main_working_directory())
             folder_path = file_dialog.getExistingDirectory(self, strings.mainwindow_select_pt_folder)
 
-        patient = Patient(self.global_config)
+        patient = Patient(self.global_config, dependency_manager=self.dependency_manager)
 
         # Guard to avoid an already loaded patient directory
         for pt in self.pt_tabs_array:
@@ -162,7 +162,7 @@ class MainWindow(QMainWindow):
                 msg_box.exec()
                 return
 
-        patient_load_ret = patient.load(folder_path, self.dependency_manager)
+        patient_load_ret = patient.load(folder_path)
 
         if patient_load_ret == PatientRet.ValidFolder:
             self.open_pt_tab(patient)
@@ -207,7 +207,7 @@ class MainWindow(QMainWindow):
             # SWANe recognizes a patient folder checking its subfolders.
             # If a selected folder is not valid, the user may force its conversion into a patient folder.
             if ret == QMessageBox.StandardButton.Yes:
-                patient.update_pt_dir(folder_path)
+                patient.fix_patient_folder_subtree(folder_path)
                 self.search_pt_dir(folder_path=folder_path)
             return
             
@@ -229,7 +229,7 @@ class MainWindow(QMainWindow):
         regex = re.compile('^' + self.global_config.get_patients_prefix() + '\d+$')
         file_list = []
         
-        for this_dir in os.listdir(self.global_config.get_patients_folder()):
+        for this_dir in os.listdir(self.global_config.get_main_working_directory()):
             if regex.match(this_dir):
                 file_list.append(
                     int(this_dir.replace(self.global_config.get_patients_prefix(), "")))
@@ -258,23 +258,27 @@ class MainWindow(QMainWindow):
         if not ok:
             return
 
-        pt_name = str(text)
+        patient_name = str(text).replace(" ", "_")
+        patient = Patient(self.global_config, dependency_manager=self.dependency_manager)
+        create_patient_ret = patient.create_new_patient_dir(patient_name)
 
-        if pt_name == "":
+        if create_patient_ret == PatientRet.FolderNotFound or create_patient_ret == PatientRet.PathBlankSpaces:
             msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_new_pt_name_error + pt_name)
+            msg_box.setText(strings.mainwindow_new_pt_name_error + patient_name)
             msg_box.exec()
             return
-
-        if os.path.exists(os.path.join(self.global_config.get_patients_folder(), pt_name)):
+        elif create_patient_ret == PatientRet.FolderAlreadyExists:
             msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_pt_exists_error + pt_name)
+            msg_box.setText(strings.mainwindow_pt_exists_error + patient_name)
             msg_box.exec()
             return
+        elif create_patient_ret == PatientRet.ValidFolder:
+            msg_box = QMessageBox()
+            msg_box.setText(strings.mainwindow_new_pt_created + patient_name)
+            msg_box.exec()
+            self.open_pt_tab(patient)
 
-        self.create_new_pt_dir(pt_name.replace(" ", "_"))
-
-    def set_patients_folder(self):
+    def set_main_working_directory(self):
         """
         Generates the OS directory selection dialog to set the default patient folder
 
@@ -295,31 +299,9 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
         
-        self.global_config.set_patients_folder(os.path.abspath(folder_path))
+        self.global_config.set_main_working_directory(os.path.abspath(folder_path))
         
         os.chdir(folder_path)
-
-    def create_new_pt_dir(self, pt_name: str):
-        """
-        Create a new patient folder and subfolders.
-
-        Parameters
-        ----------
-        pt_name : str
-            The patient folder name.
-
-        Returns
-        -------
-        None.
-
-        """
-
-        patient = Patient(self.global_config)
-        if patient.create_new_pt_dir(pt_name):
-            msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_new_pt_created + pt_name)
-            msg_box.exec()
-            self.open_pt_tab(patient)
 
     def edit_config(self):
         """
@@ -367,7 +349,7 @@ class MainWindow(QMainWindow):
         ret = wf_preference_window.exec()
 
         if ret == -1:
-            self.global_config.load_default_wf_settings(save=True)
+            self.global_config.load_default_workflow_settings(save=True)
             self.edit_wf_config()
 
     def check_running_workflows(self) -> bool:
