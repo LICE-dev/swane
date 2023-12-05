@@ -33,7 +33,7 @@ setup(name='swane',
           "matplotlib==3.5.2",
           "nibabel==5.0.0",
           "packaging",
-          "PySide6_VerticalQTabWidget",
+          "PySide6_VerticalQTabWidget=0.0.3",
           "GPUtil==1.4.0",
           "numpy"
       ],

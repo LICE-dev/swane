@@ -48,7 +48,7 @@ class PreferencesWindow(QDialog):
 
         layout = QVBoxLayout()
 
-        tab_widget = VerticalQTabWidget()
+        tab_widget = VerticalQTabWidget(force_top_valign=True)
 
         x = 0
 
