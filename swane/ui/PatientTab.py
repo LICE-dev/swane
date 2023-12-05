@@ -23,7 +23,7 @@ from swane.utils.DependencyManager import DependencyManager
 from swane.config.preference_list import WORKFLOW_TYPES
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.utils.Patient import Patient, PatientRet
-from swane.slicer.open_results_directory import open_results_directory
+from swane.workers.open_results_directory import open_results_directory
 
 
 class PatientTab(QTabWidget):
