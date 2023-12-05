@@ -12,9 +12,16 @@ class InputTypes(IntEnum):
     HIDDEN = 7
 
 
-class ImageModality(StrEnum):
+class ImageModality(Enum):
     RM = 'mr'
     PET = 'pt'
+
+    @staticmethod
+    def from_string(mod_string: str):
+        for mod in ImageModality:
+            if mod.value.lower() == mod_string.lower():
+                return mod
+        return None
 
 
 class PLANES(Enum):

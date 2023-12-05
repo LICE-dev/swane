@@ -18,7 +18,11 @@ class PersistentProgressDialog(QProgressDialog):
         if event.key() != Qt.Key_Escape:
             super(PersistentProgressDialog, self).keyPressEvent(event)
 
-    def increase_value(self, x):
+    def increase_value(self, x, maximum=0):
+        if self.maximum() == 0 and maximum > 0:
+            self.setMaximum(maximum)
+        if not self.isVisible():
+            self.show()
         if self.value() == 0 and self.maximum() > 1:
             x = x+1
         self.setValue(self.value()+x)

@@ -162,7 +162,7 @@ class MainWindow(QMainWindow):
                 msg_box.exec()
                 return
 
-        patient_load_ret = patient.load(folder_path)
+        patient_load_ret = patient.load(folder_path, self.dependency_manager)
 
         if patient_load_ret == PatientRet.ValidFolder:
             self.open_pt_tab(patient)
@@ -541,7 +541,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
-        tab_item.pt_config.save()
+        tab_item.patient.config.save()
         
         self.pt_tabs_array.remove(tab_item)
         self.main_tab.removeTab(index)
