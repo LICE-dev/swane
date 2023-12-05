@@ -31,7 +31,7 @@ from swane.utils.DataInputList import DataInputList
 from swane.utils.DependencyManager import DependencyManager
 from swane.config.preference_list import SLICER_EXTENSIONS, WORKFLOW_TYPES
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
-from swane.utils.Patient import Patient
+from swane.utils.Patient import Patient, PatientRet
 
 
 class PtTab(QTabWidget):
@@ -204,7 +204,7 @@ class PtTab(QTabWidget):
         try:
             self.node_button.setEnabled(True)
             self.wf_type_combo.setEnabled(True)
-            self.pt_config_button.setEnabled(True)
+            self.patient.config_button.setEnabled(True)
 
             self.enable_exec_tab()
 
@@ -241,8 +241,7 @@ class PtTab(QTabWidget):
                                              QLabel(""),
                                              QPushButton(strings.pttab_import_button),
                                              QPushButton(strings.pttab_clear_button)]
-            self.input_report[data_input][0].load(self.main_window.ERROR_ICON_FILE)
-            self.input_report[data_input][0].setFixedSize(25, 25)
+            self.set_error(data_input, "")
             if data_input.value.tooltip != "":
                 # Add tooltips and append ⓘ character to label
                 self.input_report[data_input][1].setText(data_input.value.label+" "+strings.INFOCHAR)
@@ -251,11 +250,9 @@ class PtTab(QTabWidget):
             self.input_report[data_input][1].setAlignment(Qt.AlignLeft | Qt.AlignBottom)
             self.input_report[data_input][2].setAlignment(Qt.AlignLeft | Qt.AlignTop)
             self.input_report[data_input][2].setStyleSheet("margin-bottom: 20px")
-            self.input_report[data_input][3].setEnabled(False)
             self.input_report[data_input][3].clicked.connect(
                 lambda checked=None, z=data_input: self.dicom_import_to_folder(z))
             self.input_report[data_input][3].setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            self.input_report[data_input][4].setEnabled(False)
             self.input_report[data_input][4].clicked.connect(
                 lambda checked=None, z=data_input: self.clear_import_folder(z))
             self.input_report[data_input][4].setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -286,14 +283,16 @@ class PtTab(QTabWidget):
         layout.addWidget(import_group_box, stretch=1)
         self.data_tab.setLayout(layout)
 
-    def dicom_import_to_folder(self, input_name: DataInputList):
+    def dicom_import_to_folder(self, data_input: DataInputList, force_mod: bool = False):
         """
-        Copies the files inside the selected folder in the input list into the folder specified by input_name var.
+        Copies the files inside the selected folder in the input list into the folder specified by data_input var.
 
         Parameters
         ----------
-        input_name : DataInputList
+        data_input: DataInputList
             The name of the series to which couple the selected file.
+        force_mod: bool
+            Skip the modality check. Default is False
 
         Returns
         -------
@@ -307,54 +306,52 @@ class PtTab(QTabWidget):
             msg_box.exec()
             return
 
-        dest_path = os.path.join(self.patient.folder,
-                                 self.global_config.get_default_dicom_folder(), str(input_name))
-
-        # number of volumes check
-        vols = self.final_series_list[self.importable_series_list.currentRow()][3]
-        if input_name.value.max_volumes != -1 and vols > input_name.value.max_volumes:
-            msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_wrong_max_vols_check_msg % (vols, input_name.value.max_volumes))
-            msg_box.exec()
-            return
-        if vols < input_name.value.min_volumes:
-            msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_wrong_min_vols_check_msg % (vols, input_name.value.min_volumes))
-            msg_box.exec()
-            return
-
-        # modality check
-        found_mod = self.final_series_list[self.importable_series_list.currentRow()][2].upper()
-        if not input_name.value.is_image_modality(found_mod):
-            msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_wrong_type_check_msg % (found_mod, input_name.value.image_modality.value))
-            msg_box.setInformativeText(strings.pttab_wrong_type_check)
-            msg_box.setIcon(QMessageBox.Icon.Warning)
-            msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            msg_box.setDefaultButton(QMessageBox.StandardButton.No)
-            ret = msg_box.exec()
-            
-            if ret == QMessageBox.StandardButton.No:
-                return
-
-        copy_list = self.final_series_list[self.importable_series_list.currentRow()][1]
+        copy_list = self.dicom_scan_series_list[self.importable_series_list.currentRow()][1]
+        vols = self.dicom_scan_series_list[self.importable_series_list.currentRow()][3]
+        found_mod = self.dicom_scan_series_list[self.importable_series_list.currentRow()][2].upper()
 
         progress = PersistentProgressDialog(strings.pttab_dicom_copy, 0, len(copy_list) + 1, self)
-        progress.show()
+        self.set_loading(data_input, "")
 
-        self.input_report[input_name][0].load(self.main_window.LOADING_MOVIE_FILE)
-
-        for thisFile in copy_list:
-            if not os.path.isfile(thisFile):
-                continue
-            
-            shutil.copy(thisFile, dest_path)
-            progress.increase_value(1)
+        # Copy files and check for return
+        import_ret = self.patient.dicom_import_to_folder(data_input=data_input,
+                                                         copy_list=copy_list,
+                                                         vols=vols,
+                                                         mod=found_mod,
+                                                         force_modality=False,
+                                                         progress_callback=progress.increase_value
+                                                         )
+        if import_ret != PatientRet.DataImportCompleted:
+            if import_ret == PatientRet.DataImportErrorVolumesMax:
+                msg_box = QMessageBox()
+                msg_box.setText(strings.pttab_wrong_max_vols_check_msg % (vols, data_input.value.max_volumes))
+                msg_box.exec()
+            elif import_ret == PatientRet.DataImportErrorVolumesMin:
+                msg_box = QMessageBox()
+                msg_box.setText(strings.pttab_wrong_min_vols_check_msg % (vols, data_input.value.min_volumes))
+                msg_box.exec()
+            elif import_ret == PatientRet.DataImportErrorCopy:
+                msg_box = QMessageBox()
+                msg_box.setText(strings.pttab_import_copy_error_msg)
+                msg_box.exec()
+            elif import_ret == PatientRet.DataImportErrorModality:
+                msg_box = QMessageBox()
+                msg_box.setText(strings.pttab_wrong_type_check_msg % (found_mod, data_input.value.image_modality.value))
+                msg_box.setInformativeText(strings.pttab_wrong_type_check)
+                msg_box.setIcon(QMessageBox.Icon.Warning)
+                msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+                ret = msg_box.exec()
+                if ret == QMessageBox.StandardButton.Yes:
+                    self.dicom_import_to_folder(data_input, force_mod=True)
+            self.set_error(data_input, "")
+            progress.deleteLater()
+            return
 
         progress.setRange(0, 0)
         progress.setLabelText(strings.pttab_dicom_check)
 
-        self.check_input_folder(input_name, progress)
+        self.patient.check_input_folder(data_input, status_callback=self.input_check_update, progress_callback=progress.increase_value)
         self.reset_workflow()
 
     def scan_dicom_folder(self):
@@ -378,7 +375,7 @@ class PtTab(QTabWidget):
 
         if dicom_src_work.get_files_len() > 0:
             self.clear_scan_result()
-            self.final_series_list = []
+            self.dicom_scan_series_list = []
             progress = PersistentProgressDialog(strings.pttab_dicom_scan, 0, 0, parent=self.parent())
             progress.show()
             progress.setMaximum(dicom_src_work.get_files_len())
@@ -434,11 +431,11 @@ class PtTab(QTabWidget):
         self.node_list_treeWidget.itemClicked.connect(self.tree_item_clicked)
 
         # Second Column: Graphviz Graph Layout
-        self.pt_config_button = QPushButton(strings.PTCONFIGBUTTONTEXT)
-        self.pt_config_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
-        self.pt_config_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        self.pt_config_button.clicked.connect(self.edit_pt_config)
-        layout.addWidget(self.pt_config_button, 0, 1)
+        self.patient.config_button = QPushButton(strings.PTCONFIGBUTTONTEXT)
+        self.patient.config_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.patient.config_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.patient.config_button.clicked.connect(self.edit_pt_config)
+        layout.addWidget(self.patient.config_button, 0, 1)
 
         self.exec_button = QPushButton(strings.EXECBUTTONTEXT)
         self.exec_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
@@ -462,12 +459,12 @@ class PtTab(QTabWidget):
 
         """
 
-        preference_window = PreferencesWindow(self.pt_config, self.main_window.dependency_manager, True, self)
+        preference_window = PreferencesWindow(self.patient.config, self.main_window.dependency_manager, True, self)
         ret = preference_window.exec()
         if ret != 0:
             self.reset_workflow()
         if ret == -1:
-            self.pt_config.load_default_wf_settings(save=True)
+            self.patient.config.load_default_wf_settings(save=True)
             self.edit_pt_config()
 
     def on_wf_type_changed(self, index: int):
@@ -485,8 +482,8 @@ class PtTab(QTabWidget):
 
         """
         
-        self.pt_config.set_wf_option(index)
-        self.pt_config.save()
+        self.patient.config.set_wf_option(index)
+        self.patient.config.save()
         self.reset_workflow()
 
     def gen_wf(self):
@@ -512,7 +509,7 @@ class PtTab(QTabWidget):
         
         # Node List population
         try:
-            self.workflow.add_input_folders(self.global_config, self.pt_config, self.main_window.dependency_manager, self.patient.input_state_list)
+            self.workflow.add_input_folders(self.global_config, self.patient.config, self.main_window.dependency_manager, self.patient.input_state_list)
         except:
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.pttab_wf_gen_error)
@@ -641,7 +638,7 @@ class PtTab(QTabWidget):
 
             fsdir = os.path.join(self.patient.folder, FS_DIR)
             # Checks for a previous workflow FreeSurfer execution
-            if self.pt_config.get_pt_wf_freesurfer() and os.path.exists(fsdir):
+            if self.patient.config.get_pt_wf_freesurfer() and os.path.exists(fsdir):
                 # If yes, asks for workflow resume or reset
                 msg_box = QMessageBox()
                 msg_box.setText(strings.pttab_old_fs_found)
@@ -673,7 +670,7 @@ class PtTab(QTabWidget):
             self.setTabEnabled(PtTab.DATATAB, False)
             self.setTabEnabled(PtTab.RESULTTAB, False)
             self.wf_type_combo.setEnabled(False)
-            self.pt_config_button.setEnabled(False)
+            self.patient.config_button.setEnabled(False)
 
         # Workflow executing
         else:
@@ -841,6 +838,42 @@ class PtTab(QTabWidget):
             slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), scene_path, parent=self)
             QThreadPool.globalInstance().start(slicer_open_thread)
 
+    def input_check_update(self, data_input: DataInputList, state: PatientRet, dicom_src_work: DicomSearchWorker = None):
+        if data_input not in self.input_report:
+            return
+        if state == PatientRet.DataInputWarningNoDicom:
+            self.set_error(data_input, strings.pttab_no_dicom_error + dicom_src_work.dicom_dir)
+        elif state == PatientRet.DataInputWarningMultiPt:
+            self.set_warn(data_input, strings.pttab_multi_pt_error + dicom_src_work.dicom_dir)
+        elif state == PatientRet.DataInputWarningMultiExam:
+            self.set_warn(data_input, strings.pttab_multi_exam_error + dicom_src_work.dicom_dir)
+        elif state == PatientRet.DataInputWarningMultiSeries:
+            self.set_warn(data_input, strings.pttab_multi_series_error + dicom_src_work.dicom_dir)
+        elif state == PatientRet.DataInputLoading:
+            self.set_loading(data_input, "")
+        elif state == PatientRet.DataInputValid:
+
+            pt_list = dicom_src_work.get_patient_list()
+            exam_list = dicom_src_work.get_exam_list(pt_list[0])
+            series_list = dicom_src_work.get_series_list(pt_list[0], exam_list[0])
+
+            image_list = dicom_src_work.get_series_files(pt_list[0], exam_list[0], series_list[0])
+            ds = pydicom.read_file(image_list[0], force=True)
+            mod = ds.Modality
+
+            label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(
+                len(image_list)) + " images"
+            if data_input == DataInputList.VENOUS or data_input == DataInputList.VENOUS2:
+                label += ", " + str(dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])) + " "
+                if dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0]) > 1:
+                    label += "phases"
+                else:
+                    label += "phase"
+
+            self.set_ok(data_input, label)
+            self.enable_exec_tab()
+            self.check_venous_volumes()
+
     def load_pt(self):
         """
         Loads the Patient configuration and folder.
@@ -850,36 +883,21 @@ class PtTab(QTabWidget):
         None.
 
         """
-        
-        dicom_scanners = {}
-        total_files = 0
 
-        # Config import based on nipype_pipeline
-        self.pt_config = ConfigManager(self.patient.folder)
-        self.pt_config.check_dependencies(self.main_window.dependency_manager)
-        self.wf_type_combo.setCurrentIndex(self.pt_config.get_pt_wf_type())
+        self.wf_type_combo.setCurrentIndex(self.patient.config.get_pt_wf_type())
         # Set after patient loading to prevent the onchanged fire on previous line command
         self.wf_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)
 
-        for data_input in DataInputList:
-            if not data_input.value.optional or self.global_config.is_optional_series_enabled(data_input):
-                dicom_scanners[data_input] = self.check_input_folder_step1(data_input)
-                total_files = total_files + dicom_scanners[data_input].get_files_len()
+        # Scan patient dicom folder
+        dicom_scanners, total_files = self.patient.prepare_scan_dicom_folders()
 
         if total_files > 0:
             progress = PersistentProgressDialog(strings.pttab_pt_loading, 0, 0, parent=self.parent())
             progress.show()
             progress.setMaximum(total_files)
-        else:
-            progress = None
+            self.patient.execute_scan_dicom_folders(dicom_scanners, self.input_check_update, progress.increase_value)
 
-        for data_input in DataInputList:
-            if not data_input.value.optional or self.global_config.is_optional_series_enabled(data_input):
-                self.input_report[data_input][0].load(self.main_window.LOADING_MOVIE_FILE)
-                self.check_input_folder_step2(data_input, dicom_scanners[data_input], progress)
-                self.directory_watcher.addPath(
-                    os.path.join(self.patient.folder, self.global_config.get_default_dicom_folder(), str(data_input)))
-
+        # Update UI after loading dicom
         self.setTabEnabled(PtTab.DATATAB, True)
         self.setCurrentWidget(self.data_tab)
 
@@ -910,145 +928,13 @@ class PtTab(QTabWidget):
             self.setTabEnabled(PtTab.RESULTTAB, False)
             self.result_directory_watcher.removePaths([scene_dir])
 
-    def check_input_folder_step1(self, input_name: DataInputList) -> DicomSearchWorker:
-        """
-        Generates a Worker that scan the series folder in search for DICOM files.
-
-        Parameters
-        ----------
-        input_name : DataInputList
-            The series folder name to check.
-
-        Returns
-        -------
-        dicom_src_work : DicomSearchWorker
-            The DICOM Search Worker.
-
-        """
-        
-        src_path = os.path.join(self.patient.folder,
-                                self.global_config.get_default_dicom_folder(), str(input_name))
-        dicom_src_work = DicomSearchWorker(src_path)
-        dicom_src_work.load_dir()
-        
-        return dicom_src_work
-
-    def check_input_folder_step2(self, input_name: DataInputList, dicom_src_work: DicomSearchWorker, progress: PersistentProgressDialog = None):
-        """
-        Starts the DICOM files scan Worker into the series folder on a new thread.
-
-        Parameters
-        ----------
-        input_name : DataInputList
-            The series folder name to check.
-        dicom_src_work : DicomSearchWorker
-            The DICOM Search Worker.
-        progress : PersistentProgressDialog, optional
-            The progress dialog. The default is None.
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        dicom_src_work.signal.sig_finish.connect(lambda src, name=input_name: self.check_input_folder_step3(name, src))
-        
-        if progress is not None:
-            if progress.maximum() == 0:
-                progress.setMaximum(dicom_src_work.get_files_len())
-            dicom_src_work.signal.sig_loop.connect(lambda i: progress.increase_value(i))
-            
-        QThreadPool.globalInstance().start(dicom_src_work)
-
-    def check_input_folder_step3(self, input_name: DataInputList, dicom_src_work: DicomSearchWorker):
-        """
-        Updates SWANe UI at the end of the DICOM files scan Worker execution for a patient.
-
-        Parameters
-        ----------
-        input_name : DataInputList
-            The series folder name to check.
-        dicom_src_work : DicomSearchWorker
-            The DICOM Search Worker.
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        src_path = dicom_src_work.dicom_dir
-        pt_list = dicom_src_work.get_patient_list()
-
-        if len(pt_list) == 0:
-            self.set_error(input_name, strings.pttab_no_dicom_error + src_path)
-            return
-
-        if len(pt_list) > 1:
-            self.set_warn(input_name, strings.pttab_multi_pt_error + src_path)
-            return
-        
-        exam_list = dicom_src_work.get_exam_list(pt_list[0])
-        
-        if len(exam_list) != 1:
-            self.set_warn(input_name, strings.pttab_multi_exam_error + src_path)
-            return
-        
-        series_list = dicom_src_work.get_series_list(pt_list[0], exam_list[0])
-        
-        if len(series_list) != 1:
-            self.set_warn(input_name, strings.pttab_multi_series_error + src_path)
-            return
-
-        image_list = dicom_src_work.get_series_files(pt_list[0], exam_list[0], series_list[0])
-        ds = pydicom.read_file(image_list[0], force=True)
-        mod = ds.Modality
-
-        label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(len(image_list)) + " images"
-        if input_name == DataInputList.VENOUS or input_name == DataInputList.VENOUS2:
-            label += ", " + str(dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])) + " "
-            if dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0]) > 1:
-                label += "phases"
-            else:
-                label += "phase"
-            
-        self.set_ok(input_name, label)
-
-        self.patient.input_state_list[input_name].loaded = True
-        self.patient.input_state_list[input_name].volumes = dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])
-
-        self.enable_exec_tab()
-        self.check_venous_volumes()
-
-    def check_input_folder(self, input_name: DataInputList, progress: PersistentProgressDialog = None):
-        """
-        Checks if the series folder labelled input_name contains DICOM files.
-        If PersistentProgressDialog is not None, it will be used to show the scan progress.
-
-        Parameters
-        ----------
-        input_name : DataInputList
-            The series folder name to check.
-        progress : PersistentProgressDialog, optional
-            The progress dialog. The default is None.
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        dicom_src_work = self.check_input_folder_step1(input_name)
-        self.check_input_folder_step2(input_name, dicom_src_work, progress)
-
-    def clear_import_folder(self, input_name: DataInputList):
+    def clear_import_folder(self, data_input: DataInputList):
         """
         Clears the patient series folder.
 
         Parameters
         ----------
-        input_name : DataInputList
+        data_input : DataInputList
             The series folder name to clear.
 
         Returns
@@ -1057,23 +943,16 @@ class PtTab(QTabWidget):
 
         """
 
-        src_path = os.path.join(self.patient.folder,
-                                self.global_config.get_default_dicom_folder(), str(input_name))
+        src_path = os.path.join(self.patient.dicom_folder(), str(data_input))
 
         progress = PersistentProgressDialog(strings.pttab_dicom_clearing + src_path, 0, 0, self)
         progress.show()
 
-        shutil.rmtree(src_path, ignore_errors=True)
-        os.makedirs(src_path, exist_ok=True)
+        self.patient.clear_import_folder(data_input)
 
-        # Reset the workflows related to the deleted DICOM images
-        src_path = os.path.join(self.patient.folder, self.patient.name + strings.WF_DIR_SUFFIX,
-                                input_name.value.wf_name)
-        shutil.rmtree(src_path, ignore_errors=True)
-
-        self.set_error(input_name, strings.pttab_no_dicom_error + src_path)
-        self.patient.input_state_list[input_name].loaded = False
-        self.patient.input_state_list[input_name].volumes = 0
+        self.set_error(data_input, strings.pttab_no_dicom_error + src_path)
+        self.patient.input_state_list[data_input].loaded = False
+        self.patient.input_state_list[data_input].volumes = 0
         self.enable_exec_tab()
 
         progress.accept()
@@ -1081,7 +960,7 @@ class PtTab(QTabWidget):
         self.reset_workflow()
         self.check_venous_volumes()
 
-        if input_name == DataInputList.VENOUS and self.patient.input_state_list[DataInputList.VENOUS2].loaded:
+        if data_input == DataInputList.VENOUS and self.patient.input_state_list[DataInputList.VENOUS2].loaded:
             self.clear_import_folder(DataInputList.VENOUS2)
 
     def check_venous_volumes(self):
@@ -1147,7 +1026,7 @@ class PtTab(QTabWidget):
         self.exec_button_setEnabled(False)
         self.node_button.setEnabled(True)
         self.wf_type_combo.setEnabled(True)
-        self.pt_config_button.setEnabled(True)
+        self.patient.config_button.setEnabled(True)
 
     def result_directory_changed(self):
         self.enable_tab_if_result_dir()
@@ -1205,26 +1084,26 @@ class PtTab(QTabWidget):
                 else:
                     label += "volume"
 
-                self.final_series_list.append(
+                self.dicom_scan_series_list.append(
                     [label, image_list, mod, vols])
                 del image_list
 
-        for series in self.final_series_list:
+        for series in self.dicom_scan_series_list:
             self.importable_series_list.addItem(series[0])
 
     def clear_scan_result(self):
         self.importable_series_list.clear()
-        self.final_series_list = None
+        self.dicom_scan_series_list = None
         if len(self.scan_directory_watcher.directories()) > 0:
             self.scan_directory_watcher.removePaths(self.scan_directory_watcher.directories())
 
-    def set_warn(self, input_name: DataInputList, msg: str, clear_text: bool = True):
+    def set_warn(self, data_input: DataInputList, msg: str, clear_text: bool = True):
         """
         Set a warning message and icon near a series label.
 
         Parameters
         ----------
-        input_name : DataInputList
+        data_input : DataInputList
             The series label.
         msg : str
             The warning message.
@@ -1237,21 +1116,21 @@ class PtTab(QTabWidget):
 
         """
         
-        self.input_report[input_name][0].load(self.main_window.WARNING_ICON_FILE)
-        self.input_report[input_name][0].setFixedSize(25, 25)
-        self.input_report[input_name][0].setToolTip(msg)
-        self.input_report[input_name][3].setEnabled(False)
-        self.input_report[input_name][4].setEnabled(True)
+        self.input_report[data_input][0].load(self.main_window.WARNING_ICON_FILE)
+        self.input_report[data_input][0].setFixedSize(25, 25)
+        self.input_report[data_input][0].setToolTip(msg)
+        self.input_report[data_input][3].setEnabled(False)
+        self.input_report[data_input][4].setEnabled(True)
         if clear_text:
-            self.input_report[input_name][2].setText("")
+            self.input_report[data_input][2].setText("")
 
-    def set_error(self, input_name: DataInputList, msg: str):
+    def set_error(self, data_input: DataInputList, msg: str):
         """
         Set an error message and icon near a series label.
 
         Parameters
         ----------
-        input_name : DataInputList
+        data_input : DataInputList
             The series label.
         msg : str
             The error message.
@@ -1262,20 +1141,20 @@ class PtTab(QTabWidget):
 
         """
         
-        self.input_report[input_name][0].load(self.main_window.ERROR_ICON_FILE)
-        self.input_report[input_name][0].setFixedSize(25, 25)
-        self.input_report[input_name][0].setToolTip(msg)
-        self.input_report[input_name][3].setEnabled(True)
-        self.input_report[input_name][4].setEnabled(False)
-        self.input_report[input_name][2].setText("")
+        self.input_report[data_input][0].load(self.main_window.ERROR_ICON_FILE)
+        self.input_report[data_input][0].setFixedSize(25, 25)
+        self.input_report[data_input][0].setToolTip(msg)
+        self.input_report[data_input][3].setEnabled(True)
+        self.input_report[data_input][4].setEnabled(False)
+        self.input_report[data_input][2].setText("")
 
-    def set_ok(self, input_name: DataInputList, msg: str):
+    def set_ok(self, data_input: DataInputList, msg: str):
         """
         Set a success message and icon near a series label.
 
         Parameters
         ----------
-        input_name : DataInputList
+        data_input : DataInputList
             The series label.
         msg : str
             The success message. If string is None keep the current text
@@ -1286,13 +1165,40 @@ class PtTab(QTabWidget):
 
         """
         
-        self.input_report[input_name][0].load(self.main_window.OK_ICON_FILE)
-        self.input_report[input_name][0].setFixedSize(25, 25)
-        self.input_report[input_name][0].setToolTip("")
-        self.input_report[input_name][3].setEnabled(False)
-        self.input_report[input_name][4].setEnabled(True)
+        self.input_report[data_input][0].load(self.main_window.OK_ICON_FILE)
+        self.input_report[data_input][0].setFixedSize(25, 25)
+        self.input_report[data_input][0].setToolTip("")
+        self.input_report[data_input][3].setEnabled(False)
+        self.input_report[data_input][4].setEnabled(True)
         if msg is not None:
-            self.input_report[input_name][2].setText(msg)
+            self.input_report[data_input][2].setText(msg)
+
+    def set_loading(self, data_input: DataInputList, msg: str, clear_text: bool = True):
+        """
+        Set a loading message and icon near a series label.
+
+        Parameters
+        ----------
+        data_input : DataInputList
+            The series label.
+        msg : str
+            The warning message.
+        clear_text : bool
+            If True delete the label text
+
+        Returns
+        -------
+        None.
+
+        """
+
+        self.input_report[data_input][0].load(self.main_window.LOADING_MOVIE_FILE)
+        self.input_report[data_input][0].setFixedSize(25, 25)
+        self.input_report[data_input][0].setToolTip(msg)
+        self.input_report[data_input][3].setEnabled(False)
+        self.input_report[data_input][4].setEnabled(False)
+        if clear_text:
+            self.input_report[data_input][2].setText("")
 
     def enable_exec_tab(self):
         """
