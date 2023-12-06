@@ -3,18 +3,18 @@ import shutil
 from swane.config.ConfigManager import ConfigManager
 import pytest
 from swane.config.preference_list import GlobalPrefCategoryList, GLOBAL_PREFERENCES
+from swane.tests import TEST_DIR
 
 
 @pytest.fixture(autouse=True)
 def change_test_dir(request):
-    test_dir = TestConfigManager.TEST_DIR
+    test_dir = os.path.join(TEST_DIR, "config")
     shutil.rmtree(test_dir, ignore_errors=True)
     os.makedirs(test_dir, exist_ok=True)
     os.chdir(test_dir)
 
 
 class TestConfigManager:
-    TEST_DIR = os.path.join(os.path.expanduser("~"), "swane_test")
 
     def test_init_global(self, monkeypatch):
         expected_global_config_file = os.path.join(os.getcwd(), ".SWANe")

@@ -1,5 +1,4 @@
 import os
-import pydicom
 from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
 from PySide6.QtSvgWidgets import QSvgWidget
@@ -739,19 +738,13 @@ class PatientTab(QTabWidget):
             pt_list = dicom_src_work.get_patient_list()
             exam_list = dicom_src_work.get_exam_list(pt_list[0])
             series_list = dicom_src_work.get_series_list(pt_list[0], exam_list[0])
+            print(type(pt_list[0]))
+            print(type(exam_list[0]))
+            print(type(series_list[0]))
 
-            image_list = dicom_src_work.get_series_files(pt_list[0], exam_list[0], series_list[0])
-            ds = pydicom.read_file(image_list[0], force=True)
-            mod = ds.Modality
+            image_list, patient_name, mod, series_description, vols = dicom_src_work.get_series_info(pt_list[0], exam_list[0], series_list[0])
 
-            label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(
-                len(image_list)) + " images"
-            if data_input == DataInputList.VENOUS or data_input == DataInputList.VENOUS2:
-                label += ", " + str(dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0])) + " "
-                if dicom_src_work.get_series_nvol(pt_list[0], exam_list[0], series_list[0]) > 1:
-                    label += "phases"
-                else:
-                    label += "phase"
+            label = PatientTab.label_from_dicom(image_list, patient_name, mod, series_description, vols)
 
             self.set_ok(data_input, label)
             self.enable_exec_tab()
@@ -909,6 +902,21 @@ class PatientTab(QTabWidget):
     def result_directory_changed(self):
         self.enable_tab_if_result_dir()
 
+    @staticmethod
+    def label_from_dicom(image_list: list[str], patient_name: str, mod: str, series_description: str, vols: int) -> str|None:
+        if image_list is None:
+            return None
+        try:
+            label = patient_name + "-" + mod + "-" + series_description + ": " + str(
+                len(image_list)) + " images, " + str(vols) + " "
+            if vols > 1:
+                label += "volumes"
+            else:
+                label += "volume"
+            return label
+        except:
+            return ""
+
     def show_scan_result(self, dicom_src_work: DicomSearchWorker):
         """
         Updates importable series list using DICOM Search Worker results.
@@ -945,26 +953,13 @@ class PatientTab(QTabWidget):
         for exam in exam_list:
             series_list = dicom_src_work.get_series_list(pt_list[0], exam)
             for series in series_list:
-                image_list = dicom_src_work.get_series_files(pt_list[0], exam, series)
-                ds = pydicom.read_file(image_list[0], force=True)
-                
-                # Excludes series with less than 10 images unless they are siemens mosaics series
-                if len(image_list) < 10 and hasattr(ds, 'ImageType') and "MOSAIC" not in ds.ImageType:
-                    continue
 
-                mod = ds.Modality
-                vols = dicom_src_work.get_series_nvol(pt_list[0], exam, series)
+                image_list, patient_name, mod, series_description, vols = dicom_src_work.get_series_info(pt_list[0], exam, series)
 
-                label = str(ds.PatientName) + "-" + mod + "-" + ds.SeriesDescription + ": " + str(
-                        len(image_list)) + " images, " + str(vols) + " "
-                if dicom_src_work.get_series_nvol(pt_list[0], exam, series) > 1:
-                    label += "volumes"
-                else:
-                    label += "volume"
-
-                self.dicom_scan_series_list.append(
-                    [label, image_list, mod, vols])
-                del image_list
+                if image_list is not None:
+                    label = PatientTab.label_from_dicom(image_list, patient_name, mod, series_description, vols)
+                    self.dicom_scan_series_list.append(
+                        [label, image_list, mod, vols])
 
         for series in self.dicom_scan_series_list:
             self.importable_series_list.addItem(series[0])
@@ -1054,7 +1049,7 @@ class PatientTab(QTabWidget):
             text=""
         )
 
-    def set_ok(self, data_input: DataInputList, text: str):
+    def set_ok(self, data_input: DataInputList, text: str|None):
         """
         Set a success message and icon near a series label.
 

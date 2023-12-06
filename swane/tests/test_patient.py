@@ -4,11 +4,12 @@ import pytest
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.Patient import Patient, PatientRet
+from swane.tests import TEST_DIR
 
 
 @pytest.fixture(autouse=True)
 def change_test_dir(request):
-    test_dir = TestPatient.TEST_DIR
+    test_dir = os.path.join(TEST_DIR, "patient")
     test_main_working_directory = TestPatient.TEST_MAIN_WORKING_DIRECTORY
     shutil.rmtree(test_dir, ignore_errors=True)
     os.makedirs(test_dir, exist_ok=True)
@@ -29,8 +30,7 @@ def dependency_manager():
 
 
 class TestPatient:
-    TEST_DIR = os.path.join(os.path.expanduser("~"), "swane_test")
-    TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "subjects")
+    TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "patient", "subjects")
     TEST_PATIENT_NAME = "pt_01"
 
     def test_patient(self, global_config, dependency_manager):
