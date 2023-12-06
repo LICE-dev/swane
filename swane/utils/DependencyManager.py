@@ -68,6 +68,7 @@ class DependencyManager:
     MIN_FSL_VERSION = "6.0.6"
     MIN_FREESURFER_VERSION = "7.3.2"
     MIN_SLICER_VERSION = "5.2.0"
+    FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
 
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
@@ -265,8 +266,8 @@ class DependencyManager:
         freesurfer_version = str(freesurfer.base.Info.looseversion())
         if "FREESURFER_HOME" not in os.environ:
             return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error2 % freesurfer_version, DependenceStatus.MISSING)
-        file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
-        if not os.path.exists(file):
+        license_file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
+        if not os.path.exists(license_file):
             return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error4 % freesurfer_version, DependenceStatus.MISSING)
         try:
             found_version = version.parse(freesurfer_version)
@@ -274,7 +275,7 @@ class DependencyManager:
             found_version = version.parse("0")
         if found_version < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
             return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_wrong_version % (freesurfer_version, DependencyManager.MIN_FSL_VERSION))
-        mrc = os.system("checkMCR.sh")
+        mrc = os.system(DependencyManager.FREESURFER_MATLAB_COMMAND)
         if mrc != 0:
             # TODO: facciamo un parse dell'output del comando per dare all'utente il comando di installazione? o forse è meglio non basarsi sul formato attuale dell'output e linkare direttamente la pagina ufficiale?
             return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_error3 % freesurfer_version, DependenceStatus.MISSING)

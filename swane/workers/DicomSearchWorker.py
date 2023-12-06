@@ -11,7 +11,14 @@ class DicomSearchSignal(QObject):
 
 class DicomSearchWorker(QRunnable):
 
-    def __init__(self, dicom_dir):
+    def __init__(self, dicom_dir: str):
+        """
+        Thread class to scan a dicom folder and return dicom files ordered in patients, exams and series
+        Parameters
+        ----------
+        dicom_dir: str
+            The dicom folder to scan
+        """
         super(DicomSearchWorker, self).__init__()
         if os.path.exists(os.path.abspath(dicom_dir)):
             self.dicom_dir = os.path.abspath(dicom_dir)
@@ -21,7 +28,19 @@ class DicomSearchWorker(QRunnable):
         self.series_positions = {}
 
     @staticmethod
-    def clean_text(string):
+    def clean_text(string: str) -> str:
+        """
+        Remove forbidden characters from a string
+        Parameters
+        ----------
+        string: str
+            The string to clean.
+
+        Returns
+            The cleaned string in lower case.
+        -------
+
+        """
         # clean and standardize text descriptions, which makes searching files easier
         forbidden_symbols = ["*", ".", ",", "\"", "\\", "/", "|", "[", "]", ":", ";", " "]
         for symbol in forbidden_symbols:
@@ -30,20 +49,26 @@ class DicomSearchWorker(QRunnable):
         return string.lower()
 
     def load_dir(self):
-        if self.dicom_dir == "":
+        """
+        Generates the list of file to be scanned.
+        """
+        if self.dicom_dir is None or self.dicom_dir == "" or not os.path.exists(self.dicom_dir):
             return
+        self.unsorted_list = []
         for root, dirs, files in os.walk(self.dicom_dir):
             for file in files:
                 self.unsorted_list.append(os.path.join(root, file))
 
     def get_files_len(self):
+        """
+        The number of file to be scanned
+        """
         try:
             return len(self.unsorted_list)
         except:
             return 0
 
     def run(self):
-
         try:
             if len(self.unsorted_list) == 0:
                 self.load_dir()
@@ -61,8 +86,9 @@ class DicomSearchWorker(QRunnable):
                     continue
                 ds = pydicom.read_file(dicom_loc, force=True)
 
-                patient_id = self.clean_text(ds.get("PatientID", "NA"))
-                if patient_id == "na":
+                # patient_id = self.clean_text(ds.get("PatientID", "NA"))
+                patient_id = ds.get("PatientID", "NA")
+                if patient_id == "NA":
                     continue
 
                 series_number = ds.get("SeriesNumber", "NA")
@@ -113,22 +139,72 @@ class DicomSearchWorker(QRunnable):
     def get_patient_list(self):
         return list(self.dicom_tree.keys())
 
-    def get_exam_list(self, patient):
+    def get_exam_list(self, patient: str) -> list[pydicom.uid.UID]:
+        """
+        Extract from dicom search the exams of specified patient and return their study_id
+        Parameters
+        ----------
+        patient: str
+            The patient id
+        Returns
+        -------
+            A list of study_id
+        """
         if patient not in self.dicom_tree:
             return []
         return list(self.dicom_tree[patient].keys())
 
-    def get_series_list(self, patient, exam):
+    def get_series_list(self, patient: str, exam: pydicom.uid.UID) -> list[pydicom.valuerep.IS]:
+        """
+        Extract from dicom search the series of a specified exam of specified patient and return their series_id
+        Parameters
+        ----------
+        patient: str
+            The patient id
+        exam: pydicom.uid.UID
+            The exam id
+        Returns
+        -------
+            A list of series_id
+        """
         if patient not in self.dicom_tree:
             return []
         if exam not in self.dicom_tree[patient]:
             return []
         return list(self.dicom_tree[patient][exam].keys())
 
-    def get_series_nvol(self, patient, exam, series):
+    def get_series_nvol(self, patient: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> int:
+        """
+        Extract from dicom search the number of volumes of a specified series of a specified exam of specified patient and return their series_id
+        Parameters
+        ----------
+        patient: str
+            The patient id
+        exam: pydicom.uid.UID
+            The exam id
+        series: pydicom.valuerep.IS
+            The series id
+        Returns
+        -------
+            An integer corresponding to the number of volumes of wanted series
+        """
         return self.series_positions[patient][exam][series][1]
 
-    def get_series_files(self, patient, exam, series):
+    def get_series_files(self, patient: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> list[str]:
+        """
+        Extract from dicom search the dicom file path of a specified series of a specified exam of specified patient and return their series_id
+        Parameters
+        ----------
+        patient: str
+            The patient id
+        exam: pydicom.uid.UID
+            The exam id
+        series: pydicom.valuerep.IS
+            The series id
+        Returns
+        -------
+            A list of series_id
+        """
         if patient not in self.dicom_tree:
             return []
         if exam not in self.dicom_tree[patient]:
@@ -136,4 +212,43 @@ class DicomSearchWorker(QRunnable):
         if series not in self.dicom_tree[patient][exam]:
             return []
         return list(self.dicom_tree[patient][exam][series])
+
+    def get_series_info(self, patient: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> (list[str], str, str, str, int):
+        """
+        Extract information from dicom search the dicom file path of a specified series of a specified exam of specified patient
+        Parameters
+        ----------
+        patient: str
+            The patient id
+        exam: pydicom.uid.UID
+            The exam id
+        series: pydicom.valuerep.IS
+            The series id
+        Returns
+        -------
+        image_list: list[str]
+            A list of dicom files
+        patient_name: str
+            The patient name
+        mod: str
+            The exam modality
+        series_description: str
+            The series name
+        vols: int
+            The number of volumes
+
+        """
+        image_list = self.get_series_files(patient, exam, series)
+        ds = pydicom.read_file(image_list[0], force=True)
+
+        # Excludes series with less than 10 images unless they are siemens mosaics series
+        if len(image_list) < 10 and hasattr(ds, 'ImageType') and "MOSAIC" not in ds.ImageType:
+            return None
+
+        mod = ds.Modality
+        vols = self.get_series_nvol(patient, exam, series)
+        patient_name = str(ds.PatientName)
+        series_description = ds.SeriesDescription
+
+        return image_list, patient_name, mod, series_description, vols
     
