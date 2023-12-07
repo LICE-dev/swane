@@ -738,10 +738,6 @@ class PatientTab(QTabWidget):
             pt_list = dicom_src_work.get_patient_list()
             exam_list = dicom_src_work.get_exam_list(pt_list[0])
             series_list = dicom_src_work.get_series_list(pt_list[0], exam_list[0])
-            print(type(pt_list[0]))
-            print(type(exam_list[0]))
-            print(type(series_list[0]))
-
             image_list, patient_name, mod, series_description, vols = dicom_src_work.get_series_info(pt_list[0], exam_list[0], series_list[0])
 
             label = PatientTab.label_from_dicom(image_list, patient_name, mod, series_description, vols)
