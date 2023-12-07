@@ -18,8 +18,9 @@ class TestDicomSearchWorker:
     DICOM_DIRS = {
         # [path, files number, patient, exams, series, vols, series file number]
         'EMPTY_FOLDER': [os.path.join(GENERIC_DICOM_DIR, "empty_folder"), 0, 0, 0, 0, 0, 0],
-        'SINGLE_VOL': [os.path.join(GENERIC_DICOM_DIR, "singlevol"), 3, 1, 1, 1, 1, 3],
-        'MULTI_VOL': [os.path.join(GENERIC_DICOM_DIR, "multivol"), 6, 1, 1, 1, 2, 6],
+        'SINGLE_VOL': [os.path.join(GENERIC_DICOM_DIR, "singlevol"), 11, 1, 1, 1, 1, 11],
+        'TWO_VOL': [os.path.join(GENERIC_DICOM_DIR, "twovol"), 6, 1, 1, 1, 2, 6],
+        'MULTI_VOL': [os.path.join(GENERIC_DICOM_DIR, "multivol"), 12, 1, 1, 1, 4, 12],
         'NONDICOM': [os.path.join(GENERIC_DICOM_DIR, "non_dicom_files"), 2, 0, 0, 0, 0, 0],
         'MULTI_PT': [os.path.join(GENERIC_DICOM_DIR, "multipt"), 4, 2, -1, -1, -1, -1],
         'MULTI_EXAM': [os.path.join(GENERIC_DICOM_DIR, "multiexam"), 2, 1, 2, -1, -1, 1],
@@ -27,7 +28,7 @@ class TestDicomSearchWorker:
 
     def test_dicom_search(self):
         for test in TestDicomSearchWorker.DICOM_DIRS.values():
-            assert os.path.exists(test[0]) == True, "Dicom dir not found %s" % test[0]
+            assert os.path.exists(test[0]) is True, "Dicom dir not found %s" % test[0]
             worker = DicomSearchWorker(test[0])
             worker.run()
             # numer of files to scan
@@ -52,12 +53,3 @@ class TestDicomSearchWorker:
                         series_files = len(worker.get_series_files(patient_list[0], exam_list[0], series_list[0]))
                         if test[6] != -1:
                             assert series_files == test[6], "Error with series number of files for %s" % test[0]
-
-
-
-
-
-
-
-
-

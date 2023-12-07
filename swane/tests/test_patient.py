@@ -1,10 +1,14 @@
 import os
 import shutil
 import pytest
+import fnmatch
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.Patient import Patient, PatientRet
 from swane.tests import TEST_DIR
+from swane.tests.test_3_dicom_search import TestDicomSearchWorker
+from swane.workers.DicomSearchWorker import DicomSearchWorker
+from swane.utils.DataInputList import DataInputList
 
 
 @pytest.fixture(autouse=True)
@@ -33,7 +37,7 @@ class TestPatient:
     TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "patient", "subjects")
     TEST_PATIENT_NAME = "pt_01"
 
-    def test_patient(self, global_config, dependency_manager):
+    def test_patient(self, global_config, dependency_manager, qtbot):
         assert global_config.get_main_working_directory() == TestPatient.TEST_MAIN_WORKING_DIRECTORY, "Bad global config fixture"
 
         # Testing creation of new patient
@@ -62,7 +66,54 @@ class TestPatient:
         assert test_patient.check_patient_folder(path_without_subtree) == PatientRet.ValidFolder, "Error fixing patient subtree"
 
         # Load patient and import
+        assert test_patient.load(test_patient_folder) == PatientRet.ValidFolder, "Error loading empty patient"
+        series_path = os.path.join(TestDicomSearchWorker.DICOM_DIRS['SINGLE_VOL'][0])
+        worker = DicomSearchWorker(series_path)
+        worker.run()
+        patient_list = worker.get_patient_list()
+        exam_list = worker.get_exam_list(patient_list[0])
+        series_list = worker.get_series_list(patient_list[0], exam_list[0])
+        image_list, patient_name, mod, series_description, vols = worker.get_series_info(patient_list[0], exam_list[0],
+                                                                                         series_list[0])
+        import_ret = test_patient.dicom_import_to_folder(data_input=DataInputList.T13D, copy_list=image_list, vols=vols,
+                                                         mod=mod, force_modality=False)
+        assert import_ret == PatientRet.DataImportCompleted, "Importing valid series error"
 
+        dicom_copy_path = test_patient.dicom_folder(DataInputList.T13D)
+        copied_files = len([entry for entry in os.listdir(dicom_copy_path) if os.path.isfile(os.path.join(dicom_copy_path, entry))])
+        assert copied_files == len(image_list), "Copied files number different from image list length"
 
+        import_ret = test_patient.dicom_import_to_folder(data_input=DataInputList['FMRI_0'], copy_list=image_list, vols=vols,
+                                                         mod=mod, force_modality=False)
+        assert import_ret == PatientRet.DataImportErrorVolumesMin, "Min volumes check error"
 
+        import_ret = test_patient.dicom_import_to_folder(data_input=DataInputList.FLAIR3D, copy_list=image_list,
+                                                         vols=vols, mod="pt", force_modality=False)
+        assert import_ret == PatientRet.DataImportErrorModality, "Incorrect modality check error"
 
+        import_ret = test_patient.dicom_import_to_folder(data_input=DataInputList.FLAIR3D, copy_list=image_list,
+                                                         vols=vols, mod="pt", force_modality=True)
+        assert import_ret == PatientRet.DataImportCompleted, "Incorrect modality force error"
+        series_path = os.path.join(TestDicomSearchWorker.DICOM_DIRS['MULTI_VOL'][0])
+        worker = DicomSearchWorker(series_path)
+        worker.run()
+        patient_list = worker.get_patient_list()
+        exam_list = worker.get_exam_list(patient_list[0])
+        series_list = worker.get_series_list(patient_list[0], exam_list[0])
+        image_list, patient_name, mod, series_description, vols = worker.get_series_info(patient_list[0], exam_list[0],
+                                                                                         series_list[0])
+        import_ret = test_patient.dicom_import_to_folder(data_input=DataInputList.FLAIR3D, copy_list=image_list, vols=vols,
+                                                         mod=mod, force_modality=False)
+        assert import_ret == PatientRet.DataImportErrorVolumesMax, "Max volumes check error error"
+
+        # clear folder
+        clear_ret = test_patient.clear_import_folder(DataInputList.T13D)
+        assert clear_ret is True, "Clear folder error"
+        dicom_copy_path = test_patient.dicom_folder(DataInputList.T13D)
+        count = len([entry for entry in os.listdir(dicom_copy_path) if os.path.isfile(os.path.join(dicom_copy_path, entry))])
+        assert count == 0, "Folder not empty after clear error"
+
+        # with qtbot.waitCallback() as call_back:
+        #     test_patient.dicom_import_to_folder(data_input=DataInputList.T13D, copy_list=image_list, vols=vols, mod=mod,
+        #                                         force_modality=False, progress_callback=call_back)
+        # call_back.assert_called_with(PatientRet.DataImportCompleted)

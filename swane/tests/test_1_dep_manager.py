@@ -64,7 +64,7 @@ class TestDependencyManager:
         assert DependencyManager.check_freesurfer().state == DependenceStatus.WARNING, "freesurfer matlab absent error"
         monkeypatch.undo()
 
-        #check graphviz presence
+        # check graphviz presence
         assert DependencyManager.check_graphviz().state == DependenceStatus.DETECTED, "graphviz presence error"
 
     def test_slicer_dep(self, monkeypatch, qtbot):
@@ -72,10 +72,10 @@ class TestDependencyManager:
 
         # test need_slicer_check function
         assert global_config.get_slicer_path() == "", "Error initializing slicer path"
-        assert DependencyManager.need_slicer_check(global_config) == True, "need slicer check on empty string error"
+        assert DependencyManager.need_slicer_check(global_config) is True, "need slicer check on empty string error"
         global_config.set_slicer_path("nonexistingpath")
-        assert DependencyManager.need_slicer_check(global_config) == True, "need slicer check on non existing path error"
-        assert DependencyManager.need_slicer_check(None) == False, "need slicer check on invalid config error"
+        assert DependencyManager.need_slicer_check(global_config) is True, "need slicer check on non existing path error"
+        assert DependencyManager.need_slicer_check(None) is False, "need slicer check on invalid config error"
 
         # test check_slicer function
         slicer_check_worker = SlicerCheckWorker("")
@@ -85,10 +85,10 @@ class TestDependencyManager:
 
         # slicer absence
         real_slicer = blocker.args[0]
-        assert os.access(real_slicer, os.W_OK) == True, "Slicer non writeable"
+        assert os.access(real_slicer, os.W_OK) is True, "Slicer non writeable"
         slicer_dir = os.path.dirname(real_slicer)
         slicer_python = os.path.join(slicer_dir, "bin", "PythonSlicer")
-        assert os.path.exists(slicer_python) == True, "PythonSlicer not found"
+        assert os.path.exists(slicer_python) is True, "PythonSlicer not found"
         slicer_python_bk = slicer_python+"_bk"
         shutil.move(slicer_python, slicer_python_bk)
         slicer_check_worker = SlicerCheckWorker("")
@@ -108,7 +108,7 @@ class TestDependencyManager:
             unfound = slicer_dir_copy
 
         unfound_slicer = os.path.join(unfound, "Slicer")
-        assert os.path.exists(unfound_slicer) == True, "Error on duplicating Slicer"
+        assert os.path.exists(unfound_slicer) is True, "Error on duplicating Slicer"
         slicer_check_worker = SlicerCheckWorker(unfound_slicer)
         with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
             QThreadPool.globalInstance().start(slicer_check_worker)
@@ -137,8 +137,4 @@ class TestDependencyManager:
         with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
             QThreadPool.globalInstance().start(slicer_check_worker)
         assert blocker.args[3] == DependenceStatus.WARNING, "Slicer outdated version error"
-
-
-
-
-
+        monkeypatch.undo()
