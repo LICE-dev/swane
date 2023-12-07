@@ -37,7 +37,7 @@ class PatientRet(Enum):
     DataImportErrorModality = auto()
     DataImportErrorCopy = auto()
     DataImportCompleted = auto()
-    GenWfMissingFSL = auto()
+    GenWfMissingRequisites = auto()
     GenWfError = auto()
     GenWfCompleted = auto()
     ExecWfResume = auto()
@@ -99,7 +99,7 @@ class Patient:
 
         """
 
-        src_path = os.path.join(self.dicom_folder(), str(data_input))
+        src_path = self.dicom_folder(data_input)
         dicom_src_work = DicomSearchWorker(src_path)
         dicom_src_work.load_dir()
 
@@ -113,7 +113,7 @@ class Patient:
                     status_callback(data_input, PatientRet.DataInputLoading)
 
     def check_input_folder(self, data_input: DataInputList, status_callback: callable = None,
-                                 progress_callback: callable = None):
+                           progress_callback: callable = None):
         """
         Checks if the series folder labelled data_input contains DICOM files.
         If PersistentProgressDialog is not None, it will be used to show the scan progress.
@@ -208,7 +208,7 @@ class Patient:
         self.input_state_list[data_input].volumes = dicom_src_work.get_series_nvol(patient_list[0], exam_list[0],series_list[0])
         status_callback(data_input, PatientRet.DataInputValid, dicom_src_work)
 
-    def dicom_import_to_folder(self, data_input: DataInputList, copy_list: list, vols: int, mod: str, force_modality: bool, progress_callback: callable) -> PatientRet:
+    def dicom_import_to_folder(self, data_input: DataInputList, copy_list: list, vols: int, mod: str, force_modality: bool, progress_callback: callable = None) -> PatientRet:
         """
         Copies the files inside the selected folder in the input list into the folder specified by data_input var.
 
@@ -240,7 +240,8 @@ class Patient:
                     continue
 
                 shutil.copy(thisFile, dest_path)
-                progress_callback(1)
+                if progress_callback is not None:
+                    progress_callback(1)
 
             return PatientRet.DataImportCompleted
         except:
@@ -250,8 +251,11 @@ class Patient:
         self.config = ConfigManager(self.folder)
         self.config.check_dependencies(dependency_manager)
 
-    def dicom_folder(self):
-        return os.path.join(self.folder, self.global_config.get_default_dicom_folder())
+    def dicom_folder(self, data_input: DataInputList = None) -> str:
+        if data_input is None:
+            return os.path.join(self.folder, self.global_config.get_default_dicom_folder())
+        else:
+            return os.path.join(self.folder, self.global_config.get_default_dicom_folder(), str(data_input))
 
     def check_patient_folder(self, patient_folder: str):
         if not os.path.exists(patient_folder):
@@ -268,7 +272,7 @@ class Patient:
 
         return PatientRet.ValidFolder
 
-    def clear_import_folder(self, data_input: DataInputList):
+    def clear_import_folder(self, data_input: DataInputList) -> bool:
         """
         Clears the patient series folder.
 
@@ -279,11 +283,11 @@ class Patient:
 
         Returns
         -------
-        None.
+        False is exception raised, True otherwise.
 
         """
         try:
-            src_path = os.path.join(self.dicom_folder(), str(data_input))
+            src_path = self.dicom_folder(data_input)
 
             shutil.rmtree(src_path, ignore_errors=True)
             os.makedirs(src_path, exist_ok=True)
@@ -413,8 +417,8 @@ class Patient:
 
         """
 
-        if not self.dependency_manager.is_fsl():
-            return PatientRet.GenWfMissingFSL
+        if not self.can_generate_workflow():
+            return PatientRet.GenWfMissingRequisites
 
         # Main Workflow generation
         if self.workflow is None:
@@ -441,7 +445,7 @@ class Patient:
                 if self.dependency_manager.is_graphviz():
                     thread = Thread(target=self.workflow.get_node(node).write_graph,
                                     kwargs={'graph2use': self.GRAPH_TYPE, 'format': Patient.GRAPH_FILE_EXT,
-                                            'dotfilename': self.graph_file(node_list[node].long_name, Patient.GRAPH_FILE_EXT),
+                                            'dotfilename': os.path.join(self.graph_file(node_list[node].long_name, Patient.GRAPH_FILE_EXT)),
                                             })
                     thread.start()
 
@@ -560,6 +564,3 @@ class Patient:
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)
         QThreadPool.globalInstance().start(slicer_thread)
-
-
-

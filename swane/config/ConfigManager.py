@@ -13,10 +13,10 @@ class ConfigManager(configparser.ConfigParser):
     def __setitem__(self, key, value):
         super().__setitem__(str(key), value)
 
-    def getboolean(self, section, option, **kwargs):
+    def getboolean(self, section, option, **kwargs) -> bool:
         return super().getboolean(str(section), option, **kwargs)
 
-    def getint(self, section, option, **kwargs):
+    def getint(self, section, option, **kwargs) -> int:
         return super().getint(str(section), option, **kwargs)
 
     def __init__(self, patient_folder: str = None, global_base_folder: str = None):
@@ -77,7 +77,7 @@ class ConfigManager(configparser.ConfigParser):
     def reload(self):
         self.read(self.config_file)
 
-    def load_default_workflow_settings(self, save):
+    def load_default_workflow_settings(self, save: bool):
         if self.global_config:
             for category in GlobalPrefCategoryList:
                 if not save:
@@ -109,7 +109,7 @@ class ConfigManager(configparser.ConfigParser):
         if save:
             self.save()
 
-    def set_workflow_option(self, workflow_type):
+    def set_workflow_option(self, workflow_type: int | str):
         if self.global_config:
             return
         workflow_type = str(workflow_type)
@@ -122,7 +122,7 @@ class ConfigManager(configparser.ConfigParser):
         with open(self.config_file, "w") as openedFile:
             self.write(openedFile)
 
-    def get_main_working_directory(self):
+    def get_main_working_directory(self) -> str:
         try:
             if self.global_config and os.path.exists(self[GlobalPrefCategoryList.MAIN]["main_working_directory"]):
                 return self[GlobalPrefCategoryList.MAIN]["main_working_directory"]
@@ -130,12 +130,12 @@ class ConfigManager(configparser.ConfigParser):
             pass
         return ''
 
-    def set_main_working_directory(self, path):
+    def set_main_working_directory(self, path: str):
         if self.global_config:
             self[GlobalPrefCategoryList.MAIN]["main_working_directory"] = path
             self.save()
 
-    def get_max_patient_tabs(self):
+    def get_max_patient_tabs(self) -> int:
         if not self.global_config:
             return 1
         try:
@@ -143,34 +143,34 @@ class ConfigManager(configparser.ConfigParser):
         except:
             return 1
 
-    def get_patients_prefix(self):
+    def get_patients_prefix(self) -> str:
         if self.global_config:
             return self[GlobalPrefCategoryList.MAIN]['patients_prefix']
         return ''
 
-    def get_default_dicom_folder(self):
+    def get_default_dicom_folder(self) -> str:
         if self.global_config:
             return self[GlobalPrefCategoryList.MAIN]['default_dicom_folder']
         return ''
 
-    def get_slicer_path(self):
+    def get_slicer_path(self) -> str:
         if self.global_config:
             return self[GlobalPrefCategoryList.MAIN]['slicer_path']
         return ''
 
-    def set_slicer_path(self, path):
+    def set_slicer_path(self, path: str):
         if self.global_config:
             self[GlobalPrefCategoryList.MAIN]['slicer_path'] = path
 
-    def get_slicer_version(self):
+    def get_slicer_version(self) -> str:
         if self.global_config:
             return self[GlobalPrefCategoryList.MAIN]['slicer_version']
 
-    def set_slicer_version(self, slicer_version):
+    def set_slicer_version(self, slicer_version: str):
         if self.global_config:
             self[GlobalPrefCategoryList.MAIN]['slicer_version'] = slicer_version
 
-    def is_optional_series_enabled(self, series_name):
+    def is_optional_series_enabled(self, series_name: str):
         if self.global_config:
             try:
                 return self.getboolean(GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name))
@@ -178,12 +178,12 @@ class ConfigManager(configparser.ConfigParser):
                 return False
         return False
 
-    def get_slicer_scene_ext(self):
+    def get_slicer_scene_ext(self) -> str:
         if self.global_config:
             return self[GlobalPrefCategoryList.MAIN]['slicer_scene_ext']
         return ''
 
-    def get_patient_workflow_type(self):
+    def get_patient_workflow_type(self) -> str:
         if not self.global_config:
             try:
                 return self[DataInputList.T13D].getint('wf_type')
@@ -191,7 +191,7 @@ class ConfigManager(configparser.ConfigParser):
                 return 0
         return 0
 
-    def get_patient_workflow_freesurfer(self):
+    def get_patient_workflow_freesurfer(self) -> bool:
         if not self.global_config:
             try:
                 return self.getboolean(DataInputList.T13D, 'freesurfer')
@@ -199,13 +199,13 @@ class ConfigManager(configparser.ConfigParser):
                 return False
         return False
 
-    def get_workflow_hippo_pref(self):
+    def get_workflow_hippo_pref(self) -> bool:
         try:
             return self.getboolean(DataInputList.T13D, 'hippo_amyg_labels')
         except:
             return False
 
-    def get_workflow_freesurfer_pref(self):
+    def get_workflow_freesurfer_pref(self) -> bool:
         try:
             return self.getboolean(DataInputList.T13D, 'freesurfer')
         except:
@@ -223,7 +223,7 @@ class ConfigManager(configparser.ConfigParser):
         if changed:
             self.save()
 
-    def get_last_pid(self):
+    def get_last_pid(self) -> int:
         try:
             return self.getint(GlobalPrefCategoryList.MAIN, 'last_pid')
         except:

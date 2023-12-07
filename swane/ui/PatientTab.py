@@ -111,7 +111,7 @@ class PatientTab(QTabWidget):
 
             self.setTabEnabled(PatientTab.DATATAB, True)
 
-            self.exec_button_setEnabled(False)
+            self.exec_button_set_enabled(False)
 
             if errors:
                 self.node_button.setEnabled(True)
@@ -134,7 +134,6 @@ class PatientTab(QTabWidget):
             msg_box = QMessageBox()
             msg_box.setText(strings.pttab_wf_invalid_signal)
             msg_box.exec()
-
 
         # TODO - To be implemented for RAM usage info by each workflow
         # if msg == WorkflowProcess.WORKFLOW_INSUFFICIENT_RESOURCES:
@@ -407,7 +406,7 @@ class PatientTab(QTabWidget):
         self.exec_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.exec_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         self.exec_button.clicked.connect(self.toggle_workflow_execution)
-        self.exec_button_setEnabled(False)
+        self.exec_button_set_enabled(False)
 
         layout.addWidget(self.exec_button, 1, 1)
         self.exec_graph = QSvgWidget()
@@ -466,7 +465,7 @@ class PatientTab(QTabWidget):
         
         generate_workflow_return = self.patient.generate_workflow()
         
-        if generate_workflow_return == PatientRet.GenWfMissingFSL:
+        if generate_workflow_return == PatientRet.GenWfMissingRequisites:
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.pttab_missing_fsl_error)
             return
@@ -486,7 +485,7 @@ class PatientTab(QTabWidget):
                     self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(self.node_list[node].node_holder, self.node_list_treeWidget, self.node_list[node].node_list[sub_node].long_name)
         
         # UI updating
-        self.exec_button_setEnabled(True)
+        self.exec_button_set_enabled(True)
         self.node_button.setEnabled(False)
 
     def tree_item_clicked(self, item, col: int):
@@ -815,7 +814,7 @@ class PatientTab(QTabWidget):
 
         """
 
-        src_path = os.path.join(self.patient.dicom_folder(), str(data_input))
+        src_path = self.patient.dicom_folder(data_input)
 
         progress = PersistentProgressDialog(strings.pttab_dicom_clearing + src_path, 0, 0, self)
         progress.show()
@@ -860,7 +859,7 @@ class PatientTab(QTabWidget):
             if self.patient.input_state_list[DataInputList.VENOUS2].loaded:
                 self.set_warn(DataInputList.VENOUS2, "Too many venous phases loaded, delete some!", False)
 
-    def exec_button_setEnabled(self, enabled):
+    def exec_button_set_enabled(self, enabled):
         if enabled:
             self.exec_button.setEnabled(True)
             self.exec_button.setToolTip("")
@@ -890,7 +889,7 @@ class PatientTab(QTabWidget):
         if self.patient.reset_workflow(force):
             self.node_list_treeWidget.clear()
             self.exec_graph.load(self.main_window.VOID_SVG_FILE)
-            self.exec_button_setEnabled(False)
+            self.exec_button_set_enabled(False)
             self.node_button.setEnabled(True)
             self.wf_type_combo.setEnabled(True)
             self.patient_config_button.setEnabled(True)
@@ -899,7 +898,7 @@ class PatientTab(QTabWidget):
         self.enable_tab_if_result_dir()
 
     @staticmethod
-    def label_from_dicom(image_list: list[str], patient_name: str, mod: str, series_description: str, vols: int) -> str|None:
+    def label_from_dicom(image_list: list[str], patient_name: str, mod: str, series_description: str, vols: int) -> str | None:
         if image_list is None:
             return None
         try:
@@ -1045,7 +1044,7 @@ class PatientTab(QTabWidget):
             text=""
         )
 
-    def set_ok(self, data_input: DataInputList, text: str|None):
+    def set_ok(self, data_input: DataInputList, text: str | None):
         """
         Set a success message and icon near a series label.
 
