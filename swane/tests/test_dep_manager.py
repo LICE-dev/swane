@@ -1,4 +1,5 @@
 import os
+from swane import strings
 from PySide6.QtCore import QThreadPool
 from swane.config.ConfigManager import ConfigManager
 import shutil
@@ -7,6 +8,7 @@ import pytest
 from swane.tests import TEST_DIR
 from nipype.interfaces import fsl, dcm2nii, freesurfer
 from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+import distutils.dir_util
 
 
 @pytest.fixture(autouse=True)
@@ -30,18 +32,15 @@ class TestDependencyManager:
         # check FSL presence and absence
         assert shutil.which("bet") is not None, "fsl not installed"
         assert DependencyManager.check_fsl().state == DependenceStatus.DETECTED, "fsl present error"
-        print(fsl.Info.version())
         fsl_dir_bk = os.environ["FSLDIR"]
         fsl_version_file_bk = fsl.Info.version_file
         os.environ["FSLDIR"] = ""
         fsl.Info.version_file = None
         fsl.Info._version = None
         assert DependencyManager.check_fsl().state == DependenceStatus.MISSING, "fsl absent error"
-        print(fsl.Info.version())
         os.environ["FSLDIR"] = fsl_dir_bk
         fsl.Info.version_file = fsl_version_file_bk
         fsl.Info._version = None
-        print(fsl.Info.version())
         # check FSL outdated version
         monkeypatch.setattr(DependencyManager, "MIN_FSL_VERSION", "1000")
         assert DependencyManager.check_fsl().state == DependenceStatus.WARNING, "fsl outdated error"
@@ -69,7 +68,7 @@ class TestDependencyManager:
         assert DependencyManager.check_graphviz().state == DependenceStatus.DETECTED, "graphviz presence error"
 
     def test_slicer_dep(self, monkeypatch, qtbot):
-        global_config = ConfigManager(global_base_folder=TEST_DIR)
+        global_config = ConfigManager(global_base_folder=os.path.join(TEST_DIR, "dep"))
 
         # test need_slicer_check function
         assert global_config.get_slicer_path() == "", "Error initializing slicer path"
@@ -80,6 +79,59 @@ class TestDependencyManager:
 
         # test check_slicer function
         slicer_check_worker = SlicerCheckWorker("")
-        with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=20000) as blocker:
+        with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
             QThreadPool.globalInstance().start(slicer_check_worker)
         assert blocker.args[3] == DependenceStatus.DETECTED, "slicer presence error"
+
+        # slicer absence
+        real_slicer = blocker.args[0]
+        assert os.access(real_slicer, os.W_OK) == True, "Slicer non writeable"
+        slicer_dir = os.path.dirname(real_slicer)
+        slicer_python = os.path.join(slicer_dir, "bin", "PythonSlicer")
+        assert os.path.exists(slicer_python) == True, "PythonSlicer not found"
+        # slicer_python_bk = slicer_python+"_bk"
+        # shutil.move(slicer_python, slicer_python_bk)
+        # slicer_check_worker = SlicerCheckWorker("")
+        # with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
+        #     QThreadPool.globalInstance().start(slicer_check_worker)
+        # shutil.move(slicer_python_bk, slicer_python)
+        # assert blocker.args[3] == DependenceStatus.MISSING, "slicer absence error"
+
+        # double_slicer
+        slicer_dir_copy = os.path.join(TEST_DIR, "dep")
+        # use cp to force all files are copied before going on
+        os.system("cp -r %s %s" % (slicer_dir, slicer_dir_copy))
+        # found_list, _ = SlicerCheckWorker.find_slicer_python("")
+        # if slicer_dir_copy in found_list[0]:
+        #     unfound = slicer_dir
+        # else:
+        #     unfound = slicer_dir_copy
+        #
+        # unfound_slicer = os.path.join(unfound, "Slicer")
+        # assert os.path.exists(unfound_slicer) == True, "Error on duplicating Slicer"
+        # slicer_check_worker = SlicerCheckWorker(unfound_slicer)
+        # with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
+        #     QThreadPool.globalInstance().start(slicer_check_worker)
+        # assert unfound in blocker.args[0], "Error in specifing custom Slicer executable"
+
+        # uninstall and reinstall module from copied slicer
+        found_list, rel_path = SlicerCheckWorker.find_slicer_python(slicer_dir_copy)
+        cmd = os.path.abspath(os.path.join(
+            os.path.dirname(found_list[0]), rel_path))
+        os.system(cmd + " --no-main-window --python-code 'manager = slicer.app.extensionsManagerModel();manager.scheduleExtensionForUninstall(\"SlicerFreeSurfer\");import sys;sys.exit(0)'")
+        slicer_check_worker = SlicerCheckWorker(cmd)
+        with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
+            QThreadPool.globalInstance().start(slicer_check_worker)
+        assert blocker.args[3] == DependenceStatus.MISSING and blocker.args[2] == strings.check_dep_slicer_error2, "Missing SlicerFreeSurfer error"
+        install_script = os.path.join(os.path.dirname(__file__), "..", "workers", "slicer_script_freesurfer_module_install.py")
+        os.system(
+            cmd + " --no-main-window --python-script " + install_script)
+        slicer_check_worker = SlicerCheckWorker(cmd)
+        with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
+            QThreadPool.globalInstance().start(slicer_check_worker)
+        assert blocker.args[3] == DependenceStatus.DETECTED, "Reinstall SlicerFreeSurfer error"
+
+
+
+
+
