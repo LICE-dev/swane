@@ -2,9 +2,10 @@
 # Warning: slicer library is not required beacuse the script is executed in Slicer environment
 import sys
 
-manager = slicer.app.extensionsManagerModel()
-manager.downloadAndInstallExtensionByName("SlicerFreeSurfer")
-while len(manager.activeTasks) > 0:
-    print(manager.activeTasks)
-
+extensionName = 'SlicerFreeSurfer'
+em = slicer.app.extensionsManagerModel()
+em.interactive = False  # prevent display of popups
+restart = False
+if not em.installExtensionFromServer(extensionName, restart):
+  raise ValueError(f"Failed to install {extensionName} extension")
 sys.exit(0)

@@ -89,30 +89,30 @@ class TestDependencyManager:
         slicer_dir = os.path.dirname(real_slicer)
         slicer_python = os.path.join(slicer_dir, "bin", "PythonSlicer")
         assert os.path.exists(slicer_python) == True, "PythonSlicer not found"
-        # slicer_python_bk = slicer_python+"_bk"
-        # shutil.move(slicer_python, slicer_python_bk)
-        # slicer_check_worker = SlicerCheckWorker("")
-        # with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
-        #     QThreadPool.globalInstance().start(slicer_check_worker)
-        # shutil.move(slicer_python_bk, slicer_python)
-        # assert blocker.args[3] == DependenceStatus.MISSING, "slicer absence error"
+        slicer_python_bk = slicer_python+"_bk"
+        shutil.move(slicer_python, slicer_python_bk)
+        slicer_check_worker = SlicerCheckWorker("")
+        with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
+            QThreadPool.globalInstance().start(slicer_check_worker)
+        shutil.move(slicer_python_bk, slicer_python)
+        assert blocker.args[3] == DependenceStatus.MISSING, "slicer absence error"
 
         # double_slicer
         slicer_dir_copy = os.path.join(TEST_DIR, "dep")
         # use cp to force all files are copied before going on
         os.system("cp -r %s %s" % (slicer_dir, slicer_dir_copy))
-        # found_list, _ = SlicerCheckWorker.find_slicer_python("")
-        # if slicer_dir_copy in found_list[0]:
-        #     unfound = slicer_dir
-        # else:
-        #     unfound = slicer_dir_copy
-        #
-        # unfound_slicer = os.path.join(unfound, "Slicer")
-        # assert os.path.exists(unfound_slicer) == True, "Error on duplicating Slicer"
-        # slicer_check_worker = SlicerCheckWorker(unfound_slicer)
-        # with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
-        #     QThreadPool.globalInstance().start(slicer_check_worker)
-        # assert unfound in blocker.args[0], "Error in specifing custom Slicer executable"
+        found_list, _ = SlicerCheckWorker.find_slicer_python("")
+        if slicer_dir_copy in found_list[0]:
+            unfound = slicer_dir
+        else:
+            unfound = slicer_dir_copy
+
+        unfound_slicer = os.path.join(unfound, "Slicer")
+        assert os.path.exists(unfound_slicer) == True, "Error on duplicating Slicer"
+        slicer_check_worker = SlicerCheckWorker(unfound_slicer)
+        with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
+            QThreadPool.globalInstance().start(slicer_check_worker)
+        assert unfound in blocker.args[0], "Error in specifing custom Slicer executable"
 
         # uninstall and reinstall module from copied slicer
         found_list, rel_path = SlicerCheckWorker.find_slicer_python(slicer_dir_copy)
@@ -130,6 +130,13 @@ class TestDependencyManager:
         with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
             QThreadPool.globalInstance().start(slicer_check_worker)
         assert blocker.args[3] == DependenceStatus.DETECTED, "Reinstall SlicerFreeSurfer error"
+
+        # test for outdated slicer version
+        monkeypatch.setattr(DependencyManager, "MIN_SLICER_VERSION", "1000")
+        slicer_check_worker = SlicerCheckWorker(cmd)
+        with qtbot.waitSignal(slicer_check_worker.signal.slicer, timeout=2000000) as blocker:
+            QThreadPool.globalInstance().start(slicer_check_worker)
+        assert blocker.args[3] == DependenceStatus.WARNING, "Slicer outdated version error"
 
 
 
