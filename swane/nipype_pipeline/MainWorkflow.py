@@ -3,7 +3,7 @@ from multiprocessing import cpu_count
 from os.path import abspath
 
 import swane_supplement
-
+from swane.config.preference_list import GLOBAL_PREFERENCES
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.PatientInputStateList import PatientInputStateList
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
@@ -23,12 +23,19 @@ from swane.config.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
 from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
 
+
 DEBUG = False
 
 
 # TODO implementazione error manager
 class MainWorkflow(CustomWorkflow):
     SCENE_DIR = 'scene'
+
+    def __init__(self, name: str, base_dir: str = None):
+        super().__init__(name, base_dir)
+        self.is_resource_monitor = False
+        GLOBAL_PREFERENCES[GlobalPrefCategoryList.PERFORMANCE]
+
 
     def add_input_folders(self, global_config: ConfigManager, pt_config: ConfigManager, dependency_manager: DependencyManager, patient_input_state_list: PatientInputStateList):
         """
@@ -151,7 +158,6 @@ class MainWorkflow(CustomWorkflow):
             self.add_nodes([flair])
 
             flair_inputnode = flair.get_node("inputnode")
-            flair_inputnode.inputs.frac = 0.5
             flair_inputnode.inputs.crop = True
             flair_inputnode.inputs.output_name = "r-flair_brain.nii.gz"
             self.connect(t1, "outputnode.ref_brain", flair, "inputnode.reference")
@@ -195,7 +201,6 @@ class MainWorkflow(CustomWorkflow):
                 self.add_nodes([flair2d])
 
                 flair2d_tra_inputnode = flair2d.get_node("inputnode")
-                flair2d_tra_inputnode.inputs.frac = 0.5
                 flair2d_tra_inputnode.inputs.crop = False
                 flair2d_tra_inputnode.inputs.output_name = "r-flair2d_%s_brain.nii.gz" % plane
                 self.connect(t1, "outputnode.ref_brain", flair2d, "inputnode.reference")
@@ -210,7 +215,6 @@ class MainWorkflow(CustomWorkflow):
             self.add_nodes([mdc])
 
             mdc_inputnode = mdc.get_node("inputnode")
-            mdc_inputnode.inputs.frac = 0.3
             mdc_inputnode.inputs.crop = True
             mdc_inputnode.inputs.output_name = "r-mdc_brain.nii.gz"
             self.connect(t1, "outputnode.ref_brain", mdc, "inputnode.reference")

@@ -14,7 +14,7 @@ setup(name='swane',
       description='Standardized Workflow for Advanced Neuroimaging in Epilepsy',
       author='LICE - Commissione Neuroimmagini',
       author_email='dev@lice.it',
-      packages=find_packages(),
+      packages=find_packages(exclude="tests"),
       classifiers=[
           "Programming Language :: Python :: 3",
           "License :: OSI Approved :: MIT License",
@@ -37,15 +37,6 @@ setup(name='swane',
           "GPUtil==1.4.0",
           "numpy"
       ],
-      extras_require={
-          'dev': [
-              'pytest',
-              'pytest-pep8',
-              'pytest-cov',
-              'unittest',
-              'pytest-qt',
-          ]
-      },
       python_requires=">=3.7",
       entry_points={
           'gui_scripts': [

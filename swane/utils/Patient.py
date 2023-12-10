@@ -54,14 +54,14 @@ class Patient:
     GRAPH_TYPE = "colored"
 
     def __init__(self, global_config: ConfigManager, dependency_manager: DependencyManager):
-        self.global_config = global_config
-        self.folder = None
-        self.name = None        
-        self.input_state_list = None
-        self.config = None
-        self.dependency_manager = dependency_manager
-        self.workflow = None
-        self.workflow_process = None
+        self.global_config: ConfigManager = global_config
+        self.folder: str | None = None
+        self.name: str | None = None
+        self.input_state_list: PatientInputStateList | None = None
+        self.config: ConfigManager | None = None
+        self.dependency_manager: DependencyManager = dependency_manager
+        self.workflow: MainWorkflow | None = None
+        self.workflow_process: WorkflowProcess | None = None
 
     def load(self, patient_folder: str) -> PatientRet:
         # Load patient information from a folder, generate patient configuration and
@@ -257,6 +257,15 @@ class Patient:
         else:
             return os.path.join(self.folder, self.global_config.get_default_dicom_folder(), str(data_input))
 
+    def dicom_folder_count(self, data_input: DataInputList) -> int:
+        try:
+            dicom_path = self.dicom_folder(data_input)
+            count = len(
+                [entry for entry in os.listdir(dicom_path) if os.path.isfile(os.path.join(dicom_path, entry))])
+            return count
+        except:
+            return 0
+
     def check_patient_folder(self, patient_folder: str):
         if not os.path.exists(patient_folder):
             return PatientRet.FolderNotFound
@@ -406,7 +415,7 @@ class Patient:
     def scene_path(self):
         return os.path.join(self.result_dir(), "scene." + SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
 
-    def generate_workflow(self):
+    def generate_workflow(self) -> PatientRet:
         """
         Generates and populates the Main Workflow.
         Generates the graphviz analysis graphs on a new thread.

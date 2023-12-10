@@ -3,8 +3,14 @@ from swane.config.ConfigManager import ConfigManager
 from swane.utils.DataInputList import DataInputList
 
 
-class PatientInputStateList(dict):
+class PatientInputState:
 
+    def __init__(self):
+        self.loaded = False
+        self.volumes = 0
+
+
+class PatientInputStateList(dict[DataInputList, PatientInputState]):
     def __init__(self, dicom_dir: str, global_config: ConfigManager):
         super().__init__()
         self.dicom_dir = dicom_dir
@@ -20,8 +26,4 @@ class PatientInputStateList(dict):
         return os.path.join(self.dicom_dir, str(data_input))
 
 
-class PatientInputState:
 
-    def __init__(self):
-        self.loaded = False
-        self.volumes = 0

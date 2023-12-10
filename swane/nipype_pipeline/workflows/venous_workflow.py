@@ -1,7 +1,8 @@
 from nipype.interfaces.fsl import (BET, FLIRT, Split, ApplyMask, ImageStats, ImageMaths, ApplyXFM)
 from nipype.interfaces.utility import Merge
 from nipype.pipeline.engine import Node
-
+from swane.config.preference_list import WF_PREFERENCES
+from swane.utils.DataInputList import DataInputList
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -111,7 +112,7 @@ def venous_workflow(name: str, venous_dir: str, config: SectionProxy, venous2_di
     try:
         bet.inputs.frac = config.getfloat('bet_thr')
     except:
-        bet.inputs.frac = 0.4
+        bet.inputs.frac = WF_PREFERENCES[DataInputList.VENOUS]['bet_thr'].default
     workflow.connect(veins_check, "out_file_anat", bet, "in_file")
 
     # NODE 6: Linear registration of anatomic phase to reference space

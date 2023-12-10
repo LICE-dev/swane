@@ -1,0 +1,401 @@
+import os
+import shutil
+import pytest
+from swane.config.ConfigManager import ConfigManager
+from swane.utils.DependencyManager import DependencyManager
+from swane.utils.Patient import Patient, PatientRet
+from swane.tests import TEST_DIR
+from swane.workers.DicomSearchWorker import DicomSearchWorker
+from swane.utils.DataInputList import DataInputList
+from unittest.mock import ANY
+from swane.config.preference_list import WF_PREFERENCES
+
+
+@pytest.fixture(autouse=True)
+def change_test_dir(request):
+    test_dir = os.path.join(TEST_DIR, "workflow")
+    test_main_working_directory = TestWorkflow.TEST_MAIN_WORKING_DIRECTORY
+    shutil.rmtree(test_dir, ignore_errors=True)
+    os.makedirs(test_dir, exist_ok=True)
+    os.makedirs(test_main_working_directory, exist_ok=True)
+    os.chdir(test_dir)
+
+
+@pytest.fixture()
+def test_patient():
+    global_config = ConfigManager(global_base_folder=os.getcwd())
+    global_config.set_main_working_directory(TestWorkflow.TEST_MAIN_WORKING_DIRECTORY)
+    test_patient = Patient(global_config, DependencyManager())
+    test_patient.create_new_patient_dir(TestWorkflow.TEST_PATIENT_NAME)
+    return test_patient
+
+
+def run_workflow(patient: Patient):
+    patient.start_workflow(True, True)
+    patient.workflow_process.stop_event.wait()
+
+
+def clear_data_and_check(patient: Patient, data_input: DataInputList, qtbot):
+    patient.clear_import_folder(data_input)
+    with qtbot.waitCallback() as call_back:
+        patient.check_input_folder(data_input=data_input, status_callback=call_back)
+    call_back.assert_called_with(ANY, PatientRet.DataInputWarningNoDicom, ANY)
+
+
+def import_from_path(patient: Patient, data_input: DataInputList, dicom_path: str, qtbot):
+    worker = DicomSearchWorker(dicom_path)
+    worker.run()
+    patient_list = worker.get_patient_list()
+    exam_list = worker.get_exam_list(patient_list[0])
+    series_list = worker.get_series_list(patient_list[0], exam_list[0])
+    image_list, patient_name, mod, series_description, vols = worker.get_series_info(patient_list[0], exam_list[0],
+                                                                                     series_list[0])
+    import_ret = patient.dicom_import_to_folder(data_input=data_input, copy_list=image_list, vols=vols,
+                                                     mod=mod, force_modality=True)
+    assert import_ret == PatientRet.DataImportCompleted
+    with qtbot.waitCallback() as call_back:
+        patient.check_input_folder(data_input=data_input, status_callback=call_back)
+    call_back.assert_called_with(ANY, PatientRet.DataInputValid, ANY)
+
+
+class TestWorkflow:
+    TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "workflow", "subjects")
+    TEST_PATIENT_NAME = "pt_01"
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "workflow")
+
+    TESTS = {
+        # 'test_name': {
+        #     'data': {
+        #       DataInputList.T13D: "folder_name"
+        #     },
+        #     'preferences': {
+        #         DataInputList.T13D: [
+        #             ["preference_category", 'preference_value'],
+        #         ]
+        #     },
+        #     'check_nodes': {
+        #         "workflow_name": ["node_name", "input_name", "input_value"],
+        #     },
+        # },
+        'base': {
+            'preferences': {
+                DataInputList.T13D: [
+                    ["freesurfer", 'false'],
+                    ["flat1", 'true'],  # no flat1 without flair, even if preference on
+                ]
+            },
+            'check_nodes': {
+                DataInputList.T13D.value.wf_name: [
+                    ["t13d_BET", "robust", True],
+                    ["t13d_BET", "frac", WF_PREFERENCES[DataInputList.T13D]['bet_thr'].default]
+                ],
+                "-freesurfer": [],
+                "-FLAT1": []    # no flat1 without flair, even if preference on
+            },
+        },
+        'ref_bias': {
+            'preferences': {
+                DataInputList.T13D: [
+                    ["freesurfer", 'false'],
+                    ["bet_bias_correction", "true"],
+                    ['bet_thr', "0"],
+                ]
+            },
+            'check_nodes': {
+                DataInputList.T13D.value.wf_name: [
+                    ["t13d_BET", "reduce_bias", True],
+                    ["t13d_BET", "frac", 0]
+                ],
+            },
+        },
+        'ref_invalid_thr': {
+            'preferences': {
+                DataInputList.T13D: [
+                    ['bet_thr', "invalid"],
+                ]
+            },
+            'check_nodes': {
+                DataInputList.T13D.value.wf_name: [
+                    ["t13d_BET", "frac", WF_PREFERENCES[DataInputList.T13D]['bet_thr'].default]
+                ],
+            },
+        },
+        'freesurfer': {
+            'preferences': {
+                DataInputList.T13D: [
+                    ["freesurfer", 'true']
+                ]
+            },
+            'check_nodes': {
+                "freesurfer": ["-segmentHA"],
+            },
+        },
+        'hippocampal': {
+            'preferences': {
+                DataInputList.T13D: [
+                    ["freesurfer", 'true'],
+                    ["hippo_amyg_labels", "true"]
+
+                ]
+            },
+            'check_nodes': {
+                "freesurfer": ["segmentHA"],
+            },
+        },
+        'flair_and_flat1': {
+            'data': {
+                DataInputList.FLAIR3D: "flair3d"
+            },
+            'preferences': {
+                DataInputList.T13D: [
+                    ["flat1", 'true'],
+                ]
+            },
+            'check_nodes': {
+                DataInputList.FLAIR3D.value.wf_name: [
+                    ["flair3d_BET", "robust", True],
+                ],
+                "FLAT1": []
+            },
+        },
+        'flair_bias': {
+            'data': {
+                DataInputList.FLAIR3D: "flair3d"
+            },
+            'preferences': {
+                DataInputList.T13D: [
+                    ["flat1", 'false'],
+                ],
+                DataInputList.FLAIR3D: [
+                    ["bet_bias_correction", "true"],
+                    ['bet_thr', "0"],
+                ]
+            },
+            'check_nodes': {
+                DataInputList.FLAIR3D.value.wf_name: [
+                    ["flair3d_BET", "reduce_bias", True],
+                    ["flair3d_BET", "frac", 0]
+                ],
+                "-FLAT1": []
+            },
+        },
+        'asl_ai': {
+            'data': {
+                DataInputList.ASL: "asl"
+            },
+            'preferences': {
+                DataInputList.T13D: [
+                    ["freesurfer", 'true'],
+                ],
+                DataInputList.ASL: [
+                    ["ai", "true"]
+                ]
+            },
+            'check_nodes': {
+                DataInputList.ASL.value.wf_name: [
+                    ["asl_surf_lh"],
+                    ["asl_ai"]
+                ],
+            },
+        },
+        'asl_base': {
+            'data': {
+                DataInputList.ASL: "asl"
+            },
+            'preferences': {
+                DataInputList.T13D: [
+                    ["freesurfer", 'false'],
+                ],
+                DataInputList.ASL: [
+                    ["ai", "false"]
+                ]
+            },
+            'check_nodes': {
+                DataInputList.ASL.value.wf_name: [
+                    ["-asl_surf_lh"],
+                    ["-asl_ai"]
+                ],
+            },
+        },
+
+        'venous_phase1+2': {
+            'data': {
+                DataInputList.VENOUS: "venous_phase1+2"
+            },
+            'preferences': {
+            },
+            'check_nodes': {
+                DataInputList.VENOUS.value.wf_name: [
+                    ["veins_bet", "frac", WF_PREFERENCES[DataInputList.VENOUS]['bet_thr'].default],
+                    ["veins_split"]
+                ],
+            },
+        },
+        'venous_phase1only': {
+            'data': {
+                DataInputList.VENOUS: "venous_phase1"
+            },
+            'preferences': {
+            },
+            'check_nodes': {
+                "-%s" % DataInputList.VENOUS.value.wf_name: [],
+            },
+        },
+        'venous_invalid_phase_detection': {
+            'data': {
+                DataInputList.VENOUS: "venous_phase1+2"
+            },
+            'preferences': {
+                DataInputList.VENOUS: [
+                    ['vein_detection_mode', 'invalid']
+                ]
+            },
+            'check_nodes': {
+                DataInputList.VENOUS.value.wf_name: [
+                    ['veins_check', 'detection_mode', 0]
+                ],
+            },
+        },
+        'venous_phase1+phase2': {
+            'data': {
+                DataInputList.VENOUS: "venous_phase1",
+                DataInputList.VENOUS2: "venous_phase2",
+            },
+            'preferences': {
+                DataInputList.VENOUS: [
+                    ['bet_thr', "0"],
+                    ['vein_detection_mode', '2']
+                ]
+            },
+            'check_nodes': {
+                DataInputList.VENOUS.value.wf_name: [
+                    ["veins_bet", "frac", 0],
+                    ["veins2_conv"],
+                    ['veins_check', 'detection_mode', 2]
+                ],
+            },
+        },
+        'dti_base': {
+            'data': {
+                DataInputList.DTI: "dti",
+            },
+            'preferences': {
+                DataInputList.DTI: [
+                    ["tractography", "false"],
+                ]
+            },
+            'check_nodes': {
+                DataInputList.DTI.value.wf_name: [
+                    ["dti_eddy_files"],
+                    ["-dti_bedpostx"],
+                ],
+            },
+        },
+        'dti_oldeddy_tracto': {
+            'data': {
+                DataInputList.DTI: "dti",
+            },
+            'preferences': {
+                DataInputList.DTI: [
+                    ["tractography", "true"],
+                    ["old_eddy_correct", "true"],
+                    ["cst", "true"],
+                    ["track_procs", "10"]
+                ]
+            },
+            'check_nodes': {
+                DataInputList.DTI.value.wf_name: [
+                    ["-dti_eddy_files"],
+                    ["dti_bedpostx"],
+                ],
+                "tract_cst": [
+                    ["random_seed", "seeds_n", 10]
+                ]
+            },
+        },
+    }
+
+    def test_workflow(self, test_patient, qtbot):
+        # check wk dependency
+        assert test_patient.dependency_manager.is_fsl() is True, "missing fsl"
+        assert test_patient.dependency_manager.is_dcm2niix() is True, "missing dcm2niix"
+
+        for test_name in TestWorkflow.TESTS:
+            this_test = TestWorkflow.TESTS[test_name]
+
+            if 'data' not in this_test:
+                this_test['data'] = {}
+
+            if DataInputList.T13D not in this_test['data']:
+                this_test['data'][DataInputList.T13D] = "t13d_normalfov"
+
+            # Import all data
+            for data_input in this_test['data']:
+                import_from_path(test_patient, data_input, os.path.join(TestWorkflow.DATA_DIR, this_test['data'][data_input]), qtbot)
+                assert test_patient.input_state_list[data_input].loaded is True, "%s not loaded for %s" % (data_input, test_name)
+
+            # Set workflow preferences
+            for pref_cat in this_test['preferences']:
+                for pref in this_test['preferences'][pref_cat]:
+                    test_patient.config[pref_cat][pref[0]] = pref[1]
+
+            # Generate workflow
+            assert test_patient.input_state_list.is_ref_loaded() is True, "missing t13d for " + test_name
+            test_patient.reset_workflow()
+            assert test_patient.generate_workflow() == PatientRet.GenWfCompleted, "Error generating workflow for " + test_name
+
+            # Check desired nodes
+            if 'check_nodes' not in this_test:
+                this_test['check_nodes'] = {}
+            for workflow_name in this_test['check_nodes']:
+                sub_wf_presence = True
+                if workflow_name[0] == "-":
+                    workflow_name = workflow_name[1:]
+                    sub_wf_presence = False
+                sub_wf = test_patient.workflow.get_node(workflow_name)
+                if not sub_wf_presence:
+                    assert sub_wf is None, "There should not be %s subworkflow for %s" % (workflow_name, test_name)
+                else:
+                    assert sub_wf is not None, "Cannot find %s subworkflow for %s" % (workflow_name, test_name)
+                    for node_name in this_test['check_nodes'][workflow_name]:
+                        if type(node_name) is not list:
+                            node_name = [node_name]
+                        node_presence = True
+                        if node_name[0][0] == "-":
+                            node_name[0] = node_name[0][1:]
+                            node_presence = False
+                        node = sub_wf.get_node(node_name[0])
+                        if not node_presence:
+                            assert node is None, "There should not be %s in %s subworkflow for %s" % (node_name[0], workflow_name, test_name)
+                        else:
+                            assert node is not None, "Cannot find %s in %s subworkflow for %s" % (node_name[0], workflow_name, test_name)
+                            if len(node_name) == 3:
+                                assert hasattr(node.inputs, node_name[1]) is True, "No %s input in %s not in %s subworkflow for %s"  % (node_name[1], node_name[0], workflow_name, test_name)
+                                input_value = getattr(node.inputs, node_name[1])
+                                assert input_value == node_name[2], ("Error for %s input value (%s instead of %s) of %s node in subworkflow %s for %s" %
+                                                                     (node_name[1], str(input_value), str(node_name[2]), node_name[0], workflow_name, test_name))
+
+            if 'check_result' not in this_test:
+                this_test['check_result'] = {}
+            if len(this_test['check_result']) > 0:
+                run_workflow(test_patient)
+                for result in this_test['check_result']:
+                    print(result)
+
+            # Clear all data
+            for data_input in this_test['data']:
+                clear_data_and_check(test_patient, data_input, qtbot)
+
+
+
+
+
+
+
+
+
+
+        # with qtbot.waitCallback() as call_back:
+        #     test_patient.dicom_import_to_folder(data_input=DataInputList.T13D, copy_list=image_list, vols=vols, mod=mod,
+        #                                         force_modality=False, progress_callback=call_back)
+        # call_back.assert_called_with(PatientRet.DataImportCompleted)
