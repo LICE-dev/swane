@@ -3,7 +3,8 @@ from nipype.interfaces.fsl import (BET, FLIRT)
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-
+from swane.config.preference_list import WF_PREFERENCES
+from swane.utils.DataInputList import DataInputList
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
@@ -30,8 +31,6 @@ def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_di
     ----------
     reference : path
         The reference image for the registration.
-    frac : float
-        Fractional intensity threshold for bet command.
     output_name : str
         The name for registered file.
     crop : bool
@@ -55,7 +54,7 @@ def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_di
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=['reference', 'frac', 'output_name', 'crop']),
+        IdentityInterface(fields=['reference', 'output_name', 'crop']),
         name='inputnode')
     
     # Output Node
@@ -77,11 +76,10 @@ def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_di
 
     # NODE 3: Scalp removal
     bet = Node(BET(), '%s_BET' % name)
-    # bet.inputs.threshold = True
     try:
         bet.inputs.frac = config.getfloat('bet_thr')
     except:
-        bet.inputs.frac = 0.5
+        bet.inputs.frac = WF_PREFERENCES[DataInputList.T13D]['bet_thr'].default
     try:
         if config.getboolean('bet_bias_correction', fallback=False):
             bet.inputs.reduce_bias = True
@@ -92,7 +90,6 @@ def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_di
 
     bet.inputs.mask = True
     workflow.connect(reorient, "out_file", bet, "in_file")
-    workflow.connect(inputnode, "frac", bet, "frac")
 
     # NODE 4: Linear registration to reference space
     flirt_2_ref = Node(FLIRT(), name='%s_2_ref' % name)

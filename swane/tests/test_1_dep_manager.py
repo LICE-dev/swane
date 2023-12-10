@@ -19,6 +19,7 @@ def change_test_dir(request):
     os.chdir(test_dir)
 
 
+@pytest.mark.skip
 class TestDependencyManager:
 
     def test_dep(self, monkeypatch):

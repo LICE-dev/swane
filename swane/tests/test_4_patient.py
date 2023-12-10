@@ -79,9 +79,7 @@ class TestPatient:
                                                          mod=mod, force_modality=False)
         assert import_ret == PatientRet.DataImportCompleted, "Importing valid series error"
 
-        dicom_copy_path = test_patient.dicom_folder(DataInputList.T13D)
-        copied_files = len([entry for entry in os.listdir(dicom_copy_path) if os.path.isfile(os.path.join(dicom_copy_path, entry))])
-        assert copied_files == len(image_list), "Copied files number different from image list length"
+        assert test_patient.dicom_folder_count(DataInputList.T13D) == len(image_list), "Copied files number different from image list length"
 
         import_ret = test_patient.dicom_import_to_folder(data_input=DataInputList['FMRI_0'], copy_list=image_list, vols=vols,
                                                          mod=mod, force_modality=False)
@@ -109,9 +107,7 @@ class TestPatient:
         # clear folder
         clear_ret = test_patient.clear_import_folder(DataInputList.T13D)
         assert clear_ret is True, "Clear folder error"
-        dicom_copy_path = test_patient.dicom_folder(DataInputList.T13D)
-        count = len([entry for entry in os.listdir(dicom_copy_path) if os.path.isfile(os.path.join(dicom_copy_path, entry))])
-        assert count == 0, "Folder not empty after clear error"
+        assert test_patient.dicom_folder_count(DataInputList.T13D) == 0, "Folder not empty after clear error"
 
         # with qtbot.waitCallback() as call_back:
         #     test_patient.dicom_import_to_folder(data_input=DataInputList.T13D, copy_list=image_list, vols=vols, mod=mod,

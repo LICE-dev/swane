@@ -3,6 +3,8 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
 from configparser import SectionProxy
+from swane.config.preference_list import WF_PREFERENCES
+from swane.utils.DataInputList import DataInputList
 
 from nipype.interfaces.fsl import BET
 from nipype.interfaces.utility import IdentityInterface
@@ -71,12 +73,12 @@ def ref_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str 
     workflow.connect(ref_reOrient, "out_file", ref_reScale, "in_file")
 
     # NODE 4: Scalp removal
-    ref_BET = Node(BET(), name='ref_BET')
+    ref_BET = Node(BET(), name='%s_BET' % name)
     ref_BET.inputs.mask = True
     try:
         ref_BET.inputs.frac = config.getfloat('bet_thr')
     except:
-        ref_BET.inputs.frac = 0.3
+        ref_BET.inputs.frac = WF_PREFERENCES[DataInputList.T13D]['bet_thr'].default
     try:
         if config.getboolean('bet_bias_correction', fallback=False):
             ref_BET.inputs.reduce_bias = True

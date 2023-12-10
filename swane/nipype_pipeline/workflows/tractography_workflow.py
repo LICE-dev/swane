@@ -9,6 +9,8 @@ from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
 from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
+from swane.config.preference_list import WF_PREFERENCES
+from swane.utils.DataInputList import DataInputList
 
 SIDES = ["lh", "rh"]
 
@@ -91,23 +93,23 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
         is_cuda = False
 
     try:
-        threads = config.getint('track_procs')
+        track_threads = config.getint('track_procs')
     except:
-        threads = 5
+        track_threads = WF_PREFERENCES[DataInputList.DTI]['track_procs'].default
 
     if is_cuda:
         # if cuda is enabled only 1 process is launched
-        threads = 1
+        track_threads = 1
 
     # NODE 1: Random seed genration for cache preservation
     random_seed = Node(RandomSeedGenerator(), name='random_seed')
-    random_seed.inputs.seeds_n = threads
+    random_seed.inputs.seeds_n = track_threads
     workflow.connect(inputnode, "mask", random_seed, "mask")
 
     try:
-        n_samples = int(TRACTS[name][2] / threads)
+        n_samples = int(TRACTS[name][2] / track_threads)
     except:
-        n_samples = int(DEFAULT_N_SAMPLES / threads)
+        n_samples = int(DEFAULT_N_SAMPLES / track_threads)
 
     for side in SIDES:
         # Xtract protocol loading
