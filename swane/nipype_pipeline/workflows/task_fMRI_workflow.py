@@ -3,7 +3,7 @@ from nipype.algorithms.modelgen import SpecifyModel
 from nipype.algorithms.rapidart import ArtifactDetect
 from nipype.interfaces.fsl import ImageMaths, ExtractROI, MCFLIRT, BET, ImageStats, SUSAN, FLIRT, Level1Design, \
     FEATModel, FILMGLS, SmoothEstimate, Cluster, ApplyXFM
-
+from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.FslNVols import FslNVols
@@ -12,9 +12,11 @@ from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
 from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
+from swane.config.preference_list import WF_PREFERENCES
+from swane.utils.DataInputList import DataInputList
 
 
-def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: str = "/") -> CustomWorkflow:
+def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
     fMRI first level anlysis for a single task with constant task-rest paradigm.
 
@@ -24,45 +26,16 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
         The workflow name.
     dicom_dir : path
         The directory path of the DICOM files.
-    design_block : int
-        Task design block:
-            0: rArA...
-            1: rArBrArB...
+    config: SectionProxy
+        workflow settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
     Input Node Fields
     ----------
-    task_a_name : str
-        The name of the task A.
-    task_b_name : str
-        The name of the task B.
-    nvols : int
-        If == -1, automatic detection of EPI volume number, otherwise force to specified number.
-    TR : float
-        If == -1, automatic detection of Repetition Time, otherwise force to specified number.
-    slice_timing : int
-        Slice order for timing correction:
-            0, Unknown, correction disabled
-            1, Regular up
-            2, Regular down
-            3, intervealed
-    task_duration : int
-        Duration of task in seconds.
     ref_BET : path
         Betted T13D.
-    rest_duration : int
-        Duration of rest in second.
-    del_start_vols : int
-        Volumes to delete from start of sequence.
-    del_end_vols : int
-        Volumes to delete from end of sequence.
 
-    Returns
-    -------
-    workflow : CustomWorkflow
-        The fMRI workflow.
-        
     Output Node Fields
     ----------
     threshold_file_1 : path
@@ -70,7 +43,13 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
     threshold_file_2 : path
         Cluster of activation (task b vs Task) in T13D reference space.
 
+    Returns
+    -------
+    workflow : CustomWorkflow
+        The fMRI workflow.
+
     """
+
     
     #TODO rinominare in workflow
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
@@ -78,9 +57,59 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
     # Input Node
     inputnode = Node(
         IdentityInterface(
-            fields=['task_a_name', 'task_b_name', 'nvols', 'TR', 'slice_timing', 'task_duration', 'ref_BET',
-                    'rest_duration', 'del_start_vols', 'del_end_vols']),
+            fields=['ref_BET']),
         name='inputnode')
+
+    try:
+        task_a_name = config["task_a_name"]
+    except:
+        task_a_name = WF_PREFERENCES[DataInputList["FMRI_0"]]["task_a_name"].default
+
+    try:
+        task_b_name = config["task_b_name"]
+    except:
+        task_b_name = WF_PREFERENCES[DataInputList["FMRI_0"]]["task_b_name"].default
+
+    try:
+        task_duration = config.getint('task_duration')
+    except:
+        task_duration = WF_PREFERENCES[DataInputList["FMRI_0"]]["task_duration"].default
+
+    try:
+        rest_duration = config.getint('rest_duration')
+    except:
+        rest_duration = WF_PREFERENCES[DataInputList["FMRI_0"]]["rest_duration"].default
+
+    try:
+        TR = config.getfloat('tr')
+    except:
+        TR = -1
+
+    try:
+        slice_timing = config.getint('slice_timing')
+    except:
+        slice_timing = WF_PREFERENCES[DataInputList["FMRI_0"]]["slice_timing"].default[0]
+
+    try:
+        n_vols = config.getint('n_vols')
+    except:
+        n_vols = -1
+
+    try:
+        del_start_vols = config.getint('del_start_vols')
+    except:
+        del_start_vols = WF_PREFERENCES[DataInputList["FMRI_0"]]["del_start_vols"].default
+
+    try:
+        del_end_vols = config.getint('del_end_vols')
+    except:
+        del_end_vols = WF_PREFERENCES[DataInputList["FMRI_0"]]["del_end_vols"].default
+
+    try:
+        block_design = config.getint('block_design')
+    except:
+        block_design = WF_PREFERENCES[DataInputList["FMRI_0"]]["block_design"].default[0]
+    
     
     # Output Node
     outputnode = Node(
@@ -96,22 +125,22 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
     # NODE 2: Get EPI volume numbers
     nvols = Node(FslNVols(), name="%s_nvols" % name)
     nvols.long_name = "EPI volumes count"
-    workflow.connect(inputnode, 'nvols', nvols, 'force_value')
+    nvols.inputs.force_value = n_vols
     workflow.connect(conv, 'converted_files', nvols, 'in_file')
 
     # NODE 3: Get Repetition Time
     getTR = Node(GetNiftiTR(), name="%s_getTR" % name)
     getTR.long_name = "get TR"
-    workflow.connect(inputnode, 'TR', getTR, 'force_value')
+    getTR.inputs.force_value = TR
     workflow.connect(conv, 'converted_files', getTR, 'in_file')
 
     # NODE 4: Delete specified volumes at start and end of sequence
     del_vols = Node(DeleteVolumes(), name="%s_del_vols" % name)
     del_vols.long_name = "Extreme volumes deletion"
+    del_vols.inputs.del_start_vols = del_start_vols
+    del_vols.inputs.del_end_vols = del_end_vols
     workflow.connect(conv, 'converted_files', del_vols, "in_file")
     workflow.connect(nvols, 'nvols', del_vols, "nvols")
-    workflow.connect(inputnode, 'del_start_vols', del_vols, "del_start_vols")
-    workflow.connect(inputnode, 'del_end_vols', del_vols, "del_end_vols")
 
     # NODE 5: Orienting in radiological convention
     reorient = Node(ForceOrient(), name='%s_reorient' % name)
@@ -154,9 +183,9 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
 
     # NODE 8: Perform slice timing correction if needed
     slice_timing_correction = Node(CustomSliceTimer(), name="%s_timing_correction" % name)
+    slice_timing_correction.inputs.slice_timing = slice_timing
     workflow.connect(getTR, 'TR', slice_timing_correction, 'time_repetition')
     workflow.connect(motion_correct, 'out_file', slice_timing_correction, 'in_file')
-    workflow.connect(inputnode, 'slice_timing', slice_timing_correction, 'slice_timing')
 
     # NODE 9: Extract the mean volume of the first functional run
     meanfunc = Node(ImageMaths(), name="%s_meanfunc" % name)
@@ -285,11 +314,11 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
 
     # NODE 25: Generate the Bunch containing fMRI specifications
     genSpec = Node(FMRIGenSpec(), name="%s_genSpec" % name)
-    genSpec.inputs.design_block = design_block
-    workflow.connect(inputnode, 'task_duration', genSpec, 'task_duration')
-    workflow.connect(inputnode, 'rest_duration', genSpec, 'rest_duration')
-    workflow.connect(inputnode, 'task_a_name', genSpec, 'task_a_name')
-    workflow.connect(inputnode, 'task_b_name', genSpec, 'task_b_name')
+    genSpec.inputs.block_design = block_design
+    genSpec.inputs.task_duration = task_duration
+    genSpec.inputs.rest_duration = rest_duration
+    genSpec.inputs.task_a_name = task_a_name
+    genSpec.inputs.task_b_name = task_b_name
     workflow.connect(getTR, "TR", genSpec, "TR")
     workflow.connect(del_vols, "nvols", genSpec, "nvols")
     workflow.connect(meanfunc3, "out_file", genSpec, "tempMean")
@@ -375,7 +404,7 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
     workflow.connect(modelestimate, ('dof_file', dof_from_file), smoothness, 'dof')
     workflow.connect(dilatemask, 'out_file', smoothness, 'mask_file')
 
-    n_contrasts = 1 + design_block
+    n_contrasts = 1 + block_design
     cont = 0
     while cont < n_contrasts:
         cont += 1
@@ -413,8 +442,6 @@ def task_fMRI_workflow(name: str, dicom_dir: str, design_block: int, base_dir: s
         workflow.connect(results_select, 'cope', cluster, 'cope_file')
         workflow.connect(smoothness, 'volume', cluster, 'volume')
         workflow.connect(smoothness, 'dlh', cluster, 'dlh')
-        #workflow.connect(inputnode, "ref_BET", cluster, "std_space_file")
-        #workflow.connect(flirt_2_ref, "out_matrix_file", cluster, "xfm_file")
 
         # NODE 37: Transformation in ref space
         cluster_2_ref = Node(ApplyXFM(), name="%s_cluster_%d_to_ref" % (name, cont))

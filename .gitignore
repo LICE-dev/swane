@@ -22,9 +22,6 @@ dist/
 # Maven
 target/
 
-# testing data, temporary
-swane/tests/data
-
 # JetBrains IDE
 .idea/
 

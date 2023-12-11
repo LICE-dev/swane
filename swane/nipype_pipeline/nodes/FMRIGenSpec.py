@@ -9,7 +9,7 @@ class FMRIGenSpecInputSpec(BaseInterfaceInputSpec):
     nvols = traits.Int(mandatory=True, desc="Number of EPI runs")
     task_duration = traits.Int(mandatory=True, desc="Task duration")
     rest_duration = traits.Int(mandatory=True, desc="Rest duration")
-    design_block = traits.Enum(0, 1, usedefault=True)
+    block_design = traits.Enum(0, 1, usedefault=True)
     task_a_name = traits.String(mandatory=False, desc="Task A name")
     task_b_name = traits.String(mandatory=False, desc="Task A name")
     hpcutoff = traits.Int(mandatory=False, desc="Cutoff for highpass filtering")
@@ -41,7 +41,7 @@ class FMRIGenSpec(BaseInterface):
 
         if isdefined(self.inputs.hpcutoff):
             self.hpcutoff = self.inputs.hpcutoff
-        elif self.inputs.design_block == 0:
+        elif self.inputs.block_design == 0:
             self.hpcutoff = self.inputs.task_duration + self.inputs.rest_duration
         else:
             self.hpcutoff = (self.inputs.task_duration + self.inputs.rest_duration) *2
@@ -55,7 +55,7 @@ class FMRIGenSpec(BaseInterface):
         if not isdefined(self.inputs.task_b_name):
             self.inputs.task_b_name = "TaskB"
 
-        if self.inputs.design_block == 0:
+        if self.inputs.block_design == 0:
             self.contrasts = [['%s_versus_Rest' % self.inputs.task_a_name, 'T', [self.inputs.task_a_name], [1]]]
 
             self.evs_run = Bunch(

@@ -19,7 +19,7 @@ class TestDicomSearchWorker:
         # [path, files number, patient, exams, series, vols, series file number]
         'EMPTY_FOLDER': [os.path.join(GENERIC_DICOM_DIR, "empty_folder"), 0, 0, 0, 0, 0, 0],
         'SINGLE_VOL': [os.path.join(GENERIC_DICOM_DIR, "singlevol"), 11, 1, 1, 1, 1, 11],
-        'TWO_VOL': [os.path.join(GENERIC_DICOM_DIR, "twovol"), 6, 1, 1, 1, 2, 6],
+        'TWO_VOL': [os.path.join(GENERIC_DICOM_DIR, "twovol"), 10, 1, 1, 1, 2, 10],
         'MULTI_VOL': [os.path.join(GENERIC_DICOM_DIR, "multivol"), 12, 1, 1, 1, 4, 12],
         'NONDICOM': [os.path.join(GENERIC_DICOM_DIR, "non_dicom_files"), 2, 0, 0, 0, 0, 0],
         'MULTI_PT': [os.path.join(GENERIC_DICOM_DIR, "multipt"), 4, 2, -1, -1, -1, -1],
@@ -28,28 +28,29 @@ class TestDicomSearchWorker:
 
     def test_dicom_search(self):
         for test in TestDicomSearchWorker.DICOM_DIRS.values():
-            assert os.path.exists(test[0]) is True, "Dicom dir not found %s" % test[0]
+            test_name = os.path.basename(test[0])
+            assert os.path.exists(test[0]) is True, "Dicom dir not found %s" % test_name
             worker = DicomSearchWorker(test[0])
             worker.run()
             # numer of files to scan
             if test[1] != -1:
-                assert worker.get_files_len() == test[1], "Error with file count for %s" % test[0]
+                assert worker.get_files_len() == test[1], "Error with file count for %s (expected %d got %d)" % (test_name, test[1], worker.get_files_len())
             # patients number
             patient_list = worker.get_patient_list()
             if test[2] != -1:
-                assert len(patient_list) == test[2], "Error with patient number for %s" % test[0]
+                assert len(patient_list) == test[2], "Error with patient number for %s (expected %d got %d)" % (test_name, test[2], len(patient_list))
             if len(patient_list) > 0:
                 exam_list = worker.get_exam_list(patient_list[0])
                 if test[3] != -1:
-                    assert len(exam_list) == test[3], "Error with exam number for %s" % test[0]
+                    assert len(exam_list) == test[3], "Error with exam number for %s (expected %d got %d)" % (test_name, test[3], len(exam_list))
                 if len(exam_list) > 0:
                     series_list = worker.get_series_list(patient_list[0], exam_list[0])
                     if test[4] != -1:
-                        assert len(series_list) == test[4], "Error with series number for %s" % test[0]
+                        assert len(series_list) == test[4], "Error with series number for %s (expected %d got %d)" % (test_name, test[4], len(series_list))
                     if len(series_list) > 0:
                         vols = worker.get_series_nvol(patient_list[0], exam_list[0], series_list[0])
                         if test[5] != -1:
-                            assert vols == test[5], "Error with series volumes for %s" % test[0]
+                            assert vols == test[5], "Error with series volumes for %s (expected %d got %d)" % (test_name, test[5], vols)
                         series_files = len(worker.get_series_files(patient_list[0], exam_list[0], series_list[0]))
                         if test[6] != -1:
-                            assert series_files == test[6], "Error with series number of files for %s" % test[0]
+                            assert series_files == test[6], "Error with series number of files for %s" % test_name

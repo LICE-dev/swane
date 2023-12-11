@@ -61,7 +61,7 @@ def import_from_path(patient: Patient, data_input: DataInputList, dicom_path: st
 class TestWorkflow:
     TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "workflow", "subjects")
     TEST_PATIENT_NAME = "pt_01"
-    DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "workflow")
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "dicom")
 
     TESTS = {
         # 'test_name': {
@@ -144,7 +144,7 @@ class TestWorkflow:
         },
         'flair_and_flat1': {
             'data': {
-                DataInputList.FLAIR3D: "flair3d"
+                DataInputList.FLAIR3D: "singlevol"
             },
             'preferences': {
                 DataInputList.T13D: [
@@ -160,7 +160,7 @@ class TestWorkflow:
         },
         'flair_bias': {
             'data': {
-                DataInputList.FLAIR3D: "flair3d"
+                DataInputList.FLAIR3D: "singlevol"
             },
             'preferences': {
                 DataInputList.T13D: [
@@ -181,7 +181,7 @@ class TestWorkflow:
         },
         'asl_ai': {
             'data': {
-                DataInputList.ASL: "asl"
+                DataInputList.ASL: "singlevol"
             },
             'preferences': {
                 DataInputList.T13D: [
@@ -200,7 +200,7 @@ class TestWorkflow:
         },
         'asl_base': {
             'data': {
-                DataInputList.ASL: "asl"
+                DataInputList.ASL: "singlevol"
             },
             'preferences': {
                 DataInputList.T13D: [
@@ -220,7 +220,7 @@ class TestWorkflow:
 
         'venous_phase1+2': {
             'data': {
-                DataInputList.VENOUS: "venous_phase1+2"
+                DataInputList.VENOUS: "twovol"
             },
             'preferences': {
             },
@@ -233,7 +233,7 @@ class TestWorkflow:
         },
         'venous_phase1only': {
             'data': {
-                DataInputList.VENOUS: "venous_phase1"
+                DataInputList.VENOUS: "singlevol"
             },
             'preferences': {
             },
@@ -243,7 +243,7 @@ class TestWorkflow:
         },
         'venous_invalid_phase_detection': {
             'data': {
-                DataInputList.VENOUS: "venous_phase1+2"
+                DataInputList.VENOUS: "twovol"
             },
             'preferences': {
                 DataInputList.VENOUS: [
@@ -258,8 +258,8 @@ class TestWorkflow:
         },
         'venous_phase1+phase2': {
             'data': {
-                DataInputList.VENOUS: "venous_phase1",
-                DataInputList.VENOUS2: "venous_phase2",
+                DataInputList.VENOUS: "singlevol",
+                DataInputList.VENOUS2: "singlevol",
             },
             'preferences': {
                 DataInputList.VENOUS: [
@@ -277,7 +277,7 @@ class TestWorkflow:
         },
         'dti_base': {
             'data': {
-                DataInputList.DTI: "dti",
+                DataInputList.DTI: "multivol",
             },
             'preferences': {
                 DataInputList.DTI: [
@@ -293,7 +293,7 @@ class TestWorkflow:
         },
         'dti_oldeddy_tracto': {
             'data': {
-                DataInputList.DTI: "dti",
+                DataInputList.DTI: "multivol",
             },
             'preferences': {
                 DataInputList.DTI: [
@@ -313,12 +313,51 @@ class TestWorkflow:
                 ]
             },
         },
+        'fmri_base': {
+            'data': {
+                DataInputList["FMRI_0"]: "multivol",
+            },
+            'check_nodes': {
+                DataInputList["FMRI_0"].value.wf_name: [
+                    ["-fmri_0_cluster_2"],
+                ],
+            },
+        },
+        'fmri_AB': {
+            'data': {
+                DataInputList["FMRI_0"]: "multivol",
+            },
+            'preferences': {
+                DataInputList["FMRI_0"]: [
+                    ["block_design", "1"],
+                    ["task_duration", "invalid"],
+                    ["rest_duration", "invalid"],
+                    ["tr", "invalid"],
+                    ["n_vols", "invalid"],
+                    ["del_start_vols", "invalid"],
+                    ["del_end_vols", "invalid"],
+                ]
+            },
+            'check_nodes': {
+                DataInputList["FMRI_0"].value.wf_name: [
+                    ["fmri_0_genSpec", "task_duration", WF_PREFERENCES[DataInputList["FMRI_0"]]["task_duration"].default],
+                    ["fmri_0_genSpec", "rest_duration", WF_PREFERENCES[DataInputList["FMRI_0"]]["rest_duration"].default],
+                    ["fmri_0_nvols", "force_value", -1],
+                    ["fmri_0_getTR", "force_value", -1],
+                    ["fmri_0_del_vols", "del_start_vols", WF_PREFERENCES[DataInputList["FMRI_0"]]["del_start_vols"].default],
+                    ["fmri_0_del_vols", "del_end_vols", WF_PREFERENCES[DataInputList["FMRI_0"]]["del_end_vols"].default],
+                    ["fmri_0_cluster_2"],
+                ],
+            },
+        },
     }
 
     def test_workflow(self, test_patient, qtbot):
         # check wk dependency
         assert test_patient.dependency_manager.is_fsl() is True, "missing fsl"
         assert test_patient.dependency_manager.is_dcm2niix() is True, "missing dcm2niix"
+
+        last_test = None
 
         for test_name in TestWorkflow.TESTS:
             this_test = TestWorkflow.TESTS[test_name]
@@ -327,22 +366,33 @@ class TestWorkflow:
                 this_test['data'] = {}
 
             if DataInputList.T13D not in this_test['data']:
-                this_test['data'][DataInputList.T13D] = "t13d_normalfov"
+                this_test['data'][DataInputList.T13D] = "singlevol"
+
+            # Clear all data, if necessary
+            if last_test is not None:
+                for data_input in DataInputList:
+                    if data_input not in this_test['data'] or (data_input in last_test['data'] and this_test['data'][data_input] != last_test['data'][data_input]):
+                        clear_data_and_check(test_patient, data_input, qtbot)
 
             # Import all data
             for data_input in this_test['data']:
-                import_from_path(test_patient, data_input, os.path.join(TestWorkflow.DATA_DIR, this_test['data'][data_input]), qtbot)
+                if last_test is not None and data_input in last_test['data'] and this_test['data'][data_input] == last_test['data'][data_input]:
+                    pass
+                else:
+                    import_from_path(test_patient, data_input, os.path.join(TestWorkflow.DATA_DIR, this_test['data'][data_input]), qtbot)
+
                 assert test_patient.input_state_list[data_input].loaded is True, "%s not loaded for %s" % (data_input, test_name)
 
-            # Set workflow preferences
-            for pref_cat in this_test['preferences']:
-                for pref in this_test['preferences'][pref_cat]:
-                    test_patient.config[pref_cat][pref[0]] = pref[1]
+            if 'preferences' in this_test:
+                # Set workflow preferences
+                for pref_cat in this_test['preferences']:
+                    for pref in this_test['preferences'][pref_cat]:
+                        test_patient.config[pref_cat][pref[0]] = pref[1]
 
             # Generate workflow
             assert test_patient.input_state_list.is_ref_loaded() is True, "missing t13d for " + test_name
             test_patient.reset_workflow()
-            assert test_patient.generate_workflow() == PatientRet.GenWfCompleted, "Error generating workflow for " + test_name
+            assert test_patient.generate_workflow(generate_praphs=False) == PatientRet.GenWfCompleted, "Error generating workflow for " + test_name
 
             # Check desired nodes
             if 'check_nodes' not in this_test:
@@ -382,9 +432,7 @@ class TestWorkflow:
                 for result in this_test['check_result']:
                     print(result)
 
-            # Clear all data
-            for data_input in this_test['data']:
-                clear_data_and_check(test_patient, data_input, qtbot)
+            last_test = this_test
 
 
 

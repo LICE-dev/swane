@@ -507,7 +507,7 @@ class PatientTab(QTabWidget):
         """
         
         if item.parent() is None:
-            graph_file = self.patient.graph_file(item.get_text(), svg=True)
+            graph_file = self.patient.graph_file(item.get_text())
             if os.path.exists(graph_file):
                 self.exec_graph.load(graph_file)
                 self.exec_graph.renderer().setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)

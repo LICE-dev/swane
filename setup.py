@@ -14,7 +14,7 @@ setup(name='swane',
       description='Standardized Workflow for Advanced Neuroimaging in Epilepsy',
       author='LICE - Commissione Neuroimmagini',
       author_email='dev@lice.it',
-      packages=find_packages(exclude="tests"),
+      packages=find_packages(exclude=["swane.tests"]),
       classifiers=[
           "Programming Language :: Python :: 3",
           "License :: OSI Approved :: MIT License",
