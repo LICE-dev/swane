@@ -146,7 +146,7 @@ WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
     input_type=InputTypes.NUMBER,
     label="Threshold for Asymmetry Index map outliers removal",
     tooltip="100 for no thresholding, suggested 80-90",
-    default='85',
+    default=85,
     range=[0, 100],
     pref_requirement={DataInputList.ASL: [('ai', True)]},
     pref_requirement_fail_tooltip="Requires ASL Asymmetry Index",
@@ -163,7 +163,7 @@ WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
     input_type=InputTypes.NUMBER,
     label="Threshold for Asymmetry Index map outliers removal",
     tooltip="100 for no thresholding, suggested 80-90",
-    default='85',
+    default=85,
     range=[0, 100],
     pref_requirement={DataInputList.PET: [('ai', True)]},
     pref_requirement_fail_tooltip="Requires PET Asymmetry Index",
@@ -183,7 +183,7 @@ WF_PREFERENCES[category]['tractography'] = PreferenceEntry(
 WF_PREFERENCES[category]['track_procs'] = PreferenceEntry(
     input_type=InputTypes.NUMBER,
     label="Parallel processes for each side tractography",
-    default='5',
+    default=5,
     range=[1, 10],
     pref_requirement={DataInputList.DTI: [('tractography', True)]},
     pref_requirement_fail_tooltip="Tractography disabled",
@@ -221,13 +221,13 @@ for x in range(FMRI_NUM):
     WF_PREFERENCES[category]['task_duration'] = PreferenceEntry(
         input_type=InputTypes.NUMBER,
         label="Tasks duration (sec)",
-        default="30",
+        default=30,
         range=[1, 500],
     )
     WF_PREFERENCES[category]['rest_duration'] = PreferenceEntry(
         input_type=InputTypes.NUMBER,
         label="Rest duration (sec)",
-        default="30",
+        default=30,
         range=[1, 500],
     )
     WF_PREFERENCES[category]['tr'] = PreferenceEntry(
@@ -248,13 +248,13 @@ for x in range(FMRI_NUM):
     WF_PREFERENCES[category]['del_start_vols'] = PreferenceEntry(
         input_type=InputTypes.NUMBER,
         label="Delete start volumes",
-        default="0",
+        default=0,
         range=[1, 500],
     )
     WF_PREFERENCES[category]['del_end_vols'] = PreferenceEntry(
         input_type=InputTypes.NUMBER,
         label="Delete end volumes",
-        default="0",
+        default=0,
         range=[1, 500],
     )
 
@@ -287,7 +287,7 @@ GLOBAL_PREFERENCES[category]['slicer_version'] = PreferenceEntry(
 )
 GLOBAL_PREFERENCES[category]['last_pid'] = PreferenceEntry(
     input_type=InputTypes.HIDDEN,
-    default="-1",
+    default=-1,
 )
 GLOBAL_PREFERENCES[category]['last_swane_version'] = PreferenceEntry(
     input_type=InputTypes.HIDDEN,
@@ -315,7 +315,7 @@ GLOBAL_PREFERENCES[category] = {}
 GLOBAL_PREFERENCES[category]['max_pt'] = PreferenceEntry(
     input_type=InputTypes.NUMBER,
     label="Patient tab limit",
-    default="1",
+    default=1,
     range=[0, 5],
 )
 try:
@@ -341,7 +341,7 @@ GLOBAL_PREFERENCES[category]['max_pt_gpu'] = PreferenceEntry(
     input_type=InputTypes.NUMBER,
     label="GPU process limit per patient",
     tooltip="The limit should be equal or lesser than the number of physical GPU",
-    default="1",
+    default=1,
     range=[1, 5],
     pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [('cuda', True)]},
     pref_requirement_fail_tooltip="Requires CUDA",

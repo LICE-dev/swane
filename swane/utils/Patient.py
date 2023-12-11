@@ -390,24 +390,19 @@ class Patient:
     def graph_dir(self):
         return os.path.join(self.folder, Patient.GRAPH_DIR_NAME)
 
-    def graph_file(self, long_name: str, svg: bool = False):
+    def graph_file(self, long_name: str):
         """
 
         Parameters
         ----------
         long_name: str
             The workflow complete name
-        svg: bool
-            If True, return the extension .svg insteda .dot. Default is Fase
         Returns
         -------
 
         """
-        ext = ".dot"
-        if svg:
-            ext = ".svg"
         graph_name = long_name.lower().replace(" ", "_")
-        return os.path.join(self.graph_dir(), Patient.GRAPH_FILE_PREFIX + graph_name + ext)
+        return os.path.join(self.graph_dir(), Patient.GRAPH_FILE_PREFIX + graph_name + "." + Patient.GRAPH_FILE_EXT)
 
     def result_dir(self):
         return os.path.join(self.folder, MainWorkflow.SCENE_DIR)
@@ -415,10 +410,15 @@ class Patient:
     def scene_path(self):
         return os.path.join(self.result_dir(), "scene." + SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
 
-    def generate_workflow(self) -> PatientRet:
+    def generate_workflow(self, generate_praphs: bool = True) -> PatientRet:
         """
         Generates and populates the Main Workflow.
         Generates the graphviz analysis graphs on a new thread.
+
+        Parameters
+        ----------
+        generate_praphs: bool.
+            If True, svg graphics of workflows are generated. Default is True.
 
         Returns
         -------
@@ -449,14 +449,15 @@ class Patient:
         node_list = self.workflow.get_node_array()
 
         # Graphviz analysis graphs drawing
-        for node in node_list.keys():
-            if len(node_list[node].node_list.keys()) > 0:
-                if self.dependency_manager.is_graphviz():
-                    thread = Thread(target=self.workflow.get_node(node).write_graph,
-                                    kwargs={'graph2use': self.GRAPH_TYPE, 'format': Patient.GRAPH_FILE_EXT,
-                                            'dotfilename': os.path.join(self.graph_file(node_list[node].long_name, Patient.GRAPH_FILE_EXT)),
-                                            })
-                    thread.start()
+        if generate_praphs:
+            for node in node_list.keys():
+                if len(node_list[node].node_list.keys()) > 0:
+                    if self.dependency_manager.is_graphviz():
+                        thread = Thread(target=self.workflow.get_node(node).write_graph,
+                                        kwargs={'graph2use': self.GRAPH_TYPE, 'format': Patient.GRAPH_FILE_EXT,
+                                                'dotfilename': os.path.join(self.graph_file(node_list[node].long_name)),
+                                                })
+                        thread.start()
 
         return PatientRet.GenWfCompleted
 

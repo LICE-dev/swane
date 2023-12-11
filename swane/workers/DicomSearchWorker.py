@@ -87,8 +87,9 @@ class DicomSearchWorker(QRunnable):
                 ds = pydicom.read_file(dicom_loc, force=True)
 
                 # patient_id = self.clean_text(ds.get("PatientID", "NA"))
-                patient_id = ds.get("PatientID", "NA")
-                if patient_id == "NA":
+                patient_id = ds.get("PatientID", "na")
+                #patient_id = DicomSearchWorker.clean_text(patient_id)
+                if patient_id == "na":
                     continue
 
                 series_number = ds.get("SeriesNumber", "NA")

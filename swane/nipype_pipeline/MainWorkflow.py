@@ -346,71 +346,10 @@ class MainWorkflow(CustomWorkflow):
 
             if patient_input_state_list[DIL['FMRI_%d' % y]].loaded:
 
-                try:
-                    task_a_name = pt_config[DIL['FMRI_%d' % y]]["task_a_name"]
-                except:
-                    task_a_name = "Task A"
-
-                try:
-                    task_b_name = pt_config[DIL['FMRI_%d' % y]]["task_b_name"]
-                except:
-                    task_b_name = "Task B"
-
-                try:
-                    task_duration = pt_config[DIL['FMRI_%d' % y]].getint('task_duration')
-                except:
-                    task_duration = 30
-
-                try:
-                    rest_duration = pt_config[DIL['FMRI_%d' % y]].getint('rest_duration')
-                except:
-                    rest_duration = 30
-
-                try:
-                    TR = pt_config[DIL['FMRI_%d' % y]].getfloat('tr')
-                except:
-                    TR = -1
-
-                try:
-                    slice_timing = pt_config[DIL['FMRI_%d' % y]].getint('slice_timing')
-                except:
-                    slice_timing = 0
-
-                try:
-                    n_vols = pt_config[DIL['FMRI_%d' % y]].getint('n_vols')
-                except:
-                    n_vols = -1
-
-                try:
-                    del_start_vols = pt_config[DIL['FMRI_%d' % y]].getint('del_start_vols')
-                except:
-                    del_start_vols = 0
-
-                try:
-                    del_end_vols = pt_config[DIL['FMRI_%d' % y]].getint('del_end_vols')
-                except:
-                    del_end_vols = 0
-
-                try:
-                    design_block = pt_config[DIL['FMRI_%d' % y]].getint('block_design')
-                except:
-                    design_block = 0
-
                 dicom_dir = patient_input_state_list.get_dicom_dir(DIL['FMRI_%d' % y])
-                fMRI = task_fMRI_workflow(DIL['FMRI_%d' % y].value.wf_name, dicom_dir, design_block, self.base_dir)
+                fMRI = task_fMRI_workflow(DIL['FMRI_%d' % y].value.wf_name, dicom_dir, pt_config[DIL['FMRI_%d' % y]], self.base_dir)
                 fMRI.long_name = "Task fMRI analysis - %d" % y
-                inputnode = fMRI.get_node("inputnode")
-                inputnode.inputs.TR = TR
-                inputnode.inputs.slice_timing = slice_timing
-                inputnode.inputs.nvols = n_vols
-                inputnode.inputs.task_a_name = task_a_name
-                inputnode.inputs.task_b_name = task_b_name
-                inputnode.inputs.task_duration = task_duration
-                inputnode.inputs.rest_duration = rest_duration
-                inputnode.inputs.del_start_vols = del_start_vols
-                inputnode.inputs.del_end_vols = del_end_vols
-
                 self.connect(t1, "outputnode.ref_brain", fMRI, "inputnode.ref_BET")
                 fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_1', self.SCENE_DIR + '.fMRI')
-                if design_block == 1:
+                if pt_config[DIL['FMRI_%d' % y]]["block_design"] == "1":
                     fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_2', self.SCENE_DIR + '.fMRI')
