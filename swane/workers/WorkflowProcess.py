@@ -10,6 +10,8 @@ from nipype.external.cloghandler import ConcurrentRotatingFileHandler
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 import logging as orig_log
 
+LOG_DIR_NAME = "log"
+
 
 class WorkflowProcess(Process):
     LOG_CHANNELS = [
@@ -78,7 +80,7 @@ class WorkflowProcess(Process):
 
     def run(self):
         # gestione del file di log nella cartella del paziente
-        log_dir = os.path.join(self.workflow.base_dir, "log/")
+        log_dir = os.path.join(self.workflow.base_dir, LOG_DIR_NAME)
         if not os.path.exists(log_dir):
             os.mkdir(log_dir)
 

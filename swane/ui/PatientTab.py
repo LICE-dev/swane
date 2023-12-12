@@ -64,7 +64,7 @@ class PatientTab(QTabWidget):
         self.dicom_scan_series_list = []
         self.importable_series_list = QListWidget()
         self.wf_type_combo = None
-        self.node_button = None
+        self.generate_workflow_button = None
         self.node_list_treeWidget = None
         self.patient_config_button = None
         self.exec_button = None
@@ -114,7 +114,7 @@ class PatientTab(QTabWidget):
             self.exec_button_set_enabled(False)
 
             if errors:
-                self.node_button.setEnabled(True)
+                self.generate_workflow_button.setEnabled(True)
                 self.patient.workflow = None
                 self.exec_button.setText(strings.pttab_wf_executed_with_error)
                 self.exec_button.setToolTip("")
@@ -208,7 +208,8 @@ class PatientTab(QTabWidget):
                                              QLabel(data_input.value.label),
                                              QLabel(""),
                                              QPushButton(strings.pttab_import_button),
-                                             QPushButton(strings.pttab_clear_button)]
+                                             QPushButton(strings.pttab_clear_button),
+                                             None]
             self.set_error(data_input, "")
             if data_input.value.tooltip != "":
                 # Add tooltips and append ⓘ character to label
@@ -375,12 +376,12 @@ class PatientTab(QTabWidget):
 
         layout.addWidget(self.wf_type_combo, 0, 0)
 
-        self.node_button = QPushButton(strings.GENBUTTONTEXT)
-        self.node_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
-        self.node_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        self.node_button.clicked.connect(self.gen_wf)
+        self.generate_workflow_button = QPushButton(strings.GENBUTTONTEXT)
+        self.generate_workflow_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.generate_workflow_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.generate_workflow_button.clicked.connect(self.generate_workflow)
 
-        layout.addWidget(self.node_button, 1, 0)
+        layout.addWidget(self.generate_workflow_button, 1, 0)
 
         self.node_list_treeWidget = QTreeWidget()
         self.node_list_treeWidget.setHeaderHidden(True)
@@ -451,7 +452,7 @@ class PatientTab(QTabWidget):
         self.patient.config.save()
         self.reset_workflow()
 
-    def gen_wf(self):
+    def generate_workflow(self):
         """
         Generates and populates the Main Workflow.
         Shows the node list into the UI.
@@ -486,7 +487,7 @@ class PatientTab(QTabWidget):
         
         # UI updating
         self.exec_button_set_enabled(True)
-        self.node_button.setEnabled(False)
+        self.generate_workflow_button.setEnabled(False)
 
     def tree_item_clicked(self, item, col: int):
         """
@@ -659,9 +660,7 @@ class PatientTab(QTabWidget):
         result_tab_layout.addItem(horizontal_spacer, 0, 1, 1, 1)
 
         self.load_scene_button = QPushButton(strings.pttab_open_results_button)
-        self.load_scene_button.clicked.connect(
-            lambda pushed=False, slicer_path=self.global_config.get_slicer_path(), scene_path=self.patient.scene_path(): load_scene(pushed, slicer_path, scene_path)
-        )
+        self.load_scene_button.clicked.connect(self.load_scene)
         self.load_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.load_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.load_scene_button_update_state()
@@ -682,19 +681,20 @@ class PatientTab(QTabWidget):
 
         result_tab_layout.addWidget(self.result_tree, 1, 0, 1, 4)
 
-    def generate_scene(self):
+    def generate_scene(self) -> PersistentProgressDialog:
         """
         Exports the workflow results into 3D Slicer using a new thread.
 
         Returns
         -------
-        None.
+        The progress dialog shown.
 
         """
         
         progress = PersistentProgressDialog(strings.pttab_exporting_start, 0, 0, parent=self)
         progress.show()
         self.patient.generate_scene(lambda msg: PatientTab.slicer_thread_signal(msg, progress))
+        return progress
 
     @staticmethod
     def slicer_thread_signal(msg: str, progress: PersistentProgressDialog):
@@ -890,7 +890,7 @@ class PatientTab(QTabWidget):
             self.node_list_treeWidget.clear()
             self.exec_graph.load(self.main_window.VOID_SVG_FILE)
             self.exec_button_set_enabled(False)
-            self.node_button.setEnabled(True)
+            self.generate_workflow_button.setEnabled(True)
             self.wf_type_combo.setEnabled(True)
             self.patient_config_button.setEnabled(True)
 
@@ -965,6 +965,17 @@ class PatientTab(QTabWidget):
         if len(self.scan_directory_watcher.directories()) > 0:
             self.scan_directory_watcher.removePaths(self.scan_directory_watcher.directories())
 
+    def is_data_loading(self) -> bool:
+        """
+        Returns
+            True if any data folder is being scanned
+        """
+
+        for row in self.input_report.values():
+            if row[5] == self.main_window.LOADING_MOVIE_FILE:
+                return True
+        return False
+
     def update_input_report(self, data_input: DataInputList, icon: str, tooltip: str, import_enable: bool, clear_enable: bool, text: str = None):
         """
         Generic update function for series labels.
@@ -989,6 +1000,7 @@ class PatientTab(QTabWidget):
         self.input_report[data_input][0].setToolTip(tooltip)
         self.input_report[data_input][3].setEnabled(import_enable)
         self.input_report[data_input][4].setEnabled(clear_enable)
+        self.input_report[data_input][5] = icon
         if text is not None:
             self.input_report[data_input][2].setText(text)
 
@@ -1094,6 +1106,9 @@ class PatientTab(QTabWidget):
         
         enable = self.patient.can_generate_workflow()
         self.setTabEnabled(PatientTab.EXECTAB, enable)
+
+    def load_scene(self):
+        load_scene(self.global_config.get_slicer_path(), self.patient.scene_path())
 
     def setTabEnabled(self, index, enabled):
         if index == PatientTab.EXECTAB and not enabled:

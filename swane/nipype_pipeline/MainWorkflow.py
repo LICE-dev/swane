@@ -29,13 +29,11 @@ DEBUG = False
 
 # TODO implementazione error manager
 class MainWorkflow(CustomWorkflow):
-    SCENE_DIR = 'scene'
+    Result_DIR = 'scene'
 
-    def __init__(self, name: str, base_dir: str = None):
+    def __init__(self, name: str, base_dir: str):
         super().__init__(name, base_dir)
         self.is_resource_monitor = False
-        GLOBAL_PREFERENCES[GlobalPrefCategoryList.PERFORMANCE]
-
 
     def add_input_folders(self, global_config: ConfigManager, pt_config: ConfigManager, dependency_manager: DependencyManager, patient_input_state_list: PatientInputStateList):
         """
@@ -120,8 +118,8 @@ class MainWorkflow(CustomWorkflow):
         t1.long_name = "3D T1w analysis"
         self.add_nodes([t1])
 
-        t1.sink_result(self.base_dir, "outputnode", 'ref', self.SCENE_DIR)
-        t1.sink_result(self.base_dir, "outputnode", 'ref_brain', self.SCENE_DIR)
+        t1.sink_result(self.base_dir, "outputnode", 'ref', self.Result_DIR)
+        t1.sink_result(self.base_dir, "outputnode", 'ref_brain', self.Result_DIR)
 
         if is_ai and (patient_input_state_list[DIL.ASL].loaded or patient_input_state_list[DIL.PET].loaded):
             # Non linear registration for Asymmetry Index
@@ -142,9 +140,9 @@ class MainWorkflow(CustomWorkflow):
             freesurfer_inputnode.inputs.subjects_dir = self.base_dir
             self.connect(t1, "outputnode.ref", freesurfer, "inputnode.ref")
 
-            freesurfer.sink_result(self.base_dir, "outputnode", 'pial', self.SCENE_DIR)
-            freesurfer.sink_result(self.base_dir, "outputnode", 'white', self.SCENE_DIR)
-            freesurfer.sink_result(self.base_dir, "outputnode", 'vol_label_file', self.SCENE_DIR)
+            freesurfer.sink_result(self.base_dir, "outputnode", 'pial', self.Result_DIR)
+            freesurfer.sink_result(self.base_dir, "outputnode", 'white', self.Result_DIR)
+            freesurfer.sink_result(self.base_dir, "outputnode", 'vol_label_file', self.Result_DIR)
             if is_hippo_amyg_labels:
                 regex_subs = [("-T1.*.mgz", ".mgz")]
                 freesurfer.sink_result(self.base_dir, "outputnode", 'lh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
@@ -162,7 +160,7 @@ class MainWorkflow(CustomWorkflow):
             flair_inputnode.inputs.output_name = "r-flair_brain.nii.gz"
             self.connect(t1, "outputnode.ref_brain", flair, "inputnode.reference")
 
-            flair.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
+            flair.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
 
             # if is_freesurfer:
             #     from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
@@ -189,9 +187,9 @@ class MainWorkflow(CustomWorkflow):
             self.connect(mni1, "outputnode.fieldcoeff_file", flat1, "inputnode.ref_2_mni1_warp")
             self.connect(mni1, "outputnode.inverse_warp", flat1, "inputnode.ref_2_mni1_inverse_warp")
 
-            flat1.sink_result(self.base_dir, "outputnode", "extension_z", self.SCENE_DIR)
-            flat1.sink_result(self.base_dir, "outputnode", "junction_z", self.SCENE_DIR)
-            flat1.sink_result(self.base_dir, "outputnode", "binary_flair", self.SCENE_DIR)
+            flat1.sink_result(self.base_dir, "outputnode", "extension_z", self.Result_DIR)
+            flat1.sink_result(self.base_dir, "outputnode", "junction_z", self.Result_DIR)
+            flat1.sink_result(self.base_dir, "outputnode", "binary_flair", self.Result_DIR)
 
         for plane in PLANES:
             if DIL['FLAIR2D_%s' % plane.name] in patient_input_state_list and patient_input_state_list[DIL['FLAIR2D_%s' % plane.name]].loaded:
@@ -205,7 +203,7 @@ class MainWorkflow(CustomWorkflow):
                 flair2d_tra_inputnode.inputs.output_name = "r-flair2d_%s_brain.nii.gz" % plane
                 self.connect(t1, "outputnode.ref_brain", flair2d, "inputnode.reference")
 
-                flair2d.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
+                flair2d.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
 
         if patient_input_state_list[DIL.MDC].loaded:
             # MDC analysis
@@ -219,7 +217,7 @@ class MainWorkflow(CustomWorkflow):
             mdc_inputnode.inputs.output_name = "r-mdc_brain.nii.gz"
             self.connect(t1, "outputnode.ref_brain", mdc, "inputnode.reference")
 
-            mdc.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
+            mdc.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
 
         if patient_input_state_list[DIL.ASL].loaded:
             # ASL analysis
@@ -230,28 +228,28 @@ class MainWorkflow(CustomWorkflow):
             self.connect(t1, 'outputnode.ref_brain', asl, 'inputnode.reference')
             self.connect(t1, 'outputnode.ref_mask', asl, 'inputnode.brain_mask')
 
-            asl.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
+            asl.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
 
             if is_freesurfer:
                 self.connect(freesurfer, 'outputnode.subjects_dir', asl, 'inputnode.freesurfer_subjects_dir')
                 self.connect(freesurfer, 'outputnode.subject_id', asl, 'inputnode.freesurfer_subject_id')
                 self.connect(freesurfer, 'outputnode.bgROI', asl, 'inputnode.bgROI')
 
-                asl.sink_result(self.base_dir, "outputnode", 'surf_lh', self.SCENE_DIR)
-                asl.sink_result(self.base_dir, "outputnode", 'surf_rh', self.SCENE_DIR)
-                asl.sink_result(self.base_dir, "outputnode", 'zscore', self.SCENE_DIR)
-                asl.sink_result(self.base_dir, "outputnode", 'zscore_surf_lh', self.SCENE_DIR)
-                asl.sink_result(self.base_dir, "outputnode", 'zscore_surf_rh', self.SCENE_DIR)
+                asl.sink_result(self.base_dir, "outputnode", 'surf_lh', self.Result_DIR)
+                asl.sink_result(self.base_dir, "outputnode", 'surf_rh', self.Result_DIR)
+                asl.sink_result(self.base_dir, "outputnode", 'zscore', self.Result_DIR)
+                asl.sink_result(self.base_dir, "outputnode", 'zscore_surf_lh', self.Result_DIR)
+                asl.sink_result(self.base_dir, "outputnode", 'zscore_surf_rh', self.Result_DIR)
 
             if is_ai:
                 self.connect(sym, 'outputnode.fieldcoeff_file', asl, 'inputnode.ref_2_sym_warp')
                 self.connect(sym, 'outputnode.inverse_warp', asl, 'inputnode.ref_2_sym_invwarp')
 
-                asl.sink_result(self.base_dir, "outputnode", 'ai', self.SCENE_DIR)
+                asl.sink_result(self.base_dir, "outputnode", 'ai', self.Result_DIR)
 
                 if is_freesurfer:
-                    asl.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.SCENE_DIR)
-                    asl.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.SCENE_DIR)
+                    asl.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
+                    asl.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
 
         if patient_input_state_list[DIL.PET].loaded:  # and check_input['ct_brain']:
             # PET analysis
@@ -262,18 +260,18 @@ class MainWorkflow(CustomWorkflow):
             self.connect(t1, 'outputnode.ref', pet, 'inputnode.reference')
             self.connect(t1, 'outputnode.ref_mask', pet, 'inputnode.brain_mask')
 
-            pet.sink_result(self.base_dir, "outputnode", 'registered_file', self.SCENE_DIR)
+            pet.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
 
             if is_freesurfer:
                 self.connect(freesurfer, 'outputnode.subjects_dir', pet, 'inputnode.freesurfer_subjects_dir')
                 self.connect(freesurfer, 'outputnode.subject_id', pet, 'inputnode.freesurfer_subject_id')
                 self.connect(freesurfer, 'outputnode.bgROI', pet, 'inputnode.bgROI')
 
-                pet.sink_result(self.base_dir, "outputnode", 'surf_lh', self.SCENE_DIR)
-                pet.sink_result(self.base_dir, "outputnode", 'surf_rh', self.SCENE_DIR)
-                pet.sink_result(self.base_dir, "outputnode", 'zscore', self.SCENE_DIR)
-                pet.sink_result(self.base_dir, "outputnode", 'zscore_surf_lh', self.SCENE_DIR)
-                pet.sink_result(self.base_dir, "outputnode", 'zscore_surf_rh', self.SCENE_DIR)
+                pet.sink_result(self.base_dir, "outputnode", 'surf_lh', self.Result_DIR)
+                pet.sink_result(self.base_dir, "outputnode", 'surf_rh', self.Result_DIR)
+                pet.sink_result(self.base_dir, "outputnode", 'zscore', self.Result_DIR)
+                pet.sink_result(self.base_dir, "outputnode", 'zscore_surf_lh', self.Result_DIR)
+                pet.sink_result(self.base_dir, "outputnode", 'zscore_surf_rh', self.Result_DIR)
 
                 # TODO work in progress for segmentation based asymmetry study
                 # from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
@@ -285,11 +283,11 @@ class MainWorkflow(CustomWorkflow):
                 self.connect(sym, 'outputnode.fieldcoeff_file', pet, 'inputnode.ref_2_sym_warp')
                 self.connect(sym, 'outputnode.inverse_warp', pet, 'inputnode.ref_2_sym_invwarp')
 
-                pet.sink_result(self.base_dir, "outputnode", 'ai', self.SCENE_DIR)
+                pet.sink_result(self.base_dir, "outputnode", 'ai', self.Result_DIR)
 
                 if is_freesurfer:
-                    pet.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.SCENE_DIR)
-                    pet.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.SCENE_DIR)
+                    pet.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
+                    pet.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
 
         if patient_input_state_list[DIL.VENOUS].loaded and patient_input_state_list[DIL.VENOUS].volumes + patient_input_state_list[DIL.VENOUS2].volumes == 2:
             # Venous analysis
@@ -302,7 +300,7 @@ class MainWorkflow(CustomWorkflow):
 
             self.connect(t1, "outputnode.ref_brain", venous, "inputnode.ref_brain")
 
-            venous.sink_result(self.base_dir, "outputnode", 'veins', self.SCENE_DIR)
+            venous.sink_result(self.base_dir, "outputnode", 'veins', self.Result_DIR)
 
         if patient_input_state_list[DIL.DTI].loaded:
             # DTI analysis
@@ -313,7 +311,7 @@ class MainWorkflow(CustomWorkflow):
             dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
             self.connect(t1, "outputnode.ref_brain", dti_preproc, "inputnode.ref_brain")
 
-            dti_preproc.sink_result(self.base_dir, "outputnode", 'FA', self.SCENE_DIR)
+            dti_preproc.sink_result(self.base_dir, "outputnode", 'FA', self.Result_DIR)
 
             if is_tractography:
                 for tract in TRACTS.keys():
@@ -337,9 +335,9 @@ class MainWorkflow(CustomWorkflow):
 
                         for side in SIDES:
                             tract_workflow.sink_result(self.base_dir, "outputnode", "waytotal_%s" % side,
-                                                             self.SCENE_DIR + ".dti")
+                                                       self.Result_DIR + ".dti")
                             tract_workflow.sink_result(self.base_dir, "outputnode", "fdt_paths_%s" % side,
-                                                             self.SCENE_DIR + ".dti")
+                                                       self.Result_DIR + ".dti")
 
         # Check for Task FMRI sequences
         for y in range(FMRI_NUM):
@@ -350,6 +348,6 @@ class MainWorkflow(CustomWorkflow):
                 fMRI = task_fMRI_workflow(DIL['FMRI_%d' % y].value.wf_name, dicom_dir, pt_config[DIL['FMRI_%d' % y]], self.base_dir)
                 fMRI.long_name = "Task fMRI analysis - %d" % y
                 self.connect(t1, "outputnode.ref_brain", fMRI, "inputnode.ref_BET")
-                fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_1', self.SCENE_DIR + '.fMRI')
+                fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_1', self.Result_DIR + '.fMRI')
                 if pt_config[DIL['FMRI_%d' % y]]["block_design"] == "1":
-                    fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_2', self.SCENE_DIR + '.fMRI')
+                    fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_2', self.Result_DIR + '.fMRI')
