@@ -11,6 +11,9 @@ from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 import distutils.dir_util
 
 
+# INSTALL REQUIRED LIB: pip3 install pytest pytest-qt pytest-xdist
+# START TEST: pytest swane/ --color=yes --verbose -n 3
+
 @pytest.fixture(autouse=True)
 def change_test_dir(request):
     test_dir = os.path.join(TEST_DIR, "dep")
