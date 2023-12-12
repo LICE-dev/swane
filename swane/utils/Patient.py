@@ -62,6 +62,7 @@ class Patient:
         self.dependency_manager: DependencyManager = dependency_manager
         self.workflow: MainWorkflow | None = None
         self.workflow_process: WorkflowProcess | None = None
+        self.workflow_monitor_work: WorkflowMonitorWorker | None = None
 
     def load(self, patient_folder: str) -> PatientRet:
         # Load patient information from a folder, generate patient configuration and
@@ -405,7 +406,7 @@ class Patient:
         return os.path.join(self.graph_dir(), Patient.GRAPH_FILE_PREFIX + graph_name + "." + Patient.GRAPH_FILE_EXT)
 
     def result_dir(self):
-        return os.path.join(self.folder, MainWorkflow.SCENE_DIR)
+        return os.path.join(self.folder, MainWorkflow.Result_DIR)
 
     def scene_path(self):
         return os.path.join(self.result_dir(), "scene." + SLICER_EXTENSIONS[int(self.global_config.get_slicer_scene_ext())])
@@ -518,10 +519,10 @@ class Patient:
         queue = Queue(maxsize=500)
 
         # Generates a Monitor Worker to receive workflows notifications
-        workflow_monitor_work = WorkflowMonitorWorker(queue)
+        self.workflow_monitor_work = WorkflowMonitorWorker(queue)
         if update_node_callback is not None:
-            workflow_monitor_work.signal.log_msg.connect(update_node_callback)
-        QThreadPool.globalInstance().start(workflow_monitor_work)
+            self.workflow_monitor_work.signal.log_msg.connect(update_node_callback)
+        QThreadPool.globalInstance().start(self.workflow_monitor_work)
 
         # Starts the workflow on a new process
         self.workflow_process = WorkflowProcess(self.name, self.workflow, queue)

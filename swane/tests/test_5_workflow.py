@@ -9,6 +9,7 @@ from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.DataInputList import DataInputList
 from unittest.mock import ANY
 from swane.config.preference_list import WF_PREFERENCES
+from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 
 
 @pytest.fixture(autouse=True)
@@ -28,11 +29,6 @@ def test_patient():
     test_patient = Patient(global_config, DependencyManager())
     test_patient.create_new_patient_dir(TestWorkflow.TEST_PATIENT_NAME)
     return test_patient
-
-
-def run_workflow(patient: Patient):
-    patient.start_workflow(True, True)
-    patient.workflow_process.stop_event.wait()
 
 
 def clear_data_and_check(patient: Patient, data_input: DataInputList, qtbot):
@@ -92,6 +88,7 @@ class TestWorkflow:
                 "-freesurfer": [],
                 "-FLAT1": []    # no flat1 without flair, even if preference on
             },
+            'execute': True
         },
         'ref_bias': {
             'preferences': {
@@ -352,7 +349,7 @@ class TestWorkflow:
         },
     }
 
-    def test_workflow(self, test_patient, qtbot):
+    def test_1_workflow_generation(self, test_patient, qtbot):
         # check wk dependency
         assert test_patient.dependency_manager.is_fsl() is True, "missing fsl"
         assert test_patient.dependency_manager.is_dcm2niix() is True, "missing dcm2niix"
@@ -425,25 +422,43 @@ class TestWorkflow:
                                 assert input_value == node_name[2], ("Error for %s input value (%s instead of %s) of %s node in subworkflow %s for %s" %
                                                                      (node_name[1], str(input_value), str(node_name[2]), node_name[0], workflow_name, test_name))
 
-            if 'check_result' not in this_test:
-                this_test['check_result'] = {}
-            if len(this_test['check_result']) > 0:
-                run_workflow(test_patient)
-                for result in this_test['check_result']:
-                    print(result)
+            if 'execute' in this_test and this_test['execute'] is True:
+                self.last_node_cb = None
+                self.allow_wf_errors = True
+                cb = lambda report, tn=test_name: self.node_callback(report, tn)
+                test_patient.start_workflow(True, True, update_node_callback=cb)
+                qtbot.waitUntil(test_patient.workflow_process.stop_event.is_set, timeout=2000000)
+                assert self.last_node_cb == WorkflowSignals.WORKFLOW_STOP, "Workflow finished but not segnaled"
 
             last_test = this_test
 
+    # def test_2_workflow_execution(self, qtbot):
+    #     real_gloabl_config = ConfigManager()
+    #     real_main_working_directory = real_gloabl_config.get_main_working_directory()
+    #     real_exec_patient_path = os.path.join(real_main_working_directory, "pt_test")
+    #     assert os.path.exists(real_exec_patient_path), "Could not find pt_test in %s" % real_main_working_directory
+    #     test_global_config = ConfigManager(global_base_folder=os.getcwd())
+    #     test_global_config.set_main_working_directory(TestWorkflow.TEST_MAIN_WORKING_DIRECTORY)
+    #     os.system("cp -r %s %s" % (real_exec_patient_path, TestWorkflow.TEST_MAIN_WORKING_DIRECTORY))
+    #     test_patient = Patient(test_global_config, DependencyManager())
+    #     text_exec_patient_path = os.path.join(TestWorkflow.TEST_MAIN_WORKING_DIRECTORY, "pt_test")
+    #     assert os.path.exists(text_exec_patient_path), "Error in copying pt_test folder"
+    #     patient_load_ret = test_patient.load(text_exec_patient_path)
+    #     assert patient_load_ret == PatientRet.ValidFolder, "Error loading pt_test: %s" % str(patient_load_ret)
+    #
+    #     test_patient.reset_workflow()
+    #     assert test_patient.generate_workflow(generate_praphs=False) == PatientRet.GenWfCompleted, "Error generating workflow for pt_test"
+    #
+    #     self.last_node_cb = None
+    #     self.allow_wf_errors = False
+    #     cb = lambda report, tn="workflow execution on pt_test": self.node_callback(report, tn)
+    #     test_patient.start_workflow(True, True, update_node_callback=cb)
+    #     qtbot.waitUntil(test_patient.workflow_process.stop_event.is_set, timeout=2000000)
+    #     assert self.last_node_cb == WorkflowSignals.WORKFLOW_STOP, "Workflow finished but not segnaled"
+    #     assert os.path.exists(test_patient.result_dir()), "No result dir found after pt_test wf exec"
 
+    def node_callback(self, wf_report: WorkflowReport, test_name: str):
+        self.last_node_cb = wf_report.signal_type
+        if not self.allow_wf_errors and wf_report.signal_type == WorkflowSignals.NODE_ERROR:
+            assert False, "Node error during %s" % test_name
 
-
-
-
-
-
-
-
-        # with qtbot.waitCallback() as call_back:
-        #     test_patient.dicom_import_to_folder(data_input=DataInputList.T13D, copy_list=image_list, vols=vols, mod=mod,
-        #                                         force_modality=False, progress_callback=call_back)
-        # call_back.assert_called_with(PatientRet.DataImportCompleted)

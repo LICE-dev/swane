@@ -24,7 +24,7 @@ class SlicerViewerWorker(QRunnable):
         popen = subprocess.Popen(cmd, cwd=os.getcwd(), shell=True, stdout=subprocess.PIPE, universal_newlines=True)
 
 
-def load_scene(pushed: bool, slicer_path: str, scene_path: str):
+def load_scene(slicer_path: str, scene_path: str):
     """
     Visualize the workflow results into 3D Slicer.
 
