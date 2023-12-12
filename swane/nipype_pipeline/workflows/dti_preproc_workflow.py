@@ -93,6 +93,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     conv.inputs.source_dir = dti_dir
     conv.inputs.out_filename = "dti"
     conv.inputs.bids_format = False
+    conv.inputs.request_dti = True
 
     # NODE 1b: Orienting in radiological convention
     reorient = Node(ForceOrient(), name='dti_reOrient')
