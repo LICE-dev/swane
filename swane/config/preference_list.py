@@ -193,7 +193,7 @@ for tract in TRACTS.keys():
     WF_PREFERENCES[category][tract] = PreferenceEntry(
         input_type=InputTypes.CHECKBOX,
         label=TRACTS[tract][0],
-        default=TRACTS[tract][0],
+        default=TRACTS[tract][1],
         pref_requirement={DataInputList.DTI: [('tractography', True)]},
         pref_requirement_fail_tooltip="Tractography disabled",
     )
@@ -231,14 +231,18 @@ for x in range(FMRI_NUM):
         range=[1, 500],
     )
     WF_PREFERENCES[category]['tr'] = PreferenceEntry(
-        input_type=InputTypes.TEXT,
+        input_type=InputTypes.FLOAT,
         label="Repetition Time (TR)",
-        default="auto",
+        tooltip="Set -1 for automatic detection",
+        default="-1",
+        range=[-1, 1000],
     )
     WF_PREFERENCES[category]['n_vols'] = PreferenceEntry(
-        input_type=InputTypes.TEXT,
-        label="Task B duration",
-        default="auto",
+        input_type=InputTypes.NUMBER,
+        label="Number of volumes",
+        tooltip="Set -1 for automatic detection",
+        default="-1",
+        range=[-1, 1000],
     )
     WF_PREFERENCES[category]['slice_timing'] = PreferenceEntry(
         input_type=InputTypes.COMBO,

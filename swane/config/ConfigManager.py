@@ -2,6 +2,7 @@ import configparser
 from swane import strings, __version__
 from swane.config.preference_list import *
 from swane.utils.DataInputList import DataInputList
+from enum import Enum
 
 
 class ConfigManager(configparser.ConfigParser):
@@ -15,6 +16,9 @@ class ConfigManager(configparser.ConfigParser):
 
     def getboolean(self, section, option, **kwargs) -> bool:
         return super().getboolean(str(section), option, **kwargs)
+
+    def getfloat(self, section, option, **kwargs) -> bool:
+        return super().getfloat(str(section), option, **kwargs)
 
     def getint(self, section, option, **kwargs) -> int:
         return super().getint(str(section), option, **kwargs)
@@ -45,10 +49,7 @@ class ConfigManager(configparser.ConfigParser):
         self.load_default_workflow_settings(save=False)
 
         # check if this version need pref reset
-        try:
-            force_pref_reset = self.getboolean(GlobalPrefCategoryList.MAIN, 'force_pref_reset')
-        except:
-            force_pref_reset = False
+        force_pref_reset = save_get_boolean(self, GLOBAL_PREFERENCES, GlobalPrefCategoryList.MAIN, 'force_pref_reset')
 
         reset_pref = False
 
@@ -136,12 +137,7 @@ class ConfigManager(configparser.ConfigParser):
             self.save()
 
     def get_max_patient_tabs(self) -> int:
-        if not self.global_config:
-            return 1
-        try:
-            return self.getint(GlobalPrefCategoryList.PERFORMANCE, 'max_pt')
-        except:
-            return 1
+        return save_get_int(self, GLOBAL_PREFERENCES, GlobalPrefCategoryList.PERFORMANCE, 'max_pt')
 
     def get_patients_prefix(self) -> str:
         if self.global_config:
@@ -170,46 +166,22 @@ class ConfigManager(configparser.ConfigParser):
         if self.global_config:
             self[GlobalPrefCategoryList.MAIN]['slicer_version'] = slicer_version
 
-    def is_optional_series_enabled(self, series_name: str):
-        if self.global_config:
-            try:
-                return self.getboolean(GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name))
-            except:
-                return False
-        return False
+    def is_optional_series_enabled(self, series_name: str) -> bool:
+        return save_get_boolean(self, GLOBAL_PREFERENCES, GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name))
 
     def get_slicer_scene_ext(self) -> str:
         if self.global_config:
             return self[GlobalPrefCategoryList.MAIN]['slicer_scene_ext']
         return ''
 
-    def get_patient_workflow_type(self) -> str:
-        if not self.global_config:
-            try:
-                return self[DataInputList.T13D].getint('wf_type')
-            except:
-                return 0
-        return 0
-
-    def get_patient_workflow_freesurfer(self) -> bool:
-        if not self.global_config:
-            try:
-                return self.getboolean(DataInputList.T13D, 'freesurfer')
-            except:
-                return False
-        return False
+    def get_patient_workflow_type(self) -> int:
+        return save_get_int(self, WF_PREFERENCES, DataInputList.T13D, 'wf_type')
 
     def get_workflow_hippo_pref(self) -> bool:
-        try:
-            return self.getboolean(DataInputList.T13D, 'hippo_amyg_labels')
-        except:
-            return False
+        return save_get_boolean(self, WF_PREFERENCES, DataInputList.T13D, 'hippo_amyg_labels')
 
     def get_workflow_freesurfer_pref(self) -> bool:
-        try:
-            return self.getboolean(DataInputList.T13D, 'freesurfer')
-        except:
-            return False
+        return save_get_boolean(self, WF_PREFERENCES, DataInputList.T13D, 'freesurfer')
 
     def check_dependencies(self, dependency_manager):
         changed = False
@@ -224,9 +196,51 @@ class ConfigManager(configparser.ConfigParser):
             self.save()
 
     def get_last_pid(self) -> int:
-        try:
-            return self.getint(GlobalPrefCategoryList.MAIN, 'last_pid')
-        except:
-            pass
-        return -1
+        return save_get_int(self, GLOBAL_PREFERENCES, GlobalPrefCategoryList.MAIN, 'last_pid')
 
+
+def save_get_boolean(config: ConfigManager | configparser.SectionProxy, defaults: dict[Enum, PreferenceEntry], section: Enum, option: str) -> bool:
+    try:
+        if type(config) is ConfigManager:
+            return config.getboolean(section, option)
+        elif type(config) is configparser.SectionProxy:
+            return config.getboolean(option)
+    except:
+        if section in defaults and option in defaults[section]:
+            if type(defaults[section][option].default) is list:
+                ret = defaults[section][option].default[0]
+            else:
+                ret = defaults[section][option].default
+            if ret.lower() in configparser.ConfigParser.BOOLEAN_STATES:
+                return configparser.ConfigParser.BOOLEAN_STATES[ret.lower()]
+    raise Exception()
+
+
+def save_get_int(config: ConfigManager | configparser.SectionProxy, defaults: dict[Enum, PreferenceEntry], section: Enum, option: str) -> int:
+    try:
+        if type(config) is ConfigManager:
+            return config.getint(section, option)
+        elif type(config) is configparser.SectionProxy:
+            return config.getint(option)
+    except:
+        if section in defaults and option in defaults[section]:
+            if type(defaults[section][option].default) is list:
+                return 0
+            else:
+                return int(defaults[section][option].default)
+    raise Exception("Error for %s - %s" % (str(section), str(option)))
+
+
+def save_get_float(config: ConfigManager | configparser.SectionProxy, defaults: dict[Enum, PreferenceEntry], section: Enum, option: str) -> float:
+    try:
+        if type(config) is ConfigManager:
+            return config.getfloat(section, option)
+        elif type(config) is configparser.SectionProxy:
+            return config.getfloat(option)
+    except:
+        if section in defaults and option in defaults[section]:
+            if type(defaults[section][option].default) is list:
+                return float(defaults[section][option].default[0])
+            else:
+                return float(defaults[section][option].default)
+    raise Exception("Error for %s - %s" % (str(section), str(option)))

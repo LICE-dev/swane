@@ -510,7 +510,7 @@ class Patient:
                 self.delete_workflow_dir()
 
         # Checks for a previous workflow FreeSurfer execution
-        if self.config.get_patient_workflow_freesurfer() and self.freesurfer_dir_exists():
+        if self.config.get_workflow_freesurfer_pref() and self.freesurfer_dir_exists():
             if resume_freesurfer is None:
                 return PatientRet.ExecWfResumeFreesurfer
             elif not resume_freesurfer:

@@ -9,6 +9,7 @@ from PySide6_VerticalQTabWidget import VerticalQTabWidget
 from swane.config.config_enums import InputTypes
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
+from swane.config.ConfigManager import save_get_boolean
 
 
 class PreferencesWindow(QDialog):
@@ -75,7 +76,7 @@ class PreferencesWindow(QDialog):
                 if self.preferences[category][key].input_type == InputTypes.HIDDEN:
                     continue
                 self.input_keys[category][key] = x
-                self.inputs[x] = PreferenceUIEntry(category, key, my_config, self.preferences[category][key].input_type, parent=self)
+                self.inputs[x] = PreferenceUIEntry(category, key, my_config, self.preferences, self.preferences[category][key].input_type, parent=self)
 
                 # Label and Tooltip
                 self.inputs[x].set_label_text(self.preferences[category][key].label)
@@ -115,7 +116,7 @@ class PreferencesWindow(QDialog):
                                 self.inputs[target_x].input_field.currentIndexChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
                             else:
                                 self.inputs[target_x].input_field.textChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
-                            if not my_config.getboolean(pref_cat, pref_req[0]):
+                            if not save_get_boolean(my_config, self.preferences, pref_cat, pref_req[0]):
                                 self.inputs[x].disable(self.preferences[category][key].pref_requirement_fail_tooltip)
                                 break
                 if not my_config.global_config and self.preferences[category][key].input_requirement is not None:

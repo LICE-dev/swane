@@ -12,6 +12,7 @@ from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
 from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
+from swane.config.ConfigManager import save_get_boolean, save_get_float, save_get_int
 from swane.config.preference_list import WF_PREFERENCES
 from swane.utils.DataInputList import DataInputList
 
@@ -60,56 +61,16 @@ def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir
             fields=['ref_BET']),
         name='inputnode')
 
-    try:
-        task_a_name = config["task_a_name"]
-    except:
-        task_a_name = WF_PREFERENCES[DataInputList["FMRI_0"]]["task_a_name"].default
-
-    try:
-        task_b_name = config["task_b_name"]
-    except:
-        task_b_name = WF_PREFERENCES[DataInputList["FMRI_0"]]["task_b_name"].default
-
-    try:
-        task_duration = config.getint('task_duration')
-    except:
-        task_duration = WF_PREFERENCES[DataInputList["FMRI_0"]]["task_duration"].default
-
-    try:
-        rest_duration = config.getint('rest_duration')
-    except:
-        rest_duration = WF_PREFERENCES[DataInputList["FMRI_0"]]["rest_duration"].default
-
-    try:
-        TR = config.getfloat('tr')
-    except:
-        TR = -1
-
-    try:
-        slice_timing = config.getint('slice_timing')
-    except:
-        slice_timing = WF_PREFERENCES[DataInputList["FMRI_0"]]["slice_timing"].default[0]
-
-    try:
-        n_vols = config.getint('n_vols')
-    except:
-        n_vols = -1
-
-    try:
-        del_start_vols = config.getint('del_start_vols')
-    except:
-        del_start_vols = WF_PREFERENCES[DataInputList["FMRI_0"]]["del_start_vols"].default
-
-    try:
-        del_end_vols = config.getint('del_end_vols')
-    except:
-        del_end_vols = WF_PREFERENCES[DataInputList["FMRI_0"]]["del_end_vols"].default
-
-    try:
-        block_design = config.getint('block_design')
-    except:
-        block_design = WF_PREFERENCES[DataInputList["FMRI_0"]]["block_design"].default[0]
-    
+    task_a_name = config["task_a_name"]
+    task_b_name = config["task_b_name"]
+    task_duration = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'task_duration')
+    rest_duration = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'rest_duration')
+    TR = save_get_float(config, WF_PREFERENCES, DataInputList.FMRI_0, 'tr')
+    slice_timing = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'slice_timing')
+    n_vols = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'n_vols')
+    del_start_vols = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'del_start_vols')
+    del_end_vols = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'del_end_vols')
+    block_design = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'block_design')
     
     # Output Node
     outputnode = Node(

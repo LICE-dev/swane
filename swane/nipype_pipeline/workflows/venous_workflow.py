@@ -1,15 +1,16 @@
 from nipype.interfaces.fsl import (BET, FLIRT, Split, ApplyMask, ImageStats, ImageMaths, ApplyXFM)
 from nipype.interfaces.utility import Merge
 from nipype.pipeline.engine import Node
-from swane.config.preference_list import WF_PREFERENCES
-from swane.utils.DataInputList import DataInputList
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.VenousCheck import VenousCheck
-
+from swane.config.ConfigManager import save_get_float, save_get_int
+from swane.config.preference_list import WF_PREFERENCES
+from swane.utils.DataInputList import DataInputList
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
+
 
 def venous_workflow(name: str, venous_dir: str, config: SectionProxy, venous2_dir: str = None, base_dir: str = "/") -> CustomWorkflow:
     """
@@ -71,11 +72,7 @@ def venous_workflow(name: str, venous_dir: str, config: SectionProxy, venous2_di
     # NODE 4: Detect the venous phase from the anatomic phase
     veins_check = Node(VenousCheck(), name='veins_check')
     veins_check.long_name = "angiographic volume detection"
-    try:
-        veins_check.inputs.detection_mode = config.getint("vein_detection_mode")
-    except:
-        veins_check.inputs.detection_mode = 0
-
+    veins_check.inputs.detection_mode = save_get_int(config, WF_PREFERENCES, DataInputList.VENOUS, "vein_detection_mode")
         # If the phases are in the same sequence
     if venous2_dir is None:
         # NODE 3a: Divide the two phases from the phase contrast
@@ -109,10 +106,7 @@ def venous_workflow(name: str, venous_dir: str, config: SectionProxy, venous2_di
     bet.inputs.mask = True
     bet.inputs.threshold = True
     bet.inputs.surfaces = True
-    try:
-        bet.inputs.frac = config.getfloat('bet_thr')
-    except:
-        bet.inputs.frac = WF_PREFERENCES[DataInputList.VENOUS]['bet_thr'].default
+    bet.inputs.frac = save_get_float(config, WF_PREFERENCES, DataInputList.VENOUS, 'bet_thr')
     workflow.connect(veins_check, "out_file_anat", bet, "in_file")
 
     # NODE 6: Linear registration of anatomic phase to reference space

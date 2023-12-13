@@ -28,7 +28,6 @@ class WorkflowReport:
         """
 
         if not isinstance(signal_type, WorkflowSignals):
-            print(signal_type)
             signal_type = WorkflowSignals.INVALID_SIGNAL
         self.signal_type = signal_type
         self.workflow_name = None
