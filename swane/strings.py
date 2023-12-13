@@ -112,6 +112,7 @@ pttab_wf_insufficient_resources = "Insufficient system resources (RAM or CPU) to
 pttab_wf_invalid_signal = "Signaling error, workflow will be stopped. Report this error."
 pttab_wf_error_oom_gpu = "Process killed: Out of Memory (GPU). Try to reduce GPU process limit in performance preferences"
 pttab_wf_error_oom = "Process killed (possibile Out of Memory). Try to reduce CPU core limit in performance preferences"
+pttab_wf_error_terminated = "Process terminated. This can occur if user manually terminates a running process."
 pttab_tabtooltip_exec_disabled_series = "A 3D T1w series is required to enable workflow execution"
 pttab_tabtooltip_exec_disabled_dependency = "Mandatory dependencies are required to enable workflow execution"
 pttab_tabtooltip_result_disabled = "Complete a workflow first"

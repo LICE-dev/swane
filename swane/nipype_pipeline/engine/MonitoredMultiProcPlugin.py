@@ -250,8 +250,11 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 if "out of memory" in line:
                     info = strings.pttab_wf_error_oom_gpu
                     break
-                elif "Ucciso" in line:
+                elif "Killed" in line:
                     info = strings.pttab_wf_error_oom
+                    break
+                elif "Terminated" in line:
+                    info = strings.pttab_wf_error_terminated
                     break
             self.queue.put(WorkflowReport(long_name=node.fullname, signal_type=WorkflowSignals.NODE_ERROR, info=info))
         except:
@@ -266,6 +269,11 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 self.queue.put(WorkflowReport(long_name=node.fullname, signal_type=WorkflowSignals.NODE_STARTED))
             except:
                 traceback.print_exc()
+
+        # Force english language for every node with: export LC_ALL=en_US.UTF-8
+        # This is needed to recognize the "Killed" message in case of Out Of Memory Killer error
+        if hasattr(node.interface.inputs, "environ"):
+            node.interface.inputs.environ['LC_ALL'] = "en_US.UTF-8"
 
         return super(MonitoredMultiProcPlugin, self)._submit_job(node, updatehash)
 
