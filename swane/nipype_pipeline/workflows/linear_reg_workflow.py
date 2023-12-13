@@ -1,5 +1,5 @@
 from nipype.interfaces.fsl import (BET, FLIRT)
-
+from swane.config.ConfigManager import save_get_boolean, save_get_float
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -76,18 +76,11 @@ def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_di
 
     # NODE 3: Scalp removal
     bet = Node(BET(), '%s_BET' % name)
-    try:
-        bet.inputs.frac = config.getfloat('bet_thr')
-    except:
-        bet.inputs.frac = WF_PREFERENCES[DataInputList.T13D]['bet_thr'].default
-    try:
-        if config.getboolean('bet_bias_correction', fallback=False):
-            bet.inputs.reduce_bias = True
-        else:
-            bet.inputs.robust = True
-    except:
+    bet.inputs.frac = save_get_float(config, WF_PREFERENCES, DataInputList[name.upper()], 'bet_thr')
+    if save_get_boolean(config, WF_PREFERENCES, DataInputList[name.upper()], 'bet_bias_correction'):
+        bet.inputs.reduce_bias = True
+    else:
         bet.inputs.robust = True
-
     bet.inputs.mask = True
     workflow.connect(reorient, "out_file", bet, "in_file")
 

@@ -1,6 +1,7 @@
 from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT, Eddy)
 from nipype.pipeline.engine import Node
-from shutil import which
+from swane.config.ConfigManager import save_get_boolean
+from swane.config.preference_list import GLOBAL_PREFERENCES, GlobalPrefCategoryList, WF_PREFERENCES
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -10,6 +11,7 @@ from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
 from multiprocessing import cpu_count
+from swane.utils.DataInputList import DataInputList
 
 
 def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir: str = None, base_dir: str = "/", max_cpu: int = 0, multicore_node_limit: int = 0) -> CustomWorkflow:
@@ -83,10 +85,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
                                   ]),
         name='outputnode')
 
-    try:
-        is_cuda = config.getboolean('cuda')
-    except:
-        is_cuda = False
+    is_cuda = save_get_boolean(config, GLOBAL_PREFERENCES, GlobalPrefCategoryList.PERFORMANCE, 'cuda')
 
     # NODE 1: Conversion dicom -> nifti
     conv = Node(CustomDcm2niix(), name='dti_conv')
@@ -115,19 +114,15 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     bet.inputs.mask = True
     workflow.connect(nodif, "roi_file", bet, "in_file")
 
-    try:
-        old_eddy_correct = config.getboolean("old_eddy_correct")
-    except:
-        old_eddy_correct = False
-
+    old_eddy_correct = save_get_boolean(config, WF_PREFERENCES, DataInputList.DTI, "old_eddy_correct")
     if old_eddy_correct:
+        # NODE 4a: Generate Eddy files
         eddy = Node(EddyCorrect(), name='dti_eddy')
         eddy.inputs.ref_num = 0
         eddy.inputs.out_file = "data.nii.gz"
         workflow.connect(reorient, "out_file", eddy, "in_file")
         eddy_output_name = "eddy_corrected"
     else:
-
         # NODE 4a: Generate Eddy files
         eddy_files = Node(GenEddyFiles(), name="dti_eddy_files")
         workflow.connect(conv, "bvals", eddy_files, "bval")
@@ -184,10 +179,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     
     workflow.connect(fa_2_ref_flirt, 'out_file', outputnode, 'FA')
 
-    try:
-        is_tractography = config.getboolean('tractography')
-    except:
-        is_tractography = False
+    is_tractography = save_get_boolean(config, WF_PREFERENCES, DataInputList.DTI, 'tractography')
 
     if is_tractography:
         # NODE 1: Linear registration

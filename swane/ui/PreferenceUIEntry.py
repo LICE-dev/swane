@@ -4,10 +4,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIntValidator, QDoubleValidator
 from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox,
                                QComboBox, QStyle, QSizePolicy, QStyleOption)
-
+from enum import Enum
 from swane import strings
 from configparser import RawConfigParser
 from swane.config.config_enums import InputTypes
+from swane.config.ConfigManager import save_get_int, save_get_float, save_get_boolean, ConfigManager
+from swane.config.preference_list import GLOBAL_PREFERENCES, WF_PREFERENCES, GlobalPrefCategoryList
 
 
 class PreferenceUIEntry:
@@ -21,13 +23,14 @@ class PreferenceUIEntry:
     FLOAT = 6
     HIDDEN = 7
 
-    def __init__(self, category, key, my_config, input_type=TEXT, parent=None, populate_combo=None, validate_on_change=False):
+    def __init__(self, category: Enum, key: str, my_config: ConfigManager, defaults: dict, input_type=TEXT, parent=None, populate_combo=None, validate_on_change=False):
         self.restart = False
         self.category = category
         self.key = key
         self.input_type = input_type
         self.tooltip = None
         self.label = QLabel()
+        self.defaults = defaults
         opt = QStyleOption()
         opt.initFrom(self.label)
         text_size = self.label.fontMetrics().size(Qt.TextShowMnemonic, self.label.text())
@@ -114,13 +117,20 @@ class PreferenceUIEntry:
         for index, label in enumerate(items):
             self.input_field.insertItem(index, label)
 
-    def set_value_from_config(self, config):
+    def set_value_from_config(self, config: ConfigManager):
         if config is None:
             return
-        try:
-            self.set_value(config[self.category][self.key])
-        except:
-            pass
+
+        if self.input_type == InputTypes.CHECKBOX:
+            value = save_get_boolean(config, self.defaults, self.category, self.key)
+        elif self.input_type == InputTypes.NUMBER or self.input_type == InputTypes.COMBO:
+            value = save_get_int(config, self.defaults, self.category, self.key)
+        elif self.input_type == InputTypes.FLOAT:
+            value = save_get_float(config, self.defaults, self.category, self.key)
+        else:
+            value = config[self.category][self.key]
+
+        self.set_value(value)
 
     def set_range(self, min_value: int, max_value: int):
         if self.input_type != InputTypes.NUMBER and self.input_type != InputTypes.FLOAT:
@@ -136,21 +146,24 @@ class PreferenceUIEntry:
 
     def set_value(self, value, reset_change_state=False):
         if self.input_type == InputTypes.CHECKBOX:
-            if value in RawConfigParser.BOOLEAN_STATES and RawConfigParser.BOOLEAN_STATES[value]:
+            if type(value) is not bool:
+                raise Exception("Non boolean value for checkbox: %s" % str(value))
+            if value:
                 self.input_field.setCheckState(Qt.Checked)
             else:
                 self.input_field.setCheckState(Qt.Unchecked)
         elif self.input_type == InputTypes.COMBO:
-            try:
-                self.input_field.setCurrentIndex(int(value))
-            except ValueError:
-                index = self.input_field.findText(value)
-                if index != -1:
-                    self.input_field.setCurrentIndex(index)
-                else:
-                    return
+            if type(value) is not int:
+                raise Exception("Non int value for combo")
+            self.input_field.setCurrentIndex(value)
+            # except ValueError:
+            #     index = self.input_field.findText(value)
+            #     if index != -1:
+            #         self.input_field.setCurrentIndex(index)
+            #     else:
+            #         return
         else:
-            self.input_field.setText(value)
+            self.input_field.setText(str(value))
 
         if reset_change_state:
             self.changed = False

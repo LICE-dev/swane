@@ -3,8 +3,8 @@ from multiprocessing import cpu_count
 from os.path import abspath
 
 import swane_supplement
-from swane.config.preference_list import GLOBAL_PREFERENCES
-from swane.config.ConfigManager import ConfigManager
+from swane.config.preference_list import GLOBAL_PREFERENCES, WF_PREFERENCES, GlobalPrefCategoryList
+from swane.config.ConfigManager import ConfigManager, save_get_int, save_get_boolean
 from swane.utils.PatientInputStateList import PatientInputStateList
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
 from swane.config.config_enums import PLANES
@@ -22,6 +22,7 @@ from swane.nipype_pipeline.workflows.tractography_workflow import tractography_w
 from swane.config.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
 from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
+from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 
 
 DEBUG = False
@@ -33,7 +34,10 @@ class MainWorkflow(CustomWorkflow):
 
     def __init__(self, name: str, base_dir: str):
         super().__init__(name, base_dir)
-        self.is_resource_monitor = False
+        self.is_resource_monitor: bool = False
+        self.max_cpu: int = -1
+        self.max_gpu: int = -1
+        self.multicore_node_limit: int = -1
 
     def add_input_folders(self, global_config: ConfigManager, pt_config: ConfigManager, dependency_manager: DependencyManager, patient_input_state_list: PatientInputStateList):
         """
@@ -58,48 +62,25 @@ class MainWorkflow(CustomWorkflow):
             return
 
         # Check for FreeSurfer requirement and request
-        is_freesurfer = dependency_manager.is_freesurfer() and pt_config.get_patient_workflow_freesurfer()
+        is_freesurfer = dependency_manager.is_freesurfer() and pt_config.get_workflow_freesurfer_pref()
         is_hippo_amyg_labels = dependency_manager.is_freesurfer_matlab() and pt_config.get_workflow_hippo_pref()
 
         # Check for FLAT1 requirement and request
-        try:
-            is_flat1 = pt_config.getboolean(DIL.T13D, 'flat1') and patient_input_state_list[DIL.FLAIR3D].loaded
-        except:
-            is_flat1 = False
+        is_flat1 = save_get_boolean(pt_config, WF_PREFERENCES, DIL.T13D, 'flat1') and patient_input_state_list[DIL.FLAIR3D].loaded
         # Check for Asymmetry Index request
-        try:
-            is_ai = pt_config.getboolean(DIL.PET, 'ai') or pt_config.getboolean(DIL.ASL, 'ai')
-        except:
-            is_ai = False
+        is_ai = save_get_boolean(pt_config, WF_PREFERENCES, DIL.PET, 'ai') or save_get_boolean(pt_config, WF_PREFERENCES, DIL.ASL, 'ai')
         # Check for Tractography request
-        try:
-            is_tractography = pt_config.getboolean(DIL.DTI, 'tractography')
-        except:
-            is_tractography = False
-
+        is_tractography = save_get_boolean(pt_config, WF_PREFERENCES, DIL.DTI, 'tractography')
         # CPU cores and memory management
-        try:
-            self.is_resource_monitor = global_config.getboolean(GlobalPrefCategoryList.PERFORMANCE, 'resourceMonitor')
-        except:
-            self.is_resource_monitor = False
-        try:
-            self.max_cpu = global_config.getint(GlobalPrefCategoryList.PERFORMANCE, 'max_pt_cpu')
-        except:
-            self.max_cpu = -1
-
+        self.is_resource_monitor = save_get_boolean(global_config, GLOBAL_PREFERENCES, GlobalPrefCategoryList.PERFORMANCE, 'resourceMonitor')
+        self.max_cpu = save_get_int(global_config, GLOBAL_PREFERENCES, GlobalPrefCategoryList.PERFORMANCE, 'max_pt_cpu')
         if self.max_cpu < 1:
             self.max_cpu = cpu_count()
-
-        try:
-            self.multicore_node_limit = global_config.getint(GlobalPrefCategoryList.PERFORMANCE, 'multicore_node_limit')
-        except:
-            self.multicore_node_limit = 0
-        try:
-            self.max_gpu = global_config.getint(GlobalPrefCategoryList.PERFORMANCE, 'max_pt_gpu')
-            if self.max_gpu < 0:
-                self.max_gpu = 1
-        except:
-            self.max_gpu = 1
+        self.multicore_node_limit = save_get_int(global_config, GLOBAL_PREFERENCES, GlobalPrefCategoryList.PERFORMANCE, 'multicore_node_limit')
+        # GPU management
+        self.max_gpu = save_get_int(global_config, GLOBAL_PREFERENCES, GlobalPrefCategoryList.PERFORMANCE, 'max_pt_gpu')
+        if self.max_gpu < 0:
+            self.max_gpu = MonitoredMultiProcPlugin.gpu_count()
         try:
             if not dependency_manager.is_cuda():
                 pt_config[DIL.DTI]["cuda"] = "false"
@@ -316,7 +297,7 @@ class MainWorkflow(CustomWorkflow):
             if is_tractography:
                 for tract in TRACTS.keys():
                     try:
-                        if not pt_config.getboolean(DIL.DTI, tract):
+                        if not save_get_boolean(pt_config, WF_PREFERENCES, DIL.DTI, tract):
                             continue
                     except:
                         continue
