@@ -98,9 +98,11 @@ def load_freesurfer_surf(scene_dir: str, node_name: str, ref_node):
     if os.path.exists(file):
         try:
             print("SLICERLOADER: Loading surface " + node_name)
-            surf_node = slicer.util.loadNodeFromFile(file, 'FreeSurferModelFile',
-                                                    {"referenceVolumeID": ref_node.GetID()})
-            surf_node.GetDisplayNode().SetColor(0.82, 0.82, 0.82)
+            loaded_nodes = vtk.vtkCollection()
+            surf_node = slicer.app.ioManager().loadNodes("FreeSurfer model", {"fileName": file, "referenceVolumeID": ref_node.GetID()}, loaded_nodes)
+            if surf_node:
+                surf_node = list(loaded_nodes)[0]
+                surf_node.GetDisplayNode().SetColor(0.82, 0.82, 0.82)
         except:
             pass
         
@@ -387,7 +389,7 @@ else:
         if os.path.isdir(dtiDir):
             main_tract(dtiDir, sceneDir)
 
-        lesion_segment(sceneDir)
+        # lesion_segment(sceneDir)
 
         baseList = ['ref_brain', 'r-flair_brain', 'r-mdc_brain', 'r-FA', 'r-flair2d_tra_brain', 'r-flair2d_cor_brain',
                     'r-flair2d_sag_brain', 'r-binary_flair', 'r-junction_z', 'r-extension_z']
