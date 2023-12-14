@@ -53,6 +53,10 @@ class PreferencesWindow(QDialog):
 
         x = 0
 
+        # Define here to prevent calling during invalid pref value reading
+        self.saveButton = QPushButton(strings.pref_window_save_button)
+        self.saveButton.clicked.connect(self.save_preferences)
+
         for category in default_pref_list:
 
             if str(category) not in my_config:
@@ -76,14 +80,20 @@ class PreferencesWindow(QDialog):
                 if self.preferences[category][key].input_type == InputTypes.HIDDEN:
                     continue
                 self.input_keys[category][key] = x
-                self.inputs[x] = PreferenceUIEntry(category, key, my_config, self.preferences, self.preferences[category][key].input_type, parent=self)
+                self.inputs[x] = PreferenceUIEntry(category=category,
+                                                   key=key,
+                                                   my_config=my_config,
+                                                   defaults=self.preferences,
+                                                   input_type=self.preferences[category][key].input_type,
+                                                   restart=self.preferences[category][key].restart,
+                                                   parent=self)
 
                 # Label and Tooltip
                 self.inputs[x].set_label_text(self.preferences[category][key].label)
                 self.inputs[x].set_tooltip(self.preferences[category][key].tooltip)
 
                 # Some global preference need application restart
-                self.inputs[x].restart = self.preferences[category][key].restart
+                # self.inputs[x].restart = self.preferences[category][key].restart
 
                 # Input type-related controls
                 if self.preferences[category][key].input_type == InputTypes.COMBO:
@@ -147,9 +157,6 @@ class PreferencesWindow(QDialog):
             grid.addItem(vertical_spacer, x, 0, 1, 2)
 
         layout.addWidget(tab_widget)
-
-        self.saveButton = QPushButton(strings.pref_window_save_button)
-        self.saveButton.clicked.connect(self.save_preferences)
         layout.addWidget(self.saveButton)
 
         discard_button = QPushButton(strings.pref_window_discard_button)

@@ -75,7 +75,8 @@ WF_PREFERENCES[category]['bet_thr'] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold value for skull removal",
     default=0.3,
-    range=[0, 1],
+    # range=[0, 1],
+    range=[1, 0],
 )
 WF_PREFERENCES[category]['freesurfer'] = PreferenceEntry(
     input_type=InputTypes.CHECKBOX,
@@ -234,7 +235,7 @@ for x in range(FMRI_NUM):
         input_type=InputTypes.FLOAT,
         label="Repetition Time (TR)",
         tooltip="Set -1 for automatic detection",
-        default="-1",
+        default="-1.0",
         range=[-1, 1000],
     )
     WF_PREFERENCES[category]['n_vols'] = PreferenceEntry(

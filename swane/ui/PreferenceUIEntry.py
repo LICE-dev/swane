@@ -1,15 +1,12 @@
 import os
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIntValidator, QDoubleValidator
 from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox,
                                QComboBox, QStyle, QSizePolicy, QStyleOption)
 from enum import Enum
 from swane import strings
-from configparser import RawConfigParser
 from swane.config.config_enums import InputTypes
 from swane.config.ConfigManager import save_get_int, save_get_float, save_get_boolean, ConfigManager
-from swane.config.preference_list import GLOBAL_PREFERENCES, WF_PREFERENCES, GlobalPrefCategoryList
 
 
 class PreferenceUIEntry:
@@ -23,14 +20,16 @@ class PreferenceUIEntry:
     FLOAT = 6
     HIDDEN = 7
 
-    def __init__(self, category: Enum, key: str, my_config: ConfigManager, defaults: dict, input_type=TEXT, parent=None, populate_combo=None, validate_on_change=False):
-        self.restart = False
+    def __init__(self, category: Enum, key: str, my_config: ConfigManager, defaults: dict, input_type=TEXT, restart: bool = False, parent=None, populate_combo: [] = None, validate_on_change: bool = False):
+        self.changed = False
         self.category = category
         self.key = key
+        self.defaults = defaults
         self.input_type = input_type
+        self.restart = restart
+        self.parent = parent
         self.tooltip = None
         self.label = QLabel()
-        self.defaults = defaults
         opt = QStyleOption()
         opt.initFrom(self.label)
         text_size = self.label.fontMetrics().size(Qt.TextShowMnemonic, self.label.text())
@@ -42,14 +41,12 @@ class PreferenceUIEntry:
             self.populate_combo(populate_combo)
         self.set_value_from_config(my_config)
         self.box_text = ''
-        self.parent = parent
-        self.changed = False
         self.validate_on_change = validate_on_change
 
-    def set_label_text(self, text):
+    def set_label_text(self, text: str):
         self.label.setText(text)
 
-    def set_box_text(self, text):
+    def set_box_text(self, text: str):
         self.box_text = text
 
     def set_changed(self, **kwargs):
@@ -74,7 +71,9 @@ class PreferenceUIEntry:
             field.setValidator(QIntValidator(-1, 100))
 
         if self.input_type == InputTypes.FLOAT:
-            field.setValidator(QDoubleValidator(0, 100, 2).setNotation(QDoubleValidator.StandardNotation))
+            validator = QDoubleValidator(0.00, 100.00, 2, field)
+            validator.setNotation(QDoubleValidator.StandardNotation)
+            field.setValidator(validator)
 
         if self.input_type == InputTypes.FILE or self.input_type == InputTypes.DIRECTORY:
             field.setReadOnly(True)
@@ -111,7 +110,7 @@ class PreferenceUIEntry:
 
         self.set_value(file_path)
 
-    def populate_combo(self, items):
+    def populate_combo(self, items: []):
         if self.input_type != InputTypes.COMBO or items is None:
             return
         for index, label in enumerate(items):
@@ -132,19 +131,17 @@ class PreferenceUIEntry:
 
         self.set_value(value)
 
-    def set_range(self, min_value: int, max_value: int):
-        if self.input_type != InputTypes.NUMBER and self.input_type != InputTypes.FLOAT:
+        if str(value).lower() != config[self.category][self.key].lower():
+            self.set_changed()
+
+    def set_range(self, min_value: int | float, max_value: int | float):
+        if self.input_field.validator() is None:
             return
         if min_value > max_value:
-            x = min_value
-            min_value = max_value
-            max_value = x
-        if self.input_type == InputTypes.NUMBER:
-            self.input_field.setValidator(QIntValidator(min_value, max_value))
-        elif self.input_type == InputTypes.FLOAT:
-            self.input_field.setValidator(QDoubleValidator(min_value, max_value, 2).setNotation(QDoubleValidator.StandardNotation))
+            min_value, max_value = max_value, min_value
+        self.input_field.validator().setRange(min_value, max_value)
 
-    def set_value(self, value, reset_change_state=False):
+    def set_value(self, value, reset_change_state: bool = False):
         if self.input_type == InputTypes.CHECKBOX:
             if type(value) is not bool:
                 raise Exception("Non boolean value for checkbox: %s" % str(value))
@@ -156,26 +153,20 @@ class PreferenceUIEntry:
             if type(value) is not int:
                 raise Exception("Non int value for combo")
             self.input_field.setCurrentIndex(value)
-            # except ValueError:
-            #     index = self.input_field.findText(value)
-            #     if index != -1:
-            #         self.input_field.setCurrentIndex(index)
-            #     else:
-            #         return
         else:
             self.input_field.setText(str(value))
 
         if reset_change_state:
             self.changed = False
 
-    def disable(self, tooltip=None):
+    def disable(self, tooltip: str = None):
         self.input_field.setEnabled(False)
         self.label.setStyleSheet("color: gray")
         self.set_tooltip(tooltip)
         if self.input_type == InputTypes.CHECKBOX:
             self.input_field.setChecked(False)
 
-    def set_tooltip(self, tooltip):
+    def set_tooltip(self, tooltip: str):
         if self.tooltip is None:
             self.tooltip = tooltip
         if tooltip == "" and self.tooltip != "":
@@ -192,7 +183,7 @@ class PreferenceUIEntry:
         self.set_tooltip(self.tooltip)
         self.label.setStyleSheet("")
 
-    def get_value(self):
+    def get_value(self) -> str:
         if self.input_type == InputTypes.COMBO:
             value = str(self.input_field.currentIndex())
         elif self.input_type == InputTypes.CHECKBOX:
