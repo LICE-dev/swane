@@ -46,7 +46,7 @@ class ConfigManager(configparser.ConfigParser):
             self.config_file = os.path.abspath(os.path.join(global_base_folder, "." + strings.APPNAME))
 
         # Load default pref from pref list
-        self.load_default_workflow_settings(save=False)
+        self._load_defaults(save=False)
 
         # check if this version need pref reset
         force_pref_reset = save_get_boolean(self, GLOBAL_PREFERENCES, GlobalPrefCategoryList.MAIN, 'force_pref_reset')
@@ -78,7 +78,10 @@ class ConfigManager(configparser.ConfigParser):
     def reload(self):
         self.read(self.config_file)
 
-    def load_default_workflow_settings(self, save: bool):
+    def reset_to_defaults(self):
+        self._load_defaults(save=True)
+
+    def _load_defaults(self, save: bool):
         if self.global_config:
             for category in GlobalPrefCategoryList:
                 if not save:

@@ -12,6 +12,7 @@ import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
 from swane.utils.Patient import Patient, PatientRet
+from swane.config.ConfigManager import ConfigManager
 
 
 class MainWindow(QMainWindow):
@@ -20,13 +21,13 @@ class MainWindow(QMainWindow):
 
     """
        
-    def __init__(self, global_config):
+    def __init__(self, global_config: ConfigManager):
 
         super(MainWindow, self).__init__()
 
         # GUI configuration setting
-        self.global_config = global_config
-        self.dependency_manager = DependencyManager()
+        self.global_config: ConfigManager = global_config
+        self.dependency_manager: DependencyManager = DependencyManager()
         self.global_config.check_dependencies(self.dependency_manager)
 
         # GUI Icons setting
@@ -349,7 +350,7 @@ class MainWindow(QMainWindow):
         ret = wf_preference_window.exec()
 
         if ret == -1:
-            self.global_config.load_default_workflow_settings(save=True)
+            self.global_config.reset_to_defaults()
             self.edit_wf_config()
 
     def check_running_workflows(self) -> bool:
