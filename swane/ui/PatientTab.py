@@ -430,7 +430,7 @@ class PatientTab(QTabWidget):
         if ret != 0:
             self.reset_workflow()
         if ret == -1:
-            self.patient.config.load_default_workflow_settings(save=True)
+            self.patient.config.reset_to_defaults()
             self.edit_pt_config()
 
     def on_wf_type_changed(self, index: int):
