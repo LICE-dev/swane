@@ -67,7 +67,8 @@ class MainWorkflow(CustomWorkflow):
         # Check for FLAT1 requirement and request
         is_flat1 = patient_config.getboolean_safe(DIL.T13D, 'flat1') and patient_input_state_list[DIL.FLAIR3D].loaded
         # Check for Asymmetry Index request
-        is_ai = patient_config.getboolean_safe(DIL.PET, 'ai') or patient_config.getboolean_safe(DIL.ASL, 'ai')
+        is_ai = ((patient_config.getboolean_safe(DIL.PET, 'ai') and patient_input_state_list[DIL.PET].loaded) or
+                 (patient_config.getboolean_safe(DIL.ASL, 'ai') and patient_input_state_list[DIL.ASL].loaded))
         # Check for Tractography request
         is_tractography = patient_config.getboolean_safe(DIL.DTI, 'tractography')
         # CPU cores and memory management
@@ -101,7 +102,7 @@ class MainWorkflow(CustomWorkflow):
         t1.sink_result(self.base_dir, "outputnode", 'ref', self.Result_DIR)
         t1.sink_result(self.base_dir, "outputnode", 'ref_brain', self.Result_DIR)
 
-        if is_ai and (patient_input_state_list[DIL.ASL].loaded or patient_input_state_list[DIL.PET].loaded):
+        if is_ai:
             # Non linear registration for Asymmetry Index
             sym = nonlinear_reg_workflow("sym")
             sym.long_name = "Symmetric atlas registration"
@@ -221,7 +222,7 @@ class MainWorkflow(CustomWorkflow):
                 asl.sink_result(self.base_dir, "outputnode", 'zscore_surf_lh', self.Result_DIR)
                 asl.sink_result(self.base_dir, "outputnode", 'zscore_surf_rh', self.Result_DIR)
 
-            if is_ai:
+            if patient_config.getboolean_safe(DIL.ASL, 'ai'):
                 self.connect(sym, 'outputnode.fieldcoeff_file', asl, 'inputnode.ref_2_sym_warp')
                 self.connect(sym, 'outputnode.inverse_warp', asl, 'inputnode.ref_2_sym_invwarp')
 
@@ -259,7 +260,7 @@ class MainWorkflow(CustomWorkflow):
                 # self.connect(pet, "outputnode.registered_file", pet_ai, "inputnode.in_file")
                 # self.connect(freesurfer, "outputnode.vol_label_file_nii", pet_ai, "inputnode.seg_file")
 
-            if is_ai:
+            if patient_config.getboolean_safe(DIL.PET, 'ai'):
                 self.connect(sym, 'outputnode.fieldcoeff_file', pet, 'inputnode.ref_2_sym_warp')
                 self.connect(sym, 'outputnode.inverse_warp', pet, 'inputnode.ref_2_sym_invwarp')
 

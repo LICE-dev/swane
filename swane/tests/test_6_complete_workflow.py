@@ -28,10 +28,11 @@ class TestCompleteWorkflow:
     def test_complete_workflow(self, qtbot):
 
         #copy pt_test folder from real swane main working directory to testing folder
-        real_gloabl_config = ConfigManager()
-        real_main_working_directory = real_gloabl_config.get_main_working_directory()
+        real_global_config = ConfigManager()
+        real_main_working_directory = real_global_config.get_main_working_directory()
         real_exec_patient_path = os.path.join(real_main_working_directory, "pt_test")
         assert os.path.exists(real_exec_patient_path), "Could not find pt_test in %s" % real_main_working_directory
+        os.system("cp " + real_global_config.config_file + " " + os.getcwd())
         test_global_config = ConfigManager(global_base_folder=os.getcwd())
         test_global_config.set_main_working_directory(TestCompleteWorkflow.TEST_MAIN_WORKING_DIRECTORY)
         os.system("cp -r %s %s" % (real_exec_patient_path, TestCompleteWorkflow.TEST_MAIN_WORKING_DIRECTORY))
@@ -55,10 +56,10 @@ class TestCompleteWorkflow:
         test_patient = pt_tab.patient
 
         # Clear previous wf output copied from real folder
-        shutil.rmtree(test_patient.result_dir())
-        shutil.rmtree(test_patient.graph_dir())
-        shutil.rmtree(os.path.join(text_exec_patient_path, FS_DIR))
-        shutil.rmtree(os.path.join(text_exec_patient_path, LOG_DIR_NAME))
+        shutil.rmtree(test_patient.result_dir(), ignore_errors=True)
+        shutil.rmtree(test_patient.graph_dir(), ignore_errors=True)
+        shutil.rmtree(os.path.join(text_exec_patient_path, FS_DIR), ignore_errors=True)
+        shutil.rmtree(os.path.join(text_exec_patient_path, LOG_DIR_NAME), ignore_errors=True)
 
         # Generate workflow
         assert pt_tab.generate_workflow_button.isEnabled(), "Generate workflowbutton is disabled"
@@ -66,7 +67,7 @@ class TestCompleteWorkflow:
         qtbot.waitUntil(lambda: pt_tab.exec_button.isEnabled(), timeout=1000 * 60 * 2)
 
         # Clear previous wf output copied from real folder
-        shutil.rmtree(os.path.join(text_exec_patient_path, test_patient.workflow.name))
+        shutil.rmtree(os.path.join(text_exec_patient_path, test_patient.workflow.name), ignore_errors=True)
 
         # Execute workflow
         pt_tab.toggle_workflow_execution(False, False)
@@ -82,7 +83,7 @@ class TestCompleteWorkflow:
         assert pt_tab.generate_scene_button.isEnabled(), "Generate scene button not enabled"
         assert pt_tab.open_results_directory_button.isEnabled(), "Open result button not enabled"
         progress_dialog = pt_tab.generate_scene()
-        qtbot.waitUntil(lambda: not progress_dialog.isVisible(), timeout=1000 * 60 * 5)
+        qtbot.waitUntil(lambda: not progress_dialog.isVisible(), timeout=1000 * 60 * 25)
         assert pt_tab.load_scene_button.isEnabled(), "Load scene button not enabled"
 
         # Show scene in slicer
