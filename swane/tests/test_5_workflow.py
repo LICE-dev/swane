@@ -2,6 +2,7 @@ import os
 import shutil
 import pytest
 from swane.config.ConfigManager import ConfigManager
+from swane.config.config_enums import BLOCK_DESIGN
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.Patient import Patient, PatientRet
 from swane.tests import TEST_DIR
@@ -326,7 +327,7 @@ class TestWorkflow:
             },
             'preferences': {
                 DataInputList["FMRI_0"]: [
-                    ["block_design", "1"],
+                    ["block_design", BLOCK_DESIGN.RARB.name],
                     ["task_duration", "invalid"],
                     ["rest_duration", "invalid"],
                     ["tr", "invalid"],

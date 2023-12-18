@@ -63,7 +63,7 @@ class PatientTab(QTabWidget):
         self.input_report = {}
         self.dicom_scan_series_list = []
         self.importable_series_list = QListWidget()
-        self.wf_type_combo = None
+        self.workflow_type_combo = None
         self.generate_workflow_button = None
         self.node_list_treeWidget = None
         self.patient_config_button = None
@@ -369,12 +369,12 @@ class PatientTab(QTabWidget):
         layout = QGridLayout()
 
         # First Column: NODE LIST
-        self.wf_type_combo = QComboBox(self)
+        self.workflow_type_combo = QComboBox(self)
 
-        for index, label in enumerate(WORKFLOW_TYPES):
-            self.wf_type_combo.insertItem(index, label)
+        for row in WORKFLOW_TYPES:
+            self.workflow_type_combo.addItem(row.value, userData=row.name)
 
-        layout.addWidget(self.wf_type_combo, 0, 0)
+        layout.addWidget(self.workflow_type_combo, 0, 0)
 
         self.generate_workflow_button = QPushButton(strings.GENBUTTONTEXT)
         self.generate_workflow_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
@@ -400,7 +400,7 @@ class PatientTab(QTabWidget):
         self.patient_config_button = QPushButton(strings.PTCONFIGBUTTONTEXT)
         self.patient_config_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.patient_config_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        self.patient_config_button.clicked.connect(self.edit_pt_config)
+        self.patient_config_button.clicked.connect(self.edit_patient_config)
         layout.addWidget(self.patient_config_button, 0, 1)
 
         self.exec_button = QPushButton(strings.EXECBUTTONTEXT)
@@ -415,7 +415,7 @@ class PatientTab(QTabWidget):
 
         self.exec_tab.setLayout(layout)
 
-    def edit_pt_config(self):
+    def edit_patient_config(self):
         """
         Opens the Patient Preference Window.
 
@@ -431,7 +431,7 @@ class PatientTab(QTabWidget):
             self.reset_workflow()
         if ret == -1:
             self.patient.config.reset_to_defaults()
-            self.edit_pt_config()
+            self.edit_patient_config()
 
     def on_wf_type_changed(self, index: int):
         """
@@ -447,8 +447,9 @@ class PatientTab(QTabWidget):
         None.
 
         """
-        
-        self.patient.config.set_workflow_option(index)
+
+        new_workflow_type = self.workflow_type_combo.itemData(index)
+        self.patient.config.set_workflow_option(WORKFLOW_TYPES[new_workflow_type])
         self.patient.config.save()
         self.reset_workflow()
 
@@ -579,7 +580,7 @@ class PatientTab(QTabWidget):
                 self.exec_button.setText(strings.EXECBUTTONTEXT_STOP)
                 self.setTabEnabled(PatientTab.DATATAB, False)
                 self.setTabEnabled(PatientTab.RESULTTAB, False)
-                self.wf_type_combo.setEnabled(False)
+                self.workflow_type_combo.setEnabled(False)
                 self.patient_config_button.setEnabled(False)
 
         # Workflow executing
@@ -734,10 +735,10 @@ class PatientTab(QTabWidget):
             self.set_loading(data_input)
         elif state == PatientRet.DataInputValid:
 
-            pt_list = dicom_src_work.get_patient_list()
-            exam_list = dicom_src_work.get_exam_list(pt_list[0])
-            series_list = dicom_src_work.get_series_list(pt_list[0], exam_list[0])
-            image_list, patient_name, mod, series_description, vols = dicom_src_work.get_series_info(pt_list[0], exam_list[0], series_list[0])
+            patient_list = dicom_src_work.get_patient_list()
+            exam_list = dicom_src_work.get_exam_list(patient_list[0])
+            series_list = dicom_src_work.get_series_list(patient_list[0], exam_list[0])
+            image_list, patient_name, mod, series_description, vols = dicom_src_work.get_series_info(patient_list[0], exam_list[0], series_list[0])
 
             label = PatientTab.label_from_dicom(image_list, patient_name, mod, series_description, vols)
 
@@ -755,9 +756,10 @@ class PatientTab(QTabWidget):
 
         """
 
-        self.wf_type_combo.setCurrentIndex(self.patient.config.get_patient_workflow_type())
+        index = self.workflow_type_combo.findData(self.patient.config.get_patient_workflow_type().name)
+        self.workflow_type_combo.setCurrentIndex(index)
         # Set after patient loading to prevent the onchanged fire on previous line command
-        self.wf_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)
+        self.workflow_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)
 
         # Scan patient dicom folder
         dicom_scanners, total_files = self.patient.prepare_scan_dicom_folders()
@@ -891,7 +893,7 @@ class PatientTab(QTabWidget):
             self.exec_graph.load(self.main_window.VOID_SVG_FILE)
             self.exec_button_set_enabled(False)
             self.generate_workflow_button.setEnabled(True)
-            self.wf_type_combo.setEnabled(True)
+            self.workflow_type_combo.setEnabled(True)
             self.patient_config_button.setEnabled(True)
 
     def result_directory_changed(self):
@@ -929,27 +931,27 @@ class PatientTab(QTabWidget):
         
         folder_path = dicom_src_work.dicom_dir
         self.scan_directory_watcher.addPath(folder_path)
-        pt_list = dicom_src_work.get_patient_list()
+        patient_list = dicom_src_work.get_patient_list()
 
-        if len(pt_list) == 0:
+        if len(patient_list) == 0:
             msg_box = QMessageBox()
             msg_box.setText(strings.pttab_no_dicom_error + folder_path)
             msg_box.exec()
             return
         
-        if len(pt_list) > 1:
+        if len(patient_list) > 1:
             msg_box = QMessageBox()
             msg_box.setText(strings.pttab_multi_pt_error + folder_path)
             msg_box.exec()
             return
         
-        exam_list = dicom_src_work.get_exam_list(pt_list[0])
+        exam_list = dicom_src_work.get_exam_list(patient_list[0])
         
         for exam in exam_list:
-            series_list = dicom_src_work.get_series_list(pt_list[0], exam)
+            series_list = dicom_src_work.get_series_list(patient_list[0], exam)
             for series in series_list:
 
-                image_list, patient_name, mod, series_description, vols = dicom_src_work.get_series_info(pt_list[0], exam, series)
+                image_list, patient_name, mod, series_description, vols = dicom_src_work.get_series_info(patient_list[0], exam, series)
 
                 if image_list is not None:
                     label = PatientTab.label_from_dicom(image_list, patient_name, mod, series_description, vols)

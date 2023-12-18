@@ -45,7 +45,7 @@ class TestCompleteWorkflow:
         main_window = MainWindow(global_config)
         qtbot.addWidget(main_window)
         qtbot.waitForWindowShown(main_window)
-        main_window.search_pt_dir(folder_path=text_exec_patient_path)
+        main_window.search_patient_dir(folder_path=text_exec_patient_path)
         pt_tab = main_window.main_tab.widget(1)
         assert type(pt_tab) is PatientTab, "Error in tab selection"
         qtbot.waitUntil(lambda: pt_tab.isTabEnabled(PatientTab.EXECTAB), timeout=1000*60*2)

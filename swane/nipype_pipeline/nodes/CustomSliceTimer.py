@@ -6,6 +6,7 @@ from nipype import Node
 from os.path import abspath
 import os
 from nipype.interfaces.base import (traits, TraitedSpec, BaseInterface, BaseInterfaceInputSpec, File)
+from swane.config.config_enums import SLICE_TIMING
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -13,10 +14,7 @@ class CustomSliceTimerInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='the input image')
     time_repetition = traits.Float(mandatory=True)
     slice_timing = traits.Enum(
-        0,  # None
-        1,  # Regular up
-        2,  # Regular down
-        3,  # intervealed
+        SLICE_TIMING,
         usedefault=True)
 
 
@@ -37,16 +35,16 @@ class CustomSliceTimer(BaseInterface):
 
     def _run_interface(self, runtime):
         out_file = self._gen_outfilename()
-        if self.inputs.slice_timing == 0:
+        if self.inputs.slice_timing == SLICE_TIMING.UNKNOWN:
             shutil.copy(self.inputs.in_file, out_file)
         else:
             fmri_timing_correction = Node(SliceTimer(), name="fMRI_timing_correction")
             fmri_timing_correction.inputs.time_repetition = self.inputs.time_repetition
             fmri_timing_correction.inputs.in_file = self.inputs.in_file
             fmri_timing_correction.inputs.out_file = out_file
-            if self.inputs.slice_timing == 2:
+            if self.inputs.slice_timing == SLICE_TIMING.DOWN:
                 fmri_timing_correction.inputs.index_dir = True
-            elif self.inputs.slice_timing == 3:
+            elif self.inputs.slice_timing == SLICE_TIMING.INTERLEAVED:
                 fmri_timing_correction.inputs.interleaved = True
             fmri_timing_correction.run()
 

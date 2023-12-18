@@ -246,7 +246,6 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             # TODO: implements signaling in case of OOM strings.pttab_wf_error_oom
             info = None
             for line in result['traceback']:
-                print(line)
                 if "out of memory" in line:
                     info = strings.pttab_wf_error_oom_gpu
                     break

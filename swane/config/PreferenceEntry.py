@@ -17,6 +17,8 @@ class PreferenceEntry:
     validate_on_change = False
     informative_text = None
     box_text = None
+    hidden = False
+    value_enum = None
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():

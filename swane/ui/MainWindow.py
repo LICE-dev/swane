@@ -80,7 +80,7 @@ class MainWindow(QMainWindow):
         text_size = button.fontMetrics().size(Qt.TextShowMnemonic, button.text())
         return button.style().sizeFromContents(QStyle.CT_PushButton, opt, text_size, button).height()
 
-    def open_pt_tab(self, patient: Patient):
+    def open_patient_tab(self, patient: Patient):
         """
         Load a checked and valid patient folder.
 
@@ -96,14 +96,14 @@ class MainWindow(QMainWindow):
         """
         
         this_tab = PatientTab(self.global_config, patient, main_window=self, parent=self.main_tab)
-        self.pt_tabs_array.append(this_tab)
+        self.patient_tab_array.append(this_tab)
 
         self.main_tab.addTab(this_tab, os.path.basename(patient.name))
         self.main_tab.setCurrentWidget(this_tab)
         
         this_tab.load_patient()
 
-    def check_pt_limit(self) -> bool:
+    def check_patient_limit(self) -> bool:
         """
         Check if SWANe can open another patient tab without overcome the limit set by configuration.
 
@@ -114,10 +114,10 @@ class MainWindow(QMainWindow):
 
         """
         
-        max_pt = self.global_config.get_max_patient_tabs()
-        if max_pt <= 0:
+        max_patients = self.global_config.get_max_patient_tabs()
+        if max_patients <= 0:
             return True
-        if len(self.pt_tabs_array) >= max_pt:
+        if len(self.patient_tab_array) >= max_patients:
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Icon.Warning)
             msg_box.setText(strings.mainwindow_max_pt_error)
@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
             return False
         return True
 
-    def search_pt_dir(self, button_state: bool = False, folder_path: str = None):
+    def search_patient_dir(self, button_state: bool = False, folder_path: str = None):
         """
         Try to open a patient directory
 
@@ -143,7 +143,7 @@ class MainWindow(QMainWindow):
         """
         
         # Guard to avoid the opening of patient tabs greater than the maximum allowed
-        if not self.check_pt_limit():
+        if not self.check_patient_limit():
             return
 
         if folder_path is None:
@@ -155,8 +155,8 @@ class MainWindow(QMainWindow):
         patient = Patient(self.global_config, dependency_manager=self.dependency_manager)
 
         # Guard to avoid an already loaded patient directory
-        for pt in self.pt_tabs_array:
-            if pt.pt_folder == folder_path:
+        for tab in self.patient_tab_array:
+            if tab.patient.folder == folder_path:
                 msg_box = QMessageBox()
                 msg_box.setIcon(QMessageBox.Icon.Warning)
                 msg_box.setText(strings.mainwindow_pt_already_loaded_error)
@@ -166,13 +166,9 @@ class MainWindow(QMainWindow):
         patient_load_ret = patient.load(folder_path)
 
         if patient_load_ret == PatientRet.ValidFolder:
-            self.open_pt_tab(patient)
+            self.open_patient_tab(patient)
         elif patient_load_ret == PatientRet.FolderNotFound:
-            # Should not be possible
-            msg_box = QMessageBox()
-            msg_box.setIcon(QMessageBox.Icon.Critical)
-            msg_box.setText(strings.mainwindow_ptfolder_not_found_error)
-            msg_box.exec()
+            # User canceled patient load
             return
         elif patient_load_ret == PatientRet.PathBlankSpaces:
             # Guard to avoid the opening a directory containing blank spaces
@@ -209,7 +205,7 @@ class MainWindow(QMainWindow):
             # If a selected folder is not valid, the user may force its conversion into a patient folder.
             if ret == QMessageBox.StandardButton.Yes:
                 patient.fix_patient_folder_subtree(folder_path)
-                self.search_pt_dir(folder_path=folder_path)
+                self.search_patient_dir(folder_path=folder_path)
             return
             
         return
@@ -240,7 +236,7 @@ class MainWindow(QMainWindow):
         
         return self.global_config.get_patients_prefix() + str(max(file_list) + 1)
 
-    def choose_new_pt_dir(self):
+    def choose_new_patient_dir(self):
         """
         Create a new patient folder. The user must specify its name.
 
@@ -250,7 +246,7 @@ class MainWindow(QMainWindow):
 
         """
         
-        if not self.check_pt_limit():
+        if not self.check_patient_limit():
             return
 
         text, ok = QInputDialog.getText(self, strings.mainwindow_new_pt_title, strings.mainwindow_new_pt_name,
@@ -277,7 +273,7 @@ class MainWindow(QMainWindow):
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_new_pt_created + patient_name)
             msg_box.exec()
-            self.open_pt_tab(patient)
+            self.open_patient_tab(patient)
 
     def set_main_working_directory(self):
         """
@@ -364,7 +360,7 @@ class MainWindow(QMainWindow):
 
         """
         
-        for pt in self.pt_tabs_array:
+        for pt in self.patient_tab_array:
             if pt.patient.is_workflow_process_alive():
                 return True
             
@@ -380,7 +376,7 @@ class MainWindow(QMainWindow):
 
         """
         
-        for pt in self.pt_tabs_array:
+        for pt in self.patient_tab_array:
             pt.reset_workflow()
 
     def about(self):
@@ -443,12 +439,12 @@ class MainWindow(QMainWindow):
         button_action = QAction(QIcon.fromTheme(
             "document-open"), strings.menu_load_pt, self)
         button_action.setStatusTip(strings.menu_load_pt_tip)
-        button_action.triggered.connect(self.search_pt_dir)
+        button_action.triggered.connect(self.search_patient_dir)
 
         button_action2 = QAction(QIcon.fromTheme(
             "document-new"), strings.menu_new_pt, self)
         button_action2.setStatusTip(strings.menu_new_pt_tip)
-        button_action2.triggered.connect(self.choose_new_pt_dir)
+        button_action2.triggered.connect(self.choose_new_patient_dir)
 
         button_action3 = QAction(QIcon.fromTheme(
             "application-exit"), strings.menu_exit, self)
@@ -482,7 +478,7 @@ class MainWindow(QMainWindow):
         # Tab definition
         self.main_tab = QTabWidget(parent=self)
         self.main_tab.setTabsClosable(True)
-        self.main_tab.tabCloseRequested.connect(self.close_pt_tab)
+        self.main_tab.tabCloseRequested.connect(self.close_patient_tab)
         self.setCentralWidget(self.main_tab)
         self.homeTab = QWidget()
         self.main_tab.addTab(self.homeTab, strings.mainwindow_home_tab_name)
@@ -494,11 +490,11 @@ class MainWindow(QMainWindow):
         # Home Tab definition
         self.home_tab_ui()
         
-        self.pt_tabs_array = []
+        self.patient_tab_array = []
 
         self.show()
 
-    def close_pt_tab(self, index: int):
+    def close_patient_tab(self, index: int):
         """
         Handle the PySide tab closing event for the Patient tab.
 
@@ -526,7 +522,7 @@ class MainWindow(QMainWindow):
 
         tab_item.patient.config.save()
         
-        self.pt_tabs_array.remove(tab_item)
+        self.patient_tab_array.remove(tab_item)
         self.main_tab.removeTab(index)
 
     def closeEvent(self, event: QCloseEvent):
@@ -708,6 +704,6 @@ class MainWindow(QMainWindow):
         self.global_config.set_slicer_version(slicer_version)
         self.global_config.save()
 
-        for tab in self.pt_tabs_array:
+        for tab in self.patient_tab_array:
             tab.export_results_button_update_state()
             tab.load_scene_button_update_state()

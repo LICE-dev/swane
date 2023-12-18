@@ -1,8 +1,8 @@
 from nipype import Node, IdentityInterface, Merge, SelectFiles
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.algorithms.rapidart import ArtifactDetect
-from nipype.interfaces.fsl import ImageMaths, ExtractROI, MCFLIRT, BET, ImageStats, SUSAN, FLIRT, Level1Design, \
-    FEATModel, FILMGLS, SmoothEstimate, Cluster, ApplyXFM
+from nipype.interfaces.fsl import (ImageMaths, ExtractROI, MCFLIRT, BET, ImageStats, SUSAN, FLIRT, Level1Design,
+                                   FEATModel, FILMGLS, SmoothEstimate, Cluster, ApplyXFM)
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
@@ -12,9 +12,7 @@ from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
 from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
-from swane.config.ConfigManager import save_get_boolean, save_get_float, save_get_int
-from swane.config.preference_list import WF_PREFERENCES
-from swane.utils.DataInputList import DataInputList
+from swane.config.config_enums import BLOCK_DESIGN, SLICE_TIMING
 
 
 def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
@@ -63,14 +61,14 @@ def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir
 
     task_a_name = config["task_a_name"]
     task_b_name = config["task_b_name"]
-    task_duration = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'task_duration')
-    rest_duration = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'rest_duration')
-    TR = save_get_float(config, WF_PREFERENCES, DataInputList.FMRI_0, 'tr')
-    slice_timing = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'slice_timing')
-    n_vols = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'n_vols')
-    del_start_vols = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'del_start_vols')
-    del_end_vols = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'del_end_vols')
-    block_design = save_get_int(config, WF_PREFERENCES, DataInputList.FMRI_0, 'block_design')
+    task_duration = config.getint_safe('task_duration')
+    rest_duration = config.getint_safe('rest_duration')
+    TR = config.getfloat_safe('tr')
+    slice_timing = config.getenum_safe('slice_timing')
+    n_vols = config.getint_safe('n_vols')
+    del_start_vols = config.getint_safe('del_start_vols')
+    del_end_vols = config.getint_safe('del_end_vols')
+    block_design = config.getenum_safe('block_design')
     
     # Output Node
     outputnode = Node(
@@ -365,7 +363,9 @@ def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir
     workflow.connect(modelestimate, ('dof_file', dof_from_file), smoothness, 'dof')
     workflow.connect(dilatemask, 'out_file', smoothness, 'mask_file')
 
-    n_contrasts = 1 + block_design
+    n_contrasts = 1
+    if block_design == BLOCK_DESIGN.RARB:
+        n_contrasts += 1
     cont = 0
     while cont < n_contrasts:
         cont += 1

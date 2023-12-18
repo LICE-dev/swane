@@ -4,6 +4,7 @@ import shutil
 from nipype.interfaces.base import InputMultiObject
 from nipype.interfaces.fsl import ImageStats
 from os.path import abspath
+from swane.config.config_enums import VEIN_DETECTION_MODE
 from nipype.interfaces.base import traits
 from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File)
 
@@ -12,10 +13,7 @@ from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, Trait
 class VenousCheckInputSpec(BaseInterfaceInputSpec):
     in_files = InputMultiObject(File(exists=True), desc="List of splitted file")
     detection_mode = traits.Enum(
-        0,
-        1,
-        2,
-        3,
+        VEIN_DETECTION_MODE,
         argstr="-m %d",
         usedefault=True)
     out_file_veins = File(desc='the output venous image')
@@ -42,17 +40,17 @@ class VenousCheck(BaseInterface):
         self.inputs.out_file_veins = abspath("veins.nii.gz")
         self.inputs.out_file_anat = abspath("veins_anat.nii.gz")
 
-        if self.inputs.detection_mode == 2:
+        if self.inputs.detection_mode == VEIN_DETECTION_MODE.FIRST:
             # Always first
             shutil.copy(self.inputs.in_files[0], self.inputs.out_file_veins)
             shutil.copy(self.inputs.in_files[1], self.inputs.out_file_anat)
             return runtime
-        elif self.inputs.detection_mode == 3:
+        elif self.inputs.detection_mode == VEIN_DETECTION_MODE.SECOND:
             # Always second
             shutil.copy(self.inputs.in_files[1], self.inputs.out_file_veins)
             shutil.copy(self.inputs.in_files[0], self.inputs.out_file_anat)
             return runtime
-        elif self.inputs.detection_mode == 1:
+        elif self.inputs.detection_mode == VEIN_DETECTION_MODE.MEAN:
             # Mean value mode
             op_string = "-M"
         else:

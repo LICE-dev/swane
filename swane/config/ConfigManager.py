@@ -3,6 +3,8 @@ from swane import strings, __version__
 from swane.config.preference_list import *
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
+from inspect import isclass
+from swane.config.config_enums import WORKFLOW_TYPES, SLICER_EXTENSIONS
 
 
 class ConfigManager(configparser.ConfigParser):
@@ -14,15 +16,6 @@ class ConfigManager(configparser.ConfigParser):
     def __setitem__(self, key, value):
         super().__setitem__(str(key), value)
 
-    def getboolean(self, section, option, **kwargs) -> bool:
-        return super().getboolean(str(section), option, **kwargs)
-
-    def getfloat(self, section, option, **kwargs) -> bool:
-        return super().getfloat(str(section), option, **kwargs)
-
-    def getint(self, section, option, **kwargs) -> int:
-        return super().getint(str(section), option, **kwargs)
-
     def __init__(self, patient_folder: str = None, global_base_folder: str = None):
         """
 
@@ -32,6 +25,7 @@ class ConfigManager(configparser.ConfigParser):
             The patient folder path. None in global all configuration
         """
         super(ConfigManager, self).__init__()
+        self._section_defaults = {}
 
         # First set some internal values differentiating global from patient pref objects
         if patient_folder is not None:
@@ -49,7 +43,7 @@ class ConfigManager(configparser.ConfigParser):
         self._load_defaults(save=False)
 
         # check if this version need pref reset
-        force_pref_reset = save_get_boolean(self, GLOBAL_PREFERENCES, GlobalPrefCategoryList.MAIN, 'force_pref_reset')
+        force_pref_reset = self.getboolean_safe(GlobalPrefCategoryList.MAIN, 'force_pref_reset')
 
         reset_pref = False
 
@@ -69,6 +63,11 @@ class ConfigManager(configparser.ConfigParser):
 
         if not reset_pref and os.path.exists(self.config_file):
             self.read(self.config_file)
+            # Cycle all read values and reassign them to invoke validate_type without rewriting read method
+            for section in self._section_defaults.keys():
+                for option in self._section_defaults[section].keys():
+                    self.set(section, option, self[section][option])
+            # set last_swane_version in patient config to ensure force_pref_reset compatibility
             if str(GlobalPrefCategoryList.MAIN) not in self:
                 self[GlobalPrefCategoryList.MAIN] = {}
             self[GlobalPrefCategoryList.MAIN]['last_swane_version'] = __version__
@@ -86,38 +85,42 @@ class ConfigManager(configparser.ConfigParser):
             for category in GlobalPrefCategoryList:
                 if not save:
                     self[category] = {}
+                    self._section_defaults[str(category)] = GLOBAL_PREFERENCES[category]
                     for pref in GLOBAL_PREFERENCES[category]:
-                        if isinstance(GLOBAL_PREFERENCES[category][pref].default, list):
-                            self[category][pref] = "0"
+                        if issubclass(type(GLOBAL_PREFERENCES[category][pref].default), Enum):
+                            self[category][pref] = GLOBAL_PREFERENCES[category][pref].default.name
                         else:
                             self[category][pref] = str(GLOBAL_PREFERENCES[category][pref].default)
 
             for data_input in DataInputList:
                 if data_input in WF_PREFERENCES:
                     self[data_input] = {}
+                    self._section_defaults[str(data_input)] = WF_PREFERENCES[data_input]
                     for pref in WF_PREFERENCES[data_input]:
-                        if isinstance(WF_PREFERENCES[data_input][pref].default, list):
-                            self[data_input][pref] = "0"
+                        if issubclass(type(WF_PREFERENCES[data_input][pref].default), Enum):
+                            self[data_input][pref] = WF_PREFERENCES[data_input][pref].default.name
                         else:
                             self[data_input][pref] = str(WF_PREFERENCES[data_input][pref].default)
         else:
             tmp_config = ConfigManager()
             for data_input in DataInputList:
                 if data_input in WF_PREFERENCES:
+                    self._section_defaults[str(data_input)] = WF_PREFERENCES[data_input]
                     self[data_input] = tmp_config[data_input]
             self[GlobalPrefCategoryList.MAIN] = {}
             self[GlobalPrefCategoryList.MAIN]['last_swane_version'] = tmp_config[GlobalPrefCategoryList.MAIN]['last_swane_version']
             self[GlobalPrefCategoryList.MAIN]['force_pref_reset'] = tmp_config[GlobalPrefCategoryList.MAIN]['force_pref_reset']
 
-            self.set_workflow_option(tmp_config[GlobalPrefCategoryList.MAIN]['default_wf_type'])
+            self.set_workflow_option(tmp_config.getenum_safe(GlobalPrefCategoryList.MAIN, 'default_wf_type'))
         if save:
             self.save()
 
-    def set_workflow_option(self, workflow_type: int | str):
+    def set_workflow_option(self, workflow_type: WORKFLOW_TYPES):
         if self.global_config:
             return
-        workflow_type = str(workflow_type)
-        self[DataInputList.T13D]['wf_type'] = workflow_type
+        if type(workflow_type) is not WORKFLOW_TYPES:
+            return
+        self[DataInputList.T13D]['wf_type'] = workflow_type.name
         for category in DEFAULT_WF[workflow_type]:
             for key in DEFAULT_WF[workflow_type][category]:
                 self[category][key] = DEFAULT_WF[workflow_type][category][key]
@@ -140,7 +143,7 @@ class ConfigManager(configparser.ConfigParser):
             self.save()
 
     def get_max_patient_tabs(self) -> int:
-        return save_get_int(self, GLOBAL_PREFERENCES, GlobalPrefCategoryList.PERFORMANCE, 'max_pt')
+        return self.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_pt')
 
     def get_patients_prefix(self) -> str:
         if self.global_config:
@@ -170,21 +173,21 @@ class ConfigManager(configparser.ConfigParser):
             self[GlobalPrefCategoryList.MAIN]['slicer_version'] = slicer_version
 
     def is_optional_series_enabled(self, series_name: str) -> bool:
-        return save_get_boolean(self, GLOBAL_PREFERENCES, GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name))
+        return self.getboolean_safe(GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name))
 
-    def get_slicer_scene_ext(self) -> str:
+    def get_slicer_scene_ext(self) -> Enum:
         if self.global_config:
-            return self[GlobalPrefCategoryList.MAIN]['slicer_scene_ext']
-        return ''
+            return self.getenum_safe(GlobalPrefCategoryList.MAIN, 'slicer_scene_ext')
+        return None
 
-    def get_patient_workflow_type(self) -> int:
-        return save_get_int(self, WF_PREFERENCES, DataInputList.T13D, 'wf_type')
+    def get_patient_workflow_type(self) -> Enum:
+        return self.getenum_safe(DataInputList.T13D, 'wf_type')
 
     def get_workflow_hippo_pref(self) -> bool:
-        return save_get_boolean(self, WF_PREFERENCES, DataInputList.T13D, 'hippo_amyg_labels')
+        return self.getboolean_safe(DataInputList.T13D, 'hippo_amyg_labels')
 
     def get_workflow_freesurfer_pref(self) -> bool:
-        return save_get_boolean(self, WF_PREFERENCES, DataInputList.T13D, 'freesurfer')
+        return self.getboolean_safe(DataInputList.T13D, 'freesurfer')
 
     def check_dependencies(self, dependency_manager):
         changed = False
@@ -199,51 +202,83 @@ class ConfigManager(configparser.ConfigParser):
             self.save()
 
     def get_last_pid(self) -> int:
-        return save_get_int(self, GLOBAL_PREFERENCES, GlobalPrefCategoryList.MAIN, 'last_pid')
+        return self.getint_safe(GlobalPrefCategoryList.MAIN, 'last_pid')
 
+    def getboolean_safe(self, section: Enum | str, option: str, *, raw=False, vars=None, **kwargs) -> bool:
+        section = str(section)
+        try:
+            return self.getboolean(section, option, raw=raw, vars=vars)
+        except:
+            if section in self._section_defaults and option in self._section_defaults[section]:
+                if type(self._section_defaults[section]) is list:
+                    ret = self._section_defaults[section].default[0]
+                else:
+                    ret = self._section_defaults[section].default
+                if ret.lower() in configparser.ConfigParser.BOOLEAN_STATES:
+                    return configparser.ConfigParser.BOOLEAN_STATES[ret.lower()]
+        raise Exception()
 
-def save_get_boolean(config: ConfigManager | configparser.SectionProxy, defaults: dict[Enum, PreferenceEntry], section: Enum, option: str) -> bool:
-    try:
-        if type(config) is ConfigManager:
-            return config.getboolean(section, option)
-        elif type(config) is configparser.SectionProxy:
-            return config.getboolean(option)
-    except:
-        if section in defaults and option in defaults[section]:
-            if type(defaults[section][option].default) is list:
-                ret = defaults[section][option].default[0]
-            else:
-                ret = defaults[section][option].default
-            if ret.lower() in configparser.ConfigParser.BOOLEAN_STATES:
-                return configparser.ConfigParser.BOOLEAN_STATES[ret.lower()]
-    raise Exception()
+    def getint_safe(self, section: Enum | str, option: str, *, raw=False, vars=None, **kwargs) -> int:
+        section = str(section)
+        try:
+            return self.getint(section, option, raw=raw, vars=vars)
+        except:
+            if section in self._section_defaults and option in self._section_defaults[section]:
+                if type(self._section_defaults[section][option].default) is list:
+                    return 0
+                else:
+                    return int(self._section_defaults[section][option].default)
+        raise Exception("Error for %s - %s" % (str(section), str(option)))
 
+    def getfloat_safe(self, section: Enum | str, option: str, *, raw=False, vars=None, **kwargs) -> float:
+        section = str(section)
+        try:
+            return self.getfloat(section, option, raw=raw, vars=vars)
+        except:
+            if section in self._section_defaults and option in self._section_defaults[section]:
+                if type(self._section_defaults[section][option].default) is list:
+                    return float(self._section_defaults[section][option].default[0])
+                else:
+                    return float(self._section_defaults[section][option].default)
+        raise Exception("Error for %s - %s" % (str(section), str(option)))
 
-def save_get_int(config: ConfigManager | configparser.SectionProxy, defaults: dict[Enum, PreferenceEntry], section: Enum, option: str) -> int:
-    try:
-        if type(config) is ConfigManager:
-            return config.getint(section, option)
-        elif type(config) is configparser.SectionProxy:
-            return config.getint(option)
-    except:
-        if section in defaults and option in defaults[section]:
-            if type(defaults[section][option].default) is list:
-                return 0
-            else:
-                return int(defaults[section][option].default)
-    raise Exception("Error for %s - %s" % (str(section), str(option)))
+    def getenum_safe(self, section: Enum | str, option: str, *, raw=False, vars=None, **kwargs) -> Enum:
+        section = str(section)
+        if self._section_defaults[section][option].value_enum is None:
+            raise("No value_enum for %s - %s" % (str(section), str(option)))
 
+        if self[section][option] in self._section_defaults[section][option].value_enum.__members__:
+            return self._section_defaults[section][option].value_enum[self[section][option]]
+        else:
+            return self._section_defaults[section][option].default
 
-def save_get_float(config: ConfigManager | configparser.SectionProxy, defaults: dict[Enum, PreferenceEntry], section: Enum, option: str) -> float:
-    try:
-        if type(config) is ConfigManager:
-            return config.getfloat(section, option)
-        elif type(config) is configparser.SectionProxy:
-            return config.getfloat(option)
-    except:
-        if section in defaults and option in defaults[section]:
-            if type(defaults[section][option].default) is list:
-                return float(defaults[section][option].default[0])
-            else:
-                return float(defaults[section][option].default)
-    raise Exception("Error for %s - %s" % (str(section), str(option)))
+    def validate_type(self, section="", option="", value=""):
+        if section != "" and option != "" and value != "":
+            if section in self._section_defaults and option in self._section_defaults[section]:
+                if self._section_defaults[section][option].input_type == InputTypes.INT:
+                    try:
+                        return int(value)
+                    except:
+                        return int(self._section_defaults[section][option].default)
+                elif self._section_defaults[section][option].input_type == InputTypes.ENUM:
+                    if value in self._section_defaults[section][option].value_enum.__members__:
+                        return value
+                    else:
+                        return self._section_defaults[section][option].default.name
+                elif self._section_defaults[section][option].input_type == InputTypes.FLOAT:
+                    try:
+                        return float(value)
+                    except:
+                        return float(self._section_defaults[section][option].default)
+                elif self._section_defaults[section][option].input_type == InputTypes.BOOLEAN:
+                    if value.lower() in configparser.ConfigParser.BOOLEAN_STATES:
+                        return value
+                    elif self._section_defaults[section][option].default.lower() in configparser.ConfigParser.BOOLEAN_STATES:
+                        return self._section_defaults[section][option].default.lower()
+        return value
+
+    def set(self, section, option, value=None):
+        """Set an option after checking for type"""
+        if value is not None:
+            value = str(self.validate_type(section, option, value))
+        super().set(section, option, value)

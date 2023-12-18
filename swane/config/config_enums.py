@@ -1,16 +1,43 @@
-from enum import IntEnum, Enum
+from enum import Enum, auto
 
 
-class InputTypes(IntEnum):
-    TEXT = 0
-    NUMBER = 1
-    CHECKBOX = 2
-    COMBO = 3
-    FILE = 4
-    DIRECTORY = 5
-    FLOAT = 6
-    HIDDEN = 7
+class InputTypes(Enum):
+    TEXT = auto()
+    INT = auto()
+    BOOLEAN = auto()
+    ENUM = auto()
+    FILE = auto()
+    DIRECTORY = auto()
+    FLOAT = auto()
 
+class WORKFLOW_TYPES(Enum):
+    STRUCTURAL = "Structural Workflow"
+    FUNCTIONAL = "Morpho-Functional Workflow"
+
+class SLICER_EXTENSIONS(Enum):
+    MRB = "mrb"
+    MRML = "mrml"
+
+class CORE_LIMIT(Enum):
+    NO_LIMIT = "No limit"
+    SOFT_CAP = "Soft cap"
+    HARD_CAP = "Hard Cap"
+
+class VEIN_DETECTION_MODE(Enum):
+    SD = 'Automatic (standard deviation)'
+    MEAN = 'Automatic (mean value)'
+    FIRST = 'Always first volume'
+    SECOND = 'Always second volume'
+
+class BLOCK_DESIGN(Enum):
+    RARA = 'rArA...'
+    RARB = 'rArBrArB...'
+
+class SLICE_TIMING(Enum):
+    UNKNOWN = 'Unknown'
+    UP = 'Regular up'
+    DOWN = 'Regular down'
+    INTERLEAVED = 'Interleaved'
 
 class ImageModality(Enum):
     RM = 'mr'
@@ -22,7 +49,6 @@ class ImageModality(Enum):
             if mod.value.lower() == mod_string.lower():
                 return mod
         return None
-
 
 class PLANES(Enum):
     TRA = 'transverse'
