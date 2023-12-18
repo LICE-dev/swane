@@ -27,6 +27,7 @@ class TestDicomSearchWorker:
     }
 
     def test_dicom_search(self):
+        os.makedirs(TestDicomSearchWorker.DICOM_DIRS['EMPTY_FOLDER'][0], exist_ok=True)
         for test in TestDicomSearchWorker.DICOM_DIRS.values():
             test_name = os.path.basename(test[0])
             assert os.path.exists(test[0]) is True, "Dicom dir not found %s" % test_name

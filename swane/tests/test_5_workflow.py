@@ -2,7 +2,7 @@ import os
 import shutil
 import pytest
 from swane.config.ConfigManager import ConfigManager
-from swane.config.config_enums import BLOCK_DESIGN
+from swane.config.config_enums import BLOCK_DESIGN, VEIN_DETECTION_MODE
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.Patient import Patient, PatientRet
 from swane.tests import TEST_DIR
@@ -121,7 +121,8 @@ class TestWorkflow:
         'freesurfer': {
             'preferences': {
                 DataInputList.T13D: [
-                    ["freesurfer", 'true']
+                    ["freesurfer", 'true'],
+                    ["hippo_amyg_labels", "false"]
                 ]
             },
             'check_nodes': {
@@ -250,7 +251,7 @@ class TestWorkflow:
             },
             'check_nodes': {
                 DataInputList.VENOUS.value.wf_name: [
-                    ['veins_check', 'detection_mode', 0]
+                    ['veins_check', 'detection_mode', VEIN_DETECTION_MODE.SD]
                 ],
             },
         },
@@ -262,14 +263,14 @@ class TestWorkflow:
             'preferences': {
                 DataInputList.VENOUS: [
                     ['bet_thr', "0"],
-                    ['vein_detection_mode', '2']
+                    ['vein_detection_mode', VEIN_DETECTION_MODE.FIRST.name]
                 ]
             },
             'check_nodes': {
                 DataInputList.VENOUS.value.wf_name: [
                     ["veins_bet", "frac", 0],
                     ["veins2_conv"],
-                    ['veins_check', 'detection_mode', 2]
+                    ['veins_check', 'detection_mode', VEIN_DETECTION_MODE.FIRST]
                 ],
             },
         },
@@ -314,6 +315,11 @@ class TestWorkflow:
         'fmri_base': {
             'data': {
                 DataInputList["FMRI_0"]: "multivol",
+            },
+            'preferences': {
+                DataInputList["FMRI_0"]: [
+                    ["block_design", BLOCK_DESIGN.RARA.name],
+                ]
             },
             'check_nodes': {
                 DataInputList["FMRI_0"].value.wf_name: [
@@ -432,31 +438,6 @@ class TestWorkflow:
                 assert self.last_node_cb == WorkflowSignals.WORKFLOW_STOP, "Workflow finished but not segnaled"
 
             last_test = this_test
-
-    # def test_2_workflow_execution(self, qtbot):
-    #     real_gloabl_config = ConfigManager()
-    #     real_main_working_directory = real_gloabl_config.get_main_working_directory()
-    #     real_exec_patient_path = os.path.join(real_main_working_directory, "pt_test")
-    #     assert os.path.exists(real_exec_patient_path), "Could not find pt_test in %s" % real_main_working_directory
-    #     test_global_config = ConfigManager(global_base_folder=os.getcwd())
-    #     test_global_config.set_main_working_directory(TestWorkflow.TEST_MAIN_WORKING_DIRECTORY)
-    #     os.system("cp -r %s %s" % (real_exec_patient_path, TestWorkflow.TEST_MAIN_WORKING_DIRECTORY))
-    #     test_patient = Patient(test_global_config, DependencyManager())
-    #     text_exec_patient_path = os.path.join(TestWorkflow.TEST_MAIN_WORKING_DIRECTORY, "pt_test")
-    #     assert os.path.exists(text_exec_patient_path), "Error in copying pt_test folder"
-    #     patient_load_ret = test_patient.load(text_exec_patient_path)
-    #     assert patient_load_ret == PatientRet.ValidFolder, "Error loading pt_test: %s" % str(patient_load_ret)
-    #
-    #     test_patient.reset_workflow()
-    #     assert test_patient.generate_workflow(generate_praphs=False) == PatientRet.GenWfCompleted, "Error generating workflow for pt_test"
-    #
-    #     self.last_node_cb = None
-    #     self.allow_wf_errors = False
-    #     cb = lambda report, tn="workflow execution on pt_test": self.node_callback(report, tn)
-    #     test_patient.start_workflow(True, True, update_node_callback=cb)
-    #     qtbot.waitUntil(test_patient.workflow_process.stop_event.is_set, timeout=2000000)
-    #     assert self.last_node_cb == WorkflowSignals.WORKFLOW_STOP, "Workflow finished but not segnaled"
-    #     assert os.path.exists(test_patient.result_dir()), "No result dir found after pt_test wf exec"
 
     def node_callback(self, wf_report: WorkflowReport, test_name: str):
         self.last_node_cb = wf_report.signal_type

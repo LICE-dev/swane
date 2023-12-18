@@ -70,7 +70,8 @@ def venous_workflow(name: str, venous_dir: str, config: SectionProxy, venous2_di
     # NODE 4: Detect the venous phase from the anatomic phase
     veins_check = Node(VenousCheck(), name='veins_check')
     veins_check.long_name = "angiographic volume detection"
-    veins_check.inputs.detection_mode = config.getenum_safe("vein_detection_mode")
+    vein_detection_mode = config.getenum_safe("vein_detection_mode")
+    veins_check.inputs.detection_mode = vein_detection_mode
         # If the phases are in the same sequence
     if venous2_dir is None:
         # NODE 3a: Divide the two phases from the phase contrast
