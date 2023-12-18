@@ -8,10 +8,8 @@ from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
 from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
-from swane.config.preference_list import (TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR, WF_PREFERENCES,
-                                          GLOBAL_PREFERENCES, GlobalPrefCategoryList)
+from swane.config.preference_list import (TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR, GlobalPrefCategoryList)
 from swane.utils.DataInputList import DataInputList
-from swane.config.ConfigManager import save_get_boolean, save_get_int
 
 SIDES = ["lh", "rh"]
 
@@ -88,12 +86,12 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
         IdentityInterface(fields=['fdt_paths_rh', 'fdt_paths_lh', 'waytotal_rh', 'waytotal_lh']),
         name='outputnode')
 
-    is_cuda = save_get_boolean(config, GLOBAL_PREFERENCES, GlobalPrefCategoryList.PERFORMANCE, 'cuda')
+    is_cuda = config.getboolean_safe('cuda')
     if is_cuda:
         # if cuda is enabled only 1 process is launched
         track_threads = 1
     else:
-        track_threads = save_get_int(config, WF_PREFERENCES, DataInputList.DTI, 'track_procs')
+        track_threads = config.getint_safe('track_procs')
 
     # NODE 1: Random seed genration for cache preservation
     random_seed = Node(RandomSeedGenerator(), name='random_seed')

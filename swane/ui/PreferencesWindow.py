@@ -9,7 +9,6 @@ from PySide6_VerticalQTabWidget import VerticalQTabWidget
 from swane.config.config_enums import InputTypes
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
-from swane.config.ConfigManager import save_get_boolean
 
 
 class PreferencesWindow(QDialog):
@@ -77,7 +76,7 @@ class PreferencesWindow(QDialog):
             for key in my_config[category].keys():
                 if key not in self.preferences[category]:
                     continue
-                if self.preferences[category][key].input_type == InputTypes.HIDDEN:
+                if self.preferences[category][key].hidden:
                     continue
                 self.input_keys[category][key] = x
                 self.inputs[x] = PreferenceUIEntry(category=category,
@@ -86,20 +85,15 @@ class PreferencesWindow(QDialog):
                                                    defaults=self.preferences,
                                                    input_type=self.preferences[category][key].input_type,
                                                    restart=self.preferences[category][key].restart,
+                                                   populate_combo=self.preferences[category][key].value_enum,
                                                    parent=self)
 
                 # Label and Tooltip
                 self.inputs[x].set_label_text(self.preferences[category][key].label)
                 self.inputs[x].set_tooltip(self.preferences[category][key].tooltip)
 
-                # Some global preference need application restart
-                # self.inputs[x].restart = self.preferences[category][key].restart
-
                 # Input type-related controls
-                if self.preferences[category][key].input_type == InputTypes.COMBO:
-                    self.inputs[x].populate_combo(self.preferences[category][key].default)
-                    self.inputs[x].set_value_from_config(my_config)
-                elif self.preferences[category][key].input_type == InputTypes.FILE or self.preferences[category][key].input_type == InputTypes.DIRECTORY:
+                if self.preferences[category][key].input_type == InputTypes.FILE or self.preferences[category][key].input_type == InputTypes.DIRECTORY:
                     grid.addWidget(self.inputs[x].button, x, 2)
                     # path validation for folders and file
                     self.inputs[x].validate_on_change = self.preferences[category][key].validate_on_change
@@ -113,6 +107,7 @@ class PreferencesWindow(QDialog):
 
                 # Other preference requirement
                 if self.preferences[category][key].pref_requirement is not None:
+                    # Search all inputs that are preference for this one and apply them a function on chang
                     for pref_cat in self.preferences[category][key].pref_requirement:
                         if str(pref_cat) not in my_config:
                             continue
@@ -120,15 +115,14 @@ class PreferencesWindow(QDialog):
                             if str(pref_req[0]) not in my_config[pref_cat]:
                                 continue
                             target_x = self.input_keys[pref_cat][pref_req[0]]
-                            if self.inputs[target_x].input_type == InputTypes.CHECKBOX:
+                            if self.inputs[target_x].input_type == InputTypes.BOOLEAN:
                                 self.inputs[target_x].input_field.stateChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
-                            elif self.inputs[target_x].input_type == InputTypes.COMBO:
+                            elif self.inputs[target_x].input_type == InputTypes.ENUM:
                                 self.inputs[target_x].input_field.currentIndexChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
                             else:
                                 self.inputs[target_x].input_field.textChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
-                            if not save_get_boolean(my_config, self.preferences, pref_cat, pref_req[0]):
-                                self.inputs[x].disable(self.preferences[category][key].pref_requirement_fail_tooltip)
-                                break
+                    # After the loop check if pref should be enabled
+                    self.requirement_changed(False, category, key)
                 if not my_config.global_config and self.preferences[category][key].input_requirement is not None:
                     for input_req in self.preferences[category][key].input_requirement:
                         for cat_check in default_pref_list:
@@ -222,10 +216,10 @@ class PreferencesWindow(QDialog):
                     continue
                 req_x = self.input_keys[req_cat][req_key[0]]
 
-                if self.inputs[req_x].input_type == InputTypes.CHECKBOX:
+                if self.inputs[req_x].input_type == InputTypes.BOOLEAN:
                     check = req_key[1] == self.inputs[req_x].input_field.isChecked()
-                elif self.inputs[req_x].input_type == InputTypes.COMBO:
-                    check = req_key[1] == self.inputs[req_x].input_field.currentIndex()
+                elif self.inputs[req_x].input_type == InputTypes.ENUM:
+                    check = req_key[1].name == self.inputs[req_x].input_field.itemData(self.inputs[req_x].input_field.currentIndex())
                 else:
                     check = req_key[1] == self.inputs[req_x].input_field.get_value()
 
@@ -274,6 +268,7 @@ class PreferencesWindow(QDialog):
         Called when user change a settings that require SWANe restart.
 
         """
+        raise Exception
         self.restart = True
         self.saveButton.setText(strings.pref_window_save_restart_button)
 

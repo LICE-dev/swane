@@ -1,7 +1,6 @@
-from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT, Eddy)
+from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT)
 from nipype.pipeline.engine import Node
-from swane.config.ConfigManager import save_get_boolean
-from swane.config.preference_list import GLOBAL_PREFERENCES, GlobalPrefCategoryList, WF_PREFERENCES
+from swane.config.config_enums import CORE_LIMIT
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -11,10 +10,9 @@ from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
 from multiprocessing import cpu_count
-from swane.utils.DataInputList import DataInputList
 
 
-def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir: str = None, base_dir: str = "/", max_cpu: int = 0, multicore_node_limit: int = 0) -> CustomWorkflow:
+def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir: str = None, base_dir: str = "/", max_cpu: int = 0, multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP) -> CustomWorkflow:
     """
     DTI preprocessing workflow with eddy current and motion artifact correction.
     Diffusion metrics calculation and, if needed, bayesian estimation of
@@ -34,11 +32,8 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         workflow settings.
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
-    multicore_node_limit: int, optional
-        Preference for bedpostX core usage. The default il 0
-        0 -> no limit
-        1 -> soft cap
-        2 -> hard cap
+    multicore_node_limit: CORE_LIMIT, optional
+        Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
         
     Input Node Fields
     ----------
@@ -85,7 +80,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
                                   ]),
         name='outputnode')
 
-    is_cuda = save_get_boolean(config, GLOBAL_PREFERENCES, GlobalPrefCategoryList.PERFORMANCE, 'cuda')
+    is_cuda = config.getboolean_safe('cuda')
 
     # NODE 1: Conversion dicom -> nifti
     conv = Node(CustomDcm2niix(), name='dti_conv')
@@ -114,7 +109,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     bet.inputs.mask = True
     workflow.connect(nodif, "roi_file", bet, "in_file")
 
-    old_eddy_correct = save_get_boolean(config, WF_PREFERENCES, DataInputList.DTI, "old_eddy_correct")
+    old_eddy_correct = config.getboolean_safe("old_eddy_correct")
     if old_eddy_correct:
         # NODE 4a: Generate Eddy files
         eddy = Node(EddyCorrect(), name='dti_eddy')
@@ -131,10 +126,10 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         eddy = Node(CustomEddy(), name="dti_eddy")
         eddy.inputs.use_gpu = is_cuda
         if not is_cuda:
-            if multicore_node_limit == 2:
+            if multicore_node_limit == CORE_LIMIT.HARD_CAP:
                 eddy_cpu = max_cpu
                 eddy.inputs.num_threads = max_cpu
-            elif multicore_node_limit == 1:
+            elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
                 eddy_cpu = max_cpu
             else:
                 eddy_cpu = cpu_count()
@@ -179,7 +174,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     
     workflow.connect(fa_2_ref_flirt, 'out_file', outputnode, 'FA')
 
-    is_tractography = save_get_boolean(config, WF_PREFERENCES, DataInputList.DTI, 'tractography')
+    is_tractography = config.getboolean_safe('tractography')
 
     if is_tractography:
         # NODE 1: Linear registration
@@ -213,9 +208,9 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         bedpostx.inputs.use_gpu = is_cuda
         if not is_cuda:
             # if cuda is enabled only 1 process is launched
-            if multicore_node_limit == 1:
+            if multicore_node_limit == CORE_LIMIT.SOFT_CAP:
                 bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
-            elif multicore_node_limit == 2:
+            elif multicore_node_limit == CORE_LIMIT.HARD_CAP:
                 bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
                 bedpostx.inputs.num_threads = max_cpu
 

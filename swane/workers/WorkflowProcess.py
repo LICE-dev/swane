@@ -21,12 +21,12 @@ class WorkflowProcess(Process):
         "nipype.interface",
     ]
 
-    def __init__(self, pt_name, workflow, queue):
+    def __init__(self, patient_name, workflow, queue):
         super(WorkflowProcess, self).__init__()
         self.stop_event = Event()
         self.workflow = workflow
         self.queue = queue
-        self.pt_name = pt_name
+        self.patient_name = patient_name
 
     @staticmethod
     def remove_handlers(handler):

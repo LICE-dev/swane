@@ -7,7 +7,8 @@ from math import ceil
 
 from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
 from swane.config.PreferenceEntry import PreferenceEntry
-from swane.config.config_enums import InputTypes
+from swane.config.config_enums import (InputTypes, WORKFLOW_TYPES, SLICER_EXTENSIONS, CORE_LIMIT, VEIN_DETECTION_MODE,
+                                       BLOCK_DESIGN, SLICE_TIMING)
 
 try:
     XTRACT_DATA_DIR=os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
@@ -52,8 +53,8 @@ for k in list(TRACTS.keys()):
     if TRACTS[k][2] == 0:
         del TRACTS[k]
 
-WORKFLOW_TYPES = ["Structural Workflow", "Morpho-Functional Workflow"]
-SLICER_EXTENSIONS = ["mrb", "mrml"]
+# WORKFLOW_TYPES = ["Structural Workflow", "Morpho-Functional Workflow"]
+# SLICER_EXTENSIONS = ["mrb", "mrml"]
 
 # WORKFLOWS PREFERENCE LIST
 WF_PREFERENCES = {}
@@ -61,12 +62,14 @@ WF_PREFERENCES = {}
 category = DataInputList.T13D
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]['wf_type'] = PreferenceEntry(
-    input_type=InputTypes.HIDDEN,
+    input_type=InputTypes.ENUM,
+    hidden=True,
     label="Default workflow",
-    default=WORKFLOW_TYPES,
+    value_enum=WORKFLOW_TYPES,
+    default=WORKFLOW_TYPES.STRUCTURAL,
 )
 WF_PREFERENCES[category]['bet_bias_correction'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="Bias reduction for skull removal",
     tooltip="Increase time with better results",
     default='false',
@@ -79,14 +82,14 @@ WF_PREFERENCES[category]['bet_thr'] = PreferenceEntry(
     range=[1, 0],
 )
 WF_PREFERENCES[category]['freesurfer'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="FreeSurfer analysis",
     default='true',
     dependency='is_freesurfer',
     dependency_fail_tooltip="Freesurfer not detected",
 )
 WF_PREFERENCES[category]['hippo_amyg_labels'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="FreeSurfer hippocampal and amygdala subfields",
     default='false',
     dependency='is_freesurfer_matlab',
@@ -95,7 +98,7 @@ WF_PREFERENCES[category]['hippo_amyg_labels'] = PreferenceEntry(
     pref_requirement_fail_tooltip="Requires Freesurfer analysis",
 )
 WF_PREFERENCES[category]['flat1'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="FLAT1 analysis",
     default='true',
     input_requirement=[DataInputList.FLAIR3D],
@@ -131,20 +134,21 @@ WF_PREFERENCES[category]['bet_thr'] = PreferenceEntry(
     range=[0, 1],
 )
 WF_PREFERENCES[category]['vein_detection_mode'] = PreferenceEntry(
-    input_type=InputTypes.COMBO,
+    input_type=InputTypes.ENUM,
     label="Venous volume detection mode",
-    default=['Automatic (standard deviation)', 'Automatic (mean value)', 'Always first volume', 'Always second volume'],
+    value_enum=VEIN_DETECTION_MODE,
+    default=VEIN_DETECTION_MODE.SD,
 )
 
 category = DataInputList.ASL
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]['ai'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="Asymmetry Index map for ASL",
     default='true',
 )
 WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
+    input_type=InputTypes.INT,
     label="Threshold for Asymmetry Index map outliers removal",
     tooltip="100 for no thresholding, suggested 80-90",
     default=85,
@@ -156,12 +160,12 @@ WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
 category = DataInputList.PET
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]['ai'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="Asymmetry Index map for PET",
     default='true',
 )
 WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
+    input_type=InputTypes.INT,
     label="Threshold for Asymmetry Index map outliers removal",
     tooltip="100 for no thresholding, suggested 80-90",
     default=85,
@@ -172,17 +176,17 @@ WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
 category = DataInputList.DTI
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]['old_eddy_correct'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="Use older but faster fsl eddy_correct",
     default='false',
 )
 WF_PREFERENCES[category]['tractography'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="DTI tractography",
     default='true',
 )
 WF_PREFERENCES[category]['track_procs'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
+    input_type=InputTypes.INT,
     label="Parallel processes for each side tractography",
     default=5,
     range=[1, 10],
@@ -192,7 +196,7 @@ WF_PREFERENCES[category]['track_procs'] = PreferenceEntry(
 
 for tract in TRACTS.keys():
     WF_PREFERENCES[category][tract] = PreferenceEntry(
-        input_type=InputTypes.CHECKBOX,
+        input_type=InputTypes.BOOLEAN,
         label=TRACTS[tract][0],
         default=TRACTS[tract][1],
         pref_requirement={DataInputList.DTI: [('tractography', True)]},
@@ -208,25 +212,26 @@ for x in range(FMRI_NUM):
         default="Task A",
     )
     WF_PREFERENCES[category]['block_design'] = PreferenceEntry(
-        input_type=InputTypes.COMBO,
+        input_type=InputTypes.ENUM,
         label="Block design",
-        default=['rArA...', 'rArBrArB...'],
+        value_enum=BLOCK_DESIGN,
+        default=BLOCK_DESIGN.RARA,
     )
     WF_PREFERENCES[category]['task_b_name'] = PreferenceEntry(
         input_type=InputTypes.TEXT,
         label="Task B name",
         default="Task B",
-        pref_requirement={DataInputList['FMRI'+"_%s" % x]: [('block_design', 1)]},
+        pref_requirement={DataInputList['FMRI'+"_%s" % x]: [('block_design', BLOCK_DESIGN.RARB)]},
         pref_requirement_fail_tooltip="Requires rArBrArB... block design",
     )
     WF_PREFERENCES[category]['task_duration'] = PreferenceEntry(
-        input_type=InputTypes.NUMBER,
+        input_type=InputTypes.INT,
         label="Tasks duration (sec)",
         default=30,
         range=[1, 500],
     )
     WF_PREFERENCES[category]['rest_duration'] = PreferenceEntry(
-        input_type=InputTypes.NUMBER,
+        input_type=InputTypes.INT,
         label="Rest duration (sec)",
         default=30,
         range=[1, 500],
@@ -239,25 +244,26 @@ for x in range(FMRI_NUM):
         range=[-1, 1000],
     )
     WF_PREFERENCES[category]['n_vols'] = PreferenceEntry(
-        input_type=InputTypes.NUMBER,
+        input_type=InputTypes.INT,
         label="Number of volumes",
         tooltip="Set -1 for automatic detection",
         default="-1",
         range=[-1, 1000],
     )
     WF_PREFERENCES[category]['slice_timing'] = PreferenceEntry(
-        input_type=InputTypes.COMBO,
+        input_type=InputTypes.ENUM,
         label="Slice timing",
-        default=['Unknown', 'Regular up', 'Regular down', 'Interleaved'],
+        value_enum=SLICE_TIMING,
+        default=SLICE_TIMING.UNKNOWN,
     )
     WF_PREFERENCES[category]['del_start_vols'] = PreferenceEntry(
-        input_type=InputTypes.NUMBER,
+        input_type=InputTypes.INT,
         label="Delete start volumes",
         default=0,
         range=[1, 500],
     )
     WF_PREFERENCES[category]['del_end_vols'] = PreferenceEntry(
-        input_type=InputTypes.NUMBER,
+        input_type=InputTypes.INT,
         label="Delete end volumes",
         default=0,
         range=[1, 500],
@@ -275,7 +281,8 @@ GLOBAL_PREFERENCES[category]['main_working_directory'] = PreferenceEntry(
     restart=True
 )
 GLOBAL_PREFERENCES[category]['patients_prefix'] = PreferenceEntry(
-    input_type=InputTypes.HIDDEN,
+    input_type=InputTypes.TEXT,
+    hidden=True,
     default="pt_",
 )
 GLOBAL_PREFERENCES[category]['slicer_path'] = PreferenceEntry(
@@ -287,38 +294,46 @@ GLOBAL_PREFERENCES[category]['slicer_path'] = PreferenceEntry(
     validate_on_change=True
 )
 GLOBAL_PREFERENCES[category]['slicer_version'] = PreferenceEntry(
-    input_type=InputTypes.HIDDEN,
+    input_type=InputTypes.TEXT,
+    hidden=True,
     default="",
 )
 GLOBAL_PREFERENCES[category]['last_pid'] = PreferenceEntry(
-    input_type=InputTypes.HIDDEN,
+    input_type=InputTypes.INT,
+    hidden=True,
     default=-1,
 )
 GLOBAL_PREFERENCES[category]['last_swane_version'] = PreferenceEntry(
-    input_type=InputTypes.HIDDEN,
+    input_type=InputTypes.TEXT,
+    hidden=True,
     default=__version__,
 )
 GLOBAL_PREFERENCES[category]['force_pref_reset'] = PreferenceEntry(
-    input_type=InputTypes.HIDDEN,
+    input_type=InputTypes.BOOLEAN,
+    hidden=True,
     default="false",
 )
 GLOBAL_PREFERENCES[category]['slicer_scene_ext'] = PreferenceEntry(
-    input_type=InputTypes.HIDDEN,
-    default=SLICER_EXTENSIONS,
+    input_type=InputTypes.ENUM,
+    hidden=True,
+    value_enum=SLICER_EXTENSIONS,
+    default=SLICER_EXTENSIONS.MRB,
 )
 GLOBAL_PREFERENCES[category]['default_dicom_folder'] = PreferenceEntry(
-    input_type=InputTypes.HIDDEN,
+    input_type=InputTypes.TEXT,
+    hidden=True,
     default="dicom",
 )
 GLOBAL_PREFERENCES[category]['default_wf_type'] = PreferenceEntry(
-    input_type=InputTypes.COMBO,
+    input_type=InputTypes.ENUM,
     label="Default workflow",
-    default=WORKFLOW_TYPES,
+    value_enum=WORKFLOW_TYPES,
+    default=WORKFLOW_TYPES.STRUCTURAL,
 )
 category = GlobalPrefCategoryList.PERFORMANCE
 GLOBAL_PREFERENCES[category] = {}
 GLOBAL_PREFERENCES[category]['max_pt'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
+    input_type=InputTypes.INT,
     label="Patient tab limit",
     default=1,
     range=[0, 5],
@@ -328,14 +343,14 @@ try:
 except:
     suggested_max_cpu = 1
 GLOBAL_PREFERENCES[category]['max_pt_cpu'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
+    input_type=InputTypes.INT,
     label="CPU core limit per patient",
     tooltip="To use all CPU cores set value equal to -1",
     default=str(suggested_max_cpu),
     range=[-1, 30],
 )
 GLOBAL_PREFERENCES[category]['cuda'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="Enable CUDA for GPUable commands",
     tooltip='NVIDIA GPU-based computation',
     default='false',
@@ -343,7 +358,7 @@ GLOBAL_PREFERENCES[category]['cuda'] = PreferenceEntry(
     dependency_fail_tooltip="GPU does not support CUDA",
 )
 GLOBAL_PREFERENCES[category]['max_pt_gpu'] = PreferenceEntry(
-    input_type=InputTypes.NUMBER,
+    input_type=InputTypes.INT,
     label="GPU process limit per patient",
     tooltip="The limit should be equal or lesser than the number of physical GPU",
     default=1,
@@ -352,14 +367,15 @@ GLOBAL_PREFERENCES[category]['max_pt_gpu'] = PreferenceEntry(
     pref_requirement_fail_tooltip="Requires CUDA",
 )
 GLOBAL_PREFERENCES[category]['resourceMonitor'] = PreferenceEntry(
-    input_type=InputTypes.CHECKBOX,
+    input_type=InputTypes.BOOLEAN,
     label="Enable resource monitor",
     default='false',
 )
 GLOBAL_PREFERENCES[category]['multicore_node_limit'] = PreferenceEntry(
-    input_type=InputTypes.COMBO,
+    input_type=InputTypes.ENUM,
     label="CPU management for multi-core steps",
-    default=["No limit", "Soft cap", "Hard Cap"],
+    value_enum=CORE_LIMIT,
+    default=CORE_LIMIT.SOFT_CAP,
     informative_text=[
         "Multi-core steps ignore the patient CPU core limit, using all available resources",
         "Multi-core steps use up to twice the patient CPU core limit",
@@ -371,14 +387,14 @@ GLOBAL_PREFERENCES[category] = {}
 for data_input in DataInputList:
     if data_input.value.optional:
         GLOBAL_PREFERENCES[category][data_input.value.name] = PreferenceEntry(
-            input_type=InputTypes.CHECKBOX,
+            input_type=InputTypes.BOOLEAN,
             label=data_input.value.label,
             default='false',
             restart=True,
         )
 
 DEFAULT_WF = {}
-DEFAULT_WF['0'] = {
+DEFAULT_WF[WORKFLOW_TYPES.STRUCTURAL] = {
     DataInputList.T13D: {
         'hippo_amyg_labels': 'false',
         'flat1': 'false',
@@ -393,7 +409,7 @@ DEFAULT_WF['0'] = {
         'ai': 'false'
     },
 }
-DEFAULT_WF['1'] = {
+DEFAULT_WF[WORKFLOW_TYPES.FUNCTIONAL] = {
     DataInputList.T13D: {
         'hippo_amyg_labels': 'true',
         'flat1': 'true',

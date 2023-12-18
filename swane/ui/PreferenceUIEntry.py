@@ -6,21 +6,13 @@ from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMes
 from enum import Enum
 from swane import strings
 from swane.config.config_enums import InputTypes
-from swane.config.ConfigManager import save_get_int, save_get_float, save_get_boolean, ConfigManager
+from swane.config.ConfigManager import ConfigManager
+from inspect import isclass
 
 
 class PreferenceUIEntry:
 
-    TEXT = 0
-    NUMBER = 1
-    CHECKBOX = 2
-    COMBO = 3
-    FILE = 4
-    DIRECTORY = 5
-    FLOAT = 6
-    HIDDEN = 7
-
-    def __init__(self, category: Enum, key: str, my_config: ConfigManager, defaults: dict, input_type=TEXT, restart: bool = False, parent=None, populate_combo: [] = None, validate_on_change: bool = False):
+    def __init__(self, category: Enum, key: str, my_config: ConfigManager, defaults: dict, input_type=InputTypes.TEXT, restart: bool = False, parent=None, populate_combo: [] = None, validate_on_change: bool = False):
         self.changed = False
         self.category = category
         self.key = key
@@ -37,11 +29,12 @@ class PreferenceUIEntry:
         self.label.setMaximumHeight(height)
         self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.input_field, self.button = self.gen_input_field()
-        if input_type == InputTypes.COMBO:
+        if input_type == InputTypes.ENUM and populate_combo is not None:
             self.populate_combo(populate_combo)
         self.set_value_from_config(my_config)
         self.box_text = ''
         self.validate_on_change = validate_on_change
+        self.connect_change()
 
     def set_label_text(self, text: str):
         self.label.setText(text)
@@ -52,22 +45,28 @@ class PreferenceUIEntry:
     def set_changed(self, **kwargs):
         self.changed = True
         if self.restart and self.parent is not None:
+            raise Exception
             self.parent.set_restart()
+
+    def connect_change(self):
+        if self.input_type == InputTypes.BOOLEAN:
+            self.input_field.toggled.connect(self.set_changed)
+        elif self.input_type == InputTypes.ENUM:
+            self.input_field.currentIndexChanged.connect(self.set_changed)
+        else:
+            self.input_field.textChanged.connect(self.set_changed)
 
     def gen_input_field(self):
         button = None
 
-        if self.input_type == InputTypes.CHECKBOX:
+        if self.input_type == InputTypes.BOOLEAN:
             field = QCheckBox()
-            field.toggled.connect(self.set_changed)
-        elif self.input_type == InputTypes.COMBO:
+        elif self.input_type == InputTypes.ENUM:
             field = QComboBox()
-            field.currentIndexChanged.connect(self.set_changed)
         else:
             field = QLineEdit()
-            field.textChanged.connect(self.set_changed)
 
-        if self.input_type == InputTypes.NUMBER:
+        if self.input_type == InputTypes.INT:
             field.setValidator(QIntValidator(-1, 100))
 
         if self.input_type == InputTypes.FLOAT:
@@ -110,27 +109,32 @@ class PreferenceUIEntry:
 
         self.set_value(file_path)
 
-    def populate_combo(self, items: []):
-        if self.input_type != InputTypes.COMBO or items is None:
+    def populate_combo(self, items):
+        if self.input_type != InputTypes.ENUM or items is None:
             return
-        for index, label in enumerate(items):
-            self.input_field.insertItem(index, label)
+        for row in items:
+            self.input_field.addItem(row.value, userData=row.name)
 
     def set_value_from_config(self, config: ConfigManager):
         if config is None:
             return
 
-        if self.input_type == InputTypes.CHECKBOX:
-            value = save_get_boolean(config, self.defaults, self.category, self.key)
-        elif self.input_type == InputTypes.NUMBER or self.input_type == InputTypes.COMBO:
-            value = save_get_int(config, self.defaults, self.category, self.key)
+        if self.input_type == InputTypes.BOOLEAN:
+            value = config.getboolean_safe(self.category, self.key)
+        elif self.input_type == InputTypes.INT:
+            value = config.getint_safe(self.category, self.key)
+        elif self.input_type == InputTypes.ENUM:
+            value = config.getenum_safe(self.category, self.key)
         elif self.input_type == InputTypes.FLOAT:
-            value = save_get_float(config, self.defaults, self.category, self.key)
+            value = config.getfloat_safe(self.category, self.key)
         else:
             value = config[self.category][self.key]
 
         self.set_value(value)
 
+        # Convert Enum to their label for compare reason
+        if hasattr(value, "name"):
+            value = value.name
         if str(value).lower() != config[self.category][self.key].lower():
             self.set_changed()
 
@@ -142,17 +146,18 @@ class PreferenceUIEntry:
         self.input_field.validator().setRange(min_value, max_value)
 
     def set_value(self, value, reset_change_state: bool = False):
-        if self.input_type == InputTypes.CHECKBOX:
+        if self.input_type == InputTypes.BOOLEAN:
             if type(value) is not bool:
                 raise Exception("Non boolean value for checkbox: %s" % str(value))
             if value:
                 self.input_field.setCheckState(Qt.Checked)
             else:
                 self.input_field.setCheckState(Qt.Unchecked)
-        elif self.input_type == InputTypes.COMBO:
-            if type(value) is not int:
-                raise Exception("Non int value for combo")
-            self.input_field.setCurrentIndex(value)
+        elif self.input_type == InputTypes.ENUM:
+            if self.input_field.count() == 0:
+                return
+            index = self.input_field.findData(value.name)
+            self.input_field.setCurrentIndex(index)
         else:
             self.input_field.setText(str(value))
 
@@ -163,7 +168,7 @@ class PreferenceUIEntry:
         self.input_field.setEnabled(False)
         self.label.setStyleSheet("color: gray")
         self.set_tooltip(tooltip)
-        if self.input_type == InputTypes.CHECKBOX:
+        if self.input_type == InputTypes.BOOLEAN:
             self.input_field.setChecked(False)
 
     def set_tooltip(self, tooltip: str):
@@ -184,9 +189,9 @@ class PreferenceUIEntry:
         self.label.setStyleSheet("")
 
     def get_value(self) -> str:
-        if self.input_type == InputTypes.COMBO:
-            value = str(self.input_field.currentIndex())
-        elif self.input_type == InputTypes.CHECKBOX:
+        if self.input_type == InputTypes.ENUM:
+            value = self.input_field.itemData(self.input_field.currentIndex())
+        elif self.input_type == InputTypes.BOOLEAN:
             if self.input_field.checkState() == Qt.Checked:
                 value = 'true'
             else:

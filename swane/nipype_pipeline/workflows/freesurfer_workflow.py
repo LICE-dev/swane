@@ -8,13 +8,13 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SegmentHA import SegmentHA
 from swane.nipype_pipeline.nodes.CustomLabel2Vol import CustomLabel2Vol
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
-
+from swane.config.config_enums import CORE_LIMIT
 from nipype.interfaces.utility import IdentityInterface
 
 FS_DIR = "FS"
 
 
-def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "/", max_cpu: int = 0, multicore_node_limit: int = 0) -> CustomWorkflow:
+def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "/", max_cpu: int = 0, multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP) -> CustomWorkflow:
     """
     Freesurfer cortical reconstruction, white matter ROI, basal ganglia and thalami ROI.
     If needed, segmentation of the hippocampal substructures and the nuclei of the amygdala.
@@ -29,11 +29,8 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
-    multicore_node_limit: int, optional
-        Preference for bedpostX core usage. The default il 0
-        0 -> no limit
-        1 -> soft cap
-        2 -> hard cap
+    multicore_node_limit: CORE_LIMIT, optional
+        Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
         
     Input Node Fields
     ----------
@@ -93,10 +90,10 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
         recon_all.inputs.parallel = True
 
     # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
-    if multicore_node_limit == 0:
+    if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
         # no limit
         recon_all.inputs.openmp = cpu_count()
-    elif multicore_node_limit == 1:
+    elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
         # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
         recon_all.inputs.openmp = max_cpu
         recon_all.n_procs = recon_all.inputs.openmp
@@ -190,9 +187,9 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     if is_hippo_amyg_labels:
         # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
         segmentHA = Node(SegmentHA(), name="segmentHA")
-        if multicore_node_limit == 0:
+        if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
             segmentHA.inputs.num_threads = cpu_count()
-        elif multicore_node_limit == 1:
+        elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
             segmentHA.inputs.num_threads = max_cpu
         else:
             segmentHA.inputs.num_threads = max_cpu

@@ -2,9 +2,6 @@ from nipype.interfaces.freesurfer import SampleToSurface
 from nipype.interfaces.fsl import (FLIRT, IsotropicSmooth, ApplyWarp, ApplyMask, SwapDimensions, ApplyXFM, ImageMaths)
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.workflows.tractography_workflow import SIDES
-from swane.config.ConfigManager import save_get_boolean, save_get_int
-from swane.config.preference_list import WF_PREFERENCES
-from swane.utils.DataInputList import DataInputList
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -185,7 +182,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
 
             workflow.connect(zscore_surf_lh, "out_file", outputnode, "zscore_surf_%s" % side)
 
-    is_ai = save_get_boolean(config, WF_PREFERENCES, DataInputList[name.upper()], "ai")
+    is_ai = config.getboolean_safe("ai")
 
     if is_ai:
         sym_template = swane_supplement.sym_template
@@ -213,7 +210,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
 
         # NODE 14: AI thresholding
         ai_threshold = Node(ImageMaths(), name='%s_ai_threshold' % name)
-        threshold = save_get_int(config, WF_PREFERENCES, DataInputList[name.upper()], "ai_threshold")
+        threshold = config.getint_safe("ai_threshold")
         threshold = abs(threshold/100)
         ai_threshold.inputs.op_string = "-thr %f -uthr %f" % (-threshold, threshold)
         workflow.connect(ai, "out_file", ai_threshold, "in_file")
