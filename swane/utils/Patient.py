@@ -185,8 +185,6 @@ class Patient:
 
         """
 
-        print("DONE WITH ", data_input)
-
         patient_list = dicom_src_work.get_patient_list()
 
         if len(patient_list) == 0:
