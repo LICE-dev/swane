@@ -79,6 +79,7 @@ pttab_wrong_type_check_msg = "You selected %s images while %s images were expect
 pttab_wrong_max_vols_check_msg = "The series you selected contains %d volumes while a maximum of %d were expected."
 pttab_wrong_min_vols_check_msg = "The series you selected contains %d volumes while a minimum of %d were expected."
 pttab_import_copy_error_msg = "Error copying selected series files."
+pttab_import_folder_not_empy = "Images are already loaded for this series."
 pttab_dicom_copy = "Copying DICOM files in patient folder..."
 pttab_dicom_check = "Verifying patient folder..."
 pttab_dicom_scan = "Scanning DICOM folder..."

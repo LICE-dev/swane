@@ -294,6 +294,10 @@ class PatientTab(QTabWidget):
                 msg_box = QMessageBox()
                 msg_box.setText(strings.pttab_wrong_max_vols_check_msg % (vols, data_input.value.max_volumes))
                 msg_box.exec()
+            elif import_ret == PatientRet.DataInputNonEmpty:
+                msg_box = QMessageBox()
+                msg_box.setText(strings.pttab_import_folder_not_empy)
+                msg_box.exec()
             elif import_ret == PatientRet.DataImportErrorVolumesMin:
                 msg_box = QMessageBox()
                 msg_box.setText(strings.pttab_wrong_min_vols_check_msg % (vols, data_input.value.min_volumes))
@@ -1032,8 +1036,8 @@ class PatientTab(QTabWidget):
             data_input=data_input,
             icon=self.main_window.WARNING_ICON_FILE,
             tooltip=tooltip,
-            import_enable=True,
-            clear_enable=False,
+            import_enable=False,
+            clear_enable=True,
             text=text
         )
 

@@ -79,6 +79,11 @@ class TestPatient:
                                                          mod=mod, force_modality=False)
         assert import_ret == PatientRet.DataImportCompleted, "Importing valid series error"
 
+        test_patient.input_state_list[DataInputList.T13D].loaded = True
+        import_ret = test_patient.dicom_import_to_folder(data_input=DataInputList.T13D, copy_list=image_list, vols=vols,
+                                                         mod=mod, force_modality=False)
+        assert import_ret == PatientRet.DataInputNonEmpty, "Importing in non empty-folder error"
+
         assert test_patient.dicom_folder_count(DataInputList.T13D) == len(image_list), "Copied files number different from image list length"
 
         import_ret = test_patient.dicom_import_to_folder(data_input=DataInputList['FMRI_0'], copy_list=image_list, vols=vols,

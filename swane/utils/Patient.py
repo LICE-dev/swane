@@ -26,6 +26,7 @@ class PatientRet(Enum):
     FolderAlreadyExists = auto()
     InvalidFolderTree = auto()
     ValidFolder = auto()
+    DataInputNonEmpty = auto()
     DataInputLoading = auto()
     DataInputWarningNoDicom = auto()
     DataInputWarningMultiPt = auto()
@@ -184,6 +185,8 @@ class Patient:
 
         """
 
+        print("DONE WITH ", data_input)
+
         patient_list = dicom_src_work.get_patient_list()
 
         if len(patient_list) == 0:
@@ -223,6 +226,9 @@ class Patient:
         None.
 
         """
+        # series already loaded
+        if self.input_state_list[data_input].loaded:
+            return PatientRet.DataInputNonEmpty
         # number of volumes check
         if data_input.value.max_volumes != -1 and vols > data_input.value.max_volumes:
             return PatientRet.DataImportErrorVolumesMax
