@@ -40,6 +40,8 @@ def clear_data_and_check(patient: Patient, data_input: DataInputList, qtbot):
 
 
 def import_from_path(patient: Patient, data_input: DataInputList, dicom_path: str, qtbot):
+    patient.clear_import_folder(data_input)
+    patient.reset_workflow()
     worker = DicomSearchWorker(dicom_path)
     worker.run()
     patient_list = worker.get_patient_list()
