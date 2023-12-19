@@ -828,12 +828,10 @@ class PatientTab(QTabWidget):
         self.patient.clear_import_folder(data_input)
 
         self.set_error(data_input, strings.pttab_no_dicom_error + src_path)
-        self.patient.input_state_list[data_input].loaded = False
-        self.patient.input_state_list[data_input].volumes = 0
         self.enable_exec_tab()
 
         progress.accept()
-        
+
         self.reset_workflow()
         self.check_venous_volumes()
 

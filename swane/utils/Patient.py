@@ -310,6 +310,8 @@ class Patient:
             src_path = os.path.join(self.folder, self.name + strings.WF_DIR_SUFFIX,
                                     data_input.value.wf_name)
             shutil.rmtree(src_path, ignore_errors=True)
+            self.input_state_list[data_input].loaded = False
+            self.input_state_list[data_input].volumes = 0
             return True
         except:
             return False
