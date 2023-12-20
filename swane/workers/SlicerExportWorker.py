@@ -19,12 +19,11 @@ class SlicerExportWorker(QRunnable):
     def __init__(self, slicer_path: str, result_dir: str, scene_ext: str):
         super(SlicerExportWorker, self).__init__()
         self.signal = SlicerExportSignaler()
-        self.slicer_path = slicer_path
-        self.result_dir = result_dir
-        self.scene_ext = scene_ext
+        self.slicer_path: str = slicer_path
+        self.result_dir: str = result_dir
+        self.scene_ext: str = scene_ext
 
     def run(self):
-
         cmd = self.slicer_path + " --no-splash --no-main-window --python-script " + os.path.join(
             os.path.dirname(__file__), "slicer_script_result.py " + self.scene_ext)
 

@@ -4,7 +4,6 @@ from swane.utils.DataInputList import DataInputList
 
 
 class PatientInputState:
-
     def __init__(self):
         self.loaded = False
         self.volumes = 0

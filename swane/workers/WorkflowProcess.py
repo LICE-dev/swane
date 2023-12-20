@@ -9,6 +9,9 @@ from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, Workflow
 from nipype.external.cloghandler import ConcurrentRotatingFileHandler
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 import logging as orig_log
+from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+from multiprocessing import Queue
+
 
 LOG_DIR_NAME = "log"
 
@@ -21,24 +24,50 @@ class WorkflowProcess(Process):
         "nipype.interface",
     ]
 
-    def __init__(self, patient_name, workflow, queue):
+    def __init__(self, patient_name: str, workflow: MainWorkflow, queue: Queue):
+        """
+            A Process that execute a patient workflow in a thread, manage executor settings and signaling with gui.
+            A process is needed to iterate and kill its subprocess if user wants to stop a workflow, a thread would not
+            allow that.
+
+        Parameters
+        ----------
+        patient_name: str
+            The patient name
+        workflow: MainWorkflow
+            The workflow already generated and populated
+        queue: Queue
+            The subprocess queue for signal handling
+
+        """
         super(WorkflowProcess, self).__init__()
-        self.stop_event = Event()
-        self.workflow = workflow
-        self.queue = queue
-        self.patient_name = patient_name
+        self.stop_event: Event = Event()
+        self.workflow: MainWorkflow = workflow
+        self.queue: Queue = queue
+        self.patient_name: str = patient_name
 
     @staticmethod
     def remove_handlers(handler):
+        """
+            Remove the specified handler from nipype logger channels
+        """
+
         for channel in WorkflowProcess.LOG_CHANNELS:
             nipype_log.getLogger(channel).removeHandler(handler)
 
     @staticmethod
     def add_handlers(handler):
+        """
+            Add the specified handler to nipype logger channels
+        """
         for channel in WorkflowProcess.LOG_CHANNELS:
             nipype_log.getLogger(channel).addHandler(handler)
 
     def workflow_run_worker(self):
+        """
+            Thread that run the workflow
+        """
+
         plugin_args = {
             'mp_context': 'fork',
             'queue': self.queue,
@@ -60,10 +89,15 @@ class WorkflowProcess(Process):
 
         # TODO implement nipype.utils.draw_gantt_chart.generate_gantt_chart but maybe it's bugged
 
+        # This event signal the workflow end. When called here is a finished run
         self.stop_event.set()
 
     @staticmethod
     def kill_with_subprocess():
+        """
+            Loop all subprocess of current process and kill them, then kill the parent process.
+            MUST BE CALLED FROM THE WORKFLOW PROCESS ITSELF OR WILL KILL THE MAIN APPLICATION!
+        """
         import psutil
         try:
             this_process = psutil.Process(os.getpid())
@@ -79,7 +113,10 @@ class WorkflowProcess(Process):
             return
 
     def run(self):
-        # gestione del file di log nella cartella del paziente
+        """
+            The Process main code
+        """
+        # log folder management
         log_dir = os.path.join(self.workflow.base_dir, LOG_DIR_NAME)
         if not os.path.exists(log_dir):
             os.mkdir(log_dir)
@@ -105,23 +142,24 @@ class WorkflowProcess(Process):
             resource_log_handler = orig_log.FileHandler(resource_log_filename)
             callback_logger.addHandler(resource_log_handler)
 
-        # avvio il wf in un subhread
+        # start workflow subthread
         workflow_run_work = Thread(target=self.workflow_run_worker)
         workflow_run_work.start()
 
-        # l'evento può essere settato dal wf_run_worker (se il wf finisce spontaneamente) o dall'esterno per terminare il processo
+        # Wait for stop_event. It can be set from the workflow subthread (if workflow is executed till end) or from
+        # the GUI to stop the execution
         self.stop_event.wait()
 
-        # rimuovo gli handler di filelog e aggiornamento gui
+        # Handler removal
         WorkflowProcess.remove_handlers(file_handler)
         if self.workflow.is_resource_monitor:
             callback_logger.removeHandler(resource_log_handler)
 
-        # chiudo la queue del subprocess
+        # Signal workflow_stop to GUI and close queue
         self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_STOP))
         self.queue.close()
 
-        # se il thread è alive vuol dire che devo killare su richiesta della GUI
+        # If the thread is alive at this point the stop_event was set from GUI, so the user asked to kill the process
         if workflow_run_work.is_alive():
             WorkflowProcess.kill_with_subprocess()
 

@@ -172,7 +172,7 @@ class ConfigManager(configparser.ConfigParser):
         if self.global_config:
             self[GlobalPrefCategoryList.MAIN]['slicer_version'] = slicer_version
 
-    def is_optional_series_enabled(self, series_name: str) -> bool:
+    def is_optional_series_enabled(self, series_name: DataInputList) -> bool:
         return self.getboolean_safe(GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name))
 
     def get_slicer_scene_ext(self) -> str:

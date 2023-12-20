@@ -6,7 +6,7 @@ from packaging import version
 from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 import subprocess
-from enum import IntEnum
+from enum import IntEnum, auto
 
 
 class DependenceStatus(IntEnum):
@@ -25,15 +25,15 @@ class Dependence:
         """
         Parameters
         ----------
-        state: int
-            A value in Dependence.STATES describing the dependence status
+        state: DependenceStatus
+            A value describing the dependence status
         label: str
             A string to inform the user about the depence status
-        state2: int
-            A value in Dependence.STATES describing a subdependence status
+        state2: DependenceStatus
+            A value describing a subdependence status
         """
 
-        self.state = None
+        self.state: DependenceStatus = state
         self.state2 = DependenceStatus.MISSING
         self.label = None
         self.update(state, label, state2)
@@ -42,11 +42,11 @@ class Dependence:
         """
         Parameters
         ----------
-        state: int
+        state: DependenceStatus
             A value in DependenceStatus describing the dependence status
         label: str
             A string to inform the user about the depence status
-        state2: int
+        state2: DependenceStatus
             A value in DependenceStatus describing a subdependence status
         """
 

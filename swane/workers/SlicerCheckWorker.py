@@ -16,31 +16,37 @@ class SlicerCheckWorker(QRunnable):
 
     """
     
-    def __init__(self, current_slicer_path):
+    def __init__(self, current_slicer_path: str):
         super(SlicerCheckWorker, self).__init__()
         self.signal = SlicerCheckSignaler()
         self.current_slicer_path = current_slicer_path
 
     @staticmethod
-    def find_slicer_python(path: str) -> (list[str], str):
-        if not os.path.exists(path):
-            path = ''
-        elif os.path.isfile(path):
-            path = os.path.dirname(path)
+    def find_slicer_python(current_slicer_path: str) -> (list[str], str):
+        # If current_slicer_path doeas not exists, replace with a blank string
+        # If it is a file, search in its directory
+        if not os.path.exists(current_slicer_path):
+            current_slicer_path = ''
+        elif os.path.isfile(current_slicer_path):
+            current_slicer_path = os.path.dirname(current_slicer_path)
+
+        # Adjust search path based on OS
         if platform.system() == "Darwin":
-            if path == '':
+            if current_slicer_path == '':
                 src_path = "/Applications"
             else:
-                src_path = path
+                src_path = current_slicer_path
             find_cmd = "find " + src_path + " -type f -wholename *app/Contents/bin/PythonSlicer -print 2>/dev/null"
             rel_path = "../MacOS/Slicer"
         else:
-            if path == '':
+            if current_slicer_path == '':
                 src_path = "/"
             else:
-                src_path = path
+                src_path = current_slicer_path
             find_cmd = "find " + src_path + " -executable -type f -wholename *bin/PythonSlicer -print -quit 2>/dev/null"
             rel_path = "../Slicer"
+
+        # Perform search with find
         output = subprocess.run(find_cmd, shell=True,
                                 stdout=subprocess.PIPE).stdout.decode('utf-8')
         split = output.split("\n")
@@ -51,7 +57,7 @@ class SlicerCheckWorker(QRunnable):
     def run(self):
         repeat = True
         cmd = ""
-        state = DependenceStatus.MISSING
+        state: DependenceStatus = DependenceStatus.MISSING
         label = ""
         slicer_version = ""
 
@@ -63,22 +69,27 @@ class SlicerCheckWorker(QRunnable):
                     os.path.dirname(entry), rel_path))
                 break
             if cmd == '' or not os.path.exists(cmd):
-                # if slicerpython is found but slicer executable is not found, search entire filesystem
+                # if slicer executable is not found, search entire filesystem if we were searchng a specific folder
+                # otherwise stop loop, slicer is not detectable on system
                 if self.current_slicer_path != '':
                     self.current_slicer_path = ''
                 else:
                     repeat = False
                 label = strings.check_dep_slicer_error1
             else:
+                # if slicer command is found, version check
                 repeat = False
                 cmd2 = cmd + " --version"
                 output2 = subprocess.run(
                     cmd2, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
-                slicer_version = output2.replace("Slicer ", "").replace("\n","")
+                slicer_version = output2.replace("Slicer ", "").replace("\n", "")
                 if not DependencyManager.check_slicer_version(slicer_version):
                     label = strings.check_dep_slicer_wrong_version % (slicer_version, DependencyManager.MIN_SLICER_VERSION)
                     state = DependenceStatus.WARNING
                 else:
+                    # if version check is passed, check for freesurfer module
+                    # TODO: we can try to install missing feesurfer module automatically.
+                    #   see slicer_script_freesurfer_module_install.py for example
                     cmd3 = cmd + " --no-splash --no-main-window --python-script " + \
                            os.path.join(os.path.dirname(__file__), "slicer_script_freesurfer_module_check.py")
                     output3 = subprocess.run(

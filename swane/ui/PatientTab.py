@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeader
 
 from swane import strings
 from swane.workers.SlicerExportWorker import SlicerExportWorker
-from swane.workers.SlicerViewerWorker import load_scene
+from swane.workers.SlicerViewerWorker import SlicerViewerWorker
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
@@ -1112,7 +1112,12 @@ class PatientTab(QTabWidget):
         self.setTabEnabled(PatientTab.EXECTAB, enable)
 
     def load_scene(self):
-        load_scene(self.global_config.get_slicer_path(), self.patient.scene_path())
+        """
+            Visualize the workflow results into 3D Slicer.
+        """
+
+        slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), self.patient.scene_path())
+        QThreadPool.globalInstance().start(slicer_open_thread)
 
     def setTabEnabled(self, index, enabled):
         if index == PatientTab.EXECTAB and not enabled:

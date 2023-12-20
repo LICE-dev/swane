@@ -84,7 +84,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.T13D.value.wf_name: [
+                DataInputList.T13D.value.workflow_name: [
                     ["t13d_BET", "robust", True],
                     ["t13d_BET", "frac", WF_PREFERENCES[DataInputList.T13D]['bet_thr'].default]
                 ],
@@ -102,7 +102,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.T13D.value.wf_name: [
+                DataInputList.T13D.value.workflow_name: [
                     ["t13d_BET", "reduce_bias", True],
                     ["t13d_BET", "frac", 0]
                 ],
@@ -115,7 +115,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.T13D.value.wf_name: [
+                DataInputList.T13D.value.workflow_name: [
                     ["t13d_BET", "frac", WF_PREFERENCES[DataInputList.T13D]['bet_thr'].default]
                 ],
             },
@@ -153,7 +153,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.FLAIR3D.value.wf_name: [
+                DataInputList.FLAIR3D.value.workflow_name: [
                     ["flair3d_BET", "robust", True],
                 ],
                 "FLAT1": []
@@ -173,7 +173,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.FLAIR3D.value.wf_name: [
+                DataInputList.FLAIR3D.value.workflow_name: [
                     ["flair3d_BET", "reduce_bias", True],
                     ["flair3d_BET", "frac", 0]
                 ],
@@ -193,7 +193,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.ASL.value.wf_name: [
+                DataInputList.ASL.value.workflow_name: [
                     ["asl_surf_lh"],
                     ["asl_ai"]
                 ],
@@ -212,7 +212,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.ASL.value.wf_name: [
+                DataInputList.ASL.value.workflow_name: [
                     ["-asl_surf_lh"],
                     ["-asl_ai"]
                 ],
@@ -226,7 +226,7 @@ class TestWorkflow:
             'preferences': {
             },
             'check_nodes': {
-                DataInputList.VENOUS.value.wf_name: [
+                DataInputList.VENOUS.value.workflow_name: [
                     ["veins_bet", "frac", WF_PREFERENCES[DataInputList.VENOUS]['bet_thr'].default],
                     ["veins_split"]
                 ],
@@ -239,7 +239,7 @@ class TestWorkflow:
             'preferences': {
             },
             'check_nodes': {
-                "-%s" % DataInputList.VENOUS.value.wf_name: [],
+                "-%s" % DataInputList.VENOUS.value.workflow_name: [],
             },
         },
         'venous_invalid_phase_detection': {
@@ -252,7 +252,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.VENOUS.value.wf_name: [
+                DataInputList.VENOUS.value.workflow_name: [
                     ['veins_check', 'detection_mode', VEIN_DETECTION_MODE.SD]
                 ],
             },
@@ -269,7 +269,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.VENOUS.value.wf_name: [
+                DataInputList.VENOUS.value.workflow_name: [
                     ["veins_bet", "frac", 0],
                     ["veins2_conv"],
                     ['veins_check', 'detection_mode', VEIN_DETECTION_MODE.FIRST]
@@ -286,7 +286,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.DTI.value.wf_name: [
+                DataInputList.DTI.value.workflow_name: [
                     ["dti_eddy_files"],
                     ["-dti_bedpostx"],
                 ],
@@ -305,7 +305,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList.DTI.value.wf_name: [
+                DataInputList.DTI.value.workflow_name: [
                     ["-dti_eddy_files"],
                     ["dti_bedpostx"],
                 ],
@@ -324,7 +324,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList["FMRI_0"].value.wf_name: [
+                DataInputList["FMRI_0"].value.workflow_name: [
                     ["-fmri_0_cluster_2"],
                 ],
             },
@@ -345,7 +345,7 @@ class TestWorkflow:
                 ]
             },
             'check_nodes': {
-                DataInputList["FMRI_0"].value.wf_name: [
+                DataInputList["FMRI_0"].value.workflow_name: [
                     ["fmri_0_genSpec", "task_duration", WF_PREFERENCES[DataInputList["FMRI_0"]]["task_duration"].default],
                     ["fmri_0_genSpec", "rest_duration", WF_PREFERENCES[DataInputList["FMRI_0"]]["rest_duration"].default],
                     ["fmri_0_nvols", "force_value", -1],
@@ -398,7 +398,8 @@ class TestWorkflow:
             # Generate workflow
             assert test_patient.input_state_list.is_ref_loaded() is True, "missing t13d for " + test_name
             test_patient.reset_workflow()
-            assert test_patient.generate_workflow(generate_praphs=False) == PatientRet.GenWfCompleted, "Error generating workflow for " + test_name
+            assert test_patient.generate_workflow(
+                generate_graphs=False) == PatientRet.GenWfCompleted, "Error generating workflow for " + test_name
 
             # Check desired nodes
             if 'check_nodes' not in this_test:

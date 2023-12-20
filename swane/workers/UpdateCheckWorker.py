@@ -18,7 +18,7 @@ class UpdateCheckWorker(QRunnable):
 
     def __init__(self):
         super(UpdateCheckWorker, self).__init__()
-        self.signal = UpdateCheckSignaler()
+        self.signal: UpdateCheckSignaler = UpdateCheckSignaler()
 
     def run(self):
         cmd = sys.executable + " -m pip index versions swane"
@@ -33,7 +33,20 @@ class UpdateCheckWorker(QRunnable):
                     break
 
     @staticmethod
-    def is_newer_version(pip_version):
+    def is_newer_version(pip_version: str) -> bool:
+        """
+            Compare current version with pip version
+
+        Parameters
+        ----------
+        pip_version : str
+            The version retrieved from pip
+
+        Returns
+        -------
+            True if pip version is newer than current version
+        """
+
         try:
             if version.parse(pip_version) > version.parse(__version__):
                 return True

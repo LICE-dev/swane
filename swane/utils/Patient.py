@@ -15,7 +15,6 @@ from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from multiprocessing import Queue
 from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from swane.workers.WorkflowProcess import WorkflowProcess
-from swane.config.preference_list import SLICER_EXTENSIONS
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 
 
@@ -66,7 +65,20 @@ class Patient:
         self.workflow_monitor_work: WorkflowMonitorWorker | None = None
 
     def load(self, patient_folder: str) -> PatientRet:
-        # Load patient information from a folder, generate patient configuration and
+        """
+        Load patient information from a folder, generate patient configuration and input_state_list
+
+        Parameters
+        ----------
+        patient_folder: str
+            The folder to scan
+
+        Returns
+        -------
+        A return code from PatientRet
+
+        """
+
         check = self.check_patient_folder(patient_folder)
         if check != PatientRet.ValidFolder:
             return check
@@ -78,6 +90,19 @@ class Patient:
         return PatientRet.ValidFolder
 
     def prepare_scan_dicom_folders(self) -> tuple[dict[DataInputList, DicomSearchWorker], int]:
+        """
+        Generates a DicomSearchWorker for every data input
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        A tuple formed by:
+            A dict wich keys are data inputs and values are the relative DicomSearchWorkers
+            An int with the number of files to be scanned by that worker
+
+        """
         dicom_scanners = {}
         total_files = 0
         for data_input in self.input_state_list:
@@ -108,6 +133,19 @@ class Patient:
         return dicom_src_work
 
     def execute_scan_dicom_folders(self, dicom_scanners: dict[DataInputList, DicomSearchWorker], status_callback: callable = None, progress_callback: callable = None):
+        """
+        Load patient information from a folder, generate patient configuration and input_state_list
+
+        Parameters
+        ----------
+        dicom_scanners: dict[DataInputList, DicomSearchWorker]
+            The list of DicomSearchWorker for every data input
+        status_callback: callable, optional
+            The function to notify return code. Default is None
+        progress_callback: callable, optional
+            The function to notify scan progress. Default is None
+
+        """
         for data_input in self.input_state_list:
             if data_input in dicom_scanners:
                 self.check_input_folder_step2(data_input, dicom_scanners[data_input], progress_callback=progress_callback, status_callback=status_callback)
@@ -124,7 +162,7 @@ class Patient:
         ----------
         data_input : DataInputList
             The series folder name to check.
-        status_callback: callable
+        status_callback: callable, optional
             The function to notify update to UI. Default is None
         progress_callback : callable, optional
             A callback function to notify progress. The default is None.
@@ -253,16 +291,56 @@ class Patient:
             return PatientRet.DataImportErrorCopy
 
     def create_config(self, dependency_manager: DependencyManager):
+        """
+        Generate the patient configuration reading its config file.
+
+        Parameters
+        ----------
+        dependency_manager: DependencyManager
+            the application dependency manager
+
+        Returns
+        -------
+        None.
+
+        """
         self.config = ConfigManager(self.folder)
         self.config.check_dependencies(dependency_manager)
 
     def dicom_folder(self, data_input: DataInputList = None) -> str:
-        if data_input is None:
+        """
+        Get a dicom folder path
+
+        Parameters
+        ----------
+        data_input: DataInputList, optional
+            if specified, return the relative dicom subfolder
+
+        Returns
+        -------
+            The requested dicom folder path
+
+        """
+
+        if type(data_input) is not DataInputList:
             return os.path.join(self.folder, self.global_config.get_default_dicom_folder())
         else:
             return os.path.join(self.folder, self.global_config.get_default_dicom_folder(), str(data_input))
 
     def dicom_folder_count(self, data_input: DataInputList) -> int:
+        """
+        Counts files in a dicom folder
+
+        Parameters
+        ----------
+        data_input: DataInputList
+            the data input dicom folder to scan
+
+        Returns
+        -------
+            The file count as an int
+
+        """
         try:
             dicom_path = self.dicom_folder(data_input)
             count = len(
@@ -271,7 +349,20 @@ class Patient:
         except:
             return 0
 
-    def check_patient_folder(self, patient_folder: str):
+    def check_patient_folder(self, patient_folder: str) -> PatientRet:
+        """
+        Check if a path is a valid patient folder
+
+        Parameters
+        ----------
+        patient_folder: str
+            the path to check
+
+        Returns
+        -------
+            A PatientRet code
+
+        """
         if not os.path.exists(patient_folder):
             return PatientRet.FolderNotFound
 
@@ -297,7 +388,7 @@ class Patient:
 
         Returns
         -------
-        False is exception raised, True otherwise.
+        False if exception raised, True otherwise.
 
         """
         try:
@@ -308,7 +399,7 @@ class Patient:
 
             # Reset the workflows related to the deleted DICOM images
             src_path = os.path.join(self.folder, self.name + strings.WF_DIR_SUFFIX,
-                                    data_input.value.wf_name)
+                                    data_input.value.workflow_name)
             shutil.rmtree(src_path, ignore_errors=True)
             self.input_state_list[data_input].loaded = False
             self.input_state_list[data_input].volumes = 0
@@ -391,45 +482,66 @@ class Patient:
             except:
                 return PatientRet.FolderNotFound
 
-    def can_generate_workflow(self):
+    def can_generate_workflow(self) -> bool:
+        """
+        Check if requisites for workflow generation are met
+
+        Returns
+        -------
+        True if workflow can be generated
+        """
         return self.input_state_list.is_ref_loaded() and self.dependency_manager.is_fsl() and self.dependency_manager.is_dcm2niix()
 
-    def graph_dir(self):
+    def graph_dir(self) -> str:
+        """
+        Returns
+        -------
+        The path of graph directory
+        """
         return os.path.join(self.folder, Patient.GRAPH_DIR_NAME)
 
     def graph_file(self, long_name: str):
         """
-
         Parameters
         ----------
         long_name: str
             The workflow complete name
         Returns
         -------
-
+        The complete path of graph file with the specified name
         """
         graph_name = long_name.lower().replace(" ", "_")
         return os.path.join(self.graph_dir(), Patient.GRAPH_FILE_PREFIX + graph_name + "." + Patient.GRAPH_FILE_EXT)
 
-    def result_dir(self):
+    def result_dir(self) -> str:
+        """
+        Returns
+        -------
+        The patient results directory path
+        """
         return os.path.join(self.folder, MainWorkflow.Result_DIR)
 
-    def scene_path(self):
+    def scene_path(self) -> str:
+        """
+        Returns
+        -------
+        The slicer scene file path
+        """
         return os.path.join(self.result_dir(), "scene." + self.global_config.get_slicer_scene_ext())
 
-    def generate_workflow(self, generate_praphs: bool = True) -> PatientRet:
+    def generate_workflow(self, generate_graphs: bool = True) -> PatientRet:
         """
         Generates and populates the Main Workflow.
         Generates the graphviz analysis graphs on a new thread.
 
         Parameters
         ----------
-        generate_praphs: bool.
+        generate_graphs: bool.
             If True, svg graphics of workflows are generated. Default is True.
 
         Returns
         -------
-        PatientRet corresponging to succes or failure
+        PatientRet corresponding to success or failure
 
         """
 
@@ -456,7 +568,7 @@ class Patient:
         node_list = self.workflow.get_node_array()
 
         # Graphviz analysis graphs drawing
-        if generate_praphs:
+        if generate_graphs:
             for node in node_list.keys():
                 if len(node_list[node].node_list.keys()) > 0:
                     if self.dependency_manager.is_graphviz():
@@ -486,25 +598,69 @@ class Patient:
         except AttributeError:
             return False
 
-    def workflow_dir(self):
+    def workflow_dir(self) -> str:
+        """
+        Returns
+        -------
+        The workflow directory path
+        """
         return os.path.join(self.folder, self.name + strings.WF_DIR_SUFFIX)
 
-    def workflow_dir_exists(self):
+    def workflow_dir_exists(self) -> bool:
+        """
+        Returns
+        -------
+        True if a previous workflow execution is found
+        """
         return os.path.exists(self.workflow_dir())
 
     def delete_workflow_dir(self):
+        """
+        Delete any previous workflow execution
+        """
         shutil.rmtree(self.workflow_dir(), ignore_errors=True)
 
-    def freesurfer_dir(self):
+    def freesurfer_dir(self) -> str:
+        """
+        Returns
+        -------
+        The freesurfer subject directory path
+        """
         return os.path.join(self.folder, FS_DIR)
 
-    def freesurfer_dir_exists(self):
+    def freesurfer_dir_exists(self) -> bool:
+        """
+        Returns
+        -------
+        True if freesurfer subject directory exists
+        """
         return os.path.exists(self.freesurfer_dir())
 
     def delete_freesurfer_dir(self):
+        """
+        Delete any previous freesurfer run
+        """
         shutil.rmtree(self.freesurfer_dir(), ignore_errors=True)
 
-    def start_workflow(self, resume: bool = None, resume_freesurfer: bool = None, update_node_callback: callable = None) -> PatientRet:
+    def start_workflow(self, resume: bool = None, resume_freesurfer: bool = None,
+                       update_node_callback: callable = None) -> PatientRet:
+        """
+        Start the workflow execution in a subprocess
+
+        Parameters
+        ----------
+        resume: bool, optional
+            If True resume previous run, if False delete them, if None and previous run is found, stops. Default is None
+        resume_freesurfer: bool, optional
+            If True resume previous fs run , if False delete them, if None and previous fs run is found, stops. Default is None
+        update_node_callback: callable, optional
+            The method to notify workflow update
+
+        Returns
+        -------
+        A PatientRet code
+
+        """
         # Already executing workflow
         if self.is_workflow_process_alive():
             return PatientRet.ExecWfStatusError
@@ -536,12 +692,20 @@ class Patient:
         return PatientRet.ExecWfStarted
 
     def stop_workflow(self) -> PatientRet:
+        """
+        Stop a running workflow execution
+
+        Returns
+        -------
+        A PatientRet code
+
+        """
         if not self.is_workflow_process_alive():
             return PatientRet.ExecWfStatusError
         # Workflow killing
         self.workflow_process.stop_event.set()
 
-    def reset_workflow(self, force: bool = False):
+    def reset_workflow(self, force: bool = False) -> bool:
         """
         Set the workflow var to None.
         Resets the UI.
@@ -554,7 +718,7 @@ class Patient:
 
         Returns
         -------
-        None.
+        True if workflow was generated
 
         """
 
