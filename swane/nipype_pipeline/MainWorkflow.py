@@ -29,7 +29,7 @@ DEBUG = False
 
 # TODO implementazione error manager
 class MainWorkflow(CustomWorkflow):
-    Result_DIR = 'scene'
+    Result_DIR = 'results'
 
     def __init__(self, name: str, base_dir: str):
         super().__init__(name, base_dir)

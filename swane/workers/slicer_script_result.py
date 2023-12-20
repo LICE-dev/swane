@@ -377,17 +377,17 @@ def main_tract(dti_dir: str, scene_dir: str):
 
 # slicerpython execution code
 slicer.mrmlScene.Clear(0)
-sceneDir = os.path.join(os.getcwd(), "scene")
+results_folder = os.getcwd()
 
-if not os.path.isdir(sceneDir):
+if not os.path.isdir(results_folder):
     print("SLICERLOADER: Results folder not found")
 else:
-    refNode = load_anat(sceneDir, "ref")
+    refNode = load_anat(results_folder, "ref")
     if refNode is not None:
 
-        dtiDir = os.path.join(sceneDir, "dti")
+        dtiDir = os.path.join(results_folder, "dti")
         if os.path.isdir(dtiDir):
-            main_tract(dtiDir, sceneDir)
+            main_tract(dtiDir, results_folder)
 
         # lesion_segment(sceneDir)
 
@@ -395,7 +395,7 @@ else:
                     'r-flair2d_sag_brain', 'r-binary_flair', 'r-junction_z', 'r-extension_z']
 
         for volume in baseList:
-            load_anat(sceneDir, volume)
+            load_anat(results_folder, volume)
 
         colorList = [('r-asl_ai', 'vtkMRMLColorTableNodeFileDivergingBlueRed.txt'),
                      ('r-pet_ai', 'vtkMRMLColorTableNodeFileDivergingBlueRed.txt'),
@@ -406,22 +406,22 @@ else:
                      ]
 
         for volume in colorList:
-            load_anat(sceneDir, volume[0], volume[1])
+            load_anat(results_folder, volume[0], volume[1])
 
-        load_fmri(sceneDir)
+        load_fmri(results_folder)
 
-        load_vein(sceneDir)
+        load_vein(results_folder)
 
-        load_freesurfer(sceneDir, refNode)
+        load_freesurfer(results_folder, refNode)
 
         ext = "mrb"
         
         #TODO valutare
         # Saving in MRML doesn't work well, disable extension choice for now
-        # if sys.argv[1] is not None and sys.argv[1] == "1":
+        # if sys.argv[1] is not None and sys.argv[1] == "mrml":
         #     ext = "mrml"
 
         print("SLICERLOADER: Saving multimodale scene (some minutes)")
-        slicer.util.saveScene(os.path.join(sceneDir, "scene." + ext))
+        slicer.util.saveScene(os.path.join(results_folder, "scene." + ext))
 
 sys.exit(0)
