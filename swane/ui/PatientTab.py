@@ -617,10 +617,10 @@ class PatientTab(QTabWidget):
         try:
             if not DependencyManager.is_slicer(self.global_config):
                 self.generate_scene_button.setEnabled(False)
-                self.generate_scene_button.setToolTip(strings.pttab_results_button_disabled_tooltip)
+                self.generate_scene_button.setToolTip(strings.pttab_generate_scene_button_disabled_tooltip)
             else:
                 self.generate_scene_button.setEnabled(True)
-                self.generate_scene_button.setToolTip(strings.pttab_results_button_tooltip)
+                self.generate_scene_button.setToolTip(strings.pttab_generate_scene_button_tooltip)
         except:
             pass
 
@@ -628,16 +628,16 @@ class PatientTab(QTabWidget):
         try:
             if not DependencyManager.is_slicer(self.global_config):
                 self.load_scene_button.setEnabled(False)
-                self.load_scene_button.setText(strings.pttab_open_results_button + " " + strings.INFOCHAR)
-                self.load_scene_button.setToolTip(strings.pttab_results_button_disabled_tooltip)
+                self.load_scene_button.setText(strings.pttab_load_scene_button + " " + strings.INFOCHAR)
+                self.load_scene_button.setToolTip(strings.pttab_generate_scene_button_disabled_tooltip)
             elif os.path.exists(self.patient.scene_path()):
                 self.load_scene_button.setEnabled(True)
                 self.load_scene_button.setToolTip("")
-                self.load_scene_button.setText(strings.pttab_open_results_button)
+                self.load_scene_button.setText(strings.pttab_load_scene_button)
             else:
                 self.load_scene_button.setEnabled(False)
-                self.load_scene_button.setToolTip(strings.pttab_open_results_button_tooltip)
-                self.load_scene_button.setText(strings.pttab_open_results_button + " " + strings.INFOCHAR)
+                self.load_scene_button.setToolTip(strings.pttab_load_scene_button_tooltip)
+                self.load_scene_button.setText(strings.pttab_load_scene_button + " " + strings.INFOCHAR)
         except:
             pass
 
@@ -654,7 +654,7 @@ class PatientTab(QTabWidget):
         result_tab_layout = QGridLayout()
         self.result_tab.setLayout(result_tab_layout)
 
-        self.generate_scene_button = QPushButton(strings.pttab_results_button)
+        self.generate_scene_button = QPushButton(strings.pttab_generate_scene_button)
         self.generate_scene_button.clicked.connect(self.generate_scene)
         self.generate_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.generate_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -664,7 +664,7 @@ class PatientTab(QTabWidget):
         horizontal_spacer = QSpacerItem(20, 40, QSizePolicy.Expanding, QSizePolicy.Minimum)
         result_tab_layout.addItem(horizontal_spacer, 0, 1, 1, 1)
 
-        self.load_scene_button = QPushButton(strings.pttab_open_results_button)
+        self.load_scene_button = QPushButton(strings.pttab_load_scene_button)
         self.load_scene_button.clicked.connect(self.load_scene)
         self.load_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.load_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)

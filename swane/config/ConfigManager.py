@@ -175,9 +175,9 @@ class ConfigManager(configparser.ConfigParser):
     def is_optional_series_enabled(self, series_name: str) -> bool:
         return self.getboolean_safe(GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name))
 
-    def get_slicer_scene_ext(self) -> Enum:
+    def get_slicer_scene_ext(self) -> str:
         if self.global_config:
-            return self.getenum_safe(GlobalPrefCategoryList.MAIN, 'slicer_scene_ext')
+            return self.getenum_safe(GlobalPrefCategoryList.MAIN, 'slicer_scene_ext').value
         return None
 
     def get_patient_workflow_type(self) -> Enum:

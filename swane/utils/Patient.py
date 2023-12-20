@@ -415,7 +415,7 @@ class Patient:
         return os.path.join(self.folder, MainWorkflow.Result_DIR)
 
     def scene_path(self):
-        return os.path.join(self.result_dir(), "scene." + self.global_config.get_slicer_scene_ext().value)
+        return os.path.join(self.result_dir(), "scene." + self.global_config.get_slicer_scene_ext())
 
     def generate_workflow(self, generate_praphs: bool = True) -> PatientRet:
         """
@@ -576,8 +576,8 @@ class Patient:
 
         """
 
-        slicer_thread = SlicerExportWorker(self.global_config.get_slicer_path(), self.folder,
-                                           self.global_config.get_slicer_scene_ext().value)
+        slicer_thread = SlicerExportWorker(self.global_config.get_slicer_path(), self.result_dir(),
+                                           self.global_config.get_slicer_scene_ext())
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)
         QThreadPool.globalInstance().start(slicer_thread)
