@@ -95,7 +95,7 @@ class MainWorkflow(CustomWorkflow):
 
         # 3D T1w
         ref_dir = patient_input_state_list.get_dicom_dir(DIL.T13D)
-        t1 = ref_workflow(DIL.T13D.value.wf_name, ref_dir, patient_config[DIL.T13D])
+        t1 = ref_workflow(DIL.T13D.value.workflow_name, ref_dir, patient_config[DIL.T13D])
         t1.long_name = "3D T1w analysis"
         self.add_nodes([t1])
 
@@ -132,7 +132,7 @@ class MainWorkflow(CustomWorkflow):
         if patient_input_state_list[DIL.FLAIR3D].loaded:
             # 3D Flair analysis
             flair_dir = patient_input_state_list.get_dicom_dir(DIL.FLAIR3D)
-            flair = linear_reg_workflow(DIL.FLAIR3D.value.wf_name, flair_dir, patient_config[DIL.FLAIR3D])
+            flair = linear_reg_workflow(DIL.FLAIR3D.value.workflow_name, flair_dir, patient_config[DIL.FLAIR3D])
             flair.long_name = "3D Flair analysis"
             self.add_nodes([flair])
 
@@ -175,7 +175,7 @@ class MainWorkflow(CustomWorkflow):
         for plane in PLANES:
             if DIL['FLAIR2D_%s' % plane.name] in patient_input_state_list and patient_input_state_list[DIL['FLAIR2D_%s' % plane.name]].loaded:
                 flair_dir = patient_input_state_list.get_dicom_dir(DIL['FLAIR2D_%s' % plane.name])
-                flair2d = linear_reg_workflow(DIL['FLAIR2D_%s' % plane.name].value.wf_name, flair_dir, None, is_volumetric=False)
+                flair2d = linear_reg_workflow(DIL['FLAIR2D_%s' % plane.name].value.workflow_name, flair_dir, None, is_volumetric=False)
                 flair2d.long_name = "2D %s FLAIR analysis" % plane.value
                 self.add_nodes([flair2d])
 
@@ -189,7 +189,7 @@ class MainWorkflow(CustomWorkflow):
         if patient_input_state_list[DIL.MDC].loaded:
             # MDC analysis
             mdc_dir = patient_input_state_list.get_dicom_dir(DIL.MDC)
-            mdc = linear_reg_workflow(DIL.MDC.value.wf_name, mdc_dir, patient_config[DIL.MDC])
+            mdc = linear_reg_workflow(DIL.MDC.value.workflow_name, mdc_dir, patient_config[DIL.MDC])
             mdc.long_name = "Post-contrast 3D T1w analysis"
             self.add_nodes([mdc])
 
@@ -203,7 +203,7 @@ class MainWorkflow(CustomWorkflow):
         if patient_input_state_list[DIL.ASL].loaded:
             # ASL analysis
             asl_dir = patient_input_state_list.get_dicom_dir(DIL.ASL)
-            asl = func_map_workflow(DIL.ASL.value.wf_name, asl_dir, is_freesurfer, patient_config[DIL.ASL])
+            asl = func_map_workflow(DIL.ASL.value.workflow_name, asl_dir, is_freesurfer, patient_config[DIL.ASL])
             asl.long_name = "Arterial Spin Labelling analysis"
 
             self.connect(t1, 'outputnode.ref_brain', asl, 'inputnode.reference')
@@ -235,7 +235,7 @@ class MainWorkflow(CustomWorkflow):
         if patient_input_state_list[DIL.PET].loaded:  # and check_input['ct_brain']:
             # PET analysis
             pet_dir = patient_input_state_list.get_dicom_dir(DIL.PET)
-            pet = func_map_workflow(DIL.PET.value.wf_name, pet_dir, is_freesurfer, patient_config[DIL.PET])
+            pet = func_map_workflow(DIL.PET.value.workflow_name, pet_dir, is_freesurfer, patient_config[DIL.PET])
             pet.long_name = "Pet analysis"
 
             self.connect(t1, 'outputnode.ref', pet, 'inputnode.reference')
@@ -276,7 +276,7 @@ class MainWorkflow(CustomWorkflow):
             venous2_dir = None
             if patient_input_state_list[DIL.VENOUS2].loaded:
                 venous2_dir = patient_input_state_list.get_dicom_dir(DIL.VENOUS2)
-            venous = venous_workflow(DIL.VENOUS.value.wf_name, venous_dir, patient_config[DIL.VENOUS], venous2_dir)
+            venous = venous_workflow(DIL.VENOUS.value.workflow_name, venous_dir, patient_config[DIL.VENOUS], venous2_dir)
             venous.long_name = "Venous MRA analysis"
 
             self.connect(t1, "outputnode.ref_brain", venous, "inputnode.ref_brain")
@@ -288,7 +288,7 @@ class MainWorkflow(CustomWorkflow):
             dti_dir = patient_input_state_list.get_dicom_dir(DIL.DTI)
             mni_dir = abspath(os.path.join(os.environ["FSLDIR"], 'data/standard/MNI152_T1_2mm_brain.nii.gz'))
 
-            dti_preproc = dti_preproc_workflow(DIL.DTI.value.wf_name, dti_dir, patient_config[DIL.DTI], mni_dir, max_cpu=self.max_cpu, multicore_node_limit=self.multicore_node_limit)
+            dti_preproc = dti_preproc_workflow(DIL.DTI.value.workflow_name, dti_dir, patient_config[DIL.DTI], mni_dir, max_cpu=self.max_cpu, multicore_node_limit=self.multicore_node_limit)
             dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
             self.connect(t1, "outputnode.ref_brain", dti_preproc, "inputnode.ref_brain")
 
@@ -326,7 +326,7 @@ class MainWorkflow(CustomWorkflow):
             if patient_input_state_list[DIL['FMRI_%d' % y]].loaded:
 
                 dicom_dir = patient_input_state_list.get_dicom_dir(DIL['FMRI_%d' % y])
-                fMRI = task_fMRI_workflow(DIL['FMRI_%d' % y].value.wf_name, dicom_dir, patient_config[DIL['FMRI_%d' % y]], self.base_dir)
+                fMRI = task_fMRI_workflow(DIL['FMRI_%d' % y].value.workflow_name, dicom_dir, patient_config[DIL['FMRI_%d' % y]], self.base_dir)
                 fMRI.long_name = "Task fMRI analysis - %d" % y
                 self.connect(t1, "outputnode.ref_brain", fMRI, "inputnode.ref_BET")
                 fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_1', self.Result_DIR + '.fMRI')

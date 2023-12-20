@@ -1,5 +1,6 @@
 from PySide6.QtCore import Signal, QObject, QRunnable
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
+from multiprocessing import Queue
 
 
 class LogReceiverSignal(QObject):
@@ -11,10 +12,10 @@ class WorkflowMonitorWorker(QRunnable):
     Create a thread waiting for nipype workflow reports using a multiprocessing queue.
     """
 
-    def __init__(self, queue):
+    def __init__(self, queue: Queue):
         super(WorkflowMonitorWorker, self).__init__()
-        self.signal = LogReceiverSignal()
-        self.queue = queue
+        self.signal: LogReceiverSignal = LogReceiverSignal()
+        self.queue: Queue = queue
 
     def run(self):
         while True:

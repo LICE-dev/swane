@@ -6,7 +6,8 @@ FMRI_NUM = 3
 
 
 class DataInput(PrefCategory):
-    def __init__(self, name: str, label: str = "", tooltip: str = "", image_modality: ImageModality = ImageModality.RM, optional: bool = False, wf_name: str = None, max_volumes: int = 1, min_volumes: int = 1):
+    def __init__(self, name: str, label: str = "", tooltip: str = "", image_modality: ImageModality = ImageModality.RM,
+                 optional: bool = False, workflow_name: str = None, max_volumes: int = 1, min_volumes: int = 1):
         super().__init__(name, label)
         self.tooltip = tooltip
         self.image_modality = image_modality
@@ -15,14 +16,15 @@ class DataInput(PrefCategory):
         self.volumes = 0
         self.max_volumes = max_volumes
         self.min_volumes = min_volumes
-        if wf_name is None:
-            self.wf_name = self.name
+        if workflow_name is None:
+            self.workflow_name = self.name
         else:
-            self.wf_name = wf_name
+            self.workflow_name = workflow_name
 
-    def is_image_modality(self, image_modality_found):
+    def is_image_modality(self, image_modality_found: str) -> bool:
         try:
-            return self.image_modality == image_modality_found or self.image_modality.value.lower() == str(image_modality_found).lower()
+            return (self.image_modality == image_modality_found or
+                    self.image_modality.value.lower() == str(image_modality_found).lower())
         except:
             return False
 
@@ -50,7 +52,7 @@ class DataInputList(Enum):
         name=VENOUS.name+"2",
         label='Venous MRA - Second volume (optional)',
         tooltip='If you have anatomic and venous volumes in two different sequences, load the remaining volume here. Otherwise, leave this slot empty',
-        wf_name='venous')
+        workflow_name=VENOUS.name)
     DTI = DataInput(
         name='dti',
         label='Diffusion Tensor Imaging',
@@ -68,6 +70,7 @@ class DataInputList(Enum):
         image_modality=ImageModality.PET
     )
 
+    # An Enum usually contains EVERY variable defined in its __init__, we want to ignore some used for loop only
     _ignore_ = 'DataInputList i'
     DataInputList = vars()
 
