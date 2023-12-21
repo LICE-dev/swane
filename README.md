@@ -62,7 +62,7 @@ A few of the analyses you can do with SWANe:
 | [fsl](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/) | [6.0.6](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation) | [Link](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation#Installing_FSL) |
 
 > [!WARNING]
-The installation of some of these dependencies can be tricky. If you're not handy with Mac or Linux OS we recommend you to use our Wiki (coming soon!)  or read the [Help](#help) section for a full installation guide of each one of these softwares.
+The installation of some of these dependencies can be tricky. If you're not handy with Mac or Linux OS we recommend you to use our Wiki (coming soon!)  or read the [Wiki](https://github.com/LICE-dev/swane/wiki) section for a full installation guide of each one of these softwares.
 
 ### Optional Dependencies
 
@@ -73,7 +73,7 @@ The installation of some of these dependencies can be tricky. If you're not hand
 | [graphviz](https://graphviz.org/) | [0.2.2](https://github.com/graphp/graphviz/tree/v0.2.2) | [Linux](https://graphviz.org/download/#linux) - [macOS](https://graphviz.org/download/#mac) |
 
 > [!WARNING]
-The installation of some of these dependencies can be tricky. If you're not handy with Mac or Linux OS we recommend you to use our Wiki (coming soon!) or read the  [Help](#help) section for a full installation guide of each one of these softwares.
+The installation of some of these dependencies can be tricky. If you're not handy with Mac or Linux OS we recommend you to use our Wiki (coming soon!) or read the [Wiki](https://github.com/LICE-dev/swane/wiki) for a full installation guide of each one of these softwares.
 
 ### Package/Software Installation Order
 Below the recommend software/package installation order to make sure SWANe works properly:
