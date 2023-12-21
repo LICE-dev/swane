@@ -57,10 +57,8 @@ class PreferencesWindow(QDialog):
         self.saveButton.clicked.connect(self.save_preferences)
 
         for category in default_pref_list:
-
             if str(category) not in my_config:
                 continue
-
             if is_workflow and not my_config.global_config and not self.parent().patient.input_state_list[category].loaded:
                 continue
 
@@ -82,32 +80,14 @@ class PreferencesWindow(QDialog):
                 self.inputs[x] = PreferenceUIEntry(category=category,
                                                    key=key,
                                                    my_config=my_config,
-                                                   defaults=self.preferences,
-                                                   input_type=self.preferences[category][key].input_type,
-                                                   restart=self.preferences[category][key].restart,
-                                                   populate_combo=self.preferences[category][key].value_enum,
+                                                   entry=self.preferences[category][key],
                                                    parent=self)
-
-                # Label and Tooltip
-                self.inputs[x].set_label_text(self.preferences[category][key].label)
-                self.inputs[x].set_tooltip(self.preferences[category][key].tooltip)
-
-                # Input type-related controls
-                if self.preferences[category][key].input_type == InputTypes.FILE or self.preferences[category][key].input_type == InputTypes.DIRECTORY:
-                    grid.addWidget(self.inputs[x].button, x, 2)
-                    # path validation for folders and file
-                    self.inputs[x].validate_on_change = self.preferences[category][key].validate_on_change
-
-                # Range application
-                if self.preferences[category][key].range is not None:
-                    self.inputs[x].set_range(self.preferences[category][key].range[0], self.preferences[category][key].range[1])
-
-                # External dependence check
+                # External dependencies check
                 self.check_dependency(category, key, x)
 
-                # Other preference requirement
+                # Other preferences requirements
                 if self.preferences[category][key].pref_requirement is not None:
-                    # Search all inputs that are preference for this one and apply them a function on chang
+                    # Search all inputs that are preference for this one and apply them a function on change
                     for pref_cat in self.preferences[category][key].pref_requirement:
                         if str(pref_cat) not in my_config:
                             continue
@@ -115,14 +95,11 @@ class PreferencesWindow(QDialog):
                             if str(pref_req[0]) not in my_config[pref_cat]:
                                 continue
                             target_x = self.input_keys[pref_cat][pref_req[0]]
-                            if self.inputs[target_x].input_type == InputTypes.BOOLEAN:
-                                self.inputs[target_x].input_field.stateChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
-                            elif self.inputs[target_x].input_type == InputTypes.ENUM:
-                                self.inputs[target_x].input_field.currentIndexChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
-                            else:
-                                self.inputs[target_x].input_field.textChanged.connect(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
+                            self.inputs[target_x].connect_change(lambda checked, my_cat=category, my_key=key: self.requirement_changed(checked, my_cat, my_key))
                     # After the loop check if pref should be enabled
                     self.requirement_changed(False, category, key)
+
+                # Data input requirements
                 if not my_config.global_config and self.preferences[category][key].input_requirement is not None:
                     for input_req in self.preferences[category][key].input_requirement:
                         for cat_check in default_pref_list:
@@ -130,20 +107,16 @@ class PreferencesWindow(QDialog):
                                 self.inputs[x].disable(self.preferences[category][key].input_requirement_fail_tooltip)
                                 break
 
+                # Add GUI elements to grid
                 grid.addWidget(self.inputs[x].label, x, 0)
                 grid.addWidget(self.inputs[x].input_field, x, 1)
+                if self.inputs[x].button is not None:
+                    grid.addWidget(self.inputs[x].button, x, 2)
                 x += 1
 
-                # Informative text displayed in next row
-                if self.preferences[category][key].informative_text is not None:
-                    informative_text_label = QLabel()
-                    informative_text_label.setText(self.preferences[category][key].informative_text[
-                                                               self.inputs[x - 1].input_field.currentIndex()])
-                    grid.addWidget(informative_text_label, x, 0, 1, 2)
-                    self.inputs[x-1].input_field.currentIndexChanged.connect(lambda value,
-                                                                                    q_label=informative_text_label,
-                                                                                    labels=self.preferences[category][key].informative_text:
-                                                                             PreferencesWindow.update_informative_text(value, q_label, labels))
+                # Informative text displayed in next row, if present
+                if self.inputs[x-1].informative_text_label is not None:
+                    grid.addWidget(self.inputs[x-1].informative_text_label, x, 0, 1, 2)
                     x += 1
 
             vertical_spacer = QSpacerItem(
@@ -171,6 +144,7 @@ class PreferencesWindow(QDialog):
     def check_dependency(self, category: Enum, key: str, x: int) -> bool:
         """
         Check an external dependence to test if a preference can be enabled.
+
         Parameters
         ----------
         category: Enum
@@ -268,21 +242,5 @@ class PreferencesWindow(QDialog):
         Called when user change a settings that require SWANe restart.
 
         """
-        raise Exception
         self.restart = True
         self.saveButton.setText(strings.pref_window_save_restart_button)
-
-    @staticmethod
-    def update_informative_text(value: int, q_label: QLabel, labels: list):
-        """
-        Update the bedpostx core usage setting label if the user change the setting value.
-        Parameters
-        ----------
-        value: int
-            The index of the setting combo
-        q_label: int
-            The QLabel to update
-        labels: list
-            The list of possible labels
-        """
-        q_label.setText(labels[value])
