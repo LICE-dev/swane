@@ -84,8 +84,8 @@ class PatientTab(QTabWidget):
 
     def update_node_list(self, wf_report: WorkflowReport):
         """
-        Searches for the node linked to the msg arg.
-        Uses the parsed msng arg to update the node status.
+        Searches for the node linked to the wf_report arg.
+        Uses the wf_report arg to update the node status.
 
         Parameters
         ----------
@@ -614,6 +614,9 @@ class PatientTab(QTabWidget):
                 self.enable_tab_if_result_dir()
 
     def export_results_button_update_state(self):
+        """
+        Enable the export results button if Slicer is found on system
+        """
         try:
             if not DependencyManager.is_slicer(self.global_config):
                 self.generate_scene_button.setEnabled(False)
@@ -625,6 +628,9 @@ class PatientTab(QTabWidget):
             pass
 
     def load_scene_button_update_state(self):
+        """
+        Enable the load scene button if a scene file is present, otherwise disable it
+        """
         try:
             if not DependencyManager.is_slicer(self.global_config):
                 self.load_scene_button.setEnabled(False)
@@ -725,6 +731,18 @@ class PatientTab(QTabWidget):
             progress.setLabelText(strings.pttab_exporting_prefix + msg)
 
     def input_check_update(self, data_input: DataInputList, state: PatientRet, dicom_src_work: DicomSearchWorker = None):
+        """
+        Function used as callback after patient dicom folder check
+
+        Parameters
+        ----------
+        data_input: DataInputList
+            The data input checked
+        state: PatientRet
+            The return code of the scan
+        dicom_src_work: DicomSearchWorker, optional
+            The dicom scanner calling the function. Default is None
+        """
         if data_input not in self.input_report:
             return
         if state == PatientRet.DataInputWarningNoDicom:
@@ -772,7 +790,8 @@ class PatientTab(QTabWidget):
             progress = PersistentProgressDialog(strings.pttab_pt_loading, 0, 0, parent=self.parent())
             progress.show()
             progress.setMaximum(total_files)
-            self.patient.execute_scan_dicom_folders(dicom_scanners, self.input_check_update, progress.increase_value)
+            self.patient.execute_scan_dicom_folders(dicom_scanners, status_callback=self.input_check_update,
+                                                    progress_callback=progress.increase_value)
 
         # Update UI after loading dicom
         self.setTabEnabled(PatientTab.DATATAB, True)
@@ -839,6 +858,9 @@ class PatientTab(QTabWidget):
             self.clear_import_folder(DataInputList.VENOUS2)
 
     def check_venous_volumes(self):
+        """
+        Display informative warnings in venous and venous2 data input rows to help user in data loading
+        """
         phases = self.patient.input_state_list[DataInputList.VENOUS].volumes + self.patient.input_state_list[DataInputList.VENOUS2].volumes
         if phases == 0:
             self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
@@ -863,7 +885,15 @@ class PatientTab(QTabWidget):
             if self.patient.input_state_list[DataInputList.VENOUS2].loaded:
                 self.set_warn(DataInputList.VENOUS2, "Too many venous phases loaded, delete some!", False)
 
-    def exec_button_set_enabled(self, enabled):
+    def exec_button_set_enabled(self, enabled: bool):
+        """
+        Change the status and the tooltip of the exec workflow button.
+
+        Parameters
+        ----------
+        enabled : bool
+            The new status of the button
+        """
         if enabled:
             self.exec_button.setEnabled(True)
             self.exec_button.setToolTip("")
@@ -903,6 +933,27 @@ class PatientTab(QTabWidget):
 
     @staticmethod
     def label_from_dicom(image_list: list[str], patient_name: str, mod: str, series_description: str, vols: int) -> str | None:
+        """
+        Compose dicom scan result into a readable label
+
+        Parameters
+        ----------
+        image_list : list[str]
+            The list of file found
+        patient_name: str
+            The patient name found
+        mod: str
+            The image modality found
+        series_description: str
+            The series description found
+        vols: int
+            The volumes count found in the series
+
+        Returns
+        -------
+        A string containing the label text
+
+        """
         if image_list is None:
             return None
         try:
@@ -964,6 +1015,9 @@ class PatientTab(QTabWidget):
             self.importable_series_list.addItem(series[0])
 
     def clear_scan_result(self):
+        """
+        Clear the content of the scan result list
+        """
         self.importable_series_list.clear()
         self.dicom_scan_series_list = None
         if len(self.scan_directory_watcher.directories()) > 0:
@@ -1119,7 +1173,17 @@ class PatientTab(QTabWidget):
         slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), self.patient.scene_path())
         QThreadPool.globalInstance().start(slicer_open_thread)
 
-    def setTabEnabled(self, index, enabled):
+    def setTabEnabled(self, index: int, enabled: bool):
+        """
+        Changes the status of a tab and set an informative tooltip
+
+        Parameters
+        -------
+        index: int
+            The tab index
+        enabled: bool
+            The new tab status
+        """
         if index == PatientTab.EXECTAB and not enabled:
             if not self.patient.dependency_manager.is_fsl() or not self.patient.dependency_manager.is_dcm2niix():
                 self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled_dependency)
@@ -1133,9 +1197,19 @@ class PatientTab(QTabWidget):
             self.setTabToolTip(index, "")
         super().setTabEnabled(index, enabled)
 
-    def setTabToolTip(self, index, tip):
-        super().setTabToolTip(index, tip)
-        if tip == "" and self.tabText(index).endswith(strings.INFOCHAR):
+    def setTabToolTip(self, index: int, tooltip: str):
+        """
+        Changes the tooltip of a tab
+
+        Parameters
+        -------
+        index: int
+            The tab index
+        tooltip: str
+            The tooltip to show
+        """
+        super().setTabToolTip(index, tooltip)
+        if tooltip == "" and self.tabText(index).endswith(strings.INFOCHAR):
             self.setTabText(index, self.tabText(index).replace(" "+strings.INFOCHAR, ""))
-        elif tip != "" and not self.tabText(index).endswith(strings.INFOCHAR):
+        elif tooltip != "" and not self.tabText(index).endswith(strings.INFOCHAR):
             self.setTabText(index, self.tabText(index) + " " + strings.INFOCHAR)

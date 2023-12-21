@@ -349,6 +349,22 @@ GLOBAL_PREFERENCES[category]['max_pt_cpu'] = PreferenceEntry(
     default=str(suggested_max_cpu),
     range=[-1, 30],
 )
+GLOBAL_PREFERENCES[category]['resourceMonitor'] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Enable resource monitor",
+    default='false',
+)
+GLOBAL_PREFERENCES[category]['multicore_node_limit'] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="CPU management for multi-core steps",
+    value_enum=CORE_LIMIT,
+    default=CORE_LIMIT.SOFT_CAP,
+    informative_text={
+        CORE_LIMIT.NO_LIMIT: "Multi-core steps ignore the patient CPU core limit, using all available resources",
+        CORE_LIMIT.SOFT_CAP: "Multi-core steps use up to twice the patient CPU core limit",
+        CORE_LIMIT.HARD_CAP: "Multi-core steps strictly respect the patient CPU core limit",
+    }
+)
 GLOBAL_PREFERENCES[category]['cuda'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Enable CUDA for GPUable commands",
@@ -365,22 +381,6 @@ GLOBAL_PREFERENCES[category]['max_pt_gpu'] = PreferenceEntry(
     range=[1, 5],
     pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [('cuda', True)]},
     pref_requirement_fail_tooltip="Requires CUDA",
-)
-GLOBAL_PREFERENCES[category]['resourceMonitor'] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Enable resource monitor",
-    default='false',
-)
-GLOBAL_PREFERENCES[category]['multicore_node_limit'] = PreferenceEntry(
-    input_type=InputTypes.ENUM,
-    label="CPU management for multi-core steps",
-    value_enum=CORE_LIMIT,
-    default=CORE_LIMIT.SOFT_CAP,
-    informative_text=[
-        "Multi-core steps ignore the patient CPU core limit, using all available resources",
-        "Multi-core steps use up to twice the patient CPU core limit",
-        "Multi-core steps strictly respect the patient CPU core limit",
-    ]
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}

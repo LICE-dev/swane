@@ -73,7 +73,12 @@ class MainWindow(QMainWindow):
         msg_box.exec()
 
     @staticmethod
-    def get_non_unicode_height():
+    def get_non_unicode_height() -> int:
+        """
+        Returns
+        -------
+        The pixel height of a generic label WITHOUT unicode character
+        """
         button = QPushButton()
         opt = QStyleOptionButton()
         opt.initFrom(button)

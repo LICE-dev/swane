@@ -15,7 +15,7 @@ class PreferenceEntry:
     input_requirement_fail_tooltip = None
     restart = False
     validate_on_change = False
-    informative_text = None
+    informative_text: dict | None = None
     box_text = None
     hidden = False
     value_enum = None
@@ -40,7 +40,7 @@ class PreferenceEntry:
                 "input_requirement_fail_tooltip": str,
                 "restart": bool,
                 "validate_on_change": bool,
-                "informative_text": list,
+                "informative_text": dict,
                 "box_text": str,
 
         }
