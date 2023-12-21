@@ -56,7 +56,8 @@ class PatientTab(QTabWidget):
         self.scan_directory_watcher.directoryChanged.connect(self.clear_scan_result)
 
         self.result_directory_watcher = QFileSystemWatcher()
-        self.result_directory_watcher.directoryChanged.connect(self.result_directory_changed)
+        self.result_directory_watcher.directoryChanged.connect(self.enable_tab_if_result_dir)
+        self.result_directory_watcher.addPath(self.patient.folder)
 
         self.workflow_process = None
         self.node_list = None
@@ -99,6 +100,7 @@ class PatientTab(QTabWidget):
         """
         
         if wf_report.signal_type == WorkflowSignals.WORKFLOW_STOP:
+            self.enable_tab_if_result_dir(on_workflow_running=True)
             errors = False
             for key in self.node_list.keys():
                 self.node_list[key].node_holder.setExpanded(False)
@@ -122,7 +124,7 @@ class PatientTab(QTabWidget):
                 self.exec_button.setText(strings.pttab_wf_executed)
                 self.exec_button.setToolTip("")
 
-            self.enable_tab_if_result_dir()
+
             
             return
         elif wf_report.signal_type == WorkflowSignals.INVALID_SIGNAL:
@@ -802,9 +804,16 @@ class PatientTab(QTabWidget):
 
         self.enable_tab_if_result_dir()
 
-    def enable_tab_if_result_dir(self):
+    def enable_tab_if_result_dir(self, changed_path: str = "", on_workflow_running: bool = False):
         """
         Enables Results tab, if any.
+
+        Parameters
+        _______
+        changed_path: str
+            The changed directory, passed if called by watcher
+        on_workflow_running: bool
+            If True, updte states even if workflow is running. Default is False.
 
         Returns
         -------
@@ -812,6 +821,9 @@ class PatientTab(QTabWidget):
 
         """
         scene_dir = self.patient.result_dir()
+
+        if self.patient.is_workflow_process_alive() and not on_workflow_running:
+            return
         
         if os.path.exists(scene_dir):
             self.setTabEnabled(PatientTab.RESULTTAB, True)
@@ -927,9 +939,6 @@ class PatientTab(QTabWidget):
             self.generate_workflow_button.setEnabled(True)
             self.workflow_type_combo.setEnabled(True)
             self.patient_config_button.setEnabled(True)
-
-    def result_directory_changed(self):
-        self.enable_tab_if_result_dir()
 
     @staticmethod
     def label_from_dicom(image_list: list[str], patient_name: str, mod: str, series_description: str, vols: int) -> str | None:
