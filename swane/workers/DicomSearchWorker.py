@@ -244,7 +244,7 @@ class DicomSearchWorker(QRunnable):
 
         # Excludes series with less than 10 images unless they are siemens mosaics series
         if len(image_list) < 10 and hasattr(ds, 'ImageType') and "MOSAIC" not in ds.ImageType:
-            return None
+            return None, None, None, None, None
 
         mod = ds.Modality
         vols = self.get_series_nvol(patient, exam, series)
