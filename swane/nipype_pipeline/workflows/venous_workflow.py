@@ -5,7 +5,6 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.VenousCheck import VenousCheck
-from swane.utils.DataInputList import DataInputList
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 

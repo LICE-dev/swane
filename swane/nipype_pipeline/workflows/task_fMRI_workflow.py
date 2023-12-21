@@ -12,7 +12,7 @@ from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
 from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
-from swane.config.config_enums import BLOCK_DESIGN, SLICE_TIMING
+from swane.config.config_enums import BLOCK_DESIGN
 
 
 def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
@@ -49,8 +49,6 @@ def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir
 
     """
 
-    
-    #TODO rinominare in workflow
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
     
     # Input Node
@@ -371,12 +369,10 @@ def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir
         cont += 1
 
         # NODE 34: Select all result file from filmgls output folder
-        results_select = Node(SelectFiles({'cope': 'cope%d.nii.gz' % cont,
-                                                'zstat': 'zstat%d.nii.gz' % cont}),
-                                   name="%s_results_select_%d" % (name, cont))
+        results_select = Node(SelectFiles({'cope': 'cope%d.nii.gz' % cont, 'zstat': 'zstat%d.nii.gz' % cont}),
+                              name="%s_results_select_%d" % (name, cont))
         results_select.long_name = "contrast %d result selection" % cont
         workflow.connect(modelestimate, 'results_dir', results_select, 'base_directory')
-
 
         # NODE 35: Mask z-stat with the dilated mask
         maskfunc4 = Node(ImageMaths(), name="%s_maskfunc4_%d" % (name, cont))

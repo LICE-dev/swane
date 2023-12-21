@@ -64,8 +64,7 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=['ref_brain', 'flair_brain', 'ref_2_mni1_warp',
-                                  'ref_2_mni1_inverse_warp']),
+        IdentityInterface(fields=['ref_brain', 'flair_brain', 'ref_2_mni1_warp', 'ref_2_mni1_inverse_warp']),
         name='inputnode')
     
     # Output Node

@@ -38,7 +38,8 @@ class MainWorkflow(CustomWorkflow):
         self.max_gpu: int = -1
         self.multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP
 
-    def add_input_folders(self, global_config: ConfigManager, patient_config: ConfigManager, dependency_manager: DependencyManager, patient_input_state_list: PatientInputStateList):
+    def add_input_folders(self, global_config: ConfigManager, patient_config: ConfigManager,
+                          dependency_manager: DependencyManager, patient_input_state_list: PatientInputStateList):
         """
         Create the Workflows and their sub-workflows based on the list of available data inputs 
 
@@ -48,6 +49,8 @@ class MainWorkflow(CustomWorkflow):
             The app global configurations.
         patient_config : ConfigManager
             The patient specific configurations.
+        dependency_manager: DependencyManager
+            The state of application dependency
         patient_input_state_list : PatientInputStateList
             The list of all available input data from the DICOM directory.
 
@@ -303,8 +306,8 @@ class MainWorkflow(CustomWorkflow):
                         continue
                     
                     tract_workflow = tractography_workflow(tract, patient_config[DIL.DTI])
-                    tract_workflow.long_name = TRACTS[tract][0] + " tractography"
                     if tract_workflow is not None:
+                        tract_workflow.long_name = TRACTS[tract][0] + " tractography"
                         self.connect(dti_preproc, "outputnode.fsamples", tract_workflow, "inputnode.fsamples")
                         self.connect(dti_preproc, "outputnode.nodiff_mask_file", tract_workflow, "inputnode.mask")
                         self.connect(dti_preproc, "outputnode.phsamples", tract_workflow, "inputnode.phsamples")

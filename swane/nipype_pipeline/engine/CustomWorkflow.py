@@ -39,7 +39,7 @@ class CustomWorkflow(Workflow):
         formatted_name = formatted_name[0].upper() + formatted_name[1:]
         return formatted_name
 
-    def get_node_array(self):
+    def get_node_array(self) -> dict:
         """
         Returns a List of NodeListEntry objects for the Nodes in a Workflow.
         
@@ -58,7 +58,8 @@ class CustomWorkflow(Workflow):
                 outlist[node.name].node_list = node.get_node_array()
         return outlist
 
-    def sink_result(self, save_path, result_node, result_name, sub_folder, regexp_substitutions=None):
+    def sink_result(self, save_path: str, result_node: str, result_name: str, sub_folder: str,
+                    regexp_substitutions: list[tuple[str, str]] = None):
         """
         Creates a sink_result Node to save the output files of a Workflow.
         
@@ -76,9 +77,7 @@ class CustomWorkflow(Workflow):
 
         self.connect(result_node, result_name, data_sink, sub_folder)
 
-    def _get_dot(
-            self, prefix=None, hierarchy=None, colored=False, simple_form=True, level=0
-    ):
+    def _get_dot(self, prefix=None, hierarchy=None, colored=False, simple_form=True, level=0):
         """
         Custom implementation of _get_dot Nipype func to support the long_name Node attribute.
         
