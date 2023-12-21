@@ -8,13 +8,12 @@ from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
 from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
-from swane.config.preference_list import (TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR, GlobalPrefCategoryList)
-from swane.utils.DataInputList import DataInputList
+from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
 
 SIDES = ["lh", "rh"]
 
 
-def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
+def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow | None:
     """
     Executes tractography for chosen tract using xtract protocols.
 
@@ -29,6 +28,8 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
 
     Input Node Fields
     ----------
+    mask: path
+        The ref brain mask.
     fsamples : path
         Samples from the distribution of anysotropic volume fraction.
     phsamples : path
