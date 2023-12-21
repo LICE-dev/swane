@@ -243,7 +243,6 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
     def _report_crash(self, node, result=None):
         # This class implements signaling for generic node error
         try:
-            # TODO: implements signaling in case of OOM strings.pttab_wf_error_oom
             info = None
             for line in result['traceback']:
                 if "out of memory" in line:
