@@ -36,7 +36,7 @@ class SlicerCheckWorker(QRunnable):
                 src_path = "/Applications"
             else:
                 src_path = current_slicer_path
-            find_cmd = "find " + src_path + " -type f -wholename *app/Contents/bin/PythonSlicer -print 2>/dev/null"
+            find_cmd = "find " + src_path + " -type f -wholename *app/Contents/bin/PythonSlicer -print -quit 2>/dev/null"
             rel_path = "../MacOS/Slicer"
         else:
             if current_slicer_path == '':
