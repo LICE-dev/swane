@@ -6,7 +6,6 @@ from enum import Enum
 from inspect import isclass
 from swane.config.config_enums import WORKFLOW_TYPES, SLICER_EXTENSIONS
 
-
 class ConfigManager(configparser.ConfigParser):
 
     # Overrides to accept non-str stringable object as section keys
@@ -29,13 +28,11 @@ class ConfigManager(configparser.ConfigParser):
 
         # First set some internal values differentiating global from patient pref objects
         if patient_folder is not None:
-            # NEL CASO STIA GESTENDO LE IMPOSTAZIONI SPECIFICHE DI UN UTENTE COPIO ALCUNI VALORI DALLE IMPOSTAZIONI GLOBALI
             self.global_config = False
-            self.config_file = os.path.join(os.path.join(patient_folder, ".config"))
+            self.config_file = os.path.abspath(os.path.join(patient_folder, ".config"))
         else:
             if global_base_folder is None or not os.path.exists(global_base_folder):
                 global_base_folder = os.path.expanduser("~")
-            # NEL CASO STIA GESTENDO LE IMPOSTAZIONI GLOBALI DELL'APP
             self.global_config = True
             self.config_file = os.path.abspath(os.path.join(global_base_folder, "." + strings.APPNAME))
 
