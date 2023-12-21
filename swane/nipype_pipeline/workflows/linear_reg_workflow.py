@@ -60,7 +60,6 @@ def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_di
         IdentityInterface(fields=['registered_file', 'out_matrix_file']),
         name='outputnode')
 
-
     # NODE 1: Conversion dicom -> nifti
     conversion = Node(CustomDcm2niix(), name='%s_conv' % name)
     conversion.inputs.source_dir = dicom_dir

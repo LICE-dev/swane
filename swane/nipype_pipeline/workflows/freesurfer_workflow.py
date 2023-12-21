@@ -14,7 +14,8 @@ from nipype.interfaces.utility import IdentityInterface
 FS_DIR = "FS"
 
 
-def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "/", max_cpu: int = 0, multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP) -> CustomWorkflow:
+def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "/", max_cpu: int = 0,
+                        multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP) -> CustomWorkflow:
     """
     Freesurfer cortical reconstruction, white matter ROI, basal ganglia and thalami ROI.
     If needed, segmentation of the hippocampal substructures and the nuclei of the amygdala.
@@ -60,6 +61,8 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
         White/gray matter rh and lh surfaces.
     vol_label_file : path
         Aparc parcellation projected into aseg volume in reference space.
+    vol_label_file_nii : path
+        Aparc parcellation projected into aseg volume in reference space and nifti format.
     lh_hippoAmygLabels : path
         Left side labels from segmentation of the hippocampal substructures and the nuclei of the amygdala.
     rh_hippoAmygLabels : path
@@ -76,9 +79,8 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=['subject_id', 'subjects_dir', 'bgROI', 'wmROI',
-                                  'pial', 'white', 'vol_label_file', 'vol_label_file_nii', 'lh_hippoAmygLabels',
-                                  'rh_hippoAmygLabels']),
+        IdentityInterface(fields=['subject_id', 'subjects_dir', 'bgROI', 'wmROI', 'pial', 'white', 'vol_label_file',
+                                  'vol_label_file_nii', 'lh_hippoAmygLabels', 'rh_hippoAmygLabels']),
         name='outputnode')
 
     # NODE 1: Freesurfer cortical reconstruction process

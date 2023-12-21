@@ -81,9 +81,8 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
     
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=['reference', 'brain_mask', 'freesurfer_subjects_dir',
-                                  'freesurfer_subject_id', 'bgROI', 'ref_2_sym_warp',
-                                  'swap_2_sym_warp', 'ref_2_sym_invwarp']),
+        IdentityInterface(fields=['reference', 'brain_mask', 'freesurfer_subjects_dir', 'freesurfer_subject_id',
+                                  'bgROI', 'ref_2_sym_warp', 'ref_2_sym_invwarp']),
         name='inputnode')
     
     # Output Node
