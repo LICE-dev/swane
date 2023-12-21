@@ -56,9 +56,9 @@ menu_load_pt_tip = "Load patient data from the main working directory"
 menu_new_pt = "Create new patient"
 menu_new_pt_tip = "Add a new patient in the main working directory"
 menu_exit = "Exit " + APPNAME
-menu_pref = "Preferences"
-menu_pref_tip = "Edit " + APPNAME + " preferences"
-menu_wf_pref = "Default Workflow settings"
+menu_pref = "Application settings"
+menu_pref_tip = "Edit " + APPNAME + " settings"
+menu_wf_pref = "Default Workflow preferences"
 menu_about = "About " + APPNAME + "..."
 menu_file_name = "File"
 menu_tools_name = "Tools"
@@ -119,12 +119,9 @@ pttab_tabtooltip_result_disabled = "Complete a workflow first"
 pttab_tabtooltip_data_disabled = "Cannot change patient data during workflow execution"
 
 # Wf Preference Window
-wf_pref_window_title_global = 'Default Workflow Settings'
-wf_pref_window_title_user = ' - Workflow Settings'
+wf_pref_window_title_user = ' - Workflow preferences'
 
 # Preference Window
-pref_window_title_global = APPNAME + ' - Preferences'
-pref_window_title_user = ' - Workflow preferences'
 pref_window_save_button = "Save preferences"
 pref_window_save_restart_button = "Save preferences (" + APPNAME + " will close and restart)"
 pref_window_discard_button = "Discard changes"
