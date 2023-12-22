@@ -29,7 +29,7 @@ class VenousCheckOutputSpec(TraitedSpec):
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class VenousCheck(BaseInterface):
     """
-    Recognises the venous phase from the anatomic image of a phase contrast sequence based on its standard deviation.
+    Recognises the venous phase from the anatomic image of a phase contrast sequence based criteria specified by user.
 
     """
     

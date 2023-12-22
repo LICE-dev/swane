@@ -4,9 +4,8 @@ from PySide6.QtWidgets import (QDialog,  QGridLayout, QVBoxLayout, QWidget, QPus
 from swane import strings, EXIT_CODE_REBOOT
 from swane.ui.PreferenceUIEntry import PreferenceUIEntry
 from swane.config.preference_list import WF_PREFERENCES, GLOBAL_PREFERENCES
-from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
 from PySide6_VerticalQTabWidget import VerticalQTabWidget
-from swane.config.config_enums import InputTypes
+from swane.config.config_enums import InputTypes, GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
 

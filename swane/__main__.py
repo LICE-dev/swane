@@ -11,7 +11,7 @@ def main():
     from swane.ui.MainWindow import MainWindow
     from swane.config.ConfigManager import ConfigManager
     from swane import EXIT_CODE_REBOOT
-    from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
+    from swane.config.config_enums import GlobalPrefCategoryList
     from swane.utils.last_pid_is_running import last_pid_is_running
 
     # Exit Code definition for automatic reboot

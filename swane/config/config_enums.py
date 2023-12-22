@@ -1,5 +1,7 @@
 from enum import Enum, auto
 
+from swane.config.PrefCategory import PrefCategory
+
 
 class InputTypes(Enum):
     TEXT = auto()
@@ -54,3 +56,12 @@ class PLANES(Enum):
     TRA = 'transverse'
     COR = 'coronal'
     SAG = 'sagittal'
+
+
+class GlobalPrefCategoryList(Enum):
+    MAIN = PrefCategory("main", "Global settings")
+    PERFORMANCE = PrefCategory("performance", 'Performance')
+    OPTIONAL_SERIES = PrefCategory("optional_series", 'Optional series')
+
+    def __str__(self):
+        return self.value.name

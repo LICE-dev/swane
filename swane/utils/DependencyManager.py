@@ -6,14 +6,14 @@ from packaging import version
 from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 import subprocess
-from enum import IntEnum, auto
+from enum import Enum, auto
 
 
-class DependenceStatus(IntEnum):
-    DETECTED = 1
-    WARNING = 0
-    MISSING = -1
-    CHECKING = -2
+class DependenceStatus(Enum):
+    DETECTED = auto()
+    WARNING = auto()
+    MISSING = auto()
+    CHECKING = auto()
 
 
 class Dependence:

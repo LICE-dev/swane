@@ -5,10 +5,9 @@ from multiprocessing import cpu_count
 from nipype.utils.profiler import get_system_total_memory_gb
 from math import ceil
 
-from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import (InputTypes, WORKFLOW_TYPES, SLICER_EXTENSIONS, CORE_LIMIT, VEIN_DETECTION_MODE,
-                                       BLOCK_DESIGN, SLICE_TIMING)
+                                       BLOCK_DESIGN, SLICE_TIMING, GlobalPrefCategoryList)
 
 try:
     XTRACT_DATA_DIR=os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
