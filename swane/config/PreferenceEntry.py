@@ -1,7 +1,11 @@
 from swane.config.config_enums import InputTypes
-
+from enum import Enum
 
 class PreferenceEntry:
+    """
+    Contains information to manage loading, saving and visualization of a preference
+    """
+
     input_type = InputTypes.TEXT
     label = ""
     default = None
@@ -42,9 +46,12 @@ class PreferenceEntry:
                 "validate_on_change": bool,
                 "informative_text": dict,
                 "box_text": str,
-
+                "hidden": bool,
+                #"value_enum": Enum
         }
         if key in types:
+            if types[key] == Enum:
+                return isinstance(value, Enum)
             return type(value) is types[key]
         return True
 

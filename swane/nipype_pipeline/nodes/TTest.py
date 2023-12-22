@@ -19,7 +19,7 @@ class TTestOutputSpec(TraitedSpec):
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class TTest(BaseInterface):
     """
-    Reads the num. of volumes from a 4d NIFTI file.
+    Calculate T statistics of two given distributions
 
     """
 

@@ -25,7 +25,7 @@ class CropFovOutputSpec(TraitedSpec):
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class CropFov(BaseInterface):
     """
-    Generate Asymmetry Index Map from an image and its RL swapped as subtraction/sum.
+    If FOV exceeds 250mm, crop the borders.
 
     """
 

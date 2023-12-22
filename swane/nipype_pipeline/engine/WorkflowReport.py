@@ -1,13 +1,13 @@
-from enum import IntEnum
+from enum import Enum, auto
 
 
-class WorkflowSignals(IntEnum):
-    NODE_STARTED = 0
-    NODE_COMPLETED = 1
-    NODE_ERROR = 2
-    WORKFLOW_INSUFFICIENT_RESOURCES = 3
-    WORKFLOW_STOP = 4
-    INVALID_SIGNAL = -1
+class WorkflowSignals(Enum):
+    NODE_STARTED = auto()
+    NODE_COMPLETED = auto()
+    NODE_ERROR = auto()
+    WORKFLOW_INSUFFICIENT_RESOURCES = auto()
+    WORKFLOW_STOP = auto()
+    INVALID_SIGNAL = auto()
 
 
 class WorkflowReport:

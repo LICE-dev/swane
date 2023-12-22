@@ -6,7 +6,7 @@ import swane_supplement
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.PatientInputStateList import PatientInputStateList
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
-from swane.config.config_enums import PLANES, CORE_LIMIT, BLOCK_DESIGN
+from swane.config.config_enums import PLANES, CORE_LIMIT, BLOCK_DESIGN, GlobalPrefCategoryList
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
 from swane.nipype_pipeline.workflows.task_fMRI_workflow import task_fMRI_workflow
@@ -20,7 +20,6 @@ from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_wor
 from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow, SIDES
 from swane.config.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
-from swane.config.GlobalPrefCategoryList import GlobalPrefCategoryList
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
 
 

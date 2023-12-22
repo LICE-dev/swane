@@ -2,7 +2,8 @@ import os
 import shutil
 from swane.config.ConfigManager import ConfigManager
 import pytest
-from swane.config.preference_list import GlobalPrefCategoryList, GLOBAL_PREFERENCES
+from swane.config.preference_list import GLOBAL_PREFERENCES
+from swane.config.config_enums import GlobalPrefCategoryList
 from swane.tests import TEST_DIR
 
 

@@ -18,7 +18,7 @@ class GenEddyFilesOutputSpec(TraitedSpec):
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommand)  -*-
 class GenEddyFiles(BaseInterface):
     """
-    Reads the time of repetition from a NIFTI file.
+    Generates index and acqp files for eddy. Does not support topup
 
     """
 
