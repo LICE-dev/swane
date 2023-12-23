@@ -4,7 +4,7 @@ import pytest
 from swane.config.ConfigManager import ConfigManager
 from swane.config.config_enums import BLOCK_DESIGN, VEIN_DETECTION_MODE
 from swane.utils.DependencyManager import DependencyManager
-from swane.utils.Patient import Patient, PatientRet
+from swane.utils.Subject import Subject, SubjectRet
 from swane.tests import TEST_DIR
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.DataInputList import DataInputList
@@ -27,34 +27,34 @@ def change_test_dir(request):
 def test_patient():
     global_config = ConfigManager(global_base_folder=os.getcwd())
     global_config.set_main_working_directory(TestWorkflow.TEST_MAIN_WORKING_DIRECTORY)
-    test_patient = Patient(global_config, DependencyManager())
-    test_patient.create_new_patient_dir(TestWorkflow.TEST_PATIENT_NAME)
+    test_patient = Subject(global_config, DependencyManager())
+    test_patient.create_new_subject_dir(TestWorkflow.TEST_PATIENT_NAME)
     return test_patient
 
 
-def clear_data_and_check(patient: Patient, data_input: DataInputList, qtbot):
+def clear_data_and_check(patient: Subject, data_input: DataInputList, qtbot):
     patient.clear_import_folder(data_input)
     with qtbot.waitCallback() as call_back:
         patient.check_input_folder(data_input=data_input, status_callback=call_back)
-    call_back.assert_called_with(ANY, PatientRet.DataInputWarningNoDicom, ANY)
+    call_back.assert_called_with(ANY, SubjectRet.DataInputWarningNoDicom, ANY)
 
 
-def import_from_path(patient: Patient, data_input: DataInputList, dicom_path: str, qtbot):
+def import_from_path(patient: Subject, data_input: DataInputList, dicom_path: str, qtbot):
     patient.clear_import_folder(data_input)
     patient.reset_workflow()
     worker = DicomSearchWorker(dicom_path)
     worker.run()
-    patient_list = worker.get_patient_list()
+    patient_list = worker.get_subject_list()
     exam_list = worker.get_exam_list(patient_list[0])
     series_list = worker.get_series_list(patient_list[0], exam_list[0])
     image_list, patient_name, mod, series_description, vols = worker.get_series_info(patient_list[0], exam_list[0],
                                                                                      series_list[0])
     import_ret = patient.dicom_import_to_folder(data_input=data_input, copy_list=image_list, vols=vols,
                                                      mod=mod, force_modality=True)
-    assert import_ret == PatientRet.DataImportCompleted
+    assert import_ret == SubjectRet.DataImportCompleted
     with qtbot.waitCallback() as call_back:
         patient.check_input_folder(data_input=data_input, status_callback=call_back)
-    call_back.assert_called_with(ANY, PatientRet.DataInputValid, ANY)
+    call_back.assert_called_with(ANY, SubjectRet.DataInputValid, ANY)
 
 
 class TestWorkflow:
@@ -399,7 +399,7 @@ class TestWorkflow:
             assert test_patient.input_state_list.is_ref_loaded() is True, "missing t13d for " + test_name
             test_patient.reset_workflow()
             assert test_patient.generate_workflow(
-                generate_graphs=False) == PatientRet.GenWfCompleted, "Error generating workflow for " + test_name
+                generate_graphs=False) == SubjectRet.GenWfCompleted, "Error generating workflow for " + test_name
 
             # Check desired nodes
             if 'check_nodes' not in this_test:

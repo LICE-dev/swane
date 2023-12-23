@@ -37,7 +37,7 @@ class TestDicomSearchWorker:
             if test[1] != -1:
                 assert worker.get_files_len() == test[1], "Error with file count for %s (expected %d got %d)" % (test_name, test[1], worker.get_files_len())
             # patients number
-            patient_list = worker.get_patient_list()
+            patient_list = worker.get_subject_list()
             if test[2] != -1:
                 assert len(patient_list) == test[2], "Error with patient number for %s (expected %d got %d)" % (test_name, test[2], len(patient_list))
             if len(patient_list) > 0:

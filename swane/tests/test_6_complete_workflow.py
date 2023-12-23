@@ -7,7 +7,7 @@ from swane.workers.WorkflowProcess import LOG_DIR_NAME
 from swane.tests import TEST_DIR
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from swane.ui.MainWindow import MainWindow
-from swane.ui.PatientTab import PatientTab
+from swane.ui.SubjectTab import SubjectTab
 from PySide6 import QtCore
 
 
@@ -46,14 +46,14 @@ class TestCompleteWorkflow:
         main_window = MainWindow(global_config)
         qtbot.addWidget(main_window)
         qtbot.waitForWindowShown(main_window)
-        main_window.search_patient_dir(folder_path=text_exec_patient_path)
+        main_window.search_subject_dir(folder_path=text_exec_patient_path)
         pt_tab = main_window.main_tab.widget(1)
-        assert type(pt_tab) is PatientTab, "Error in tab selection"
-        qtbot.waitUntil(lambda: pt_tab.isTabEnabled(PatientTab.EXECTAB), timeout=1000*60*2)
+        assert type(pt_tab) is SubjectTab, "Error in tab selection"
+        qtbot.waitUntil(lambda: pt_tab.isTabEnabled(SubjectTab.EXECTAB), timeout=1000 * 60 * 2)
         qtbot.waitUntil(lambda: not pt_tab.is_data_loading(), timeout=1000*60*2)
-        assert pt_tab.isTabEnabled(PatientTab.EXECTAB), "Exectab disabled after data loading"
-        pt_tab.setCurrentIndex(PatientTab.EXECTAB)
-        test_patient = pt_tab.patient
+        assert pt_tab.isTabEnabled(SubjectTab.EXECTAB), "Exectab disabled after data loading"
+        pt_tab.setCurrentIndex(SubjectTab.EXECTAB)
+        test_patient = pt_tab.subject
 
         # Clear previous wf output copied from real folder
         shutil.rmtree(test_patient.result_dir(), ignore_errors=True)
@@ -76,10 +76,10 @@ class TestCompleteWorkflow:
         test_patient.workflow_monitor_work.signal.log_msg.connect(self.update_node_callback)
         qtbot.waitUntil(lambda: not test_patient.is_workflow_process_alive(), timeout=1000*60*5)
         assert self.wf_error is False, "Node error during workflow"
-        assert pt_tab.isTabEnabled(PatientTab.RESULTTAB), "No result after workflow execution"
+        assert pt_tab.isTabEnabled(SubjectTab.RESULTTAB), "No result after workflow execution"
 
         # Generate Slicer Scene
-        pt_tab.setCurrentIndex(PatientTab.RESULTTAB)
+        pt_tab.setCurrentIndex(SubjectTab.RESULTTAB)
         assert pt_tab.generate_scene_button.isEnabled(), "Generate scene button not enabled"
         assert pt_tab.open_results_directory_button.isEnabled(), "Open result button not enabled"
         progress_dialog = pt_tab.generate_scene()

@@ -24,16 +24,16 @@ class WorkflowProcess(Process):
         "nipype.interface",
     ]
 
-    def __init__(self, patient_name: str, workflow: MainWorkflow, queue: Queue):
+    def __init__(self, subject_name: str, workflow: MainWorkflow, queue: Queue):
         """
-            A Process that execute a patient workflow in a thread, manage executor settings and signaling with gui.
+            A Process that execute a subject workflow in a thread, manage executor settings and signaling with gui.
             A process is needed to iterate and kill its subprocess if user wants to stop a workflow, a thread would not
             allow that.
 
         Parameters
         ----------
-        patient_name: str
-            The patient name
+        subject_name: str
+            The subject name
         workflow: MainWorkflow
             The workflow already generated and populated
         queue: Queue
@@ -44,7 +44,7 @@ class WorkflowProcess(Process):
         self.stop_event: Event = Event()
         self.workflow: MainWorkflow = workflow
         self.queue: Queue = queue
-        self.patient_name: str = patient_name
+        self.subject_name: str = subject_name
 
     @staticmethod
     def remove_handlers(handler):
@@ -79,7 +79,7 @@ class WorkflowProcess(Process):
             plugin_args['n_gpu_proc'] = self.workflow.max_gpu
 
         try:
-            # this is useful to generate resource monitor files in patient directory
+            # this is useful to generate resource monitor files in subject directory
             os.chdir(self.workflow.base_dir)
 
             self.workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args))

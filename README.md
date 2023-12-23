@@ -22,9 +22,9 @@
 
 ## Introduction
 SWANe is a software designed and developed to improve and simplify the management of a wide range of advanced neuroimaging analysis algorithms.
-It consists of a library of predefinied workflows that can be managed through an user-friendly Graphical User Interface, which guides the users step by step to all the operations without any text-based command interface.
-SWANe straightforward pipeline can be used to manage imaging for epileptic patients of all ages (including pediatric patients). Its structure in indipendent modules permits to be diffusely adopted overcoming the difficulties to collect advanced imaging (especially metabolic and functional) in small epileptic centers.
-Each module is completely independent from the others and is dedicated to one imaging modality/analysis, starting from a 3D-T1 weighted image, which represent the “base image” for all the analysis.
+It consists of a library of predefined workflows that can be managed through an user-friendly Graphical User Interface, which guides the users step by step to all the operations without any text-based command interface.
+SWANe straightforward pipeline can be used to manage imaging for epileptic subjects of all ages. Its structure in independent modules permits to be diffusely adopted overcoming the difficulties to collect advanced imaging (especially metabolic and functional) in small epileptic centers.
+Each module is completely independent of the others and is dedicated to one imaging modality/analysis, starting from a 3D-T1 weighted image, which represent the “base image” for all the analysis.
 
 
 
@@ -37,7 +37,7 @@ A few of the analysis you can do with SWANi:
 * **Post-contrast 3D T1w**: generate post-contrast 3D T1w NIFTI files and perform linear registration to T13D reference space.
 * **FreeSurfer**: perform FreeSurfer cortical reconstruction and, if required, segmentation of the hippocampal substructures and the nuclei of the amygdala;
 * **FLAT1**: create a junction and extension z-score map based on 3D T1w, 3D Flair and a mean template;
-* **Diffusion Tensor Imaging processing**: DTI preprocessing workflow and fractinal anisotropy calculation;
+* **Diffusion Tensor Imaging processing**: DTI preprocessing workflow and fractional anisotropy calculation;
 * **Tractography**: tractography execution for chosen tract using FSL xtract protocols;
 * **PET & Arterial Spin Analysis (ASL)**: analysis for registration to reference, z-score and asymmetry index maps, projection on FreeSurfer pial surface;
 * **Task fMRI**: fMRI first level analysis for a single or double task with constant task-rest paradigm;
@@ -103,7 +103,7 @@ SWANe can try to fix your configuration file or to restart with system Python in
 To fix it, you can follow the instruction displayed in the alert window. We recommend you to use the automatic error fixing option.
 
 ### Scipy error with Apple Silicon mac
-During SWANe installation with pip, the following error may occur on hardwares with Apple Silicon CPU:
+During SWANe installation with pip, the following error may occur on hardware with Apple Silicon CPU:
 ```
 pip3 install swane
 […]
@@ -115,11 +115,11 @@ brew install scipy
 ```
 
 ### Ubuntu Freesurfer bad interpreter
-After the installation of FreeSurfer, the following error may occour at SWANe launching:
+After the installation of FreeSurfer, the following error may occur at SWANe launching:
 ```
 /usr/local/freesurfer/bin/recon-all: /bin/tcsh: badinterpreter: No such file or directory
 ```
-To solve it, launch the following install command.
+To solve it, launch the following installation command.
 ```
 sudo apt install csh tcsh
 ```

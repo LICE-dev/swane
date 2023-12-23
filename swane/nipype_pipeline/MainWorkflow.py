@@ -4,7 +4,7 @@ from os.path import abspath
 
 import swane_supplement
 from swane.config.ConfigManager import ConfigManager
-from swane.utils.PatientInputStateList import PatientInputStateList
+from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
 from swane.config.config_enums import PLANES, CORE_LIMIT, BLOCK_DESIGN, GlobalPrefCategoryList
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
@@ -37,8 +37,8 @@ class MainWorkflow(CustomWorkflow):
         self.max_gpu: int = -1
         self.multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP
 
-    def add_input_folders(self, global_config: ConfigManager, patient_config: ConfigManager,
-                          dependency_manager: DependencyManager, patient_input_state_list: PatientInputStateList):
+    def add_input_folders(self, global_config: ConfigManager, subject_config: ConfigManager,
+                          dependency_manager: DependencyManager, subject_input_state_list: SubjectInputStateList):
         """
         Create the Workflows and their sub-workflows based on the list of available data inputs 
 
@@ -46,11 +46,11 @@ class MainWorkflow(CustomWorkflow):
         ----------
         global_config : ConfigManager
             The app global configurations.
-        patient_config : ConfigManager
-            The patient specific configurations.
+        subject_config : ConfigManager
+            The subject specific configurations.
         dependency_manager: DependencyManager
             The state of application dependency
-        patient_input_state_list : PatientInputStateList
+        subject_input_state_list : SubjectInputStateList
             The list of all available input data from the DICOM directory.
 
         Returns
@@ -59,45 +59,45 @@ class MainWorkflow(CustomWorkflow):
 
         """
         
-        if not patient_input_state_list.is_ref_loaded:
+        if not subject_input_state_list.is_ref_loaded:
             return
 
         # Check for FreeSurfer requirement and request
-        is_freesurfer = dependency_manager.is_freesurfer() and patient_config.get_workflow_freesurfer_pref()
-        is_hippo_amyg_labels = dependency_manager.is_freesurfer_matlab() and patient_config.get_workflow_hippo_pref()
+        is_freesurfer = dependency_manager.is_freesurfer() and subject_config.get_workflow_freesurfer_pref()
+        is_hippo_amyg_labels = dependency_manager.is_freesurfer_matlab() and subject_config.get_workflow_hippo_pref()
 
         # Check for FLAT1 requirement and request
-        is_flat1 = patient_config.getboolean_safe(DIL.T13D, 'flat1') and patient_input_state_list[DIL.FLAIR3D].loaded
+        is_flat1 = subject_config.getboolean_safe(DIL.T13D, 'flat1') and subject_input_state_list[DIL.FLAIR3D].loaded
         # Check for Asymmetry Index request
-        is_ai = ((patient_config.getboolean_safe(DIL.PET, 'ai') and patient_input_state_list[DIL.PET].loaded) or
-                 (patient_config.getboolean_safe(DIL.ASL, 'ai') and patient_input_state_list[DIL.ASL].loaded))
+        is_ai = ((subject_config.getboolean_safe(DIL.PET, 'ai') and subject_input_state_list[DIL.PET].loaded) or
+                 (subject_config.getboolean_safe(DIL.ASL, 'ai') and subject_input_state_list[DIL.ASL].loaded))
         # Check for Tractography request
-        is_tractography = patient_config.getboolean_safe(DIL.DTI, 'tractography')
+        is_tractography = subject_config.getboolean_safe(DIL.DTI, 'tractography')
         # CPU cores and memory management
         self.is_resource_monitor = global_config.getboolean_safe(GlobalPrefCategoryList.PERFORMANCE, 'resourceMonitor')
-        self.max_cpu = global_config.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_pt_cpu')
+        self.max_cpu = global_config.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_subj_cu')
         if self.max_cpu < 1:
             self.max_cpu = cpu_count()
         self.multicore_node_limit = global_config.getenum_safe(GlobalPrefCategoryList.PERFORMANCE, 'multicore_node_limit')
         # GPU management
-        self.max_gpu = global_config.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_pt_gpu')
+        self.max_gpu = global_config.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_subj_gpu')
         if self.max_gpu < 0:
             self.max_gpu = MonitoredMultiProcPlugin.gpu_count()
         try:
             if not dependency_manager.is_cuda():
-                patient_config[DIL.DTI]["cuda"] = "false"
+                subject_config[DIL.DTI]["cuda"] = "false"
             else:
-                patient_config[DIL.DTI]["cuda"] = global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"]
+                subject_config[DIL.DTI]["cuda"] = global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"]
         except:
-            patient_config[DIL.DTI]["cuda"] = "false"
+            subject_config[DIL.DTI]["cuda"] = "false"
 
-        patient_config.sections()
+        subject_config.sections()
 
         max_node_cpu = max(int(self.max_cpu / 2), 1)
 
         # 3D T1w
-        ref_dir = patient_input_state_list.get_dicom_dir(DIL.T13D)
-        t1 = ref_workflow(DIL.T13D.value.workflow_name, ref_dir, patient_config[DIL.T13D])
+        ref_dir = subject_input_state_list.get_dicom_dir(DIL.T13D)
+        t1 = ref_workflow(DIL.T13D.value.workflow_name, ref_dir, subject_config[DIL.T13D])
         t1.long_name = "3D T1w analysis"
         self.add_nodes([t1])
 
@@ -131,10 +131,10 @@ class MainWorkflow(CustomWorkflow):
                 freesurfer.sink_result(self.base_dir, "outputnode", 'lh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
                 freesurfer.sink_result(self.base_dir, "outputnode", 'rh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
 
-        if patient_input_state_list[DIL.FLAIR3D].loaded:
+        if subject_input_state_list[DIL.FLAIR3D].loaded:
             # 3D Flair analysis
-            flair_dir = patient_input_state_list.get_dicom_dir(DIL.FLAIR3D)
-            flair = linear_reg_workflow(DIL.FLAIR3D.value.workflow_name, flair_dir, patient_config[DIL.FLAIR3D])
+            flair_dir = subject_input_state_list.get_dicom_dir(DIL.FLAIR3D)
+            flair = linear_reg_workflow(DIL.FLAIR3D.value.workflow_name, flair_dir, subject_config[DIL.FLAIR3D])
             flair.long_name = "3D Flair analysis"
             self.add_nodes([flair])
 
@@ -175,8 +175,8 @@ class MainWorkflow(CustomWorkflow):
             flat1.sink_result(self.base_dir, "outputnode", "binary_flair", self.Result_DIR)
 
         for plane in PLANES:
-            if DIL['FLAIR2D_%s' % plane.name] in patient_input_state_list and patient_input_state_list[DIL['FLAIR2D_%s' % plane.name]].loaded:
-                flair_dir = patient_input_state_list.get_dicom_dir(DIL['FLAIR2D_%s' % plane.name])
+            if DIL['FLAIR2D_%s' % plane.name] in subject_input_state_list and subject_input_state_list[DIL['FLAIR2D_%s' % plane.name]].loaded:
+                flair_dir = subject_input_state_list.get_dicom_dir(DIL['FLAIR2D_%s' % plane.name])
                 flair2d = linear_reg_workflow(DIL['FLAIR2D_%s' % plane.name].value.workflow_name, flair_dir, None, is_volumetric=False)
                 flair2d.long_name = "2D %s FLAIR analysis" % plane.value
                 self.add_nodes([flair2d])
@@ -188,10 +188,10 @@ class MainWorkflow(CustomWorkflow):
 
                 flair2d.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
 
-        if patient_input_state_list[DIL.MDC].loaded:
+        if subject_input_state_list[DIL.MDC].loaded:
             # MDC analysis
-            mdc_dir = patient_input_state_list.get_dicom_dir(DIL.MDC)
-            mdc = linear_reg_workflow(DIL.MDC.value.workflow_name, mdc_dir, patient_config[DIL.MDC])
+            mdc_dir = subject_input_state_list.get_dicom_dir(DIL.MDC)
+            mdc = linear_reg_workflow(DIL.MDC.value.workflow_name, mdc_dir, subject_config[DIL.MDC])
             mdc.long_name = "Post-contrast 3D T1w analysis"
             self.add_nodes([mdc])
 
@@ -202,10 +202,10 @@ class MainWorkflow(CustomWorkflow):
 
             mdc.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
 
-        if patient_input_state_list[DIL.ASL].loaded:
+        if subject_input_state_list[DIL.ASL].loaded:
             # ASL analysis
-            asl_dir = patient_input_state_list.get_dicom_dir(DIL.ASL)
-            asl = func_map_workflow(DIL.ASL.value.workflow_name, asl_dir, is_freesurfer, patient_config[DIL.ASL])
+            asl_dir = subject_input_state_list.get_dicom_dir(DIL.ASL)
+            asl = func_map_workflow(DIL.ASL.value.workflow_name, asl_dir, is_freesurfer, subject_config[DIL.ASL])
             asl.long_name = "Arterial Spin Labelling analysis"
 
             self.connect(t1, 'outputnode.ref_brain', asl, 'inputnode.reference')
@@ -224,7 +224,7 @@ class MainWorkflow(CustomWorkflow):
                 asl.sink_result(self.base_dir, "outputnode", 'zscore_surf_lh', self.Result_DIR)
                 asl.sink_result(self.base_dir, "outputnode", 'zscore_surf_rh', self.Result_DIR)
 
-            if patient_config.getboolean_safe(DIL.ASL, 'ai'):
+            if subject_config.getboolean_safe(DIL.ASL, 'ai'):
                 self.connect(sym, 'outputnode.fieldcoeff_file', asl, 'inputnode.ref_2_sym_warp')
                 self.connect(sym, 'outputnode.inverse_warp', asl, 'inputnode.ref_2_sym_invwarp')
 
@@ -234,10 +234,10 @@ class MainWorkflow(CustomWorkflow):
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
 
-        if patient_input_state_list[DIL.PET].loaded:  # and check_input['ct_brain']:
+        if subject_input_state_list[DIL.PET].loaded:  # and check_input['ct_brain']:
             # PET analysis
-            pet_dir = patient_input_state_list.get_dicom_dir(DIL.PET)
-            pet = func_map_workflow(DIL.PET.value.workflow_name, pet_dir, is_freesurfer, patient_config[DIL.PET])
+            pet_dir = subject_input_state_list.get_dicom_dir(DIL.PET)
+            pet = func_map_workflow(DIL.PET.value.workflow_name, pet_dir, is_freesurfer, subject_config[DIL.PET])
             pet.long_name = "Pet analysis"
 
             self.connect(t1, 'outputnode.ref', pet, 'inputnode.reference')
@@ -262,7 +262,7 @@ class MainWorkflow(CustomWorkflow):
                 # self.connect(pet, "outputnode.registered_file", pet_ai, "inputnode.in_file")
                 # self.connect(freesurfer, "outputnode.vol_label_file_nii", pet_ai, "inputnode.seg_file")
 
-            if patient_config.getboolean_safe(DIL.PET, 'ai'):
+            if subject_config.getboolean_safe(DIL.PET, 'ai'):
                 self.connect(sym, 'outputnode.fieldcoeff_file', pet, 'inputnode.ref_2_sym_warp')
                 self.connect(sym, 'outputnode.inverse_warp', pet, 'inputnode.ref_2_sym_invwarp')
 
@@ -272,25 +272,25 @@ class MainWorkflow(CustomWorkflow):
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
 
-        if patient_input_state_list[DIL.VENOUS].loaded and patient_input_state_list[DIL.VENOUS].volumes + patient_input_state_list[DIL.VENOUS2].volumes == 2:
+        if subject_input_state_list[DIL.VENOUS].loaded and subject_input_state_list[DIL.VENOUS].volumes + subject_input_state_list[DIL.VENOUS2].volumes == 2:
             # Venous analysis
-            venous_dir = patient_input_state_list.get_dicom_dir(DIL.VENOUS)
+            venous_dir = subject_input_state_list.get_dicom_dir(DIL.VENOUS)
             venous2_dir = None
-            if patient_input_state_list[DIL.VENOUS2].loaded:
-                venous2_dir = patient_input_state_list.get_dicom_dir(DIL.VENOUS2)
-            venous = venous_workflow(DIL.VENOUS.value.workflow_name, venous_dir, patient_config[DIL.VENOUS], venous2_dir)
+            if subject_input_state_list[DIL.VENOUS2].loaded:
+                venous2_dir = subject_input_state_list.get_dicom_dir(DIL.VENOUS2)
+            venous = venous_workflow(DIL.VENOUS.value.workflow_name, venous_dir, subject_config[DIL.VENOUS], venous2_dir)
             venous.long_name = "Venous MRA analysis"
 
             self.connect(t1, "outputnode.ref_brain", venous, "inputnode.ref_brain")
 
             venous.sink_result(self.base_dir, "outputnode", 'veins', self.Result_DIR)
 
-        if patient_input_state_list[DIL.DTI].loaded:
+        if subject_input_state_list[DIL.DTI].loaded:
             # DTI analysis
-            dti_dir = patient_input_state_list.get_dicom_dir(DIL.DTI)
+            dti_dir = subject_input_state_list.get_dicom_dir(DIL.DTI)
             mni_dir = abspath(os.path.join(os.environ["FSLDIR"], 'data/standard/MNI152_T1_2mm_brain.nii.gz'))
 
-            dti_preproc = dti_preproc_workflow(DIL.DTI.value.workflow_name, dti_dir, patient_config[DIL.DTI], mni_dir, max_cpu=self.max_cpu, multicore_node_limit=self.multicore_node_limit)
+            dti_preproc = dti_preproc_workflow(DIL.DTI.value.workflow_name, dti_dir, subject_config[DIL.DTI], mni_dir, max_cpu=self.max_cpu, multicore_node_limit=self.multicore_node_limit)
             dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
             self.connect(t1, "outputnode.ref_brain", dti_preproc, "inputnode.ref_brain")
 
@@ -299,12 +299,12 @@ class MainWorkflow(CustomWorkflow):
             if is_tractography:
                 for tract in TRACTS.keys():
                     try:
-                        if not patient_config.getboolean_safe(DIL.DTI, tract):
+                        if not subject_config.getboolean_safe(DIL.DTI, tract):
                             continue
                     except:
                         continue
                     
-                    tract_workflow = tractography_workflow(tract, patient_config[DIL.DTI])
+                    tract_workflow = tractography_workflow(tract, subject_config[DIL.DTI])
                     if tract_workflow is not None:
                         tract_workflow.long_name = TRACTS[tract][0] + " tractography"
                         self.connect(dti_preproc, "outputnode.fsamples", tract_workflow, "inputnode.fsamples")
@@ -325,12 +325,12 @@ class MainWorkflow(CustomWorkflow):
         # Check for Task FMRI sequences
         for y in range(FMRI_NUM):
 
-            if patient_input_state_list[DIL['FMRI_%d' % y]].loaded:
+            if subject_input_state_list[DIL['FMRI_%d' % y]].loaded:
 
-                dicom_dir = patient_input_state_list.get_dicom_dir(DIL['FMRI_%d' % y])
-                fMRI = task_fMRI_workflow(DIL['FMRI_%d' % y].value.workflow_name, dicom_dir, patient_config[DIL['FMRI_%d' % y]], self.base_dir)
+                dicom_dir = subject_input_state_list.get_dicom_dir(DIL['FMRI_%d' % y])
+                fMRI = task_fMRI_workflow(DIL['FMRI_%d' % y].value.workflow_name, dicom_dir, subject_config[DIL['FMRI_%d' % y]], self.base_dir)
                 fMRI.long_name = "Task fMRI analysis - %d" % y
                 self.connect(t1, "outputnode.ref_brain", fMRI, "inputnode.ref_BET")
                 fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_1', self.Result_DIR + '.fMRI')
-                if patient_config.getenum_safe(DIL['FMRI_%d' % y], "block_design") == BLOCK_DESIGN.RARB:
+                if subject_config.getenum_safe(DIL['FMRI_%d' % y], "block_design") == BLOCK_DESIGN.RARB:
                     fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_2', self.Result_DIR + '.fMRI')

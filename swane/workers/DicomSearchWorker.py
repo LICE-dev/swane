@@ -13,7 +13,7 @@ class DicomSearchWorker(QRunnable):
 
     def __init__(self, dicom_dir: str):
         """
-        Thread class to scan a dicom folder and return dicom files ordered in patients, exams and series
+        Thread class to scan a dicom folder and return dicom files ordered in subjects, exams and series
         Parameters
         ----------
         dicom_dir: str
@@ -86,10 +86,8 @@ class DicomSearchWorker(QRunnable):
                     continue
                 ds = pydicom.read_file(dicom_loc, force=True)
 
-                # patient_id = self.clean_text(ds.get("PatientID", "NA"))
-                patient_id = ds.get("PatientID", "na")
-                #patient_id = DicomSearchWorker.clean_text(patient_id)
-                if patient_id == "na":
+                subject_id = ds.get("PatientID", "na")
+                if subject_id == "na":
                     continue
 
                 series_number = ds.get("SeriesNumber", "NA")
@@ -105,28 +103,28 @@ class DicomSearchWorker(QRunnable):
                 if hasattr(ds, 'ImageType') and "PROJECTION IMAGE" in ds.ImageType:
                     continue
 
-                if patient_id not in self.dicom_tree:
-                    self.dicom_tree[patient_id] = {}
-                    self.series_positions[patient_id] = {}
+                if subject_id not in self.dicom_tree:
+                    self.dicom_tree[subject_id] = {}
+                    self.series_positions[subject_id] = {}
                     if DEBUG:
-                        print("New patient: " + str(patient_id))
+                        print("New subject: " + str(subject_id))
 
-                if study_instance_uid not in self.dicom_tree[patient_id]:
-                    self.dicom_tree[patient_id][study_instance_uid] = {}
-                    self.series_positions[patient_id][study_instance_uid] = {}
+                if study_instance_uid not in self.dicom_tree[subject_id]:
+                    self.dicom_tree[subject_id][study_instance_uid] = {}
+                    self.series_positions[subject_id][study_instance_uid] = {}
                     if DEBUG:
                         print("New study: " + str(study_instance_uid))
 
-                if series_number not in self.dicom_tree[patient_id][study_instance_uid]:
-                    self.dicom_tree[patient_id][study_instance_uid][series_number] = []
-                    self.series_positions[patient_id][study_instance_uid][series_number] = [ds.get("SliceLocation"), 0]
+                if series_number not in self.dicom_tree[subject_id][study_instance_uid]:
+                    self.dicom_tree[subject_id][study_instance_uid][series_number] = []
+                    self.series_positions[subject_id][study_instance_uid][series_number] = [ds.get("SliceLocation"), 0]
                     if DEBUG:
                         print("New series: " + str(series_number) + " " + ds.SeriesDescription)
 
-                self.dicom_tree[patient_id][study_instance_uid][series_number].append(dicom_loc)
+                self.dicom_tree[subject_id][study_instance_uid][series_number].append(dicom_loc)
 
-                if self.series_positions[patient_id][study_instance_uid][series_number][0] == ds.get("SliceLocation"):
-                    self.series_positions[patient_id][study_instance_uid][series_number][1] += 1
+                if self.series_positions[subject_id][study_instance_uid][series_number][0] == ds.get("SliceLocation"):
+                    self.series_positions[subject_id][study_instance_uid][series_number][1] += 1
                     if DEBUG:
                         print("New volume for series: " + str(series_number))
 
@@ -137,50 +135,50 @@ class DicomSearchWorker(QRunnable):
         except:
             self.signal.sig_finish.emit(self)
 
-    def get_patient_list(self):
+    def get_subject_list(self):
         return list(self.dicom_tree.keys())
 
-    def get_exam_list(self, patient: str) -> list[pydicom.uid.UID]:
+    def get_exam_list(self, subject: str) -> list[pydicom.uid.UID]:
         """
-        Extract from dicom search the exams of specified patient and return their study_id
+        Extract from dicom search the exams of specified subject and return their study_id
         Parameters
         ----------
-        patient: str
-            The patient id
+        subject: str
+            The subject id
         Returns
         -------
             A list of study_id
         """
-        if patient not in self.dicom_tree:
+        if subject not in self.dicom_tree:
             return []
-        return list(self.dicom_tree[patient].keys())
+        return list(self.dicom_tree[subject].keys())
 
-    def get_series_list(self, patient: str, exam: pydicom.uid.UID) -> list[pydicom.valuerep.IS]:
+    def get_series_list(self, subject: str, exam: pydicom.uid.UID) -> list[pydicom.valuerep.IS]:
         """
-        Extract from dicom search the series of a specified exam of specified patient and return their series_id
+        Extract from dicom search the series of a specified exam of specified subject and return their series_id
         Parameters
         ----------
-        patient: str
-            The patient id
+        subject: str
+            The subject id
         exam: pydicom.uid.UID
             The exam id
         Returns
         -------
             A list of series_id
         """
-        if patient not in self.dicom_tree:
+        if subject not in self.dicom_tree:
             return []
-        if exam not in self.dicom_tree[patient]:
+        if exam not in self.dicom_tree[subject]:
             return []
-        return list(self.dicom_tree[patient][exam].keys())
+        return list(self.dicom_tree[subject][exam].keys())
 
-    def get_series_nvol(self, patient: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> int:
+    def get_series_nvol(self, subject: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> int:
         """
-        Extract from dicom search the number of volumes of a specified series of a specified exam of specified patient and return their series_id
+        Extract from dicom search the number of volumes of a specified series of a specified exam of specified subject and return their series_id
         Parameters
         ----------
-        patient: str
-            The patient id
+        subject: str
+            The subject id
         exam: pydicom.uid.UID
             The exam id
         series: pydicom.valuerep.IS
@@ -189,15 +187,15 @@ class DicomSearchWorker(QRunnable):
         -------
             An integer corresponding to the number of volumes of wanted series
         """
-        return self.series_positions[patient][exam][series][1]
+        return self.series_positions[subject][exam][series][1]
 
-    def get_series_files(self, patient: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> list[str]:
+    def get_series_files(self, subject: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> list[str]:
         """
-        Extract from dicom search the dicom file path of a specified series of a specified exam of specified patient and return their series_id
+        Extract from dicom search the dicom file path of a specified series of a specified exam of specified subject and return their series_id
         Parameters
         ----------
-        patient: str
-            The patient id
+        subject: str
+            The subject id
         exam: pydicom.uid.UID
             The exam id
         series: pydicom.valuerep.IS
@@ -206,21 +204,21 @@ class DicomSearchWorker(QRunnable):
         -------
             A list of series_id
         """
-        if patient not in self.dicom_tree:
+        if subject not in self.dicom_tree:
             return []
-        if exam not in self.dicom_tree[patient]:
+        if exam not in self.dicom_tree[subject]:
             return []
-        if series not in self.dicom_tree[patient][exam]:
+        if series not in self.dicom_tree[subject][exam]:
             return []
-        return list(self.dicom_tree[patient][exam][series])
+        return list(self.dicom_tree[subject][exam][series])
 
-    def get_series_info(self, patient: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> (list[str], str, str, str, int):
+    def get_series_info(self, subject: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> (list[str], str, str, str, int):
         """
-        Extract information from dicom search the dicom file path of a specified series of a specified exam of specified patient
+        Extract information from dicom search the dicom file path of a specified series of a specified exam of specified subject
         Parameters
         ----------
-        patient: str
-            The patient id
+        subject: str
+            The subject id
         exam: pydicom.uid.UID
             The exam id
         series: pydicom.valuerep.IS
@@ -229,8 +227,8 @@ class DicomSearchWorker(QRunnable):
         -------
         image_list: list[str]
             A list of dicom files
-        patient_name: str
-            The patient name
+        subject_name: str
+            The subject name
         mod: str
             The exam modality
         series_description: str
@@ -239,7 +237,7 @@ class DicomSearchWorker(QRunnable):
             The number of volumes
 
         """
-        image_list = self.get_series_files(patient, exam, series)
+        image_list = self.get_series_files(subject, exam, series)
         ds = pydicom.read_file(image_list[0], force=True)
 
         # Excludes series with less than 10 images unless they are siemens mosaics series
@@ -247,9 +245,9 @@ class DicomSearchWorker(QRunnable):
             return None, None, None, None, None
 
         mod = ds.Modality
-        vols = self.get_series_nvol(patient, exam, series)
-        patient_name = str(ds.PatientName)
+        vols = self.get_series_nvol(subject, exam, series)
+        subject_name = str(ds.PatientName)
         series_description = ds.SeriesDescription
 
-        return image_list, patient_name, mod, series_description, vols
+        return image_list, subject_name, mod, series_description, vols
     

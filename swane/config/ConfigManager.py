@@ -15,22 +15,22 @@ class ConfigManager(configparser.ConfigParser):
     def __setitem__(self, key, value):
         super().__setitem__(str(key), value)
 
-    def __init__(self, patient_folder: str = None, global_base_folder: str = None):
+    def __init__(self, subject_folder: str = None, global_base_folder: str = None):
         """
         Parameters
         ----------
-        patient_folder: path
-            The patient folder path. None in global all configuration
+        subject_folder: path
+            The subject folder path. None in global all configuration
         global_base_folder: path, optional
             An alternative folder for global configuration file. Default is None
         """
         super(ConfigManager, self).__init__()
         self._section_defaults = {}
 
-        # First set some internal values differentiating global from patient pref objects
-        if patient_folder is not None:
+        # First set some internal values differentiating global from subject pref objects
+        if subject_folder is not None:
             self.global_config = False
-            self.config_file = os.path.abspath(os.path.join(patient_folder, ".config"))
+            self.config_file = os.path.abspath(os.path.join(subject_folder, ".config"))
         else:
             if global_base_folder is None or not os.path.exists(global_base_folder):
                 global_base_folder = os.path.expanduser("~")
@@ -65,7 +65,7 @@ class ConfigManager(configparser.ConfigParser):
             for section in self._section_defaults.keys():
                 for option in self._section_defaults[section].keys():
                     self.set(section, option, self[section][option])
-            # set last_swane_version in patient config to ensure force_pref_reset compatibility
+            # set last_swane_version in subject config to ensure force_pref_reset compatibility
             if str(GlobalPrefCategoryList.MAIN) not in self:
                 self[GlobalPrefCategoryList.MAIN] = {}
             self[GlobalPrefCategoryList.MAIN]['last_swane_version'] = __version__
@@ -179,22 +179,22 @@ class ConfigManager(configparser.ConfigParser):
             self[GlobalPrefCategoryList.MAIN]["main_working_directory"] = main_working_dir_path
             self.save()
 
-    def get_max_patient_tabs(self) -> int:
+    def get_max_subject_tabs(self) -> int:
         """
         Returns
         -------
-        An int containing the maximum patient tab number
+        An int containing the maximum subject tab number
         """
-        return self.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_pt')
+        return self.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_subj')
 
-    def get_patients_prefix(self) -> str:
+    def get_subjects_prefix(self) -> str:
         """
         Returns
         -------
-        A string containing the patient folder prefix
+        A string containing the subject folder prefix
         """
         if self.global_config:
-            return self[GlobalPrefCategoryList.MAIN]['patients_prefix']
+            return self[GlobalPrefCategoryList.MAIN]['subjects_prefix']
         return ''
 
     def get_default_dicom_folder(self) -> str:
@@ -277,7 +277,7 @@ class ConfigManager(configparser.ConfigParser):
             return self.getenum_safe(GlobalPrefCategoryList.MAIN, 'slicer_scene_ext').value
         return None
 
-    def get_patient_workflow_type(self) -> Enum:
+    def get_subject_workflow_type(self) -> Enum:
         """
         Returns
         -------
