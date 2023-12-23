@@ -21,11 +21,15 @@
 ## Introduction
 SWANe is a software designed and developed to improve and simplify the management of a wide range of advanced neuroimaging analysis algorithms.
 
-It consists of a library of predefined workflows that can be managed through a user-friendly Graphical User Interface, which guides the users step by step to all the operations without any text-based command interface.
+It consists of a library of predefined workflows that can be managed through a user-friendly Graphical User Interface, 
+which guides the users step by step to all the operations without any text-based command interface.
 
-SWANe straightforward pipeline can be used to manage imaging for epileptic patients of all ages (including pediatric patients). Its structure in independent modules permits to be diffusely adopted overcoming the difficulties to collect advanced imaging (especially metabolic and functional) in small epileptic centers.
+SWANe straightforward pipeline can be used to manage imaging for epileptic subjects of all ages.
+Its structure in independent modules permits to be diffusely adopted overcoming the difficulties to collect advanced 
+imaging (especially metabolic and functional) in small epilepsy centers.
 
-Each module is completely independent to the others and is dedicated to one imaging modality/analysis, starting from a 3D-T1 weighted image, which represent the “base image” for all the analysis.
+Each module is completely independent of the others and is dedicated to one imaging modality/analysis, starting from 
+a 3D-T1 weighted image, which represents the “base image” for all the analysis.
 
 
 
@@ -33,8 +37,8 @@ Each module is completely independent to the others and is dedicated to one imag
 
 A few of the analyses you can do with SWANe:
 * **3D T1w**: generates T13D NIFTI files to use as reference;
-* **3D Flair**: generates 3D Flair NIFTI files and perform linear registration to reference space;
-* **2D Cor/Sag/Tra Flair**: generates 2D Flair NIFTI files and perform linear registration to reference space;
+* **3D Flair**: generates 3D Flair NIFTI files and performs linear registration to reference space;
+* **2D Cor/Sag/Tra Flair**: generates 2D Flair NIFTI files and performs linear registration to reference space;
 * **Post-contrast 3D T1w**: generates post-contrast 3D T1w NIFTI files and perform linear registration to T13D reference space.
 * **FreeSurfer**: performs FreeSurfer cortical reconstruction and, if required, segmentation of the hippocampal substructures and the nuclei of the amygdala;
 * **FlaT1**: creates a junction and extension z-score map based on 3D T1w, 3D Flair and a mean template;
