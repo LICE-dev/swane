@@ -22,7 +22,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
     name : str
         The workflow and tract name.
     config: SectionProxy
-        The patient workflow preferences.
+        The subject workflow preferences.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 

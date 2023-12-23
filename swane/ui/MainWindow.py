@@ -6,12 +6,12 @@ from PySide6.QtCore import QCoreApplication, Qt, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.utils.DependencyManager import DependencyManager, Dependence, DependenceStatus
-from swane.ui.PatientTab import PatientTab
+from swane.ui.SubjectTab import SubjectTab
 from swane.ui.PreferencesWindow import PreferencesWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
-from swane.utils.Patient import Patient, PatientRet
+from swane.utils.Subject import Subject, SubjectRet
 from swane.config.ConfigManager import ConfigManager
 
 
@@ -42,14 +42,14 @@ class MainWindow(QMainWindow):
         self.WARNING_ICON = QPixmap(self.WARNING_ICON_FILE)
         self.NON_UNICODE_BUTTON_HEIGHT = MainWindow.get_non_unicode_height()
 
-        # Patient folder configuration checking
+        # subject folder configuration checking
         while self.global_config.get_main_working_directory() == "":
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_choose_working_dir)
             msg_box.exec()
             self.set_main_working_directory()
 
-        # Patient folder configuration setting
+        # subject folder configuration setting
         os.chdir(self.global_config.get_main_working_directory())
 
         self.initialize_ui()
@@ -85,14 +85,14 @@ class MainWindow(QMainWindow):
         text_size = button.fontMetrics().size(Qt.TextShowMnemonic, button.text())
         return button.style().sizeFromContents(QStyle.CT_PushButton, opt, text_size, button).height()
 
-    def open_patient_tab(self, patient: Patient):
+    def open_subject_tab(self, subject: Subject):
         """
-        Load a checked and valid patient folder.
+        Load a checked and valid subject folder.
 
         Parameters
         ----------
-        patient : str
-            The patient to load in the tab.
+        subject : str
+            The subject to load in the tab.
 
         Returns
         -------
@@ -100,17 +100,17 @@ class MainWindow(QMainWindow):
 
         """
         
-        this_tab = PatientTab(self.global_config, patient, main_window=self, parent=self.main_tab)
-        self.patient_tab_array.append(this_tab)
+        this_tab = SubjectTab(self.global_config, subject, main_window=self, parent=self.main_tab)
+        self.subject_tab_array.append(this_tab)
 
-        self.main_tab.addTab(this_tab, os.path.basename(patient.name))
+        self.main_tab.addTab(this_tab, os.path.basename(subject.name))
         self.main_tab.setCurrentWidget(this_tab)
         
-        this_tab.load_patient()
+        this_tab.load_subject()
 
-    def check_patient_limit(self) -> bool:
+    def check_subject_limit(self) -> bool:
         """
-        Check if SWANe can open another patient tab without overcome the limit set by configuration.
+        Check if SWANe can open another subject tab without overcome the limit set by configuration.
 
         Returns
         -------
@@ -119,20 +119,20 @@ class MainWindow(QMainWindow):
 
         """
         
-        max_patients = self.global_config.get_max_patient_tabs()
-        if max_patients <= 0:
+        max_subjects = self.global_config.get_max_subject_tabs()
+        if max_subjects <= 0:
             return True
-        if len(self.patient_tab_array) >= max_patients:
+        if len(self.subject_tab_array) >= max_subjects:
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Icon.Warning)
-            msg_box.setText(strings.mainwindow_max_pt_error)
+            msg_box.setText(strings.mainwindow_max_subj_error)
             msg_box.exec()
             return False
         return True
 
-    def search_patient_dir(self, button_state: bool = False, folder_path: str = None):
+    def search_subject_dir(self, button_state: bool = False, folder_path: str = None):
         """
-        Try to open a patient directory
+        Try to open a subject directory
 
         Parameters
         ----------
@@ -147,50 +147,50 @@ class MainWindow(QMainWindow):
 
         """
         
-        # Guard to avoid the opening of patient tabs greater than the maximum allowed
-        if not self.check_patient_limit():
+        # Guard to avoid the opening of subject tabs greater than the maximum allowed
+        if not self.check_subject_limit():
             return
 
         if folder_path is None:
             # Open the directory selection dialog if a path is not provided
             file_dialog = QFileDialog()
             file_dialog.setDirectory(self.global_config.get_main_working_directory())
-            folder_path = file_dialog.getExistingDirectory(self, strings.mainwindow_select_pt_folder)
+            folder_path = file_dialog.getExistingDirectory(self, strings.mainwindow_select_subj_folder)
 
-        patient = Patient(self.global_config, dependency_manager=self.dependency_manager)
+        subject = Subject(self.global_config, dependency_manager=self.dependency_manager)
 
-        # Guard to avoid an already loaded patient directory
-        for tab in self.patient_tab_array:
-            if tab.patient.folder == folder_path:
+        # Guard to avoid an already loaded subject directory
+        for tab in self.subject_tab_array:
+            if tab.subject.folder == folder_path:
                 msg_box = QMessageBox()
                 msg_box.setIcon(QMessageBox.Icon.Warning)
-                msg_box.setText(strings.mainwindow_pt_already_loaded_error)
+                msg_box.setText(strings.mainwindow_subj_already_loaded_error)
                 msg_box.exec()
                 return
 
-        patient_load_ret = patient.load(folder_path)
+        subject_load_ret = subject.load(folder_path)
 
-        if patient_load_ret == PatientRet.ValidFolder:
-            self.open_patient_tab(patient)
-        elif patient_load_ret == PatientRet.FolderNotFound:
-            # User canceled patient load
+        if subject_load_ret == SubjectRet.ValidFolder:
+            self.open_subject_tab(subject)
+        elif subject_load_ret == SubjectRet.FolderNotFound:
+            # User canceled subject load
             return
-        elif patient_load_ret == PatientRet.PathBlankSpaces:
+        elif subject_load_ret == SubjectRet.PathBlankSpaces:
             # Guard to avoid the opening a directory containing blank spaces
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Icon.Critical)
-            msg_box.setText(strings.mainwindow_ptfolder_with_blank_spaces_error)
+            msg_box.setText(strings.mainwindow_subj_folder_with_blank_spaces_error)
             msg_box.exec()
             return
-        elif patient_load_ret == PatientRet.FolderOutsideMain:
-            # Guard to avoid the opening of a directory outside the main patient folder
+        elif subject_load_ret == SubjectRet.FolderOutsideMain:
+            # Guard to avoid the opening of a directory outside the main subject folder
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Icon.Critical)
-            msg_box.setText(strings.mainwindow_ptfolder_outside_workingdir_error)
+            msg_box.setText(strings.mainwindow_subj_folder_outside_workingdir_error)
             msg_box.exec()
             return
-        elif patient_load_ret == PatientRet.InvalidFolderTree:
-            # Check if selected folder is a valid patient folder
+        elif subject_load_ret == SubjectRet.InvalidFolderTree:
+            # Check if selected folder is a valid subject folder
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Icon.Warning)
             msg_box.setText(strings.mainwindow_invalid_folder_error)
@@ -205,45 +205,45 @@ class MainWindow(QMainWindow):
             msg_box2.setDefaultButton(QMessageBox.StandardButton.No)
             ret = msg_box2.exec()
 
-            # A patient folder has a predefined folder tree.
-            # SWANe recognizes a patient folder checking its subfolders.
-            # If a selected folder is not valid, the user may force its conversion into a patient folder.
+            # A subject folder has a predefined folder tree.
+            # SWANe recognizes a subject folder checking its subfolders.
+            # If a selected folder is not valid, the user may force its conversion into a subject folder.
             if ret == QMessageBox.StandardButton.Yes:
-                patient.fix_patient_folder_subtree(folder_path)
-                self.search_patient_dir(folder_path=folder_path)
+                subject.fix_subject_folder_subtree(folder_path)
+                self.search_subject_dir(folder_path=folder_path)
             return
             
         return
 
-    def get_suggested_patient_name(self) -> str:
+    def get_suggested_subject_name(self) -> str:
         """
-        Get a default name for the patient folder based the existing patient folders into the main patient directory.
+        Get a default name for the subject folder based the existing subject folders into the main subject directory.
 
         Returns
         -------
         str
-            The suggested patient folder name.
+            The suggested subject folder name.
 
         """
         
         import re
         
-        regex = re.compile('^' + self.global_config.get_patients_prefix() + '\d+$')
+        regex = re.compile('^' + self.global_config.get_subjects_prefix() + '\d+$')
         file_list = []
         
         for this_dir in os.listdir(self.global_config.get_main_working_directory()):
             if regex.match(this_dir):
                 file_list.append(
-                    int(this_dir.replace(self.global_config.get_patients_prefix(), "")))
+                    int(this_dir.replace(self.global_config.get_subjects_prefix(), "")))
 
         if len(file_list) == 0:
-            return self.global_config.get_patients_prefix() + "1"
+            return self.global_config.get_subjects_prefix() + "1"
         
-        return self.global_config.get_patients_prefix() + str(max(file_list) + 1)
+        return self.global_config.get_subjects_prefix() + str(max(file_list) + 1)
 
-    def choose_new_patient_dir(self):
+    def choose_new_subject_dir(self):
         """
-        Create a new patient folder. The user must specify its name.
+        Create a new subject folder. The user must specify its name.
 
         Returns
         -------
@@ -251,38 +251,38 @@ class MainWindow(QMainWindow):
 
         """
         
-        if not self.check_patient_limit():
+        if not self.check_subject_limit():
             return
 
-        text, ok = QInputDialog.getText(self, strings.mainwindow_new_pt_title, strings.mainwindow_new_pt_name,
-                                        QLineEdit.EchoMode.Normal, self.get_suggested_patient_name())
+        text, ok = QInputDialog.getText(self, strings.mainwindow_new_subj_title, strings.mainwindow_new_subj_name,
+                                        QLineEdit.EchoMode.Normal, self.get_suggested_subject_name())
 
         if not ok:
             return
 
-        patient_name = str(text).replace(" ", "_")
-        patient = Patient(self.global_config, dependency_manager=self.dependency_manager)
-        create_patient_ret = patient.create_new_patient_dir(patient_name)
+        subject_name = str(text).replace(" ", "_")
+        subject = Subject(self.global_config, dependency_manager=self.dependency_manager)
+        create_subject_ret = subject.create_new_subject_dir(subject_name)
 
-        if create_patient_ret == PatientRet.FolderNotFound or create_patient_ret == PatientRet.PathBlankSpaces:
+        if create_subject_ret == SubjectRet.FolderNotFound or create_subject_ret == SubjectRet.PathBlankSpaces:
             msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_new_pt_name_error + patient_name)
+            msg_box.setText(strings.mainwindow_new_subj_name_error + subject_name)
             msg_box.exec()
             return
-        elif create_patient_ret == PatientRet.FolderAlreadyExists:
+        elif create_subject_ret == SubjectRet.FolderAlreadyExists:
             msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_pt_exists_error + patient_name)
+            msg_box.setText(strings.mainwindow_subj_exists_error + subject_name)
             msg_box.exec()
             return
-        elif create_patient_ret == PatientRet.ValidFolder:
+        elif create_subject_ret == SubjectRet.ValidFolder:
             msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_new_pt_created + patient_name)
+            msg_box.setText(strings.mainwindow_new_subj_created + subject_name)
             msg_box.exec()
-            self.open_patient_tab(patient)
+            self.open_subject_tab(subject)
 
     def set_main_working_directory(self):
         """
-        Generates the OS directory selection dialog to set the default patient folder
+        Generates the OS directory selection dialog to set the default subject folder
 
         Returns
         -------
@@ -356,7 +356,7 @@ class MainWindow(QMainWindow):
 
     def check_running_workflows(self) -> bool:
         """
-        Check if SWANe is executing a workflow in any open Patients tab.
+        Check if SWANe is executing a workflow in any open subject tab.
 
         Returns
         -------
@@ -365,8 +365,8 @@ class MainWindow(QMainWindow):
 
         """
         
-        for pt in self.patient_tab_array:
-            if pt.patient.is_workflow_process_alive():
+        for subj in self.subject_tab_array:
+            if subj.subject.is_workflow_process_alive():
                 return True
             
         return False
@@ -381,8 +381,8 @@ class MainWindow(QMainWindow):
 
         """
         
-        for pt in self.patient_tab_array:
-            pt.reset_workflow()
+        for subj in self.subject_tab_array:
+            subj.reset_workflow()
 
     def about(self):
         """
@@ -442,14 +442,14 @@ class MainWindow(QMainWindow):
 
         # Buttons definition
         button_action = QAction(QIcon.fromTheme(
-            "document-open"), strings.menu_load_pt, self)
-        button_action.setStatusTip(strings.menu_load_pt_tip)
-        button_action.triggered.connect(self.search_patient_dir)
+            "document-open"), strings.menu_load_subj, self)
+        button_action.setStatusTip(strings.menu_load_subj_tip)
+        button_action.triggered.connect(self.search_subject_dir)
 
         button_action2 = QAction(QIcon.fromTheme(
-            "document-new"), strings.menu_new_pt, self)
-        button_action2.setStatusTip(strings.menu_new_pt_tip)
-        button_action2.triggered.connect(self.choose_new_patient_dir)
+            "document-new"), strings.menu_new_subj, self)
+        button_action2.setStatusTip(strings.menu_new_subj_tip)
+        button_action2.triggered.connect(self.choose_new_subject_dir)
 
         button_action3 = QAction(QIcon.fromTheme(
             "application-exit"), strings.menu_exit, self)
@@ -483,7 +483,7 @@ class MainWindow(QMainWindow):
         # Tab definition
         self.main_tab = QTabWidget(parent=self)
         self.main_tab.setTabsClosable(True)
-        self.main_tab.tabCloseRequested.connect(self.close_patient_tab)
+        self.main_tab.tabCloseRequested.connect(self.close_subject_tab)
         self.setCentralWidget(self.main_tab)
         self.homeTab = QWidget()
         self.main_tab.addTab(self.homeTab, strings.mainwindow_home_tab_name)
@@ -495,18 +495,18 @@ class MainWindow(QMainWindow):
         # Home Tab definition
         self.home_tab_ui()
         
-        self.patient_tab_array = []
+        self.subject_tab_array = []
 
         self.show()
 
-    def close_patient_tab(self, index: int):
+    def close_subject_tab(self, index: int):
         """
-        Handle the PySide tab closing event for the Patient tab.
+        Handle the PySide tab closing event for the subject tab.
 
         Parameters
         ----------
         index : int
-            The patient tab index into the GUI.
+            The subject tab index into the GUI.
 
         Returns
         -------
@@ -519,15 +519,15 @@ class MainWindow(QMainWindow):
             return
 
         tab_item = self.main_tab.widget(index)
-        if tab_item.patient.is_workflow_process_alive():
+        if tab_item.subject.is_workflow_process_alive():
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_wf_executing_error_1)
             msg_box.exec()
             return
 
-        tab_item.patient.config.save()
+        tab_item.subject.config.save()
         
-        self.patient_tab_array.remove(tab_item)
+        self.subject_tab_array.remove(tab_item)
         self.main_tab.removeTab(index)
 
     def closeEvent(self, event: QCloseEvent):
@@ -709,6 +709,6 @@ class MainWindow(QMainWindow):
         self.global_config.set_slicer_version(slicer_version)
         self.global_config.save()
 
-        for tab in self.patient_tab_array:
+        for tab in self.subject_tab_array:
             tab.export_results_button_update_state()
             tab.load_scene_button_update_state()

@@ -21,13 +21,13 @@ from swane.utils.DataInputList import DataInputList
 from swane.utils.DependencyManager import DependencyManager
 from swane.config.preference_list import WORKFLOW_TYPES
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
-from swane.utils.Patient import Patient, PatientRet
+from swane.utils.Subject import Subject, SubjectRet
 from swane.workers.open_results_directory import open_results_directory
 
 
-class PatientTab(QTabWidget):
+class SubjectTab(QTabWidget):
     """
-    Custom implementation of PySide QTabWidget to define a patient tab widget.
+    Custom implementation of PySide QTabWidget to define a subject tab widget.
 
     """
     
@@ -35,19 +35,19 @@ class PatientTab(QTabWidget):
     EXECTAB = 1
     RESULTTAB = 2
 
-    def __init__(self, global_config: ConfigManager, patient: Patient, main_window, parent=None):
-        super(PatientTab, self).__init__(parent)
+    def __init__(self, global_config: ConfigManager, subject: Subject, main_window, parent=None):
+        super(SubjectTab, self).__init__(parent)
         self.global_config = global_config
-        self.patient = patient
+        self.subject = subject
         self.main_window = main_window
 
         self.data_tab = QWidget()
         self.exec_tab = QWidget()
         self.result_tab = QWidget()
 
-        self.addTab(self.data_tab, strings.pttab_data_tab_name)
-        self.addTab(self.exec_tab, strings.pttab_wf_tab_name)
-        self.addTab(self.result_tab, strings.pttab_results_tab_name)
+        self.addTab(self.data_tab, strings.subj_tab_data_tab_name)
+        self.addTab(self.exec_tab, strings.subj_tab_wf_tab_name)
+        self.addTab(self.result_tab, strings.subj_tab_results_tab_name)
 
         self.directory_watcher = QFileSystemWatcher()
         self.directory_watcher.directoryChanged.connect(self.reset_workflow)
@@ -57,7 +57,7 @@ class PatientTab(QTabWidget):
 
         self.result_directory_watcher = QFileSystemWatcher()
         self.result_directory_watcher.directoryChanged.connect(self.enable_tab_if_result_dir)
-        self.result_directory_watcher.addPath(self.patient.folder)
+        self.result_directory_watcher.addPath(self.subject.folder)
 
         self.workflow_process = None
         self.node_list = None
@@ -67,7 +67,7 @@ class PatientTab(QTabWidget):
         self.workflow_type_combo = None
         self.generate_workflow_button = None
         self.node_list_treeWidget = None
-        self.patient_config_button = None
+        self.subject_config_button = None
         self.exec_button = None
         self.exec_graph = None
         self.load_scene_button = None
@@ -80,8 +80,8 @@ class PatientTab(QTabWidget):
         self.exec_tab_ui()
         self.result_tab_ui()
 
-        self.setTabEnabled(PatientTab.EXECTAB, False)
-        self.setTabEnabled(PatientTab.RESULTTAB, False)
+        self.setTabEnabled(SubjectTab.EXECTAB, False)
+        self.setTabEnabled(SubjectTab.RESULTTAB, False)
 
     def update_node_list(self, wf_report: WorkflowReport):
         """
@@ -111,17 +111,17 @@ class PatientTab(QTabWidget):
                             self.node_list[key].node_holder.set_art(self.main_window.ERROR_ICON_FILE)
                             break
 
-            self.setTabEnabled(PatientTab.DATATAB, True)
+            self.setTabEnabled(SubjectTab.DATATAB, True)
 
             self.exec_button_set_enabled(False)
 
             if errors:
                 self.generate_workflow_button.setEnabled(True)
-                self.patient.workflow = None
-                self.exec_button.setText(strings.pttab_wf_executed_with_error)
+                self.subject.workflow = None
+                self.exec_button.setText(strings.subj_tab_wf_executed_with_error)
                 self.exec_button.setToolTip("")
             else:
-                self.exec_button.setText(strings.pttab_wf_executed)
+                self.exec_button.setText(strings.subj_tab_wf_executed)
                 self.exec_button.setToolTip("")
 
 
@@ -134,7 +134,7 @@ class PatientTab(QTabWidget):
             except:
                 pass
             msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_wf_invalid_signal)
+            msg_box.setText(strings.subj_tab_wf_invalid_signal)
             msg_box.exec()
 
         # TODO - To be implemented for RAM usage info by each workflow
@@ -205,12 +205,12 @@ class PatientTab(QTabWidget):
         bold_font.setBold(True)
         x = 0
 
-        for data_input in self.patient.input_state_list:
+        for data_input in self.subject.input_state_list:
             self.input_report[data_input] = [QSvgWidget(self),
                                              QLabel(data_input.value.label),
                                              QLabel(""),
-                                             QPushButton(strings.pttab_import_button),
-                                             QPushButton(strings.pttab_clear_button),
+                                             QPushButton(strings.subj_tab_import_button),
+                                             QPushButton(strings.subj_tab_clear_button),
                                              None]
             self.set_error(data_input, "")
             if data_input.value.tooltip != "":
@@ -242,7 +242,7 @@ class PatientTab(QTabWidget):
         import_layout = QVBoxLayout()
         import_group_box.setLayout(import_layout)
 
-        scan_dicom_folder_button = QPushButton(strings.pttab_scan_dicom_button)
+        scan_dicom_folder_button = QPushButton(strings.subj_tab_scan_dicom_button)
         scan_dicom_folder_button.clicked.connect(self.scan_dicom_folder)
 
         import_layout.addWidget(scan_dicom_folder_button)
@@ -272,7 +272,7 @@ class PatientTab(QTabWidget):
         
         if self.importable_series_list.currentRow() == -1:
             msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_selected_series_error)
+            msg_box.setText(strings.subj_tab_selected_series_error)
             msg_box.exec()
             return
 
@@ -280,38 +280,38 @@ class PatientTab(QTabWidget):
         vols = self.dicom_scan_series_list[self.importable_series_list.currentRow()][3]
         found_mod = self.dicom_scan_series_list[self.importable_series_list.currentRow()][2].upper()
 
-        progress = PersistentProgressDialog(strings.pttab_dicom_copy, 0, len(copy_list) + 1, self)
+        progress = PersistentProgressDialog(strings.subj_tab_dicom_copy, 0, len(copy_list) + 1, self)
         self.set_loading(data_input)
 
         # Copy files and check for return
-        import_ret = self.patient.dicom_import_to_folder(data_input=data_input,
+        import_ret = self.subject.dicom_import_to_folder(data_input=data_input,
                                                          copy_list=copy_list,
                                                          vols=vols,
                                                          mod=found_mod,
                                                          force_modality=force_mod,
                                                          progress_callback=progress.increase_value
                                                          )
-        if import_ret != PatientRet.DataImportCompleted:
-            if import_ret == PatientRet.DataImportErrorVolumesMax:
+        if import_ret != SubjectRet.DataImportCompleted:
+            if import_ret == SubjectRet.DataImportErrorVolumesMax:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.pttab_wrong_max_vols_check_msg % (vols, data_input.value.max_volumes))
+                msg_box.setText(strings.subj_tab_wrong_max_vols_check_msg % (vols, data_input.value.max_volumes))
                 msg_box.exec()
-            elif import_ret == PatientRet.DataInputNonEmpty:
+            elif import_ret == SubjectRet.DataInputNonEmpty:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.pttab_import_folder_not_empy)
+                msg_box.setText(strings.subj_tab_import_folder_not_empy)
                 msg_box.exec()
-            elif import_ret == PatientRet.DataImportErrorVolumesMin:
+            elif import_ret == SubjectRet.DataImportErrorVolumesMin:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.pttab_wrong_min_vols_check_msg % (vols, data_input.value.min_volumes))
+                msg_box.setText(strings.subj_tab_wrong_min_vols_check_msg % (vols, data_input.value.min_volumes))
                 msg_box.exec()
-            elif import_ret == PatientRet.DataImportErrorCopy:
+            elif import_ret == SubjectRet.DataImportErrorCopy:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.pttab_import_copy_error_msg)
+                msg_box.setText(strings.subj_tab_import_copy_error_msg)
                 msg_box.exec()
-            elif import_ret == PatientRet.DataImportErrorModality:
+            elif import_ret == SubjectRet.DataImportErrorModality:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.pttab_wrong_type_check_msg % (found_mod, data_input.value.image_modality.value))
-                msg_box.setInformativeText(strings.pttab_wrong_type_check)
+                msg_box.setText(strings.subj_tab_wrong_type_check_msg % (found_mod, data_input.value.image_modality.value))
+                msg_box.setInformativeText(strings.subj_tab_wrong_type_check)
                 msg_box.setIcon(QMessageBox.Icon.Warning)
                 msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 msg_box.setDefaultButton(QMessageBox.StandardButton.No)
@@ -323,9 +323,9 @@ class PatientTab(QTabWidget):
             return
 
         progress.setRange(0, 0)
-        progress.setLabelText(strings.pttab_dicom_check)
+        progress.setLabelText(strings.subj_tab_dicom_check)
 
-        self.patient.check_input_folder(data_input, status_callback=self.input_check_update, progress_callback=progress.increase_value)
+        self.subject.check_input_folder(data_input, status_callback=self.input_check_update, progress_callback=progress.increase_value)
         self.reset_workflow()
 
     def scan_dicom_folder(self):
@@ -339,7 +339,7 @@ class PatientTab(QTabWidget):
 
         """
         
-        folder_path = QFileDialog.getExistingDirectory(self, strings.pttab_select_dicom_folder)
+        folder_path = QFileDialog.getExistingDirectory(self, strings.subj_tab_select_dicom_folder)
         
         if not os.path.exists(folder_path):
             return
@@ -350,7 +350,7 @@ class PatientTab(QTabWidget):
         if dicom_src_work.get_files_len() > 0:
             self.clear_scan_result()
             self.dicom_scan_series_list = []
-            progress = PersistentProgressDialog(strings.pttab_dicom_scan, 0, 0, parent=self.parent())
+            progress = PersistentProgressDialog(strings.subj_tab_dicom_scan, 0, 0, parent=self.parent())
             progress.show()
             progress.setMaximum(dicom_src_work.get_files_len())
             dicom_src_work.signal.sig_loop.connect(lambda i: progress.increase_value(i))
@@ -359,7 +359,7 @@ class PatientTab(QTabWidget):
 
         else:
             msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_no_dicom_error + folder_path)
+            msg_box.setText(strings.subj_tab_no_dicom_error + folder_path)
             msg_box.exec()
 
     def exec_tab_ui(self):
@@ -403,11 +403,11 @@ class PatientTab(QTabWidget):
         self.node_list_treeWidget.itemClicked.connect(self.tree_item_clicked)
 
         # Second Column: Graphviz Graph Layout
-        self.patient_config_button = QPushButton(strings.PTCONFIGBUTTONTEXT)
-        self.patient_config_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
-        self.patient_config_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        self.patient_config_button.clicked.connect(self.edit_patient_config)
-        layout.addWidget(self.patient_config_button, 0, 1)
+        self.subject_config_button = QPushButton(strings.SUBJCONFIGBUTTONTEXT)
+        self.subject_config_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.subject_config_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.subject_config_button.clicked.connect(self.edit_subject_config)
+        layout.addWidget(self.subject_config_button, 0, 1)
 
         self.exec_button = QPushButton(strings.EXECBUTTONTEXT)
         self.exec_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
@@ -421,9 +421,9 @@ class PatientTab(QTabWidget):
 
         self.exec_tab.setLayout(layout)
 
-    def edit_patient_config(self):
+    def edit_subject_config(self):
         """
-        Opens the Patient Preference Window.
+        Opens the subject Preference Window.
 
         Returns
         -------
@@ -431,13 +431,13 @@ class PatientTab(QTabWidget):
 
         """
 
-        preference_window = PreferencesWindow(self.patient.config, self.patient.dependency_manager, True, self)
+        preference_window = PreferencesWindow(self.subject.config, self.subject.dependency_manager, True, self)
         ret = preference_window.exec()
         if ret != 0:
             self.reset_workflow()
         if ret == -1:
-            self.patient.config.reset_to_defaults()
-            self.edit_patient_config()
+            self.subject.config.reset_to_defaults()
+            self.edit_subject_config()
 
     def on_wf_type_changed(self, index: int):
         """
@@ -455,8 +455,8 @@ class PatientTab(QTabWidget):
         """
 
         new_workflow_type = self.workflow_type_combo.itemData(index)
-        self.patient.config.set_workflow_option(WORKFLOW_TYPES[new_workflow_type])
-        self.patient.config.save()
+        self.subject.config.set_workflow_option(WORKFLOW_TYPES[new_workflow_type])
+        self.subject.config.save()
         self.reset_workflow()
 
     def generate_workflow(self):
@@ -471,19 +471,19 @@ class PatientTab(QTabWidget):
 
         """
         
-        generate_workflow_return = self.patient.generate_workflow()
+        generate_workflow_return = self.subject.generate_workflow()
         
-        if generate_workflow_return == PatientRet.GenWfMissingRequisites:
+        if generate_workflow_return == SubjectRet.GenWfMissingRequisites:
             error_dialog = QErrorMessage(parent=self)
-            error_dialog.showMessage(strings.pttab_missing_fsl_error)
+            error_dialog.showMessage(strings.subj_tab_missing_fsl_error)
             return
-        elif generate_workflow_return == PatientRet.GenWfError:
+        elif generate_workflow_return == SubjectRet.GenWfError:
             error_dialog = QErrorMessage(parent=self)
-            error_dialog.showMessage(strings.pttab_wf_gen_error)
+            error_dialog.showMessage(strings.subj_tab_wf_gen_error)
             return
         
         self.node_list_treeWidget.clear()
-        self.node_list = self.patient.workflow.get_node_array()
+        self.node_list = self.subject.workflow.get_node_array()
         
         # Graphviz analysis graphs drawing
         for node in self.node_list.keys():
@@ -515,7 +515,7 @@ class PatientTab(QTabWidget):
         """
         
         if item.parent() is None:
-            graph_file = self.patient.graph_file(item.get_text())
+            graph_file = self.subject.graph_file(item.get_text())
             if os.path.exists(graph_file):
                 self.exec_graph.load(graph_file)
                 self.exec_graph.renderer().setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
@@ -550,50 +550,50 @@ class PatientTab(QTabWidget):
         """
         
         # Workflow not started
-        if not self.patient.is_workflow_process_alive():
-            workflow_start_ret = self.patient.start_workflow(resume=resume, resume_freesurfer=resume_freesurfer, update_node_callback=self.update_node_list)
-            if workflow_start_ret == PatientRet.ExecWfResume:
+        if not self.subject.is_workflow_process_alive():
+            workflow_start_ret = self.subject.start_workflow(resume=resume, resume_freesurfer=resume_freesurfer, update_node_callback=self.update_node_list)
+            if workflow_start_ret == SubjectRet.ExecWfResume:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.pttab_old_wf_found)
+                msg_box.setText(strings.subj_tab_old_wf_found)
                 msg_box.setIcon(QMessageBox.Icon.Question)
                 msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                msg_box.button(QMessageBox.StandardButton.Yes).setText(strings.pttab_old_wf_resume)
-                msg_box.button(QMessageBox.StandardButton.No).setText(strings.pttab_old_wf_reset)
+                msg_box.button(QMessageBox.StandardButton.Yes).setText(strings.subj_tab_old_wf_resume)
+                msg_box.button(QMessageBox.StandardButton.No).setText(strings.subj_tab_old_wf_reset)
                 msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
                 msg_box.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
                 msg_box.closeEvent = self.no_close_event
                 ret = msg_box.exec()
                 resume = ret == QMessageBox.StandardButton.Yes
                 self.toggle_workflow_execution(resume=resume, resume_freesurfer=resume_freesurfer)
-            elif workflow_start_ret == PatientRet.ExecWfResumeFreesurfer:
+            elif workflow_start_ret == SubjectRet.ExecWfResumeFreesurfer:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.pttab_old_fs_found)
+                msg_box.setText(strings.subj_tab_old_fs_found)
                 msg_box.setIcon(QMessageBox.Icon.Question)
                 msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                msg_box.button(QMessageBox.StandardButton.Yes).setText(strings.pttab_old_fs_resume)
-                msg_box.button(QMessageBox.StandardButton.No).setText(strings.pttab_old_fs_reset)
+                msg_box.button(QMessageBox.StandardButton.Yes).setText(strings.subj_tab_old_fs_resume)
+                msg_box.button(QMessageBox.StandardButton.No).setText(strings.subj_tab_old_fs_reset)
                 msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
                 msg_box.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
                 msg_box.closeEvent = self.no_close_event
                 ret = msg_box.exec()
                 resume_freesurfer = ret == QMessageBox.StandardButton.Yes
                 self.toggle_workflow_execution(resume=resume, resume_freesurfer=resume_freesurfer)
-            elif workflow_start_ret == PatientRet.ExecWfStatusError:
+            elif workflow_start_ret == SubjectRet.ExecWfStatusError:
                 # Already running, should not be possible
                 pass
             else:
                 # UI updating
                 self.exec_button.setText(strings.EXECBUTTONTEXT_STOP)
-                self.setTabEnabled(PatientTab.DATATAB, False)
-                self.setTabEnabled(PatientTab.RESULTTAB, False)
+                self.setTabEnabled(SubjectTab.DATATAB, False)
+                self.setTabEnabled(SubjectTab.RESULTTAB, False)
                 self.workflow_type_combo.setEnabled(False)
-                self.patient_config_button.setEnabled(False)
+                self.subject_config_button.setEnabled(False)
 
         # Workflow executing
         else:
             # Asks for workflow kill confirmation
             msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_wf_stop)
+            msg_box.setText(strings.subj_tab_wf_stop)
             msg_box.setIcon(QMessageBox.Icon.Question)
             msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             msg_box.setDefaultButton(QMessageBox.StandardButton.No)
@@ -603,15 +603,15 @@ class PatientTab(QTabWidget):
             if ret == QMessageBox.StandardButton.No:
                 return
 
-            workflow_stop_ret = self.patient.stop_workflow()
-            if workflow_stop_ret == PatientRet.ExecWfStatusError:
+            workflow_stop_ret = self.subject.stop_workflow()
+            if workflow_stop_ret == SubjectRet.ExecWfStatusError:
                 # Not running, should not be possible
                 pass
             else:
                 # UI updating
                 self.remove_running_icon()
                 self.exec_button.setText(strings.EXECBUTTONTEXT)
-                self.setTabEnabled(PatientTab.DATATAB, True)
+                self.setTabEnabled(SubjectTab.DATATAB, True)
                 self.reset_workflow(force=True)
                 self.enable_tab_if_result_dir()
 
@@ -622,10 +622,10 @@ class PatientTab(QTabWidget):
         try:
             if not DependencyManager.is_slicer(self.global_config):
                 self.generate_scene_button.setEnabled(False)
-                self.generate_scene_button.setToolTip(strings.pttab_generate_scene_button_disabled_tooltip)
+                self.generate_scene_button.setToolTip(strings.subj_tab_generate_scene_button_disabled_tooltip)
             else:
                 self.generate_scene_button.setEnabled(True)
-                self.generate_scene_button.setToolTip(strings.pttab_generate_scene_button_tooltip)
+                self.generate_scene_button.setToolTip(strings.subj_tab_generate_scene_button_tooltip)
         except:
             pass
 
@@ -636,16 +636,16 @@ class PatientTab(QTabWidget):
         try:
             if not DependencyManager.is_slicer(self.global_config):
                 self.load_scene_button.setEnabled(False)
-                self.load_scene_button.setText(strings.pttab_load_scene_button + " " + strings.INFOCHAR)
-                self.load_scene_button.setToolTip(strings.pttab_generate_scene_button_disabled_tooltip)
-            elif os.path.exists(self.patient.scene_path()):
+                self.load_scene_button.setText(strings.subj_tab_load_scene_button + " " + strings.INFOCHAR)
+                self.load_scene_button.setToolTip(strings.subj_tab_generate_scene_button_disabled_tooltip)
+            elif os.path.exists(self.subject.scene_path()):
                 self.load_scene_button.setEnabled(True)
                 self.load_scene_button.setToolTip("")
-                self.load_scene_button.setText(strings.pttab_load_scene_button)
+                self.load_scene_button.setText(strings.subj_tab_load_scene_button)
             else:
                 self.load_scene_button.setEnabled(False)
-                self.load_scene_button.setToolTip(strings.pttab_load_scene_button_tooltip)
-                self.load_scene_button.setText(strings.pttab_load_scene_button + " " + strings.INFOCHAR)
+                self.load_scene_button.setToolTip(strings.subj_tab_load_scene_button_tooltip)
+                self.load_scene_button.setText(strings.subj_tab_load_scene_button + " " + strings.INFOCHAR)
         except:
             pass
 
@@ -662,7 +662,7 @@ class PatientTab(QTabWidget):
         result_tab_layout = QGridLayout()
         self.result_tab.setLayout(result_tab_layout)
 
-        self.generate_scene_button = QPushButton(strings.pttab_generate_scene_button)
+        self.generate_scene_button = QPushButton(strings.subj_tab_generate_scene_button)
         self.generate_scene_button.clicked.connect(self.generate_scene)
         self.generate_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.generate_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -672,16 +672,16 @@ class PatientTab(QTabWidget):
         horizontal_spacer = QSpacerItem(20, 40, QSizePolicy.Expanding, QSizePolicy.Minimum)
         result_tab_layout.addItem(horizontal_spacer, 0, 1, 1, 1)
 
-        self.load_scene_button = QPushButton(strings.pttab_load_scene_button)
+        self.load_scene_button = QPushButton(strings.subj_tab_load_scene_button)
         self.load_scene_button.clicked.connect(self.load_scene)
         self.load_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.load_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.load_scene_button_update_state()
         result_tab_layout.addWidget(self.load_scene_button, 0, 2)
 
-        self.open_results_directory_button = QPushButton(strings.pttab_open_results_directory)
+        self.open_results_directory_button = QPushButton(strings.subj_tab_open_results_directory)
         self.open_results_directory_button.clicked.connect(
-            lambda pushed=False, results_dir=self.patient.result_dir(): open_results_directory(pushed, results_dir)
+            lambda pushed=False, results_dir=self.subject.result_dir(): open_results_directory(pushed, results_dir)
         )
         self.open_results_directory_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.open_results_directory_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
@@ -704,9 +704,9 @@ class PatientTab(QTabWidget):
 
         """
         
-        progress = PersistentProgressDialog(strings.pttab_exporting_start, 0, 0, parent=self)
+        progress = PersistentProgressDialog(strings.subj_tab_exporting_start, 0, 0, parent=self)
         progress.show()
-        self.patient.generate_scene(lambda msg: PatientTab.slicer_thread_signal(msg, progress))
+        self.subject.generate_scene(lambda msg: SubjectTab.slicer_thread_signal(msg, progress))
         return progress
 
     @staticmethod
@@ -730,49 +730,49 @@ class PatientTab(QTabWidget):
         if msg == SlicerExportWorker.END_MSG:
             progress.done(1)
         else:
-            progress.setLabelText(strings.pttab_exporting_prefix + msg)
+            progress.setLabelText(strings.subj_tab_exporting_prefix + msg)
 
-    def input_check_update(self, data_input: DataInputList, state: PatientRet, dicom_src_work: DicomSearchWorker = None):
+    def input_check_update(self, data_input: DataInputList, state: SubjectRet, dicom_src_work: DicomSearchWorker = None):
         """
-        Function used as callback after patient dicom folder check
+        Function used as callback after subject dicom folder check
 
         Parameters
         ----------
         data_input: DataInputList
             The data input checked
-        state: PatientRet
+        state: SubjectRet
             The return code of the scan
         dicom_src_work: DicomSearchWorker, optional
             The dicom scanner calling the function. Default is None
         """
         if data_input not in self.input_report:
             return
-        if state == PatientRet.DataInputWarningNoDicom:
-            self.set_error(data_input, strings.pttab_no_dicom_error + dicom_src_work.dicom_dir)
-        elif state == PatientRet.DataInputWarningMultiPt:
-            self.set_warn(data_input, strings.pttab_multi_pt_error + dicom_src_work.dicom_dir)
-        elif state == PatientRet.DataInputWarningMultiExam:
-            self.set_warn(data_input, strings.pttab_multi_exam_error + dicom_src_work.dicom_dir)
-        elif state == PatientRet.DataInputWarningMultiSeries:
-            self.set_warn(data_input, strings.pttab_multi_series_error + dicom_src_work.dicom_dir)
-        elif state == PatientRet.DataInputLoading:
+        if state == SubjectRet.DataInputWarningNoDicom:
+            self.set_error(data_input, strings.subj_tab_no_dicom_error + dicom_src_work.dicom_dir)
+        elif state == SubjectRet.DataInputWarningMultiSubj:
+            self.set_warn(data_input, strings.subj_tab_multi_subj_error + dicom_src_work.dicom_dir)
+        elif state == SubjectRet.DataInputWarningMultiExam:
+            self.set_warn(data_input, strings.subj_tab_multi_exam_error + dicom_src_work.dicom_dir)
+        elif state == SubjectRet.DataInputWarningMultiSeries:
+            self.set_warn(data_input, strings.subj_tab_multi_series_error + dicom_src_work.dicom_dir)
+        elif state == SubjectRet.DataInputLoading:
             self.set_loading(data_input)
-        elif state == PatientRet.DataInputValid:
+        elif state == SubjectRet.DataInputValid:
 
-            patient_list = dicom_src_work.get_patient_list()
-            exam_list = dicom_src_work.get_exam_list(patient_list[0])
-            series_list = dicom_src_work.get_series_list(patient_list[0], exam_list[0])
-            image_list, patient_name, mod, series_description, vols = dicom_src_work.get_series_info(patient_list[0], exam_list[0], series_list[0])
+            subject_list = dicom_src_work.get_subject_list()
+            exam_list = dicom_src_work.get_exam_list(subject_list[0])
+            series_list = dicom_src_work.get_series_list(subject_list[0], exam_list[0])
+            image_list, subject_name, mod, series_description, vols = dicom_src_work.get_series_info(subject_list[0], exam_list[0], series_list[0])
 
-            label = PatientTab.label_from_dicom(image_list, patient_name, mod, series_description, vols)
+            label = SubjectTab.label_from_dicom(image_list, subject_name, mod, series_description, vols)
 
             self.set_ok(data_input, label)
             self.enable_exec_tab()
             self.check_venous_volumes()
 
-    def load_patient(self):
+    def load_subject(self):
         """
-        Loads the Patient configuration and folder.
+        Loads the subject configuration and folder.
 
         Returns
         -------
@@ -780,23 +780,23 @@ class PatientTab(QTabWidget):
 
         """
 
-        index = self.workflow_type_combo.findData(self.patient.config.get_patient_workflow_type().name)
+        index = self.workflow_type_combo.findData(self.subject.config.get_subject_workflow_type().name)
         self.workflow_type_combo.setCurrentIndex(index)
-        # Set after patient loading to prevent the onchanged fire on previous line command
+        # Set after subject loading to prevent the onchanged fire on previous line command
         self.workflow_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)
 
-        # Scan patient dicom folder
-        dicom_scanners, total_files = self.patient.prepare_scan_dicom_folders()
+        # Scan subject dicom folder
+        dicom_scanners, total_files = self.subject.prepare_scan_dicom_folders()
 
         if total_files > 0:
-            progress = PersistentProgressDialog(strings.pttab_pt_loading, 0, 0, parent=self.parent())
+            progress = PersistentProgressDialog(strings.subj_tab_subj_loading, 0, 0, parent=self.parent())
             progress.show()
             progress.setMaximum(total_files)
-            self.patient.execute_scan_dicom_folders(dicom_scanners, status_callback=self.input_check_update,
+            self.subject.execute_scan_dicom_folders(dicom_scanners, status_callback=self.input_check_update,
                                                     progress_callback=progress.increase_value)
 
         # Update UI after loading dicom
-        self.setTabEnabled(PatientTab.DATATAB, True)
+        self.setTabEnabled(SubjectTab.DATATAB, True)
         self.setCurrentWidget(self.data_tab)
 
         self.clear_scan_result()
@@ -820,25 +820,25 @@ class PatientTab(QTabWidget):
         None.
 
         """
-        scene_dir = self.patient.result_dir()
+        scene_dir = self.subject.result_dir()
 
-        if self.patient.is_workflow_process_alive() and not on_workflow_running:
+        if self.subject.is_workflow_process_alive() and not on_workflow_running:
             return
         
         if os.path.exists(scene_dir):
-            self.setTabEnabled(PatientTab.RESULTTAB, True)
+            self.setTabEnabled(SubjectTab.RESULTTAB, True)
             self.results_model.setRootPath(scene_dir)
             index_root = self.results_model.index(self.results_model.rootPath())
             self.result_tree.setRootIndex(index_root)
             self.result_directory_watcher.addPath(scene_dir)
             self.load_scene_button_update_state()
         else:
-            self.setTabEnabled(PatientTab.RESULTTAB, False)
+            self.setTabEnabled(SubjectTab.RESULTTAB, False)
             self.result_directory_watcher.removePaths([scene_dir])
 
     def clear_import_folder(self, data_input: DataInputList):
         """
-        Clears the patient series folder.
+        Clears the subject series folder.
 
         Parameters
         ----------
@@ -851,14 +851,14 @@ class PatientTab(QTabWidget):
 
         """
 
-        src_path = self.patient.dicom_folder(data_input)
+        src_path = self.subject.dicom_folder(data_input)
 
-        progress = PersistentProgressDialog(strings.pttab_dicom_clearing + src_path, 0, 0, self)
+        progress = PersistentProgressDialog(strings.subj_tab_dicom_clearing + src_path, 0, 0, self)
         progress.show()
 
-        self.patient.clear_import_folder(data_input)
+        self.subject.clear_import_folder(data_input)
 
-        self.set_error(data_input, strings.pttab_no_dicom_error + src_path)
+        self.set_error(data_input, strings.subj_tab_no_dicom_error + src_path)
         self.enable_exec_tab()
 
         progress.accept()
@@ -866,35 +866,35 @@ class PatientTab(QTabWidget):
         self.reset_workflow()
         self.check_venous_volumes()
 
-        if data_input == DataInputList.VENOUS and self.patient.input_state_list[DataInputList.VENOUS2].loaded:
+        if data_input == DataInputList.VENOUS and self.subject.input_state_list[DataInputList.VENOUS2].loaded:
             self.clear_import_folder(DataInputList.VENOUS2)
 
     def check_venous_volumes(self):
         """
         Display informative warnings in venous and venous2 data input rows to help user in data loading
         """
-        phases = self.patient.input_state_list[DataInputList.VENOUS].volumes + self.patient.input_state_list[DataInputList.VENOUS2].volumes
+        phases = self.subject.input_state_list[DataInputList.VENOUS].volumes + self.subject.input_state_list[DataInputList.VENOUS2].volumes
         if phases == 0:
             self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
         elif phases == 1:
-            if self.patient.input_state_list[DataInputList.VENOUS].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS].loaded:
                 self.set_warn(DataInputList.VENOUS, "Series has only one phase, load the second phase below", False)
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.patient.input_state_list[DataInputList.VENOUS2].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
                 # this should not be possible!
                 self.set_warn(DataInputList.VENOUS2, "Series has only one phase, load the second phase above", False)
         elif phases == 2:
-            if self.patient.input_state_list[DataInputList.VENOUS].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS].loaded:
                 self.set_ok(DataInputList.VENOUS, None)
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
-            if self.patient.input_state_list[DataInputList.VENOUS2].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
                 self.set_ok(DataInputList.VENOUS2, None)
         else:
             # something gone wrong, more than 2 phases!
-            if self.patient.input_state_list[DataInputList.VENOUS].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS].loaded:
                 self.set_warn(DataInputList.VENOUS, "Too many venous phases loaded, delete some!", False)
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.patient.input_state_list[DataInputList.VENOUS2].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
                 self.set_warn(DataInputList.VENOUS2, "Too many venous phases loaded, delete some!", False)
 
     def exec_button_set_enabled(self, enabled: bool):
@@ -932,16 +932,16 @@ class PatientTab(QTabWidget):
 
         """
 
-        if self.patient.reset_workflow(force):
+        if self.subject.reset_workflow(force):
             self.node_list_treeWidget.clear()
             self.exec_graph.load(self.main_window.VOID_SVG_FILE)
             self.exec_button_set_enabled(False)
             self.generate_workflow_button.setEnabled(True)
             self.workflow_type_combo.setEnabled(True)
-            self.patient_config_button.setEnabled(True)
+            self.subject_config_button.setEnabled(True)
 
     @staticmethod
-    def label_from_dicom(image_list: list[str], patient_name: str, mod: str, series_description: str, vols: int) -> str | None:
+    def label_from_dicom(image_list: list[str], subject_name: str, mod: str, series_description: str, vols: int) -> str | None:
         """
         Compose dicom scan result into a readable label
 
@@ -949,8 +949,8 @@ class PatientTab(QTabWidget):
         ----------
         image_list : list[str]
             The list of file found
-        patient_name: str
-            The patient name found
+        subject_name: str
+            The subject name found
         mod: str
             The image modality found
         series_description: str
@@ -966,7 +966,7 @@ class PatientTab(QTabWidget):
         if image_list is None:
             return None
         try:
-            label = patient_name + "-" + mod + "-" + series_description + ": " + str(
+            label = subject_name + "-" + mod + "-" + series_description + ": " + str(
                 len(image_list)) + " images, " + str(vols) + " "
             if vols > 1:
                 label += "volumes"
@@ -993,30 +993,30 @@ class PatientTab(QTabWidget):
         
         folder_path = dicom_src_work.dicom_dir
         self.scan_directory_watcher.addPath(folder_path)
-        patient_list = dicom_src_work.get_patient_list()
+        subject_list = dicom_src_work.get_subject_list()
 
-        if len(patient_list) == 0:
+        if len(subject_list) == 0:
             msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_no_dicom_error + folder_path)
+            msg_box.setText(strings.subj_tab_no_dicom_error + folder_path)
             msg_box.exec()
             return
         
-        if len(patient_list) > 1:
+        if len(subject_list) > 1:
             msg_box = QMessageBox()
-            msg_box.setText(strings.pttab_multi_pt_error + folder_path)
+            msg_box.setText(strings.subj_tab_multi_subj_error + folder_path)
             msg_box.exec()
             return
         
-        exam_list = dicom_src_work.get_exam_list(patient_list[0])
+        exam_list = dicom_src_work.get_exam_list(subject_list[0])
         
         for exam in exam_list:
-            series_list = dicom_src_work.get_series_list(patient_list[0], exam)
+            series_list = dicom_src_work.get_series_list(subject_list[0], exam)
             for series in series_list:
 
-                image_list, patient_name, mod, series_description, vols = dicom_src_work.get_series_info(patient_list[0], exam, series)
+                image_list, subject_name, mod, series_description, vols = dicom_src_work.get_series_info(subject_list[0], exam, series)
 
                 if image_list is not None:
-                    label = PatientTab.label_from_dicom(image_list, patient_name, mod, series_description, vols)
+                    label = SubjectTab.label_from_dicom(image_list, subject_name, mod, series_description, vols)
                     self.dicom_scan_series_list.append(
                         [label, image_list, mod, vols])
 
@@ -1171,15 +1171,15 @@ class PatientTab(QTabWidget):
 
         """
         
-        enable = self.patient.can_generate_workflow()
-        self.setTabEnabled(PatientTab.EXECTAB, enable)
+        enable = self.subject.can_generate_workflow()
+        self.setTabEnabled(SubjectTab.EXECTAB, enable)
 
     def load_scene(self):
         """
             Visualize the workflow results into 3D Slicer.
         """
 
-        slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), self.patient.scene_path())
+        slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), self.subject.scene_path())
         QThreadPool.globalInstance().start(slicer_open_thread)
 
     def setTabEnabled(self, index: int, enabled: bool):
@@ -1193,15 +1193,15 @@ class PatientTab(QTabWidget):
         enabled: bool
             The new tab status
         """
-        if index == PatientTab.EXECTAB and not enabled:
-            if not self.patient.dependency_manager.is_fsl() or not self.patient.dependency_manager.is_dcm2niix():
-                self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled_dependency)
+        if index == SubjectTab.EXECTAB and not enabled:
+            if not self.subject.dependency_manager.is_fsl() or not self.subject.dependency_manager.is_dcm2niix():
+                self.setTabToolTip(index, strings.subj_tab_tabtooltip_exec_disabled_dependency)
             else:
-                self.setTabToolTip(index, strings.pttab_tabtooltip_exec_disabled_series)
-        elif index == PatientTab.RESULTTAB and not enabled:
-            self.setTabToolTip(index, strings.pttab_tabtooltip_result_disabled)
-        elif index == PatientTab.DATATAB and not enabled:
-            self.setTabToolTip(index, strings.pttab_tabtooltip_data_disabled)
+                self.setTabToolTip(index, strings.subj_tab_tabtooltip_exec_disabled_series)
+        elif index == SubjectTab.RESULTTAB and not enabled:
+            self.setTabToolTip(index, strings.subj_tab_tabtooltip_result_disabled)
+        elif index == SubjectTab.DATATAB and not enabled:
+            self.setTabToolTip(index, strings.subj_tab_tabtooltip_data_disabled)
         else:
             self.setTabToolTip(index, "")
         super().setTabEnabled(index, enabled)

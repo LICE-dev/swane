@@ -246,13 +246,13 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             info = None
             for line in result['traceback']:
                 if "out of memory" in line:
-                    info = strings.pttab_wf_error_oom_gpu
+                    info = strings.subj_tab_wf_error_oom_gpu
                     break
                 elif "Killed" in line:
-                    info = strings.pttab_wf_error_oom
+                    info = strings.subj_tab_wf_error_oom
                     break
                 elif "Terminated" in line:
-                    info = strings.pttab_wf_error_terminated
+                    info = strings.subj_tab_wf_error_terminated
                     break
             self.queue.put(WorkflowReport(long_name=node.fullname, signal_type=WorkflowSignals.NODE_ERROR, info=info))
         except:

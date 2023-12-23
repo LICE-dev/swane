@@ -3,7 +3,7 @@ import shutil
 from swane.utils.DataInputList import DataInputList, ImageModality
 from enum import Enum, auto
 from swane.config.ConfigManager import ConfigManager
-from swane.utils.PatientInputStateList import PatientInputStateList
+from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DependencyManager import DependencyManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from PySide6.QtCore import QThreadPool
@@ -18,7 +18,7 @@ from swane.workers.WorkflowProcess import WorkflowProcess
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 
 
-class PatientRet(Enum):
+class SubjectRet(Enum):
     FolderNotFound = auto()
     PathBlankSpaces = auto()
     FolderOutsideMain = auto()
@@ -28,7 +28,7 @@ class PatientRet(Enum):
     DataInputNonEmpty = auto()
     DataInputLoading = auto()
     DataInputWarningNoDicom = auto()
-    DataInputWarningMultiPt = auto()
+    DataInputWarningMultiSubj = auto()
     DataInputWarningMultiExam = auto()
     DataInputWarningMultiSeries = auto()
     DataInputValid = ()
@@ -47,7 +47,7 @@ class PatientRet(Enum):
     ExecWfStatusError = auto()
 
 
-class Patient:
+class Subject:
     GRAPH_DIR_NAME = "graph"
     GRAPH_FILE_PREFIX = "graph_"
     GRAPH_FILE_EXT = "svg"
@@ -57,37 +57,37 @@ class Patient:
         self.global_config: ConfigManager = global_config
         self.folder: str | None = None
         self.name: str | None = None
-        self.input_state_list: PatientInputStateList | None = None
+        self.input_state_list: SubjectInputStateList | None = None
         self.config: ConfigManager | None = None
         self.dependency_manager: DependencyManager = dependency_manager
         self.workflow: MainWorkflow | None = None
         self.workflow_process: WorkflowProcess | None = None
         self.workflow_monitor_work: WorkflowMonitorWorker | None = None
 
-    def load(self, patient_folder: str) -> PatientRet:
+    def load(self, subject_folder: str) -> SubjectRet:
         """
-        Load patient information from a folder, generate patient configuration and input_state_list
+        Load subject information from a folder, generate subject configuration and input_state_list
 
         Parameters
         ----------
-        patient_folder: str
+        subject_folder: str
             The folder to scan
 
         Returns
         -------
-        A return code from PatientRet
+        A return code from SubjectRet
 
         """
 
-        check = self.check_patient_folder(patient_folder)
-        if check != PatientRet.ValidFolder:
+        check = self.check_subject_folder(subject_folder)
+        if check != SubjectRet.ValidFolder:
             return check
 
-        self.folder = patient_folder
-        self.name = os.path.basename(patient_folder)
-        self.input_state_list = PatientInputStateList(self.dicom_folder(), self.global_config)
+        self.folder = subject_folder
+        self.name = os.path.basename(subject_folder)
+        self.input_state_list = SubjectInputStateList(self.dicom_folder(), self.global_config)
         self.create_config(self.dependency_manager)
-        return PatientRet.ValidFolder
+        return SubjectRet.ValidFolder
 
     def prepare_scan_dicom_folders(self) -> tuple[dict[DataInputList, DicomSearchWorker], int]:
         """
@@ -134,7 +134,7 @@ class Patient:
 
     def execute_scan_dicom_folders(self, dicom_scanners: dict[DataInputList, DicomSearchWorker], status_callback: callable = None, progress_callback: callable = None):
         """
-        Load patient information from a folder, generate patient configuration and input_state_list
+        Load subject information from a folder, generate subject configuration and input_state_list
 
         Parameters
         ----------
@@ -150,7 +150,7 @@ class Patient:
             if data_input in dicom_scanners:
                 self.check_input_folder_step2(data_input, dicom_scanners[data_input], progress_callback=progress_callback, status_callback=status_callback)
                 if status_callback is not None:
-                    status_callback(data_input, PatientRet.DataInputLoading)
+                    status_callback(data_input, SubjectRet.DataInputLoading)
 
     def check_input_folder(self, data_input: DataInputList, status_callback: callable = None,
                            progress_callback: callable = None):
@@ -206,7 +206,7 @@ class Patient:
 
     def check_input_folder_step3(self, data_input: DataInputList, dicom_src_work: DicomSearchWorker, status_callback: callable = None):
         """
-        Updates SWANe UI at the end of the DICOM files scan Worker execution for a patient.
+        Updates SWANe UI at the end of the DICOM files scan Worker execution for a subject.
 
         Parameters
         ----------
@@ -223,32 +223,32 @@ class Patient:
 
         """
 
-        patient_list = dicom_src_work.get_patient_list()
+        subjects_list = dicom_src_work.get_subject_list()
 
-        if len(patient_list) == 0:
-            status_callback(data_input, PatientRet.DataInputWarningNoDicom, dicom_src_work)
+        if len(subjects_list) == 0:
+            status_callback(data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work)
             return
 
-        if len(patient_list) > 1:
-            status_callback(data_input, PatientRet.DataInputWarningMultiPt, dicom_src_work)
+        if len(subjects_list) > 1:
+            status_callback(data_input, SubjectRet.DataInputWarningMultiSubj, dicom_src_work)
             return
 
-        exam_list = dicom_src_work.get_exam_list(patient_list[0])
+        exam_list = dicom_src_work.get_exam_list(subjects_list[0])
 
         if len(exam_list) != 1:
-            status_callback(data_input, PatientRet.DataInputWarningMultiExam, dicom_src_work)
+            status_callback(data_input, SubjectRet.DataInputWarningMultiExam, dicom_src_work)
             return
 
-        series_list = dicom_src_work.get_series_list(patient_list[0], exam_list[0])
+        series_list = dicom_src_work.get_series_list(subjects_list[0], exam_list[0])
 
         if len(series_list) != 1:
-            status_callback(data_input, PatientRet.DataInputWarningMultiSeries, dicom_src_work)
+            status_callback(data_input, SubjectRet.DataInputWarningMultiSeries, dicom_src_work)
             return
         self.input_state_list[data_input].loaded = True
-        self.input_state_list[data_input].volumes = dicom_src_work.get_series_nvol(patient_list[0], exam_list[0],series_list[0])
-        status_callback(data_input, PatientRet.DataInputValid, dicom_src_work)
+        self.input_state_list[data_input].volumes = dicom_src_work.get_series_nvol(subjects_list[0], exam_list[0],series_list[0])
+        status_callback(data_input, SubjectRet.DataInputValid, dicom_src_work)
 
-    def dicom_import_to_folder(self, data_input: DataInputList, copy_list: list, vols: int, mod: str, force_modality: bool, progress_callback: callable = None) -> PatientRet:
+    def dicom_import_to_folder(self, data_input: DataInputList, copy_list: list, vols: int, mod: str, force_modality: bool, progress_callback: callable = None) -> SubjectRet:
         """
         Copies the files inside the selected folder in the input list into the folder specified by data_input var.
 
@@ -264,16 +264,16 @@ class Patient:
         """
         # series already loaded
         if self.input_state_list[data_input].loaded:
-            return PatientRet.DataInputNonEmpty
+            return SubjectRet.DataInputNonEmpty
         # number of volumes check
         if data_input.value.max_volumes != -1 and vols > data_input.value.max_volumes:
-            return PatientRet.DataImportErrorVolumesMax
+            return SubjectRet.DataImportErrorVolumesMax
         if vols < data_input.value.min_volumes:
-            return PatientRet.DataImportErrorVolumesMin
+            return SubjectRet.DataImportErrorVolumesMin
 
         # modality check
         if not data_input.value.is_image_modality(ImageModality.from_string(mod)) and not force_modality:
-            return PatientRet.DataImportErrorModality
+            return SubjectRet.DataImportErrorModality
 
         dest_path = os.path.join(self.dicom_folder(), str(data_input))
 
@@ -286,13 +286,13 @@ class Patient:
                 if progress_callback is not None:
                     progress_callback(1)
 
-            return PatientRet.DataImportCompleted
+            return SubjectRet.DataImportCompleted
         except:
-            return PatientRet.DataImportErrorCopy
+            return SubjectRet.DataImportErrorCopy
 
     def create_config(self, dependency_manager: DependencyManager):
         """
-        Generate the patient configuration reading its config file.
+        Generate the subject configuration reading its config file.
 
         Parameters
         ----------
@@ -349,37 +349,37 @@ class Patient:
         except:
             return 0
 
-    def check_patient_folder(self, patient_folder: str) -> PatientRet:
+    def check_subject_folder(self, subject_folder: str) -> SubjectRet:
         """
-        Check if a path is a valid patient folder
+        Check if a path is a valid subject folder
 
         Parameters
         ----------
-        patient_folder: str
+        subject_folder: str
             the path to check
 
         Returns
         -------
-            A PatientRet code
+            A SubjectRet code
 
         """
-        if not os.path.exists(patient_folder):
-            return PatientRet.FolderNotFound
+        if not os.path.exists(subject_folder):
+            return SubjectRet.FolderNotFound
 
-        if ' ' in patient_folder:
-            return PatientRet.PathBlankSpaces
+        if ' ' in subject_folder:
+            return SubjectRet.PathBlankSpaces
 
-        if not os.path.abspath(patient_folder).startswith(os.path.abspath(self.global_config.get_main_working_directory() + os.sep)):
-            return PatientRet.FolderOutsideMain
+        if not os.path.abspath(subject_folder).startswith(os.path.abspath(self.global_config.get_main_working_directory() + os.sep)):
+            return SubjectRet.FolderOutsideMain
 
-        if not self.check_patient_subtree(patient_folder):
-            return PatientRet.InvalidFolderTree
+        if not self.check_subject_subtree(subject_folder):
+            return SubjectRet.InvalidFolderTree
 
-        return PatientRet.ValidFolder
+        return SubjectRet.ValidFolder
 
     def clear_import_folder(self, data_input: DataInputList) -> bool:
         """
-        Clears the patient series folder.
+        Clears the subject series folder.
 
         Parameters
         ----------
@@ -407,36 +407,36 @@ class Patient:
         except:
             return False
 
-    def check_patient_subtree(self, patient_folder: str) -> bool:
+    def check_subject_subtree(self, subject_folder: str) -> bool:
         """
-        Check if a directory is a valid patient folder
+        Check if a directory is a valid subject folder
 
         Parameters
         ----------
-        patient_folder : str
+        subject_folder : str
             The directory path to check.
 
         Returns
         -------
         bool
-            True if the directory is a valid patient folder, otherwise False.
+            True if the directory is a valid subject folder, otherwise False.
 
         """
 
         for data_input in DataInputList:
-            if not os.path.exists(os.path.join(patient_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
+            if not os.path.exists(os.path.join(subject_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
                 return False
 
         return True
 
-    def fix_patient_folder_subtree(self, patient_folder: str):
+    def fix_subject_folder_subtree(self, subject_folder: str):
         """
-        Update an existing folder with the patient subfolder structure.
+        Update an existing folder with the subject subfolder structure.
 
         Parameters
         ----------
-        patient_folder : str
-            The directory path to update into a patient folder.
+        subject_folder : str
+            The directory path to update into a subject folder.
 
         Returns
         -------
@@ -446,18 +446,18 @@ class Patient:
 
         for data_input in DataInputList:
             if not os.path.exists(
-                    os.path.join(patient_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
-                os.makedirs(os.path.join(patient_folder, self.global_config.get_default_dicom_folder(), str(data_input)),
+                    os.path.join(subject_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
+                os.makedirs(os.path.join(subject_folder, self.global_config.get_default_dicom_folder(), str(data_input)),
                             exist_ok=True)
 
-    def create_new_patient_dir(self, patient_name: str) -> PatientRet:
+    def create_new_subject_dir(self, subject_name: str) -> SubjectRet:
         """
-        Create a new patient folder and subfolders.
+        Create a new subject folder and subfolders.
 
         Parameters
         ----------
-        patient_name : str
-            The patient folder name.
+        subject_name : str
+            The subject folder name.
 
         Returns
         -------
@@ -466,21 +466,21 @@ class Patient:
         """
         invalid_chars = r'\/:*?<>|'
 
-        if patient_name is None or patient_name == "":
-            return PatientRet.FolderNotFound
-        elif any(char in invalid_chars for char in patient_name) or patient_name.isspace() or ' ' in patient_name:
-            return PatientRet.PathBlankSpaces
-        elif os.path.exists(os.path.join(self.global_config.get_main_working_directory(), patient_name)):
-            return PatientRet.FolderAlreadyExists
+        if subject_name is None or subject_name == "":
+            return SubjectRet.FolderNotFound
+        elif any(char in invalid_chars for char in subject_name) or subject_name.isspace() or ' ' in subject_name:
+            return SubjectRet.PathBlankSpaces
+        elif os.path.exists(os.path.join(self.global_config.get_main_working_directory(), subject_name)):
+            return SubjectRet.FolderAlreadyExists
         else:
             try:
-                base_folder = os.path.abspath(os.path.join(self.global_config.get_main_working_directory(), patient_name))
+                base_folder = os.path.abspath(os.path.join(self.global_config.get_main_working_directory(), subject_name))
                 dicom_folder = os.path.join(base_folder, self.global_config.get_default_dicom_folder())
                 for data_input in DataInputList:
                     os.makedirs(os.path.join(dicom_folder, str(data_input)), exist_ok=True)
                 return self.load(base_folder)
             except:
-                return PatientRet.FolderNotFound
+                return SubjectRet.FolderNotFound
 
     def can_generate_workflow(self) -> bool:
         """
@@ -498,7 +498,7 @@ class Patient:
         -------
         The path of graph directory
         """
-        return os.path.join(self.folder, Patient.GRAPH_DIR_NAME)
+        return os.path.join(self.folder, Subject.GRAPH_DIR_NAME)
 
     def graph_file(self, long_name: str):
         """
@@ -511,13 +511,13 @@ class Patient:
         The complete path of graph file with the specified name
         """
         graph_name = long_name.lower().replace(" ", "_")
-        return os.path.join(self.graph_dir(), Patient.GRAPH_FILE_PREFIX + graph_name + "." + Patient.GRAPH_FILE_EXT)
+        return os.path.join(self.graph_dir(), Subject.GRAPH_FILE_PREFIX + graph_name + "." + Subject.GRAPH_FILE_EXT)
 
     def result_dir(self) -> str:
         """
         Returns
         -------
-        The patient results directory path
+        The subject results directory path
         """
         return os.path.join(self.folder, MainWorkflow.Result_DIR)
 
@@ -529,7 +529,7 @@ class Patient:
         """
         return os.path.join(self.result_dir(), "scene." + self.global_config.get_slicer_scene_ext())
 
-    def generate_workflow(self, generate_graphs: bool = True) -> PatientRet:
+    def generate_workflow(self, generate_graphs: bool = True) -> SubjectRet:
         """
         Generates and populates the Main Workflow.
         Generates the graphviz analysis graphs on a new thread.
@@ -541,12 +541,12 @@ class Patient:
 
         Returns
         -------
-        PatientRet corresponding to success or failure
+        SubjectRet corresponding to success or failure
 
         """
 
         if not self.can_generate_workflow():
-            return PatientRet.GenWfMissingRequisites
+            return SubjectRet.GenWfMissingRequisites
 
         # Main Workflow generation
         if self.workflow is None:
@@ -559,7 +559,7 @@ class Patient:
         except:
             traceback.print_exc()
             # TODO: generiamo un file crash nella cartella log?
-            return PatientRet.GenWfError
+            return SubjectRet.GenWfError
 
         graph_dir = self.graph_dir()
         shutil.rmtree(graph_dir, ignore_errors=True)
@@ -573,12 +573,12 @@ class Patient:
                 if len(node_list[node].node_list.keys()) > 0:
                     if self.dependency_manager.is_graphviz():
                         thread = Thread(target=self.workflow.get_node(node).write_graph,
-                                        kwargs={'graph2use': self.GRAPH_TYPE, 'format': Patient.GRAPH_FILE_EXT,
+                                        kwargs={'graph2use': self.GRAPH_TYPE, 'format': Subject.GRAPH_FILE_EXT,
                                                 'dotfilename': os.path.join(self.graph_file(node_list[node].long_name)),
                                                 })
                         thread.start()
 
-        return PatientRet.GenWfCompleted
+        return SubjectRet.GenWfCompleted
 
     def is_workflow_process_alive(self) -> bool:
         """
@@ -643,7 +643,7 @@ class Patient:
         shutil.rmtree(self.freesurfer_dir(), ignore_errors=True)
 
     def start_workflow(self, resume: bool = None, resume_freesurfer: bool = None,
-                       update_node_callback: callable = None) -> PatientRet:
+                       update_node_callback: callable = None) -> SubjectRet:
         """
         Start the workflow execution in a subprocess
 
@@ -658,23 +658,23 @@ class Patient:
 
         Returns
         -------
-        A PatientRet code
+        A SubjectRet code
 
         """
         # Already executing workflow
         if self.is_workflow_process_alive():
-            return PatientRet.ExecWfStatusError
+            return SubjectRet.ExecWfStatusError
         # Checks for a previous workflow execution
         if self.workflow_dir_exists():
             if resume is None:
-                return PatientRet.ExecWfResume
+                return SubjectRet.ExecWfResume
             elif not resume:
                 self.delete_workflow_dir()
 
         # Checks for a previous workflow FreeSurfer execution
         if self.config.get_workflow_freesurfer_pref() and self.freesurfer_dir_exists():
             if resume_freesurfer is None:
-                return PatientRet.ExecWfResumeFreesurfer
+                return SubjectRet.ExecWfResumeFreesurfer
             elif not resume_freesurfer:
                 self.delete_freesurfer_dir()
 
@@ -689,19 +689,19 @@ class Patient:
         # Starts the workflow on a new process
         self.workflow_process = WorkflowProcess(self.name, self.workflow, queue)
         self.workflow_process.start()
-        return PatientRet.ExecWfStarted
+        return SubjectRet.ExecWfStarted
 
-    def stop_workflow(self) -> PatientRet:
+    def stop_workflow(self) -> SubjectRet:
         """
         Stop a running workflow execution
 
         Returns
         -------
-        A PatientRet code
+        A SubjectRet code
 
         """
         if not self.is_workflow_process_alive():
-            return PatientRet.ExecWfStatusError
+            return SubjectRet.ExecWfStatusError
         # Workflow killing
         self.workflow_process.stop_event.set()
 

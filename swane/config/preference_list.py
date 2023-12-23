@@ -279,10 +279,10 @@ GLOBAL_PREFERENCES[category]['main_working_directory'] = PreferenceEntry(
     default="",
     restart=True
 )
-GLOBAL_PREFERENCES[category]['patients_prefix'] = PreferenceEntry(
+GLOBAL_PREFERENCES[category]['subjects_prefix'] = PreferenceEntry(
     input_type=InputTypes.TEXT,
     hidden=True,
-    default="pt_",
+    default="subj_",
 )
 GLOBAL_PREFERENCES[category]['slicer_path'] = PreferenceEntry(
     input_type=InputTypes.FILE,
@@ -331,7 +331,7 @@ GLOBAL_PREFERENCES[category]['default_wf_type'] = PreferenceEntry(
 )
 category = GlobalPrefCategoryList.PERFORMANCE
 GLOBAL_PREFERENCES[category] = {}
-GLOBAL_PREFERENCES[category]['max_pt'] = PreferenceEntry(
+GLOBAL_PREFERENCES[category]['max_subj'] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Patient tab limit",
     default=1,
@@ -341,9 +341,9 @@ try:
     suggested_max_cpu = max(ceil(min(cpu_count()/2, get_system_total_memory_gb()/3)), 1)
 except:
     suggested_max_cpu = 1
-GLOBAL_PREFERENCES[category]['max_pt_cpu'] = PreferenceEntry(
+GLOBAL_PREFERENCES[category]['max_subj_cu'] = PreferenceEntry(
     input_type=InputTypes.INT,
-    label="CPU core limit per patient",
+    label="CPU core limit per subject",
     tooltip="To use all CPU cores set value equal to -1",
     default=str(suggested_max_cpu),
     range=[-1, 30],
@@ -359,9 +359,9 @@ GLOBAL_PREFERENCES[category]['multicore_node_limit'] = PreferenceEntry(
     value_enum=CORE_LIMIT,
     default=CORE_LIMIT.SOFT_CAP,
     informative_text={
-        CORE_LIMIT.NO_LIMIT: "Multi-core steps ignore the patient CPU core limit, using all available resources",
-        CORE_LIMIT.SOFT_CAP: "Multi-core steps use up to twice the patient CPU core limit",
-        CORE_LIMIT.HARD_CAP: "Multi-core steps strictly respect the patient CPU core limit",
+        CORE_LIMIT.NO_LIMIT: "Multi-core steps ignore the subject CPU core limit, using all available resources",
+        CORE_LIMIT.SOFT_CAP: "Multi-core steps use up to twice the subject CPU core limit",
+        CORE_LIMIT.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
     }
 )
 GLOBAL_PREFERENCES[category]['cuda'] = PreferenceEntry(
@@ -372,9 +372,9 @@ GLOBAL_PREFERENCES[category]['cuda'] = PreferenceEntry(
     dependency='is_cuda',
     dependency_fail_tooltip="GPU does not support CUDA",
 )
-GLOBAL_PREFERENCES[category]['max_pt_gpu'] = PreferenceEntry(
+GLOBAL_PREFERENCES[category]['max_subj_gpu'] = PreferenceEntry(
     input_type=InputTypes.INT,
-    label="GPU process limit per patient",
+    label="GPU process limit per subject",
     tooltip="The limit should be equal or lesser than the number of physical GPU",
     default=1,
     range=[1, 5],

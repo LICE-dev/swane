@@ -58,7 +58,7 @@ class PreferencesWindow(QDialog):
         for category in default_pref_list:
             if str(category) not in my_config:
                 continue
-            if is_workflow and not my_config.global_config and not self.parent().patient.input_state_list[category].loaded:
+            if is_workflow and not my_config.global_config and not self.parent().subject.input_state_list[category].loaded:
                 continue
 
             cat_label = category.value.label
@@ -102,7 +102,7 @@ class PreferencesWindow(QDialog):
                 if not my_config.global_config and self.preferences[category][key].input_requirement is not None:
                     for input_req in self.preferences[category][key].input_requirement:
                         for cat_check in default_pref_list:
-                            if cat_check == input_req and not self.parent().patient.input_state_list[cat_check].loaded:
+                            if cat_check == input_req and not self.parent().subject.input_state_list[cat_check].loaded:
                                 self.inputs[x].disable(self.preferences[category][key].input_requirement_fail_tooltip)
                                 break
 
@@ -134,7 +134,7 @@ class PreferencesWindow(QDialog):
             if self.my_config.global_config:
                 reset_button.setText(strings.pref_window_reset_global_button)
             else:
-                reset_button.setText(strings.pref_window_reset_pt_button)
+                reset_button.setText(strings.pref_window_reset_subj_button)
             reset_button.clicked.connect(self.reset)
             layout.addWidget(reset_button)
 
@@ -227,7 +227,7 @@ class PreferencesWindow(QDialog):
         if self.my_config.global_config:
             msg_box.setText(strings.pref_window_reset_global_box)
         else:
-            msg_box.setText(strings.pref_window_reset_pt_box)
+            msg_box.setText(strings.pref_window_reset_subj_box)
         msg_box.setIcon(QMessageBox.Icon.Warning)
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         msg_box.setDefaultButton(QMessageBox.StandardButton.No)
