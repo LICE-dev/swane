@@ -330,13 +330,13 @@ class ConfigManager(configparser.ConfigParser):
         """
         return self.getint_safe(GlobalPrefCategoryList.MAIN, 'last_pid')
 
-    def getboolean_safe(self, section: Enum | str, option: str, *, raw=False, vars=None, **kwargs) -> bool:
+    def getboolean_safe(self, section: str, option: str, *, raw=False, vars=None, **kwargs) -> bool:
         """
         Get an option value as bool or, if invalid, its default value
 
         Parameters
         ----------
-        section: Enum | str
+        section: str
             The configuration section
         option: str
             The configuration option
@@ -362,13 +362,13 @@ class ConfigManager(configparser.ConfigParser):
                     return configparser.ConfigParser.BOOLEAN_STATES[ret.lower()]
         raise Exception()
 
-    def getint_safe(self, section: Enum | str, option: str, *, raw=False, vars=None, **kwargs) -> int:
+    def getint_safe(self, section: str, option: str, *, raw=False, vars=None, **kwargs) -> int:
         """
         Get an option value as int or, if invalid, its default value
 
         Parameters
         ----------
-        section: Enum | str
+        section: str
             The configuration section
         option: str
             The configuration option
@@ -392,13 +392,13 @@ class ConfigManager(configparser.ConfigParser):
                     return int(self._section_defaults[section][option].default)
         raise Exception("Error for %s - %s" % (str(section), str(option)))
 
-    def getfloat_safe(self, section: Enum | str, option: str, *, raw=False, vars=None, **kwargs) -> float:
+    def getfloat_safe(self, section: str, option: str, *, raw=False, vars=None, **kwargs) -> float:
         """
         Get an option value as float or, if invalid, its default value
 
         Parameters
         ----------
-        section: Enum | str
+        section: str
             The configuration section
         option: str
             The configuration option
@@ -422,13 +422,13 @@ class ConfigManager(configparser.ConfigParser):
                     return float(self._section_defaults[section][option].default)
         raise Exception("Error for %s - %s" % (str(section), str(option)))
 
-    def getenum_safe(self, section: Enum | str, option: str, *, raw: bool = False, vars=None, **kwargs) -> Enum:
+    def getenum_safe(self, section: str, option: str, *, raw: bool = False, vars=None, **kwargs) -> Enum:
         """
         Get an option value as Enum or, if invalid, its default value
 
         Parameters
         ----------
-        section: Enum | str
+        section: str
             The configuration section
         option: str
             The configuration option

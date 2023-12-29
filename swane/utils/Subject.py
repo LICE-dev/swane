@@ -55,14 +55,14 @@ class Subject:
 
     def __init__(self, global_config: ConfigManager, dependency_manager: DependencyManager):
         self.global_config: ConfigManager = global_config
-        self.folder: str | None = None
-        self.name: str | None = None
-        self.input_state_list: SubjectInputStateList | None = None
-        self.config: ConfigManager | None = None
+        self.folder: str = None
+        self.name: str = None
+        self.input_state_list: SubjectInputStateList = None
+        self.config: ConfigManager = None
         self.dependency_manager: DependencyManager = dependency_manager
-        self.workflow: MainWorkflow | None = None
-        self.workflow_process: WorkflowProcess | None = None
-        self.workflow_monitor_work: WorkflowMonitorWorker | None = None
+        self.workflow: MainWorkflow = None
+        self.workflow_process: WorkflowProcess = None
+        self.workflow_monitor_work: WorkflowMonitorWorker = None
 
     def load(self, subject_folder: str) -> SubjectRet:
         """

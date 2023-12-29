@@ -19,7 +19,7 @@ class PreferenceEntry:
     input_requirement_fail_tooltip = None
     restart = False
     validate_on_change = False
-    informative_text: dict | None = None
+    informative_text: dict = None
     box_text = None
     hidden = False
     value_enum = None

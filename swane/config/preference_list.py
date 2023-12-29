@@ -77,8 +77,8 @@ WF_PREFERENCES[category]['bet_thr'] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold value for skull removal",
     default=0.3,
-    # range=[0, 1],
-    range=[1, 0],
+    tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
+    range=[0, 1],
 )
 WF_PREFERENCES[category]['freesurfer'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -111,6 +111,7 @@ WF_PREFERENCES[category]['bet_thr'] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold value for skull removal",
     default=0.5,
+    tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
 )
 
@@ -121,6 +122,7 @@ WF_PREFERENCES[category]['bet_thr'] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold value for skull removal",
     default=0.5,
+    tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
 )
 
@@ -130,6 +132,7 @@ WF_PREFERENCES[category]['bet_thr'] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold value for skull removal",
     default=0.4,
+    tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
 )
 WF_PREFERENCES[category]['vein_detection_mode'] = PreferenceEntry(

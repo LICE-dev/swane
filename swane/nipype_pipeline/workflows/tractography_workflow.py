@@ -13,7 +13,7 @@ from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_
 SIDES = ["lh", "rh"]
 
 
-def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow | None:
+def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
 

@@ -941,7 +941,7 @@ class SubjectTab(QTabWidget):
             self.subject_config_button.setEnabled(True)
 
     @staticmethod
-    def label_from_dicom(image_list: list[str], subject_name: str, mod: str, series_description: str, vols: int) -> str | None:
+    def label_from_dicom(image_list: list[str], subject_name: str, mod: str, series_description: str, vols: int) -> str:
         """
         Compose dicom scan result into a readable label
 
@@ -1123,7 +1123,7 @@ class SubjectTab(QTabWidget):
             text=""
         )
 
-    def set_ok(self, data_input: DataInputList, text: str | None):
+    def set_ok(self, data_input: DataInputList, text: str):
         """
         Set a success message and icon near a series label.
 

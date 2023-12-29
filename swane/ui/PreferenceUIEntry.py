@@ -221,15 +221,15 @@ class PreferenceUIEntry:
         if str(value).lower() != config[self.category][self.key].lower():
             self.set_changed()
 
-    def set_range(self, min_value: int | float, max_value: int | float):
+    def set_range(self, min_value, max_value):
         """
         Apply specified values to a numeric input field validator
 
         Parameters
         ----------
-        min_value: int | float
+        min_value: int or float
             The minimum accepted value
-        max_value: int | float
+        max_value: int or float
            The maximum accepted value
         """
         if self.input_field.validator() is None:
@@ -328,7 +328,7 @@ class PreferenceUIEntry:
 
         return value
 
-    def get_typed_value(self) -> bool | Enum | str:
+    def get_typed_value(self):
         """
         Return
         ----------
