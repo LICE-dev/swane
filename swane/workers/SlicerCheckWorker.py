@@ -99,7 +99,6 @@ class SlicerCheckWorker(QRunnable):
                         label = strings.check_dep_slicer_found % slicer_version
                     else:
                         label = strings.check_dep_slicer_error2
-                        slicer_version = ""
 
         self.signal.slicer.emit(cmd, slicer_version, label, state)
 
