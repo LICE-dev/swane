@@ -190,12 +190,12 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
         # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
         segmentHA = Node(SegmentHA(), name="segmentHA")
         if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
-            segmentHA.inputs.num_threads = cpu_count()
+            segmentHA.inputs.num_cpu = cpu_count()
         elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
-            segmentHA.inputs.num_threads = max_cpu
+            segmentHA.inputs.num_cpu = max_cpu
         else:
-            segmentHA.inputs.num_threads = max_cpu
-            segmentHA.n_procs = segmentHA.inputs.num_threads
+            segmentHA.inputs.num_cpu = max_cpu
+            segmentHA.n_procs = segmentHA.inputs.num_cpu
         workflow.connect(recon_all, "subjects_dir", segmentHA, "subjects_dir")
         workflow.connect(recon_all, "subject_id", segmentHA, "subject_id")
         workflow.connect(segmentHA, "lh_hippoAmygLabels", outputnode, "lh_hippoAmygLabels")
