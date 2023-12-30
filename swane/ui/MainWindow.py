@@ -705,9 +705,10 @@ class MainWindow(QMainWindow):
         
         self.add_home_entry(Dependence(state, msg), self.slicer_x)
 
-        self.global_config.set_slicer_path(slicer_path)
-        self.global_config.set_slicer_version(slicer_version)
-        self.global_config.save()
+        if state is DependenceStatus.DETECTED:
+            self.global_config.set_slicer_path(slicer_path)
+            self.global_config.set_slicer_version(slicer_version)
+            self.global_config.save()
 
         for tab in self.subject_tab_array:
             tab.export_results_button_update_state()
