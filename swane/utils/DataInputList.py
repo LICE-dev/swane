@@ -1,6 +1,7 @@
 from enum import Enum
 from swane.config.PrefCategory import PrefCategory
 from swane.config.config_enums import ImageModality, PLANES
+from swane.config.model.T13DPreference import T13DPreference
 
 FMRI_NUM = 3
 
