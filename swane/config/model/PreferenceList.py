@@ -1,19 +1,24 @@
-from typing import Any
-from swane.config.model.T13DPreference import GenericPreference, T13DPreference
+import typing
+from swane.config.model.T13DPreference import T13DPreference
 from swane.utils.DataInputList import DataInputList
+from typing import Literal
 
-class PreferenceList():
-        
-    T13D: T13DPreference = T13DPreference()
-    
-    def __init__(self) -> None:
-        pass
-    
-    def get_typed_attr(self, data_type: DataInputList) -> GenericPreference:
-        
-        return getattr(self, data_type.name)
-        
-    
-        
-preference = PreferenceList()
-asd = preference.get_typed_attr(DataInputList.T13D)
+PreferenceListDeclaration = {
+    "DataInputList.T13D": T13DPreference
+}
+
+
+class PreferenceList(dict):
+
+    @typing.overload
+    def __getitem__(self, name: Literal[DataInputList.T13D]) -> T13DPreference: ...
+
+    def __getitem__(self, name):
+        return super().__getitem__(name)
+
+    def __init__(self):
+        super().__init__()
+        self[DataInputList.T13D]: T13DPreference = T13DPreference()
+
+
+PreferenceList()[DataInputList.T13D]
