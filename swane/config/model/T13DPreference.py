@@ -1,10 +1,10 @@
-from enum import Enum
-
-from swane.config.model import PreferenceEntry
+from swane.config.model.PreferenceEntry import PreferenceEntry
+from swane.config.model.BoolPreferenceEntry import BoolPreferenceEntry
 from swane.config.model.EnumPreference import WORKFLOW_TYPES
+from swane.utils.DataInputList import DataInputList
 
 
-class T13DPreference():
+class T13DPreference:
     
     wf_type: PreferenceEntry = PreferenceEntry(
         input_type=InputTypes.ENUM,
@@ -13,8 +13,7 @@ class T13DPreference():
         value_enum=WORKFLOW_TYPES,
         default=WORKFLOW_TYPES.STRUCTURAL,
     )
-    bet_bias_correction = PreferenceEntry(
-        input_type=InputTypes.BOOLEAN,
+    bet_bias_correction = BoolPreferenceEntry(
         label="Bias reduction for skull removal",
         tooltip="Increase time with better results",
         default='false',
@@ -26,15 +25,13 @@ class T13DPreference():
         tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
         range=[0, 1],
     )
-    freesurfer = PreferenceEntry(
-        input_type=InputTypes.BOOLEAN,
+    freesurfer = BoolPreferenceEntry(
         label="FreeSurfer analysis",
         default='true',
         dependency='is_freesurfer',
         dependency_fail_tooltip="Freesurfer not detected",
     )
-    hippo_amyg_labels = PreferenceEntry(
-        input_type=InputTypes.BOOLEAN,
+    hippo_amyg_labels = BoolPreferenceEntry(
         label="FreeSurfer hippocampal and amygdala subfields",
         default='false',
         dependency='is_freesurfer_matlab',
@@ -42,8 +39,7 @@ class T13DPreference():
         pref_requirement={DataInputList.T13D: [('freesurfer', True)]},
         pref_requirement_fail_tooltip="Requires Freesurfer analysis",
     )
-    flat1 = PreferenceEntry(
-        input_type=InputTypes.BOOLEAN,
+    flat1 = BoolPreferenceEntry(
         label="FLAT1 analysis",
         default='true',
         input_requirement=[DataInputList.FLAIR3D],

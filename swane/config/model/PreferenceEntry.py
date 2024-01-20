@@ -1,8 +1,9 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from enum import Enum
 
+
 class PreferenceEntry(ABC):
-    value = None
+    _value = None
     label = ""
     default = None
     tooltip = ""
@@ -47,6 +48,17 @@ class PreferenceEntry(ABC):
                 return isinstance(value, Enum)
             return type(value) is self.types[key]
         return True
-    
-    def set_value(self, value: object):
-        raise Exception
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value: object):
+        raise Exception("Not implemented")
+
+    def value_2_str(self) -> str:
+        return str(self.value)
+
+    def str_2_value(self, value: str):
+        raise Exception("Not implemented")
