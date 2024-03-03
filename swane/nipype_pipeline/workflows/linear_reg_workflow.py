@@ -73,8 +73,9 @@ def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_di
 
     # NODE 3: Scalp removal
     bet = Node(BET(), '%s_BET' % name)
-    bet.inputs.frac = config.getfloat_safe('bet_thr')
-    if config.getboolean_safe('bet_bias_correction'):
+    if config is not None:
+        bet.inputs.frac = config.getfloat_safe('bet_thr')
+    if config is not None and config.getboolean_safe('bet_bias_correction'):
         bet.inputs.reduce_bias = True
     else:
         bet.inputs.robust = True
