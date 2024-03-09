@@ -15,7 +15,7 @@ source "$HOME/$venv_name/bin/activate"
 # Deactivate the swane_venv
 source "$HOME/$venv_name/bin/deactivate"
 
-# Crea uno script per attivare l'ambiente virtuale e eseguire il comando python -m swane
+# Create a script to activate the virtual env and execute the command python -m swane
 echo "#!/bin/bash" > run_swane.sh
 echo "source $HOME/$venv_name/bin/activate" >> run_swane.sh
 echo "${python_version} -m swane" >> run_swane.sh
