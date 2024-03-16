@@ -37,14 +37,14 @@ user_profile_validate() {
 	# Get user profile path
 	profile_file=$(user_profile_get)
 
-	if profile_file == ""; then
+	if [ -z "$profile_file" ]; then
 		echo "User Profile not found. Cannot check the FSL/FREESURFER configuration"
-	else:
+	else
 		# Check the profile file for the FSL and FreeSurfer configuration
 		fsl_row=$(grep -n "^export $fsl=" "$profile_file" | cut -d: -f1)
 		freesurfer_row=$(grep -n "^export $freesurfer=" "$profile_file" | cut -d: -f1)
 
-		# Check thhe configuration order
+		# Check the configuration order
 		if [ -n "$fsl_row" ] && [ -n "$freesurfer_row" ]; then
 		    if [ "$fsl_row" -lt "$freesurfer_row" ]; then
 		        echo "$fsl configuration must be placed AFTER $freesurfer configuration"
@@ -57,15 +57,17 @@ user_profile_validate() {
 		    echo "$freesurfer has been found, but $fsl is missing."
 		else
 		    echo "$freesurfer and $fsl are missing."
+		fi
 	fi
 }
 
 
 # Create a swane_env virtual environment dedicated to SWANe using the python3 interpreter
 cd $HOME
-venv_name = "swane_venv"
-python_version = "python3"
-${python_version} -m venv "$venv_name"
+venv_name="swane_venv"
+python_version="python3"
+
+"${python_version}" -m venv "$venv_name"
 
 # Activate the swane_venv
 source "$HOME/$venv_name/bin/activate"
@@ -74,7 +76,7 @@ source "$HOME/$venv_name/bin/activate"
 "${python_version}" -m pip install swane
 
 # Deactivate the swane_venv
-source "$HOME/$venv_name/bin/deactivate"
+deactivate
 
 # Create a script to activate the virtual env and execute the command python -m swane
 echo "#!/bin/bash" > run_swane.sh
