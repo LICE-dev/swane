@@ -1,64 +1,48 @@
 #!/bin/bash
 
-# Check the user profile configuration
-user_profile_check() {
-    if [[ -f $1 ]]; then
-    	echo 0
-    else
-    	echo 1
-    fi
-}
-
-# Common user configuration paths
-file_bash="$HOME/.bashrc"
-file_bash_profile="$HOME/.bash_profile"
-file_zsh="$HOME/.zshrc"
-file_profile="$HOME/.profile"
-
-# Get the user profile configuration
-user_profile_get() {
-    if user_profile_check "$file_bash"; then
-    	echo "$file_bash"
-    elif user_profile_check "$file_bash_profile"; then
-    	echo "$file_bash_profile"
-    elif user_profile_check "$file_zsh"; then
-    	echo "$file_zsh"
-	elif user_profile_check "$file_profile"; then
-		echo "$file_profile"
-	else:
-		echo ""
-	fi
-}
-
+# Validate the user profile configuration
 user_profile_validate() {
-	fsl="FSL"
-	freesurfer="FREESURFER_HOME"
+    fsl="FSL"
+    freesurfer="FREESURFER_HOME"
 
-	# Get user profile path
-	profile_file=$(user_profile_get)
+    # Array dei file di profilo da controllare
+    profile_files=("$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.zshrc" "$HOME/.profile")
 
-	if [ -z "$profile_file" ]; then
-		echo "User Profile not found. Cannot check the FSL/FREESURFER configuration"
-	else
-		# Check the profile file for the FSL and FreeSurfer configuration
-		fsl_row=$(grep -n "^export $fsl=" "$profile_file" | cut -d: -f1)
-		freesurfer_row=$(grep -n "^export $freesurfer=" "$profile_file" | cut -d: -f1)
+    # Variabile per tenere traccia se un file è stato trovato
+    files_found=false
 
-		# Check the configuration order
-		if [ -n "$fsl_row" ] && [ -n "$freesurfer_row" ]; then
-		    if [ "$fsl_row" -lt "$freesurfer_row" ]; then
-		        echo "$fsl configuration must be placed AFTER $freesurfer configuration"
-		    else
-		        echo "$freesurfer and $fsl are configured correctly"
-		    fi
-		elif [ -n "$fsl_row" ]; then
-		    echo "$fsl has been found, but $freesurfer is missing."
-		elif [ -n "$freesurfer_row" ]; then
-		    echo "$freesurfer has been found, but $fsl is missing."
-		else
-		    echo "$freesurfer and $fsl are missing."
-		fi
-	fi
+    # Itera su ciascun file di profilo
+    for profile_file in "${profile_files[@]}"; do
+        if [ -f "$profile_file" ]; then
+            # Un file di profilo è stato trovato
+            files_found=true
+            echo "Checking $profile_file..."
+
+            # Check the profile file for the FSL and FreeSurfer configuration
+            fsl_row=$(grep -n "^export $fsl=" "$profile_file" | cut -d: -f1)
+            freesurfer_row=$(grep -n "^export $freesurfer=" "$profile_file" | cut -d: -f1)
+
+            # Check the configuration order
+            if [ -n "$fsl_row" ] && [ -n "$freesurfer_row" ]; then
+                if [ "$fsl_row" -lt "$freesurfer_row" ]; then
+                    echo "$fsl configuration must be placed AFTER $freesurfer configuration in $profile_file"
+                else
+                    echo "$freesurfer and $fsl are configured correctly in $profile_file"
+                fi
+            elif [ -n "$fsl_row" ]; then
+                echo "$fsl has been found in $profile_file, but $freesurfer is missing."
+            elif [ -n "$freesurfer_row" ]; then
+                echo "$freesurfer has been found in $profile_file, but $fsl is missing."
+            else
+                echo "$freesurfer and $fsl are missing in $profile_file."
+            fi
+            echo ""
+        fi
+    done
+
+    if [ "$files_found" = false ]; then
+        echo "User Profile files not found. Cannot check the FSL/FREESURFER configuration"
+    fi
 }
 
 
