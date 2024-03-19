@@ -50,6 +50,7 @@ user_profile_validate() {
     		echo "Wrong FSL/FREESURFER configuration. Please read SWANe Wiki (https://github.com/LICE-dev/swane/wiki) to configure your dependencies"
     	else
     		echo "FSL/FREESURFER configured correctly!"
+    	fi
     fi
 }
 
