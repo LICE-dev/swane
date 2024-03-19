@@ -10,6 +10,7 @@ user_profile_validate() {
 
     # Variabile per tenere traccia se un file è stato trovato
     files_found=false
+    configuration_found=false
 
     # Itera su ciascun file di profilo
     for profile_file in "${profile_files[@]}"; do
@@ -27,6 +28,7 @@ user_profile_validate() {
                 if [ "$fsl_row" -lt "$freesurfer_row" ]; then
                     echo "$fsl configuration must be placed AFTER $freesurfer configuration in $profile_file"
                 else
+                	configuration_found=true
                     echo "$freesurfer and $fsl are configured correctly in $profile_file"
                 fi
             elif [ -n "$fsl_row" ]; then
@@ -41,7 +43,13 @@ user_profile_validate() {
     done
 
     if [ "$files_found" = false ]; then
-        echo "User Profile files not found. Cannot check the FSL/FREESURFER configuration"
+        echo "User Profile files not found. Cannot check the FSL/FREESURFER configuration. Please read SWANe Wiki (https://github.com/LICE-dev/swane/wiki) to configure your dependencies"
+    else
+    	echo "User Profile found!"
+    	if [ "$configuration_found" = false ]; then
+    		echo "Wrong FSL/FREESURFER configuration. Please read SWANe Wiki (https://github.com/LICE-dev/swane/wiki) to configure your dependencies"
+    	else
+    		echo "FSL/FREESURFER configured correctly!"
     fi
 }
 
