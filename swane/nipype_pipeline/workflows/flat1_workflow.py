@@ -1,12 +1,11 @@
 import swane_supplement
 
-from nipype.interfaces.fsl import (ApplyWarp, ApplyMask, BinaryMaths, FAST, ImageStats, )
+from nipype.interfaces.fsl import (ApplyWarp, ApplyMask, BinaryMaths, FAST, ImageStats, SpatialFilter)
 from nipype.pipeline.engine import Node
 
 from swane.nipype_pipeline.nodes.utils import getn
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
-from swane.nipype_pipeline.nodes.CustomDilateImage import CustomDilateImage
 from swane.nipype_pipeline.nodes.FLAT1OutliersMask import FLAT1OutliersMask
 
 from nipype.interfaces.utility import IdentityInterface
@@ -172,9 +171,9 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     workflow.connect(wm_mean, "out_stat", binary_flair, "seg_val_min")
 
     # NODE 14: Junction map generation
-    convolution_flair = Node(CustomDilateImage(), name="%s_convolution_flair" % name)
+    convolution_flair = Node(SpatialFilter(), name="%s_convolution_flair" % name)
     convolution_flair.long_name = "junction map generation"
-    convolution_flair.inputs.args = "-fmean"
+    convolution_flair.inputs.operation = "mean"
     convolution_flair.inputs.kernel_shape = "boxv"
     convolution_flair.inputs.kernel_size = 5
     convolution_flair.inputs.out_file = "convolution_flair.nii.gz"
@@ -224,9 +223,9 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     workflow.connect(cerebellum_mean, "out_stat", normalised_gm_mask, "operand_value")
 
     # NODE 19: Extension map generation
-    smoothed_image_extension = Node(CustomDilateImage(), name="%s_smoothed_image_extension" % name)
+    smoothed_image_extension = Node(SpatialFilter(), name="%s_smoothed_image_extension" % name)
     smoothed_image_extension.long_name = "extension map generation"
-    smoothed_image_extension.inputs.args = "-fmean"
+    smoothed_image_extension.inputs.operation = "mean"
     smoothed_image_extension.inputs.kernel_shape = "boxv"
     smoothed_image_extension.inputs.kernel_size = 5
     smoothed_image_extension.inputs.out_file = "smoothed_image_extension.nii.gz"
