@@ -74,7 +74,7 @@ class MainWorkflow(CustomWorkflow):
         # Check for Tractography request
         is_tractography = subject_config.getboolean_safe(DIL.DTI, 'tractography')
         # CPU cores and memory management
-        self.is_resource_monitor = global_config.getboolean_safe(GlobalPrefCategoryList.PERFORMANCE, 'resourceMonitor')
+        self.is_resource_monitor = global_config.getboolean_safe(GlobalPrefCategoryList.PERFORMANCE, 'resource_monitor')
         self.max_cpu = global_config.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_subj_cu')
         if self.max_cpu < 1:
             self.max_cpu = cpu_count()
