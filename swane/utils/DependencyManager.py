@@ -285,8 +285,3 @@ class DependencyManager:
     @staticmethod
     def is_cuda():
         return len(GPUtil.getGPUs()) > 0
-        # try:
-        #     output = subprocess.run("nvidia-smi", shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
-        #     return "CUDA Version" in output
-        # except:
-        #     return False
