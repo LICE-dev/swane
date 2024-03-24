@@ -351,7 +351,7 @@ GLOBAL_PREFERENCES[category]['max_subj_cu'] = PreferenceEntry(
     default=str(suggested_max_cpu),
     range=[-1, 30],
 )
-GLOBAL_PREFERENCES[category]['resourceMonitor'] = PreferenceEntry(
+GLOBAL_PREFERENCES[category]['resource_monitor'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Enable resource monitor",
     default='false',
