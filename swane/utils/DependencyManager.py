@@ -7,6 +7,7 @@ from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 import subprocess
 from enum import Enum, auto
+import GPUtil
 
 
 class DependenceStatus(Enum):
@@ -283,8 +284,9 @@ class DependencyManager:
 
     @staticmethod
     def is_cuda():
-        try:
-            output = subprocess.run("nvidia-smi", shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
-            return "CUDA Version" in output
-        except:
-            return False
+        return len(GPUtil.getGPUs()) > 0
+        # try:
+        #     output = subprocess.run("nvidia-smi", shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
+        #     return "CUDA Version" in output
+        # except:
+        #     return False
