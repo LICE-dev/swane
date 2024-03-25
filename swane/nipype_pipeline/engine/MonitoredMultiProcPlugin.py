@@ -26,7 +26,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         if "queue" in plugin_args:
             self.queue = plugin_args["queue"]
 
-        # GPU found on syste
+        # GPU found on system
         self.n_gpus_visible = MonitoredMultiProcPlugin.gpu_count()
         # proc per GPU set by user
         self.n_gpu_proc = plugin_args.get('n_gpu_proc', 1)
