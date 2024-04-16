@@ -20,7 +20,7 @@ class SegmentHAInputSpec(CommandLineInputSpec):
         desc="path to subjects directory",
         genfile=True,
     )
-    num_threads = traits.Int(argstr="")
+    num_cpu = traits.Int(argstr="")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -64,10 +64,10 @@ class SegmentHA(CommandLine):
 
         """
 
-        if isdefined(self.inputs.num_threads):
-            skip = ["num_threads"]
-            self.n_procs = self.inputs.num_threads
-            self.inputs.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = "%d" % self.inputs.num_threads
+        if isdefined(self.inputs.num_cpu):
+            skip = ["num_cpu"]
+            # self.n_procs = self.inputs.num_threads
+            self.inputs.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = "%d" % self.inputs.num_cpu
 
         parse = super(SegmentHA, self)._parse_inputs(skip)
 

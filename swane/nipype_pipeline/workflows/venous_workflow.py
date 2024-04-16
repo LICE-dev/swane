@@ -1,16 +1,15 @@
 from nipype.interfaces.fsl import (BET, FLIRT, Split, ApplyMask, ImageStats, ImageMaths, ApplyXFM)
 from nipype.interfaces.utility import Merge
 from nipype.pipeline.engine import Node
-
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.VenousCheck import VenousCheck
-
 from nipype.interfaces.utility import IdentityInterface
+from configparser import SectionProxy
 
 
-def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_dir: str = "/") -> CustomWorkflow:
+def venous_workflow(name: str, venous_dir: str, config: SectionProxy, venous2_dir: str = None, base_dir: str = "/") -> CustomWorkflow:
     """
     Analysis of phase contrasts images (in single or two series) to obtain in skull veins
     in reference space, scaled in 0-100 value.
@@ -21,6 +20,8 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
         The workflow name.
     venous_dir : path
         The directory path of the venous phase contrast DICOM files.
+    config: SectionProxy
+        workflow settings.
     venous2_dir : path
         If veins phase is divided from anatomic phase, use this param to load the second DICOM files directory.
     base_dir : str, optional
@@ -67,13 +68,14 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
     # NODE 4: Detect the venous phase from the anatomic phase
     veins_check = Node(VenousCheck(), name='veins_check')
-    veins_check.long_name = "angiographic phase detection"
-
-    # If the phases are in the same sequence
+    veins_check.long_name = "angiographic volume detection"
+    vein_detection_mode = config.getenum_safe("vein_detection_mode")
+    veins_check.inputs.detection_mode = vein_detection_mode
+        # If the phases are in the same sequence
     if venous2_dir is None:
         # NODE 3a: Divide the two phases from the phase contrast
         veins_split = Node(Split(), name='veins_split')
-        veins_split.long_name = "phase splitting"
+        veins_split.long_name = "volumes splitting"
         veins_split.inputs.dimension = 't'
         workflow.connect(veins_reOrient, "out_file", veins_split, "in_file")
 
@@ -91,7 +93,7 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
         # NODE 3b: Merge the two phases
         veins_merge = Node(Merge(2), name="veins_merge")
-        veins_merge.long_name = "phase merging"
+        veins_merge.long_name = "volumes merging"
         workflow.connect(veins_reOrient, "out_file", veins_merge, "in1")
         workflow.connect(veins2_reOrient, "out_file", veins_merge, "in2")
 
@@ -99,10 +101,10 @@ def venous_workflow(name: str, venous_dir: str, venous2_dir: str = None, base_di
 
     # NODE 5: Scalp removal and in skull structures segmentation
     bet = Node(BET(), name='veins_bet')
-    bet.inputs.frac = 0.4
     bet.inputs.mask = True
     bet.inputs.threshold = True
     bet.inputs.surfaces = True
+    bet.inputs.frac = config.getfloat_safe('bet_thr')
     workflow.connect(veins_check, "out_file_anat", bet, "in_file")
 
     # NODE 6: Linear registration of anatomic phase to reference space

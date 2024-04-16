@@ -1,20 +1,19 @@
 import os
 import glob
-
-from nipype import Node, IdentityInterface, MapNode, JoinNode, Merge, Rename
+from nipype import Node, IdentityInterface, MapNode, JoinNode, Merge
 from nipype.interfaces.fsl import ApplyWarp, ImageMaths
-
+from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
 from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
-from swane.utils.ConfigManager import ConfigManager
+from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
 
 SIDES = ["lh", "rh"]
 
 
-def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> CustomWorkflow:
+def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
 
@@ -22,13 +21,15 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
     ----------
     name : str
         The workflow and tract name.
-    threads : int
-        The number of parallel threads to use for the analysis.
+    config: SectionProxy
+        The subject workflow preferences.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
     Input Node Fields
     ----------
+    mask: path
+        The ref brain mask.
     fsamples : path
         Samples from the distribution of anysotropic volume fraction.
     phsamples : path
@@ -67,11 +68,11 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
     """
 
     # Check if tract is in configuration list
-    if name not in ConfigManager.TRACTS:
+    if name not in TRACTS:
         return None
 
     # Check for existance of xtract data directory and protocol name dicrectory
-    if not os.path.exists(os.path.join(ConfigManager.XTRACT_DATA_DIR, name + "_l")):
+    if not os.path.exists(os.path.join(XTRACT_DATA_DIR, name + "_l")):
         return None
 
     workflow = CustomWorkflow(name='tract_' + name, base_dir=base_dir)
@@ -86,19 +87,26 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
         IdentityInterface(fields=['fdt_paths_rh', 'fdt_paths_lh', 'waytotal_rh', 'waytotal_lh']),
         name='outputnode')
 
+    is_cuda = config.getboolean_safe('cuda')
+    if is_cuda:
+        # if cuda is enabled only 1 process is launched
+        track_threads = 1
+    else:
+        track_threads = config.getint_safe('track_procs')
+
     # NODE 1: Random seed genration for cache preservation
     random_seed = Node(RandomSeedGenerator(), name='random_seed')
-    random_seed.inputs.seeds_n = threads
+    random_seed.inputs.seeds_n = track_threads
     workflow.connect(inputnode, "mask", random_seed, "mask")
 
     try:
-        n_samples = int(ConfigManager.TRACTS[name][2] / threads)
+        n_samples = int(TRACTS[name][2] / track_threads)
     except:
-        n_samples = int(ConfigManager.DEFAULT_N_SAMPLES / threads)
+        n_samples = int(DEFAULT_N_SAMPLES / track_threads)
 
     for side in SIDES:
         # Xtract protocol loading
-        protocol_dir = os.path.join(ConfigManager.XTRACT_DATA_DIR, name + "_" + side[0])
+        protocol_dir = os.path.join(XTRACT_DATA_DIR, name + "_" + side[0])
 
         seed_file = os.path.join(protocol_dir, "seed.nii.gz")
         exclude_file = os.path.join(protocol_dir, "exclude.nii.gz")
@@ -163,6 +171,7 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
         probtrackx.inputs.wayorder = is_wayorder
         probtrackx.inputs.rand_fib = 1
         probtrackx.inputs.sample_random_points = 1
+        probtrackx.inputs.use_gpu = is_cuda
         # TODO argomento --ompl che fa??
         probtrackx.inputs.opd = True
         workflow.connect(inputnode, "fsamples", probtrackx, "fsamples")
@@ -198,6 +207,7 @@ def tractography_workflow(name: str, threads: int, base_dir: str = "/") -> Custo
             probtrackx_inverted.inputs.rand_fib = 1
             probtrackx_inverted.inputs.sample_random_points = 1
             probtrackx_inverted.inputs.opd = True
+            probtrackx_inverted.inputs.use_gpu = is_cuda
             workflow.connect(inputnode, "fsamples", probtrackx_inverted, "fsamples")
             workflow.connect(inputnode, "mask", probtrackx_inverted, "mask")
             workflow.connect(inputnode, "ref_brain", probtrackx_inverted, "seed_ref")

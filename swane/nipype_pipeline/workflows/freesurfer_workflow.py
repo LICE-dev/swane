@@ -1,20 +1,21 @@
 from nipype.interfaces.freesurfer import ReconAll
 from nipype.interfaces.fsl import BinaryMaths
-
+from multiprocessing import cpu_count
 from nipype.pipeline.engine import Node
-
+from math import trunc
 from swane.nipype_pipeline.nodes.utils import getn
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SegmentHA import SegmentHA
 from swane.nipype_pipeline.nodes.CustomLabel2Vol import CustomLabel2Vol
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
-
+from swane.config.config_enums import CORE_LIMIT
 from nipype.interfaces.utility import IdentityInterface
 
 FS_DIR = "FS"
 
 
-def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "/")  -> CustomWorkflow:
+def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "/", max_cpu: int = 0,
+                        multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP) -> CustomWorkflow:
     """
     Freesurfer cortical reconstruction, white matter ROI, basal ganglia and thalami ROI.
     If needed, segmentation of the hippocampal substructures and the nuclei of the amygdala.
@@ -27,11 +28,13 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
         Enable segmentation of the hippocampal substructures and the nuclei of the amygdala.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of bedpostx. The default is 0.
+    multicore_node_limit: CORE_LIMIT, optional
+        Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
         
     Input Node Fields
     ----------
-    max_node_cpu : int
-        Max number of cpu to use for the workflow.
     ref : path
         T13D reference file.
     subjects_dir : path
@@ -48,7 +51,7 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
         Subject name for Freesurfer (defined as FS_DIR="FS").
     subjects_dir : path
         Directory for Freesurfer analysis.
-    bgtROI : path
+    bgROI : path
         Binary ROI for basal ganglia and thalamus.
     wmROI : path
         Binary ROI for cerebral white matter.
@@ -58,6 +61,8 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
         White/gray matter rh and lh surfaces.
     vol_label_file : path
         Aparc parcellation projected into aseg volume in reference space.
+    vol_label_file_nii : path
+        Aparc parcellation projected into aseg volume in reference space and nifti format.
     lh_hippoAmygLabels : path
         Left side labels from segmentation of the hippocampal substructures and the nuclei of the amygdala.
     rh_hippoAmygLabels : path
@@ -69,57 +74,59 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=['max_node_cpu', 'ref', 'subjects_dir']),
+        IdentityInterface(fields=['ref', 'subjects_dir']),
         name='inputnode')
     
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=['subject_id', 'subjects_dir', 'bgtROI', 'wmROI',
-                                  'pial', 'white', 'vol_label_file', 'vol_label_file_nii', 'lh_hippoAmygLabels',
-                                  'rh_hippoAmygLabels']),
+        IdentityInterface(fields=['subject_id', 'subjects_dir', 'bgROI', 'wmROI', 'pial', 'white', 'vol_label_file',
+                                  'vol_label_file_nii', 'lh_hippoAmygLabels', 'rh_hippoAmygLabels']),
         name='outputnode')
 
-    def check_fov_dim(nifti):
-        import subprocess
-        for x in range(1, 4, 1):
-            cmd = "echo $( echo $(fslval " + nifti + " dim" + str(x) + ") \\* $(fslval " + nifti + " pixdim" + str(x) + ") | bc)"
-            output = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
-            try:
-                fovdim = float(output)
-                if fovdim > 256:
-                    return "-cw256"
-            except:
-                pass
-        return ""
-
     # NODE 1: Freesurfer cortical reconstruction process
-    reconAll = Node(ReconAll(), name='reconAll')
-    reconAll.inputs.subject_id = FS_DIR
-    reconAll.inputs.parallel = True
-    reconAll.inputs.directive = 'all'
-    workflow.add_nodes([reconAll])
-    workflow.connect(inputnode, "max_node_cpu", reconAll, "openmp")
-    workflow.connect(inputnode, "ref", reconAll, "T1_files")
-    workflow.connect(inputnode, ('ref', check_fov_dim), reconAll, 'flags')
-    workflow.connect(inputnode, "subjects_dir", reconAll, "subjects_dir")
+    recon_all = Node(ReconAll(), name='reconAll')
+    recon_all.inputs.subject_id = FS_DIR
+
+    # parallel option split some steps in right and left
+    if max_cpu > 1:
+        recon_all.inputs.parallel = True
+
+    # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
+    if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
+        # no limit
+        recon_all.inputs.openmp = cpu_count()
+    elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
+        # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
+        recon_all.inputs.openmp = max_cpu
+        recon_all.n_procs = recon_all.inputs.openmp
+    else:
+        # for hard cap we use half of max_cpu setting, but at least 1
+        recon_all.inputs.openmp = max(trunc(max_cpu/2), 1)
+        recon_all.n_procs = recon_all.inputs.openmp * 2
+
+    recon_all.inputs.directive = 'all'
+    recon_all.inputs.args = "-no-isrunning"
+    workflow.add_nodes([recon_all])
+    workflow.connect(inputnode, "ref", recon_all, "T1_files")
+    workflow.connect(inputnode, "subjects_dir", recon_all, "subjects_dir")
 
     # NODE 2: Aparcaseg linear transformation in reference space
     aparaseg2Volmgz = Node(CustomLabel2Vol(), name="aparaseg2Volmgz")
     aparaseg2Volmgz.long_name = "label %s to reference space"
     aparaseg2Volmgz.inputs.vol_label_file = "./r-aparc_aseg.mgz"
-    workflow.connect(reconAll, "rawavg", aparaseg2Volmgz, "template_file")
-    workflow.connect([(reconAll, aparaseg2Volmgz, [(('aparc_aseg', getn, 0), 'reg_header')])])
-    workflow.connect([(reconAll, aparaseg2Volmgz, [(('aparc_aseg', getn, 0), 'seg_file')])])
-    workflow.connect(reconAll, "subjects_dir", aparaseg2Volmgz, "subjects_dir")
-    workflow.connect(reconAll, "subject_id", aparaseg2Volmgz, "subject_id")
+    workflow.connect(recon_all, "rawavg", aparaseg2Volmgz, "template_file")
+    workflow.connect([(recon_all, aparaseg2Volmgz, [(('aparc_aseg', getn, 0), 'reg_header')])])
+    workflow.connect([(recon_all, aparaseg2Volmgz, [(('aparc_aseg', getn, 0), 'seg_file')])])
+    workflow.connect(recon_all, "subjects_dir", aparaseg2Volmgz, "subjects_dir")
+    workflow.connect(recon_all, "subject_id", aparaseg2Volmgz, "subject_id")
 
     # NODE 3: Aparcaseg conversion mgz -> nifti
     aparaseg2Volnii = Node(CustomLabel2Vol(), name="aparaseg2Volnii")
     aparaseg2Volnii.long_name = "label Nifti conversion"
     aparaseg2Volnii.inputs.vol_label_file = "r-aparc_aseg.nii.gz"
-    workflow.connect(reconAll, "rawavg", aparaseg2Volnii, "template_file")
-    workflow.connect([(reconAll, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'reg_header')])])
-    workflow.connect([(reconAll, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'seg_file')])])
+    workflow.connect(recon_all, "rawavg", aparaseg2Volnii, "template_file")
+    workflow.connect([(recon_all, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'reg_header')])])
+    workflow.connect([(recon_all, aparaseg2Volnii, [(('aparc_aseg', getn, 0), 'seg_file')])])
     workflow.connect(aparaseg2Volnii, "vol_label_file", outputnode, "vol_label_file_nii")
 
     # NODE 4: Left cerebral white matter binary ROI
@@ -147,45 +154,50 @@ def freesurfer_workflow(name: str, is_hippo_amyg_labels: bool, base_dir: str = "
     workflow.connect(rhwmROI, "out_file", wmROI, "operand_file")
 
     # NODE 7: Left basal ganglia and thalamus binary ROI
-    lhbgtROI = Node(ThrROI(), name='lhbgtROI')
-    lhbgtROI.long_name = "Lh BGT ROI"
-    lhbgtROI.inputs.seg_val_min = 10
-    lhbgtROI.inputs.seg_val_max = 13
-    lhbgtROI.inputs.out_file = "lhbgtROI.nii.gz"
-    workflow.connect(aparaseg2Volnii, "vol_label_file", lhbgtROI, "in_file")
+    lhbgROI = Node(ThrROI(), name='lhbgROI')
+    lhbgROI.long_name = "Lh Basal ganglia ROI"
+    lhbgROI.inputs.seg_val_min = 11
+    lhbgROI.inputs.seg_val_max = 13
+    lhbgROI.inputs.out_file = "lhbgROI.nii.gz"
+    workflow.connect(aparaseg2Volnii, "vol_label_file", lhbgROI, "in_file")
 
     # NODE 8: Right basal ganglia and thalamus binary ROI
-    rhbgtROI = Node(ThrROI(), name='rhbgtROI')
-    rhbgtROI.long_name = "Rh BGT ROI"
-    rhbgtROI.inputs.seg_val_min = 49
-    rhbgtROI.inputs.seg_val_max = 52
-    rhbgtROI.inputs.out_file = "rhbgtROI.nii.gz"
-    workflow.connect(aparaseg2Volnii, "vol_label_file", rhbgtROI, "in_file")
+    rhbgROI = Node(ThrROI(), name='rhbgROI')
+    rhbgROI.long_name = "Rh Basal ganglia ROI"
+    rhbgROI.inputs.seg_val_min = 50
+    rhbgROI.inputs.seg_val_max = 52
+    rhbgROI.inputs.out_file = "rhbgROI.nii.gz"
+    workflow.connect(aparaseg2Volnii, "vol_label_file", rhbgROI, "in_file")
 
     # NODE 9: Basal ganglia and thalami binary ROI
-    bgtROI = Node(BinaryMaths(), name='bgtROI')
-    bgtROI.long_name = "BGT ROI"
-    bgtROI.inputs.operation = "add"
-    bgtROI.inputs.out_file = "bgtROI.nii.gz"
-    workflow.connect(lhbgtROI, "out_file", bgtROI, "in_file")
-    workflow.connect(rhbgtROI, "out_file", bgtROI, "operand_file")
+    bgROI = Node(BinaryMaths(), name='bgROI')
+    bgROI.long_name = "Basal ganglia ROI"
+    bgROI.inputs.operation = "add"
+    bgROI.inputs.out_file = "bgROI.nii.gz"
+    workflow.connect(lhbgROI, "out_file", bgROI, "in_file")
+    workflow.connect(rhbgROI, "out_file", bgROI, "operand_file")
 
-    workflow.connect(bgtROI, "out_file", outputnode, "bgtROI")
+    workflow.connect(bgROI, "out_file", outputnode, "bgROI")
     # TODO wmROI work in progress - Not used for now. Maybe useful for SUPERFLAIR
     workflow.connect(wmROI, "out_file", outputnode, "wmROI")
-    workflow.connect(reconAll, "pial", outputnode, "pial")
-    workflow.connect(reconAll, "white", outputnode, "white")
-    workflow.connect(reconAll, "subject_id", outputnode, "subject_id")
-    workflow.connect(reconAll, "subjects_dir", outputnode, "subjects_dir")
+    workflow.connect(recon_all, "pial", outputnode, "pial")
+    workflow.connect(recon_all, "white", outputnode, "white")
+    workflow.connect(recon_all, "subject_id", outputnode, "subject_id")
+    workflow.connect(recon_all, "subjects_dir", outputnode, "subjects_dir")
     workflow.connect(aparaseg2Volmgz, "vol_label_file", outputnode, "vol_label_file")
 
     if is_hippo_amyg_labels:
         # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
         segmentHA = Node(SegmentHA(), name="segmentHA")
-        workflow.connect(reconAll, "subjects_dir", segmentHA, "subjects_dir")
-        workflow.connect(reconAll, "subject_id", segmentHA, "subject_id")
-        workflow.connect(inputnode, "max_node_cpu", segmentHA, "num_threads")
-
+        if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
+            segmentHA.inputs.num_cpu = cpu_count()
+        elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
+            segmentHA.inputs.num_cpu = max_cpu
+        else:
+            segmentHA.inputs.num_cpu = max_cpu
+            segmentHA.n_procs = segmentHA.inputs.num_cpu
+        workflow.connect(recon_all, "subjects_dir", segmentHA, "subjects_dir")
+        workflow.connect(recon_all, "subject_id", segmentHA, "subject_id")
         workflow.connect(segmentHA, "lh_hippoAmygLabels", outputnode, "lh_hippoAmygLabels")
         workflow.connect(segmentHA, "rh_hippoAmygLabels", outputnode, "rh_hippoAmygLabels")
 

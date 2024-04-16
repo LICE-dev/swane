@@ -16,7 +16,7 @@ FIX_LINE = "PATH=$(echo \"$PATH\" | sed -e \"s/:$( echo \"$FSL_DIR\" | sed 's/\/
 APP_EXEC_COMMAND = "python3 -m " + __name__.split(".")[0]
 
 
-def check_config_file(config_file):
+def check_config_file(config_file: str):
     try:
         with open(config_file) as file:
             file_content = file.read()
@@ -50,9 +50,8 @@ def runtime_fix():
     subprocess.run(cmd, shell=True)
 
 
-def config_file_fix(config_file):
+def config_file_fix(config_file: str):
     with open(config_file, "a") as file_object:
-        # Append 'hello' at the end of file
         file_object.write("\n"+FIX_LINE)
 
 
@@ -63,19 +62,26 @@ def copy_fix_to_clipboard():
     subprocess.run("pbcopy", shell=True, text=True, input=FIX_LINE)
 
 
-def fsl_conflict_check():
-    # Handle freesurfer<=7.3.2 overwriting system python executable if fsl>=6.0.6 is installed
+def fsl_conflict_check() -> bool:
+    """
+        Handle freesurfer<=7.3.2 overwriting system python executable if fsl>=6.0.6 is installed
+        In that case propose a fix
+
+    Returns
+    -------
+        True if system Python is unaffected, False if it was hidden
+
+    """
+
     if FSL_CONFLICT_PATH not in sys.executable:
         return True
 
-    # This functions uses fsl built-in qt library to show a warning
+    # This function uses fsl built-in qt library to show a warning: ignore IDE import error!
     from PyQt5.QtWidgets import QApplication, QLabel, QMessageBox
-    from PyQt5.QtGui import QIcon, QPixmap
 
     app = QApplication([])
     app.setApplicationDisplayName(strings.APPNAME)
 
-    # todo Add wiki link with example images
     config_file = get_config_file()
     error_string = strings.fsl_python_error % config_file
 

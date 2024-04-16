@@ -4,14 +4,15 @@ from swane.utils.fsl_conflict_handler import fsl_conflict_check
 def main():
     import sys
     import os
-    import psutil
     from swane import strings
     import swane_supplement
     from PySide6.QtWidgets import QApplication, QMessageBox
     from PySide6.QtGui import QIcon, QPixmap
     from swane.ui.MainWindow import MainWindow
-    from swane.utils.ConfigManager import ConfigManager
+    from swane.config.ConfigManager import ConfigManager
     from swane import EXIT_CODE_REBOOT
+    from swane.config.config_enums import GlobalPrefCategoryList
+    from swane.utils.last_pid_is_running import last_pid_is_running
 
     # Exit Code definition for automatic reboot
     current_exit_code = EXIT_CODE_REBOOT
@@ -33,18 +34,16 @@ def main():
         global_config = ConfigManager()
 
         # Guard to prevent multiple SWANe instances launch
-        last_pid = global_config.getint('MAIN', 'lastPID')
-        if last_pid != os.getpid():
-            try:
-                psutil.Process(last_pid)
-                msg_box = QMessageBox()
-                msg_box.setText(strings.main_multiple_instances_error)
-                msg_box.exec()
-                break
+        last_pid = global_config.get_last_pid()
 
-            except (psutil.NoSuchProcess, ValueError):
-                global_config['MAIN']['lastPID'] = str(os.getpid())
-                global_config.save()
+        if last_pid_is_running(last_pid):
+            msg_box = QMessageBox()
+            msg_box.setText(strings.main_multiple_instances_error)
+            msg_box.exec()
+            sys.exit(-1)
+        else:
+            global_config[GlobalPrefCategoryList.MAIN]['last_pid'] = str(os.getpid())
+            global_config.save()
 
         # MainWindow in a varariable to prenvent garbage collector deletion (might cause crash)
         widget = MainWindow(global_config)
