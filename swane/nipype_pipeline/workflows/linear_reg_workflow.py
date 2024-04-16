@@ -1,14 +1,14 @@
 from nipype.interfaces.fsl import (BET, FLIRT)
-
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-
+from swane.utils.DataInputList import DataInputList
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface
+from configparser import SectionProxy
 
 
-def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volumetric: bool = True) -> CustomWorkflow:
+def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/", is_volumetric: bool = True) -> CustomWorkflow:
     """
     Transforms input images in a reference space through a linear registration.
 
@@ -18,6 +18,8 @@ def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volum
         The workflow name.
     dicom_dir : path
         The file path of the DICOM files.
+    config: SectionProxy
+        workflow settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
     is_volumetric : bool, optional
@@ -27,8 +29,6 @@ def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volum
     ----------
     reference : path
         The reference image for the registration.
-    frac : float
-        Fractional intensity threshold for bet command.
     output_name : str
         The name for registered file.
     crop : bool
@@ -52,14 +52,13 @@ def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volum
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=['reference', 'frac', 'output_name', 'crop']),
+        IdentityInterface(fields=['reference', 'output_name', 'crop']),
         name='inputnode')
     
     # Output Node
     outputnode = Node(
         IdentityInterface(fields=['registered_file', 'out_matrix_file']),
         name='outputnode')
-
 
     # NODE 1: Conversion dicom -> nifti
     conversion = Node(CustomDcm2niix(), name='%s_conv' % name)
@@ -74,10 +73,14 @@ def linear_reg_workflow(name: str, dicom_dir: str, base_dir: str = "/", is_volum
 
     # NODE 3: Scalp removal
     bet = Node(BET(), '%s_BET' % name)
-    bet.inputs.robust = True
-    bet.inputs.threshold = True
+    if config is not None:
+        bet.inputs.frac = config.getfloat_safe('bet_thr')
+    if config is not None and config.getboolean_safe('bet_bias_correction'):
+        bet.inputs.reduce_bias = True
+    else:
+        bet.inputs.robust = True
+    bet.inputs.mask = True
     workflow.connect(reorient, "out_file", bet, "in_file")
-    workflow.connect(inputnode, "frac", bet, "frac")
 
     # NODE 4: Linear registration to reference space
     flirt_2_ref = Node(FLIRT(), name='%s_2_ref' % name)

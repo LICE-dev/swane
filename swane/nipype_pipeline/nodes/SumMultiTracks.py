@@ -34,10 +34,9 @@ class SumMultiTracks(BaseInterface):
         self.inputs.out_file = self._gen_outfilename()
         waytotal_sum_file = self._gen_waytotal_outfilename()
 
-        steps = len(self.inputs.path_files) - 1
+        steps = len(self.inputs.path_files)
         sum_loop = [None] * steps
         sum_res = [None] * steps
-
         waytotal_sum = 0
 
         for x in range(steps):
@@ -51,7 +50,7 @@ class SumMultiTracks(BaseInterface):
             else:
                 sum_loop[x].inputs.in_file = sum_res[(x - 1)].outputs.out_file
 
-            sum_loop[x].inputs.operand_file = self.inputs.path_files[(x + 1)]
+            sum_loop[x].inputs.operand_file = self.inputs.path_files[x]
 
             if x == (steps - 1):
                 sum_loop[x].inputs.out_file = self.inputs.out_file

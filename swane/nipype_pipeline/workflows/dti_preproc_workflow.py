@@ -1,16 +1,19 @@
 from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT)
 from nipype.pipeline.engine import Node
-import os
-
+from swane.config.config_enums import CORE_LIMIT
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CustomBEDPOSTX5 import CustomBEDPOSTX5
-
+from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
+from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
+from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
+from multiprocessing import cpu_count
 
 
-def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir: str = "/", is_tractography: bool = False) -> CustomWorkflow:
+def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir: str = None, base_dir: str = "/",
+                         max_cpu: int = 0, multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP) -> CustomWorkflow:
     """
     DTI preprocessing workflow with eddy current and motion artifact correction.
     Diffusion metrics calculation and, if needed, bayesian estimation of
@@ -26,8 +29,12 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
         The file path of the MNI template. The default is None.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
-    is_tractography : bool, optional
-        Enable bayesian estimation of diffusion parameters. The default is False.
+    config: SectionProxy
+        workflow settings.
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of bedpostx. The default is 0.
+    multicore_node_limit: CORE_LIMIT, optional
+        Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
         
     Input Node Fields
     ----------
@@ -74,11 +81,14 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
                                   ]),
         name='outputnode')
 
+    is_cuda = config.getboolean_safe('cuda')
+
     # NODE 1: Conversion dicom -> nifti
     conv = Node(CustomDcm2niix(), name='dti_conv')
     conv.inputs.source_dir = dti_dir
     conv.inputs.out_filename = "dti"
     conv.inputs.bids_format = False
+    conv.inputs.request_dti = True
 
     # NODE 1b: Orienting in radiological convention
     reorient = Node(ForceOrient(), name='dti_reOrient')
@@ -100,16 +110,44 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
     bet.inputs.mask = True
     workflow.connect(nodif, "roi_file", bet, "in_file")
 
-    # NODE 4: Eddy current and motion artifact correction
-    eddy = Node(EddyCorrect(), name='dti_eddy')
-    eddy.inputs.ref_num = 0
-    eddy.inputs.out_file = "data.nii.gz"
-    workflow.connect(reorient, "out_file", eddy, "in_file")
+    old_eddy_correct = config.getboolean_safe("old_eddy_correct")
+    if old_eddy_correct:
+        # NODE 4a: Generate Eddy files
+        eddy = Node(EddyCorrect(), name='dti_eddy')
+        eddy.inputs.ref_num = 0
+        eddy.inputs.out_file = "data.nii.gz"
+        workflow.connect(reorient, "out_file", eddy, "in_file")
+        eddy_output_name = "eddy_corrected"
+    else:
+        # NODE 4a: Generate Eddy files
+        eddy_files = Node(GenEddyFiles(), name="dti_eddy_files")
+        workflow.connect(conv, "bvals", eddy_files, "bval")
+
+        # NODE 4: Eddy current and motion artifact correction
+        eddy = Node(CustomEddy(), name="dti_eddy")
+        eddy.inputs.use_gpu = is_cuda
+        if not is_cuda:
+            if multicore_node_limit == CORE_LIMIT.HARD_CAP:
+                eddy_cpu = max_cpu
+                eddy.inputs.num_threads = max_cpu
+            elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
+                eddy_cpu = max_cpu
+            else:
+                eddy_cpu = cpu_count()
+            eddy.inputs.environ = {'OMP_NUM_THREADS': str(eddy_cpu), 'FSL_SKIP_GLOBAL': '1'}
+
+        workflow.connect(reorient, "out_file", eddy, "in_file")
+        workflow.connect(conv, "bvals", eddy, "in_bval")
+        workflow.connect(conv, "bvecs", eddy, "in_bvec")
+        workflow.connect(eddy_files, "acqp", eddy, "in_acqp")
+        workflow.connect(eddy_files, "index", eddy, "in_index")
+        workflow.connect(bet, "mask_file", eddy, "in_mask")
+        eddy_output_name = "out_corrected"
 
     # NODE 5: DTI metrics calculation
     dtifit = Node(DTIFit(), name='dti_dtifit')
     dtifit.long_name = "DTI metrics calculation"
-    workflow.connect(eddy, "eddy_corrected", dtifit, "dwi")
+    workflow.connect(eddy, eddy_output_name, dtifit, "dwi")
     workflow.connect(bet, "mask_file", dtifit, "mask")
     workflow.connect(conv, "bvecs", dtifit, "bvecs")
     workflow.connect(conv, "bvals", dtifit, "bvals")
@@ -128,6 +166,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
 
     # NODE 7: FA linear transformation in reference space
     fa_2_ref_flirt = Node(ApplyXFM(), name='FA2ref_FLIRT')
+    fa_2_ref_flirt.long_name = "FA %s in reference space"
     fa_2_ref_flirt.inputs.out_file = "r-FA.nii.gz"
     fa_2_ref_flirt.inputs.interp = "trilinear"
     workflow.connect(dtifit, "FA", fa_2_ref_flirt, "in_file")
@@ -135,6 +174,8 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
     workflow.connect(inputnode, "ref_brain", fa_2_ref_flirt, "reference")
     
     workflow.connect(fa_2_ref_flirt, 'out_file', outputnode, 'FA')
+
+    is_tractography = config.getboolean_safe('tractography')
 
     if is_tractography:
         # NODE 1: Linear registration
@@ -165,7 +206,16 @@ def dti_preproc_workflow(name: str, dti_dir: str, mni_dir: str = None, base_dir:
         bedpostx.inputs.sample_every = 25
         bedpostx.inputs.n_jumps = 1250
         bedpostx.inputs.burn_in = 1000
-        workflow.connect(eddy, "eddy_corrected", bedpostx, "dwi")
+        bedpostx.inputs.use_gpu = is_cuda
+        if not is_cuda:
+            # if cuda is enabled only 1 process is launched
+            if multicore_node_limit == CORE_LIMIT.SOFT_CAP:
+                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
+            elif multicore_node_limit == CORE_LIMIT.HARD_CAP:
+                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
+                bedpostx.inputs.num_threads = max_cpu
+
+        workflow.connect(eddy, eddy_output_name, bedpostx, "dwi")
         workflow.connect(bet, "mask_file", bedpostx, "mask")
         workflow.connect(conv, "bvecs", bedpostx, "bvecs")
         workflow.connect(conv, "bvals", bedpostx, "bvals")

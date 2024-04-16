@@ -1,6 +1,7 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 from nipype.interfaces.base import (traits, BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File, Bunch, isdefined)
+from swane.config.config_enums import BLOCK_DESIGN
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -9,7 +10,7 @@ class FMRIGenSpecInputSpec(BaseInterfaceInputSpec):
     nvols = traits.Int(mandatory=True, desc="Number of EPI runs")
     task_duration = traits.Int(mandatory=True, desc="Task duration")
     rest_duration = traits.Int(mandatory=True, desc="Rest duration")
-    design_block = traits.Enum(0, 1, usedefault=True)
+    block_design = traits.Enum(BLOCK_DESIGN, usedefault=True)
     task_a_name = traits.String(mandatory=False, desc="Task A name")
     task_b_name = traits.String(mandatory=False, desc="Task A name")
     hpcutoff = traits.Int(mandatory=False, desc="Cutoff for highpass filtering")
@@ -41,7 +42,7 @@ class FMRIGenSpec(BaseInterface):
 
         if isdefined(self.inputs.hpcutoff):
             self.hpcutoff = self.inputs.hpcutoff
-        elif self.inputs.design_block == 0:
+        elif self.inputs.block_design == BLOCK_DESIGN.RARA:
             self.hpcutoff = self.inputs.task_duration + self.inputs.rest_duration
         else:
             self.hpcutoff = (self.inputs.task_duration + self.inputs.rest_duration) *2
@@ -55,7 +56,7 @@ class FMRIGenSpec(BaseInterface):
         if not isdefined(self.inputs.task_b_name):
             self.inputs.task_b_name = "TaskB"
 
-        if self.inputs.design_block == 0:
+        if self.inputs.block_design == BLOCK_DESIGN.RARA:
             self.contrasts = [['%s_versus_Rest' % self.inputs.task_a_name, 'T', [self.inputs.task_a_name], [1]]]
 
             self.evs_run = Bunch(
