@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Deactivating running virtual env, if any
-deactivate
+
 
 cd $HOME
 venv_name="swane_venv"
@@ -10,7 +10,7 @@ python_version="python3"
 # Checking the FSL/FREESURFER user profile configuration
 echo "Checking User Profile configuration..."
 python_path=$(which $python_version)
-if [[ $python_path = *^fsl^* ]]; then
+if [[ $python_path = *"fsl"* ]]; then
     echo "Wrong FSL and FREESURFER configuration in your profile"
     echo "Please fix it before installing SWANe"
     echo "More info on https://github.com/LICE-dev/swane/wiki/04-Dependencies-Guides#freesurferfsl-conflict-with-python"
