@@ -62,6 +62,7 @@ class GlobalPrefCategoryList(Enum):
     MAIN = PrefCategory("main", "Global settings")
     PERFORMANCE = PrefCategory("performance", 'Performance')
     OPTIONAL_SERIES = PrefCategory("optional_series", 'Optional series')
+    MAIL_SETTINGS = PrefCategory("mail_settings", "Mail settings")
 
     def __str__(self):
         return self.value.name

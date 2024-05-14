@@ -395,6 +395,35 @@ for data_input in DataInputList:
             restart=True,
         )
 
+category = GlobalPrefCategoryList.MAIL_SETTINGS
+GLOBAL_PREFERENCES[category] = {}
+GLOBAL_PREFERENCES[category]['address'] = PreferenceEntry(
+    input_type=InputTypes.TEXT,
+    label="Address",
+    default=""
+)
+GLOBAL_PREFERENCES[category]['port'] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Port",
+    default=0,
+    range=[1, 1000]
+)
+GLOBAL_PREFERENCES[category]['username'] = PreferenceEntry(
+    input_type=InputTypes.TEXT,
+    label="Username",
+    default=""
+)
+GLOBAL_PREFERENCES[category]['password'] = PreferenceEntry(
+    input_type=InputTypes.TEXT,
+    label="Password",
+    default=""
+)
+GLOBAL_PREFERENCES[category]['use_tls'] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use TLS",
+    default='false'
+)
+
 DEFAULT_WF = {}
 DEFAULT_WF[WORKFLOW_TYPES.STRUCTURAL] = {
     DataInputList.T13D: {
