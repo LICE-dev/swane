@@ -1,4 +1,5 @@
 import smtplib
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -23,22 +24,34 @@ class MailManager:
         if self.use_tls:
             self.server.starttls()
         self.server.login(self.username, self.password)
-
-    def send_mail(self, from_addr, to_addr, subject, body):
-        """
-        Send an email with the specified subject and body.
-        """
-        message = MIMEMultipart()
-        message['From'] = from_addr
-        message['To'] = to_addr
-        message['Subject'] = subject
-        message.attach(MIMEText(body, 'plain'))
         
-        self.server.send_message(message)
-
     def disconnect(self):
         """
         Disconnect from the SMTP server.
         """
         if self.server:
             self.server.quit()
+
+    def send_mail(self, from_addr, to_addr, subject, body):
+        """
+        Send an email with the specified subject and body.
+        """
+        
+        self.connect()
+        
+        message = MIMEMultipart()
+        message['From'] = from_addr
+        message['To'] = to_addr
+        message['Subject'] = subject
+        message.attach(MIMEText(body, 'html'))
+        
+        self.server.send_message(message)
+        
+        self.disconnect()
+
+    def send_report(self, body):
+        """
+        Send a report for a SWANe workflow based on the user mail configuration
+        """
+        
+        self.send_mail(self.username, self.username, f"SWANe Report - {datetime.now()}", body)

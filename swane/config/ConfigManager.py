@@ -4,6 +4,7 @@ from swane.config.preference_list import *
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
 from swane.config.config_enums import WORKFLOW_TYPES, GlobalPrefCategoryList
+from swane.utils.MailManager import MailManager
 
 
 class ConfigManager(configparser.ConfigParser):
@@ -300,6 +301,23 @@ class ConfigManager(configparser.ConfigParser):
         True if freesurfer analysis is enabled
         """
         return self.getboolean_safe(DataInputList.T13D, 'freesurfer')
+    
+    def get_mail_manager(self) -> MailManager:
+        """
+        Returns
+        -------
+        An initialized MailManager
+        """
+        
+        server_address = self[GlobalPrefCategoryList.MAIL_SETTINGS]["address"]
+        server_port = self.getint_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'port')
+        username = self[GlobalPrefCategoryList.MAIL_SETTINGS]["username"]
+        password = self[GlobalPrefCategoryList.MAIL_SETTINGS]["password"]
+        use_tls = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'use_tls')
+        
+        mail_manager = MailManager(server_address=server_address, server_port=server_port, username=username, password=password, use_tls=use_tls)
+        
+        return mail_manager
 
     def check_dependencies(self, dependency_manager):
         """

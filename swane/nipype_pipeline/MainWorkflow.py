@@ -1,7 +1,9 @@
+from datetime import datetime
 import os
 from multiprocessing import cpu_count
 from os.path import abspath
 
+from swane.utils.MailManager import MailManager
 import swane_supplement
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.SubjectInputStateList import SubjectInputStateList
@@ -83,6 +85,11 @@ class MainWorkflow(CustomWorkflow):
         self.max_gpu = global_config.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_subj_gpu')
         if self.max_gpu < 0:
             self.max_gpu = MonitoredMultiProcPlugin.gpu_count()
+            
+        # Mail manager initialization
+        # TODO - IF mail config is set
+        mail_manager = MailManager()
+        
         try:
             if not dependency_manager.is_cuda():
                 subject_config[DIL.DTI]["cuda"] = "false"
@@ -93,6 +100,7 @@ class MainWorkflow(CustomWorkflow):
 
         subject_config.sections()
 
+        # TODO - NOT USED, WHY?
         max_node_cpu = max(int(self.max_cpu / 2), 1)
 
         # 3D T1w
@@ -103,6 +111,10 @@ class MainWorkflow(CustomWorkflow):
 
         t1.sink_result(self.base_dir, "outputnode", 'ref', self.Result_DIR)
         t1.sink_result(self.base_dir, "outputnode", 'ref_brain', self.Result_DIR)
+        
+        # TODO - Gestione errore?
+        if mail_manager != None:
+            mail_manager.send_report(f"3D T1w analysis completed at {datetime.now()}")
 
         if is_ai:
             # Non linear registration for Asymmetry Index
@@ -130,6 +142,10 @@ class MainWorkflow(CustomWorkflow):
                 regex_subs = [("-T1.*.mgz", ".mgz")]
                 freesurfer.sink_result(self.base_dir, "outputnode", 'lh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
                 freesurfer.sink_result(self.base_dir, "outputnode", 'rh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
+                
+            # TODO - Gestione errore?
+            if mail_manager != None:
+                mail_manager.send_report(f"Freesurfer analysis completed at {datetime.now()}")
 
         if subject_input_state_list[DIL.FLAIR3D].loaded:
             # 3D Flair analysis
@@ -144,6 +160,10 @@ class MainWorkflow(CustomWorkflow):
             self.connect(t1, "outputnode.ref_brain", flair, "inputnode.reference")
 
             flair.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
+            
+            # TODO - Gestione errore?
+            if mail_manager != None:
+                mail_manager.send_report(f"3D Flair analysis completed at {datetime.now()}")
 
             # if is_freesurfer:
             #     from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
@@ -173,6 +193,10 @@ class MainWorkflow(CustomWorkflow):
             flat1.sink_result(self.base_dir, "outputnode", "extension_z", self.Result_DIR)
             flat1.sink_result(self.base_dir, "outputnode", "junction_z", self.Result_DIR)
             flat1.sink_result(self.base_dir, "outputnode", "binary_flair", self.Result_DIR)
+            
+            # TODO - Gestione errore?
+            if mail_manager != None:
+                mail_manager.send_report(f"FLAT1 analysis completed at {datetime.now()}")
 
         for plane in PLANES:
             if DIL['FLAIR2D_%s' % plane.name] in subject_input_state_list and subject_input_state_list[DIL['FLAIR2D_%s' % plane.name]].loaded:
@@ -187,6 +211,10 @@ class MainWorkflow(CustomWorkflow):
                 self.connect(t1, "outputnode.ref_brain", flair2d, "inputnode.reference")
 
                 flair2d.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
+                
+                # TODO - Gestione errore?
+                if mail_manager != None:
+                    mail_manager.send_report(f"FLAIR2D_%s {plane.name} analysis completed at {datetime.now()}")
 
         if subject_input_state_list[DIL.MDC].loaded:
             # MDC analysis
@@ -201,6 +229,10 @@ class MainWorkflow(CustomWorkflow):
             self.connect(t1, "outputnode.ref_brain", mdc, "inputnode.reference")
 
             mdc.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
+            
+            # TODO - Gestione errore?
+            if mail_manager != None:
+                mail_manager.send_report(f"Post-contrast 3D T1w analysis completed at {datetime.now()}")
 
         if subject_input_state_list[DIL.ASL].loaded:
             # ASL analysis
@@ -233,6 +265,10 @@ class MainWorkflow(CustomWorkflow):
                 if is_freesurfer:
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
+                    
+            # TODO - Gestione errore?
+            if mail_manager != None:
+                mail_manager.send_report(f"Arterial Spin Labelling analysis completed at {datetime.now()}")
 
         if subject_input_state_list[DIL.PET].loaded:  # and check_input['ct_brain']:
             # PET analysis
@@ -271,6 +307,10 @@ class MainWorkflow(CustomWorkflow):
                 if is_freesurfer:
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
+                    
+            # TODO - Gestione errore?
+            if mail_manager != None:
+                mail_manager.send_report(f"Pet analysis completed at {datetime.now()}")
 
         if subject_input_state_list[DIL.VENOUS].loaded and subject_input_state_list[DIL.VENOUS].volumes + subject_input_state_list[DIL.VENOUS2].volumes == 2:
             # Venous analysis
@@ -284,6 +324,10 @@ class MainWorkflow(CustomWorkflow):
             self.connect(t1, "outputnode.ref_brain", venous, "inputnode.ref_brain")
 
             venous.sink_result(self.base_dir, "outputnode", 'veins', self.Result_DIR)
+            
+            # TODO - Gestione errore?
+            if mail_manager != None:
+                mail_manager.send_report(f"Venous MRA analysis completed at {datetime.now()}")
 
         if subject_input_state_list[DIL.DTI].loaded:
             # DTI analysis
@@ -321,6 +365,10 @@ class MainWorkflow(CustomWorkflow):
                                                        self.Result_DIR + ".dti")
                             tract_workflow.sink_result(self.base_dir, "outputnode", "fdt_paths_%s" % side,
                                                        self.Result_DIR + ".dti")
+                            
+            # TODO - Gestione errore?
+            if mail_manager != None:
+                mail_manager.send_report(f"Diffusion Tensor Imaging preprocessing analysis completed at {datetime.now()}")
 
         # Check for Task FMRI sequences
         for y in range(FMRI_NUM):
@@ -334,3 +382,7 @@ class MainWorkflow(CustomWorkflow):
                 fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_1', self.Result_DIR + '.fMRI')
                 if subject_config.getenum_safe(DIL['FMRI_%d' % y], "block_design") == BLOCK_DESIGN.RARB:
                     fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_2', self.Result_DIR + '.fMRI')
+                    
+            # TODO - Gestione errore?
+            if mail_manager != None:
+                mail_manager.send_report(f"FMRI_%d {y} analysis completed at {datetime.now()}")
