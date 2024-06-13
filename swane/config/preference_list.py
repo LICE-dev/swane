@@ -422,10 +422,16 @@ GLOBAL_PREFERENCES[category]['password'] = PreferenceEntry(
     tooltip="Your password email",
     default=""
 )
+GLOBAL_PREFERENCES[category]['use_ssl'] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SSL",
+    tooltip="True if your mail host requires the SSL security protocol",
+    default='true'
+)
 GLOBAL_PREFERENCES[category]['use_tls'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Use TLS",
-    tooltip="True if your mail host requires the TLS security protocol",
+    tooltip="True if your mail host requires the TLS security protocol. TLS is not used if SSL is active",
     default='false'
 )
 
