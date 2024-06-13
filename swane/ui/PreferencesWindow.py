@@ -193,7 +193,7 @@ class PreferencesWindow(QDialog):
                     )
                 )
 
-                grid.addItem(test_button, x, 0, 1, 2)
+                grid.addWidget(test_button, x, 0, 1, 2)
 
         layout.addWidget(tab_widget)
         layout.addWidget(self.saveButton)
