@@ -208,6 +208,11 @@ class PreferencesWindow(QDialog):
             mail_manager.send_report(
                 f"This is a test mail sent by SWANe at {datetime.now()} to check the mail settings configuration inserted by the user"
             )
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Information)
+            msg_box.setText("Mail Sent Succesfully, check in your inbox")
+            msg_box.setWindowTitle("Tada!")
+            msg_box.exec()
         except Exception as e:
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Critical)
