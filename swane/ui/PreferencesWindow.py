@@ -182,15 +182,23 @@ class PreferencesWindow(QDialog):
                     server_address, port, username, password, use_tls
                 )
 
-                test_button.clicked.connect(
-                    partial(
-                        mail_manger.send_mail,
-                        username,
-                        username,
-                        f"SWANe - Test Mail {datetime.now()}",
-                        f"This is a test mail sent by SWANe at {datetime.now()} to check the mail settings configuration inserted by the user",
+                try:
+                    test_button.clicked.connect(
+                        partial(
+                            mail_manger.send_mail,
+                            username,
+                            username,
+                            f"SWANe - Test Mail {datetime.now()}",
+                            f"This is a test mail sent by SWANe at {datetime.now()} to check the mail settings configuration inserted by the user",
+                        )
                     )
-                )
+                except Exception as e:
+                    msg_box = QMessageBox()
+                    msg_box.setIcon(QMessageBox.Critical)
+                    msg_box.setText("An error occurred")
+                    msg_box.setInformativeText(e)
+                    msg_box.setWindowTitle("Error")
+                    msg_box.exec()
 
                 grid.addWidget(test_button, x, 0, 1, 2)
 
