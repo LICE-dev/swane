@@ -55,3 +55,4 @@ release
 build
 venv
 /.vscode
+/swane/.vscode
