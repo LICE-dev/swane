@@ -400,27 +400,32 @@ GLOBAL_PREFERENCES[category] = {}
 GLOBAL_PREFERENCES[category]['address'] = PreferenceEntry(
     input_type=InputTypes.TEXT,
     label="Address",
+    tooltip="The POP3/IMAP address of your mail host",
     default=""
 )
 GLOBAL_PREFERENCES[category]['port'] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Port",
+    tooltip="The port indicated in your mail host documentation",
     default=0,
     range=[1, 1000]
 )
 GLOBAL_PREFERENCES[category]['username'] = PreferenceEntry(
     input_type=InputTypes.TEXT,
     label="Username",
+    tooltip="Ypur email",
     default=""
 )
 GLOBAL_PREFERENCES[category]['password'] = PreferenceEntry(
     input_type=InputTypes.TEXT,
     label="Password",
+    tooltip="Your password email",
     default=""
 )
 GLOBAL_PREFERENCES[category]['use_tls'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Use TLS",
+    tooltip="True if your mail host requires the TLS security protocol",
     default='false'
 )
 
