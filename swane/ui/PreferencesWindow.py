@@ -173,7 +173,6 @@ class PreferencesWindow(QDialog):
                 server_address = my_config[GlobalPrefCategoryList.MAIL_SETTINGS][
                     "address"
                 ]
-                print("server_address", server_address)
                 port = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["port"]
                 username = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["username"]
                 password = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["password"]
