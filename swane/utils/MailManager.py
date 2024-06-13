@@ -54,4 +54,4 @@ class MailManager:
         Send a report for a SWANe workflow based on the user mail configuration
         """
         
-        self.send_mail(self.username, self.username, f"SWANe Report - {datetime.now()}", body)
+        self.send_mail(self.username, self.username, f"SWANe - {datetime.now()}", body)

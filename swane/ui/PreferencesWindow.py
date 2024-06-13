@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QSpacerItem,
     QSizePolicy,
     QMessageBox,
-    QLabel,
 )
 from swane import strings, EXIT_CODE_REBOOT
 from swane.ui.PreferenceUIEntry import PreferenceUIEntry
@@ -182,23 +181,7 @@ class PreferencesWindow(QDialog):
                     server_address, port, username, password, use_tls
                 )
 
-                try:
-                    test_button.clicked.connect(
-                        partial(
-                            mail_manger.send_mail,
-                            username,
-                            username,
-                            f"SWANe - Test Mail {datetime.now()}",
-                            f"This is a test mail sent by SWANe at {datetime.now()} to check the mail settings configuration inserted by the user",
-                        )
-                    )
-                except Exception as e:
-                    msg_box = QMessageBox()
-                    msg_box.setIcon(QMessageBox.Critical)
-                    msg_box.setText("An error occurred")
-                    msg_box.setInformativeText(e)
-                    msg_box.setWindowTitle("Error")
-                    msg_box.exec()
+                test_button.clicked.connect(partial(self.send_test_mail, mail_manger))
 
                 grid.addWidget(test_button, x, 0, 1, 2)
 
@@ -219,6 +202,19 @@ class PreferencesWindow(QDialog):
             layout.addWidget(reset_button)
 
         self.setLayout(layout)
+
+    def send_test_mail(self, mail_manager: MailManager):
+        try:
+            mail_manager.send_report(
+                f"This is a test mail sent by SWANe at {datetime.now()} to check the mail settings configuration inserted by the user"
+            )
+        except Exception as e:
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Critical)
+            msg_box.setText("An error occurred")
+            msg_box.setInformativeText(e)
+            msg_box.setWindowTitle("Error")
+            msg_box.exec()
 
     def check_dependency(self, category: Enum, key: str, x: int) -> bool:
         """
