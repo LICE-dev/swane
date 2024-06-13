@@ -170,14 +170,21 @@ class PreferencesWindow(QDialog):
                 test_button.setText(strings.pref_window_mail_test_button)
                 test_button.setToolTip(strings.pref_window_mail_test_hint)
 
-                mail_manger = MailManager()
+                server_address = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]['address']
+                print("server_address", server_address)
+                port = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]['port']
+                username = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]['username']
+                password = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]['password']
+                use_tls = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]['use_tls']
+
+                mail_manger = MailManager(server_address, port, username, password, use_tls)
 
                 test_button.clicked.connect(
                     partial(
                         test_button.execute,
                         mail_manger.send_mail(
-                            "",
-                            "",
+                            username,
+                            username,
                             f"SWANe - Test Mail {datetime.now()}",
                             f"This is a test mail sent by SWANe at {datetime.now()} to check the mail settings configuration inserted by the user",
                         ),
