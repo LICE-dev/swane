@@ -133,6 +133,9 @@ pref_window_reset_global_box = "Do you really want to reset global workflow sett
 pref_window_reset_subj_button = "Apply default workflow settings"
 pref_window_reset_subj_box = "Do you really want to apply default workflow settings to this subject?"
 
+pref_window_mail_test_button = "Test Email Settings"
+pref_window_mail_test_hint = "By clicking this button a test mail wil be send using the mail settings preferences"
+
 # Workflow
 check_dep_generic_error = "Dependency check error"
 check_dep_dcm2niix_error = "dcm2niix not detected (<a href='https://github.com/rordenlab/dcm2niix#Install" \
