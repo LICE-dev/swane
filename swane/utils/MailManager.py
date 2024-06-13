@@ -15,16 +15,26 @@ class MailManager:
         self.password = password
         self.use_tls = use_tls
         self.server = None
+        self.use_ssl = True
 
     def connect(self):
         """
         Connect to the SMTP server using the provided credentials.
         """
-        self.server = smtplib.SMTP(self.server_address, self.server_port)
-        if self.use_tls:
-            self.server.starttls()
-        self.server.login(self.username, self.password)
-        
+        try:
+            if self.use_ssl:
+                self.server = smtplib.SMTP_SSL(self.server_address, self.server_port)
+            else:
+                self.server = smtplib.SMTP(self.server_address, self.server_port)
+                self.server.ehlo()
+                if self.use_tls:
+                    self.server.starttls()
+                    self.server.ehlo()
+            self.server.login(self.username, self.password)
+        except Exception as e:
+            print(f"Error connecting to the server: {e}")
+            raise
+
     def disconnect(self):
         """
         Disconnect from the SMTP server.
@@ -37,13 +47,13 @@ class MailManager:
         Send an email with the specified subject and body.
         """
         
-        self.connect()
-        
         message = MIMEMultipart()
         message['From'] = from_addr
         message['To'] = to_addr
         message['Subject'] = subject
         message.attach(MIMEText(body, 'html'))
+
+        self.connect()
         
         self.server.send_message(message)
         
