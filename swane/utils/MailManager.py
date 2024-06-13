@@ -46,18 +46,20 @@ class MailManager:
         """
         Send an email with the specified subject and body.
         """
-        
-        message = MIMEMultipart()
-        message['From'] = from_addr
-        message['To'] = to_addr
-        message['Subject'] = subject
-        message.attach(MIMEText(body, 'html'))
+        try:
+            message = MIMEMultipart()
+            message['From'] = from_addr
+            message['To'] = to_addr
+            message['Subject'] = subject
+            message.attach(MIMEText(body, 'html'))
 
-        self.connect()
-        
-        self.server.send_message(message)
-        
-        self.disconnect()
+            self.connect()
+            self.server.send_message(message)
+        except Exception as e:
+            print(f"Error sending email: {e}")
+            raise
+        finally:
+            self.disconnect()
 
     def send_report(self, body):
         """
