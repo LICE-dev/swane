@@ -212,7 +212,7 @@ class PreferencesWindow(QDialog):
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Critical)
             msg_box.setText("An error occurred")
-            msg_box.setInformativeText(e)
+            msg_box.setInformativeText(str(e))
             msg_box.setWindowTitle("Error")
             msg_box.exec()
 
