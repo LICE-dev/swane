@@ -397,6 +397,12 @@ for data_input in DataInputList:
 
 category = GlobalPrefCategoryList.MAIL_SETTINGS
 GLOBAL_PREFERENCES[category] = {}
+GLOBAL_PREFERENCES[category]['enabled'] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Enabled",
+    tooltip="Toggle on/off the mail report sending service. If enabled, a mail report will be sent to your email at each workflow completion",
+    default='false'
+)
 GLOBAL_PREFERENCES[category]['address'] = PreferenceEntry(
     input_type=InputTypes.TEXT,
     label="Address",
