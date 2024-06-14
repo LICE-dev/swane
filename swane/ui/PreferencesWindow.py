@@ -175,10 +175,11 @@ class PreferencesWindow(QDialog):
                 port = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["port"]
                 username = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["username"]
                 password = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["password"]
+                use_ssl = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["use_ssl"]
                 use_tls = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["use_tls"]
 
                 mail_manger = MailManager(
-                    server_address, port, username, password, use_tls
+                    server_address, port, username, password, use_ssl, use_tls
                 )
 
                 test_button.clicked.connect(partial(self.send_test_mail, mail_manger))
