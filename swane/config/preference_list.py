@@ -419,11 +419,11 @@ GLOBAL_PREFERENCES[category]['port'] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]['username'] = PreferenceEntry(
     input_type=InputTypes.TEXT,
     label="Username",
-    tooltip="Ypur email",
+    tooltip="Your email",
     default=""
 )
 GLOBAL_PREFERENCES[category]['password'] = PreferenceEntry(
-    input_type=InputTypes.TEXT,
+    input_type=InputTypes.PASSWORD,
     label="Password",
     tooltip="Your password email",
     default=""

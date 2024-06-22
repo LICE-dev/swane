@@ -5,6 +5,7 @@ from swane.config.PrefCategory import PrefCategory
 
 class InputTypes(Enum):
     TEXT = auto()
+    PASSWORD = auto()
     INT = auto()
     BOOLEAN = auto()
     ENUM = auto()

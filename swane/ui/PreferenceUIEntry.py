@@ -3,11 +3,13 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIntValidator, QDoubleValidator
 from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox,
                                QComboBox, QStyle, QSizePolicy, QStyleOption, QWidget)
+from functools import partial
 from enum import Enum
 from swane import strings
 from swane.config.config_enums import InputTypes
 from swane.config.ConfigManager import ConfigManager
 from swane.config.PreferenceEntry import PreferenceEntry
+from swane.utils.CryptographyManager import CryptographyManager
 
 
 class PreferenceUIEntry:
@@ -143,7 +145,15 @@ class PreferenceUIEntry:
             button.setIcon(icon_open_dir)
             button.clicked.connect(self.choose_file)
 
+        if self.input_type == InputTypes.PASSWORD:
+            field.setEchoMode(QLineEdit.PasswordEchoOnEdit)
+            field.editingFinished.connect(partial(self.encrypt_password, field))
+
         return field, button
+
+    @staticmethod
+    def encrypt_password(field: QLineEdit):
+        field.setText(CryptographyManager.encrypt(field.text()))
 
     def choose_file(self):
         """

@@ -18,6 +18,7 @@ from PySide6_VerticalQTabWidget import VerticalQTabWidget
 from swane.config.config_enums import InputTypes, GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
+from swane.utils.CryptographyManager import CryptographyManager
 
 from swane.utils.MailManager import MailManager
 
@@ -169,20 +170,7 @@ class PreferencesWindow(QDialog):
                 test_button.setText(strings.pref_window_mail_test_button)
                 test_button.setToolTip(strings.pref_window_mail_test_hint)
 
-                server_address = my_config[GlobalPrefCategoryList.MAIL_SETTINGS][
-                    "address"
-                ]
-                port = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["port"]
-                username = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["username"]
-                password = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["password"]
-                use_ssl = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["use_ssl"]
-                use_tls = my_config[GlobalPrefCategoryList.MAIL_SETTINGS]["use_tls"]
-
-                mail_manger = MailManager(
-                    server_address, port, username, password, use_ssl, use_tls
-                )
-
-                test_button.clicked.connect(partial(self.send_test_mail, mail_manger))
+                test_button.clicked.connect(self.send_test_mail)
 
                 grid.addWidget(test_button, x, 0, 1, 2)
 
@@ -204,8 +192,22 @@ class PreferencesWindow(QDialog):
 
         self.setLayout(layout)
 
-    def send_test_mail(self, mail_manager: MailManager):
+    def send_test_mail(self):
         try:
+            server_address = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["address"]].get_value()
+            port = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["port"]].get_value()
+            username = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["username"]].get_value()
+            password = CryptographyManager.decrypt(self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["password"]].get_value())
+            use_ssl = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["use_ssl"]].get_value()
+            use_tls = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["use_tls"]].get_value()
+
+            if server_address == "" or port == "" or username == "" or password == "":
+                raise Exception("Fill all mail configuration fields first")
+
+            mail_manager = MailManager(
+                server_address, port, username, password, use_ssl, use_tls
+            )
+
             mail_manager.send_report(
                 f"This is a test mail sent by SWANe at {datetime.now()} to check the mail settings configuration inserted by the user"
             )
