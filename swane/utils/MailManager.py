@@ -9,6 +9,8 @@ class MailManager:
     Mail Sending service manager
     """
 
+    TIMEOUT = 2
+
     def __init__(self, server_address: str, server_port: int, username: str, password: str, use_ssl: bool= True, use_tls: bool=False):
         """
         The MailManager initializer.
@@ -46,17 +48,16 @@ class MailManager:
 
         try:
             if self.use_ssl:
-                self.server = smtplib.SMTP_SSL(self.server_address, self.server_port)
+                self.server = smtplib.SMTP_SSL(self.server_address, self.server_port, timeout=MailManager.TIMEOUT)
             else:
-                self.server = smtplib.SMTP(self.server_address, self.server_port)
+                self.server = smtplib.SMTP(self.server_address, self.server_port, timeout=MailManager.TIMEOUT)
                 self.server.ehlo()
                 if self.use_tls:
                     self.server.starttls()
                     self.server.ehlo()
             self.server.login(self.username, self.password)
         except Exception as e:
-            print(f"Error connecting to the server: {e}")
-            raise
+            raise Exception(f"{str(e)} - Check your Mail Configuration")
 
     def disconnect(self):
         """
@@ -82,11 +83,9 @@ class MailManager:
 
             self.connect()
             self.server.send_message(message)
-        except Exception as e:
-            print(f"Error sending email: {e}")
-            raise
-        finally:
             self.disconnect()
+        except Exception as e:
+            raise
 
     def send_report(self, body):
         """
