@@ -1,6 +1,7 @@
 import configparser
 from swane import strings, __version__
 from swane.config.preference_list import *
+from swane.utils.CryptographyManager import CryptographyManager
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
 from swane.config.config_enums import WORKFLOW_TYPES, GlobalPrefCategoryList
@@ -309,13 +310,21 @@ class ConfigManager(configparser.ConfigParser):
         An initialized MailManager
         """
         
+        mail_manager_enabled = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'enabled')
+        if not mail_manager_enabled:
+            return None
+        
         server_address = self[GlobalPrefCategoryList.MAIL_SETTINGS]["address"]
         server_port = self.getint_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'port')
         username = self[GlobalPrefCategoryList.MAIL_SETTINGS]["username"]
-        password = self[GlobalPrefCategoryList.MAIL_SETTINGS]["password"]
+        password = CryptographyManager.decrypt(self[GlobalPrefCategoryList.MAIL_SETTINGS]['password'])
+        use_ssl = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'use_ssl')
         use_tls = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'use_tls')
         
-        mail_manager = MailManager(server_address=server_address, server_port=server_port, username=username, password=password, use_tls=use_tls)
+        if server_address == "" or server_port == "" or username == "" or password == "":
+            return None
+        
+        mail_manager = MailManager(server_address=server_address, server_port=server_port, username=username, password=password, use_ssl=use_ssl, use_tls=use_tls)
         
         return mail_manager
 
