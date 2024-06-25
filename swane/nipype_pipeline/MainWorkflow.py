@@ -184,12 +184,25 @@ class MainWorkflow(CustomWorkflow):
                 flair2d.long_name = "2D %s FLAIR analysis" % plane.value
                 self.add_nodes([flair2d])
 
-                flair2d_tra_inputnode = flair2d.get_node("inputnode")
-                flair2d_tra_inputnode.inputs.crop = False
-                flair2d_tra_inputnode.inputs.output_name = "r-flair2d_%s_brain.nii.gz" % plane
+                flair2d_inputnode = flair2d.get_node("inputnode")
+                flair2d_inputnode.inputs.crop = False
+                flair2d_inputnode.inputs.output_name = "r-flair2d_%s_brain.nii.gz" % plane
                 self.connect(t1, "outputnode.ref_brain", flair2d, "inputnode.reference")
 
                 flair2d.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
+
+        if DIL.T2_COR in subject_input_state_list and subject_input_state_list[DIL.T2_COR].loaded:
+            t2_cor_dir = subject_input_state_list.get_dicom_dir(DIL.T2_COR)
+            t2_cor = linear_reg_workflow(DIL.T2_COR.value.workflow_name, t2_cor_dir, None, is_volumetric=False)
+            t2_cor.long_name = "2D coronal T2 analysis"
+            self.add_nodes([t2_cor])
+
+            t2_cor_inputnode = t2_cor.get_node("inputnode")
+            t2_cor_inputnode.inputs.crop = False
+            t2_cor_inputnode.inputs.output_name = "r-t2_cor_brain.nii.gz"
+            self.connect(t1, "outputnode.ref_brain", t2_cor, "inputnode.reference")
+
+            t2_cor.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
                 
         if subject_input_state_list[DIL.MDC].loaded:
             # MDC analysis
