@@ -85,9 +85,6 @@ class MainWorkflow(CustomWorkflow):
         if self.max_gpu < 0:
             self.max_gpu = MonitoredMultiProcPlugin.gpu_count()
             
-        # Mail manager initialization
-        mail_manager = global_config.get_mail_manager()
-                
         try:
             if not dependency_manager.is_cuda():
                 subject_config[DIL.DTI]["cuda"] = "false"
@@ -110,12 +107,6 @@ class MainWorkflow(CustomWorkflow):
         t1.sink_result(self.base_dir, "outputnode", 'ref', self.Result_DIR)
         t1.sink_result(self.base_dir, "outputnode", 'ref_brain', self.Result_DIR)
         
-        if mail_manager != None:
-            try:
-                mail_manager.send_report(f"3D T1w analysis completed at {datetime.now()}")
-            except:
-                pass
-
         if is_ai:
             # Non linear registration for Asymmetry Index
             sym = nonlinear_reg_workflow("sym")
@@ -143,12 +134,6 @@ class MainWorkflow(CustomWorkflow):
                 freesurfer.sink_result(self.base_dir, "outputnode", 'lh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
                 freesurfer.sink_result(self.base_dir, "outputnode", 'rh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
                 
-            if mail_manager != None:
-                try:
-                    mail_manager.send_report(f"Freesurfer analysis completed at {datetime.now()}")
-                except:
-                    pass
-
         if subject_input_state_list[DIL.FLAIR3D].loaded:
             # 3D Flair analysis
             flair_dir = subject_input_state_list.get_dicom_dir(DIL.FLAIR3D)
@@ -163,12 +148,6 @@ class MainWorkflow(CustomWorkflow):
 
             flair.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
             
-            if mail_manager != None:
-                try:
-                    mail_manager.send_report(f"3D Flair analysis completed at {datetime.now()}")
-                except:
-                    pass
-                
             # if is_freesurfer:
             #     from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
             #     flair_ai = freesurfer_asymmetry_index_workflow(name="flair_ai")
@@ -198,12 +177,6 @@ class MainWorkflow(CustomWorkflow):
             flat1.sink_result(self.base_dir, "outputnode", "junction_z", self.Result_DIR)
             flat1.sink_result(self.base_dir, "outputnode", "binary_flair", self.Result_DIR)
             
-            if mail_manager != None:
-                try:
-                    mail_manager.send_report(f"FLAT1 analysis completed at {datetime.now()}")
-                except:
-                    pass
-
         for plane in PLANES:
             if DIL['FLAIR2D_%s' % plane.name] in subject_input_state_list and subject_input_state_list[DIL['FLAIR2D_%s' % plane.name]].loaded:
                 flair_dir = subject_input_state_list.get_dicom_dir(DIL['FLAIR2D_%s' % plane.name])
@@ -218,12 +191,6 @@ class MainWorkflow(CustomWorkflow):
 
                 flair2d.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
                 
-                if mail_manager != None:
-                    try:
-                        mail_manager.send_report(f"FLAIR2D_%s {plane.name} analysis completed at {datetime.now()}")
-                    except:
-                        pass
-
         if subject_input_state_list[DIL.MDC].loaded:
             # MDC analysis
             mdc_dir = subject_input_state_list.get_dicom_dir(DIL.MDC)
@@ -238,12 +205,6 @@ class MainWorkflow(CustomWorkflow):
 
             mdc.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
             
-            if mail_manager != None:
-                try:
-                    mail_manager.send_report(f"Post-contrast 3D T1w analysis completed at {datetime.now()}")
-                except:
-                    pass
-
         if subject_input_state_list[DIL.ASL].loaded:
             # ASL analysis
             asl_dir = subject_input_state_list.get_dicom_dir(DIL.ASL)
@@ -276,12 +237,6 @@ class MainWorkflow(CustomWorkflow):
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
             
-            if mail_manager != None:
-                try:
-                    mail_manager.send_report(f"Arterial Spin Labelling analysis completed at {datetime.now()}")
-                except:
-                    pass
-
         if subject_input_state_list[DIL.PET].loaded:  # and check_input['ct_brain']:
             # PET analysis
             pet_dir = subject_input_state_list.get_dicom_dir(DIL.PET)
@@ -320,12 +275,6 @@ class MainWorkflow(CustomWorkflow):
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
                     
-            if mail_manager != None:
-                try:
-                    mail_manager.send_report(f"Pet analysis completed at {datetime.now()}")
-                except:
-                    pass
-
         if subject_input_state_list[DIL.VENOUS].loaded and subject_input_state_list[DIL.VENOUS].volumes + subject_input_state_list[DIL.VENOUS2].volumes == 2:
             # Venous analysis
             venous_dir = subject_input_state_list.get_dicom_dir(DIL.VENOUS)
@@ -339,12 +288,6 @@ class MainWorkflow(CustomWorkflow):
 
             venous.sink_result(self.base_dir, "outputnode", 'veins', self.Result_DIR)
             
-            if mail_manager != None:
-                try:
-                    mail_manager.send_report(f"Venous MRA analysis completed at {datetime.now()}")
-                except:
-                    pass
-
         if subject_input_state_list[DIL.DTI].loaded:
             # DTI analysis
             dti_dir = subject_input_state_list.get_dicom_dir(DIL.DTI)
@@ -382,12 +325,6 @@ class MainWorkflow(CustomWorkflow):
                             tract_workflow.sink_result(self.base_dir, "outputnode", "fdt_paths_%s" % side,
                                                        self.Result_DIR + ".dti")
                             
-            if mail_manager != None:
-                try:
-                    mail_manager.send_report(f"Diffusion Tensor Imaging preprocessing analysis completed at {datetime.now()}")
-                except:
-                    pass
-
         # Check for Task FMRI sequences
         for y in range(FMRI_NUM):
 
@@ -400,9 +337,3 @@ class MainWorkflow(CustomWorkflow):
                 fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_1', self.Result_DIR + '.fMRI')
                 if subject_config.getenum_safe(DIL['FMRI_%d' % y], "block_design") == BLOCK_DESIGN.RARB:
                     fMRI.sink_result(self.base_dir, "outputnode", 'threshold_file_2', self.Result_DIR + '.fMRI')
-                    
-            if mail_manager != None:
-                try:
-                    mail_manager.send_report(f"FMRI_%d {y} analysis completed at {datetime.now()}")
-                except:
-                    pass
