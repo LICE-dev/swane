@@ -80,6 +80,11 @@ class DataInputList(Enum):
             label='2D Flair %s' % i.value,
             optional=True
         )
+    T2_COR = DataInput(
+        name='t2_cor',
+        label='2D T2 coronal',
+        optional=True
+    )
 
     for i in range(FMRI_NUM):
         DataInputList['FMRI_%d' % i] = DataInput(
