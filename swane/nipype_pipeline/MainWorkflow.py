@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 from multiprocessing import cpu_count
 from os.path import abspath
@@ -83,6 +84,7 @@ class MainWorkflow(CustomWorkflow):
         self.max_gpu = global_config.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_subj_gpu')
         if self.max_gpu < 0:
             self.max_gpu = MonitoredMultiProcPlugin.gpu_count()
+            
         try:
             if not dependency_manager.is_cuda():
                 subject_config[DIL.DTI]["cuda"] = "false"
@@ -93,6 +95,7 @@ class MainWorkflow(CustomWorkflow):
 
         subject_config.sections()
 
+        # TODO - NOT USED, WHY?
         max_node_cpu = max(int(self.max_cpu / 2), 1)
 
         # 3D T1w
@@ -103,7 +106,7 @@ class MainWorkflow(CustomWorkflow):
 
         t1.sink_result(self.base_dir, "outputnode", 'ref', self.Result_DIR)
         t1.sink_result(self.base_dir, "outputnode", 'ref_brain', self.Result_DIR)
-
+        
         if is_ai:
             # Non linear registration for Asymmetry Index
             sym = nonlinear_reg_workflow("sym")
@@ -130,7 +133,7 @@ class MainWorkflow(CustomWorkflow):
                 regex_subs = [("-T1.*.mgz", ".mgz")]
                 freesurfer.sink_result(self.base_dir, "outputnode", 'lh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
                 freesurfer.sink_result(self.base_dir, "outputnode", 'rh_hippoAmygLabels', 'scene.segmentHA', regex_subs)
-
+                
         if subject_input_state_list[DIL.FLAIR3D].loaded:
             # 3D Flair analysis
             flair_dir = subject_input_state_list.get_dicom_dir(DIL.FLAIR3D)
@@ -144,7 +147,7 @@ class MainWorkflow(CustomWorkflow):
             self.connect(t1, "outputnode.ref_brain", flair, "inputnode.reference")
 
             flair.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
-
+            
             # if is_freesurfer:
             #     from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
             #     flair_ai = freesurfer_asymmetry_index_workflow(name="flair_ai")
@@ -173,7 +176,7 @@ class MainWorkflow(CustomWorkflow):
             flat1.sink_result(self.base_dir, "outputnode", "extension_z", self.Result_DIR)
             flat1.sink_result(self.base_dir, "outputnode", "junction_z", self.Result_DIR)
             flat1.sink_result(self.base_dir, "outputnode", "binary_flair", self.Result_DIR)
-
+            
         for plane in PLANES:
             if DIL['FLAIR2D_%s' % plane.name] in subject_input_state_list and subject_input_state_list[DIL['FLAIR2D_%s' % plane.name]].loaded:
                 flair_dir = subject_input_state_list.get_dicom_dir(DIL['FLAIR2D_%s' % plane.name])
@@ -187,7 +190,7 @@ class MainWorkflow(CustomWorkflow):
                 self.connect(t1, "outputnode.ref_brain", flair2d, "inputnode.reference")
 
                 flair2d.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
-
+                
         if subject_input_state_list[DIL.MDC].loaded:
             # MDC analysis
             mdc_dir = subject_input_state_list.get_dicom_dir(DIL.MDC)
@@ -201,7 +204,7 @@ class MainWorkflow(CustomWorkflow):
             self.connect(t1, "outputnode.ref_brain", mdc, "inputnode.reference")
 
             mdc.sink_result(self.base_dir, "outputnode", 'registered_file', self.Result_DIR)
-
+            
         if subject_input_state_list[DIL.ASL].loaded:
             # ASL analysis
             asl_dir = subject_input_state_list.get_dicom_dir(DIL.ASL)
@@ -233,7 +236,7 @@ class MainWorkflow(CustomWorkflow):
                 if is_freesurfer:
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
                     asl.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
-
+            
         if subject_input_state_list[DIL.PET].loaded:  # and check_input['ct_brain']:
             # PET analysis
             pet_dir = subject_input_state_list.get_dicom_dir(DIL.PET)
@@ -271,7 +274,7 @@ class MainWorkflow(CustomWorkflow):
                 if is_freesurfer:
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_lh', self.Result_DIR)
                     pet.sink_result(self.base_dir, "outputnode", 'ai_surf_rh', self.Result_DIR)
-
+                    
         if subject_input_state_list[DIL.VENOUS].loaded and subject_input_state_list[DIL.VENOUS].volumes + subject_input_state_list[DIL.VENOUS2].volumes == 2:
             # Venous analysis
             venous_dir = subject_input_state_list.get_dicom_dir(DIL.VENOUS)
@@ -284,7 +287,7 @@ class MainWorkflow(CustomWorkflow):
             self.connect(t1, "outputnode.ref_brain", venous, "inputnode.ref_brain")
 
             venous.sink_result(self.base_dir, "outputnode", 'veins', self.Result_DIR)
-
+            
         if subject_input_state_list[DIL.DTI].loaded:
             # DTI analysis
             dti_dir = subject_input_state_list.get_dicom_dir(DIL.DTI)
@@ -321,7 +324,7 @@ class MainWorkflow(CustomWorkflow):
                                                        self.Result_DIR + ".dti")
                             tract_workflow.sink_result(self.base_dir, "outputnode", "fdt_paths_%s" % side,
                                                        self.Result_DIR + ".dti")
-
+                            
         # Check for Task FMRI sequences
         for y in range(FMRI_NUM):
 
