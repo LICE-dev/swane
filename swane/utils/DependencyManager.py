@@ -108,7 +108,7 @@ class DependencyManager:
         """
         Returns
         -------
-       True if freesurfer is detected and configured (even if outdated).
+        True if freesurfer is detected and configured (even if outdated).
 
         """
         return self.freesurfer.state != DependenceStatus.MISSING
