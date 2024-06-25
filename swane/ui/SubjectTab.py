@@ -1,4 +1,5 @@
 import os
+from functools import partial
 from datetime import datetime
 from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
@@ -428,7 +429,7 @@ class SubjectTab(QTabWidget):
         self.exec_button = QPushButton(strings.EXECBUTTONTEXT)
         self.exec_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.exec_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        self.exec_button.clicked.connect(self.toggle_workflow_execution)
+        self.exec_button.clicked.connect(partial(self.toggle_workflow_execution, None, None))
         self.exec_button_set_enabled(False)
 
         layout.addWidget(self.exec_button, 1, 1)

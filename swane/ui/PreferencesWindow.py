@@ -213,15 +213,15 @@ class PreferencesWindow(QDialog):
             )
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Information)
-            msg_box.setText("Mail Sent Succesfully, check in your inbox")
-            msg_box.setWindowTitle("Tada!")
+            msg_box.setText(strings.pref_window_mail_test_success)
+            msg_box.setWindowTitle("Mail report")
             msg_box.exec()
         except Exception as e:
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Critical)
-            msg_box.setText("An error occurred")
+            msg_box.setText(strings.pref_window_mail_test_fail)
             msg_box.setInformativeText(str(e))
-            msg_box.setWindowTitle("Error")
+            msg_box.setWindowTitle("Mail report")
             msg_box.exec()
 
     def check_dependency(self, category: Enum, key: str, x: int) -> bool:
