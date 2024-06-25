@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
 from PySide6.QtSvgWidgets import QSvgWidget
@@ -149,6 +150,13 @@ class SubjectTab(QTabWidget):
             icon = self.main_window.OK_ICON_FILE
         else:
             icon = self.main_window.ERROR_ICON_FILE
+            # Mail manager initialization
+            mail_manager = self.global_config.get_mail_manager()
+            if mail_manager is not None:
+                try:
+                    mail_manager.send_report(f"{self.subject.name} - {wf_report.workflow_name} - {wf_report.node_name} FAILED at {datetime.now()}")
+                except:
+                    pass
 
         self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder.set_art(icon)
 
@@ -167,6 +175,14 @@ class SubjectTab(QTabWidget):
                 self.node_list[wf_report.workflow_name].node_holder.set_art(self.main_window.OK_ICON_FILE)
                 self.node_list[wf_report.workflow_name].node_holder.setExpanded(False)
                 self.node_list[wf_report.workflow_name].node_holder.completed = True
+                # Mail manager initialization
+                mail_manager = self.global_config.get_mail_manager()
+                if mail_manager is not None:
+                    try:
+                        mail_manager.send_report(f"{self.subject.name} - {wf_report.workflow_name} COMPLETED at {datetime.now()}")
+                    except:
+                        pass
+
 
     def remove_running_icon(self):
         """
