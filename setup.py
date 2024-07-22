@@ -35,7 +35,8 @@ setup(name='swane',
           "packaging",
           "PySide6_VerticalQTabWidget==0.0.3",
           "GPUtil==1.4.0",
-          "numpy"
+          "numpy",
+          "cryptography"
       ],
       python_requires=">=3.7",
       entry_points={
