@@ -153,7 +153,7 @@ check_dep_fs_error1 = "FreeSurfer not detected (<a href='https://surfer.nmr.mgh.
                       "'>installation info</a>)"
 check_dep_fs_error2 = "FreeSurfer detected (%s) but without environment configuration"
 check_dep_fs_error3 = "FreeSurfer detected (%s). Matlab Runtime is not installed (<a " \
-                      "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>registration instruction</a>)"
+                      "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>installation instruction</a>)"
 check_dep_fs_error4 = "FreeSurfer detected (%s). License key missing (<a " \
                       "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instruction</a>)"
 check_dep_fs_wrong_version = "FreeSurfer version outdated (found %s, required %s). Please " \
