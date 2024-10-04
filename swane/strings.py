@@ -21,7 +21,7 @@ mainwindow_subj_folder_outside_workingdir_error = "The selected folder is not in
 mainwindow_subj_folder_with_blank_spaces_error = "The selected folder name contains blank spaces!"
 mainwindow_subj_already_loaded_error = "The selected subject was already loaded in " + APPNAME + "!"
 mainwindow_invalid_folder_error = "The selected folder does not contains valid subject data!"
-mainwindow_force_dir_update = "If you are SURE you selected a subject folder, " + APPNAME + "can try to update " \
+mainwindow_force_dir_update = "If you are SURE you selected a subject folder, " + APPNAME + " can try to update " \
                               "it.\nDo you want to update selected subject folder?"
 mainwindow_max_subj_error = "Max subject tab limit reached!"
 mainwindow_update_available = "New version available (%s). We recommend you to update " + APPNAME + " with:<br><b><center>pip3 install --upgrade swane"
