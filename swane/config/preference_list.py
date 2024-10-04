@@ -10,7 +10,18 @@ from swane.config.config_enums import (InputTypes, WORKFLOW_TYPES, SLICER_EXTENS
                                        BLOCK_DESIGN, SLICE_TIMING, GlobalPrefCategoryList)
 
 try:
-    XTRACT_DATA_DIR=os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
+    base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
+    human_path = os.path.join(base_dir, "Human")
+    HUMAN_path = os.path.join(base_dir, "HUMAN")
+
+    if os.path.exists(human_path):
+        # For FSL Version < 6.0.7
+        XTRACT_DATA_DIR = human_path
+    elif os.path.exists(HUMAN_path):
+        # For FSL Version >= 6.0.7
+        XTRACT_DATA_DIR = HUMAN_path
+    else:
+        XTRACT_DATA_DIR = ""
 except:
     XTRACT_DATA_DIR = ""
 DEFAULT_N_SAMPLES = 5000
