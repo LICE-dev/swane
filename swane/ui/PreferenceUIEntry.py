@@ -287,6 +287,7 @@ class PreferenceUIEntry:
             A tooltip to be displayed on label and input field. Default is None
         """
         self.input_field.setEnabled(False)
+        self.input_field.setStyleSheet("color: gray")
         self.label.setStyleSheet("color: gray")
         self.set_tooltip(tooltip)
         if self.input_type == InputTypes.BOOLEAN:
@@ -317,6 +318,7 @@ class PreferenceUIEntry:
         Enable the input field and remove gray out from the label
         """
         self.input_field.setEnabled(True)
+        self.input_field.setStyleSheet("")
         self.set_tooltip(self.tooltip)
         self.label.setStyleSheet("")
 

@@ -111,9 +111,7 @@ class PreferencesWindow(QDialog):
                     for pref_cat in self.preferences[category][key].pref_requirement:
                         if str(pref_cat) not in my_config:
                             continue
-                        for pref_req in self.preferences[category][
-                            key
-                        ].pref_requirement[pref_cat]:
+                        for pref_req in self.preferences[category][key].pref_requirement[pref_cat]:
                             if str(pref_req[0]) not in my_config[pref_cat]:
                                 continue
                             target_x = self.input_keys[pref_cat][pref_req[0]]
@@ -282,9 +280,7 @@ class PreferencesWindow(QDialog):
                 if self.inputs[req_x].input_type == InputTypes.BOOLEAN:
                     check = req_key[1] == self.inputs[req_x].input_field.isChecked()
                 elif self.inputs[req_x].input_type == InputTypes.ENUM:
-                    check = req_key[1].name == self.inputs[req_x].input_field.itemData(
-                        self.inputs[req_x].input_field.currentIndex()
-                    )
+                    check = req_key[1].name == self.inputs[req_x].input_field.itemData(self.inputs[req_x].input_field.currentIndex()).name
                 else:
                     check = req_key[1] == self.inputs[req_x].input_field.get_value()
 
