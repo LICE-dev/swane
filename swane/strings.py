@@ -183,6 +183,7 @@ generic_shell_file = "your shell configuration"
 # Nodes
 node_names = {}
 node_names["CustomDcm2niix"] = "nifti conversion"
+node_names["RobustFOV"] = "neck removal"
 node_names["ForceOrient"] = "standard orientation"
 node_names["BET"] = "scalp removal"
 node_names["FLIRT"] = "linear registration"
