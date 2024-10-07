@@ -276,8 +276,7 @@ class MainWorkflow(CustomWorkflow):
         self.add_nodes([self.flair])
 
         flair_inputnode = self.flair.get_node("inputnode")
-        flair_inputnode.inputs.crop = True
-        flair_inputnode.inputs.output_name = "r-flair_brain.nii.gz"
+        flair_inputnode.inputs.output_name = "flair"
         self.connect(self.t1, "outputnode.ref_brain", self.flair, "inputnode.reference")
 
         self.flair.sink_result(
@@ -287,6 +286,14 @@ class MainWorkflow(CustomWorkflow):
             sub_folder=self.Result_DIR,
         )
 
+        self.flair.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="betted_registered_file",
+            sub_folder=self.Result_DIR,
+        )
+
+        # TODO: explore possibility of freesurfer based asymmetry index
         # if is_freesurfer:
         #     from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
         #     flair_ai = freesurfer_asymmetry_index_workflow(name="flair_ai")
@@ -374,7 +381,7 @@ class MainWorkflow(CustomWorkflow):
                 flair2d_inputnode = self.flair2d.get_node("inputnode")
                 flair2d_inputnode.inputs.crop = False
                 flair2d_inputnode.inputs.output_name = (
-                    "r-flair2d_%s_brain.nii.gz" % plane
+                    "flair2d_%s" % plane
                 )
                 self.connect(
                     self.t1, "outputnode.ref_brain", self.flair2d, "inputnode.reference"
@@ -383,7 +390,7 @@ class MainWorkflow(CustomWorkflow):
                 self.flair2d.sink_result(
                     save_path=self.base_dir,
                     result_node="outputnode",
-                    result_name="registered_file",
+                    result_name="betted_registered_file",
                     sub_folder=self.Result_DIR,
                 )
 
@@ -406,7 +413,7 @@ class MainWorkflow(CustomWorkflow):
 
         t2_cor_inputnode = self.t2_cor.get_node("inputnode")
         t2_cor_inputnode.inputs.crop = False
-        t2_cor_inputnode.inputs.output_name = "r-t2_cor_brain.nii.gz"
+        t2_cor_inputnode.inputs.output_name = "r-t2_cor"
         self.connect(
             self.t1, "outputnode.ref_brain", self.t2_cor, "inputnode.reference"
         )
@@ -415,6 +422,13 @@ class MainWorkflow(CustomWorkflow):
             save_path=self.base_dir,
             result_node="outputnode",
             result_name="registered_file",
+            sub_folder=self.Result_DIR,
+        )
+
+        self.t2_cor.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="betted_registered_file",
             sub_folder=self.Result_DIR,
         )
 
@@ -434,13 +448,20 @@ class MainWorkflow(CustomWorkflow):
 
         mdc_inputnode = self.mdc.get_node("inputnode")
         mdc_inputnode.inputs.crop = True
-        mdc_inputnode.inputs.output_name = "r-mdc_brain.nii.gz"
+        mdc_inputnode.inputs.output_name = "mdc"
         self.connect(self.t1, "outputnode.ref_brain", self.mdc, "inputnode.reference")
 
         self.mdc.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
             result_name="registered_file",
+            sub_folder=self.Result_DIR,
+        )
+
+        self.mdc.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="betted_registered_file",
             sub_folder=self.Result_DIR,
         )
 
@@ -721,7 +742,7 @@ class MainWorkflow(CustomWorkflow):
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
         self.connect(
-            self.t1, "outputnode.ref_brain", self.ti_preproc, "inputnode.ref_brain"
+            self.t1, "outputnode.ref_brain", self.dti_preproc, "inputnode.ref_brain"
         )
 
         self.dti_preproc.sink_result(
