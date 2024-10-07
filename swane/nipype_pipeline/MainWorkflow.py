@@ -413,7 +413,7 @@ class MainWorkflow(CustomWorkflow):
 
         t2_cor_inputnode = self.t2_cor.get_node("inputnode")
         t2_cor_inputnode.inputs.crop = False
-        t2_cor_inputnode.inputs.output_name = "r-t2_cor"
+        t2_cor_inputnode.inputs.output_name = "t2_cor"
         self.connect(
             self.t1, "outputnode.ref_brain", self.t2_cor, "inputnode.reference"
         )
