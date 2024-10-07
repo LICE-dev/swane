@@ -22,7 +22,7 @@ class TestDicomSearchWorker:
         'TWO_VOL': [os.path.join(GENERIC_DICOM_DIR, "twovol"), 10, 1, 1, 1, 2, 10],
         'MULTI_VOL': [os.path.join(GENERIC_DICOM_DIR, "multivol"), 12, 1, 1, 1, 4, 12],
         'NONDICOM': [os.path.join(GENERIC_DICOM_DIR, "non_dicom_files"), 2, 0, 0, 0, 0, 0],
-        'MULTI_PT': [os.path.join(GENERIC_DICOM_DIR, "multipt"), 4, 2, -1, -1, -1, -1],
+        'MULTI_SUBJ': [os.path.join(GENERIC_DICOM_DIR, "multisubj"), 4, 2, -1, -1, -1, -1],
         'MULTI_EXAM': [os.path.join(GENERIC_DICOM_DIR, "multiexam"), 2, 1, 2, -1, -1, 1],
     }
 
