@@ -391,8 +391,9 @@ else:
 
         # lesion_segment(sceneDir)
 
-        baseList = ['ref_brain', 'r-flair_brain', 'r-mdc_brain', 'r-FA', 'r-flair2d_tra_brain', 'r-flair2d_cor_brain',
-                    'r-flair2d_sag_brain', 'r-t2_cor_brain', 'r-binary_flair', 'r-junction_z', 'r-extension_z']
+        baseList = ['ref_brain', 'r-flair_brain', 'r-flair', 'r-mdc_brain', 'r-mdc', 'r-FA', 'r-flair2d_tra_brain',
+                    'r-flair2d_cor_brain', 'r-flair2d_sag_brain', 'r-t2_cor_brain', 'r-t2_cor', 'r-binary_flair',
+                    'r-junction_z', 'r-extension_z']
 
         for volume in baseList:
             load_anat(results_folder, volume)
