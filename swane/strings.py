@@ -147,17 +147,19 @@ check_dep_fsl_error = "FSL not detected (<a href='https://fsl.fmrib.ox.ac.uk/fsl
                       "'>installation info</a>)"
 check_dep_fsl_wrong_version = "FSL version outdated (found %s, required %s). Please " \
                               "<a href='https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation'>update</a>"
+check_dep_fsl_no_locale = "FSL detected, but locale en_US.UTF-8 not available"
 check_dep_fsl_found = "FSL detected (%s)"
 check_dep_fs_found = "FreeSurfer detected (%s)"
 check_dep_fs_error1 = "FreeSurfer not detected (<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall" \
                       "'>installation info</a>)"
-check_dep_fs_error2 = "FreeSurfer detected (%s) but without environment configuration"
+check_dep_fs_error2 = "FreeSurfer detected (%s), but without environment configuration"
 check_dep_fs_error3 = "FreeSurfer detected (%s). Matlab Runtime is not installed (<a " \
                       "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>installation instruction</a>)"
 check_dep_fs_error4 = "FreeSurfer detected (%s). License key missing (<a " \
                       "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instruction</a>)"
 check_dep_fs_wrong_version = "FreeSurfer version outdated (found %s, required %s). Please " \
                               "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a>"
+check_dep_fs_no_tcsh = "FreeSurfer detected (%s) but tcsh is not installed."
 check_dep_graph_error = "Graphviz not detected (<a href='https://graphviz.org/download/'>Installation info</a>)"
 check_dep_graph_found = "Graphviz detected"
 check_dep_slicer_error1 = "Slicer not detected (<a href='https://slicer.readthedocs.io/en/latest/user_guide" \
