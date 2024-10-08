@@ -5,7 +5,6 @@ from swane import strings
 from packaging import version
 from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
-import subprocess
 from enum import Enum, auto
 import GPUtil
 
@@ -70,6 +69,8 @@ class DependencyManager:
     MIN_FREESURFER_VERSION = "7.3.2"
     MIN_SLICER_VERSION = "5.2.1"
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
+    FSL_TCSH_COMMAND = "tcsh"
+    FLS_LOCALE_COMMAND = "locale -a | grep en_US.utf8 || false"
 
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
@@ -240,8 +241,16 @@ class DependencyManager:
             found_version = version.parse(fsl_version)
         except:
             found_version = version.parse("0")
+
+        # check if locale en_US.utf8 is available
+        locale_en = os.system(DependencyManager.FLS_LOCALE_COMMAND)
+        if locale_en != 0:
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_no_locale)
+
+        # check fsl version
         if found_version < version.parse(DependencyManager.MIN_FSL_VERSION):
             return Dependence(DependenceStatus.WARNING, strings.check_dep_fsl_wrong_version % (fsl_version, DependencyManager.MIN_FSL_VERSION))
+
         return Dependence(DependenceStatus.DETECTED, strings.check_dep_fsl_found % fsl_version)
 
     @staticmethod
@@ -262,9 +271,13 @@ class DependencyManager:
         -------
         A Dependence object with freesurfer and freesurfer matlab runtime information.
         """
+
+        # FS installed
         if freesurfer.base.Info.version() is None:
             return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error1, DependenceStatus.MISSING)
         freesurfer_version = str(freesurfer.base.Info.looseversion())
+
+        # FS version file presence
         if "FREESURFER_HOME" not in os.environ:
             return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error2 % freesurfer_version, DependenceStatus.MISSING)
         license_file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
@@ -274,8 +287,16 @@ class DependencyManager:
             found_version = version.parse(freesurfer_version)
         except:
             found_version = version.parse("0")
+
+        # FS minimum version
         if found_version < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
-            return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_wrong_version % (freesurfer_version, DependencyManager.MIN_FSL_VERSION))
+            return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_wrong_version % (freesurfer_version, DependencyManager.MIN_FREESURFER_VERSION))
+
+        # tcsh shell installed
+        if which(DependencyManager.FSL_TCSH_COMMAND) is None:
+            return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_no_tcsh % freesurfer_version, DependenceStatus.MISSING)
+
+        # FS matlab runtime
         mrc = os.system(DependencyManager.FREESURFER_MATLAB_COMMAND)
         if mrc != 0:
             # TODO: facciamo un parse dell'output del comando per dare all'utente il comando di installazione? o forse è meglio non basarsi sul formato attuale dell'output e linkare direttamente la pagina ufficiale?
