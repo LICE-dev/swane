@@ -147,7 +147,7 @@ check_dep_fsl_error = "FSL not detected (<a href='https://fsl.fmrib.ox.ac.uk/fsl
                       "'>installation info</a>)"
 check_dep_fsl_wrong_version = "FSL version outdated (found %s, required %s). Please " \
                               "<a href='https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation'>update</a>"
-check_dep_fsl_no_locale = "FSL detected, but locale en_US.UTF-8 not available"
+check_dep_fsl_no_locale = "FSL detected, but locale en_US.utf8 not available. Use: sudo locale-gen en_US.utf8"
 check_dep_fsl_found = "FSL detected (%s)"
 check_dep_fs_found = "FreeSurfer detected (%s)"
 check_dep_fs_error1 = "FreeSurfer not detected (<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall" \
