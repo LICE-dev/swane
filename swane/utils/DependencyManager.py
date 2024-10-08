@@ -7,6 +7,7 @@ from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 from enum import Enum, auto
 import GPUtil
+import platform
 
 
 class DependenceStatus(Enum):
@@ -70,7 +71,7 @@ class DependencyManager:
     MIN_SLICER_VERSION = "5.2.1"
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
     FSL_TCSH_COMMAND = "tcsh"
-    FLS_LOCALE_COMMAND = "locale -a | grep en_US || false"
+    FLS_LOCALE_COMMAND = "locale -a | grep en_US.utf8 || false"
 
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
@@ -243,9 +244,10 @@ class DependencyManager:
             found_version = version.parse("0")
 
         # check if locale en_US.utf8 is available
-        locale_en = os.system(DependencyManager.FLS_LOCALE_COMMAND)
-        if locale_en != 0:
-            return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_no_locale)
+        if platform.system() == "Linux":
+            locale_en = os.system(DependencyManager.FLS_LOCALE_COMMAND)
+            if locale_en != 0:
+                return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_no_locale)
 
         # check fsl version
         if found_version < version.parse(DependencyManager.MIN_FSL_VERSION):
