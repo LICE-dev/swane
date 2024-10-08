@@ -25,7 +25,7 @@ setup(name='swane',
       install_requires=[
           "networkx<3",
           "nipype==1.8.6",
-          "Pyside6<=6.7.2",
+          "Pyside6",
           "pydicom<3",
           "configparser<=7.1.0",
           "psutil<=6.0.0",
