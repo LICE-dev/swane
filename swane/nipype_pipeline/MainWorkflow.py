@@ -109,6 +109,13 @@ class MainWorkflow(CustomWorkflow):
         self.launch_dti_analysis()
         self.launch_fMRI_analysis()
 
+        # Remove reference to original variables to prevent crash during subprocess spawn in MacOS
+        # Maybe this can be solved setting fork subprocess method too
+        self.global_config = None
+        self.subject_config = None
+        self.dependency_manager = None
+        self.subject_input_state_list = None
+
     def set_resources_configuration(self):
         # CPU cores and memory management
         self.is_resource_monitor = self.global_config.getboolean_safe(
