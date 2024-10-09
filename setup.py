@@ -23,7 +23,7 @@ setup(name='swane',
       ],
       license='MIT',
       install_requires=[
-          "networkx<3",
+          "networkx<3", # check compatilbity with nipype before upgrading
           "nipype==1.8.6",
           "Pyside6",
           "pydicom<3",
@@ -31,11 +31,11 @@ setup(name='swane',
           "psutil<=6.0.0",
           "swane_supplement>=0.1.2",
           "matplotlib<=3.9.2",
-          "nibabel==5.2.1",
+          "nibabel=<5.3.0",
           "packaging",
           "PySide6_VerticalQTabWidget==0.0.3",
           "GPUtil==1.4.0",
-          "numpy",
+          "numpy<=2.1.1", # check compatibility with nibabel e CropFov node before upgrading!
           "cryptography"
       ],
       python_requires=">=3.7",
