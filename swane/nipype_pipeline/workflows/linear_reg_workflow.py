@@ -2,7 +2,6 @@ from nipype.interfaces.fsl import (BET, FLIRT, RobustFOV, ApplyXFM)
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.utils.DataInputList import DataInputList
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
