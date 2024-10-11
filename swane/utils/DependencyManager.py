@@ -71,7 +71,7 @@ class DependencyManager:
     MIN_SLICER_VERSION = "5.2.1"
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
     FSL_TCSH_COMMAND = "tcsh"
-    FLS_LOCALE_COMMAND = "locale -a | grep en_US.utf8 || false"
+    FLS_LOCALE_COMMAND = "locale -a | grep en_US.utf8 >/dev/null || false "
 
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
