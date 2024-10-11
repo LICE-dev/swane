@@ -26,7 +26,7 @@ setup(name='swane',
           "networkx<3", # check compatibility with nipype before upgrading
           "nipype==1.8.6",
           "Pyside6",
-          "pydicom<3",
+          "pydicom<=3.0.1",
           "configparser<=7.1.0",
           "psutil<=6.0.0",
           "swane_supplement>=0.1.2",
