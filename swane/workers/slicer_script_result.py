@@ -309,7 +309,7 @@ def tract_model(segmentation_node, dti_dir: str, tract: [], side: str):
     segment_editor_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentEditorNode")
     segment_editor_widget.setMRMLSegmentEditorNode(segment_editor_node)
     segment_editor_widget.setSegmentationNode(segmentation_node)
-    segment_editor_widget.setMasterVolumeNode(tract_node)
+    segment_editor_widget.setSourceVolumeNode(tract_node)
 
     # Create segment
     tract_segment_id = segmentation_node.GetSegmentation().AddEmptySegment(tract['name'], tract['name'], tract['color'])
