@@ -132,7 +132,7 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 - Mail Settings for mail report at the workflow completion
 - 2D Cor T2 workflow (in Optional Series)
 - Unbetted series saved into workflow results
-- New dependency check in Home
+- New dependency checks in Home
 
 #### Changed
 
