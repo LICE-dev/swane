@@ -136,7 +136,10 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 #### Changed
 
+- Various python packages dependency requirement updated
 - FSL robustfov for neck cropping
+- 3D Slicer **setMasterVolumeNode** replaced with **setSourceVolumeNode**
+- pydicom **read_file** replaced with **dcmread**
 
 #### Fixed
 
