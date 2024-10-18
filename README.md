@@ -140,6 +140,7 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 - FSL robustfov for neck cropping
 - 3D Slicer **setMasterVolumeNode** replaced with **setSourceVolumeNode**
 - pydicom **read_file** replaced with **dcmread**
+- ASL Flirt cost function param **Mutual Information** replaced with **Normalized Mutual Information**
 
 #### Fixed
 
