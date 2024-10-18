@@ -125,7 +125,7 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 ## Changelog
 
-### [0.1.1] - 2024-10-08
+### [0.1.1] - 2024-10-18
 
 #### Added
 
