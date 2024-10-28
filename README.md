@@ -93,7 +93,7 @@ Below the recommend software/package installation order to make sure SWANe works
 ```
 pip3 install swane
 ```
-> :information_source: **Info**
+> [!NOTE]
 Starting from Ubuntu 23.04 apt is the default package manager for python libraries.
 SWANe is published only on PyPi, therefore it's necessary to allow the pip installation command with the argument --break-system-packages.
 This is not necessary for previous Ubuntu versions.
