@@ -21,7 +21,7 @@ mainwindow_subj_folder_outside_workingdir_error = "The selected folder is not in
 mainwindow_subj_folder_with_blank_spaces_error = "The selected folder name contains blank spaces!"
 mainwindow_subj_already_loaded_error = "The selected subject was already loaded in " + APPNAME + "!"
 mainwindow_invalid_folder_error = "The selected folder does not contains valid subject data!"
-mainwindow_force_dir_update = "If you are SURE you selected a subject folder, " + APPNAME + "can try to update " \
+mainwindow_force_dir_update = "If you are SURE you selected a subject folder, " + APPNAME + " can try to update " \
                               "it.\nDo you want to update selected subject folder?"
 mainwindow_max_subj_error = "Max subject tab limit reached!"
 mainwindow_update_available = "New version available (%s). We recommend you to update " + APPNAME + " with:<br><b><center>pip3 install --upgrade swane"
@@ -133,6 +133,11 @@ pref_window_reset_global_box = "Do you really want to reset global workflow sett
 pref_window_reset_subj_button = "Apply default workflow settings"
 pref_window_reset_subj_box = "Do you really want to apply default workflow settings to this subject?"
 
+pref_window_mail_test_button = "Test email settings"
+pref_window_mail_test_hint = "By clicking this button a test mail wil be send using the mail settings preferences"
+pref_window_mail_test_fail = "An error occurred, check " + APPNAME + " mail configuration"
+pref_window_mail_test_success = "Mail sent succesfully, check in your inbox"
+
 # Workflow
 check_dep_generic_error = "Dependency check error"
 check_dep_dcm2niix_error = "dcm2niix not detected (<a href='https://github.com/rordenlab/dcm2niix#Install" \
@@ -142,17 +147,19 @@ check_dep_fsl_error = "FSL not detected (<a href='https://fsl.fmrib.ox.ac.uk/fsl
                       "'>installation info</a>)"
 check_dep_fsl_wrong_version = "FSL version outdated (found %s, required %s). Please " \
                               "<a href='https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation'>update</a>"
+check_dep_fsl_no_locale = "FSL detected, but locale en_US.utf8 not available. Use: sudo locale-gen en_US.utf8"
 check_dep_fsl_found = "FSL detected (%s)"
 check_dep_fs_found = "FreeSurfer detected (%s)"
 check_dep_fs_error1 = "FreeSurfer not detected (<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall" \
                       "'>installation info</a>)"
-check_dep_fs_error2 = "FreeSurfer detected (%s) but without environment configuration"
+check_dep_fs_error2 = "FreeSurfer detected (%s), but without environment configuration"
 check_dep_fs_error3 = "FreeSurfer detected (%s). Matlab Runtime is not installed (<a " \
-                      "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>registration instruction</a>)"
+                      "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>installation instruction</a>)"
 check_dep_fs_error4 = "FreeSurfer detected (%s). License key missing (<a " \
                       "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instruction</a>)"
 check_dep_fs_wrong_version = "FreeSurfer version outdated (found %s, required %s). Please " \
                               "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a>"
+check_dep_fs_no_tcsh = "FreeSurfer detected (%s) but tcsh is not installed."
 check_dep_graph_error = "Graphviz not detected (<a href='https://graphviz.org/download/'>Installation info</a>)"
 check_dep_graph_found = "Graphviz detected"
 check_dep_slicer_error1 = "Slicer not detected (<a href='https://slicer.readthedocs.io/en/latest/user_guide" \
@@ -178,6 +185,7 @@ generic_shell_file = "your shell configuration"
 # Nodes
 node_names = {}
 node_names["CustomDcm2niix"] = "nifti conversion"
+node_names["RobustFOV"] = "neck removal"
 node_names["ForceOrient"] = "standard orientation"
 node_names["BET"] = "scalp removal"
 node_names["FLIRT"] = "linear registration"

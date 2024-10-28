@@ -309,7 +309,7 @@ def tract_model(segmentation_node, dti_dir: str, tract: [], side: str):
     segment_editor_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentEditorNode")
     segment_editor_widget.setMRMLSegmentEditorNode(segment_editor_node)
     segment_editor_widget.setSegmentationNode(segmentation_node)
-    segment_editor_widget.setMasterVolumeNode(tract_node)
+    segment_editor_widget.setSourceVolumeNode(tract_node)
 
     # Create segment
     tract_segment_id = segmentation_node.GetSegmentation().AddEmptySegment(tract['name'], tract['name'], tract['color'])
@@ -391,8 +391,9 @@ else:
 
         # lesion_segment(sceneDir)
 
-        baseList = ['ref_brain', 'r-flair_brain', 'r-mdc_brain', 'r-FA', 'r-flair2d_tra_brain', 'r-flair2d_cor_brain',
-                    'r-flair2d_sag_brain', 'r-binary_flair', 'r-junction_z', 'r-extension_z']
+        baseList = ['ref_brain', 'r-flair_brain', 'r-flair', 'r-mdc_brain', 'r-mdc', 'r-FA', 'r-flair2d_tra_brain',
+                    'r-flair2d_cor_brain', 'r-flair2d_sag_brain', 'r-t2_cor_brain', 'r-t2_cor', 'r-binary_flair',
+                    'r-junction_z', 'r-extension_z']
 
         for volume in baseList:
             load_anat(results_folder, volume)

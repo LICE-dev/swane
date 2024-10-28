@@ -109,7 +109,7 @@ class TestDependencyManager:
         if slicer_dir_copy in found_list[0]:
             unfound = slicer_dir
         else:
-            unfound = slicer_dir_copy
+            unfound = os.path.join(slicer_dir_copy, os.path.basename(slicer_dir))
 
         unfound_slicer = os.path.join(unfound, "Slicer")
         assert os.path.exists(unfound_slicer) is True, "Error on duplicating Slicer"

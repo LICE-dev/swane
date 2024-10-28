@@ -110,7 +110,7 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
     # NODE 4: Registration matrix calculation in reference space
     func_2_ref_flirt = Node(FLIRT(), name='%s_2_ref_flirt' % name)
     func_2_ref_flirt.long_name = "%s to reference space"
-    func_2_ref_flirt.inputs.cost = "mutualinfo"
+    func_2_ref_flirt.inputs.cost = "normmi"
     func_2_ref_flirt.inputs.searchr_x = [-90, 90]
     func_2_ref_flirt.inputs.searchr_y = [-90, 90]
     func_2_ref_flirt.inputs.searchr_z = [-90, 90]

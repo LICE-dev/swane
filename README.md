@@ -16,6 +16,7 @@
 - [Authors](#authors)
 - [Feedback](#feedback)
 - [License](#license)
+- [Changelog](#changelog)
 
 
 ## Introduction
@@ -35,6 +36,7 @@ A few of the analyses you can do with SWANe:
 * **3D T1w**: generates T13D NIFTI files to use as reference;
 * **3D Flair**: generates 3D Flair NIFTI files and perform linear registration to reference space;
 * **2D Cor/Sag/Tra Flair**: generates 2D Flair NIFTI files and perform linear registration to reference space;
+* **2D 2T Coronal**: generates 2D 2T Coronal NIFTI files and perform linear registration to reference space;
 * **Post-contrast 3D T1w**: generates post-contrast 3D T1w NIFTI files and perform linear registration to T13D reference space.
 * **FreeSurfer**: performs FreeSurfer cortical reconstruction and, if required, segmentation of the hippocampal substructures and the nuclei of the amygdala;
 * **FlaT1**: creates a junction and extension z-score map based on 3D T1w, 3D Flair and a mean template;
@@ -91,7 +93,7 @@ Below the recommend software/package installation order to make sure SWANe works
 ```
 pip3 install swane
 ```
-> :information_source: **Info**
+> [!NOTE]
 Starting from Ubuntu 23.04 apt is the default package manager for python libraries.
 SWANe is published only on PyPi, therefore it's necessary to allow the pip installation command with the argument --break-system-packages.
 This is not necessary for previous Ubuntu versions.
@@ -120,3 +122,28 @@ You can contact us at the following e-mail: [dev@lice.it](mailto:dev@lice.it).
 ## License
 
 This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LICENSE) file for details
+
+## Changelog
+
+### [0.1.1] - 2024-10-18
+
+#### Added
+
+- Mail Settings for mail report at the workflow completion
+- 2D Cor T2 workflow (in Optional Series)
+- Unbetted series saved into workflow results
+- New dependency checks in Home
+
+#### Changed
+
+- Various python packages dependency requirement updated
+- FSL robustfov for neck cropping
+- 3D Slicer **setMasterVolumeNode** replaced with **setSourceVolumeNode**
+- pydicom **read_file** replaced with **dcmread**
+- ASL Flirt cost function param **Mutual Information** replaced with **Normalized Mutual Information**
+
+#### Fixed
+
+- SWANe compatibility with FSL ver. >= 7.0.0
+- fMRI Task B name setting field unlocked for rArB block design
+- Various typos

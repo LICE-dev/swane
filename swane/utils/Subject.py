@@ -53,7 +53,9 @@ class Subject:
     GRAPH_FILE_EXT = "svg"
     GRAPH_TYPE = "colored"
 
-    def __init__(self, global_config: ConfigManager, dependency_manager: DependencyManager):
+    def __init__(
+        self, global_config: ConfigManager, dependency_manager: DependencyManager
+    ):
         self.global_config: ConfigManager = global_config
         self.folder: str = None
         self.name: str = None
@@ -85,11 +87,15 @@ class Subject:
 
         self.folder = subject_folder
         self.name = os.path.basename(subject_folder)
-        self.input_state_list = SubjectInputStateList(self.dicom_folder(), self.global_config)
+        self.input_state_list = SubjectInputStateList(
+            self.dicom_folder(), self.global_config
+        )
         self.create_config(self.dependency_manager)
         return SubjectRet.ValidFolder
 
-    def prepare_scan_dicom_folders(self) -> tuple[dict[DataInputList, DicomSearchWorker], int]:
+    def prepare_scan_dicom_folders(
+        self,
+    ) -> tuple[dict[DataInputList, DicomSearchWorker], int]:
         """
         Generates a DicomSearchWorker for every data input
 
@@ -132,7 +138,12 @@ class Subject:
 
         return dicom_src_work
 
-    def execute_scan_dicom_folders(self, dicom_scanners: dict[DataInputList, DicomSearchWorker], status_callback: callable = None, progress_callback: callable = None):
+    def execute_scan_dicom_folders(
+        self,
+        dicom_scanners: dict[DataInputList, DicomSearchWorker],
+        status_callback: callable = None,
+        progress_callback: callable = None,
+    ):
         """
         Load subject information from a folder, generate subject configuration and input_state_list
 
@@ -148,12 +159,21 @@ class Subject:
         """
         for data_input in self.input_state_list:
             if data_input in dicom_scanners:
-                self.check_input_folder_step2(data_input, dicom_scanners[data_input], progress_callback=progress_callback, status_callback=status_callback)
+                self.check_input_folder_step2(
+                    data_input,
+                    dicom_scanners[data_input],
+                    progress_callback=progress_callback,
+                    status_callback=status_callback,
+                )
                 if status_callback is not None:
                     status_callback(data_input, SubjectRet.DataInputLoading)
 
-    def check_input_folder(self, data_input: DataInputList, status_callback: callable = None,
-                           progress_callback: callable = None):
+    def check_input_folder(
+        self,
+        data_input: DataInputList,
+        status_callback: callable = None,
+        progress_callback: callable = None,
+    ):
         """
         Checks if the series folder labelled data_input contains DICOM files.
         If PersistentProgressDialog is not None, it will be used to show the scan progress.
@@ -174,10 +194,20 @@ class Subject:
         """
 
         dicom_src_work = self.gen_dicom_search_worker(data_input)
-        self.check_input_folder_step2(data_input, dicom_src_work, status_callback=status_callback, progress_callback=progress_callback)
+        self.check_input_folder_step2(
+            data_input,
+            dicom_src_work,
+            status_callback=status_callback,
+            progress_callback=progress_callback,
+        )
 
-    def check_input_folder_step2(self, data_input: DataInputList, dicom_src_work: DicomSearchWorker, status_callback: callable = None,
-                                 progress_callback: callable = None):
+    def check_input_folder_step2(
+        self,
+        data_input: DataInputList,
+        dicom_src_work: DicomSearchWorker,
+        status_callback: callable = None,
+        progress_callback: callable = None,
+    ):
         """
         Starts the DICOM files scan Worker into the series folder on a new thread.
 
@@ -198,13 +228,26 @@ class Subject:
 
         """
 
-        dicom_src_work.signal.sig_finish.connect(lambda src, name=data_input, callback=status_callback: self.check_input_folder_step3(name, src, callback))
+        dicom_src_work.signal.sig_finish.connect(
+            lambda src, name=data_input, callback=status_callback: self.check_input_folder_step3(
+                name, src, callback
+            )
+        )
 
         if progress_callback is not None:
-            dicom_src_work.signal.sig_loop.connect(lambda i, maximum=dicom_src_work.get_files_len(): progress_callback(i, maximum))
+            dicom_src_work.signal.sig_loop.connect(
+                lambda i, maximum=dicom_src_work.get_files_len(): progress_callback(
+                    i, maximum
+                )
+            )
         QThreadPool.globalInstance().start(dicom_src_work)
 
-    def check_input_folder_step3(self, data_input: DataInputList, dicom_src_work: DicomSearchWorker, status_callback: callable = None):
+    def check_input_folder_step3(
+        self,
+        data_input: DataInputList,
+        dicom_src_work: DicomSearchWorker,
+        status_callback: callable = None,
+    ):
         """
         Updates SWANe UI at the end of the DICOM files scan Worker execution for a subject.
 
@@ -226,29 +269,47 @@ class Subject:
         subjects_list = dicom_src_work.get_subject_list()
 
         if len(subjects_list) == 0:
-            status_callback(data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work)
+            status_callback(
+                data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work
+            )
             return
 
         if len(subjects_list) > 1:
-            status_callback(data_input, SubjectRet.DataInputWarningMultiSubj, dicom_src_work)
+            status_callback(
+                data_input, SubjectRet.DataInputWarningMultiSubj, dicom_src_work
+            )
             return
 
         exam_list = dicom_src_work.get_exam_list(subjects_list[0])
 
         if len(exam_list) != 1:
-            status_callback(data_input, SubjectRet.DataInputWarningMultiExam, dicom_src_work)
+            status_callback(
+                data_input, SubjectRet.DataInputWarningMultiExam, dicom_src_work
+            )
             return
 
         series_list = dicom_src_work.get_series_list(subjects_list[0], exam_list[0])
 
         if len(series_list) != 1:
-            status_callback(data_input, SubjectRet.DataInputWarningMultiSeries, dicom_src_work)
+            status_callback(
+                data_input, SubjectRet.DataInputWarningMultiSeries, dicom_src_work
+            )
             return
         self.input_state_list[data_input].loaded = True
-        self.input_state_list[data_input].volumes = dicom_src_work.get_series_nvol(subjects_list[0], exam_list[0],series_list[0])
+        self.input_state_list[data_input].volumes = dicom_src_work.get_series_nvol(
+            subjects_list[0], exam_list[0], series_list[0]
+        )
         status_callback(data_input, SubjectRet.DataInputValid, dicom_src_work)
 
-    def dicom_import_to_folder(self, data_input: DataInputList, copy_list: list, vols: int, mod: str, force_modality: bool, progress_callback: callable = None) -> SubjectRet:
+    def dicom_import_to_folder(
+        self,
+        data_input: DataInputList,
+        copy_list: list,
+        vols: int,
+        mod: str,
+        force_modality: bool,
+        progress_callback: callable = None,
+    ) -> SubjectRet:
         """
         Copies the files inside the selected folder in the input list into the folder specified by data_input var.
 
@@ -272,7 +333,10 @@ class Subject:
             return SubjectRet.DataImportErrorVolumesMin
 
         # modality check
-        if not data_input.value.is_image_modality(ImageModality.from_string(mod)) and not force_modality:
+        if (
+            not data_input.value.is_image_modality(ImageModality.from_string(mod))
+            and not force_modality
+        ):
             return SubjectRet.DataImportErrorModality
 
         dest_path = os.path.join(self.dicom_folder(), str(data_input))
@@ -323,9 +387,15 @@ class Subject:
         """
 
         if type(data_input) is not DataInputList:
-            return os.path.join(self.folder, self.global_config.get_default_dicom_folder())
+            return os.path.join(
+                self.folder, self.global_config.get_default_dicom_folder()
+            )
         else:
-            return os.path.join(self.folder, self.global_config.get_default_dicom_folder(), str(data_input))
+            return os.path.join(
+                self.folder,
+                self.global_config.get_default_dicom_folder(),
+                str(data_input),
+            )
 
     def dicom_folder_count(self, data_input: DataInputList) -> int:
         """
@@ -344,7 +414,12 @@ class Subject:
         try:
             dicom_path = self.dicom_folder(data_input)
             count = len(
-                [entry for entry in os.listdir(dicom_path) if os.path.isfile(os.path.join(dicom_path, entry))])
+                [
+                    entry
+                    for entry in os.listdir(dicom_path)
+                    if os.path.isfile(os.path.join(dicom_path, entry))
+                ]
+            )
             return count
         except:
             return 0
@@ -366,10 +441,12 @@ class Subject:
         if not os.path.exists(subject_folder):
             return SubjectRet.FolderNotFound
 
-        if ' ' in subject_folder:
+        if " " in subject_folder:
             return SubjectRet.PathBlankSpaces
 
-        if not os.path.abspath(subject_folder).startswith(os.path.abspath(self.global_config.get_main_working_directory() + os.sep)):
+        if not os.path.abspath(subject_folder).startswith(
+            os.path.abspath(self.global_config.get_main_working_directory() + os.sep)
+        ):
             return SubjectRet.FolderOutsideMain
 
         if not self.check_subject_subtree(subject_folder):
@@ -398,8 +475,11 @@ class Subject:
             os.makedirs(src_path, exist_ok=True)
 
             # Reset the workflows related to the deleted DICOM images
-            src_path = os.path.join(self.folder, self.name + strings.WF_DIR_SUFFIX,
-                                    data_input.value.workflow_name)
+            src_path = os.path.join(
+                self.folder,
+                self.name + strings.WF_DIR_SUFFIX,
+                data_input.value.workflow_name,
+            )
             shutil.rmtree(src_path, ignore_errors=True)
             self.input_state_list[data_input].loaded = False
             self.input_state_list[data_input].volumes = 0
@@ -424,7 +504,13 @@ class Subject:
         """
 
         for data_input in DataInputList:
-            if not os.path.exists(os.path.join(subject_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
+            if not os.path.exists(
+                os.path.join(
+                    subject_folder,
+                    self.global_config.get_default_dicom_folder(),
+                    str(data_input),
+                )
+            ):
                 return False
 
         return True
@@ -446,9 +532,20 @@ class Subject:
 
         for data_input in DataInputList:
             if not os.path.exists(
-                    os.path.join(subject_folder, self.global_config.get_default_dicom_folder(), str(data_input))):
-                os.makedirs(os.path.join(subject_folder, self.global_config.get_default_dicom_folder(), str(data_input)),
-                            exist_ok=True)
+                os.path.join(
+                    subject_folder,
+                    self.global_config.get_default_dicom_folder(),
+                    str(data_input),
+                )
+            ):
+                os.makedirs(
+                    os.path.join(
+                        subject_folder,
+                        self.global_config.get_default_dicom_folder(),
+                        str(data_input),
+                    ),
+                    exist_ok=True,
+                )
 
     def create_new_subject_dir(self, subject_name: str) -> SubjectRet:
         """
@@ -464,20 +561,34 @@ class Subject:
         True if no Exception raised.
 
         """
-        invalid_chars = r'\/:*?<>|'
+        invalid_chars = r"\/:*?<>|"
 
         if subject_name is None or subject_name == "":
             return SubjectRet.FolderNotFound
-        elif any(char in invalid_chars for char in subject_name) or subject_name.isspace() or ' ' in subject_name:
+        elif (
+            any(char in invalid_chars for char in subject_name)
+            or subject_name.isspace()
+            or " " in subject_name
+        ):
             return SubjectRet.PathBlankSpaces
-        elif os.path.exists(os.path.join(self.global_config.get_main_working_directory(), subject_name)):
+        elif os.path.exists(
+            os.path.join(self.global_config.get_main_working_directory(), subject_name)
+        ):
             return SubjectRet.FolderAlreadyExists
         else:
             try:
-                base_folder = os.path.abspath(os.path.join(self.global_config.get_main_working_directory(), subject_name))
-                dicom_folder = os.path.join(base_folder, self.global_config.get_default_dicom_folder())
+                base_folder = os.path.abspath(
+                    os.path.join(
+                        self.global_config.get_main_working_directory(), subject_name
+                    )
+                )
+                dicom_folder = os.path.join(
+                    base_folder, self.global_config.get_default_dicom_folder()
+                )
                 for data_input in DataInputList:
-                    os.makedirs(os.path.join(dicom_folder, str(data_input)), exist_ok=True)
+                    os.makedirs(
+                        os.path.join(dicom_folder, str(data_input)), exist_ok=True
+                    )
                 return self.load(base_folder)
             except:
                 return SubjectRet.FolderNotFound
@@ -490,7 +601,11 @@ class Subject:
         -------
         True if workflow can be generated
         """
-        return self.input_state_list.is_ref_loaded() and self.dependency_manager.is_fsl() and self.dependency_manager.is_dcm2niix()
+        return (
+            self.input_state_list.is_ref_loaded()
+            and self.dependency_manager.is_fsl()
+            and self.dependency_manager.is_dcm2niix()
+        )
 
     def graph_dir(self) -> str:
         """
@@ -511,7 +626,10 @@ class Subject:
         The complete path of graph file with the specified name
         """
         graph_name = long_name.lower().replace(" ", "_")
-        return os.path.join(self.graph_dir(), Subject.GRAPH_FILE_PREFIX + graph_name + "." + Subject.GRAPH_FILE_EXT)
+        return os.path.join(
+            self.graph_dir(),
+            Subject.GRAPH_FILE_PREFIX + graph_name + "." + Subject.GRAPH_FILE_EXT,
+        )
 
     def result_dir(self) -> str:
         """
@@ -527,7 +645,9 @@ class Subject:
         -------
         The slicer scene file path
         """
-        return os.path.join(self.result_dir(), "scene." + self.global_config.get_slicer_scene_ext())
+        return os.path.join(
+            self.result_dir(), "scene." + self.global_config.get_slicer_scene_ext()
+        )
 
     def generate_workflow(self, generate_graphs: bool = True) -> SubjectRet:
         """
@@ -550,16 +670,21 @@ class Subject:
 
         # Main Workflow generation
         if self.workflow is None:
-            self.workflow = MainWorkflow(name=self.name + strings.WF_DIR_SUFFIX, base_dir=self.folder)
 
-        # Node List population
-        try:
-            self.workflow.add_input_folders(self.global_config, self.config,
-                                            self.dependency_manager, self.input_state_list)
-        except:
-            traceback.print_exc()
-            # TODO: generiamo un file crash nella cartella log?
-            return SubjectRet.GenWfError
+            # Node List population
+            try:
+                self.workflow = MainWorkflow(
+                    name=self.name + strings.WF_DIR_SUFFIX,
+                    base_dir=self.folder,
+                    global_config=self.global_config,
+                    subject_config=self.config,
+                    dependency_manager=self.dependency_manager,
+                    subject_input_state_list=self.input_state_list,
+                )
+            except:
+                traceback.print_exc()
+                # TODO: generiamo un file crash nella cartella log?
+                return SubjectRet.GenWfError
 
         graph_dir = self.graph_dir()
         shutil.rmtree(graph_dir, ignore_errors=True)
@@ -572,10 +697,16 @@ class Subject:
             for node in node_list.keys():
                 if len(node_list[node].node_list.keys()) > 0:
                     if self.dependency_manager.is_graphviz():
-                        thread = Thread(target=self.workflow.get_node(node).write_graph,
-                                        kwargs={'graph2use': self.GRAPH_TYPE, 'format': Subject.GRAPH_FILE_EXT,
-                                                'dotfilename': os.path.join(self.graph_file(node_list[node].long_name)),
-                                                })
+                        thread = Thread(
+                            target=self.workflow.get_node(node).write_graph,
+                            kwargs={
+                                "graph2use": self.GRAPH_TYPE,
+                                "format": Subject.GRAPH_FILE_EXT,
+                                "dotfilename": os.path.join(
+                                    self.graph_file(node_list[node].long_name)
+                                ),
+                            },
+                        )
                         thread.start()
 
         return SubjectRet.GenWfCompleted
@@ -642,8 +773,12 @@ class Subject:
         """
         shutil.rmtree(self.freesurfer_dir(), ignore_errors=True)
 
-    def start_workflow(self, resume: bool = None, resume_freesurfer: bool = None,
-                       update_node_callback: callable = None) -> SubjectRet:
+    def start_workflow(
+        self,
+        resume: bool = None,
+        resume_freesurfer: bool = None,
+        update_node_callback: callable = None,
+    ) -> SubjectRet:
         """
         Start the workflow execution in a subprocess
 
@@ -740,8 +875,11 @@ class Subject:
 
         """
 
-        slicer_thread = SlicerExportWorker(self.global_config.get_slicer_path(), self.result_dir(),
-                                           self.global_config.get_slicer_scene_ext())
+        slicer_thread = SlicerExportWorker(
+            self.global_config.get_slicer_path(),
+            self.result_dir(),
+            self.global_config.get_slicer_scene_ext(),
+        )
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)
         QThreadPool.globalInstance().start(slicer_thread)
