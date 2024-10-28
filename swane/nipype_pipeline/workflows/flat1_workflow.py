@@ -119,14 +119,16 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     workflow.connect(restore_2_mni1, "out_file", flair_div_ref, "operand_file")
 
     # NODE 7: Outliers removal from mask
-    outliers_mask = Node(FLAT1OutliersMask(), name="%s_outliers_mask" % name)
-    outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
-    workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
+    # DISABLED FOR VALIDATION TESTING
+    # outliers_mask = Node(FLAT1OutliersMask(), name="%s_outliers_mask" % name)
+    # outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
+    # workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
 
     # NODE 8: Cerebellum removal from divided image
     cortex_mask = Node(ApplyMask(), name="%s_cortexMask" % name)
     cortex_mask.long_name = "outliers %s"
-    workflow.connect(outliers_mask, "out_file", cortex_mask, "mask_file")
+    # workflow.connect(outliers_mask, "out_file", cortex_mask, "mask_file")
+    cortex_mask.inputs.mask_file = swane_supplement.cortex_mas
     workflow.connect(flair_div_ref, "out_file", cortex_mask, "in_file")
 
     # NODE 9: Masking for gray matter on t1_restore in MNI1
@@ -252,7 +254,8 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     no_cereb_extension_z.long_name = "cerebellum %s"
     no_cereb_extension_z.inputs.out_file = "no_cereb_extension_z.nii.gz"
     workflow.connect(extension_z, "out_file", no_cereb_extension_z, "in_file")
-    workflow.connect(outliers_mask, "out_file", no_cereb_extension_z, "mask_file")
+    # workflow.connect(outliers_mask, "out_file", no_cereb_extension_z, "mask_file")
+    no_cereb_extension_z.inputs.mask_file = swane_supplement.cortex_mas
 
     # NODE 23: Extension z-score nonlinear transformation in reference space
     extension_z_2_ref = Node(ApplyWarp(), name="%s_extensionz2ref" % name)

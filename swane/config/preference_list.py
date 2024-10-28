@@ -10,7 +10,18 @@ from swane.config.config_enums import (InputTypes, WORKFLOW_TYPES, SLICER_EXTENS
                                        BLOCK_DESIGN, SLICE_TIMING, GlobalPrefCategoryList)
 
 try:
-    XTRACT_DATA_DIR=os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data/Human"))
+    base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
+    human_path = os.path.join(base_dir, "Human")
+    HUMAN_path = os.path.join(base_dir, "HUMAN")
+
+    if os.path.exists(human_path):
+        # For FSL Version < 6.0.7
+        XTRACT_DATA_DIR = human_path
+    elif os.path.exists(HUMAN_path):
+        # For FSL Version >= 6.0.7
+        XTRACT_DATA_DIR = HUMAN_path
+    else:
+        XTRACT_DATA_DIR = ""
 except:
     XTRACT_DATA_DIR = ""
 DEFAULT_N_SAMPLES = 5000
@@ -394,6 +405,52 @@ for data_input in DataInputList:
             default='false',
             restart=True,
         )
+
+category = GlobalPrefCategoryList.MAIL_SETTINGS
+GLOBAL_PREFERENCES[category] = {}
+GLOBAL_PREFERENCES[category]['enabled'] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Enabled",
+    tooltip="Toggle on/off the mail report sending service. If enabled, a mail report will be sent to your email at each workflow completion",
+    default='false'
+)
+GLOBAL_PREFERENCES[category]['address'] = PreferenceEntry(
+    input_type=InputTypes.TEXT,
+    label="Address",
+    tooltip="The POP3/IMAP address of your mail host",
+    default=""
+)
+GLOBAL_PREFERENCES[category]['port'] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Port",
+    tooltip="The port indicated in your mail host documentation",
+    default=0,
+    range=[1, 1000]
+)
+GLOBAL_PREFERENCES[category]['username'] = PreferenceEntry(
+    input_type=InputTypes.TEXT,
+    label="Username",
+    tooltip="Your email",
+    default=""
+)
+GLOBAL_PREFERENCES[category]['password'] = PreferenceEntry(
+    input_type=InputTypes.PASSWORD,
+    label="Password",
+    tooltip="Your password email",
+    default=""
+)
+GLOBAL_PREFERENCES[category]['use_ssl'] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SSL",
+    tooltip="True if your mail host requires the SSL security protocol",
+    default='true'
+)
+GLOBAL_PREFERENCES[category]['use_tls'] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use TLS",
+    tooltip="True if your mail host requires the TLS security protocol. TLS is not used if SSL is active",
+    default='false'
+)
 
 DEFAULT_WF = {}
 DEFAULT_WF[WORKFLOW_TYPES.STRUCTURAL] = {

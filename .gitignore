@@ -54,3 +54,6 @@ dist
 release
 build
 venv
+/.vscode
+/swane/.vscode
+/swane_supplement

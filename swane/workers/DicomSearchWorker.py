@@ -84,7 +84,7 @@ class DicomSearchWorker(QRunnable):
                 # read the file
                 if not os.path.exists(dicom_loc):
                     continue
-                ds = pydicom.read_file(dicom_loc, force=True)
+                ds = pydicom.dcmread(dicom_loc, force=True)
 
                 subject_id = ds.get("PatientID", "na")
                 if subject_id == "na":
@@ -238,7 +238,7 @@ class DicomSearchWorker(QRunnable):
 
         """
         image_list = self.get_series_files(subject, exam, series)
-        ds = pydicom.read_file(image_list[0], force=True)
+        ds = pydicom.dcmread(image_list[0], force=True)
 
         # Excludes series with less than 10 images unless they are siemens mosaics series
         if len(image_list) < 10 and hasattr(ds, 'ImageType') and "MOSAIC" not in ds.ImageType:
