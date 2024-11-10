@@ -212,7 +212,7 @@ class DicomSearchWorker(QRunnable):
             return []
         return list(self.dicom_tree[subject][exam][series])
 
-    def get_series_info(self, subject: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> (list[str], str, str, str, int):
+    def get_series_info(self, subject: str, exam: pydicom.uid.UID, series: pydicom.valuerep.IS) -> tuple[list[str], str, str, str, int]:
         """
         Extract information from dicom search the dicom file path of a specified series of a specified exam of specified subject
         Parameters
@@ -247,7 +247,7 @@ class DicomSearchWorker(QRunnable):
         mod = ds.Modality
         vols = self.get_series_nvol(subject, exam, series)
         subject_name = str(ds.PatientName)
-        series_description = ds.SeriesDescription
+        series_description = ds.SeriesDescription if hasattr(ds, "SeriesDescription") else ""
 
         return image_list, subject_name, mod, series_description, vols
     
