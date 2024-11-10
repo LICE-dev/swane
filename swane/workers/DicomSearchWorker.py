@@ -247,7 +247,7 @@ class DicomSearchWorker(QRunnable):
         mod = ds.Modality
         vols = self.get_series_nvol(subject, exam, series)
         subject_name = str(ds.PatientName)
-        series_description = ds.SeriesDescription if hasattr(ds, "SeriesDescription") else ""
+        series_description = ds.SeriesDescription if hasattr(ds, "SeriesDescription") else "unnamed_series"
 
         return image_list, subject_name, mod, series_description, vols
     
