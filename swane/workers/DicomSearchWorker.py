@@ -310,33 +310,39 @@ class DicomSearchWorker(QRunnable):
         mod = ds.Modality
         vols = self.get_series_nvol(subject, exam, series)
         subject_name = str(ds.PatientName)
-        series_description = self.get_series_description(ds)
+        if hasattr(ds, "SeriesDescription"):
+            series_description = ds.SeriesDescription
+        else:
+            series_description = self.find_series_description(image_list)
 
         return image_list, subject_name, mod, series_description, vols
 
-    def get_series_description(self, ds: pydicom.FileDataset) -> str:
+    def find_series_description(self, image_list: list[str]) -> str:
         """
-        Extract the description of a dicom file.
+        Extract the description of the dicom series searching among all the series images.
         The description is equal to:
-        - the SeriesDescription tag, if any
-        - otherwise, the file_name tag, if any
+        - the SeriesDescription tag, if any in one of the image list
         - otherwise, None (unnamed_series)
 
         Parameters
         ----------
-        ds: pydicom.FileDataset
-            The dicom file to check
+        image_list: list[str]
+            The dicom file list to check
 
         Returns
         -------
         str
-            The dicom file description
+            The dicom series description
 
         """
         
-        if hasattr(ds, "SeriesDescription"):
-            return ds.SeriesDescription
-        elif hasattr(ds, "filename"):
-            return os.path.basename(ds.filename)
-        else:
-            return "unnamed_series"
+        series_description = "unnamed_Series"
+        
+        for image in image_list:
+            ds = pydicom.dcmread(image, force=True)
+            
+            if hasattr(ds, "SeriesDescription"):
+                series_description = ds.SeriesDescription
+                break
+        
+        return series_description
