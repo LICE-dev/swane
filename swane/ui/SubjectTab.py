@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeader
                                QTreeView, QComboBox)
 
 from swane import strings
+from swane.utils.DicomTree import DicomTree
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.workers.SlicerViewerWorker import SlicerViewerWorker
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
@@ -749,7 +750,7 @@ class SubjectTab(QTabWidget):
         else:
             progress.setLabelText(strings.subj_tab_exporting_prefix + msg)
 
-    def input_check_update(self, data_input: DataInputList, state: SubjectRet, dicom_src_work: DicomSearchWorker = None):
+    def input_check_update(self, data_input: DataInputList, state: SubjectRet, dicom_tree: DicomTree = None):
         """
         Function used as callback after subject dicom folder check
 
@@ -759,29 +760,34 @@ class SubjectTab(QTabWidget):
             The data input checked
         state: SubjectRet
             The return code of the scan
-        dicom_src_work: DicomSearchWorker, optional
+        dicom_tree: DicomSearchWorker, optional
             The dicom scanner calling the function. Default is None
         """
         if data_input not in self.input_report:
             return
         if state == SubjectRet.DataInputWarningNoDicom:
-            self.set_error(data_input, strings.subj_tab_no_dicom_error + dicom_src_work.dicom_dir)
+            self.set_error(data_input, strings.subj_tab_no_dicom_error + dicom_tree.dicom_dir)
         elif state == SubjectRet.DataInputWarningMultiSubj:
-            self.set_warn(data_input, strings.subj_tab_multi_subj_error + dicom_src_work.dicom_dir)
-        elif state == SubjectRet.DataInputWarningMultiExam:
-            self.set_warn(data_input, strings.subj_tab_multi_exam_error + dicom_src_work.dicom_dir)
+            self.set_warn(data_input, strings.subj_tab_multi_subj_error + dicom_tree.dicom_dir)
+        elif state == SubjectRet.DataInputWarningMultiStudy:
+            self.set_warn(data_input, strings.subj_tab_multi_exam_error + dicom_tree.dicom_dir)
         elif state == SubjectRet.DataInputWarningMultiSeries:
-            self.set_warn(data_input, strings.subj_tab_multi_series_error + dicom_src_work.dicom_dir)
+            self.set_warn(data_input, strings.subj_tab_multi_series_error + dicom_tree.dicom_dir)
         elif state == SubjectRet.DataInputLoading:
             self.set_loading(data_input)
         elif state == SubjectRet.DataInputValid:
 
-            subject_list = dicom_src_work.get_subject_list()
-            exam_list = dicom_src_work.get_exam_list(subject_list[0])
-            series_list = dicom_src_work.get_series_list(subject_list[0], exam_list[0])
-            image_list, subject_name, mod, series_description, vols = dicom_src_work.get_series_info(subject_list[0], exam_list[0], series_list[0])
+            subject_list = dicom_tree.get_subject_list()
+            exam_list = dicom_tree.get_studies_list(subject_list[0])
+            series_list = dicom_tree.get_series_list(subject_list[0], exam_list[0])
+            series = dicom_tree.get_series(subject_list[0], exam_list[0], series_list[0])
+            subject_name = dicom_tree.dicom_subjects[subject_list[0]].subject_name
+            series_description = series.description
+            vols = series.volumes
+            mod = series.modality
+            frames = series.frames
 
-            label = SubjectTab.label_from_dicom(image_list, subject_name, mod, series_description, vols)
+            label = SubjectTab.label_from_dicom(frames, subject_name, mod, series_description, vols)
 
             self.set_ok(data_input, label)
             self.enable_exec_tab()
@@ -958,7 +964,7 @@ class SubjectTab(QTabWidget):
             self.subject_config_button.setEnabled(True)
 
     @staticmethod
-    def label_from_dicom(image_list: list[str], subject_name: str, mod: str, series_description: str, vols: int) -> str:
+    def label_from_dicom(frames: int, subject_name: str, mod: str, series_description: str, vols: int) -> str:
         """
         Compose dicom scan result into a readable label
 
@@ -980,12 +986,10 @@ class SubjectTab(QTabWidget):
         A string containing the label text
 
         """
-        if image_list is None:
-            return None
         try:
             # TODO: show correct image number for multiframe dicom
             label = subject_name + "-" + mod + "-" + series_description + ": " + str(
-                len(image_list)) + " images, " + str(vols) + " "
+                frames) + " images, " + str(vols) + " "
             if vols > 1:
                 label += "volumes"
             else:
@@ -994,13 +998,13 @@ class SubjectTab(QTabWidget):
         except:
             return ""
 
-    def show_scan_result(self, dicom_src_work: DicomSearchWorker):
+    def show_scan_result(self, dicom_tree: DicomTree):
         """
         Updates importable series list using DICOM Search Worker results.
 
         Parameters
         ----------
-        dicom_src_work : DicomSearchWorker
+        dicom_tree : DicomTree
             The DICOM Search Worker.
 
         Returns
@@ -1009,9 +1013,9 @@ class SubjectTab(QTabWidget):
 
         """
         
-        folder_path = dicom_src_work.dicom_dir
+        folder_path = dicom_tree.dicom_dir
         self.scan_directory_watcher.addPath(folder_path)
-        subject_list = dicom_src_work.get_subject_list()
+        subject_list = dicom_tree.get_subject_list()
 
         if len(subject_list) == 0:
             msg_box = QMessageBox()
@@ -1025,18 +1029,22 @@ class SubjectTab(QTabWidget):
             msg_box.exec()
             return
         
-        exam_list = dicom_src_work.get_exam_list(subject_list[0])
+        studies_list = dicom_tree.get_studies_list(subject_list[0])
         
-        for exam in exam_list:
-            series_list = dicom_src_work.get_series_list(subject_list[0], exam)
+        for study in studies_list:
+            series_list = dicom_tree.get_series_list(subject_list[0], study)
             for series in series_list:
-
-                image_list, subject_name, mod, series_description, vols = dicom_src_work.get_series_info(subject_list[0], exam, series)
-
-                if image_list is not None:
-                    label = SubjectTab.label_from_dicom(image_list, subject_name, mod, series_description, vols)
-                    self.dicom_scan_series_list.append(
-                        [label, image_list, mod, vols])
+                dicom_series = dicom_tree.get_series(subject_list[0], study, series)
+                frames = dicom_series.frames
+                if frames == 0:
+                    continue
+                subject_name = dicom_tree.dicom_subjects[subject_list[0]].subject_name
+                mod = dicom_series.modality
+                series_description = dicom_series.description
+                vols = dicom_series.volumes
+                label = SubjectTab.label_from_dicom(frames, subject_name, mod, series_description, vols)
+                self.dicom_scan_series_list.append(
+                    [label, dicom_series.dicom_locs, mod, vols])
 
         for series in self.dicom_scan_series_list:
             self.importable_series_list.addItem(series[0])

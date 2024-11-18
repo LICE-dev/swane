@@ -37,21 +37,21 @@ class TestDicomSearchWorker:
             if test[1] != -1:
                 assert worker.get_files_len() == test[1], "Error with file count for %s (expected %d got %d)" % (test_name, test[1], worker.get_files_len())
             # patients number
-            patient_list = worker.get_subject_list()
+            patient_list = worker.tree.get_subject_list()
             if test[2] != -1:
                 assert len(patient_list) == test[2], "Error with patient number for %s (expected %d got %d)" % (test_name, test[2], len(patient_list))
             if len(patient_list) > 0:
-                exam_list = worker.get_exam_list(patient_list[0])
+                studies_list = worker.tree.get_studies_list(patient_list[0])
                 if test[3] != -1:
-                    assert len(exam_list) == test[3], "Error with exam number for %s (expected %d got %d)" % (test_name, test[3], len(exam_list))
-                if len(exam_list) > 0:
-                    series_list = worker.get_series_list(patient_list[0], exam_list[0])
+                    assert len(studies_list) == test[3], "Error with exam number for %s (expected %d got %d)" % (test_name, test[3], len(studies_list))
+                if len(studies_list) > 0:
+                    series_list = worker.tree.get_series_list(patient_list[0], studies_list[0])
                     if test[4] != -1:
                         assert len(series_list) == test[4], "Error with series number for %s (expected %d got %d)" % (test_name, test[4], len(series_list))
                     if len(series_list) > 0:
-                        vols = worker.get_series_nvol(patient_list[0], exam_list[0], series_list[0])
+                        vols = worker.tree.get_series(patient_list[0], studies_list[0], series_list[0]).volumes
                         if test[5] != -1:
                             assert vols == test[5], "Error with series volumes for %s (expected %d got %d)" % (test_name, test[5], vols)
-                        series_files = len(worker.get_series_files(patient_list[0], exam_list[0], series_list[0]))
+                        series_files = len(worker.tree.get_series(patient_list[0], studies_list[0], series_list[0]).dicom_locs)
                         if test[6] != -1:
                             assert series_files == test[6], "Error with series number of files for %s" % test_name
