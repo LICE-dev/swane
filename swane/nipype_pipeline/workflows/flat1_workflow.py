@@ -73,12 +73,12 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
 
     # NODE 1: three class fast segmentation
     fast = Node(FAST(), name="%s_fast" % name)
-    fast.inputs.img_type = 1
-    fast.inputs.number_classes = 3
-    fast.inputs.hyper = 0.1
-    fast.inputs.bias_lowpass = 40
-    fast.inputs.output_biascorrected = True
-    fast.inputs.bias_iters = 4
+    fast.inputs.img_type = 1 #param -t
+    fast.inputs.number_classes = 3 #param n
+    fast.inputs.hyper = 0.1 #param -H
+    fast.inputs.bias_lowpass = 40 #param -l
+    fast.inputs.output_biascorrected = True #param -B
+    fast.inputs.bias_iters = 4 #param -I
     workflow.add_nodes([fast])
     workflow.connect(inputnode, "ref_brain", fast, "in_files")
 
@@ -119,16 +119,14 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     workflow.connect(restore_2_mni1, "out_file", flair_div_ref, "operand_file")
 
     # NODE 7: Outliers removal from mask
-    # DISABLED FOR VALIDATION TESTING
-    # outliers_mask = Node(FLAT1OutliersMask(), name="%s_outliers_mask" % name)
-    # outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
-    # workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
+    outliers_mask = Node(FLAT1OutliersMask(), name="%s_outliers_mask" % name)
+    outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
+    workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
 
     # NODE 8: Cerebellum removal from divided image
     cortex_mask = Node(ApplyMask(), name="%s_cortexMask" % name)
     cortex_mask.long_name = "outliers %s"
-    # workflow.connect(outliers_mask, "out_file", cortex_mask, "mask_file")
-    cortex_mask.inputs.mask_file = swane_supplement.cortex_mas
+    workflow.connect(outliers_mask, "out_file", cortex_mask, "mask_file")
     workflow.connect(flair_div_ref, "out_file", cortex_mask, "in_file")
 
     # NODE 9: Masking for gray matter on t1_restore in MNI1
@@ -175,16 +173,16 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     # NODE 14: Junction map generation
     convolution_flair = Node(SpatialFilter(), name="%s_convolution_flair" % name)
     convolution_flair.long_name = "junction map generation"
-    convolution_flair.inputs.operation = "mean"
-    convolution_flair.inputs.kernel_shape = "boxv"
-    convolution_flair.inputs.kernel_size = 5
+    convolution_flair.inputs.operation = "mean" #Param -fmean
+    convolution_flair.inputs.kernel_shape = "boxv" #Param -kernel
+    convolution_flair.inputs.kernel_size = 5 #Param -kernel value
     convolution_flair.inputs.out_file = "convolution_flair.nii.gz"
     workflow.connect(binary_flair, "out_file", convolution_flair, "in_file")
 
     # NODE 13: Junction map mean value calculation
     junction_mean = Node(BinaryMaths(), name="%s_junction_mean" % name)
     junction_mean.long_name = "junction variation from mean atlas"
-    junction_mean.inputs.operation = "sub"
+    junction_mean.inputs.operation = "sub" #Param -sub
     junction_mean.inputs.operand_file = swane_supplement.mean_flair
     junction_mean.inputs.out_file = "junction_flair.nii.gz"
     workflow.connect(convolution_flair, "out_file", junction_mean, "in_file")
@@ -227,9 +225,9 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     # NODE 19: Extension map generation
     smoothed_image_extension = Node(SpatialFilter(), name="%s_smoothed_image_extension" % name)
     smoothed_image_extension.long_name = "extension map generation"
-    smoothed_image_extension.inputs.operation = "mean"
-    smoothed_image_extension.inputs.kernel_shape = "boxv"
-    smoothed_image_extension.inputs.kernel_size = 5
+    smoothed_image_extension.inputs.operation = "mean" #Param -fmean
+    smoothed_image_extension.inputs.kernel_shape = "boxv" #Param -kernel
+    smoothed_image_extension.inputs.kernel_size = 5 #Param -kernel value
     smoothed_image_extension.inputs.out_file = "smoothed_image_extension.nii.gz"
     workflow.connect(normalised_gm_mask, "out_file", smoothed_image_extension, "in_file")
 
