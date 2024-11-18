@@ -983,6 +983,7 @@ class SubjectTab(QTabWidget):
         if image_list is None:
             return None
         try:
+            # TODO: show correct image number for multiframe dicom
             label = subject_name + "-" + mod + "-" + series_description + ": " + str(
                 len(image_list)) + " images, " + str(vols) + " "
             if vols > 1:
