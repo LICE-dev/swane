@@ -27,6 +27,7 @@ class DicomSearchWorker(QRunnable):
         self.signal = DicomSearchSignal()
         self.dicom_tree = {}
         self.series_positions = {}
+        self.multi_frame_series = {}
 
     @staticmethod
     def clean_text(string: str) -> str:
@@ -161,6 +162,9 @@ class DicomSearchWorker(QRunnable):
                     dicom_loc
                 )
 
+                if "NumberOfFrames" in ds and int(ds.NumberOfFrames)>1 and series_number not in self.multi_frame_series:
+                    self.multi_frame_series[series_number] = dicom_loc
+
                 if self.series_positions[subject_id][study_instance_uid][series_number][
                     0
                 ] == ds.get("SliceLocation"):
@@ -172,6 +176,20 @@ class DicomSearchWorker(QRunnable):
 
                 # if DEBUG:
                 #     skip = True
+
+            for this_series in self.multi_frame_series:
+                ds = pydicom.dcmread(self.multi_frame_series[this_series], force=True)
+                subject_id = ds.get("PatientID", "na")
+                series_number = ds.get("SeriesNumber", "NA")
+                study_instance_uid = ds.get("StudyInstanceUID", "NA")
+                self.series_positions[subject_id][study_instance_uid][series_number] = [None, 0]
+                for i, frame_group in enumerate(ds.PerFrameFunctionalGroupsSequence):
+                    if i == 0:
+                        self.series_positions[subject_id][study_instance_uid][series_number] = [frame_group.PlanePositionSequence, 1]
+                    elif self.series_positions[subject_id][study_instance_uid][series_number][0] == frame_group.PlanePositionSequence:
+                        self.series_positions[subject_id][study_instance_uid][series_number][1] += 1
+                        if DEBUG:
+                            print("New volume for series: " + str(series_number))
 
             self.signal.sig_finish.emit(self)
         except:
@@ -299,11 +317,18 @@ class DicomSearchWorker(QRunnable):
         image_list = self.get_series_files(subject, exam, series)
         ds = pydicom.dcmread(image_list[0], force=True)
 
+        num_frames = len(image_list)
+        if series in self.multi_frame_series:
+            num_frames = int(ds.NumberOfFrames)
+
         # Excludes series with less than 10 images unless they are siemens mosaics series
         if (
-            len(image_list) < 10
-            and hasattr(ds, "ImageType")
-            and "MOSAIC" not in ds.ImageType
+            num_frames < 10
+            and (
+                not hasattr(ds, "ImageType")
+                or "MOSAIC" not in ds.ImageType
+            )
+
         ):
             return None, None, None, None, None
 
