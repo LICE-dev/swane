@@ -125,6 +125,16 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 ## Changelog
 
+### [0.1.2] - Pending
+
+#### Added
+
+- Multiframe Series reading function
+
+#### Changed
+
+- FLAT1 Outliers Mask restored
+
 ### [0.1.1] - 2024-10-18
 
 #### Added
