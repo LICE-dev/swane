@@ -76,7 +76,7 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     fast.inputs.img_type = 1 #param -t
     fast.inputs.number_classes = 3 #param n
     fast.inputs.hyper = 0.1 #param -H
-    fast.inputs.bias_lowpass = 60 #param -l: 60.0
+    fast.inputs.bias_lowpass = 40 #param -l
     fast.inputs.output_biascorrected = True #param -B
     fast.inputs.bias_iters = 4 #param -I
     workflow.add_nodes([fast])
