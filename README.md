@@ -29,7 +29,6 @@ SWANe straightforward pipeline can be used to manage imaging for epileptic patie
 Each module is completely independent from the others and is dedicated to one imaging modality/analysis, starting from a 3D-T1 weighted image, which represent the “base image” for all the analysis.
 
 
-
 ## Features
 
 A few of the analyses you can do with SWANe:
@@ -107,6 +106,7 @@ python3 -m swane
 pip3 install --upgrade swane
 ```
 
+
 ## Authors
 SWANe is designed and developed by [LICE Neuroimaging Commission](https://www.lice.it/), term 2021-2024, with the main contribution by [Power ICT Srls](https://powerictsoft.com/).
 
@@ -123,6 +123,7 @@ You can contact us at the following e-mail: [dev@lice.it](mailto:dev@lice.it).
 
 This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LICENSE) file for details
 
+
 ## Changelog
 
 ### [0.1.2] - Pending
@@ -135,6 +136,11 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 - FLAT1 Outliers Mask restored
 - DICOM Tree analyze worker improved
+
+#### Fixed
+
+- fMRI Task names conflict in nypipe command
+- numpy >= 2 conflict with nypipe: numpy version forced to < 2 waiting for nypipe upgrade
 
 ### [0.1.1] - 2024-10-18
 
