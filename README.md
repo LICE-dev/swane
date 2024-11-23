@@ -134,6 +134,7 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 #### Changed
 
 - FLAT1 Outliers Mask restored
+- DICOM Tree analyze worker improved
 
 ### [0.1.1] - 2024-10-18
 
