@@ -57,8 +57,8 @@ def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir
             fields=['ref_BET']),
         name='inputnode')
 
-    task_a_name = config["task_a_name"]
-    task_b_name = config["task_b_name"]
+    task_a_name = config["task_a_name"].replace(" ", "_")
+    task_b_name = config["task_b_name"].replace(" ", "_")
     task_duration = config.getint_safe('task_duration')
     rest_duration = config.getint_safe('rest_duration')
     TR = config.getfloat_safe('tr')
