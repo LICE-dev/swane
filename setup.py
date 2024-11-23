@@ -36,6 +36,14 @@ setup(name='swane',
           "PySide6_VerticalQTabWidget==0.0.3",
           "GPUtil==1.4.0",
           "numpy<=2.1.1", # check compatibility with nibabel e CropFov node before upgrading!
+            #Error for fmri art with 2.1.2
+            # File "site-packages/nipype/algorithms/rapidart.py", line 693, in _run_interface
+            # 	    self._detect_outliers_core(imgf, motparamlist[i], i, cwd=os.getcwd())
+            # 	  File "site-packages/nipype/algorithms/rapidart.py", line 610, in _detect_outliers_core
+            # 	    np.savetxt(artifactfile, outliers, fmt=b"%d", delimiter=" ")
+            # 	  File "site-packages/numpy/lib/_npyio_impl.py", line 1627, in savetxt
+            # 	    raise ValueError('invalid fmt: %r' % (fmt,))
+            # 	ValueError: invalid fmt: b'%d'
           "cryptography"
       ],
       python_requires=">=3.7",
