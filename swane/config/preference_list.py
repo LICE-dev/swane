@@ -222,7 +222,7 @@ for x in range(FMRI_NUM):
     WF_PREFERENCES[category]['task_a_name'] = PreferenceEntry(
         input_type=InputTypes.TEXT,
         label="Task A name",
-        default="Task A",
+        default="Task_A",
     )
     WF_PREFERENCES[category]['block_design'] = PreferenceEntry(
         input_type=InputTypes.ENUM,
@@ -233,7 +233,7 @@ for x in range(FMRI_NUM):
     WF_PREFERENCES[category]['task_b_name'] = PreferenceEntry(
         input_type=InputTypes.TEXT,
         label="Task B name",
-        default="Task B",
+        default="Task_B",
         pref_requirement={DataInputList['FMRI'+"_%s" % x]: [('block_design', BLOCK_DESIGN.RARB)]},
         pref_requirement_fail_tooltip="Requires rArBrArB... block design",
     )
