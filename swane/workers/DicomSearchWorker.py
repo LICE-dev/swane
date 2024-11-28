@@ -156,9 +156,9 @@ class DicomSearchWorker(QRunnable):
                 for study in self.tree.dicom_subjects[subject].studies:
                     for series in self.tree.dicom_subjects[subject].studies[study]:
                         self.tree.dicom_subjects[subject].studies[study][series].refine_frame_number()
-            self.signal.sig_finish.emit(self.tree)
+            self.signal.sig_finish.emit(self)
         except:
-            self.signal.sig_finish.emit(self.tree)
+            self.signal.sig_finish.emit(self)
 
     @staticmethod
     def find_series_description(image_list: list[str]) -> str:
