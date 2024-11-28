@@ -126,6 +126,12 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 ## Changelog
 
+### [0.1.3] - 2024-11-28
+
+#### Fixed
+
+- PySide6 ThreadPool handing bug on python3.10
+
 ### [0.1.2] - 2024-11-25
 
 #### Added
