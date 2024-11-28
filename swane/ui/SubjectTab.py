@@ -750,7 +750,7 @@ class SubjectTab(QTabWidget):
         else:
             progress.setLabelText(strings.subj_tab_exporting_prefix + msg)
 
-    def input_check_update(self, data_input: DataInputList, state: SubjectRet, dicom_tree: DicomTree = None):
+    def input_check_update(self, data_input: DataInputList, state: SubjectRet, dicom_src_worker: DicomSearchWorker = None):
         """
         Function used as callback after subject dicom folder check
 
@@ -760,28 +760,28 @@ class SubjectTab(QTabWidget):
             The data input checked
         state: SubjectRet
             The return code of the scan
-        dicom_tree: DicomSearchWorker, optional
+        dicom_src_worker: DicomSearchWorker, optional
             The dicom scanner calling the function. Default is None
         """
         if data_input not in self.input_report:
             return
         if state == SubjectRet.DataInputWarningNoDicom:
-            self.set_error(data_input, strings.subj_tab_no_dicom_error + dicom_tree.dicom_dir)
+            self.set_error(data_input, strings.subj_tab_no_dicom_error + dicom_src_worker.dicom_dir)
         elif state == SubjectRet.DataInputWarningMultiSubj:
-            self.set_warn(data_input, strings.subj_tab_multi_subj_error + dicom_tree.dicom_dir)
+            self.set_warn(data_input, strings.subj_tab_multi_subj_error + dicom_src_worker.dicom_dir)
         elif state == SubjectRet.DataInputWarningMultiStudy:
-            self.set_warn(data_input, strings.subj_tab_multi_exam_error + dicom_tree.dicom_dir)
+            self.set_warn(data_input, strings.subj_tab_multi_exam_error + dicom_src_worker.dicom_dir)
         elif state == SubjectRet.DataInputWarningMultiSeries:
-            self.set_warn(data_input, strings.subj_tab_multi_series_error + dicom_tree.dicom_dir)
+            self.set_warn(data_input, strings.subj_tab_multi_series_error + dicom_src_worker.dicom_dir)
         elif state == SubjectRet.DataInputLoading:
             self.set_loading(data_input)
         elif state == SubjectRet.DataInputValid:
 
-            subject_list = dicom_tree.get_subject_list()
-            exam_list = dicom_tree.get_studies_list(subject_list[0])
-            series_list = dicom_tree.get_series_list(subject_list[0], exam_list[0])
-            series = dicom_tree.get_series(subject_list[0], exam_list[0], series_list[0])
-            subject_name = dicom_tree.dicom_subjects[subject_list[0]].subject_name
+            subject_list = dicom_src_worker.tree.get_subject_list()
+            exam_list = dicom_src_worker.tree.get_studies_list(subject_list[0])
+            series_list = dicom_src_worker.tree.get_series_list(subject_list[0], exam_list[0])
+            series = dicom_src_worker.tree.get_series(subject_list[0], exam_list[0], series_list[0])
+            subject_name = dicom_src_worker.tree.dicom_subjects[subject_list[0]].subject_name
             series_description = series.description
             vols = series.volumes
             mod = series.modality
@@ -998,13 +998,13 @@ class SubjectTab(QTabWidget):
         except:
             return ""
 
-    def show_scan_result(self, dicom_tree: DicomTree):
+    def show_scan_result(self, dicom_src_work: DicomSearchWorker):
         """
         Updates importable series list using DICOM Search Worker results.
 
         Parameters
         ----------
-        dicom_tree : DicomTree
+        dicom_src_work : DicomSearchWorker
             The DICOM Search Worker.
 
         Returns
@@ -1013,9 +1013,9 @@ class SubjectTab(QTabWidget):
 
         """
         
-        folder_path = dicom_tree.dicom_dir
+        folder_path = dicom_src_work.dicom_dir
         self.scan_directory_watcher.addPath(folder_path)
-        subject_list = dicom_tree.get_subject_list()
+        subject_list = dicom_src_work.tree.get_subject_list()
 
         if len(subject_list) == 0:
             msg_box = QMessageBox()
@@ -1029,16 +1029,16 @@ class SubjectTab(QTabWidget):
             msg_box.exec()
             return
         
-        studies_list = dicom_tree.get_studies_list(subject_list[0])
+        studies_list = dicom_src_work.tree.get_studies_list(subject_list[0])
         
         for study in studies_list:
-            series_list = dicom_tree.get_series_list(subject_list[0], study)
+            series_list = dicom_src_work.tree.get_series_list(subject_list[0], study)
             for series in series_list:
-                dicom_series = dicom_tree.get_series(subject_list[0], study, series)
+                dicom_series = dicom_src_work.tree.get_series(subject_list[0], study, series)
                 frames = dicom_series.frames
                 if frames == 0:
                     continue
-                subject_name = dicom_tree.dicom_subjects[subject_list[0]].subject_name
+                subject_name = dicom_src_work.tree.dicom_subjects[subject_list[0]].subject_name
                 mod = dicom_series.modality
                 series_description = dicom_series.description
                 vols = dicom_series.volumes

@@ -35,7 +35,7 @@ setup(name='swane',
           "packaging",
           "PySide6_VerticalQTabWidget==0.0.3",
           "GPUtil==1.4.0",
-          "numpy<=2.1.1", # check compatibility with nibabel e CropFov node before upgrading!
+          "numpy<=2", # check compatibility with nibabel e CropFov node before upgrading!
             #Error for fmri art with numpy>=2
             # File "site-packages/nipype/algorithms/rapidart.py", line 693, in _run_interface
             # 	    self._detect_outliers_core(imgf, motparamlist[i], i, cwd=os.getcwd())
