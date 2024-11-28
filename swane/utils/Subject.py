@@ -246,7 +246,7 @@ class Subject:
     def check_input_folder_step3(
         self,
         data_input: DataInputList,
-        dicom_tree: DicomTree,
+        dicom_src_work: DicomSearchWorker,
         status_callback: callable = None,
     ):
         """
@@ -256,7 +256,7 @@ class Subject:
         ----------
         data_input : DataInputList
             The series folder name to check.
-        dicom_tree : DicomSearchWorker
+        dicom_src_work : DicomSearchWorker
             The DICOM Search Worker.
         status_callback: callable.
             The function to notify update to UI. Default is None
@@ -267,41 +267,41 @@ class Subject:
 
         """
 
-        subjects_list = dicom_tree.get_subject_list()
+        subjects_list = dicom_src_work.tree.get_subject_list()
 
         if len(subjects_list) == 0:
             status_callback(
-                data_input, SubjectRet.DataInputWarningNoDicom, dicom_tree
+                data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work
             )
             return
 
         if len(subjects_list) > 1:
             status_callback(
-                data_input, SubjectRet.DataInputWarningMultiSubj, dicom_tree
+                data_input, SubjectRet.DataInputWarningMultiSubj, dicom_src_work
             )
             return
 
-        studies_list = dicom_tree.get_studies_list(subjects_list[0])
+        studies_list = dicom_src_work.tree.get_studies_list(subjects_list[0])
 
         if len(studies_list) != 1:
             status_callback(
-                data_input, SubjectRet.DataInputWarningMultiStudy, dicom_tree
+                data_input, SubjectRet.DataInputWarningMultiStudy, dicom_src_work
             )
             return
 
-        series_list = dicom_tree.get_series_list(subjects_list[0], studies_list[0])
+        series_list = dicom_src_work.tree.get_series_list(subjects_list[0], studies_list[0])
 
         if len(series_list) != 1:
             status_callback(
-                data_input, SubjectRet.DataInputWarningMultiSeries, dicom_tree
+                data_input, SubjectRet.DataInputWarningMultiSeries, dicom_src_work
             )
             return
 
-        series = dicom_tree.get_series(subjects_list[0], studies_list[0], series_list[0])
+        series = dicom_src_work.tree.get_series(subjects_list[0], studies_list[0], series_list[0])
 
         self.input_state_list[data_input].loaded = True
         self.input_state_list[data_input].volumes = series.volumes
-        status_callback(data_input, SubjectRet.DataInputValid, dicom_tree)
+        status_callback(data_input, SubjectRet.DataInputValid, dicom_src_work)
 
     def dicom_import_to_folder(
         self,
