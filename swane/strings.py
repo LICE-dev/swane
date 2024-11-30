@@ -47,8 +47,8 @@ mainwindow_home_label7 = "\nExternal optional dependencies:"
 
 mainwindow_dep_slicer_src = "Searching Slicer installation..."
 mainwindow_pref_disabled_error = "Preferences disabled during workflow execution!"
-aboutwindow_python_libs = "Python libraries dependencies: configparser, logging, matplotlib, nipype, pydicom, " \
-                          "PySide6, psutil, nibabel, networkx"
+aboutwindow_wiki_dependencylist = "Link to <a href='https://github.com/LICE-dev/swane/wiki/04-Dependencies-Guides'>dependencies list</a>"
+aboutwindow_wiki_changelog = "Link to versions <a href='https://github.com/LICE-dev/swane/wiki/11-Changelog'>changelog</a>"
 
 # Menu
 menu_load_subj = "Load existing subject"
