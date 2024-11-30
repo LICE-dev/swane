@@ -1,7 +1,7 @@
 import os
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIntValidator, QDoubleValidator
-from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox,
+from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox, QSpinBox, QDoubleSpinBox,
                                QComboBox, QStyle, QSizePolicy, QStyleOption, QWidget)
 from functools import partial
 from enum import Enum
@@ -126,16 +126,25 @@ class PreferenceUIEntry:
             field = QCheckBox()
         elif self.input_type == InputTypes.ENUM:
             field = QComboBox()
+        elif self.input_type == InputTypes.INT:
+            field = QSpinBox()
+            field.setMinimum(-1)
+            field.setMaximum(100)
+        elif self.input_type == InputTypes.FLOAT:
+            field = QDoubleSpinBox()
+            field.setMinimum(0)
+            field.setMaximum(100)
+            field.setDecimals(2)
         else:
             field = QLineEdit()
 
-        if self.input_type == InputTypes.INT:
-            field.setValidator(QIntValidator(-1, 100))
+        # if self.input_type == InputTypes.INT:
+        #     field.setValidator(QIntValidator(-1, 100))
 
-        if self.input_type == InputTypes.FLOAT:
-            validator = QDoubleValidator(0.00, 100.00, 2, field)
-            validator.setNotation(QDoubleValidator.StandardNotation)
-            field.setValidator(validator)
+        # if self.input_type == InputTypes.FLOAT:
+        #     validator = QDoubleValidator(0.00, 100.00, 2, field)
+        #     validator.setNotation(QDoubleValidator.StandardNotation)
+        #     field.setValidator(validator)
 
         if self.input_type == InputTypes.FILE or self.input_type == InputTypes.DIRECTORY:
             field.setReadOnly(True)
@@ -242,11 +251,18 @@ class PreferenceUIEntry:
         max_value: int or float
            The maximum accepted value
         """
-        if self.input_field.validator() is None:
+        
+        if not isinstance(self.input_field, QSpinBox | QDoubleSpinBox):
             return
+        
+        # if self.input_field.validator() is None:
+        #     return
         if min_value > max_value:
             min_value, max_value = max_value, min_value
-        self.input_field.validator().setRange(min_value, max_value)
+        # self.input_field.validator().setRange(min_value, max_value)
+        
+        self.input_field.setMinimum(min_value)
+        self.input_field.setMaximum(max_value)
 
     def set_value(self, value, reset_change_state: bool = False):
         """
@@ -271,6 +287,10 @@ class PreferenceUIEntry:
                 return
             index = self.input_field.findData(value)
             self.input_field.setCurrentIndex(index)
+        elif self.input_type == InputTypes.INT:
+            self.input_field.setValue(int(value))
+        elif self.input_type == InputTypes.FLOAT:
+            self.input_field.setValue(float(value))
         else:
             self.input_field.setText(str(value))
 
