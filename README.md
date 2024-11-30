@@ -131,6 +131,7 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 #### Added
 
 - setuptools dependency for GPUtils Series
+- fMRI cluster outputs with different thresholds (3.1, 5.1, 7.1)
 
 #### Changed
 
