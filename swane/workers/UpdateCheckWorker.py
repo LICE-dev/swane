@@ -21,6 +21,7 @@ class UpdateCheckWorker(QRunnable):
         self.signal: UpdateCheckSignaler = UpdateCheckSignaler()
 
     def run(self):
+        
         cmd = sys.executable + " -m pip index versions swane 2>/dev/null"
         output = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE).stdout.decode('utf-8')
         for stdout_line in output.split("\n"):
