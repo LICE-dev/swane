@@ -1,6 +1,5 @@
 import os
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIntValidator, QDoubleValidator
 from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox, QSpinBox, QDoubleSpinBox,
                                QComboBox, QStyle, QSizePolicy, QStyleOption, QWidget)
 from functools import partial
@@ -138,14 +137,6 @@ class PreferenceUIEntry:
         else:
             field = QLineEdit()
 
-        # if self.input_type == InputTypes.INT:
-        #     field.setValidator(QIntValidator(-1, 100))
-
-        # if self.input_type == InputTypes.FLOAT:
-        #     validator = QDoubleValidator(0.00, 100.00, 2, field)
-        #     validator.setNotation(QDoubleValidator.StandardNotation)
-        #     field.setValidator(validator)
-
         if self.input_type == InputTypes.FILE or self.input_type == InputTypes.DIRECTORY:
             field.setReadOnly(True)
             button = QPushButton()
@@ -255,11 +246,8 @@ class PreferenceUIEntry:
         if not isinstance(self.input_field, QSpinBox | QDoubleSpinBox):
             return
         
-        # if self.input_field.validator() is None:
-        #     return
         if min_value > max_value:
             min_value, max_value = max_value, min_value
-        # self.input_field.validator().setRange(min_value, max_value)
         
         self.input_field.setMinimum(min_value)
         self.input_field.setMaximum(max_value)
