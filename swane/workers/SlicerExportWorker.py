@@ -29,7 +29,6 @@ class SlicerExportWorker(QRunnable):
 
         popen = subprocess.Popen(cmd, cwd=self.result_dir, shell=True, stdout=subprocess.PIPE, universal_newlines=True)
         for stdout_line in iter(popen.stdout.readline, ""):
-            # print(stdout_line) # Print for debug
             if stdout_line.startswith(self.PROGRESS_MSG_PREFIX):
                 self.signal.export.emit(stdout_line.replace(self.PROGRESS_MSG_PREFIX, '').replace('\n', ''))
         popen.stdout.close()
