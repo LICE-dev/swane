@@ -128,6 +128,10 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 ### [0.1.4] - Pending
 
+#### Added
+
+- setuptools dependency for GPUtils Series
+
 #### Changed
 
 - PySide6 QSpinBox & QDoubleSpinBox implementation in App & Workflow Preferences
