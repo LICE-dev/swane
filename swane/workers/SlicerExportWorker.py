@@ -16,16 +16,17 @@ class SlicerExportWorker(QRunnable):
     PROGRESS_MSG_PREFIX = 'SLICERLOADER: '
     END_MSG = "ENDLOADING"
 
-    def __init__(self, slicer_path: str, result_dir: str, scene_ext: str):
+    def __init__(self, slicer_path: str, result_dir: str, scene_ext: str, vein_threshold: float):
         super(SlicerExportWorker, self).__init__()
         self.signal = SlicerExportSignaler()
         self.slicer_path: str = slicer_path
         self.result_dir: str = result_dir
         self.scene_ext: str = scene_ext
+        self.vein_threshold: float = vein_threshold
 
     def run(self):
         cmd = self.slicer_path + " --no-splash --no-main-window --python-script " + os.path.join(
-            os.path.dirname(__file__), "slicer_script_result.py " + self.scene_ext)
+            os.path.dirname(__file__), "slicer_script_result.py " + self.scene_ext + " " + self.vein_threshold)
 
         popen = subprocess.Popen(cmd, cwd=self.result_dir, shell=True, stdout=subprocess.PIPE, universal_newlines=True)
         for stdout_line in iter(popen.stdout.readline, ""):

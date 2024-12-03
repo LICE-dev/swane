@@ -152,6 +152,12 @@ WF_PREFERENCES[category]['vein_detection_mode'] = PreferenceEntry(
     value_enum=VEIN_DETECTION_MODE,
     default=VEIN_DETECTION_MODE.SD,
 )
+WF_PREFERENCES[category]['vein_segment_threshold'] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Threshold (%) for 3DSlicer Vein Segment",
+    default=97.5,
+    range=[0.1, 100],
+)
 
 category = DataInputList.ASL
 WF_PREFERENCES[category] = {}
