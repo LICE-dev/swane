@@ -207,7 +207,7 @@ def load_freesurfer(scene_dir: str, ref_node):
         load_freesurfer_overlay(scene_dir, overlay + "_rh.mgz", rh_pial)
 
 
-def load_vein(scene_dir: str, remove_vein: bool = False):
+def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 97.5):
     """
     Loads the veins files and creates their 3d model.
 
@@ -217,6 +217,8 @@ def load_vein(scene_dir: str, remove_vein: bool = False):
         The scene directory.
     remove_vein : bool, optional
         True if the model must remove the original veins images. The default is False.
+    vein_thresold : float, optional
+        The threshold for the vein detection in 3D Slicer. The default is 97.5.
 
     Returns
     -------
@@ -231,7 +233,7 @@ def load_vein(scene_dir: str, remove_vein: bool = False):
     print("SLICERLOADER: Creating 3D model: Veins")
 
     try:
-        command = "fslstats " + os.path.join(scene_dir, vein_volume_name+".nii.gz") + " -P 97.5"
+        command = "fslstats " + os.path.join(scene_dir, vein_volume_name+".nii.gz") + " -P " + vein_threshold
         output = subprocess.run(command, shell=True,
                                 stdout=subprocess.PIPE).stdout.decode('utf-8')
         thr = float(output)
@@ -412,8 +414,15 @@ else:
             load_anat(results_folder, volume[0], volume[1])
 
         load_fmri(results_folder)
+        
+        # Vein Threshold preferences parsing
+        if sys.argv[2] is not None:
+            try:
+                vein_threshold = float(sys.argv(2))
+            except:
+                vein_threshold = 97.5
 
-        load_vein(results_folder)
+        load_vein(results_folder, vein_thresold=vein_threshold)
 
         load_freesurfer(results_folder, refNode)
 
