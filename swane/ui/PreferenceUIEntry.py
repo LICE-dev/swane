@@ -343,6 +343,8 @@ class PreferenceUIEntry:
                 value = 'true'
             else:
                 value = "false"
+        elif self.input_type == InputTypes.FLOAT or self.input_type == InputTypes.INT:
+            value = str(self.input_field.value())
         else:
             value = self.input_field.text()
 
