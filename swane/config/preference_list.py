@@ -157,6 +157,7 @@ WF_PREFERENCES[category]['vein_segment_threshold'] = PreferenceEntry(
     label="Threshold (%) for 3DSlicer Vein Segment",
     default=97.5,
     range=[0.1, 100],
+    decimals=1
 )
 
 category = DataInputList.ASL
@@ -203,6 +204,13 @@ WF_PREFERENCES[category]['tractography'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="DTI tractography",
     default='true',
+)
+WF_PREFERENCES[category]['tractography_threshold'] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Threshold for 3DSlicer DTI Tract",
+    default=0.0035,
+    range=[0.0001, 1],
+    decimals=4
 )
 WF_PREFERENCES[category]['track_procs'] = PreferenceEntry(
     input_type=InputTypes.INT,

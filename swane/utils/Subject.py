@@ -883,7 +883,7 @@ class Subject:
             self.global_config.get_slicer_path(),
             self.result_dir(),
             self.global_config.get_slicer_scene_ext(),
-            vein_threshold=self.config.getfloat_safe(DataInputList.VENOUS, "vein_segment_threshold")
+            self.config
         )
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)

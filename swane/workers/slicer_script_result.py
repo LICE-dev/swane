@@ -262,7 +262,7 @@ def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 
         slicer.mrmlScene.RemoveNode(vein_node)
 
 
-def tract_model(segmentation_node, dti_dir: str, tract: [], side: str):
+def tract_model(segmentation_node, dti_dir: str, tract: [], side: str, dti_threshold: float=0.0035):
     """
     Creates the 3d model of a tract.
 
@@ -279,6 +279,8 @@ def tract_model(segmentation_node, dti_dir: str, tract: [], side: str):
         The side of the tract:
             - LH for left side
             - RH for right side
+    dti_threshold : float
+        The threshold for the dti tractography
 
     Returns
     -------
@@ -301,7 +303,7 @@ def tract_model(segmentation_node, dti_dir: str, tract: [], side: str):
             pass
 
     if waytotal > 0:
-        thr = waytotal * 0.0035
+        thr = waytotal * dti_threshold
     else:
         thr = tract['thr']
 
@@ -370,8 +372,14 @@ def main_tract(dti_dir: str, scene_dir: str):
         segmentation_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode", "tracts_" + side)
         segmentation_node.CreateDefaultDisplayNodes()  # only needed for display
         
+        # DTI Threshold preferences parsing
+        if sys.argv[2] is not None:
+            try:
+                dti_threshold = float(sys.argv[2])
+            except:
+                dti_threshold = 0.0035
         for tract in tracts:
-            tract_model(segmentation_node, dti_dir, tract, side)
+            tract_model(segmentation_node, dti_dir, tract, side, dti_threshold=dti_threshold)
             
         segmentation_node.CreateClosedSurfaceRepresentation()
         my_storage_node = segmentation_node.CreateDefaultStorageNode()
@@ -417,9 +425,9 @@ else:
         load_fmri(results_folder)
         
         # Vein Threshold preferences parsing
-        if sys.argv[2] is not None:
+        if sys.argv[3] is not None:
             try:
-                vein_threshold = float(sys.argv[2])
+                vein_threshold = float(sys.argv[3])
             except:
                 vein_threshold = 97.5
 
@@ -431,7 +439,7 @@ else:
         
         #TODO valutare
         # Saving in MRML doesn't work well, disable extension choice for now
-        # if sys.argv[2] is not None and sys.argv[1] == "mrml":
+        # if sys.argv[4] is not None and sys.argv[1] == "mrml":
         #     ext = "mrml"
 
         print("SLICERLOADER: Saving multimodale scene (some minutes)")
