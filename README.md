@@ -131,6 +131,8 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 #### Added
 
 - setuptools dependency for GPUtils Series
+- Threshold for 3DSlicer DTI Tract in Workflow Preferences
+- Threshold (%) for 3DSlicer Vein Segment in Workflow Preferences
 
 #### Changed
 
