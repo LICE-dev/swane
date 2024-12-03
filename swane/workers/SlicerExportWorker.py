@@ -26,7 +26,7 @@ class SlicerExportWorker(QRunnable):
 
     def run(self):
         cmd = self.slicer_path + " --no-splash --no-main-window --python-script " + os.path.join(
-            os.path.dirname(__file__), "slicer_script_result.py " + self.scene_ext + " " + self.vein_threshold)
+            os.path.dirname(__file__), "slicer_script_result.py " + self.scene_ext + " " + str(self.vein_threshold))
 
         popen = subprocess.Popen(cmd, cwd=self.result_dir, shell=True, stdout=subprocess.PIPE, universal_newlines=True)
         for stdout_line in iter(popen.stdout.readline, ""):

@@ -233,12 +233,13 @@ def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 
     print("SLICERLOADER: Creating 3D model: Veins")
 
     try:
-        command = "fslstats " + os.path.join(scene_dir, vein_volume_name+".nii.gz") + " -P " + vein_threshold
+        command = "fslstats " + os.path.join(scene_dir, vein_volume_name+".nii.gz") + " -P " +str(vein_threshold)
         output = subprocess.run(command, shell=True,
                                 stdout=subprocess.PIPE).stdout.decode('utf-8')
         thr = float(output)
     except:
         thr = 6
+
 
     vein_model = slicer.vtkMRMLModelNode()
     slicer.mrmlScene.AddNode(vein_model)
@@ -418,7 +419,7 @@ else:
         # Vein Threshold preferences parsing
         if sys.argv[2] is not None:
             try:
-                vein_threshold = float(sys.argv(2))
+                vein_threshold = float(sys.argv[2])
             except:
                 vein_threshold = 97.5
 
@@ -430,7 +431,7 @@ else:
         
         #TODO valutare
         # Saving in MRML doesn't work well, disable extension choice for now
-        # if sys.argv[1] is not None and sys.argv[1] == "mrml":
+        # if sys.argv[2] is not None and sys.argv[1] == "mrml":
         #     ext = "mrml"
 
         print("SLICERLOADER: Saving multimodale scene (some minutes)")

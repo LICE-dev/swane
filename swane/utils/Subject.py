@@ -1,5 +1,7 @@
 import os
 import shutil
+
+from swane.config.preference_list import WF_PREFERENCES
 from swane.utils.DataInputList import DataInputList, ImageModality
 from enum import Enum, auto
 from swane.config.ConfigManager import ConfigManager
@@ -881,6 +883,7 @@ class Subject:
             self.global_config.get_slicer_path(),
             self.result_dir(),
             self.global_config.get_slicer_scene_ext(),
+            vein_threshold=self.config.getfloat_safe(DataInputList.VENOUS, "vein_segment_threshold")
         )
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)
