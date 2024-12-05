@@ -132,6 +132,8 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 - setuptools dependency for GPUtils Series
 - fMRI cluster outputs with different thresholds (3.1, 5.1, 7.1)
+- Threshold for 3DSlicer DTI Tract in Workflow Preferences
+- Threshold (%) for 3DSlicer Vein Segment in Workflow Preferences
 
 #### Changed
 
