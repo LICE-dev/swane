@@ -11,6 +11,7 @@ class PreferenceEntry:
     default = None
     tooltip = ""
     range = None
+    decimals = None
     dependency = None
     dependency_fail_tooltip = None
     pref_requirement = None
@@ -36,6 +37,7 @@ class PreferenceEntry:
                 "label": str,
                 "tooltip": str,
                 "range": list,
+                "decimals": int,
                 "dependency": str,
                 "dependency_fail_tooltip": str,
                 "pref_requirement": dict,
