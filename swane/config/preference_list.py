@@ -208,6 +208,7 @@ WF_PREFERENCES[category]['tractography'] = PreferenceEntry(
 WF_PREFERENCES[category]['tractography_threshold'] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold for 3DSlicer DTI Tract",
+    tooltip="This value is multiplied by the tract waytotal for threshold calculation",
     default=0.0035,
     range=[0.0001, 1],
     decimals=4
