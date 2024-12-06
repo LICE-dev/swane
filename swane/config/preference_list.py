@@ -262,7 +262,7 @@ for x in range(FMRI_NUM):
         input_type=InputTypes.INT,
         label="Rest duration (sec)",
         default=30,
-        range=[1, 500],
+        range=[0, 500],
     )
     WF_PREFERENCES[category]['tr'] = PreferenceEntry(
         input_type=InputTypes.FLOAT,
