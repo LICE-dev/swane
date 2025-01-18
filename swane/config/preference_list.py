@@ -7,7 +7,7 @@ from math import ceil
 
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import (InputTypes, WORKFLOW_TYPES, SLICER_EXTENSIONS, CORE_LIMIT, VEIN_DETECTION_MODE,
-                                       BLOCK_DESIGN, SLICE_TIMING, GlobalPrefCategoryList)
+                                       BLOCK_DESIGN, SLICE_TIMING, GlobalPrefCategoryList, BETWEEN_MOD_FLIRT_COST)
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
@@ -162,6 +162,12 @@ WF_PREFERENCES[category]['vein_segment_threshold'] = PreferenceEntry(
 
 category = DataInputList.ASL
 WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]['cost_func'] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="FLIRT between modalities cost function",
+    value_enum=BETWEEN_MOD_FLIRT_COST,
+    default=BETWEEN_MOD_FLIRT_COST.NORMALIZED_MUTUAL_INFORMATION,
+)
 WF_PREFERENCES[category]['ai'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Asymmetry Index map for ASL",
@@ -179,6 +185,12 @@ WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
 
 category = DataInputList.PET
 WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]['cost_func'] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="FLIRT between modalities cost function",
+    value_enum=BETWEEN_MOD_FLIRT_COST,
+    default=BETWEEN_MOD_FLIRT_COST.MULTUAL_INFORMATION,
+)
 WF_PREFERENCES[category]['ai'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Asymmetry Index map for PET",

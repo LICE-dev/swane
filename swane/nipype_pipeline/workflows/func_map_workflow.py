@@ -10,7 +10,7 @@ from swane.nipype_pipeline.nodes.Zscore import Zscore
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 import swane_supplement
-
+from swane.config.config_enums import BETWEEN_MOD_FLIRT_COST
 
 def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
@@ -110,7 +110,13 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
     # NODE 4: Registration matrix calculation in reference space
     func_2_ref_flirt = Node(FLIRT(), name='%s_2_ref_flirt' % name)
     func_2_ref_flirt.long_name = "%s to reference space"
-    func_2_ref_flirt.inputs.cost = "normmi"
+    if config.getenum_safe("cost_func") is BETWEEN_MOD_FLIRT_COST.MULTUAL_INFORMATION:
+        cost = "mutualinfo"
+    elif config.getenum_safe("cost_func") is BETWEEN_MOD_FLIRT_COST.NORMALIZED_MUTUAL_INFORMATION:
+        cost = "normmi"
+    else:
+        cost = "corratio"
+    func_2_ref_flirt.inputs.cost = cost
     func_2_ref_flirt.inputs.searchr_x = [-90, 90]
     func_2_ref_flirt.inputs.searchr_y = [-90, 90]
     func_2_ref_flirt.inputs.searchr_z = [-90, 90]
