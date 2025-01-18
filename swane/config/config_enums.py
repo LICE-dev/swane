@@ -26,6 +26,11 @@ class CORE_LIMIT(Enum):
     SOFT_CAP = "Soft cap"
     HARD_CAP = "Hard Cap"
 
+class BETWEEN_MOD_FLIRT_COST(Enum):
+    MULTUAL_INFORMATION = "Mutual information"
+    NORMALIZED_MUTUAL_INFORMATION = "Normalized mutual information"
+    CORRELATION_RATIO = "Correlation ratio"
+
 class VEIN_DETECTION_MODE(Enum):
     SD = 'Automatic (standard deviation)'
     MEAN = 'Automatic (mean value)'
