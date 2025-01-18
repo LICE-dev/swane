@@ -219,6 +219,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 free_memory_gb += next_job_gb
                 free_processors += next_job_th
                 if is_gpu_node:
+                    logger.info("Sto liberando gpu %s", self.procs[jobid])
                     free_gpu_slots -= next_job_gpu_th
                 # Display stats next loop
                 self._stats = None

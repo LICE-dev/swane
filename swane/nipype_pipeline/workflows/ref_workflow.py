@@ -56,11 +56,42 @@ def ref_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str 
     ref_conv = Node(CustomDcm2niix(), name='%s_conv' % name)
     ref_conv.inputs.source_dir = dicom_dir
     ref_conv.inputs.bids_format = False
+    ref_conv.inputs.use_gpu = True
     ref_conv.inputs.out_filename = "converted"
+
+    ref_conv2 = Node(CustomDcm2niix(), name='%s_conv2' % name)
+    ref_conv2.inputs.source_dir = dicom_dir
+    ref_conv2.inputs.bids_format = False
+    ref_conv2.inputs.use_gpu = True
+    ref_conv2.inputs.out_filename = "converted"
+
+    ref_conv3 = Node(CustomDcm2niix(), name='%s_conv3' % name)
+    ref_conv3.inputs.source_dir = dicom_dir
+    ref_conv3.inputs.bids_format = False
+    ref_conv3.inputs.use_gpu = True
+    ref_conv3.inputs.out_filename = "converted"
+
+    ref_conv4 = Node(CustomDcm2niix(), name='%s_conv4' % name)
+    ref_conv4.inputs.source_dir = dicom_dir
+    ref_conv4.inputs.bids_format = False
+    ref_conv4.inputs.use_gpu = True
+    ref_conv4.inputs.out_filename = "converted"
 
     # NODE 2: Orienting in radiological convention
     ref_reOrient = Node(ForceOrient(), name='%s_reOrient' % name)
     workflow.connect(ref_conv, "converted_files", ref_reOrient, "in_file")
+
+    # NODE 2: Orienting in radiological convention
+    ref_reOrient2 = Node(ForceOrient(), name='%s_reOrient2' % name)
+    workflow.connect(ref_conv2, "converted_files", ref_reOrient2, "in_file")
+
+    # NODE 2: Orienting in radiological convention
+    ref_reOrient3 = Node(ForceOrient(), name='%s_reOrient3' % name)
+    workflow.connect(ref_conv3, "converted_files", ref_reOrient3, "in_file")
+
+    # NODE 2: Orienting in radiological convention
+    ref_reOrient4 = Node(ForceOrient(), name='%s_reOrient4' % name)
+    workflow.connect(ref_conv4, "converted_files", ref_reOrient4, "in_file")
 
     # NODE 3: Crop neck
     ref_robustfov = Node(RobustFOV(), name= "%s_robustfov" % name)

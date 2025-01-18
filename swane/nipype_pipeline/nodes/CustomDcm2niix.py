@@ -1,4 +1,5 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
+import time
 
 from nipype.interfaces.dcm2nii import Dcm2niix, Dcm2niixInputSpec
 import os
@@ -16,6 +17,7 @@ class CustomDcm2niixInputSpec(Dcm2niixInputSpec):
         usedefault=True)
     expected_files = traits.Int(default_value=1, usedefault=True)
     request_dti = traits.Bool(default_value=False, usedefault=True)
+    use_gpu = traits.Bool(True, desc="Use the GPU version of probtrackx")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.dcm2nii.Dcm2niix)  -*-
@@ -48,4 +50,5 @@ class CustomDcm2niix(Dcm2niix):
         if self.inputs.request_dti and (len(self.bvals) == 0 or len(self.bvecs) == 0):
                 raise NodeExecutionError("Dcm2niix could not generate requested bvals and bvecs files")
 
+        time.sleep(15)
         return runtime
