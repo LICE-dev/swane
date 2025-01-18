@@ -62,6 +62,7 @@ def nonlinear_reg_workflow(name: str, base_dir: str = "/") -> CustomWorkflow:
     flirt.inputs.searchr_y = [-90, 90]
     flirt.inputs.searchr_z = [-90, 90]
     flirt.inputs.dof = 12
+    #TODO consider switch to same-modality cost function
     flirt.inputs.cost = "corratio"
     flirt.inputs.out_matrix_file = "ref_2_%s.mat" % name
     workflow.add_nodes([flirt])
