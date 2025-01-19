@@ -206,6 +206,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             if updatehash or self.procs[jobid].run_without_submitting:
                 logger.debug("Running node %s on master thread", self.procs[jobid])
                 try:
+                    self.queue.put(WorkflowReport(long_name=self.procs[jobid].fullname, signal_type=WorkflowSignals.NODE_STARTED))
                     self.procs[jobid].run(updatehash=updatehash)
                 except Exception:
                     traceback = format_exception(*sys.exc_info())
@@ -219,7 +220,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 free_memory_gb += next_job_gb
                 free_processors += next_job_th
                 if is_gpu_node:
-                    free_gpu_slots -= next_job_gpu_th
+                    free_gpu_slots += next_job_gpu_th
                 # Display stats next loop
                 self._stats = None
 
