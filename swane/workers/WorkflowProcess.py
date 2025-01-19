@@ -82,7 +82,7 @@ class WorkflowProcess(Process):
             # this is useful to generate resource monitor files in subject directory
             os.chdir(self.workflow.base_dir)
 
-            self.workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args))
+            self.workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args), updatehash=True)
 
         except:
             traceback.print_exc()

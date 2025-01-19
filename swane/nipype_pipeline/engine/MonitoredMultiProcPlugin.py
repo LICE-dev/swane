@@ -206,6 +206,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             if updatehash or self.procs[jobid].run_without_submitting:
                 logger.debug("Running node %s on master thread", self.procs[jobid])
                 try:
+                    self.queue.put(WorkflowReport(long_name=self.procs[jobid].fullname, signal_type=WorkflowSignals.NODE_STARTED))
                     self.procs[jobid].run(updatehash=updatehash)
                 except Exception:
                     traceback = format_exception(*sys.exc_info())
