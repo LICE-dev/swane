@@ -50,5 +50,5 @@ class CustomDcm2niix(Dcm2niix):
         if self.inputs.request_dti and (len(self.bvals) == 0 or len(self.bvecs) == 0):
                 raise NodeExecutionError("Dcm2niix could not generate requested bvals and bvecs files")
 
-        time.sleep(15)
+        time.sleep(10)
         return runtime

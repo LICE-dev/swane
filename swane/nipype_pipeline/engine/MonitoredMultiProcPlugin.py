@@ -202,8 +202,13 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             if self._local_hash_check(jobid, graph):
                 continue
 
+            cached, updated = self.procs[jobid].is_cached()
+            print("*********************************")
+            print(self.procs[jobid].name, " ", cached, " ", updated, " ", (updatehash and cached and not updated))
+
             # updatehash and run_without_submitting are also run locally
-            if updatehash or self.procs[jobid].run_without_submitting:
+            if (updatehash and cached and not updated) or self.procs[jobid].run_without_submitting:
+                print("òòòòòòòòòòòòòòòòòòòòòòòòòòòòòòòòòòòòòòòò")
                 logger.debug("Running node %s on master thread", self.procs[jobid])
                 try:
                     self.queue.put(WorkflowReport(long_name=self.procs[jobid].fullname, signal_type=WorkflowSignals.NODE_STARTED))

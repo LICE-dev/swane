@@ -61,7 +61,7 @@ def ref_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str 
 
     ref_conv2 = Node(CustomDcm2niix(), name='%s_conv2' % name)
     ref_conv2.inputs.source_dir = dicom_dir
-    ref_conv2.inputs.bids_format = True
+    ref_conv2.inputs.bids_format = False
     ref_conv2.inputs.use_gpu = True
     ref_conv2.inputs.out_filename = "converted"
 
