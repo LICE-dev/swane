@@ -22,7 +22,7 @@
 ## Introduction
 SWANe is a software designed and developed to improve and simplify the management of a wide range of advanced neuroimaging analysis algorithms.
 
-It consists of a library of predefinied workflows that can be managed through an user-friendly Graphical User Interface, which guides the users step by step to all the operations without any text-based command interface.
+It consists of a library of predefinied workflows that can be managed through a user-friendly Graphical User Interface, which guides the users step by step to all the operations without any text-based command interface.
 
 SWANe straightforward pipeline can be used to manage imaging for epileptic patients of all ages (including pediatric patients). Its structure in indipendent modules permits to be diffusely adopted overcoming the difficulties to collect advanced imaging (especially metabolic and functional) in small epileptic centers.
 
