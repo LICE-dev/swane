@@ -1,7 +1,6 @@
 import os
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIntValidator, QDoubleValidator
-from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox,
+from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox, QSpinBox, QDoubleSpinBox,
                                QComboBox, QStyle, QSizePolicy, QStyleOption, QWidget)
 from functools import partial
 from enum import Enum
@@ -45,12 +44,14 @@ class PreferenceUIEntry:
         self.validate_on_change = entry.validate_on_change
 
         # Apply values to GUI elements
-        self.set_value_from_config(my_config)
         self.set_label_text(entry.label)
         self.set_tooltip(entry.tooltip)
         self.set_informative_text()
         if entry.range is not None:
             self.set_range(entry.range[0], entry.range[1])
+        if entry.decimals is not None:
+            self.set_decimals(entry.decimals)
+        self.set_value_from_config(my_config)
 
         # Change-connect must be the last step, otherwise it is fired during initialization
         self.connect_change(self.set_changed)
@@ -126,16 +127,18 @@ class PreferenceUIEntry:
             field = QCheckBox()
         elif self.input_type == InputTypes.ENUM:
             field = QComboBox()
+        elif self.input_type == InputTypes.INT:
+            field = QSpinBox()
+            field.setMinimum(-1)
+            field.setMaximum(100)
+        elif self.input_type == InputTypes.FLOAT:
+            field = QDoubleSpinBox()
+            field.setMinimum(0)
+            field.setMaximum(100)
+            field.setDecimals(2)
+            field.setSingleStep(0.01)
         else:
             field = QLineEdit()
-
-        if self.input_type == InputTypes.INT:
-            field.setValidator(QIntValidator(-1, 100))
-
-        if self.input_type == InputTypes.FLOAT:
-            validator = QDoubleValidator(0.00, 100.00, 2, field)
-            validator.setNotation(QDoubleValidator.StandardNotation)
-            field.setValidator(validator)
 
         if self.input_type == InputTypes.FILE or self.input_type == InputTypes.DIRECTORY:
             field.setReadOnly(True)
@@ -231,7 +234,7 @@ class PreferenceUIEntry:
         if str(value).lower() != config[self.category][self.key].lower():
             self.set_changed()
 
-    def set_range(self, min_value, max_value):
+    def set_range(self, min_value: int|float, max_value: int|float):
         """
         Apply specified values to a numeric input field validator
 
@@ -242,11 +245,33 @@ class PreferenceUIEntry:
         max_value: int or float
            The maximum accepted value
         """
-        if self.input_field.validator() is None:
+        
+        if not isinstance(self.input_field, QSpinBox | QDoubleSpinBox):
             return
+        
         if min_value > max_value:
             min_value, max_value = max_value, min_value
-        self.input_field.validator().setRange(min_value, max_value)
+        
+        self.input_field.setMinimum(min_value)
+        self.input_field.setMaximum(max_value)
+        
+    def set_decimals(self, decimals: int):
+        """
+        Apply specified values to a numeric input field validator
+
+        Parameters
+        ----------
+        decimal: int
+            The number of decimals accepted by the field
+        """
+        
+        if not isinstance(self.input_field, QDoubleSpinBox):
+            return
+        
+        single_step = 10 ** -decimals
+        
+        self.input_field.setDecimals(decimals)
+        self.input_field.setSingleStep(single_step)
 
     def set_value(self, value, reset_change_state: bool = False):
         """
@@ -271,6 +296,10 @@ class PreferenceUIEntry:
                 return
             index = self.input_field.findData(value)
             self.input_field.setCurrentIndex(index)
+        elif self.input_type == InputTypes.INT:
+            self.input_field.setValue(int(value))
+        elif self.input_type == InputTypes.FLOAT:
+            self.input_field.setValue(float(value))
         else:
             self.input_field.setText(str(value))
 
@@ -335,6 +364,8 @@ class PreferenceUIEntry:
                 value = 'true'
             else:
                 value = "false"
+        elif self.input_type == InputTypes.FLOAT or self.input_type == InputTypes.INT:
+            value = str(self.input_field.value())
         else:
             value = self.input_field.text()
 

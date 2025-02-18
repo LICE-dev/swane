@@ -7,7 +7,7 @@ from math import ceil
 
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import (InputTypes, WORKFLOW_TYPES, SLICER_EXTENSIONS, CORE_LIMIT, VEIN_DETECTION_MODE,
-                                       BLOCK_DESIGN, SLICE_TIMING, GlobalPrefCategoryList)
+                                       BLOCK_DESIGN, SLICE_TIMING, GlobalPrefCategoryList, BETWEEN_MOD_FLIRT_COST)
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
@@ -152,9 +152,22 @@ WF_PREFERENCES[category]['vein_detection_mode'] = PreferenceEntry(
     value_enum=VEIN_DETECTION_MODE,
     default=VEIN_DETECTION_MODE.SD,
 )
+WF_PREFERENCES[category]['vein_segment_threshold'] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Threshold (%) for 3DSlicer Vein Segment",
+    default=97.5,
+    range=[0.1, 100],
+    decimals=1
+)
 
 category = DataInputList.ASL
 WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]['cost_func'] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="FLIRT between modalities cost function",
+    value_enum=BETWEEN_MOD_FLIRT_COST,
+    default=BETWEEN_MOD_FLIRT_COST.NORMALIZED_MUTUAL_INFORMATION,
+)
 WF_PREFERENCES[category]['ai'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Asymmetry Index map for ASL",
@@ -172,6 +185,12 @@ WF_PREFERENCES[category]['ai_threshold'] = PreferenceEntry(
 
 category = DataInputList.PET
 WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]['cost_func'] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="FLIRT between modalities cost function",
+    value_enum=BETWEEN_MOD_FLIRT_COST,
+    default=BETWEEN_MOD_FLIRT_COST.MULTUAL_INFORMATION,
+)
 WF_PREFERENCES[category]['ai'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Asymmetry Index map for PET",
@@ -197,6 +216,14 @@ WF_PREFERENCES[category]['tractography'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="DTI tractography",
     default='true',
+)
+WF_PREFERENCES[category]['tractography_threshold'] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Threshold for 3DSlicer DTI Tract",
+    tooltip="This value is multiplied by the tract waytotal for threshold calculation",
+    default=0.0035,
+    range=[0.0001, 1],
+    decimals=4
 )
 WF_PREFERENCES[category]['track_procs'] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -247,7 +274,7 @@ for x in range(FMRI_NUM):
         input_type=InputTypes.INT,
         label="Rest duration (sec)",
         default=30,
-        range=[1, 500],
+        range=[0, 500],
     )
     WF_PREFERENCES[category]['tr'] = PreferenceEntry(
         input_type=InputTypes.FLOAT,

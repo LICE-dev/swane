@@ -70,7 +70,8 @@ def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir
     
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=['threshold_file_1', 'threshold_file_2']),
+        IdentityInterface(fields=['threshold_file_cont1_thresh1', 'threshold_file_cont1_thresh2', 'threshold_file_cont1_thresh3',
+                                  'threshold_file_cont2_thresh1', 'threshold_file_cont2_thresh2', 'threshold_file_cont2_thresh3']),
         name='outputnode')
 
     # NODE 1: Conversion dicom -> nifti
@@ -382,34 +383,86 @@ def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir
         workflow.connect(results_select, 'zstat', maskfunc4, 'in_file')
         workflow.connect(dilatemask, 'out_file', maskfunc4, 'in_file2')
 
-        # NODE 36: Perform clustering on statistical output
-        cluster = Node(Cluster(), name="%s_cluster_%d" % (name, cont))
-        cluster.long_name = "contrast " + str(cont) + " %s"
-        cluster.inputs.threshold = 3.1
-        cluster.inputs.connectivity = 26
-        cluster.inputs.pthreshold = 0.05
-        cluster.inputs.out_localmax_txt_file = True
-
         # Function to generate the name for the file of output cluster
-        def cluster_file_name(contrasts, run_name, x):
-            return "r-%s_cluster_%s.nii.gz" % (run_name, contrasts[x-1][0])
+        def cluster_file_name(contrasts, thres, run_name, x):
+            return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (run_name, contrasts[x-1][0], thres)
+        
+        # NODE 36a: Perform clustering on statistical output
+        threshold = 3.1
+        cluster1 = Node(Cluster(), name="%s_cluster_t3_%d" % (name, cont))
+        cluster1.long_name = "contrast " + str(cont) + " threshold " + str(threshold) + " %s in reference space"
+        cluster1.inputs.threshold = threshold
+        cluster1.inputs.connectivity = 26
+        cluster1.inputs.pthreshold = 0.05
+        cluster1.inputs.out_localmax_txt_file = True
+        
+        workflow.connect([(genSpec, cluster1, [(('contrasts', cluster_file_name, threshold, name, cont), 'out_threshold_file')])])
+        workflow.connect(maskfunc4, 'out_file', cluster1, 'in_file')
+        workflow.connect(results_select, 'cope', cluster1, 'cope_file')
+        workflow.connect(smoothness, 'volume', cluster1, 'volume')
+        workflow.connect(smoothness, 'dlh', cluster1, 'dlh')
 
-        workflow.connect([(genSpec, cluster, [(('contrasts', cluster_file_name, name, cont), 'out_threshold_file')])])
-        workflow.connect(maskfunc4, 'out_file', cluster, 'in_file')
-        workflow.connect(results_select, 'cope', cluster, 'cope_file')
-        workflow.connect(smoothness, 'volume', cluster, 'volume')
-        workflow.connect(smoothness, 'dlh', cluster, 'dlh')
+        # NODE 37a: Transformation in ref space
+        cluster1_2_ref = Node(ApplyXFM(), name="%s_cluster_t3_%d_to_ref" % (name, cont))
+        cluster1_2_ref.long_name = "contrast " + str(cont) + " threshold " + str(threshold) + " %s in reference space"
+        cluster1_2_ref.inputs.apply_xfm = True
+        workflow.connect(cluster1, 'threshold_file', cluster1_2_ref, 'in_file')
+        workflow.connect([(genSpec, cluster1_2_ref, [(('contrasts', cluster_file_name, threshold, name, cont), 'out_file')])])
+        workflow.connect(inputnode, "ref_BET", cluster1_2_ref, "reference")
+        workflow.connect(flirt_2_ref, "out_matrix_file", cluster1_2_ref, "in_matrix_file")
 
-        # NODE 37: Transformation in ref space
-        cluster_2_ref = Node(ApplyXFM(), name="%s_cluster_%d_to_ref" % (name, cont))
-        cluster_2_ref.long_name = "contrast " + str(cont) + " %s in reference space"
-        cluster_2_ref.inputs.apply_xfm = True
-        workflow.connect(cluster, 'threshold_file', cluster_2_ref, 'in_file')
-        workflow.connect([(genSpec, cluster_2_ref, [(('contrasts', cluster_file_name, name, cont), 'out_file')])])
-        workflow.connect(inputnode, "ref_BET", cluster_2_ref, "reference")
-        workflow.connect(flirt_2_ref, "out_matrix_file", cluster_2_ref, "in_matrix_file")
+        workflow.connect(cluster1_2_ref, 'out_file', outputnode, 'threshold_file_cont%s_thresh1' % cont)
+        
+        # NODE 36b: Perform clustering on statistical output
+        threshold = 5
+        cluster2 = Node(Cluster(), name="%s_cluster_t5_%d" % (name, cont))
+        cluster2.long_name = "contrast " + str(cont) + " threshold " + str(threshold) + " %s in reference space"
+        cluster2.inputs.threshold = threshold
+        cluster2.inputs.connectivity = 26
+        cluster2.inputs.pthreshold = 0.05
+        cluster2.inputs.out_localmax_txt_file = True
+        
+        workflow.connect([(genSpec, cluster2, [(('contrasts', cluster_file_name, threshold, name, cont), 'out_threshold_file')])])
+        workflow.connect(maskfunc4, 'out_file', cluster2, 'in_file')
+        workflow.connect(results_select, 'cope', cluster2, 'cope_file')
+        workflow.connect(smoothness, 'volume', cluster2, 'volume')
+        workflow.connect(smoothness, 'dlh', cluster2, 'dlh')
 
-        # workflow.connect(cluster, 'threshold_file', outputnode, 'threshold_file_%s' % cont)
-        workflow.connect(cluster_2_ref, 'out_file', outputnode, 'threshold_file_%s' % cont)
+        # NODE 37b: Transformation in ref space
+        cluster2_2_ref = Node(ApplyXFM(), name="%s_cluster_t5_%d_to_ref" % (name, cont))
+        cluster2_2_ref.long_name = "contrast " + str(cont) + " threshold " + str(threshold) + " %s in reference space"
+        cluster2_2_ref.inputs.apply_xfm = True
+        workflow.connect(cluster2, 'threshold_file', cluster2_2_ref, 'in_file')
+        workflow.connect([(genSpec, cluster2_2_ref, [(('contrasts', cluster_file_name, threshold, name, cont), 'out_file')])])
+        workflow.connect(inputnode, "ref_BET", cluster2_2_ref, "reference")
+        workflow.connect(flirt_2_ref, "out_matrix_file", cluster2_2_ref, "in_matrix_file")
+
+        workflow.connect(cluster2_2_ref, 'out_file', outputnode, 'threshold_file_cont%s_thresh2' % cont)
+        
+        # NODE 36c: Perform clustering on statistical output
+        threshold = 7
+        cluster3 = Node(Cluster(), name="%s_cluster_t7_%d" % (name, cont))
+        cluster3.long_name = "contrast " + str(cont) + " threshold " + str(threshold) + " %s in reference space"
+        cluster3.inputs.threshold = threshold
+        cluster3.inputs.connectivity = 26
+        cluster3.inputs.pthreshold = 0.05
+        cluster3.inputs.out_localmax_txt_file = True
+        
+        workflow.connect([(genSpec, cluster3, [(('contrasts', cluster_file_name, threshold, name, cont), 'out_threshold_file')])])
+        workflow.connect(maskfunc4, 'out_file', cluster3, 'in_file')
+        workflow.connect(results_select, 'cope', cluster3, 'cope_file')
+        workflow.connect(smoothness, 'volume', cluster3, 'volume')
+        workflow.connect(smoothness, 'dlh', cluster3, 'dlh')
+
+        # NODE 37c: Transformation in ref space
+        cluster3_2_ref = Node(ApplyXFM(), name="%s_cluster_t7_%d_to_ref" % (name, cont))
+        cluster3_2_ref.long_name = "contrast " + str(cont) + " threshold " + str(threshold) + " %s in reference space"
+        cluster3_2_ref.inputs.apply_xfm = True
+        workflow.connect(cluster3, 'threshold_file', cluster3_2_ref, 'in_file')
+        workflow.connect([(genSpec, cluster3_2_ref, [(('contrasts', cluster_file_name, threshold, name, cont), 'out_file')])])
+        workflow.connect(inputnode, "ref_BET", cluster3_2_ref, "reference")
+        workflow.connect(flirt_2_ref, "out_matrix_file", cluster3_2_ref, "in_matrix_file")
+
+        workflow.connect(cluster3_2_ref, 'out_file', outputnode, 'threshold_file_cont%s_thresh3' % cont)
 
     return workflow
