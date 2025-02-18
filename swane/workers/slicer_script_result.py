@@ -157,14 +157,16 @@ def load_freesurfer_segmentation_file(seg_file: str):
     
     if os.path.exists(seg_file):
         try:
-
-            # TODO: temporary fix for ubuntu crash
+            # OLD COMMON METHOD
+            # slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
+            
+            # WARNING: SlicerFreesurfer plugin bug causing Crash on ubuntu with the new method.
+            # Preserving old method to ensure functionality with older version of the plugin.
             if "linux" in sys.platform:
                 slicer.util.loadVolume(seg_file, {"labelmap": True, "colorNodeID": "vtkMRMLColorTableNodeFile"})
             else:
                 slicer.util.getModuleLogic('FreeSurferImporter').LoadFreeSurferSegmentation(seg_file)
-
-            # slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
+    
 
         except:
             pass
@@ -205,7 +207,7 @@ def load_freesurfer(scene_dir: str, ref_node):
         load_freesurfer_overlay(scene_dir, overlay + "_rh.mgz", rh_pial)
 
 
-def load_vein(scene_dir: str, remove_vein: bool = False):
+def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 97.5):
     """
     Loads the veins files and creates their 3d model.
 
@@ -215,6 +217,8 @@ def load_vein(scene_dir: str, remove_vein: bool = False):
         The scene directory.
     remove_vein : bool, optional
         True if the model must remove the original veins images. The default is False.
+    vein_thresold : float, optional
+        The threshold for the vein detection in 3D Slicer. The default is 97.5.
 
     Returns
     -------
@@ -229,12 +233,13 @@ def load_vein(scene_dir: str, remove_vein: bool = False):
     print("SLICERLOADER: Creating 3D model: Veins")
 
     try:
-        command = "fslstats " + os.path.join(scene_dir, vein_volume_name+".nii.gz") + " -P 97.5"
+        command = "fslstats " + os.path.join(scene_dir, vein_volume_name+".nii.gz") + " -P " +str(vein_threshold)
         output = subprocess.run(command, shell=True,
                                 stdout=subprocess.PIPE).stdout.decode('utf-8')
         thr = float(output)
     except:
         thr = 6
+
 
     vein_model = slicer.vtkMRMLModelNode()
     slicer.mrmlScene.AddNode(vein_model)
@@ -257,7 +262,7 @@ def load_vein(scene_dir: str, remove_vein: bool = False):
         slicer.mrmlScene.RemoveNode(vein_node)
 
 
-def tract_model(segmentation_node, dti_dir: str, tract: [], side: str):
+def tract_model(segmentation_node, dti_dir: str, tract: [], side: str, dti_threshold: float=0.0035):
     """
     Creates the 3d model of a tract.
 
@@ -274,6 +279,8 @@ def tract_model(segmentation_node, dti_dir: str, tract: [], side: str):
         The side of the tract:
             - LH for left side
             - RH for right side
+    dti_threshold : float
+        The threshold for the dti tractography
 
     Returns
     -------
@@ -296,7 +303,7 @@ def tract_model(segmentation_node, dti_dir: str, tract: [], side: str):
             pass
 
     if waytotal > 0:
-        thr = waytotal * 0.0035
+        thr = waytotal * dti_threshold
     else:
         thr = tract['thr']
 
@@ -365,8 +372,14 @@ def main_tract(dti_dir: str, scene_dir: str):
         segmentation_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode", "tracts_" + side)
         segmentation_node.CreateDefaultDisplayNodes()  # only needed for display
         
+        # DTI Threshold preferences parsing
+        if sys.argv[2] is not None:
+            try:
+                dti_threshold = float(sys.argv[2])
+            except:
+                dti_threshold = 0.0035
         for tract in tracts:
-            tract_model(segmentation_node, dti_dir, tract, side)
+            tract_model(segmentation_node, dti_dir, tract, side, dti_threshold=dti_threshold)
             
         segmentation_node.CreateClosedSurfaceRepresentation()
         my_storage_node = segmentation_node.CreateDefaultStorageNode()
@@ -410,8 +423,15 @@ else:
             load_anat(results_folder, volume[0], volume[1])
 
         load_fmri(results_folder)
+        
+        # Vein Threshold preferences parsing
+        if sys.argv[3] is not None:
+            try:
+                vein_threshold = float(sys.argv[3])
+            except:
+                vein_threshold = 97.5
 
-        load_vein(results_folder)
+        load_vein(results_folder, vein_thresold=vein_threshold)
 
         load_freesurfer(results_folder, refNode)
 
@@ -419,7 +439,7 @@ else:
         
         #TODO valutare
         # Saving in MRML doesn't work well, disable extension choice for now
-        # if sys.argv[1] is not None and sys.argv[1] == "mrml":
+        # if sys.argv[4] is not None and sys.argv[1] == "mrml":
         #     ext = "mrml"
 
         print("SLICERLOADER: Saving multimodale scene (some minutes)")

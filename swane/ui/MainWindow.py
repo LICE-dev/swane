@@ -408,7 +408,8 @@ class MainWindow(QMainWindow):
         label_about2 = QLabel(strings.app_acronym)
         label_about3 = QLabel("Version: " + __version__)
 
-        label_about4 = QLabel(strings.aboutwindow_python_libs)
+        label_about4 = QLabel(strings.aboutwindow_wiki_changelog)
+        label_about5 = QLabel(strings.aboutwindow_wiki_dependencylist)
 
         label_about_icon = QLabel()
         icon = QPixmap(swane_supplement.appIcon_file)
@@ -419,6 +420,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(label_about2, 1, 1)
         layout.addWidget(label_about3, 2, 1)
         layout.addWidget(label_about4, 3, 1)
+        layout.addWidget(label_about5, 4, 1)
 
         layout.addWidget(label_about_icon, 0, 0, 3, 1)
 

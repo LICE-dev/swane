@@ -853,19 +853,20 @@ class MainWorkflow(CustomWorkflow):
             self.connect(
                 self.t1, "outputnode.ref_brain", self.fMRI, "inputnode.ref_BET"
             )
-            self.fMRI.sink_result(
-                save_path=self.base_dir,
-                result_node="outputnode",
-                result_name="threshold_file_1",
-                sub_folder=self.Result_DIR + ".fMRI",
-            )
-            if (
-                self.subject_config.getenum_safe(DIL["FMRI_%d" % y], "block_design")
-                == BLOCK_DESIGN.RARB
-            ):
+            for thresh_i in range(1, 4):
                 self.fMRI.sink_result(
                     save_path=self.base_dir,
                     result_node="outputnode",
-                    result_name="threshold_file_2",
+                    result_name="threshold_file_cont1_thresh%d" % thresh_i,
                     sub_folder=self.Result_DIR + ".fMRI",
                 )
+                if (
+                    self.subject_config.getenum_safe(DIL["FMRI_%d" % y], "block_design")
+                    == BLOCK_DESIGN.RARB
+                ):
+                    self.fMRI.sink_result(
+                        save_path=self.base_dir,
+                        result_node="outputnode",
+                        result_name="threshold_file_cont2_thresh%d" % thresh_i,
+                        sub_folder=self.Result_DIR + ".fMRI",
+                    )

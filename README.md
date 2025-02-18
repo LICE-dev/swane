@@ -22,7 +22,7 @@
 ## Introduction
 SWANe is a software designed and developed to improve and simplify the management of a wide range of advanced neuroimaging analysis algorithms.
 
-It consists of a library of predefinied workflows that can be managed through an user-friendly Graphical User Interface, which guides the users step by step to all the operations without any text-based command interface.
+It consists of a library of predefinied workflows that can be managed through a user-friendly Graphical User Interface, which guides the users step by step to all the operations without any text-based command interface.
 
 SWANe straightforward pipeline can be used to manage imaging for epileptic patients of all ages (including pediatric patients). Its structure in indipendent modules permits to be diffusely adopted overcoming the difficulties to collect advanced imaging (especially metabolic and functional) in small epileptic centers.
 
@@ -125,6 +125,20 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 
 ## Changelog
+
+### [0.1.4] - Pending
+
+#### Added
+
+- setuptools dependency for GPUtils Series
+- fMRI cluster outputs with different thresholds (3.1, 5.1, 7.1)
+- Threshold for 3DSlicer DTI Tract in Workflow Preferences
+- Threshold (%) for 3DSlicer Vein Segment in Workflow Preferences
+- Cost Function for ASL/PET in Workflow Preferences
+
+#### Changed
+
+- PySide6 QSpinBox & QDoubleSpinBox implementation in App & Workflow Preferences
 
 ### [0.1.3] - 2024-11-28
 
