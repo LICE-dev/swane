@@ -27,6 +27,7 @@ class DicomSearchWorker(QRunnable):
             self.unsorted_list = []
         self.signal = DicomSearchSignal()
         self.tree = DicomTree(dicom_dir)
+        self.error_message = []
         #self.dicom_tree = {}
         #self.series_positions = {}
         #self.multi_frame_series = {}
@@ -122,6 +123,8 @@ class DicomSearchWorker(QRunnable):
                     and "SECONDARY" in ds.ImageType
                     and "ASL" not in ds.ImageType
                 ):
+                    if ds.ImageType not in self.error_message:
+                        self.error_message.append(ds.ImageType)
                     continue
                 # in GE e SIEMENS l'immagine anatomica di ASL è ORIGINAL\PRIMARY\ASL
                 if (
@@ -130,9 +133,13 @@ class DicomSearchWorker(QRunnable):
                     and "PRIMARY" in ds.ImageType
                     and "ASL" in ds.ImageType
                 ):
+                    if ds.ImageType not in self.error_message:
+                        self.error_message.append(ds.ImageType)
                     continue
                 # in Philips e Siemens le ricostruzioni sono PROJECTION IMAGE
                 if hasattr(ds, "ImageType") and "PROJECTION IMAGE" in ds.ImageType:
+                    if ds.ImageType not in self.error_message:
+                        self.error_message.append(ds.ImageType)
                     continue
 
                 self.tree.add_subject(subject_id, str(ds.PatientName))
