@@ -117,6 +117,7 @@ subj_tab_tabtooltip_exec_disabled_series = "A 3D T1w series is required to enabl
 subj_tab_tabtooltip_exec_disabled_dependency = "Mandatory dependencies are required to enable workflow execution"
 subj_tab_tabtooltip_result_disabled = "Complete a workflow first"
 subj_tab_tabtooltip_data_disabled = "Cannot change subject data during workflow execution"
+subj_tab_unsupported_files = "Folder contains ImageType combinations that are not supported: {}"
 
 # Wf Preference Window
 wf_pref_window_title_user = ' - Workflow preferences'
