@@ -1017,14 +1017,12 @@ class SubjectTab(QTabWidget):
         self.scan_directory_watcher.addPath(folder_path)
         subject_list = dicom_src_work.tree.get_subject_list()
 
-        if len(dicom_src_work.error_message) > 0:
-            msg_box = QMessageBox()
-            msg_box.setText(strings.subj_tab_unsupported_files.format(str(dicom_src_work.error_message)))
-            msg_box.exec()
-
         if len(subject_list) == 0:
             msg_box = QMessageBox()
-            msg_box.setText(strings.subj_tab_no_dicom_error + folder_path)
+            if len(dicom_src_work.error_message) > 0:
+                msg_box.setText(strings.subj_tab_unsupported_files.format(str(dicom_src_work.error_message)))
+            else:
+                msg_box.setText(strings.subj_tab_no_dicom_error + folder_path)
             msg_box.exec()
             return
         
