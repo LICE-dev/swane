@@ -19,7 +19,7 @@ class CustomBEDPOSTX5(BEDPOSTX5):
 
     """
     
-    input_spec = CustomBEDPOSTX5InputSpec
+    #input_spec = CustomBEDPOSTX5InputSpec
 
     def _run_interface(self, runtime):
         from nipype.utils.filemanip import split_filename, copyfile
@@ -43,15 +43,15 @@ class CustomBEDPOSTX5(BEDPOSTX5):
         self._out_dir = subjectdir + ".bedpostX"
         return retval
 
-    def _parse_inputs(self, skip=None):
-        """
-        Custom implementation of _parse_inputs func to manage multithreading.
-
-        """
-
-        if isdefined(self.inputs.num_threads):
-            skip = ["num_threads"]
-            self.inputs.environ["FSLPARALLEL"] = "%d" % self.inputs.num_threads
-
-        parse = super(CustomBEDPOSTX5, self)._parse_inputs(skip)
-        return parse
+    # def _parse_inputs(self, skip=None):
+    #     """
+    #     Custom implementation of _parse_inputs func to manage multithreading.
+    #
+    #     """
+    #
+    #     if isdefined(self.inputs.num_threads):
+    #         skip = ["num_threads"]
+    #         self.inputs.environ["FSLPARALLEL"] = "%d" % self.inputs.num_threads
+    #
+    #     parse = super(CustomBEDPOSTX5, self)._parse_inputs(skip)
+    #     return parse

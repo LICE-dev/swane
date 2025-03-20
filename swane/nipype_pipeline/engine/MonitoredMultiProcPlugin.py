@@ -21,21 +21,9 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
     """
 
     def __init__(self,  plugin_args=None):
-
-        # self.task_list = {}
+        # This method implement support for queue signaling
         if "queue" in plugin_args:
             self.queue = plugin_args["queue"]
-
-        # GPU found on system
-        self.n_gpus_visible = MonitoredMultiProcPlugin.gpu_count()
-        # proc per GPU set by user
-        self.n_gpu_proc = plugin_args.get('n_gpu_proc', 1)
-
-        # total no. of processes allowed on all gpus
-        if self.n_gpu_proc > self.n_gpus_visible:
-            logger.info(
-                'Total number of GPUs proc requested (%d) exceeds the available number of GPUs (%d) on the system. Using requested GPU slots at your own risk!' % (
-                self.n_gpu_proc, self.n_gpus_visible))
 
         super().__init__(plugin_args=plugin_args)
 
@@ -44,37 +32,17 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
 
     def _prerun_check(self, graph):
         """Check if any node exceeds the available resources"""
-        # This class implements signaling for insufficient resources error
+        # This method implements signaling for insufficient resources error
         try:
             super(MonitoredMultiProcPlugin, self)._prerun_check(graph)
-            tasks_gpu_th = []
-
-            for node in graph.nodes():
-                if MonitoredMultiProcPlugin.is_gpu_node(node):
-                    tasks_gpu_th.append(node.n_procs)
-
-            if np.any(np.array(tasks_gpu_th) > self.n_gpu_proc):
-                logger.warning(
-                    'Nodes demand more GPU than allowed (%d).',
-                    self.n_gpu_proc)
-                if self.raise_insufficient:
-                    raise RuntimeError('Insufficient GPU resources available for job')
         except RuntimeError:
             self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES))
             raise RuntimeError("Insufficient resources available for job")
 
-    def _check_resources(self, running_tasks):
-        free_memory_gb, free_processors = super()._check_resources(running_tasks)
-        free_gpu_slots = self.n_gpu_proc
-        for _, jobid in running_tasks:
-            if MonitoredMultiProcPlugin.is_gpu_node(self.procs[jobid]):
-                free_gpu_slots -= min(self.procs[jobid].n_procs, free_gpu_slots)
-        return free_memory_gb, free_processors, free_gpu_slots
-
     def _send_procs_to_workers(self, updatehash=False, graph=None):
         """
-        Sends jobs to workers when system resources are available.
-        """
+                Sends jobs to workers when system resources are available.
+                """
 
         # Check to see if a job is available (jobs with all dependencies run)
         # See https://github.com/nipy/nipype/pull/2200#discussion_r141605722
@@ -84,7 +52,9 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         )
 
         # Check available resources by summing all threads and memory used
-        free_memory_gb, free_processors, free_gpu_slots = self._check_resources(self.pending_tasks)
+        free_memory_gb, free_processors, free_gpu_slots = self._check_resources(
+            self.pending_tasks
+        )
 
         stats = (
             len(self.pending_tasks),
@@ -94,7 +64,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             free_processors,
             self.processors,
             free_gpu_slots,
-            self.n_gpu_proc
+            self.n_gpu_procs,
         )
         if self._stats != stats:
             tasks_list_msg = ""
@@ -118,8 +88,8 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 free_processors,
                 self.processors,
                 free_gpu_slots,
-                self.n_gpu_proc,
-                tasks_list_msg
+                self.n_gpu_procs,
+                tasks_list_msg,
             )
             self._stats = stats
 
@@ -160,19 +130,22 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             # Check requirements of this job
             next_job_gb = min(self.procs[jobid].mem_gb, self.memory_gb)
             next_job_th = min(self.procs[jobid].n_procs, self.processors)
-            next_job_gpu_th = min(self.procs[jobid].n_procs, self.n_gpu_proc)
+            next_job_gpu_th = min(self.procs[jobid].n_procs, self.n_gpu_procs)
 
-            is_gpu_node = MonitoredMultiProcPlugin.is_gpu_node(self.procs[jobid])
+            is_gpu_node = self.procs[jobid].is_gpu_node()
 
             # If node does not fit, skip at this moment
-            if (next_job_th > free_processors or next_job_gb > free_memory_gb
-                    or (is_gpu_node and next_job_gpu_th > free_gpu_slots)):
+            if (
+                    next_job_th > free_processors
+                    or next_job_gb > free_memory_gb
+                    or (is_gpu_node and next_job_gpu_th > free_gpu_slots)
+            ):
                 logger.debug(
                     "Cannot allocate job %d (%0.2fGB, %d threads, %d GPU slots).",
                     jobid,
                     next_job_gb,
                     next_job_th,
-                    next_job_gpu_th
+                    next_job_gpu_th,
                 )
                 continue
 
@@ -180,15 +153,13 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             free_processors -= next_job_th
             if is_gpu_node:
                 free_gpu_slots -= next_job_gpu_th
-
             logger.debug(
-                "Allocating %s ID=%d (%0.2fGB, %d threads, %d GPU slots). Free: "
+                "Allocating %s ID=%d (%0.2fGB, %d threads). Free: "
                 "%0.2fGB, %d threads, %d GPU slots.",
                 self.procs[jobid].fullname,
                 jobid,
                 next_job_gb,
                 next_job_th,
-                next_job_gpu_th,
                 free_memory_gb,
                 free_processors,
                 free_gpu_slots,
@@ -202,11 +173,14 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             if self._local_hash_check(jobid, graph):
                 continue
 
+            cached, updated = self.procs[jobid].is_cached()
             # updatehash and run_without_submitting are also run locally
-            if updatehash or self.procs[jobid].run_without_submitting:
+            if (cached and updatehash and not updated) or self.procs[
+                jobid
+            ].run_without_submitting:
                 logger.debug("Running node %s on master thread", self.procs[jobid])
                 try:
-                    self.queue.put(WorkflowReport(long_name=self.procs[jobid].fullname, signal_type=WorkflowSignals.NODE_STARTED))
+                    #self.queue.put(WorkflowReport(long_name=self.procs[jobid].fullname, signal_type=WorkflowSignals.NODE_STARTED))
                     self.procs[jobid].run(updatehash=updatehash)
                 except Exception:
                     traceback = format_exception(*sys.exc_info())
@@ -292,17 +266,3 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             except:
                 traceback.print_exc()
         return super(MonitoredMultiProcPlugin, self)._task_finished_cb(jobid, cached)
-
-    @staticmethod
-    def gpu_count():
-        n_gpus = 1
-        try:
-            import GPUtil
-            return len(GPUtil.getGPUs())
-        except ImportError:
-            return n_gpus
-
-    @staticmethod
-    def is_gpu_node(node):
-        return ((hasattr(node.interface.inputs, 'use_cuda') and node.interface.inputs.use_cuda)
-                or (hasattr(node.interface.inputs, 'use_gpu') and node.interface.inputs.use_gpu))
