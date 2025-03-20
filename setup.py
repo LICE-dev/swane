@@ -24,7 +24,7 @@ setup(name='swane',
       license='MIT',
       install_requires=[
           "networkx<3", # check compatibility with nipype before upgrading
-          "nipype==1.8.6",
+          "nipype==1.10.0",
           "Pyside6",
           "pydicom<=3.0.1",
           "configparser<=7.1.0",

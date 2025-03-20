@@ -35,10 +35,6 @@ class CustomDcm2niix(Dcm2niix):
                 if os.path.exists(value.replace(".nii.gz", "_Crop_1.nii.gz")):
                     os.remove(self.output_files[index])
                     os.rename(self.output_files[index].replace(".nii.gz", "_Crop_1.nii.gz"), self.output_files[index])
-            
-        # in mosaic conversion, nipype misread dcm2niix output and generate a duplicate list of results
-        # next line remove duplicates from output files array
-        self.output_files = [*set(self.output_files)]
 
         # Expected files check
         if self.inputs.expected_files > 0 and len(self.output_files) != self.inputs.expected_files:

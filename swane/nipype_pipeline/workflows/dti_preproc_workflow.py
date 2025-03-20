@@ -135,6 +135,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
             else:
                 eddy_cpu = cpu_count()
             eddy.inputs.environ = {'OMP_NUM_THREADS': str(eddy_cpu), 'FSL_SKIP_GLOBAL': '1'}
+            eddy.inputs.args = "--nthr=%d" % eddy_cpu
 
         workflow.connect(reorient, "out_file", eddy, "in_file")
         workflow.connect(conv, "bvals", eddy, "in_bval")
@@ -210,10 +211,10 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         if not is_cuda:
             # if cuda is enabled only 1 process is launched
             if multicore_node_limit == CORE_LIMIT.SOFT_CAP:
-                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
+                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu), 'FSLPARALLEL': str(max_cpu)}
             elif multicore_node_limit == CORE_LIMIT.HARD_CAP:
-                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
-                bedpostx.inputs.num_threads = max_cpu
+                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu), 'FSLPARALLEL': str(max_cpu)}
+                bedpostx.n_procs = max_cpu
 
         workflow.connect(eddy, eddy_output_name, bedpostx, "dwi")
         workflow.connect(bet, "mask_file", bedpostx, "mask")
