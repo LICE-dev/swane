@@ -370,6 +370,12 @@ GLOBAL_PREFERENCES[category]['default_wf_type'] = PreferenceEntry(
     value_enum=WORKFLOW_TYPES,
     default=WORKFLOW_TYPES.STRUCTURAL,
 )
+WF_PREFERENCES[category]['shutdown'] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Shutdown at Workflow End",
+    tooltip="Launch the OS shutdown command at the end of the workflow, if no errors occourred",
+    default='false',
+)
 category = GlobalPrefCategoryList.PERFORMANCE
 GLOBAL_PREFERENCES[category] = {}
 GLOBAL_PREFERENCES[category]['max_subj'] = PreferenceEntry(

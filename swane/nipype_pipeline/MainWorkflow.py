@@ -108,6 +108,13 @@ class MainWorkflow(CustomWorkflow):
         self.launch_venous_analysis()
         self.launch_dti_analysis()
         self.launch_fMRI_analysis()
+        
+        shutdown = self.global_config.getboolean_safe(
+            GlobalPrefCategoryList.MAIN, "shutdown"
+        )
+        if shutdown:
+            # TODO - Codice per SPEGNERE
+            continue
 
         # Remove reference to original variables to prevent crash during subprocess spawn in MacOS
         # Maybe this can be solved setting fork subprocess method too
