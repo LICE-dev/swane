@@ -27,7 +27,8 @@ class CustomEddy(Eddy):
         self.inputs.on_trait_change(self._cuda_update, "use_gpu")
 
     def _cuda_update(self):
-        if self.inputs.use_cuda and gpu_count()>0:
+        if (self.inputs.use_cuda or self.inputs.use_gpu) and gpu_count()>0:
+            self.inputs.num_threads = 1
             # eddy_cuda usually link to eddy_cudaX.X but some versions miss the symlink
             # anyway in newer fsl versions eddy automatically use cuda on cuda-capable systems
             self._cmd = "eddy_cuda" if which("eddy_cuda") else "eddy"
@@ -35,8 +36,14 @@ class CustomEddy(Eddy):
             # older fsl versions has cuda_openmp, newer versions has eddy_cpu
             _cmd = "eddy_openmp" if which("eddy_openmp") else "eddy_cpu"
 
+    def _num_threads_update(self):
+        if self.inputs.use_cuda or self.inputs.use_gpu:
+            self.inputs.num_threads = 1
+        super()._num_threads_update()
+
     def _run_interface(self, runtime):
         # If selected command is missing, use generic 'eddy'
+
         FSLDIR = os.getenv("FSLDIR", "")
         cmd = self._cmd
         if all(
