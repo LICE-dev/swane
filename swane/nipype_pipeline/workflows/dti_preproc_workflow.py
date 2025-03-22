@@ -1,10 +1,9 @@
-from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT)
+from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT, BEDPOSTX5)
 from nipype.pipeline.engine import Node
 from swane.config.config_enums import CORE_LIMIT
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.CustomBEDPOSTX5 import CustomBEDPOSTX5
 from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
 from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
 from configparser import SectionProxy
@@ -137,6 +136,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
             eddy.inputs.environ = {'OMP_NUM_THREADS': str(eddy_cpu), 'FSL_SKIP_GLOBAL': '1'}
             eddy.inputs.args = "--nthr=%d" % eddy_cpu
 
+
         workflow.connect(reorient, "out_file", eddy, "in_file")
         workflow.connect(conv, "bvals", eddy, "in_bval")
         workflow.connect(conv, "bvecs", eddy, "in_bvec")
@@ -201,7 +201,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         workflow.connect(inputnode, 'ref_brain', mni_2_ref_fnirt, 'ref_file')
 
         # NODE 8: Bayesian estimation of diffusion parameters
-        bedpostx = Node(CustomBEDPOSTX5(), name='dti_bedpostx')
+        bedpostx = Node(BEDPOSTX5(), name='dti_bedpostx')
         bedpostx.inputs.n_fibres = 2
         bedpostx.inputs.rician = True
         bedpostx.inputs.sample_every = 25
