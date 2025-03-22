@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeader
 
 from swane import strings
 from swane.config.config_enums import GlobalPrefCategoryList
-from swane.utils.DicomTree import DicomTree
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.workers.SlicerViewerWorker import SlicerViewerWorker
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
