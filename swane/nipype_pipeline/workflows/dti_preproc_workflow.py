@@ -124,7 +124,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
 
         # NODE 4: Eddy current and motion artifact correction
         eddy = Node(CustomEddy(), name="dti_eddy")
-        eddy.inputs.use_gpu = is_cuda
+        eddy.inputs.use_cuda = is_cuda
         if not is_cuda:
             if multicore_node_limit == CORE_LIMIT.HARD_CAP:
                 eddy_cpu = max_cpu
