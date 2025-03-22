@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeader
                                QTreeView, QComboBox)
 
 from swane import strings
+from swane.config.config_enums import GlobalPrefCategoryList
 from swane.utils.DicomTree import DicomTree
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.workers.SlicerViewerWorker import SlicerViewerWorker
@@ -626,12 +627,18 @@ class SubjectTab(QTabWidget):
                 # Not running, should not be possible
                 pass
             else:
-                # UI updating
-                self.remove_running_icon()
-                self.exec_button.setText(strings.EXECBUTTONTEXT)
-                self.setTabEnabled(SubjectTab.DATATAB, True)
-                self.reset_workflow(force=True)
-                self.enable_tab_if_result_dir()
+                shutdown = self.global_config.getboolean_safe(
+                    GlobalPrefCategoryList.MAIN, "shutdown"
+                )
+                if shutdown:
+                    os.system("sudo shutdown -h now") 
+                else:
+                    # UI updating
+                    self.remove_running_icon()
+                    self.exec_button.setText(strings.EXECBUTTONTEXT)
+                    self.setTabEnabled(SubjectTab.DATATAB, True)
+                    self.reset_workflow(force=True)
+                    self.enable_tab_if_result_dir()
 
     def export_results_button_update_state(self):
         """
