@@ -34,7 +34,7 @@ class SubjectRet(Enum):
     DataInputWarningMultiSubj = auto()
     DataInputWarningMultiStudy = auto()
     DataInputWarningMultiSeries = auto()
-    DataInputValid = ()
+    DataInputValid = auto()
     DataImportErrorVolumesMax = auto()
     DataImportErrorVolumesMin = auto()
     DataImportErrorModality = auto()
