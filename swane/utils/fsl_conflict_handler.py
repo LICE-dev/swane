@@ -12,7 +12,7 @@ SHELL_PROFILE = {'sh': ['.profile'],
                  'csh': ['.cshrc'],
                  'tcsh': ['.tcshrc']}
 
-FIX_LINE = "PATH=$(echo \"$PATH\" | sed -e \"s/:$( echo \"$FSL_DIR\" | sed 's/\//\\\\\//g')\/bin//\")"
+FIX_LINE = r"""PATH=$(echo "$PATH" | sed -e "s/:$( echo "$FSL_DIR" | sed 's/\//\\\//g')\/bin//")"""
 APP_EXEC_COMMAND = "python3 -m " + __name__.split(".")[0]
 
 
