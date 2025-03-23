@@ -228,7 +228,7 @@ class MainWindow(QMainWindow):
         
         import re
         
-        regex = re.compile('^' + self.global_config.get_subjects_prefix() + '\d+$')
+        regex = re.compile('^' + self.global_config.get_subjects_prefix() + r'\d+$')
         file_list = []
         
         for this_dir in os.listdir(self.global_config.get_main_working_directory()):
