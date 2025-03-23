@@ -23,26 +23,18 @@ setup(name='swane',
       ],
       license='MIT',
       install_requires=[
-          "networkx<3", # check compatibility with nipype before upgrading
+          "networkx==3.4.2"
           "nipype==1.10.0",
           "Pyside6",
-          "pydicom<=3.0.1",
+          "pydicom==3.0.1",
           "configparser<=7.1.0",
-          "psutil<=6.0.0",
+          "psutil<=7.0.0",
           "swane_supplement>=0.1.2",
-          "matplotlib<=3.9.2",
+          "matplotlib==3.10.1",
           "nibabel<=5.3.0",
           "packaging",
           "PySide6_VerticalQTabWidget==0.0.3",
-          "numpy<=2", # check compatibility with nibabel and CropFov node before upgrading!
-            #Error for fmri art with numpy>=2
-            # File "site-packages/nipype/algorithms/rapidart.py", line 693, in _run_interface
-            # 	    self._detect_outliers_core(imgf, motparamlist[i], i, cwd=os.getcwd())
-            # 	  File "site-packages/nipype/algorithms/rapidart.py", line 610, in _detect_outliers_core
-            # 	    np.savetxt(artifactfile, outliers, fmt=b"%d", delimiter=" ")
-            # 	  File "site-packages/numpy/lib/_npyio_impl.py", line 1627, in savetxt
-            # 	    raise ValueError('invalid fmt: %r' % (fmt,))
-            # 	ValueError: invalid fmt: b'%d'
+          "numpy==2.2.4",
           "cryptography"
       ],
       python_requires=">=3.7",
