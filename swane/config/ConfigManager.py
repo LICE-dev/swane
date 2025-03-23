@@ -47,7 +47,7 @@ class ConfigManager(configparser.ConfigParser):
 
         reset_pref = False
 
-        # if version need pref reset, load olg config file in a temp variable to get just last_swane_version
+        # if version need pref reset, load old config file in a temp variable to get just last_swane_version
         try:
             if force_pref_reset:
                 if self.global_config:
@@ -66,7 +66,11 @@ class ConfigManager(configparser.ConfigParser):
             # Cycle all read values and reassign them to invoke validate_type without rewriting read method
             for section in self._section_defaults.keys():
                 for option in self._section_defaults[section].keys():
-                    self.set(section, option, self[section][option])
+                    if self._section_defaults[section][option].default_at_startup:
+                        self.set(section, option, self._section_defaults[section][option].default)
+                    else:
+                        self.set(section, option, self[section][option])
+
             # set last_swane_version in subject config to ensure force_pref_reset compatibility
             if str(GlobalPrefCategoryList.MAIN) not in self:
                 self[GlobalPrefCategoryList.MAIN] = {}
