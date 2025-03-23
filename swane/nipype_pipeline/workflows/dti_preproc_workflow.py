@@ -211,9 +211,9 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         if not is_cuda:
             # if cuda is enabled only 1 process is launched
             if multicore_node_limit == CORE_LIMIT.SOFT_CAP:
-                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu), 'FSLPARALLEL': str(max_cpu)}
+                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
             elif multicore_node_limit == CORE_LIMIT.HARD_CAP:
-                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu), 'FSLPARALLEL': str(max_cpu)}
+                bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
                 bedpostx.n_procs = max_cpu
 
         workflow.connect(eddy, eddy_output_name, bedpostx, "dwi")
