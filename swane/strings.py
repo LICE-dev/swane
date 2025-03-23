@@ -51,15 +51,15 @@ aboutwindow_wiki_dependencylist = "Link to <a href='https://github.com/LICE-dev/
 aboutwindow_wiki_changelog = "Link to versions <a href='https://github.com/LICE-dev/swane/wiki/11-Changelog'>changelog</a>"
 
 # Menu
-menu_load_subj = "Load existing subject"
+menu_load_subj = "&Load subject..."
 menu_load_subj_tip = "Load subject data from the main working directory"
-menu_new_subj = "Create new subject"
+menu_new_subj = "&New subject..."
 menu_new_subj_tip = "Add a new subject in the main working directory"
-menu_exit = "Exit " + APPNAME
-menu_pref = "Application settings"
+menu_exit = "E&xit " + APPNAME
+menu_pref = "Application &Settings..."
 menu_pref_tip = "Edit " + APPNAME + " settings"
-menu_wf_pref = "Default Workflow preferences"
-menu_about = "About " + APPNAME + "..."
+menu_wf_pref = "Default Workflow &Preferences..."
+menu_about = "&About " + APPNAME + "..."
 menu_file_name = "File"
 menu_tools_name = "Tools"
 menu_help_name = "Help"
