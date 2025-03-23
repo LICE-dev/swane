@@ -8,12 +8,14 @@ from nipype.interfaces.base import traits
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.dcm2nii.Dcm2niixInputSpec)  -*-
 class CustomDcm2niixInputSpec(Dcm2niixInputSpec):
-    merge_imgs = traits.Enum(
+    name_conflicts = traits.Enum(
         2,
         1,
         0,
-        argstr="-m %d",
-        usedefault=True)
+        argstr="-w %d",
+        usedefault=True,
+        descr="write behavior for name conflicts - [0=skip duplicates, 1=overwrite, 2=add suffix]",
+    )
     expected_files = traits.Int(default_value=1, usedefault=True)
     request_dti = traits.Bool(default_value=False, usedefault=True)
 
@@ -28,13 +30,7 @@ class CustomDcm2niix(Dcm2niix):
     input_spec = CustomDcm2niixInputSpec
 
     def _run_interface(self, runtime):
-        self.inputs.args = "-w 1"
         runtime = super(CustomDcm2niix, self)._run_interface(runtime)
-        if self.inputs.crop:
-            for index, value in enumerate(self.output_files):
-                if os.path.exists(value.replace(".nii.gz", "_Crop_1.nii.gz")):
-                    os.remove(self.output_files[index])
-                    os.rename(self.output_files[index].replace(".nii.gz", "_Crop_1.nii.gz"), self.output_files[index])
 
         # Expected files check
         if self.inputs.expected_files > 0 and len(self.output_files) != self.inputs.expected_files:

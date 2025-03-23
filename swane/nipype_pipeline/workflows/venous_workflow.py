@@ -61,6 +61,8 @@ def venous_workflow(name: str, venous_dir: str, config: SectionProxy, venous2_di
     veins_conv.inputs.source_dir = venous_dir
     veins_conv.inputs.bids_format = False
     veins_conv.inputs.out_filename = "veins"
+    veins_conv.inputs.name_conflicts = 1
+    veins_conv.inputs.merge_imgs = 2
 
     # NODE 2a: Orienting in radiological convention
     veins_reOrient = Node(ForceOrient(), name='veins_reOrient')
@@ -86,6 +88,8 @@ def venous_workflow(name: str, venous_dir: str, config: SectionProxy, venous2_di
         veins2_conv.inputs.source_dir = venous2_dir
         veins2_conv.inputs.bids_format = False
         veins2_conv.inputs.out_filename = "veins2"
+        veins2_conv.inputs.name_conflicts = 1
+        veins2_conv.inputs.merge_imgs = 2
 
         # NODE 2b: Orienting in radiological convention
         veins2_reOrient = Node(ForceOrient(), name='veins2_reOrient')
