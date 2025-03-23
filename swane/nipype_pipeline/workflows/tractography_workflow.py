@@ -164,7 +164,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
         workflow.connect(targets_2_ref, "out_file", targets_bin, "in_file")
         
         # NODE 10: Tractography
-        probtrackx = MapNode(CustomProbTrackX2(), name="probtrackx_%s_%s" % (name, side), iterfield=["rseed"])
+        probtrackx = MapNode(CustomProbTrackX2(), name="probtrackx_%s_%s" % (name, side), iterfield=["random_seed"])
         probtrackx.long_name = side + " %s"
         probtrackx.inputs.n_samples = n_samples
         probtrackx.inputs.loop_check = True
@@ -182,7 +182,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
         workflow.connect(inputnode, "ref2diff_mat", probtrackx, "xfm")
         workflow.connect(inputnode, "diff2ref_mat", probtrackx, "inv_xfm")
         workflow.connect(seed_bin, "out_file", probtrackx, "seed")
-        workflow.connect(random_seed, "seeds", probtrackx, "rseed")
+        workflow.connect(random_seed, "seeds", probtrackx, "random_seed")
         
         # Check the number of target ROIs
         if len(target_files) > 1:
@@ -199,7 +199,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
         # Check if inverted run is required in protocol
         if is_invert:
             # NODE 11: Inverted tractography
-            probtrackx_inverted = MapNode(CustomProbTrackX2(), name="probtrackx_inverted_%s_%s" % (name, side), iterfield=["rseed"])
+            probtrackx_inverted = MapNode(CustomProbTrackX2(), name="probtrackx_inverted_%s_%s" % (name, side), iterfield=["random_seed"])
             probtrackx_inverted.long_name = side + " inverse %s"
             probtrackx_inverted.inputs.n_samples = n_samples
             probtrackx_inverted.inputs.loop_check = True
@@ -217,7 +217,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
             workflow.connect(inputnode, "diff2ref_mat", probtrackx_inverted, "inv_xfm")
             workflow.connect(targets_bin, "out_file", probtrackx_inverted, "seed")
             workflow.connect(seed_bin, "out_file", probtrackx_inverted, "waypoints")
-            workflow.connect(random_seed, "seeds", probtrackx_inverted, "rseed")
+            workflow.connect(random_seed, "seeds", probtrackx_inverted, "random_seed")
         
         # Check for exclusion ROI in protocol
         if os.path.exists(exclude_file):

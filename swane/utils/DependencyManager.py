@@ -6,7 +6,7 @@ from packaging import version
 from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 from enum import Enum, auto
-import GPUtil
+from nipype.utils.gpu_count import gpu_count
 import platform
 
 
@@ -307,4 +307,4 @@ class DependencyManager:
 
     @staticmethod
     def is_cuda():
-        return len(GPUtil.getGPUs()) > 0
+        return gpu_count() > 0

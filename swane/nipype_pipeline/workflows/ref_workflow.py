@@ -53,14 +53,16 @@ def ref_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir: str 
         name='outputnode')
 
     # NODE 1: Conversion dicom -> nifti
-    ref_conv = Node(CustomDcm2niix(), name='%s_conv' % name)
-    ref_conv.inputs.source_dir = dicom_dir
-    ref_conv.inputs.bids_format = False
-    ref_conv.inputs.out_filename = "converted"
+    conversion = Node(CustomDcm2niix(), name='%s_conv' % name)
+    conversion.inputs.source_dir = dicom_dir
+    conversion.inputs.bids_format = False
+    conversion.inputs.out_filename = "converted"
+    conversion.inputs.name_conflicts = 1
+    conversion.inputs.merge_imgs = 2
 
     # NODE 2: Orienting in radiological convention
     ref_reOrient = Node(ForceOrient(), name='%s_reOrient' % name)
-    workflow.connect(ref_conv, "converted_files", ref_reOrient, "in_file")
+    workflow.connect(conversion, "converted_files", ref_reOrient, "in_file")
 
     # NODE 3: Crop neck
     ref_robustfov = Node(RobustFOV(), name= "%s_robustfov" % name)

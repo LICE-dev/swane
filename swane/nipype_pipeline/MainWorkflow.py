@@ -387,7 +387,6 @@ class MainWorkflow(CustomWorkflow):
                 self.add_nodes([self.flair2d])
 
                 flair2d_inputnode = self.flair2d.get_node("inputnode")
-                flair2d_inputnode.inputs.crop = False
                 flair2d_inputnode.inputs.output_name = (
                     "flair2d_%s" % plane
                 )
@@ -421,7 +420,6 @@ class MainWorkflow(CustomWorkflow):
         self.add_nodes([self.t2_cor])
 
         t2_cor_inputnode = self.t2_cor.get_node("inputnode")
-        t2_cor_inputnode.inputs.crop = False
         t2_cor_inputnode.inputs.output_name = "t2_cor"
         self.connect(self.t1, "outputnode.ref", self.t2_cor, "inputnode.reference")
         self.connect(self.t1, "outputnode.ref_mask", self.t2_cor, "inputnode.brain_mask")
@@ -455,7 +453,6 @@ class MainWorkflow(CustomWorkflow):
         self.add_nodes([self.mdc])
 
         mdc_inputnode = self.mdc.get_node("inputnode")
-        mdc_inputnode.inputs.crop = True
         mdc_inputnode.inputs.output_name = "mdc"
         self.connect(self.t1, "outputnode.ref_brain", self.mdc, "inputnode.reference")
 

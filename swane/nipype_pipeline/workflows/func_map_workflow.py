@@ -92,14 +92,16 @@ def func_map_workflow(name: str, dicom_dir: str, is_freesurfer: bool, config: Se
         name='outputnode')
 
     # NODE 1: Conversion dicom -> nifti
-    conv = Node(CustomDcm2niix(), name='%s_conv' % name)
-    conv.inputs.out_filename = name
-    conv.inputs.bids_format = False
-    conv.inputs.source_dir = dicom_dir
+    conversion = Node(CustomDcm2niix(), name='%s_conv' % name)
+    conversion.inputs.out_filename = name
+    conversion.inputs.bids_format = False
+    conversion.inputs.source_dir = dicom_dir
+    conversion.inputs.name_conflicts = 1
+    conversion.inputs.merge_imgs = 2
 
     # NODE 2: Orienting in radiological convention
     reorient = Node(ForceOrient(), name='%s_reOrient' % name)
-    workflow.connect(conv, "converted_files", reorient, "in_file")
+    workflow.connect(conversion, "converted_files", reorient, "in_file")
 
     # NODE 3: Gaussian smoothing
     smooth = Node(IsotropicSmooth(), name='%s_smooth' % name)
