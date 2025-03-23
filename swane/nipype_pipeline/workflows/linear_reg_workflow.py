@@ -68,6 +68,8 @@ def linear_reg_workflow(name: str, dicom_dir: str, config: SectionProxy, base_di
     conversion.inputs.source_dir = dicom_dir
     conversion.inputs.bids_format = False
     conversion.inputs.out_filename = name
+    conversion.inputs.name_conflicts = 1
+    conversion.inputs.merge_imgs = 2
 
     # NODE 2: Orienting in radiological convention
     reorient = Node(ForceOrient(), name='%s_reorient' % name)

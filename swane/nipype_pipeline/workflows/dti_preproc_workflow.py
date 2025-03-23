@@ -1,10 +1,9 @@
-from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT)
+from nipype.interfaces.fsl import (BET, FLIRT, ConvertXFM, ExtractROI, EddyCorrect, DTIFit, ApplyXFM, FNIRT, BEDPOSTX5)
 from nipype.pipeline.engine import Node
 from swane.config.config_enums import CORE_LIMIT
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.CustomBEDPOSTX5 import CustomBEDPOSTX5
 from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
 from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
 from configparser import SectionProxy
@@ -84,15 +83,20 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     is_cuda = config.getboolean_safe('cuda')
 
     # NODE 1: Conversion dicom -> nifti
-    conv = Node(CustomDcm2niix(), name='dti_conv')
-    conv.inputs.source_dir = dti_dir
-    conv.inputs.out_filename = "dti"
-    conv.inputs.bids_format = False
-    conv.inputs.request_dti = True
+    conversion = Node(CustomDcm2niix(), name='dti_conv')
+    conversion.inputs.source_dir = dti_dir
+    conversion.inputs.out_filename = "dti"
+    conversion.inputs.bids_format = False
+    conversion.inputs.request_dti = True
+    conversion.inputs.name_conflicts = 1
+    conversion.inputs.merge_imgs = 2
+
+
+
 
     # NODE 1b: Orienting in radiological convention
     reorient = Node(ForceOrient(), name='dti_reOrient')
-    workflow.connect(conv, "converted_files", reorient, "in_file")
+    workflow.connect(conversion, "converted_files", reorient, "in_file")
 
     # NODE 2: b0 image extraction
     nodif = Node(ExtractROI(), name='dti_nodif')
@@ -121,11 +125,11 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     else:
         # NODE 4a: Generate Eddy files
         eddy_files = Node(GenEddyFiles(), name="dti_eddy_files")
-        workflow.connect(conv, "bvals", eddy_files, "bval")
+        workflow.connect(conversion, "bvals", eddy_files, "bval")
 
         # NODE 4: Eddy current and motion artifact correction
         eddy = Node(CustomEddy(), name="dti_eddy")
-        eddy.inputs.use_gpu = is_cuda
+        eddy.inputs.use_cuda = is_cuda
         if not is_cuda:
             if multicore_node_limit == CORE_LIMIT.HARD_CAP:
                 eddy_cpu = max_cpu
@@ -135,10 +139,12 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
             else:
                 eddy_cpu = cpu_count()
             eddy.inputs.environ = {'OMP_NUM_THREADS': str(eddy_cpu), 'FSL_SKIP_GLOBAL': '1'}
+            eddy.inputs.args = "--nthr=%d" % eddy_cpu
+
 
         workflow.connect(reorient, "out_file", eddy, "in_file")
-        workflow.connect(conv, "bvals", eddy, "in_bval")
-        workflow.connect(conv, "bvecs", eddy, "in_bvec")
+        workflow.connect(conversion, "bvals", eddy, "in_bval")
+        workflow.connect(conversion, "bvecs", eddy, "in_bvec")
         workflow.connect(eddy_files, "acqp", eddy, "in_acqp")
         workflow.connect(eddy_files, "index", eddy, "in_index")
         workflow.connect(bet, "mask_file", eddy, "in_mask")
@@ -149,8 +155,8 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
     dtifit.long_name = "DTI metrics calculation"
     workflow.connect(eddy, eddy_output_name, dtifit, "dwi")
     workflow.connect(bet, "mask_file", dtifit, "mask")
-    workflow.connect(conv, "bvecs", dtifit, "bvecs")
-    workflow.connect(conv, "bvals", dtifit, "bvals")
+    workflow.connect(conversion, "bvecs", dtifit, "bvecs")
+    workflow.connect(conversion, "bvals", dtifit, "bvals")
 
     # NODE 6: b0 image linear registration in reference space
     flirt = Node(FLIRT(), name='diff2ref_FLIRT')
@@ -200,7 +206,7 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
         workflow.connect(inputnode, 'ref_brain', mni_2_ref_fnirt, 'ref_file')
 
         # NODE 8: Bayesian estimation of diffusion parameters
-        bedpostx = Node(CustomBEDPOSTX5(), name='dti_bedpostx')
+        bedpostx = Node(BEDPOSTX5(), name='dti_bedpostx')
         bedpostx.inputs.n_fibres = 2
         bedpostx.inputs.rician = True
         bedpostx.inputs.sample_every = 25
@@ -213,12 +219,12 @@ def dti_preproc_workflow(name: str, dti_dir: str, config: SectionProxy, mni_dir:
                 bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
             elif multicore_node_limit == CORE_LIMIT.HARD_CAP:
                 bedpostx.inputs.environ = {'FSLSUB_PARALLEL': str(max_cpu)}
-                bedpostx.inputs.num_threads = max_cpu
+                bedpostx.n_procs = max_cpu
 
         workflow.connect(eddy, eddy_output_name, bedpostx, "dwi")
         workflow.connect(bet, "mask_file", bedpostx, "mask")
-        workflow.connect(conv, "bvecs", bedpostx, "bvecs")
-        workflow.connect(conv, "bvals", bedpostx, "bvals")
+        workflow.connect(conversion, "bvecs", bedpostx, "bvecs")
+        workflow.connect(conversion, "bvals", bedpostx, "bvals")
 
         # NODE 9: Linear transformation inverse matrix calculation from diffusion to reference space
         ref2diff_convert = Node(ConvertXFM(), name='ref2diff_convert')

@@ -75,29 +75,31 @@ def task_fMRI_workflow(name: str, dicom_dir: str, config: SectionProxy, base_dir
         name='outputnode')
 
     # NODE 1: Conversion dicom -> nifti
-    conv = Node(CustomDcm2niix(), name='%s_conv' % name)
-    conv.inputs.out_filename = name
-    conv.inputs.bids_format = False
-    conv.inputs.source_dir = dicom_dir
+    conversion = Node(CustomDcm2niix(), name='%s_conv' % name)
+    conversion.inputs.out_filename = name
+    conversion.inputs.bids_format = False
+    conversion.inputs.source_dir = dicom_dir
+    conversion.inputs.name_conflicts = 1
+    conversion.inputs.merge_imgs = 2
 
     # NODE 2: Get EPI volume numbers
     nvols = Node(FslNVols(), name="%s_nvols" % name)
     nvols.long_name = "EPI volumes count"
     nvols.inputs.force_value = n_vols
-    workflow.connect(conv, 'converted_files', nvols, 'in_file')
+    workflow.connect(conversion, 'converted_files', nvols, 'in_file')
 
     # NODE 3: Get Repetition Time
     getTR = Node(GetNiftiTR(), name="%s_getTR" % name)
     getTR.long_name = "get TR"
     getTR.inputs.force_value = TR
-    workflow.connect(conv, 'converted_files', getTR, 'in_file')
+    workflow.connect(conversion, 'converted_files', getTR, 'in_file')
 
     # NODE 4: Delete specified volumes at start and end of sequence
     del_vols = Node(DeleteVolumes(), name="%s_del_vols" % name)
     del_vols.long_name = "Extreme volumes deletion"
     del_vols.inputs.del_start_vols = del_start_vols
     del_vols.inputs.del_end_vols = del_end_vols
-    workflow.connect(conv, 'converted_files', del_vols, "in_file")
+    workflow.connect(conversion, 'converted_files', del_vols, "in_file")
     workflow.connect(nvols, 'nvols', del_vols, "nvols")
 
     # NODE 5: Orienting in radiological convention
