@@ -132,6 +132,10 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 - ImageType series error shown after DICOM folder scan: the error is shown only if no valid series are found into the folder and list all the wrong ImageType found in the path
 
+#### Fixed
+
+- Minor bug in subject workflow status tracing.
+
 ### [0.1.4] - 2025-02-18
 
 #### Added
