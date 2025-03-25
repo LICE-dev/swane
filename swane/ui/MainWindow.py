@@ -355,7 +355,7 @@ class MainWindow(QMainWindow):
             self.global_config.reset_to_defaults()
             self.edit_wf_config()
 
-    def togle_shutdown_after_workflow(self):
+    def toggle_shutdown_after_workflow(self):
         """
         Toggle shutdown after woprkflow preference
 
@@ -502,7 +502,7 @@ class MainWindow(QMainWindow):
 
         button_action6 = QAction(strings.menu_shutdown_pref, self)
         button_action6.setCheckable(True)
-        button_action6.triggered.connect(self.togle_shutdown_after_workflow)
+        button_action6.triggered.connect(self.toggle_shutdown_after_workflow)
 
         button_action7 = QAction(strings.menu_about, self)
         button_action7.triggered.connect(self.about)
@@ -610,9 +610,9 @@ class MainWindow(QMainWindow):
         """
 
         if not self.check_running_workflows(ignore_subj=subject) and not self.check_workflow_error():
-            # TODO: shutdown routine
             os.system("systemctl poweroff")
             os.system("osascript -e 'tell app \"System Events\" to shut down'")
+            exit()
             pass
 
 
