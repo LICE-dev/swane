@@ -5,6 +5,7 @@ from multiprocessing import cpu_count
 from nipype.utils.profiler import get_system_total_memory_gb
 from math import ceil
 
+from swane import strings
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import (InputTypes, WORKFLOW_TYPES, SLICER_EXTENSIONS, CORE_LIMIT, VEIN_DETECTION_MODE,
                                        BLOCK_DESIGN, SLICE_TIMING, GlobalPrefCategoryList, BETWEEN_MOD_FLIRT_COST)
@@ -369,6 +370,13 @@ GLOBAL_PREFERENCES[category]['default_wf_type'] = PreferenceEntry(
     label="Default workflow",
     value_enum=WORKFLOW_TYPES,
     default=WORKFLOW_TYPES.STRUCTURAL,
+)
+GLOBAL_PREFERENCES[category]['shutdown'] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    hidden=True,
+    label=strings.menu_shutdown_pref,
+    default='false',
+    default_at_startup='true',
 )
 category = GlobalPrefCategoryList.PERFORMANCE
 GLOBAL_PREFERENCES[category] = {}

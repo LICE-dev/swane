@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeader
                                QTreeView, QComboBox)
 
 from swane import strings
-from swane.utils.DicomTree import DicomTree
+from swane.config.config_enums import GlobalPrefCategoryList
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.workers.SlicerViewerWorker import SlicerViewerWorker
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
@@ -78,6 +78,7 @@ class SubjectTab(QTabWidget):
         self.results_model = None
         self.result_tree = None
         self.generate_scene_button = None
+        self.workflow_had_error = False
 
         self.data_tab_ui()
         self.exec_tab_ui()
@@ -104,21 +105,10 @@ class SubjectTab(QTabWidget):
         
         if wf_report.signal_type == WorkflowSignals.WORKFLOW_STOP:
             self.enable_tab_if_result_dir(on_workflow_running=True)
-            errors = False
-            for key in self.node_list.keys():
-                self.node_list[key].node_holder.setExpanded(False)
-                if not self.node_list[key].node_holder.completed:
-                    errors = True
-                    for subkey in self.node_list[key].node_list.keys():
-                        if self.node_list[key].node_list[subkey].node_holder.art == self.main_window.ERROR_ICON_FILE:
-                            self.node_list[key].node_holder.set_art(self.main_window.ERROR_ICON_FILE)
-                            break
-
             self.setTabEnabled(SubjectTab.DATATAB, True)
-
             self.exec_button_set_enabled(False)
 
-            if errors:
+            if self.workflow_had_error:
                 self.generate_workflow_button.setEnabled(True)
                 self.subject.workflow = None
                 self.exec_button.setText(strings.subj_tab_wf_executed_with_error)
@@ -127,7 +117,9 @@ class SubjectTab(QTabWidget):
                 self.exec_button.setText(strings.subj_tab_wf_executed)
                 self.exec_button.setToolTip("")
 
-
+            shutdown = self.global_config.getboolean_safe(GlobalPrefCategoryList.MAIN, "shutdown")
+            if shutdown:
+                self.main_window.safe_shutdown_after_workflow(self.subject)
             
             return
         elif wf_report.signal_type == WorkflowSignals.INVALID_SIGNAL:
@@ -152,6 +144,7 @@ class SubjectTab(QTabWidget):
             icon = self.main_window.OK_ICON_FILE
         else:
             icon = self.main_window.ERROR_ICON_FILE
+            self.workflow_had_error = True
             # Mail manager initialization
             mail_manager = self.global_config.get_mail_manager()
             if mail_manager is not None:
@@ -962,6 +955,7 @@ class SubjectTab(QTabWidget):
             self.generate_workflow_button.setEnabled(True)
             self.workflow_type_combo.setEnabled(True)
             self.subject_config_button.setEnabled(True)
+            self.workflow_had_error = False
 
     @staticmethod
     def label_from_dicom(frames: int, subject_name: str, mod: str, series_description: str, vols: int) -> str:

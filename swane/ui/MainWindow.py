@@ -13,6 +13,7 @@ from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
 from swane.utils.Subject import Subject, SubjectRet
 from swane.config.ConfigManager import ConfigManager
+from swane.config.config_enums import GlobalPrefCategoryList
 
 
 class MainWindow(QMainWindow):
@@ -354,9 +355,26 @@ class MainWindow(QMainWindow):
             self.global_config.reset_to_defaults()
             self.edit_wf_config()
 
-    def check_running_workflows(self) -> bool:
+    def toggle_shutdown_after_workflow(self):
+        """
+        Toggle shutdown after woprkflow preference
+
+        Returns
+        -------
+        None.
+
+        """
+        shutdown = self.global_config.getboolean_safe(GlobalPrefCategoryList.MAIN, "shutdown")
+        self.global_config[GlobalPrefCategoryList.MAIN]["shutdown"] = str(not shutdown)
+
+    def check_running_workflows(self, ignore_subj:Subject=None) -> bool:
         """
         Check if SWANe is executing a workflow in any open subject tab.
+
+        Parameters
+        ----------
+        ignore_subj : Subject
+            The subject tab to be ignored. Default is None
 
         Returns
         -------
@@ -366,9 +384,25 @@ class MainWindow(QMainWindow):
         """
         
         for subj in self.subject_tab_array:
-            if subj.subject.is_workflow_process_alive():
+            if subj.subject != ignore_subj and subj.subject.is_workflow_process_alive():
                 return True
             
+        return False
+
+    def check_workflow_error(self) -> bool:
+        """
+        Check if there was a node error in any open subject tab.
+
+        Returns
+        -------
+        bool
+            True if there was any error, otherwise False.
+
+        """
+
+        for subj in self.subject_tab_array:
+            if subj.workflow_had_error:
+                return True
         return False
 
     def reset_workflows(self):
@@ -466,6 +500,10 @@ class MainWindow(QMainWindow):
             "preferences-other"), strings.menu_wf_pref, self)
         button_action5.triggered.connect(self.edit_wf_config)
 
+        button_action6 = QAction(strings.menu_shutdown_pref, self)
+        button_action6.setCheckable(True)
+        button_action6.triggered.connect(self.toggle_shutdown_after_workflow)
+
         button_action7 = QAction(strings.menu_about, self)
         button_action7.triggered.connect(self.about)
 
@@ -479,6 +517,7 @@ class MainWindow(QMainWindow):
         tool_menu = menu.addMenu(strings.menu_tools_name)
         tool_menu.addAction(button_action4)
         tool_menu.addAction(button_action5)
+        tool_menu.addAction(button_action6)
         help_menu = menu.addMenu(strings.menu_help_name)
         help_menu.addAction(button_action7)
         
@@ -554,6 +593,28 @@ class MainWindow(QMainWindow):
             msg_box.setText(strings.mainwindow_wf_executing_error_2)
             msg_box.exec()
             event.ignore()
+
+    def safe_shutdown_after_workflow(self, subject:Subject):
+        """
+        Shutdown pc if all workflows are completed
+
+        Parameters
+        ----------
+        subject: Subject
+            The subject tab asking to shutdown
+
+        Returns
+        -------
+        None.
+
+        """
+
+        if not self.check_running_workflows(ignore_subj=subject) and not self.check_workflow_error():
+            os.system("systemctl poweroff")
+            os.system("osascript -e 'tell app \"System Events\" to shut down'")
+            exit()
+            pass
+
 
     def home_tab_ui(self):
         """
