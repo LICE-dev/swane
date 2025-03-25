@@ -373,8 +373,8 @@ GLOBAL_PREFERENCES[category]['default_wf_type'] = PreferenceEntry(
 )
 GLOBAL_PREFERENCES[category]['shutdown'] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
+    hidden=True,
     label=strings.menu_shutdown_pref,
-    tooltip="Launch the OS shutdown command at the end of the workflow, if no errors occurred",
     default='false',
     default_at_startup='true',
 )
