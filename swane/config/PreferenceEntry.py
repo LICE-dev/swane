@@ -24,6 +24,7 @@ class PreferenceEntry:
     box_text = None
     hidden = False
     value_enum = None
+    default_at_startup = False
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():

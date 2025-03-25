@@ -59,6 +59,7 @@ menu_exit = "E&xit " + APPNAME
 menu_pref = "Application &Settings..."
 menu_pref_tip = "Edit " + APPNAME + " settings"
 menu_wf_pref = "Default Workflow &Preferences..."
+menu_shutdown_pref = "Shutdown at Workflow end"
 menu_about = "&About " + APPNAME + "..."
 menu_file_name = "File"
 menu_tools_name = "Tools"
