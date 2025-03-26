@@ -135,8 +135,8 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 #### Changed
 
-- networkx version dependency
-- nipype version dependency
+- networkx version requisites
+- nipype version requisites
 - using typing package to ensure SWANe compatibility with older python versions
 
 #### Fixed
