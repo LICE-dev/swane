@@ -1,4 +1,5 @@
 import os
+from typing import Union
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox, QSpinBox, QDoubleSpinBox,
                                QComboBox, QStyle, QSizePolicy, QStyleOption, QWidget)
@@ -234,7 +235,7 @@ class PreferenceUIEntry:
         if str(value).lower() != config[self.category][self.key].lower():
             self.set_changed()
 
-    def set_range(self, min_value: int|float, max_value: int|float):
+    def set_range(self, min_value: Union[int, float], max_value: Union[int, float]):
         """
         Apply specified values to a numeric input field validator
 
