@@ -130,7 +130,13 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 #### Added
 
-- ImageType series error shown after DICOM folder scan: the error is shown only if no valid series are found into the folder and list all the wrong ImageType found in the path
+- **ImageType series error shown after DICOM folder scan**: the error is shown only if no valid series are found into the folder and list all the wrong ImageType found in the path
+- **Shutdown SWANe at Analysis End**: if enabled, it turns off the OS when SWANe ends all the started analyses without error
+
+#### Changed
+
+- networkx version dependency
+- nipype version dependency
 
 #### Fixed
 
