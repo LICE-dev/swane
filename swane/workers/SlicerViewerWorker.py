@@ -2,13 +2,14 @@ from PySide6.QtCore import QRunnable
 import os
 import subprocess
 
+
 class SlicerViewerWorker(QRunnable):
     """
-    Spawn a thread for 3D Slicer result export 
+    Spawn a thread for 3D Slicer result export
 
     """
-    
-    PROGRESS_MSG_PREFIX = 'SLICERLOADER: '
+
+    PROGRESS_MSG_PREFIX = "SLICERLOADER: "
     END_MSG = "ENDLOADING"
 
     def __init__(self, slicer_path: str, scene_path: str):
@@ -28,5 +29,16 @@ class SlicerViewerWorker(QRunnable):
         self.scene_path: str = scene_path
 
     def run(self):
-        cmd = self.slicer_path + " --python-code 'slicer.util.loadScene(\"" + self.scene_path + "\")'"
-        popen = subprocess.Popen(cmd, cwd=os.getcwd(), shell=True, stdout=subprocess.PIPE, universal_newlines=True)
+        cmd = (
+            self.slicer_path
+            + " --python-code 'slicer.util.loadScene(\""
+            + self.scene_path
+            + "\")'"
+        )
+        popen = subprocess.Popen(
+            cmd,
+            cwd=os.getcwd(),
+            shell=True,
+            stdout=subprocess.PIPE,
+            universal_newlines=True,
+        )

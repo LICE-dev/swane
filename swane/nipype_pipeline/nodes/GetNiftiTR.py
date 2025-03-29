@@ -1,13 +1,19 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 from nipype.interfaces.fsl.base import FSLCommand, FSLCommandInputSpec
-from nipype.interfaces.base import (traits, TraitedSpec, File, isdefined)
+from nipype.interfaces.base import traits, TraitedSpec, File, isdefined
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommandInputSpec)  -*-
 class GetNiftiTRInputSpec(FSLCommandInputSpec):
-    in_file = File(exists=True, mandatory=True, argstr="%s pixdim4", position="1", desc='the input image')
-    force_value = traits.Float(mandatory=False, desc='value forced by user')
+    in_file = File(
+        exists=True,
+        mandatory=True,
+        argstr="%s pixdim4",
+        position="1",
+        desc="the input image",
+    )
+    force_value = traits.Float(mandatory=False, desc="value forced by user")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -21,8 +27,8 @@ class GetNiftiTR(FSLCommand):
     Reads the time of repetition from a NIFTI file.
 
     """
-    
-    _cmd = 'fslval'
+
+    _cmd = "fslval"
     input_spec = GetNiftiTRInputSpec
     output_spec = GetNiftiTROutputSpec
 
@@ -38,6 +44,6 @@ class GetNiftiTR(FSLCommand):
         try:
             outputs.TR = float(info)
         except:
-            outputs.TR = 0.
+            outputs.TR = 0.0
 
         return outputs

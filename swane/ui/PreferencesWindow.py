@@ -111,7 +111,9 @@ class PreferencesWindow(QDialog):
                     for pref_cat in self.preferences[category][key].pref_requirement:
                         if str(pref_cat) not in my_config:
                             continue
-                        for pref_req in self.preferences[category][key].pref_requirement[pref_cat]:
+                        for pref_req in self.preferences[category][
+                            key
+                        ].pref_requirement[pref_cat]:
                             if str(pref_req[0]) not in my_config[pref_cat]:
                                 continue
                             target_x = self.input_keys[pref_cat][pref_req[0]]
@@ -192,12 +194,26 @@ class PreferencesWindow(QDialog):
 
     def send_test_mail(self):
         try:
-            server_address = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["address"]].get_value()
-            port = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["port"]].get_value()
-            username = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["username"]].get_value()
-            password = CryptographyManager.decrypt(self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["password"]].get_value())
-            use_ssl = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["use_ssl"]].get_value()
-            use_tls = self.inputs[self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["use_tls"]].get_value()
+            server_address = self.inputs[
+                self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["address"]
+            ].get_value()
+            port = self.inputs[
+                self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["port"]
+            ].get_value()
+            username = self.inputs[
+                self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["username"]
+            ].get_value()
+            password = CryptographyManager.decrypt(
+                self.inputs[
+                    self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["password"]
+                ].get_value()
+            )
+            use_ssl = self.inputs[
+                self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["use_ssl"]
+            ].get_value()
+            use_tls = self.inputs[
+                self.input_keys[GlobalPrefCategoryList.MAIL_SETTINGS]["use_tls"]
+            ].get_value()
 
             if server_address == "" or port == "" or username == "" or password == "":
                 raise Exception("Fill all mail configuration fields first")
@@ -280,7 +296,14 @@ class PreferencesWindow(QDialog):
                 if self.inputs[req_x].input_type == InputTypes.BOOLEAN:
                     check = req_key[1] == self.inputs[req_x].input_field.isChecked()
                 elif self.inputs[req_x].input_type == InputTypes.ENUM:
-                    check = req_key[1].name == self.inputs[req_x].input_field.itemData(self.inputs[req_x].input_field.currentIndex()).name
+                    check = (
+                        req_key[1].name
+                        == self.inputs[req_x]
+                        .input_field.itemData(
+                            self.inputs[req_x].input_field.currentIndex()
+                        )
+                        .name
+                    )
                 else:
                     check = req_key[1] == self.inputs[req_x].input_field.get_value()
 

@@ -12,9 +12,14 @@ class WorkflowSignals(Enum):
 
 class WorkflowReport:
 
-    NODE_MSG_DIVIDER = '.'
+    NODE_MSG_DIVIDER = "."
 
-    def __init__(self, signal_type: WorkflowSignals = WorkflowSignals.NODE_STARTED, long_name: str = None, info: str = None):
+    def __init__(
+        self,
+        signal_type: WorkflowSignals = WorkflowSignals.NODE_STARTED,
+        long_name: str = None,
+        info: str = None,
+    ):
         """
 
         Parameters

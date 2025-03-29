@@ -7,7 +7,9 @@ from multiprocessing import Process, Event
 from threading import Thread
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from nipype.external.cloghandler import ConcurrentRotatingFileHandler
-from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import MonitoredMultiProcPlugin
+from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
+    MonitoredMultiProcPlugin,
+)
 import logging as orig_log
 from swane.nipype_pipeline.MainWorkflow import MainWorkflow
 from multiprocessing import Queue
@@ -49,7 +51,7 @@ class WorkflowProcess(Process):
     @staticmethod
     def remove_handlers(handler):
         """
-            Remove the specified handler from nipype logger channels
+        Remove the specified handler from nipype logger channels
         """
 
         for channel in WorkflowProcess.LOG_CHANNELS:
@@ -58,25 +60,25 @@ class WorkflowProcess(Process):
     @staticmethod
     def add_handlers(handler):
         """
-            Add the specified handler to nipype logger channels
+        Add the specified handler to nipype logger channels
         """
         for channel in WorkflowProcess.LOG_CHANNELS:
             nipype_log.getLogger(channel).addHandler(handler)
 
     def workflow_run_worker(self):
         """
-            Thread that run the workflow
+        Thread that run the workflow
         """
 
         plugin_args = {
-            'mp_context': 'fork',
-            'queue': self.queue,
-            'status_callback': swane_log_nodes_cb,
+            "mp_context": "fork",
+            "queue": self.queue,
+            "status_callback": swane_log_nodes_cb,
         }
         if self.workflow.max_cpu > 0:
-            plugin_args['n_procs'] = self.workflow.max_cpu
+            plugin_args["n_procs"] = self.workflow.max_cpu
         if self.workflow.max_gpu > 0:
-            plugin_args['n_gpu_proc'] = self.workflow.max_gpu
+            plugin_args["n_gpu_proc"] = self.workflow.max_gpu
 
         try:
             # this is useful to generate resource monitor files in subject directory
@@ -95,10 +97,11 @@ class WorkflowProcess(Process):
     @staticmethod
     def kill_with_subprocess():
         """
-            Loop all subprocess of current process and kill them, then kill the parent process.
-            MUST BE CALLED FROM THE WORKFLOW PROCESS ITSELF OR WILL KILL THE MAIN APPLICATION!
+        Loop all subprocess of current process and kill them, then kill the parent process.
+        MUST BE CALLED FROM THE WORKFLOW PROCESS ITSELF OR WILL KILL THE MAIN APPLICATION!
         """
         import psutil
+
         try:
             this_process = psutil.Process(os.getpid())
             children = this_process.children(recursive=True)
@@ -114,7 +117,7 @@ class WorkflowProcess(Process):
 
     def run(self):
         """
-            The Process main code
+        The Process main code
         """
         # log folder management
         log_dir = os.path.join(self.workflow.base_dir, LOG_DIR_NAME)
@@ -122,7 +125,7 @@ class WorkflowProcess(Process):
             os.mkdir(log_dir)
 
         self.workflow.config["execution"]["crashdump_dir"] = log_dir
-        self.workflow.config['execution']['crashfile_format'] = 'txt'
+        self.workflow.config["execution"]["crashfile_format"] = "txt"
         log_filename = os.path.join(log_dir, "pypeline.log")
         file_handler = ConcurrentRotatingFileHandler(
             log_filename,
@@ -136,8 +139,8 @@ class WorkflowProcess(Process):
         # enable resource monitor if required
         if self.workflow.is_resource_monitor:
             config.enable_resource_monitor()
-            resource_log_filename = os.path.join(log_dir, 'resource_monitor.log')
-            callback_logger = orig_log.getLogger('callback')
+            resource_log_filename = os.path.join(log_dir, "resource_monitor.log")
+            callback_logger = orig_log.getLogger("callback")
             callback_logger.setLevel(orig_log.DEBUG)
             resource_log_handler = orig_log.FileHandler(resource_log_filename)
             callback_logger.addHandler(resource_log_handler)

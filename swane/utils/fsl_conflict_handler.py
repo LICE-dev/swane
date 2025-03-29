@@ -5,12 +5,14 @@ import subprocess
 
 FSL_CONFLICT_PATH = "fsl/bin"
 FREESURFER_CONFIG_FILE = "SetUpFreeSurfer.sh"
-SHELL_PROFILE = {'sh': ['.profile'],
-                 'bash': ['.bash_profile', '.profile', '.bashrc'],
-                 'dash': ['.bash_profile', '.profile'],
-                 'zsh': ['.zprofile', '.zshrc'],
-                 'csh': ['.cshrc'],
-                 'tcsh': ['.tcshrc']}
+SHELL_PROFILE = {
+    "sh": [".profile"],
+    "bash": [".bash_profile", ".profile", ".bashrc"],
+    "dash": [".bash_profile", ".profile"],
+    "zsh": [".zprofile", ".zshrc"],
+    "csh": [".cshrc"],
+    "tcsh": [".tcshrc"],
+}
 
 FIX_LINE = r"""PATH=$(echo "$PATH" | sed -e "s/:$( echo "$FSL_DIR" | sed 's/\//\\\//g')\/bin//")"""
 APP_EXEC_COMMAND = "python3 -m " + __name__.split(".")[0]
@@ -28,11 +30,11 @@ def check_config_file(config_file: str):
 def get_config_file():
     # Try to identify user shell configuration file with fsl/freesurfer setup
     try:
-        shell = os.path.basename(os.environ.get('SHELL', 'sh')).lower()
-        home_dir = os.path.expanduser('~')
+        shell = os.path.basename(os.environ.get("SHELL", "sh")).lower()
+        home_dir = os.path.expanduser("~")
 
         if shell not in SHELL_PROFILE:
-            shell = 'sh'
+            shell = "sh"
 
         candidates = [os.path.join(home_dir, p) for p in SHELL_PROFILE[shell]]
         for candidate in candidates:
@@ -52,7 +54,7 @@ def runtime_fix():
 
 def config_file_fix(config_file: str):
     with open(config_file, "a") as file_object:
-        file_object.write("\n"+FIX_LINE)
+        file_object.write("\n" + FIX_LINE)
 
 
 def copy_fix_to_clipboard():

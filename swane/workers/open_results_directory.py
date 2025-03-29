@@ -13,14 +13,13 @@ def open_results_directory(pushed: bool, results_dir: str):
     results_dir: str
         The path to show in file explorer
     """
-    if platform == 'win32':
+    if platform == "win32":
         os.startfile(results_dir)
-    elif platform == 'darwin':
-        subprocess.Popen(['open', results_dir])
+    elif platform == "darwin":
+        subprocess.Popen(["open", results_dir])
 
     else:
         try:
-            subprocess.Popen(['xdg-open', results_dir])
+            subprocess.Popen(["xdg-open", results_dir])
         except OSError:
             pass
-
