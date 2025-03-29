@@ -2,7 +2,7 @@ import os
 import sys
 from swane import strings
 import subprocess
-from utils.platform_and_tools_utils import is_command_available, is_linux, is_mac
+from swane.utils.platform_and_tools_utils import is_command_available, is_linux, is_mac
 
 
 FSL_CONFLICT_PATH = "fsl/bin"
