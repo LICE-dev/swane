@@ -2,6 +2,8 @@ import os
 import sys
 from swane import strings
 import subprocess
+from platform_and_tools_utils import is_command_available, is_linux, is_mac
+
 
 FSL_CONFLICT_PATH = "fsl/bin"
 FREESURFER_CONFIG_FILE = "SetUpFreeSurfer.sh"
@@ -57,9 +59,11 @@ def config_file_fix(config_file: str):
 
 def copy_fix_to_clipboard():
     # Linux shell copy command
-    subprocess.run("xclip -selection c", shell=True, text=True, input=FIX_LINE)
+    if is_linux():
+        subprocess.run("xclip -selection c", shell=True, text=True, input=FIX_LINE)
     # MacOS shell copy command
-    subprocess.run("pbcopy", shell=True, text=True, input=FIX_LINE)
+    if is_mac():
+        subprocess.run("pbcopy", shell=True, text=True, input=FIX_LINE)
 
 
 def fsl_conflict_check() -> bool:
@@ -93,7 +97,8 @@ def fsl_conflict_check() -> bool:
     msg_box.button(QMessageBox.Yes).setText(strings.fsl_python_error_fix)
     msg_box.button(QMessageBox.Retry).setText(strings.fsl_python_error_restart)
     msg_box.button(QMessageBox.Cancel).setText(strings.fsl_python_error_exit)
-    msg_box.setDefaultButton(QMessageBox.Cancel)
+    if is_command_available('xclip') or is_mac():
+        msg_box.setDefaultButton(QMessageBox.Cancel)
     ret = msg_box.exec()
 
     if ret == QMessageBox.Retry:
