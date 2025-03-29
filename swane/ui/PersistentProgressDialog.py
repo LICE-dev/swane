@@ -9,7 +9,9 @@ class PersistentProgressDialog(QProgressDialog):
     """
 
     def __init__(self, label_text, minimum, maximum, parent=None):
-        super(PersistentProgressDialog, self).__init__(label_text, None, minimum, maximum, parent, Qt.WindowFlags())
+        super(PersistentProgressDialog, self).__init__(
+            label_text, None, minimum, maximum, parent, Qt.WindowFlags()
+        )
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowCloseButtonHint)
         self.setWindowModality(Qt.WindowModal)
         self.setMinimumDuration(0)
@@ -24,8 +26,8 @@ class PersistentProgressDialog(QProgressDialog):
         if not self.isVisible():
             self.show()
         if self.value() == 0 and self.maximum() > 1:
-            x = x+1
-        self.setValue(self.value()+x)
+            x = x + 1
+        self.setValue(self.value() + x)
 
     def closeEvent(self, event):
         event.ignore()

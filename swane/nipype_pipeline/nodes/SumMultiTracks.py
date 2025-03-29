@@ -4,20 +4,31 @@ from os.path import abspath
 import os
 
 from nipype.interfaces.fsl import BinaryMaths
-from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, InputMultiPath, File, isdefined)
+from nipype.interfaces.base import (
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    TraitedSpec,
+    InputMultiPath,
+    File,
+    isdefined,
+)
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class SumMultiTracksInputSpec(BaseInterfaceInputSpec):
-    path_files = InputMultiPath(File(exists=True), mandatory=True, desc="list of path file to sum togheter")
-    waytotal_files = InputMultiPath(File(exists=True), mandatory=True, desc="list of waytotal files to sum togheter")
-    out_file = File(desc='the output image')
+    path_files = InputMultiPath(
+        File(exists=True), mandatory=True, desc="list of path file to sum togheter"
+    )
+    waytotal_files = InputMultiPath(
+        File(exists=True), mandatory=True, desc="list of waytotal files to sum togheter"
+    )
+    out_file = File(desc="the output image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class SumMultiTracksOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='the output image')
-    waytotal_sum = File(exists=True, desc='the output waytotal file')
+    out_file = File(exists=True, desc="the output image")
+    waytotal_sum = File(exists=True, desc="the output waytotal file")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
@@ -26,7 +37,7 @@ class SumMultiTracks(BaseInterface):
     Merges results from multiple tractography runs.
 
     """
-    
+
     input_spec = SumMultiTracksInputSpec
     output_spec = SumMultiTracksOutputSpec
 
@@ -59,7 +70,7 @@ class SumMultiTracks(BaseInterface):
 
             # SUM WAYTOTAL
             if os.path.exists(self.inputs.waytotal_files[x]):
-                with open(self.inputs.waytotal_files[x], 'r') as file:
+                with open(self.inputs.waytotal_files[x], "r") as file:
                     for line in file.readlines():
                         waytotal_sum += int(line)
 
@@ -84,6 +95,6 @@ class SumMultiTracks(BaseInterface):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['out_file'] = self._gen_outfilename()
-        outputs['waytotal_sum'] = self._gen_waytotal_outfilename()
+        outputs["out_file"] = self._gen_outfilename()
+        outputs["waytotal_sum"] = self._gen_waytotal_outfilename()
         return outputs

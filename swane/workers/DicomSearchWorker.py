@@ -28,9 +28,9 @@ class DicomSearchWorker(QRunnable):
         self.signal = DicomSearchSignal()
         self.tree = DicomTree(dicom_dir)
         self.error_message = []
-        #self.dicom_tree = {}
-        #self.series_positions = {}
-        #self.multi_frame_series = {}
+        # self.dicom_tree = {}
+        # self.series_positions = {}
+        # self.multi_frame_series = {}
 
     @staticmethod
     def clean_text(string: str) -> str:
@@ -144,25 +144,35 @@ class DicomSearchWorker(QRunnable):
 
                 self.tree.add_subject(subject_id, str(ds.PatientName))
                 self.tree.add_study(subject_id, study_instance_uid)
-                dicom_series = self.tree.add_series(subject_id, study_instance_uid, series_number)
+                dicom_series = self.tree.add_series(
+                    subject_id, study_instance_uid, series_number
+                )
 
                 multi_frame_series = False
                 if "NumberOfFrames" in ds and int(ds.NumberOfFrames) > 1:
                     multi_frame_series = True
 
-                dicom_series.add_dicom_loc(dicom_loc, multi_frame_series, ds.get("SliceLocation"))
+                dicom_series.add_dicom_loc(
+                    dicom_loc, multi_frame_series, ds.get("SliceLocation")
+                )
                 dicom_series.modality = ds.Modality
                 if hasattr(ds, "SeriesDescription"):
                     dicom_series.description = ds.SeriesDescription
                 else:
-                    dicom_series.description = DicomSearchWorker.find_series_description(dicom_series.dicom_locs)
+                    dicom_series.description = (
+                        DicomSearchWorker.find_series_description(
+                            dicom_series.dicom_locs
+                        )
+                    )
 
-                #TODO: calcolare multiframe alla fine
+                # TODO: calcolare multiframe alla fine
 
             for subject in self.tree.dicom_subjects:
                 for study in self.tree.dicom_subjects[subject].studies:
                     for series in self.tree.dicom_subjects[subject].studies[study]:
-                        self.tree.dicom_subjects[subject].studies[study][series].refine_frame_number()
+                        self.tree.dicom_subjects[subject].studies[study][
+                            series
+                        ].refine_frame_number()
             self.signal.sig_finish.emit(self)
         except:
             self.signal.sig_finish.emit(self)

@@ -16,16 +16,19 @@ class CustomWorkflow(Workflow):
     Custom implementation of Workflow class with utility funcs.
 
     """
-    
+
     @staticmethod
     def format_node_name(node):
         """
         Returns the explicit name of a Node.
 
         """
-        
+
         default_node_name = None
-        if hasattr(node, "interface") and type(node.interface).__name__ in strings.node_names:
+        if (
+            hasattr(node, "interface")
+            and type(node.interface).__name__ in strings.node_names
+        ):
             default_node_name = strings.node_names[type(node.interface).__name__]
         if hasattr(node, "long_name"):
             formatted_name = node.long_name
@@ -42,14 +45,16 @@ class CustomWorkflow(Workflow):
     def get_node_array(self) -> dict:
         """
         Returns a List of NodeListEntry objects for the Nodes in a Workflow.
-        
+
         """
-        
+
         from networkx import topological_sort
 
         outlist = {}
         for node in topological_sort(self._graph):
-            if hasattr(node, "interface") and isinstance(node.interface, IdentityInterface):
+            if hasattr(node, "interface") and isinstance(
+                node.interface, IdentityInterface
+            ):
                 continue
 
             outlist[node.name] = NodeListEntry()
@@ -58,17 +63,29 @@ class CustomWorkflow(Workflow):
                 outlist[node.name].node_list = node.get_node_array()
         return outlist
 
-    def sink_result(self, save_path: str, result_node: str, result_name: str, sub_folder: str,
-                    regexp_substitutions: list[tuple[str, str]] = None):
+    def sink_result(
+        self,
+        save_path: str,
+        result_node: str,
+        result_name: str,
+        sub_folder: str,
+        regexp_substitutions: list[tuple[str, str]] = None,
+    ):
         """
         Creates a sink_result Node to save the output files of a Workflow.
-        
+
         """
-        
+
         if isinstance(result_node, str):
             result_node = self.get_node(result_node)
 
-        data_sink = Node(DataSink(), name='SaveResults_' + result_node.name + "_" + result_name.replace(".", "_"))
+        data_sink = Node(
+            DataSink(),
+            name="SaveResults_"
+            + result_node.name
+            + "_"
+            + result_name.replace(".", "_"),
+        )
         data_sink.long_name = "%s: " + result_name
         data_sink.inputs.base_directory = save_path
 
@@ -77,12 +94,14 @@ class CustomWorkflow(Workflow):
 
         self.connect(result_node, result_name, data_sink, sub_folder)
 
-    def _get_dot(self, prefix=None, hierarchy=None, colored=False, simple_form=True, level=0):
+    def _get_dot(
+        self, prefix=None, hierarchy=None, colored=False, simple_form=True, level=0
+    ):
         """
         Custom implementation of _get_dot Nipype func to support the long_name Node attribute.
-        
+
         """
-        
+
         import networkx as nx
 
         if prefix is None:

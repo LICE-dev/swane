@@ -5,20 +5,26 @@ from nipype.interfaces.fsl import BinaryMaths
 from os.path import abspath
 import os
 
-from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File, isdefined)
+from nipype.interfaces.base import (
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    TraitedSpec,
+    File,
+    isdefined,
+)
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class AsymmetryIndexInputSpec(BaseInterfaceInputSpec):
-    
-    in_file = File(exists=True, mandatory=True, desc='the input image')
-    swapped_file = File(exists=True, mandatory=True, desc='the swapped input image')
-    out_file = File(desc='the output image')
+
+    in_file = File(exists=True, mandatory=True, desc="the input image")
+    swapped_file = File(exists=True, mandatory=True, desc="the swapped input image")
+    out_file = File(desc="the output image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class AsymmetryIndexOutputSpec(TraitedSpec):
-    out_file = File(desc='the output image')
+    out_file = File(desc="the output image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
@@ -27,7 +33,7 @@ class AsymmetryIndex(BaseInterface):
     Generate Asymmetry Index Map from an image and its RL swapped as subtraction/sum.
 
     """
-    
+
     input_spec = AsymmetryIndexInputSpec
     output_spec = AsymmetryIndexOutputSpec
 
@@ -65,5 +71,5 @@ class AsymmetryIndex(BaseInterface):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['out_file'] = self._gen_outfilename()
+        outputs["out_file"] = self._gen_outfilename()
         return outputs
