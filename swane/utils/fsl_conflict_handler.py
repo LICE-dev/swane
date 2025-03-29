@@ -2,7 +2,7 @@ import os
 import sys
 from swane import strings
 import subprocess
-from platform_and_tools_utils import is_command_available, is_linux, is_mac
+from utils.platform_and_tools_utils import is_command_available, is_linux, is_mac
 
 
 FSL_CONFLICT_PATH = "fsl/bin"
@@ -81,7 +81,7 @@ def fsl_conflict_check() -> bool:
         return True
 
     # This function uses fsl built-in qt library to show a warning: ignore IDE import error!
-    from PyQt5.QtWidgets import QApplication, QLabel, QMessageBox
+    from PySide6.QtWidgets import QApplication, QMessageBox
 
     app = QApplication([])
     app.setApplicationDisplayName(strings.APPNAME)
