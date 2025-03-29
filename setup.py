@@ -23,7 +23,7 @@ setup(name='swane',
       ],
       license='MIT',
       install_requires=[
-          "networkx==3.4.2"
+          "networkx==3.4.2",
           "nipype==1.10.0",
           "Pyside6",
           "pydicom==3.0.1",
