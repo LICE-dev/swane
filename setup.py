@@ -23,7 +23,7 @@ setup(name='swane',
       ],
       license='MIT',
       install_requires=[
-          "networkx==3.4.2"
+          "networkx==3.4.2",
           "nipype==1.10.0",
           "Pyside6",
           "pydicom==3.0.1",
@@ -34,7 +34,7 @@ setup(name='swane',
           "nibabel<=5.3.0",
           "packaging",
           "PySide6_VerticalQTabWidget==0.0.3",
-          "numpy==2.2.4",
+          "numpy",
           "cryptography"
       ],
       python_requires=">=3.7",
