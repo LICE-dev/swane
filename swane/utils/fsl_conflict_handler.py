@@ -5,8 +5,7 @@ import subprocess
 
 FSL_CONFLICT_PATH = "fsl/bin"
 FREESURFER_CONFIG_FILE = "SetUpFreeSurfer.sh"
-SHELL_PROFILE = {
-    "sh": [".profile"],
+SHELL_PROFILE = { "sh": [".profile"],
     "bash": [".bash_profile", ".profile", ".bashrc"],
     "dash": [".bash_profile", ".profile"],
     "zsh": [".zprofile", ".zshrc"],
