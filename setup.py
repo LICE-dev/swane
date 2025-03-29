@@ -34,7 +34,7 @@ setup(name='swane',
           "nibabel<=5.3.0",
           "packaging",
           "PySide6_VerticalQTabWidget==0.0.3",
-          "numpy",
+          "numpy==2.2.4",
           "cryptography"
       ],
       python_requires=">=3.7",
