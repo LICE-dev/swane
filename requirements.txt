@@ -30,7 +30,7 @@ PySide6_Addons==6.8.2.1
 PySide6_Essentials==6.8.2.1
 python-dateutil==2.9.0.post0
 rdflib==6.3.2
-requests==2.32.3
+requests==2.32.4
 scipy==1.15.2
 shiboken6==6.8.2.1
 simplejson==3.20.1
