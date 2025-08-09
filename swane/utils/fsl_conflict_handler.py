@@ -98,8 +98,8 @@ def fsl_conflict_check() -> bool:
     msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.Retry | QMessageBox.Cancel)
     msg_box.button(QMessageBox.Yes).setText(strings.fsl_python_error_fix)
     msg_box.button(QMessageBox.Retry).setText(strings.fsl_python_error_restart)
-    
-    if is_command_available('xclip') or is_mac():
+
+    if is_command_available("xclip") or is_mac():
         msg_box.button(QMessageBox.Cancel).setText(strings.fsl_python_error_exit)
         msg_box.setDefaultButton(QMessageBox.Cancel)
     ret = msg_box.exec()
@@ -109,7 +109,7 @@ def fsl_conflict_check() -> bool:
     elif ret == QMessageBox.Yes:
         config_file_fix(config_file)
         runtime_fix()
-    elif ret == QMessageBox.Cancel and (is_command_available('xclip') or is_mac()):
+    elif ret == QMessageBox.Cancel and (is_command_available("xclip") or is_mac()):
         copy_fix_to_clipboard()
 
     return False
