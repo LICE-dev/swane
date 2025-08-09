@@ -38,4 +38,4 @@ six==1.17.0
 swane-supplement==0.1.2
 traits==7.0.2
 typing_extensions==4.12.2
-urllib3==2.3.0
+urllib3==2.5.0
