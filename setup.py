@@ -35,7 +35,8 @@ setup(name='swane',
           "packaging",
           "PySide6_VerticalQTabWidget==0.0.3",
           "numpy==2.2.4",
-          "cryptography"
+          "cryptography",
+          "dicom-sequence-classifier==1.0.2",
       ],
       python_requires=">=3.7",
       entry_points={

@@ -1,4 +1,5 @@
 import pydicom
+from dicom_sequence_classifier import extract_metadata, load_dicom_file, classify_dicom
 
 
 class DicomSeries:
@@ -11,6 +12,7 @@ class DicomSeries:
         self.volumes = 1
         self.description = "Unnamed series"
         self.modality = None
+        self.classification = "Unknown"
 
     def add_dicom_loc(self, dicom_loc, is_multi_frame, slice_loc):
         if dicom_loc not in self.dicom_locs:
@@ -40,7 +42,18 @@ class DicomSeries:
             if not hasattr(ds, "ImageType") or "MOSAIC" not in ds.ImageType:
                 self.frames = 0
 
-
+    def classify_serie(self):
+        for loc in self.dicom_locs:
+            ds = load_dicom_file(loc)
+            meta = extract_metadata(ds)
+            classification = classify_dicom(meta)
+            if classification is "NOT MR":
+                continue
+            
+            self.classification = classification
+            break
+        
+        print("this serie is ", self.classification)
 
 class DicomSubject:
     def __init__(self, subject_id: str, subject_name: str):
