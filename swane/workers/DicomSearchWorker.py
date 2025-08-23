@@ -108,7 +108,7 @@ class DicomSearchWorker(QRunnable):
                 if not os.path.exists(dicom_loc):
                     continue
                 ds = pydicom.dcmread(dicom_loc, force=True)
-
+                
                 subject_id = ds.get("PatientID", "na")
                 if subject_id == "na":
                     continue
@@ -163,6 +163,7 @@ class DicomSearchWorker(QRunnable):
                 for study in self.tree.dicom_subjects[subject].studies:
                     for series in self.tree.dicom_subjects[subject].studies[study]:
                         self.tree.dicom_subjects[subject].studies[study][series].refine_frame_number()
+            
             self.signal.sig_finish.emit(self)
         except:
             self.signal.sig_finish.emit(self)
