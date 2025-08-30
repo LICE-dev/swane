@@ -3,7 +3,7 @@ import os
 from PySide6.QtCore import Signal, QObject, QRunnable
 from swane.nipype_pipeline.MainWorkflow import DEBUG
 from swane.utils.DicomTree import DicomTree
-
+from dicom_sequence_classifier import extract_metadata, load_dicom_file, classify_dicom
 
 class DicomSearchSignal(QObject):
     sig_loop = Signal(int)
@@ -108,7 +108,7 @@ class DicomSearchWorker(QRunnable):
                 if not os.path.exists(dicom_loc):
                     continue
                 ds = pydicom.dcmread(dicom_loc, force=True)
-
+                
                 subject_id = ds.get("PatientID", "na")
                 if subject_id == "na":
                     continue
@@ -158,11 +158,14 @@ class DicomSearchWorker(QRunnable):
                     dicom_series.description = DicomSearchWorker.find_series_description(dicom_series.dicom_locs)
 
                 #TODO: calcolare multiframe alla fine
+                
+                dicom_series.classification = DicomSearchWorker.find_series_classification(dicom_series.dicom_locs)
 
             for subject in self.tree.dicom_subjects:
                 for study in self.tree.dicom_subjects[subject].studies:
                     for series in self.tree.dicom_subjects[subject].studies[study]:
                         self.tree.dicom_subjects[subject].studies[study][series].refine_frame_number()
+            
             self.signal.sig_finish.emit(self)
         except:
             self.signal.sig_finish.emit(self)
@@ -193,3 +196,29 @@ class DicomSearchWorker(QRunnable):
             if hasattr(ds, "SeriesDescription"):
                 return ds.SeriesDescription
         return "Unnamed series"
+    
+    @staticmethod
+    def find_series_classification(image_list: list[str]) -> str:
+        """
+        Analyses the dicom using dicom_sequence_classifier to attempt an automatic dicom series classification.
+
+        Parameters
+        ----------
+        image_list: list[str]
+            The dicom file list to check
+
+        Returns
+        -------
+        str
+            The dicom series classification
+
+        """
+        
+        for image in image_list:
+            ds = load_dicom_file(image)
+            meta = extract_metadata(ds)
+            classification = classify_dicom(meta)
+            if classification is not "NOT MR":
+                return classification
+            
+        return "Unknown"
