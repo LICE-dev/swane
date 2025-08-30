@@ -264,7 +264,7 @@ class SubjectTab(QTabWidget):
         layout.addWidget(import_group_box, stretch=1)
         self.data_tab.setLayout(layout)
 
-    def dicom_import_to_folder(self, data_input: DataInputList, force_mod: bool = False):
+    def dicom_import_to_folder(self, data_input: DataInputList, force_mod: bool = False, force_copy_list : list = None):
         """
         Copies the files inside the selected folder in the input list into the folder specified by data_input var.
 
@@ -274,6 +274,8 @@ class SubjectTab(QTabWidget):
             The name of the series to which couple the selected file.
         force_mod: bool
             Skip the modality check. Default is False
+        force_copy_list: list
+            If specificed, series is imported from here and not from scan list result for automatic import. Default is None
 
         Returns
         -------
@@ -281,15 +283,19 @@ class SubjectTab(QTabWidget):
 
         """
         
-        if self.importable_series_list.currentRow() == -1:
+        if self.importable_series_list.currentRow() == -1 and force_copy_list is None:
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_selected_series_error)
             msg_box.exec()
             return
 
-        copy_list = self.dicom_scan_series_list[self.importable_series_list.currentRow()][1]
-        vols = self.dicom_scan_series_list[self.importable_series_list.currentRow()][3]
-        found_mod = self.dicom_scan_series_list[self.importable_series_list.currentRow()][2].upper()
+        origin = force_copy_list
+        if origin is None:
+            origin = self.dicom_scan_series_list[self.importable_series_list.currentRow()]
+
+        copy_list = origin[1]
+        vols = origin[3]
+        found_mod = origin[2].upper()
 
         progress = PersistentProgressDialog(strings.subj_tab_dicom_copy, 0, len(copy_list) + 1, self)
         self.set_loading(data_input)
@@ -1040,11 +1046,30 @@ class SubjectTab(QTabWidget):
                 series_description = dicom_series.description
                 vols = dicom_series.volumes
                 label = SubjectTab.label_from_dicom(frames, subject_name, mod, series_description, vols)
+
                 self.dicom_scan_series_list.append(
-                    [label, dicom_series.dicom_locs, mod, vols])
+                    [label, dicom_series.dicom_locs, mod, vols, dicom_series.classification])
 
         for series in self.dicom_scan_series_list:
             self.importable_series_list.addItem(series[0])
+
+        if self.global_config.getboolean_safe(GlobalPrefCategoryList.MAIN, "auto_import"):
+            for data_input in self.subject.input_state_list:
+                if not self.subject.input_state_list[data_input].loaded:
+                    for series in self.dicom_scan_series_list:
+                        if series[4]==data_input.value.name:
+                            msg_box = QMessageBox()
+                            msg_box.setText(strings.subj_tab_found_series_type.format(series_description=series[0],data_label=data_input.value.label))
+                            msg_box.setIcon(QMessageBox.Icon.Question)
+                            msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                            msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
+                            msg_box.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+                            msg_box.closeEvent = self.no_close_event
+                            ret = msg_box.exec()
+                            import_ret = ret == QMessageBox.StandardButton.Yes
+                            if import_ret:
+                                self.dicom_import_to_folder(data_input, force_copy_list=series)
+                                break
 
     def clear_scan_result(self):
         """
