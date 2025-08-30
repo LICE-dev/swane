@@ -11,6 +11,7 @@ class DicomSeries:
         self.volumes = 1
         self.description = "Unnamed series"
         self.modality = None
+        self.classification = "Unknown"
 
     def add_dicom_loc(self, dicom_loc, is_multi_frame, slice_loc):
         if dicom_loc not in self.dicom_locs:
@@ -39,8 +40,6 @@ class DicomSeries:
             ds = pydicom.dcmread(self.dicom_locs[0], force=True)
             if not hasattr(ds, "ImageType") or "MOSAIC" not in ds.ImageType:
                 self.frames = 0
-
-
 
 class DicomSubject:
     def __init__(self, subject_id: str, subject_name: str):
