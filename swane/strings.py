@@ -50,6 +50,9 @@ mainwindow_pref_disabled_error = "Preferences disabled during workflow execution
 aboutwindow_wiki_dependencylist = "Link to <a href='https://github.com/LICE-dev/swane/wiki/04-Dependencies-Guides'>dependencies list</a>"
 aboutwindow_wiki_changelog = "Link to versions <a href='https://github.com/LICE-dev/swane/wiki/11-Changelog'>changelog</a>"
 
+mainwindow_chatgpt_title = "SWANe Assistant"
+mainwindow_chatgpt_tooltip = "Open ChatGPT SWANe Assistant in your browser"
+
 # Menu
 menu_load_subj = "&Load subject..."
 menu_load_subj_tip = "Load subject data from the main working directory"

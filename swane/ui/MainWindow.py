@@ -537,6 +537,17 @@ class MainWindow(QMainWindow):
         self.home_tab_ui()
         
         self.subject_tab_array = []
+        
+        # Link to ChatGPT SWANe Assistant
+        chatgpt_url = "https://chatgpt.com/g/g-68e14421a54c8191a2110a831824f1e9-swaneassistant/"
+        self.chatgpt_link = QLabel(f'<a href="{chatgpt_url}">{strings.mainwindow_chatgpt_title}</a>')
+        self.chatgpt_link.setTextFormat(Qt.RichText)
+        self.chatgpt_link.setOpenExternalLinks(True)
+        self.chatgpt_link.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        self.chatgpt_link.setCursor(Qt.PointingHandCursor)
+        self.chatgpt_link.setToolTip(strings.mainwindow_chatgpt_tooltip)
+
+        self.statusBar().addWidget(self.chatgpt_link)
 
         self.show()
 
