@@ -130,13 +130,11 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 #### Added
 
-- **ImageType series error shown after DICOM folder scan**: the error is shown only if no valid series are found into the folder and list all the wrong ImageType found in the path
-- **Shutdown SWANe at Analysis End**: if enabled, it turns off the OS when SWANe ends all the started analyses without error
+- **ImageType series error shown after DICOM folder scan**: the error is shown only if no valid series are found into the folder and list all the wrong ImageType found in the path.
+- **Shutdown SWANe at Analysis End**: if enabled, it turns off the OS when SWANe ends all the started analyses without error.
+- **Automatic series classification**: if enabled, activates a new module that automatically classifies subject series at their load in Data Load Subtab.
+- **SWANe Assistant GPTs link**: added a button into the client footer that links to SWANe Assistant GPTs.
 - **UBUNTU ONLY**: check xclip dependency existance.
-
-- **Implemented DicomClassifier from patient folder**: added a new module to classifile patient files to avoid possible mistakes (dataload subtab), configurabile via usal settings
-
-- **Added SwaneAssistant GPT link**: Added a bottom right button to link to SwaneAssistante GPTS to help in FAQ and Wiki.
 
 #### Changed
 
