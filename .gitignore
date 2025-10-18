@@ -57,3 +57,4 @@ venv
 /.vscode
 /swane/.vscode
 /swane_supplement
+/myenv

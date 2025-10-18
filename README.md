@@ -134,6 +134,10 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 - **Shutdown SWANe at Analysis End**: if enabled, it turns off the OS when SWANe ends all the started analyses without error
 - **UBUNTU ONLY**: check xclip dependency existance.
 
+- **Implemented DicomClassifier from patient folder**: added a new module to classifile patient files to avoid possible mistakes (dataload subtab), configurabile via usal settings
+
+- **Added SwaneAssistant GPT link**: Added a bottom right button to link to SwaneAssistante GPTS to help in FAQ and Wiki.
+
 #### Changed
 
 - networkx version requisites
