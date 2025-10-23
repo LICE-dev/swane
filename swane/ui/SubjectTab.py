@@ -361,7 +361,7 @@ class SubjectTab(QTabWidget):
         if not os.path.exists(folder_path):
             return
 
-        dicom_src_work = DicomSearchWorker(folder_path)
+        dicom_src_work = DicomSearchWorker(folder_path, classify=self.global_config.getboolean_safe(GlobalPrefCategoryList.MAIN, "auto_import"))
         dicom_src_work.load_dir()
 
         if dicom_src_work.get_files_len() > 0:
