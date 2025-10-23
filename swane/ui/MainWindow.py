@@ -549,8 +549,8 @@ class MainWindow(QMainWindow):
         self.chatgpt_button.setContentsMargins(4, 0, 4, 0)
         self.chatgpt_button.setStyleSheet("""
             QPushButton {
-                color: #fffff; /* testo scuro per massima leggibilità */
-                background-color: rgba(0, 102, 204, 0.12); /* blu trasparente */
+                color: #fffff;
+                background-color: rgba(0, 102, 204, 0.12);
                 padding: 6px 12px;
                 border: 1px solid rgba(0, 102, 204, 0.20);
                 border-radius: 8px;
