@@ -5,7 +5,7 @@ charset-normalizer==3.4.1
 ci-info==0.3.0
 click==8.1.8
 cryptography==44.0.2
-dicom-sequence-classifier==1.0.3
+dicom-sequence-classifier==1.0.4
 etelemetry==0.3.1
 filelock==3.17.0
 idna==3.10
