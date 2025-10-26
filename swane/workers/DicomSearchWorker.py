@@ -155,15 +155,16 @@ class DicomSearchWorker(QRunnable):
 
                 dicom_series.add_dicom_loc(dicom_loc, multi_frame_series, ds.get("SliceLocation"))
                 dicom_series.modality = ds.Modality
-                if hasattr(ds, "SeriesDescription"):
-                    dicom_series.description = ds.SeriesDescription
-                else:
-                    dicom_series.description = DicomSearchWorker.find_series_description(dicom_series.dicom_locs)
+                if dicom_series.description == "Not named":
+                    if hasattr(ds, "SeriesDescription"):
+                        dicom_series.description = ds.SeriesDescription
+                    else:
+                        dicom_series.description = DicomSearchWorker.find_series_description(dicom_series.dicom_locs)
 
                 #TODO: calcolare multiframe alla fine
 
                 if self.classify and dicom_series.classification == "Not classified":
-                    dicom_series.classification = DicomSearchWorker.find_series_classification(dicom_series.dicom_locs)
+                    dicom_series.classification = DicomSearchWorker.find_series_classification(ds)
 
             for subject in self.tree.dicom_subjects:
                 for study in self.tree.dicom_subjects[subject].studies:
@@ -202,14 +203,14 @@ class DicomSearchWorker(QRunnable):
         return "Unnamed series"
     
     @staticmethod
-    def find_series_classification(image_list: list[str]) -> str:
+    def find_series_classification(ds) -> str:
         """
         Analyses the dicom using dicom_sequence_classifier to attempt an automatic dicom series classification.
 
         Parameters
         ----------
-        image_list: list[str]
-            The dicom file list to check
+        ds:
+            The dicom dataset to check
 
         Returns
         -------
@@ -217,12 +218,10 @@ class DicomSearchWorker(QRunnable):
             The dicom series classification
 
         """
-        
-        for image in image_list:
-            ds = load_dicom_file(image)
-            meta = extract_metadata(ds)
-            classification = classify_dicom(meta)
-            if classification != "NOT MR":
-                return classification
+
+        meta = extract_metadata(ds)
+        classification = classify_dicom(meta)
+        if classification != "NOT MR":
+            return classification
             
         return "Unknown"

@@ -9,7 +9,7 @@ class DicomSeries:
         self.multi_frame_loc = None
         self.first_position = None
         self.volumes = 1
-        self.description = "Unnamed series"
+        self.description = "Not named"
         self.modality = None
         self.classification = "Not classified"
 
