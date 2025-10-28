@@ -82,6 +82,9 @@ mainwindow_pref_disabled_error = "Preferences disabled during workflow execution
 aboutwindow_wiki_dependencylist = "Link to <a href='https://github.com/LICE-dev/swane/wiki/04-Dependencies-Guides'>dependencies list</a>"
 aboutwindow_wiki_changelog = "Link to versions <a href='https://github.com/LICE-dev/swane/wiki/11-Changelog'>changelog</a>"
 
+mainwindow_chatgpt_title = "SWANe Assistant"
+mainwindow_chatgpt_tooltip = "Open ChatGPT SWANe Assistant in your browser"
+
 # Menu
 menu_load_subj = "&Load subject..."
 menu_load_subj_tip = "Load subject data from the main working directory"
@@ -96,6 +99,7 @@ menu_about = "&About " + APPNAME + "..."
 menu_file_name = "File"
 menu_tools_name = "Tools"
 menu_help_name = "Help"
+menu_auto_import = "Automatic series classification"
 
 # Subject Tab
 subj_tab_data_tab_name = "Data load"
@@ -117,6 +121,7 @@ subj_tab_wrong_min_vols_check_msg = (
 )
 subj_tab_import_copy_error_msg = "Error copying selected series files."
 subj_tab_import_folder_not_empy = "Images are already loaded for this series."
+subj_tab_found_series_type = "{series_description} could be associated with input {data_label}.\nDou you want to import it?"
 subj_tab_dicom_copy = "Copying DICOM files in subject folder..."
 subj_tab_dicom_check = "Verifying subject folder..."
 subj_tab_dicom_scan = "Scanning folder for primary non derived DICOM images..."
