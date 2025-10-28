@@ -52,7 +52,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: develop
-          head: ${{ steps.create_branch.outputs.branch_name }}
+          branch: ${{ steps.create_branch.outputs.branch_name }}
           title: "Auto-format code with black"
           body: |
             This PR applies automatic formatting using `black`.
