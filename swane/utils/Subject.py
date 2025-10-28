@@ -1,7 +1,6 @@
 import os
 import shutil
 
-from swane.config.preference_list import WF_PREFERENCES
 from swane.utils.DataInputList import DataInputList, ImageModality
 from enum import Enum, auto
 from swane.config.ConfigManager import ConfigManager
@@ -18,7 +17,6 @@ from multiprocessing import Queue
 from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from swane.workers.WorkflowProcess import WorkflowProcess
 from swane.workers.SlicerExportWorker import SlicerExportWorker
-from swane.utils.DicomTree import DicomTree
 
 
 class SubjectRet(Enum):
