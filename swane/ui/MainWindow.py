@@ -594,6 +594,42 @@ class MainWindow(QMainWindow):
         self.home_tab_ui()
 
         self.subject_tab_array = []
+        
+         # Link to ChatGPT SWANe Assistant - as a clear clickable QPushButton
+        chatgpt_url = "https://chatgpt.com/g/g-68e14421a54c8191a2110a831824f1e9-swaneassistant/"
+        chatgpt_text = f"🤖 {strings.mainwindow_chatgpt_title}"
+
+        self.chatgpt_button = QPushButton(chatgpt_text, parent=self)
+        self.chatgpt_button.setCursor(Qt.PointingHandCursor)
+        self.chatgpt_button.setToolTip(strings.mainwindow_chatgpt_tooltip)
+        self.chatgpt_button.setMinimumHeight(28)
+        self.chatgpt_button.setContentsMargins(4, 0, 4, 0)
+        self.chatgpt_button.setStyleSheet("""
+            QPushButton {
+                color: #ffffff;
+                background-color: rgba(0, 102, 204, 0.12);
+                padding: 6px 12px;
+                border: 1px solid rgba(0, 102, 204, 0.20);
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 102, 204, 0.18);
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 102, 204, 0.24);
+            }
+        """)
+
+        def _open_chatgpt():
+            import webbrowser
+            webbrowser.open(chatgpt_url)
+
+        self.chatgpt_button.clicked.connect(_open_chatgpt)
+
+        # Add to status bar (use addPermanentWidget per preferenza)
+        self.statusBar().addPermanentWidget(self.chatgpt_button)
 
         self.show()
 
