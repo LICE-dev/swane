@@ -754,6 +754,13 @@ class Subject:
         Delete any previous workflow execution
         """
         shutil.rmtree(self.workflow_dir(), ignore_errors=True)
+        self.result_dir()
+
+    def delete_result_dir(self):
+        """
+        Delete any previous result
+        """
+        shutil.rmtree(self.result_dir(), ignore_errors=True)
 
     def freesurfer_dir(self) -> str:
         """
@@ -809,6 +816,7 @@ class Subject:
                 return SubjectRet.ExecWfResume
             elif not resume:
                 self.delete_workflow_dir()
+                self.delete_result_dir()
 
         # Checks for a previous workflow FreeSurfer execution
         if self.config.get_workflow_freesurfer_pref() and self.freesurfer_dir_exists():
