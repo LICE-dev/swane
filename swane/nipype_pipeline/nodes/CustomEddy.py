@@ -4,6 +4,7 @@ from nipype.interfaces.fsl.epi import Eddy, EddyInputSpec
 from nipype.utils.gpu_count import gpu_count
 from shutil import which
 
+
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.epi.Eddy)  -*-
 class CustomEddy(Eddy):
     """
@@ -14,7 +15,7 @@ class CustomEddy(Eddy):
     _cmd = "eddy_openmp" if which("eddy_openmp") else "eddy_cpu"
 
     def _use_cuda(self):
-        if self.inputs.use_cuda and gpu_count()>0:
+        if self.inputs.use_cuda and gpu_count() > 0:
             self.inputs.num_threads = 1
             # eddy_cuda usually link to eddy_cudaX.X but some versions miss the symlink
             # anyway in newer fsl versions eddy automatically use cuda on cuda-capable systems

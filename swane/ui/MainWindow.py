@@ -1,11 +1,30 @@
-from PySide6.QtWidgets import (QMainWindow, QMessageBox, QFileDialog, QInputDialog, QStyle,
-                               QLineEdit, QTabWidget, QGridLayout, QLabel, QSizePolicy,
-                               QSpacerItem, QWidget, QTabBar, QDialog, QPushButton, QStyleOptionButton)
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QMessageBox,
+    QFileDialog,
+    QInputDialog,
+    QStyle,
+    QLineEdit,
+    QTabWidget,
+    QGridLayout,
+    QLabel,
+    QSizePolicy,
+    QSpacerItem,
+    QWidget,
+    QTabBar,
+    QDialog,
+    QPushButton,
+    QStyleOptionButton,
+)
 from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
 from PySide6.QtCore import QCoreApplication, Qt, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
-from swane.utils.DependencyManager import DependencyManager, Dependence, DependenceStatus
+from swane.utils.DependencyManager import (
+    DependencyManager,
+    Dependence,
+    DependenceStatus,
+)
 from swane.ui.SubjectTab import SubjectTab
 from swane.ui.PreferencesWindow import PreferencesWindow
 import swane_supplement
@@ -21,7 +40,7 @@ class MainWindow(QMainWindow):
     Custom implementation of PySide QMainWindow to define SWANe GUI.
 
     """
-       
+
     def __init__(self, global_config: ConfigManager):
 
         super(MainWindow, self).__init__()
@@ -57,7 +76,9 @@ class MainWindow(QMainWindow):
 
         # Check for update
         update_thread = UpdateCheckWorker()
-        update_thread.signal.last_available.connect(lambda pip_version: self.update_available(pip_version))
+        update_thread.signal.last_available.connect(
+            lambda pip_version: self.update_available(pip_version)
+        )
         QThreadPool.globalInstance().start(update_thread)
 
     def update_available(self, pip_version: str):
@@ -84,7 +105,11 @@ class MainWindow(QMainWindow):
         opt = QStyleOptionButton()
         opt.initFrom(button)
         text_size = button.fontMetrics().size(Qt.TextShowMnemonic, button.text())
-        return button.style().sizeFromContents(QStyle.CT_PushButton, opt, text_size, button).height()
+        return (
+            button.style()
+            .sizeFromContents(QStyle.CT_PushButton, opt, text_size, button)
+            .height()
+        )
 
     def open_subject_tab(self, subject: Subject):
         """
@@ -100,13 +125,15 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
-        this_tab = SubjectTab(self.global_config, subject, main_window=self, parent=self.main_tab)
+
+        this_tab = SubjectTab(
+            self.global_config, subject, main_window=self, parent=self.main_tab
+        )
         self.subject_tab_array.append(this_tab)
 
         self.main_tab.addTab(this_tab, os.path.basename(subject.name))
         self.main_tab.setCurrentWidget(this_tab)
-        
+
         this_tab.load_subject()
 
     def check_subject_limit(self) -> bool:
@@ -119,7 +146,7 @@ class MainWindow(QMainWindow):
             True if SWANe can load another tab, otherwise False.
 
         """
-        
+
         max_subjects = self.global_config.get_max_subject_tabs()
         if max_subjects <= 0:
             return True
@@ -147,7 +174,7 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         # Guard to avoid the opening of subject tabs greater than the maximum allowed
         if not self.check_subject_limit():
             return
@@ -156,9 +183,13 @@ class MainWindow(QMainWindow):
             # Open the directory selection dialog if a path is not provided
             file_dialog = QFileDialog()
             file_dialog.setDirectory(self.global_config.get_main_working_directory())
-            folder_path = file_dialog.getExistingDirectory(self, strings.mainwindow_select_subj_folder)
+            folder_path = file_dialog.getExistingDirectory(
+                self, strings.mainwindow_select_subj_folder
+            )
 
-        subject = Subject(self.global_config, dependency_manager=self.dependency_manager)
+        subject = Subject(
+            self.global_config, dependency_manager=self.dependency_manager
+        )
 
         # Guard to avoid an already loaded subject directory
         for tab in self.subject_tab_array:
@@ -200,7 +231,9 @@ class MainWindow(QMainWindow):
             msg_box2 = QMessageBox()
             msg_box2.setText(strings.mainwindow_force_dir_update)
             msg_box2.setIcon(QMessageBox.Icon.Question)
-            msg_box2.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            msg_box2.setStandardButtons(
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
             msg_box2.button(QMessageBox.StandardButton.Yes).setText("Yes")
             msg_box2.button(QMessageBox.StandardButton.No).setText("No")
             msg_box2.setDefaultButton(QMessageBox.StandardButton.No)
@@ -213,7 +246,7 @@ class MainWindow(QMainWindow):
                 subject.fix_subject_folder_subtree(folder_path)
                 self.search_subject_dir(folder_path=folder_path)
             return
-            
+
         return
 
     def get_suggested_subject_name(self) -> str:
@@ -226,20 +259,21 @@ class MainWindow(QMainWindow):
             The suggested subject folder name.
 
         """
-        
+
         import re
-        
-        regex = re.compile('^' + self.global_config.get_subjects_prefix() + r'\d+$')
+
+        regex = re.compile("^" + self.global_config.get_subjects_prefix() + r"\d+$")
         file_list = []
-        
+
         for this_dir in os.listdir(self.global_config.get_main_working_directory()):
             if regex.match(this_dir):
                 file_list.append(
-                    int(this_dir.replace(self.global_config.get_subjects_prefix(), "")))
+                    int(this_dir.replace(self.global_config.get_subjects_prefix(), ""))
+                )
 
         if len(file_list) == 0:
             return self.global_config.get_subjects_prefix() + "1"
-        
+
         return self.global_config.get_subjects_prefix() + str(max(file_list) + 1)
 
     def choose_new_subject_dir(self):
@@ -251,21 +285,31 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         if not self.check_subject_limit():
             return
 
-        text, ok = QInputDialog.getText(self, strings.mainwindow_new_subj_title, strings.mainwindow_new_subj_name,
-                                        QLineEdit.EchoMode.Normal, self.get_suggested_subject_name())
+        text, ok = QInputDialog.getText(
+            self,
+            strings.mainwindow_new_subj_title,
+            strings.mainwindow_new_subj_name,
+            QLineEdit.EchoMode.Normal,
+            self.get_suggested_subject_name(),
+        )
 
         if not ok:
             return
 
         subject_name = str(text).replace(" ", "_")
-        subject = Subject(self.global_config, dependency_manager=self.dependency_manager)
+        subject = Subject(
+            self.global_config, dependency_manager=self.dependency_manager
+        )
         create_subject_ret = subject.create_new_subject_dir(subject_name)
 
-        if create_subject_ret == SubjectRet.FolderNotFound or create_subject_ret == SubjectRet.PathBlankSpaces:
+        if (
+            create_subject_ret == SubjectRet.FolderNotFound
+            or create_subject_ret == SubjectRet.PathBlankSpaces
+        ):
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_new_subj_name_error + subject_name)
             msg_box.exec()
@@ -290,20 +334,22 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
-        folder_path = QFileDialog.getExistingDirectory(self, strings.mainwindow_choose_working_dir_title)
-        
+
+        folder_path = QFileDialog.getExistingDirectory(
+            self, strings.mainwindow_choose_working_dir_title
+        )
+
         if not os.path.exists(folder_path):
             return
 
-        if ' ' in folder_path:
+        if " " in folder_path:
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_working_dir_space_error)
             msg_box.exec()
             return
-        
+
         self.global_config.set_main_working_directory(os.path.abspath(folder_path))
-        
+
         os.chdir(folder_path)
 
     def edit_config(self):
@@ -315,20 +361,22 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         if self.check_running_workflows():
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_pref_disabled_error)
             msg_box.exec()
             return
 
-        preference_window = PreferencesWindow(self.global_config, self.dependency_manager, False)
+        preference_window = PreferencesWindow(
+            self.global_config, self.dependency_manager, False
+        )
         ret = preference_window.exec()
-        
+
         if ret == EXIT_CODE_REBOOT:
             self.close()
             QCoreApplication.exit(EXIT_CODE_REBOOT)
-            
+
         if ret != 0:
             self.reset_workflows()
 
@@ -348,7 +396,9 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
-        wf_preference_window = PreferencesWindow(self.global_config, self.dependency_manager, True)
+        wf_preference_window = PreferencesWindow(
+            self.global_config, self.dependency_manager, True
+        )
         ret = wf_preference_window.exec()
 
         if ret == -1:
@@ -364,10 +414,12 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        shutdown = self.global_config.getboolean_safe(GlobalPrefCategoryList.MAIN, "shutdown")
+        shutdown = self.global_config.getboolean_safe(
+            GlobalPrefCategoryList.MAIN, "shutdown"
+        )
         self.global_config[GlobalPrefCategoryList.MAIN]["shutdown"] = str(not shutdown)
 
-    def check_running_workflows(self, ignore_subj:Subject=None) -> bool:
+    def check_running_workflows(self, ignore_subj: Subject = None) -> bool:
         """
         Check if SWANe is executing a workflow in any open subject tab.
 
@@ -382,11 +434,11 @@ class MainWindow(QMainWindow):
             True if SWANe is executing a workflow, otherwise False.
 
         """
-        
+
         for subj in self.subject_tab_array:
             if subj.subject != ignore_subj and subj.subject.is_workflow_process_alive():
                 return True
-            
+
         return False
 
     def check_workflow_error(self) -> bool:
@@ -414,7 +466,7 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         for subj in self.subject_tab_array:
             subj.reset_workflow()
 
@@ -427,7 +479,7 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         about_dialog = QDialog(parent=self)
         layout = QGridLayout()
 
@@ -470,34 +522,39 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         self.resize(800, 600)
         self.setWindowTitle(strings.APPNAME + " - " + strings.app_acronym)
 
-        self.statusBar().showMessage('')
+        self.statusBar().showMessage("")
 
         # Buttons definition
-        button_action = QAction(QIcon.fromTheme(
-            "document-open"), strings.menu_load_subj, self)
+        button_action = QAction(
+            QIcon.fromTheme("document-open"), strings.menu_load_subj, self
+        )
         button_action.setStatusTip(strings.menu_load_subj_tip)
         button_action.triggered.connect(self.search_subject_dir)
 
-        button_action2 = QAction(QIcon.fromTheme(
-            "document-new"), strings.menu_new_subj, self)
+        button_action2 = QAction(
+            QIcon.fromTheme("document-new"), strings.menu_new_subj, self
+        )
         button_action2.setStatusTip(strings.menu_new_subj_tip)
         button_action2.triggered.connect(self.choose_new_subject_dir)
 
-        button_action3 = QAction(QIcon.fromTheme(
-            "application-exit"), strings.menu_exit, self)
+        button_action3 = QAction(
+            QIcon.fromTheme("application-exit"), strings.menu_exit, self
+        )
         button_action3.triggered.connect(self.close)
 
-        button_action4 = QAction(QIcon.fromTheme(
-            "preferences-other"), strings.menu_pref, self)
+        button_action4 = QAction(
+            QIcon.fromTheme("preferences-other"), strings.menu_pref, self
+        )
         button_action4.setStatusTip(strings.menu_pref_tip)
         button_action4.triggered.connect(self.edit_config)
 
-        button_action5 = QAction(QIcon.fromTheme(
-            "preferences-other"), strings.menu_wf_pref, self)
+        button_action5 = QAction(
+            QIcon.fromTheme("preferences-other"), strings.menu_wf_pref, self
+        )
         button_action5.triggered.connect(self.edit_wf_config)
 
         button_action6 = QAction(strings.menu_shutdown_pref, self)
@@ -520,7 +577,7 @@ class MainWindow(QMainWindow):
         tool_menu.addAction(button_action6)
         help_menu = menu.addMenu(strings.menu_help_name)
         help_menu.addAction(button_action7)
-        
+
         # Tab definition
         self.main_tab = QTabWidget(parent=self)
         self.main_tab.setTabsClosable(True)
@@ -532,10 +589,10 @@ class MainWindow(QMainWindow):
         # Tab closing option disabled
         self.main_tab.tabBar().setTabButton(0, QTabBar.ButtonPosition.LeftSide, None)
         self.main_tab.tabBar().setTabButton(0, QTabBar.ButtonPosition.RightSide, None)
-        
+
         # Home Tab definition
         self.home_tab_ui()
-        
+
         self.subject_tab_array = []
         
          # Link to ChatGPT SWANe Assistant - as a clear clickable QPushButton
@@ -590,7 +647,7 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         # Guard to prevent the Home Tab closing
         if index <= 0:
             return
@@ -603,7 +660,7 @@ class MainWindow(QMainWindow):
             return
 
         tab_item.subject.config.save()
-        
+
         self.subject_tab_array.remove(tab_item)
         self.main_tab.removeTab(index)
 
@@ -621,7 +678,7 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         if not self.check_running_workflows():
             event.accept()
         else:
@@ -630,7 +687,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             event.ignore()
 
-    def safe_shutdown_after_workflow(self, subject:Subject):
+    def safe_shutdown_after_workflow(self, subject: Subject):
         """
         Shutdown pc if all workflows are completed
 
@@ -645,12 +702,14 @@ class MainWindow(QMainWindow):
 
         """
 
-        if not self.check_running_workflows(ignore_subj=subject) and not self.check_workflow_error():
+        if (
+            not self.check_running_workflows(ignore_subj=subject)
+            and not self.check_workflow_error()
+        ):
             os.system("systemctl poweroff")
             os.system("osascript -e 'tell app \"System Events\" to shut down'")
             exit()
             pass
-
 
     def home_tab_ui(self):
         """
@@ -661,7 +720,7 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         self.home_grid_layout = QGridLayout()
 
         bold_font = QFont()
@@ -711,10 +770,19 @@ class MainWindow(QMainWindow):
 
         if DependencyManager.need_slicer_check(self.global_config):
             self.slicer_x = x
-            x = self.add_home_entry(Dependence(DependenceStatus.CHECKING, strings.mainwindow_dep_slicer_src), x)
-            DependencyManager.check_slicer(self.global_config.get_slicer_path(), self.slicer_row)
+            x = self.add_home_entry(
+                Dependence(
+                    DependenceStatus.CHECKING, strings.mainwindow_dep_slicer_src
+                ),
+                x,
+            )
+            DependencyManager.check_slicer(
+                self.global_config.get_slicer_path(), self.slicer_row
+            )
         else:
-            label = strings.check_dep_slicer_found % self.global_config.get_slicer_version()
+            label = (
+                strings.check_dep_slicer_found % self.global_config.get_slicer_version()
+            )
             x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, label), x)
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
@@ -725,7 +793,9 @@ class MainWindow(QMainWindow):
 
         x = self.add_home_entry(self.dependency_manager.graphviz, x)
 
-        vertical_spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        vertical_spacer = QSpacerItem(
+            20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding
+        )
         self.home_grid_layout.addItem(vertical_spacer, x, 0, 1, 2)
 
         self.homeTab.setLayout(self.home_grid_layout)
@@ -747,7 +817,7 @@ class MainWindow(QMainWindow):
             The next grid layout row index.
 
         """
-        
+
         label_icon = QLabel()
         label_icon.setScaledContents(True)
 
@@ -778,10 +848,12 @@ class MainWindow(QMainWindow):
             old_label_layout.widget().deleteLater()
             self.home_grid_layout.removeItem(old_label_layout)
         self.home_grid_layout.addWidget(label, x, 1)
-        
+
         return x + 1
 
-    def slicer_row(self, slicer_path: str, slicer_version: str, msg: str, state: DependenceStatus):
+    def slicer_row(
+        self, slicer_path: str, slicer_version: str, msg: str, state: DependenceStatus
+    ):
         """
         Generates the Slicer dependency check label and path, if 3D Slicer is found.
 
@@ -801,7 +873,7 @@ class MainWindow(QMainWindow):
         None.
 
         """
-        
+
         self.add_home_entry(Dependence(state, msg), self.slicer_x)
 
         if state is DependenceStatus.DETECTED:

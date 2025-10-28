@@ -1,8 +1,21 @@
 import os
 from typing import Union
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox, QSpinBox, QDoubleSpinBox,
-                               QComboBox, QStyle, QSizePolicy, QStyleOption, QWidget)
+from PySide6.QtWidgets import (
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QFileDialog,
+    QMessageBox,
+    QCheckBox,
+    QSpinBox,
+    QDoubleSpinBox,
+    QComboBox,
+    QStyle,
+    QSizePolicy,
+    QStyleOption,
+    QWidget,
+)
 from functools import partial
 from enum import Enum
 from swane import strings
@@ -14,10 +27,17 @@ from swane.utils.CryptographyManager import CryptographyManager
 
 class PreferenceUIEntry:
     """
-        This class manage The label and the input of a preference based on the value of a PreferenceEntry
+    This class manage The label and the input of a preference based on the value of a PreferenceEntry
     """
 
-    def __init__(self, category: Enum, key: str, my_config: ConfigManager, entry: PreferenceEntry, parent=None):
+    def __init__(
+        self,
+        category: Enum,
+        key: str,
+        my_config: ConfigManager,
+        entry: PreferenceEntry,
+        parent=None,
+    ):
 
         # Var initialization
         self.changed = False
@@ -28,11 +48,17 @@ class PreferenceUIEntry:
         self.tooltip = None
         opt = QStyleOption()
         opt.initFrom(self.label)
-        text_size = self.label.fontMetrics().size(Qt.TextShowMnemonic, self.label.text())
-        height = self.label.style().sizeFromContents(QStyle.CT_PushButton, opt, text_size, self.label).height()
+        text_size = self.label.fontMetrics().size(
+            Qt.TextShowMnemonic, self.label.text()
+        )
+        height = (
+            self.label.style()
+            .sizeFromContents(QStyle.CT_PushButton, opt, text_size, self.label)
+            .height()
+        )
         self.label.setMaximumHeight(height)
         self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        self.box_text = ''
+        self.box_text = ""
 
         # Import values from entry
         self.input_type = entry.input_type
@@ -112,7 +138,9 @@ class PreferenceUIEntry:
             return
         if self.get_typed_value() not in self.informative_text:
             return
-        self.informative_text_label.setText(self.informative_text[self.get_typed_value()])
+        self.informative_text_label.setText(
+            self.informative_text[self.get_typed_value()]
+        )
 
     def gen_input_field(self) -> [QWidget, QPushButton]:
         """
@@ -141,7 +169,10 @@ class PreferenceUIEntry:
         else:
             field = QLineEdit()
 
-        if self.input_type == InputTypes.FILE or self.input_type == InputTypes.DIRECTORY:
+        if (
+            self.input_type == InputTypes.FILE
+            or self.input_type == InputTypes.DIRECTORY
+        ):
             field.setReadOnly(True)
             button = QPushButton()
             pixmap = getattr(QStyle, "SP_DirOpenIcon")
@@ -164,15 +195,19 @@ class PreferenceUIEntry:
         Open a selection window to chose a file ora directory
         """
         if self.input_type == InputTypes.FILE:
-            file_path, _ = QFileDialog.getOpenFileName(parent=self.parent, caption=self.box_text)
+            file_path, _ = QFileDialog.getOpenFileName(
+                parent=self.parent, caption=self.box_text
+            )
             error = strings.pref_window_file_error
         elif self.input_type == InputTypes.DIRECTORY:
-            file_path = QFileDialog.getExistingDirectory(parent=self.parent, caption=self.box_text)
+            file_path = QFileDialog.getExistingDirectory(
+                parent=self.parent, caption=self.box_text
+            )
             error = strings.pref_window_dir_error
         else:
             return
 
-        if file_path == '':
+        if file_path == "":
             return
 
         if not os.path.exists(file_path):
@@ -246,16 +281,16 @@ class PreferenceUIEntry:
         max_value: int or float
            The maximum accepted value
         """
-        
+
         if not isinstance(self.input_field, QSpinBox | QDoubleSpinBox):
             return
-        
+
         if min_value > max_value:
             min_value, max_value = max_value, min_value
-        
+
         self.input_field.setMinimum(min_value)
         self.input_field.setMaximum(max_value)
-        
+
     def set_decimals(self, decimals: int):
         """
         Apply specified values to a numeric input field validator
@@ -265,12 +300,12 @@ class PreferenceUIEntry:
         decimal: int
             The number of decimals accepted by the field
         """
-        
+
         if not isinstance(self.input_field, QDoubleSpinBox):
             return
-        
-        single_step = 10 ** -decimals
-        
+
+        single_step = 10**-decimals
+
         self.input_field.setDecimals(decimals)
         self.input_field.setSingleStep(single_step)
 
@@ -339,9 +374,9 @@ class PreferenceUIEntry:
         self.input_field.setToolTip(tooltip)
         self.label.setToolTip(tooltip)
         if tooltip == "":
-            self.label.setText(self.label.text().replace(" "+strings.INFOCHAR, ""))
+            self.label.setText(self.label.text().replace(" " + strings.INFOCHAR, ""))
         elif not self.label.text().endswith(strings.INFOCHAR):
-            self.label.setText(self.label.text()+" "+strings.INFOCHAR)
+            self.label.setText(self.label.text() + " " + strings.INFOCHAR)
 
     def enable(self):
         """
@@ -362,7 +397,7 @@ class PreferenceUIEntry:
             value = self.input_field.itemData(self.input_field.currentIndex()).name
         elif self.input_type == InputTypes.BOOLEAN:
             if self.input_field.checkState() == Qt.Checked:
-                value = 'true'
+                value = "true"
             else:
                 value = "false"
         elif self.input_type == InputTypes.FLOAT or self.input_type == InputTypes.INT:
@@ -386,5 +421,3 @@ class PreferenceUIEntry:
             value = self.input_field.text()
 
         return value
-
-

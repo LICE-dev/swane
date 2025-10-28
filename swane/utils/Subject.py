@@ -289,7 +289,9 @@ class Subject:
             )
             return
 
-        series_list = dicom_src_work.tree.get_series_list(subjects_list[0], studies_list[0])
+        series_list = dicom_src_work.tree.get_series_list(
+            subjects_list[0], studies_list[0]
+        )
 
         if len(series_list) != 1:
             status_callback(
@@ -297,7 +299,9 @@ class Subject:
             )
             return
 
-        series = dicom_src_work.tree.get_series(subjects_list[0], studies_list[0], series_list[0])
+        series = dicom_src_work.tree.get_series(
+            subjects_list[0], studies_list[0], series_list[0]
+        )
 
         self.input_state_list[data_input].loaded = True
         self.input_state_list[data_input].volumes = series.volumes
@@ -889,7 +893,7 @@ class Subject:
             self.global_config.get_slicer_path(),
             self.result_dir(),
             self.global_config.get_slicer_scene_ext(),
-            self.config
+            self.config,
         )
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)
