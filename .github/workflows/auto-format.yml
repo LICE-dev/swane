@@ -3,7 +3,7 @@ name: Auto Format with Black
 on:
   push:
     branches:
-      - dev
+      - dev   # puoi lasciare 'dev' come trigger
 
 jobs:
   auto-format:
@@ -33,12 +33,13 @@ jobs:
       - name: Create Pull Request with formatted code
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           base: dev
-          branch: auto-format/${{ github.run_id }}
+          branch: auto-format
+          branch-suffix: timestamp
+          delete-branch: true
           title: "Auto-format code with black"
           commit-message: "Apply black auto-formatting"
           body: |
             This PR applies automatic formatting using `black`.
             Generated automatically by GitHub Actions.
-          labels: auto-format
