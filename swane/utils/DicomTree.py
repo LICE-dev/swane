@@ -9,9 +9,9 @@ class DicomSeries:
         self.multi_frame_loc = None
         self.first_position = None
         self.volumes = 1
-        self.description = "Unnamed series"
+        self.description = "Not named"
         self.modality = None
-        self.classification = "Unknown"
+        self.classification = "Not classified"
 
     def add_dicom_loc(self, dicom_loc, is_multi_frame, slice_loc):
         if dicom_loc not in self.dicom_locs:

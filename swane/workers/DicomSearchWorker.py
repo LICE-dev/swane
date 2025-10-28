@@ -12,7 +12,7 @@ class DicomSearchSignal(QObject):
 
 class DicomSearchWorker(QRunnable):
 
-    def __init__(self, dicom_dir: str):
+    def __init__(self, dicom_dir: str, classify: bool=False):
         """
         Thread class to scan a dicom folder and return dicom files ordered in subjects, exams and series
 
@@ -20,6 +20,8 @@ class DicomSearchWorker(QRunnable):
         ----------
         dicom_dir: str
             The dicom folder to scan
+        classify: bool
+            Try to classify dicom images in series. Default is False
         """
         super(DicomSearchWorker, self).__init__()
         if os.path.exists(os.path.abspath(dicom_dir)):
@@ -28,6 +30,7 @@ class DicomSearchWorker(QRunnable):
         self.signal = DicomSearchSignal()
         self.tree = DicomTree(dicom_dir)
         self.error_message = []
+        self.classify = classify
         #self.dicom_tree = {}
         #self.series_positions = {}
         #self.multi_frame_series = {}
@@ -152,20 +155,23 @@ class DicomSearchWorker(QRunnable):
 
                 dicom_series.add_dicom_loc(dicom_loc, multi_frame_series, ds.get("SliceLocation"))
                 dicom_series.modality = ds.Modality
-                if hasattr(ds, "SeriesDescription"):
-                    dicom_series.description = ds.SeriesDescription
-                else:
-                    dicom_series.description = DicomSearchWorker.find_series_description(dicom_series.dicom_locs)
+                if dicom_series.description == "Not named":
+                    if hasattr(ds, "SeriesDescription"):
+                        dicom_series.description = ds.SeriesDescription
+                    else:
+                        dicom_series.description = DicomSearchWorker.find_series_description(dicom_series.dicom_locs)
 
                 #TODO: calcolare multiframe alla fine
-                
-                dicom_series.classification = DicomSearchWorker.find_series_classification(dicom_series.dicom_locs)
+
+                if self.classify and dicom_series.classification == "Not classified":
+                    dicom_series.classification = DicomSearchWorker.find_series_classification(ds)
 
             for subject in self.tree.dicom_subjects:
                 for study in self.tree.dicom_subjects[subject].studies:
                     for series in self.tree.dicom_subjects[subject].studies[study]:
                         self.tree.dicom_subjects[subject].studies[study][series].refine_frame_number()
-            
+
+            self.signal.sig_loop.emit(1)
             self.signal.sig_finish.emit(self)
         except:
             self.signal.sig_finish.emit(self)
@@ -198,14 +204,14 @@ class DicomSearchWorker(QRunnable):
         return "Unnamed series"
     
     @staticmethod
-    def find_series_classification(image_list: list[str]) -> str:
+    def find_series_classification(ds) -> str:
         """
         Analyses the dicom using dicom_sequence_classifier to attempt an automatic dicom series classification.
 
         Parameters
         ----------
-        image_list: list[str]
-            The dicom file list to check
+        ds:
+            The dicom dataset to check
 
         Returns
         -------
@@ -213,12 +219,10 @@ class DicomSearchWorker(QRunnable):
             The dicom series classification
 
         """
-        
-        for image in image_list:
-            ds = load_dicom_file(image)
-            meta = extract_metadata(ds)
-            classification = classify_dicom(meta)
-            if classification is not "NOT MR":
-                return classification
+
+        meta = extract_metadata(ds)
+        classification = classify_dicom(meta)
+        if classification != "NOT MR":
+            return classification
             
         return "Unknown"

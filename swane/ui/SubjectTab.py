@@ -361,7 +361,7 @@ class SubjectTab(QTabWidget):
         if not os.path.exists(folder_path):
             return
 
-        dicom_src_work = DicomSearchWorker(folder_path)
+        dicom_src_work = DicomSearchWorker(folder_path, classify=self.global_config.getboolean_safe(GlobalPrefCategoryList.MAIN, "auto_import"))
         dicom_src_work.load_dir()
 
         if dicom_src_work.get_files_len() > 0:
@@ -369,7 +369,7 @@ class SubjectTab(QTabWidget):
             self.dicom_scan_series_list = []
             progress = PersistentProgressDialog(strings.subj_tab_dicom_scan, 0, 0, parent=self.parent())
             progress.show()
-            progress.setMaximum(dicom_src_work.get_files_len())
+            progress.setMaximum(dicom_src_work.get_files_len()+1)
             dicom_src_work.signal.sig_loop.connect(lambda i: progress.increase_value(i))
             dicom_src_work.signal.sig_finish.connect(self.show_scan_result)
             QThreadPool.globalInstance().start(dicom_src_work)
