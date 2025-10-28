@@ -37,13 +37,17 @@ class ConfigManager(configparser.ConfigParser):
             if global_base_folder is None or not os.path.exists(global_base_folder):
                 global_base_folder = os.path.expanduser("~")
             self.global_config = True
-            self.config_file = os.path.abspath(os.path.join(global_base_folder, "." + strings.APPNAME))
+            self.config_file = os.path.abspath(
+                os.path.join(global_base_folder, "." + strings.APPNAME)
+            )
 
         # Load default pref from pref list
         self._load_defaults(save=False)
 
         # check if this version need pref reset
-        force_pref_reset = self.getboolean_safe(GlobalPrefCategoryList.MAIN, 'force_pref_reset')
+        force_pref_reset = self.getboolean_safe(
+            GlobalPrefCategoryList.MAIN, "force_pref_reset"
+        )
 
         reset_pref = False
 
@@ -51,11 +55,15 @@ class ConfigManager(configparser.ConfigParser):
         try:
             if force_pref_reset:
                 if self.global_config:
-                    last_swane_version = self[GlobalPrefCategoryList.MAIN]['last_swane_version']
+                    last_swane_version = self[GlobalPrefCategoryList.MAIN][
+                        "last_swane_version"
+                    ]
                 else:
                     temp_config = configparser.ConfigParser()
                     temp_config.read(self.config_file)
-                    last_swane_version = temp_config[GlobalPrefCategoryList.MAIN]['last_swane_version']
+                    last_swane_version = temp_config[GlobalPrefCategoryList.MAIN][
+                        "last_swane_version"
+                    ]
                 if __version__ != last_swane_version:
                     reset_pref = True
         except:
@@ -67,14 +75,18 @@ class ConfigManager(configparser.ConfigParser):
             for section in self._section_defaults.keys():
                 for option in self._section_defaults[section].keys():
                     if self._section_defaults[section][option].default_at_startup:
-                        self.set(section, option, self._section_defaults[section][option].default)
+                        self.set(
+                            section,
+                            option,
+                            self._section_defaults[section][option].default,
+                        )
                     else:
                         self.set(section, option, self[section][option])
 
             # set last_swane_version in subject config to ensure force_pref_reset compatibility
             if str(GlobalPrefCategoryList.MAIN) not in self:
                 self[GlobalPrefCategoryList.MAIN] = {}
-            self[GlobalPrefCategoryList.MAIN]['last_swane_version'] = __version__
+            self[GlobalPrefCategoryList.MAIN]["last_swane_version"] = __version__
 
         self.save()
 
@@ -106,9 +118,13 @@ class ConfigManager(configparser.ConfigParser):
                     self._section_defaults[str(category)] = GLOBAL_PREFERENCES[category]
                     for pref in GLOBAL_PREFERENCES[category]:
                         if isinstance(GLOBAL_PREFERENCES[category][pref].default, Enum):
-                            self[category][pref] = GLOBAL_PREFERENCES[category][pref].default.name
+                            self[category][pref] = GLOBAL_PREFERENCES[category][
+                                pref
+                            ].default.name
                         else:
-                            self[category][pref] = str(GLOBAL_PREFERENCES[category][pref].default)
+                            self[category][pref] = str(
+                                GLOBAL_PREFERENCES[category][pref].default
+                            )
 
             for data_input in DataInputList:
                 if data_input in WF_PREFERENCES:
@@ -116,9 +132,13 @@ class ConfigManager(configparser.ConfigParser):
                     self._section_defaults[str(data_input)] = WF_PREFERENCES[data_input]
                     for pref in WF_PREFERENCES[data_input]:
                         if isinstance(WF_PREFERENCES[data_input][pref].default, Enum):
-                            self[data_input][pref] = WF_PREFERENCES[data_input][pref].default.name
+                            self[data_input][pref] = WF_PREFERENCES[data_input][
+                                pref
+                            ].default.name
                         else:
-                            self[data_input][pref] = str(WF_PREFERENCES[data_input][pref].default)
+                            self[data_input][pref] = str(
+                                WF_PREFERENCES[data_input][pref].default
+                            )
         else:
             tmp_config = ConfigManager()
             for data_input in DataInputList:
@@ -126,10 +146,16 @@ class ConfigManager(configparser.ConfigParser):
                     self._section_defaults[str(data_input)] = WF_PREFERENCES[data_input]
                     self[data_input] = tmp_config[data_input]
             self[GlobalPrefCategoryList.MAIN] = {}
-            self[GlobalPrefCategoryList.MAIN]['last_swane_version'] = tmp_config[GlobalPrefCategoryList.MAIN]['last_swane_version']
-            self[GlobalPrefCategoryList.MAIN]['force_pref_reset'] = tmp_config[GlobalPrefCategoryList.MAIN]['force_pref_reset']
+            self[GlobalPrefCategoryList.MAIN]["last_swane_version"] = tmp_config[
+                GlobalPrefCategoryList.MAIN
+            ]["last_swane_version"]
+            self[GlobalPrefCategoryList.MAIN]["force_pref_reset"] = tmp_config[
+                GlobalPrefCategoryList.MAIN
+            ]["force_pref_reset"]
 
-            self.set_workflow_option(tmp_config.getenum_safe(GlobalPrefCategoryList.MAIN, 'default_wf_type'))
+            self.set_workflow_option(
+                tmp_config.getenum_safe(GlobalPrefCategoryList.MAIN, "default_wf_type")
+            )
         if save:
             self.save()
 
@@ -146,7 +172,7 @@ class ConfigManager(configparser.ConfigParser):
             return
         if type(workflow_type) is not WORKFLOW_TYPES:
             return
-        self[DataInputList.T13D]['wf_type'] = workflow_type.name
+        self[DataInputList.T13D]["wf_type"] = workflow_type.name
         for category in DEFAULT_WF[workflow_type]:
             for key in DEFAULT_WF[workflow_type][category]:
                 self[category][key] = DEFAULT_WF[workflow_type][category][key]
@@ -165,11 +191,13 @@ class ConfigManager(configparser.ConfigParser):
         A string containing the main working directory
         """
         try:
-            if self.global_config and os.path.exists(self[GlobalPrefCategoryList.MAIN]["main_working_directory"]):
+            if self.global_config and os.path.exists(
+                self[GlobalPrefCategoryList.MAIN]["main_working_directory"]
+            ):
                 return self[GlobalPrefCategoryList.MAIN]["main_working_directory"]
         except:
             pass
-        return ''
+        return ""
 
     def set_main_working_directory(self, main_working_dir_path: str):
         """
@@ -182,7 +210,9 @@ class ConfigManager(configparser.ConfigParser):
 
         """
         if self.global_config:
-            self[GlobalPrefCategoryList.MAIN]["main_working_directory"] = main_working_dir_path
+            self[GlobalPrefCategoryList.MAIN][
+                "main_working_directory"
+            ] = main_working_dir_path
             self.save()
 
     def get_max_subject_tabs(self) -> int:
@@ -191,7 +221,7 @@ class ConfigManager(configparser.ConfigParser):
         -------
         An int containing the maximum subject tab number
         """
-        return self.getint_safe(GlobalPrefCategoryList.PERFORMANCE, 'max_subj')
+        return self.getint_safe(GlobalPrefCategoryList.PERFORMANCE, "max_subj")
 
     def get_subjects_prefix(self) -> str:
         """
@@ -200,8 +230,8 @@ class ConfigManager(configparser.ConfigParser):
         A string containing the subject folder prefix
         """
         if self.global_config:
-            return self[GlobalPrefCategoryList.MAIN]['subjects_prefix']
-        return ''
+            return self[GlobalPrefCategoryList.MAIN]["subjects_prefix"]
+        return ""
 
     def get_default_dicom_folder(self) -> str:
         """
@@ -210,8 +240,8 @@ class ConfigManager(configparser.ConfigParser):
         A string containing the default dicom folder name
         """
         if self.global_config:
-            return self[GlobalPrefCategoryList.MAIN]['default_dicom_folder']
-        return ''
+            return self[GlobalPrefCategoryList.MAIN]["default_dicom_folder"]
+        return ""
 
     def get_slicer_path(self) -> str:
         """
@@ -220,8 +250,8 @@ class ConfigManager(configparser.ConfigParser):
         A string containing the slicer executable path
         """
         if self.global_config:
-            return self[GlobalPrefCategoryList.MAIN]['slicer_path']
-        return ''
+            return self[GlobalPrefCategoryList.MAIN]["slicer_path"]
+        return ""
 
     def set_slicer_path(self, slicer_path: str):
         """
@@ -234,7 +264,7 @@ class ConfigManager(configparser.ConfigParser):
 
         """
         if self.global_config:
-            self[GlobalPrefCategoryList.MAIN]['slicer_path'] = slicer_path
+            self[GlobalPrefCategoryList.MAIN]["slicer_path"] = slicer_path
 
     def get_slicer_version(self) -> str:
         """
@@ -243,7 +273,7 @@ class ConfigManager(configparser.ConfigParser):
         A string containing the current slicer version
         """
         if self.global_config:
-            return self[GlobalPrefCategoryList.MAIN]['slicer_version']
+            return self[GlobalPrefCategoryList.MAIN]["slicer_version"]
 
     def set_slicer_version(self, slicer_version: str):
         """
@@ -256,7 +286,7 @@ class ConfigManager(configparser.ConfigParser):
 
         """
         if self.global_config:
-            self[GlobalPrefCategoryList.MAIN]['slicer_version'] = slicer_version
+            self[GlobalPrefCategoryList.MAIN]["slicer_version"] = slicer_version
 
     def is_optional_series_enabled(self, series_name: DataInputList) -> bool:
         """
@@ -271,7 +301,9 @@ class ConfigManager(configparser.ConfigParser):
         -------
         True if the specified series is enabled
         """
-        return self.getboolean_safe(GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name))
+        return self.getboolean_safe(
+            GlobalPrefCategoryList.OPTIONAL_SERIES, str(series_name)
+        )
 
     def get_slicer_scene_ext(self) -> str:
         """
@@ -280,7 +312,9 @@ class ConfigManager(configparser.ConfigParser):
         A string containing the default slicer scene extension
         """
         if self.global_config:
-            return self.getenum_safe(GlobalPrefCategoryList.MAIN, 'slicer_scene_ext').value
+            return self.getenum_safe(
+                GlobalPrefCategoryList.MAIN, "slicer_scene_ext"
+            ).value
         return None
 
     def get_subject_workflow_type(self) -> Enum:
@@ -289,7 +323,7 @@ class ConfigManager(configparser.ConfigParser):
         -------
         The Enum of default workflow type
         """
-        return self.getenum_safe(DataInputList.T13D, 'wf_type')
+        return self.getenum_safe(DataInputList.T13D, "wf_type")
 
     def get_workflow_hippo_pref(self) -> bool:
         """
@@ -297,7 +331,7 @@ class ConfigManager(configparser.ConfigParser):
         -------
         True if hippocampal segmentation is enabled
         """
-        return self.getboolean_safe(DataInputList.T13D, 'hippo_amyg_labels')
+        return self.getboolean_safe(DataInputList.T13D, "hippo_amyg_labels")
 
     def get_workflow_freesurfer_pref(self) -> bool:
         """
@@ -305,31 +339,47 @@ class ConfigManager(configparser.ConfigParser):
         -------
         True if freesurfer analysis is enabled
         """
-        return self.getboolean_safe(DataInputList.T13D, 'freesurfer')
-    
+        return self.getboolean_safe(DataInputList.T13D, "freesurfer")
+
     def get_mail_manager(self) -> MailManager:
         """
         Returns
         -------
         An initialized MailManager
         """
-        
-        mail_manager_enabled = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'enabled')
+
+        mail_manager_enabled = self.getboolean_safe(
+            GlobalPrefCategoryList.MAIL_SETTINGS, "enabled"
+        )
         if not mail_manager_enabled:
             return None
-        
+
         server_address = self[GlobalPrefCategoryList.MAIL_SETTINGS]["address"]
-        server_port = self.getint_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'port')
+        server_port = self.getint_safe(GlobalPrefCategoryList.MAIL_SETTINGS, "port")
         username = self[GlobalPrefCategoryList.MAIL_SETTINGS]["username"]
-        password = CryptographyManager.decrypt(self[GlobalPrefCategoryList.MAIL_SETTINGS]['password'])
-        use_ssl = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'use_ssl')
-        use_tls = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, 'use_tls')
-        
-        if server_address == "" or server_port == "" or username == "" or password == "":
+        password = CryptographyManager.decrypt(
+            self[GlobalPrefCategoryList.MAIL_SETTINGS]["password"]
+        )
+        use_ssl = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, "use_ssl")
+        use_tls = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, "use_tls")
+
+        if (
+            server_address == ""
+            or server_port == ""
+            or username == ""
+            or password == ""
+        ):
             return None
-        
-        mail_manager = MailManager(server_address=server_address, server_port=server_port, username=username, password=password, use_ssl=use_ssl, use_tls=use_tls)
-        
+
+        mail_manager = MailManager(
+            server_address=server_address,
+            server_port=server_port,
+            username=username,
+            password=password,
+            use_ssl=use_ssl,
+            use_tls=use_tls,
+        )
+
         return mail_manager
 
     def check_dependencies(self, dependency_manager):
@@ -346,7 +396,11 @@ class ConfigManager(configparser.ConfigParser):
         for category in WF_PREFERENCES:
             for key in WF_PREFERENCES[category]:
                 if WF_PREFERENCES[category][key].dependency is not None:
-                    dep_check = getattr(dependency_manager, WF_PREFERENCES[category][key].dependency, None)
+                    dep_check = getattr(
+                        dependency_manager,
+                        WF_PREFERENCES[category][key].dependency,
+                        None,
+                    )
                     if dep_check is None or not callable(dep_check) or not dep_check():
                         self[category][key] = "false"
                         changed = True
@@ -359,9 +413,11 @@ class ConfigManager(configparser.ConfigParser):
         -------
         The last application process ID as an int
         """
-        return self.getint_safe(GlobalPrefCategoryList.MAIN, 'last_pid')
+        return self.getint_safe(GlobalPrefCategoryList.MAIN, "last_pid")
 
-    def getboolean_safe(self, section: str, option: str, *, raw=False, vars=None, **kwargs) -> bool:
+    def getboolean_safe(
+        self, section: str, option: str, *, raw=False, vars=None, **kwargs
+    ) -> bool:
         """
         Get an option value as bool or, if invalid, its default value
 
@@ -384,7 +440,10 @@ class ConfigManager(configparser.ConfigParser):
         try:
             return self.getboolean(section, option, raw=raw, vars=vars)
         except:
-            if section in self._section_defaults and option in self._section_defaults[section]:
+            if (
+                section in self._section_defaults
+                and option in self._section_defaults[section]
+            ):
                 if type(self._section_defaults[section]) is list:
                     ret = self._section_defaults[section].default[0]
                 else:
@@ -393,7 +452,9 @@ class ConfigManager(configparser.ConfigParser):
                     return configparser.ConfigParser.BOOLEAN_STATES[ret.lower()]
         raise Exception()
 
-    def getint_safe(self, section: str, option: str, *, raw=False, vars=None, **kwargs) -> int:
+    def getint_safe(
+        self, section: str, option: str, *, raw=False, vars=None, **kwargs
+    ) -> int:
         """
         Get an option value as int or, if invalid, its default value
 
@@ -416,14 +477,19 @@ class ConfigManager(configparser.ConfigParser):
         try:
             return self.getint(section, option, raw=raw, vars=vars)
         except:
-            if section in self._section_defaults and option in self._section_defaults[section]:
+            if (
+                section in self._section_defaults
+                and option in self._section_defaults[section]
+            ):
                 if type(self._section_defaults[section][option].default) is list:
                     return 0
                 else:
                     return int(self._section_defaults[section][option].default)
         raise Exception("Error for %s - %s" % (str(section), str(option)))
 
-    def getfloat_safe(self, section: str, option: str, *, raw=False, vars=None, **kwargs) -> float:
+    def getfloat_safe(
+        self, section: str, option: str, *, raw=False, vars=None, **kwargs
+    ) -> float:
         """
         Get an option value as float or, if invalid, its default value
 
@@ -446,14 +512,19 @@ class ConfigManager(configparser.ConfigParser):
         try:
             return self.getfloat(section, option, raw=raw, vars=vars)
         except:
-            if section in self._section_defaults and option in self._section_defaults[section]:
+            if (
+                section in self._section_defaults
+                and option in self._section_defaults[section]
+            ):
                 if type(self._section_defaults[section][option].default) is list:
                     return float(self._section_defaults[section][option].default[0])
                 else:
                     return float(self._section_defaults[section][option].default)
         raise Exception("Error for %s - %s" % (str(section), str(option)))
 
-    def getenum_safe(self, section: str, option: str, *, raw: bool = False, vars=None, **kwargs) -> Enum:
+    def getenum_safe(
+        self, section: str, option: str, *, raw: bool = False, vars=None, **kwargs
+    ) -> Enum:
         """
         Get an option value as Enum or, if invalid, its default value
 
@@ -476,8 +547,13 @@ class ConfigManager(configparser.ConfigParser):
         if self._section_defaults[section][option].value_enum is None:
             raise Exception("No value_enum for %s - %s" % (str(section), str(option)))
 
-        if self[section][option] in self._section_defaults[section][option].value_enum.__members__:
-            return self._section_defaults[section][option].value_enum[self[section][option]]
+        if (
+            self[section][option]
+            in self._section_defaults[section][option].value_enum.__members__
+        ):
+            return self._section_defaults[section][option].value_enum[
+                self[section][option]
+            ]
         else:
             return self._section_defaults[section][option].default
 
@@ -499,26 +575,46 @@ class ConfigManager(configparser.ConfigParser):
         The value cast to its type or the default option value
         """
         if section != "" and option != "" and value != "":
-            if section in self._section_defaults and option in self._section_defaults[section]:
+            if (
+                section in self._section_defaults
+                and option in self._section_defaults[section]
+            ):
                 if self._section_defaults[section][option].input_type == InputTypes.INT:
                     try:
                         return int(value)
                     except:
                         return int(self._section_defaults[section][option].default)
-                elif self._section_defaults[section][option].input_type == InputTypes.ENUM:
-                    if value in self._section_defaults[section][option].value_enum.__members__:
+                elif (
+                    self._section_defaults[section][option].input_type
+                    == InputTypes.ENUM
+                ):
+                    if (
+                        value
+                        in self._section_defaults[section][
+                            option
+                        ].value_enum.__members__
+                    ):
                         return value
                     else:
                         return self._section_defaults[section][option].default.name
-                elif self._section_defaults[section][option].input_type == InputTypes.FLOAT:
+                elif (
+                    self._section_defaults[section][option].input_type
+                    == InputTypes.FLOAT
+                ):
                     try:
                         return float(value)
                     except:
                         return float(self._section_defaults[section][option].default)
-                elif self._section_defaults[section][option].input_type == InputTypes.BOOLEAN:
+                elif (
+                    self._section_defaults[section][option].input_type
+                    == InputTypes.BOOLEAN
+                ):
                     if value.lower() in configparser.ConfigParser.BOOLEAN_STATES:
                         return value
-                    elif self._section_defaults[section][option].default.lower() in configparser.ConfigParser.BOOLEAN_STATES:
+                    elif (
+                        self._section_defaults[section][option].default.lower()
+                        in configparser.ConfigParser.BOOLEAN_STATES
+                    ):
                         return self._section_defaults[section][option].default.lower()
         return value
 

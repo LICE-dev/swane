@@ -5,22 +5,26 @@ from nipype.interfaces.fsl import SliceTimer
 from nipype import Node
 from os.path import abspath
 import os
-from nipype.interfaces.base import (traits, TraitedSpec, BaseInterface, BaseInterfaceInputSpec, File)
+from nipype.interfaces.base import (
+    traits,
+    TraitedSpec,
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    File,
+)
 from swane.config.config_enums import SLICE_TIMING
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class CustomSliceTimerInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='the input image')
+    in_file = File(exists=True, mandatory=True, desc="the input image")
     time_repetition = traits.Float(mandatory=True)
-    slice_timing = traits.Enum(
-        SLICE_TIMING,
-        usedefault=True)
+    slice_timing = traits.Enum(SLICE_TIMING, usedefault=True)
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class CustomSliceTimerOutputSpec(TraitedSpec):
-    slice_time_corrected_file = File(desc='the output image')
+    slice_time_corrected_file = File(desc="the output image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
@@ -29,7 +33,7 @@ class CustomSliceTimer(BaseInterface):
     Applies a slice timing correction.
 
     """
-    
+
     input_spec = CustomSliceTimerInputSpec
     output_spec = CustomSliceTimerOutputSpec
 
@@ -56,5 +60,5 @@ class CustomSliceTimer(BaseInterface):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['slice_time_corrected_file'] = self._gen_outfilename()
+        outputs["slice_time_corrected_file"] = self._gen_outfilename()
         return outputs

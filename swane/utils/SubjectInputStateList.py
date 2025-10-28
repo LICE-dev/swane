@@ -14,7 +14,10 @@ class SubjectInputStateList(dict[DataInputList, SubjectInputState]):
         super().__init__()
         self.dicom_dir = dicom_dir
         for data_input in DataInputList:
-            if data_input.value.optional and not global_config.is_optional_series_enabled(data_input):
+            if (
+                data_input.value.optional
+                and not global_config.is_optional_series_enabled(data_input)
+            ):
                 continue
             self[data_input] = SubjectInputState()
 
@@ -23,6 +26,3 @@ class SubjectInputStateList(dict[DataInputList, SubjectInputState]):
 
     def get_dicom_dir(self, data_input: DataInputList):
         return os.path.join(self.dicom_dir, str(data_input))
-
-
-

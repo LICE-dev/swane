@@ -1,13 +1,15 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 from nipype.interfaces.fsl.base import FSLCommand, FSLCommandInputSpec
-from nipype.interfaces.base import (traits, TraitedSpec, File, isdefined)
+from nipype.interfaces.base import traits, TraitedSpec, File, isdefined
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommandInputSpec)  -*-
 class FslNVolsInputSpec(FSLCommandInputSpec):
-    in_file = File(exists=True, mandatory=True, argstr="%s", position="1", desc='the input image')
-    force_value = traits.Int(mandatory=False, desc='value forced by user')
+    in_file = File(
+        exists=True, mandatory=True, argstr="%s", position="1", desc="the input image"
+    )
+    force_value = traits.Int(mandatory=False, desc="value forced by user")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -21,8 +23,8 @@ class FslNVols(FSLCommand):
     Reads the num. of volumes from a 4d NIFTI file.
 
     """
-    
-    _cmd = 'fslnvols'
+
+    _cmd = "fslnvols"
     input_spec = FslNVolsInputSpec
     output_spec = FslNVolsOutputSpec
 

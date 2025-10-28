@@ -108,7 +108,6 @@ class MainWorkflow(CustomWorkflow):
         self.launch_venous_analysis()
         self.launch_dti_analysis()
         self.launch_fMRI_analysis()
-        
 
         # Remove reference to original variables to prevent crash during subprocess spawn in MacOS
         # Maybe this can be solved setting fork subprocess method too
@@ -387,9 +386,7 @@ class MainWorkflow(CustomWorkflow):
                 self.add_nodes([self.flair2d])
 
                 flair2d_inputnode = self.flair2d.get_node("inputnode")
-                flair2d_inputnode.inputs.output_name = (
-                    "flair2d_%s" % plane
-                )
+                flair2d_inputnode.inputs.output_name = "flair2d_%s" % plane
                 self.connect(
                     self.t1, "outputnode.ref_brain", self.flair2d, "inputnode.reference"
                 )
@@ -414,7 +411,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=t2_cor_dir,
             config=None,
             is_volumetric=False,
-            is_partial_coverage=True
+            is_partial_coverage=True,
         )
         self.t2_cor.long_name = "2D coronal T2 analysis"
         self.add_nodes([self.t2_cor])
@@ -422,7 +419,9 @@ class MainWorkflow(CustomWorkflow):
         t2_cor_inputnode = self.t2_cor.get_node("inputnode")
         t2_cor_inputnode.inputs.output_name = "t2_cor"
         self.connect(self.t1, "outputnode.ref", self.t2_cor, "inputnode.reference")
-        self.connect(self.t1, "outputnode.ref_mask", self.t2_cor, "inputnode.brain_mask")
+        self.connect(
+            self.t1, "outputnode.ref_mask", self.t2_cor, "inputnode.brain_mask"
+        )
 
         self.t2_cor.sink_result(
             save_path=self.base_dir,

@@ -7,12 +7,14 @@ from swane.utils.platform_and_tools_utils import is_command_available, is_linux,
 
 FSL_CONFLICT_PATH = "fsl/bin"
 FREESURFER_CONFIG_FILE = "SetUpFreeSurfer.sh"
-SHELL_PROFILE = {'sh': ['.profile'],
-                 'bash': ['.bash_profile', '.profile', '.bashrc'],
-                 'dash': ['.bash_profile', '.profile'],
-                 'zsh': ['.zprofile', '.zshrc'],
-                 'csh': ['.cshrc'],
-                 'tcsh': ['.tcshrc']}
+SHELL_PROFILE = {
+    "sh": [".profile"],
+    "bash": [".bash_profile", ".profile", ".bashrc"],
+    "dash": [".bash_profile", ".profile"],
+    "zsh": [".zprofile", ".zshrc"],
+    "csh": [".cshrc"],
+    "tcsh": [".tcshrc"],
+}
 
 FIX_LINE = r"""PATH=$(echo "$PATH" | sed -e "s/:$( echo "$FSL_DIR" | sed 's/\//\\\//g')\/bin//")"""
 APP_EXEC_COMMAND = "python3 -m " + __name__.split(".")[0]
@@ -30,11 +32,11 @@ def check_config_file(config_file: str):
 def get_config_file():
     # Try to identify user shell configuration file with fsl/freesurfer setup
     try:
-        shell = os.path.basename(os.environ.get('SHELL', 'sh')).lower()
-        home_dir = os.path.expanduser('~')
+        shell = os.path.basename(os.environ.get("SHELL", "sh")).lower()
+        home_dir = os.path.expanduser("~")
 
         if shell not in SHELL_PROFILE:
-            shell = 'sh'
+            shell = "sh"
 
         candidates = [os.path.join(home_dir, p) for p in SHELL_PROFILE[shell]]
         for candidate in candidates:
@@ -54,7 +56,7 @@ def runtime_fix():
 
 def config_file_fix(config_file: str):
     with open(config_file, "a") as file_object:
-        file_object.write("\n"+FIX_LINE)
+        file_object.write("\n" + FIX_LINE)
 
 
 def copy_fix_to_clipboard():
@@ -96,8 +98,8 @@ def fsl_conflict_check() -> bool:
     msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.Retry | QMessageBox.Cancel)
     msg_box.button(QMessageBox.Yes).setText(strings.fsl_python_error_fix)
     msg_box.button(QMessageBox.Retry).setText(strings.fsl_python_error_restart)
-    
-    if is_command_available('xclip') or is_mac():
+
+    if is_command_available("xclip") or is_mac():
         msg_box.button(QMessageBox.Cancel).setText(strings.fsl_python_error_exit)
         msg_box.setDefaultButton(QMessageBox.Cancel)
     ret = msg_box.exec()
@@ -107,7 +109,7 @@ def fsl_conflict_check() -> bool:
     elif ret == QMessageBox.Yes:
         config_file_fix(config_file)
         runtime_fix()
-    elif ret == QMessageBox.Cancel and (is_command_available('xclip') or is_mac()):
+    elif ret == QMessageBox.Cancel and (is_command_available("xclip") or is_mac()):
         copy_fix_to_clipboard()
 
     return False

@@ -26,18 +26,26 @@ class CustomDcm2niix(Dcm2niix):
     Custom implementation of Dcm2niix Nipype Node to support crop and merge parameters.
 
     """
-    
+
     input_spec = CustomDcm2niixInputSpec
 
     def _run_interface(self, runtime):
         runtime = super(CustomDcm2niix, self)._run_interface(runtime)
 
         # Expected files check
-        if self.inputs.expected_files > 0 and len(self.output_files) != self.inputs.expected_files:
-                raise NodeExecutionError("Dcm2niix generated %d nifti files while %s were expected" % (len(self.output_files), self.inputs.expected_files))
+        if (
+            self.inputs.expected_files > 0
+            and len(self.output_files) != self.inputs.expected_files
+        ):
+            raise NodeExecutionError(
+                "Dcm2niix generated %d nifti files while %s were expected"
+                % (len(self.output_files), self.inputs.expected_files)
+            )
 
         # Bvec and Bvals check
         if self.inputs.request_dti and (len(self.bvals) == 0 or len(self.bvecs) == 0):
-                raise NodeExecutionError("Dcm2niix could not generate requested bvals and bvecs files")
+            raise NodeExecutionError(
+                "Dcm2niix could not generate requested bvals and bvecs files"
+            )
 
         return runtime

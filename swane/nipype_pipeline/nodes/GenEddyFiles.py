@@ -1,12 +1,17 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
-from nipype.interfaces.base import (TraitedSpec, File, BaseInterfaceInputSpec, BaseInterface)
+from nipype.interfaces.base import (
+    TraitedSpec,
+    File,
+    BaseInterfaceInputSpec,
+    BaseInterface,
+)
 import os
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommandInputSpec)  -*-
 class GenEddyFilesInputSpec(BaseInterfaceInputSpec):
-    bval = File(exists=True, mandatory=True, desc='the bval file')
+    bval = File(exists=True, mandatory=True, desc="the bval file")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -39,6 +44,6 @@ class GenEddyFiles(BaseInterface):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['index'] = self.index_file
-        outputs['acqp'] = self.acqp_file
+        outputs["index"] = self.index_file
+        outputs["acqp"] = self.acqp_file
         return outputs

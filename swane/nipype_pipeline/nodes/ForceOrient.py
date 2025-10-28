@@ -4,19 +4,25 @@ import shutil
 from nipype.interfaces.fsl import SwapDimensions
 from os.path import abspath
 import os
-from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File, isdefined)
+from nipype.interfaces.base import (
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    TraitedSpec,
+    File,
+    isdefined,
+)
 from swane.nipype_pipeline.nodes.Orient import Orient
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class ForceOrientInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='the input image')
-    out_file = File(desc='the output image')
+    in_file = File(exists=True, mandatory=True, desc="the input image")
+    out_file = File(desc="the output image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class ForceOrientOutputSpec(TraitedSpec):
-    out_file = File(desc='the output image')
+    out_file = File(desc="the output image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
@@ -25,7 +31,7 @@ class ForceOrient(BaseInterface):
     Converts an image in radiological convention and in RL PA IS orientation.
 
     """
-    
+
     input_spec = ForceOrientInputSpec
     output_spec = ForceOrientOutputSpec
 
@@ -60,5 +66,5 @@ class ForceOrient(BaseInterface):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['out_file'] = self._gen_outfilename()
+        outputs["out_file"] = self._gen_outfilename()
         return outputs

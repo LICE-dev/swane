@@ -16,7 +16,7 @@ class CustomProbTrackX2(ProbTrackX2):
     Custom implementation of ProbTrackX2 Nipype Node to support --rseed as Int and --sampvox as Float.
 
     """
-    
+
     input_spec = CustomProbTrackX2InputSpec
     _default_cmd = ProbTrackX2._cmd
 

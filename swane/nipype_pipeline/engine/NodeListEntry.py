@@ -6,7 +6,7 @@ class NodeListEntry:
     node_holder: CustomTreeWidgetItem object to display the Node status in UI.
 
     """
-    
+
     long_name = None
     node_list = {}
     node_holder = None

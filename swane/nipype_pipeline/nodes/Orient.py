@@ -1,17 +1,27 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 from nipype.interfaces.fsl.base import FSLCommand, FSLCommandInputSpec
-from nipype.interfaces.base import (traits, TraitedSpec, File, isdefined)
+from nipype.interfaces.base import traits, TraitedSpec, File, isdefined
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommandInputSpec)  -*-
 class OrientInputSpec(FSLCommandInputSpec):
-    in_file = File(exists=True, mandatory=True, argstr="%s", position="2", desc="input image")
-    _options_xor = ['get_orient', "swap_orient"]
-    get_orient = traits.Bool(argstr="-getorient", position="1", xor=_options_xor,
-                             desc="gets FSL left-right orientation")
-    swap_orient = traits.Bool(argstr="-swaporient", position="1", xor=_options_xor,
-                              desc="swaps FSL radiological and FSL neurological")
+    in_file = File(
+        exists=True, mandatory=True, argstr="%s", position="2", desc="input image"
+    )
+    _options_xor = ["get_orient", "swap_orient"]
+    get_orient = traits.Bool(
+        argstr="-getorient",
+        position="1",
+        xor=_options_xor,
+        desc="gets FSL left-right orientation",
+    )
+    swap_orient = traits.Bool(
+        argstr="-swaporient",
+        position="1",
+        xor=_options_xor,
+        desc="swaps FSL radiological and FSL neurological",
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -26,8 +36,8 @@ class Orient(FSLCommand):
     Returns the image orientation as neurological or radiological conventions.
 
     """
-    
-    _cmd = 'fslorient'
+
+    _cmd = "fslorient"
     input_spec = OrientInputSpec
     output_spec = OrientOutputSpec
 

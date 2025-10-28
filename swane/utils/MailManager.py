@@ -11,10 +11,18 @@ class MailManager:
 
     TIMEOUT = 2
 
-    def __init__(self, server_address: str, server_port: int, username: str, password: str, use_ssl: bool= True, use_tls: bool=False):
+    def __init__(
+        self,
+        server_address: str,
+        server_port: int,
+        username: str,
+        password: str,
+        use_ssl: bool = True,
+        use_tls: bool = False,
+    ):
         """
         The MailManager initializer.
-        
+
         Parameters
         ----------
         server_address : str
@@ -29,9 +37,9 @@ class MailManager:
             True to use the SSL protocol, otherwhise False. The default is True
         use_tls : bool. Optional
             True to use the TLS protocol, otherwhise False. Useless if use_ssl is True. The default is False
-            
+
         """
-        
+
         self.server_address = server_address
         self.server_port = server_port
         self.username = username
@@ -48,9 +56,13 @@ class MailManager:
 
         try:
             if self.use_ssl:
-                self.server = smtplib.SMTP_SSL(self.server_address, self.server_port, timeout=MailManager.TIMEOUT)
+                self.server = smtplib.SMTP_SSL(
+                    self.server_address, self.server_port, timeout=MailManager.TIMEOUT
+                )
             else:
-                self.server = smtplib.SMTP(self.server_address, self.server_port, timeout=MailManager.TIMEOUT)
+                self.server = smtplib.SMTP(
+                    self.server_address, self.server_port, timeout=MailManager.TIMEOUT
+                )
                 self.server.ehlo()
                 if self.use_tls:
                     self.server.starttls()

@@ -1,6 +1,7 @@
 import shutil
 import platform
 
+
 def is_command_available(command: str) -> bool:
     """
     Check if a command exists in the system PATH.
@@ -9,6 +10,7 @@ def is_command_available(command: str) -> bool:
     :return: True if the command exists, False otherwise
     """
     return shutil.which(command) is not None
+
 
 def get_os_type() -> str:
     """
@@ -24,11 +26,13 @@ def get_os_type() -> str:
     else:
         return "other"
 
+
 def is_mac() -> bool:
     """
     Check if the operating system is macOS.
     """
     return get_os_type() == "mac"
+
 
 def is_linux() -> bool:
     """
