@@ -114,7 +114,7 @@ class Subject:
         total_files = 0
         for data_input in self.input_state_list:
             dicom_scanners[data_input] = self.gen_dicom_search_worker(data_input)
-            total_files = total_files + dicom_scanners[data_input].get_files_len()
+            total_files = total_files + dicom_scanners[data_input].get_files_len() + 1
         return dicom_scanners, total_files
 
     def gen_dicom_search_worker(self, data_input: DataInputList) -> DicomSearchWorker:
@@ -237,7 +237,7 @@ class Subject:
 
         if progress_callback is not None:
             dicom_src_work.signal.sig_loop.connect(
-                lambda i, maximum=dicom_src_work.get_files_len(): progress_callback(
+                lambda i, maximum=dicom_src_work.get_files_len()+1: progress_callback(
                     i, maximum
                 )
             )
