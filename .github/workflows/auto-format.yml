@@ -3,7 +3,7 @@ name: Auto Format with Black
 on:
   push:
     branches:
-      - develop
+      - dev
 
 jobs:
   auto-format:
