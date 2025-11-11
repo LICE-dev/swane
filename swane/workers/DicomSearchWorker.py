@@ -153,7 +153,7 @@ class DicomSearchWorker(QRunnable):
                 if "NumberOfFrames" in ds and int(ds.NumberOfFrames) > 1:
                     multi_frame_series = True
 
-                dicom_series.add_dicom_loc(dicom_loc, multi_frame_series, ds.get("SliceLocation"))
+                dicom_series.add_dicom_loc(dicom_loc, multi_frame_series, ds.get("SliceLocation"), ds)
                 dicom_series.modality = ds.Modality
                 if dicom_series.description == "Not named":
                     if hasattr(ds, "SeriesDescription"):

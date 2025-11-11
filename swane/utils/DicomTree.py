@@ -12,13 +12,16 @@ class DicomSeries:
         self.description = "Not named"
         self.modality = None
         self.classification = "Not classified"
+        self.ds = None
 
-    def add_dicom_loc(self, dicom_loc, is_multi_frame, slice_loc):
+    def add_dicom_loc(self, dicom_loc, is_multi_frame, slice_loc, ds = None):
         if dicom_loc not in self.dicom_locs:
             self.dicom_locs.append(dicom_loc)
             if is_multi_frame:
                 self.is_multi_frame = is_multi_frame
                 self.multi_frame_loc = dicom_loc
+                # Save dicom set for multi frame series to avoid long re-read in refine_frame_number loop at scan ending
+                self.ds = ds
             else:
                 self.frames += 1
                 if self.first_position is None:
@@ -28,14 +31,18 @@ class DicomSeries:
 
     def refine_frame_number(self):
         if self.is_multi_frame and self.multi_frame_loc is not None:
-            ds = pydicom.dcmread(self.multi_frame_loc, force=True)
-            for i, frame_group in enumerate(ds.PerFrameFunctionalGroupsSequence):
+            if self.ds is None:
+                self.ds = pydicom.dcmread(self.multi_frame_loc, force=True)
+            for i, frame_group in enumerate(self.ds.PerFrameFunctionalGroupsSequence):
                 if i == 0:
                     self.first_position = frame_group.PlanePositionSequence
                     self.volumes = 1
-                    self.frames = int(ds.NumberOfFrames)
+                    self.frames = int(self.ds.NumberOfFrames)
                 elif self.first_position == frame_group.PlanePositionSequence:
                     self.volumes += 1
+            # Free memory from potentially large dicom set we don't need any more
+            self.ds = None
+            del self.ds
         elif self.frames < 10:
             ds = pydicom.dcmread(self.dicom_locs[0], force=True)
             if not hasattr(ds, "ImageType") or "MOSAIC" not in ds.ImageType:
