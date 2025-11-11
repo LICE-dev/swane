@@ -394,10 +394,10 @@ GLOBAL_PREFERENCES[category]["shutdown"] = PreferenceEntry(
     default="false",
     default_at_startup="true",
 )
-GLOBAL_PREFERENCES[category]['auto_import'] = PreferenceEntry(
+GLOBAL_PREFERENCES[category]["auto_import"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label=strings.menu_auto_import,
-    default='true',
+    default="true",
 )
 category = GlobalPrefCategoryList.PERFORMANCE
 GLOBAL_PREFERENCES[category] = {}

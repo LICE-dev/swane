@@ -237,7 +237,7 @@ class Subject:
 
         if progress_callback is not None:
             dicom_src_work.signal.sig_loop.connect(
-                lambda i, maximum=dicom_src_work.get_files_len()+1: progress_callback(
+                lambda i, maximum=dicom_src_work.get_files_len() + 1: progress_callback(
                     i, maximum
                 )
             )
