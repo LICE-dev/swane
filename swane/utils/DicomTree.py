@@ -14,7 +14,7 @@ class DicomSeries:
         self.classification = "Not classified"
         self.ds = None
 
-    def add_dicom_loc(self, dicom_loc, is_multi_frame, slice_loc, ds = None):
+    def add_dicom_loc(self, dicom_loc, is_multi_frame, slice_loc, ds=None):
         if dicom_loc not in self.dicom_locs:
             self.dicom_locs.append(dicom_loc)
             if is_multi_frame:
@@ -48,6 +48,7 @@ class DicomSeries:
             if not hasattr(ds, "ImageType") or "MOSAIC" not in ds.ImageType:
                 self.frames = 0
 
+
 class DicomSubject:
     def __init__(self, subject_id: str, subject_name: str):
         self.subject_id = subject_id
@@ -65,13 +66,17 @@ class DicomSubject:
             self.studies[study_instance_uid][series_number] = DicomSeries()
         return self.studies[study_instance_uid][series_number]
 
-    def get_series_list(self, study_instance_uid: pydicom.uid.UID) -> list[pydicom.valuerep.IS]:
+    def get_series_list(
+        self, study_instance_uid: pydicom.uid.UID
+    ) -> list[pydicom.valuerep.IS]:
         if study_instance_uid not in self.studies:
             return []
         else:
             return list(self.studies[study_instance_uid].keys())
 
-    def get_series(self, study_instance_uid: pydicom.uid.UID, series_number) -> DicomSeries:
+    def get_series(
+        self, study_instance_uid: pydicom.uid.UID, series_number
+    ) -> DicomSeries:
         if study_instance_uid not in self.studies:
             return []
         elif series_number not in self.studies[study_instance_uid]:
@@ -97,7 +102,9 @@ class DicomTree:
     def add_series(self, subject_id, study_instance_uid, series_number) -> DicomSeries:
         if subject_id not in self.dicom_subjects:
             raise Exception("Subject " + subject_id + " not found")
-        return self.dicom_subjects[subject_id].add_series(study_instance_uid, series_number)
+        return self.dicom_subjects[subject_id].add_series(
+            study_instance_uid, series_number
+        )
 
     def get_subject_list(self):
         return list(self.dicom_subjects.keys())
@@ -119,7 +126,9 @@ class DicomTree:
             return []
         return list(self.dicom_subjects[subject].studies.keys())
 
-    def get_series_list(self, subject: str, study_instance_uid: pydicom.uid.UID) -> list[pydicom.valuerep.IS]:
+    def get_series_list(
+        self, subject: str, study_instance_uid: pydicom.uid.UID
+    ) -> list[pydicom.valuerep.IS]:
         """
         Extract from dicom search the series of a specified studies of specified subject and return their series_id
 
@@ -138,10 +147,11 @@ class DicomTree:
             return []
         return self.dicom_subjects[subject].get_series_list(study_instance_uid)
 
-    def get_series(self, subject: str, study_instance_uid: pydicom.uid.UID, series_number) -> DicomSeries:
+    def get_series(
+        self, subject: str, study_instance_uid: pydicom.uid.UID, series_number
+    ) -> DicomSeries:
         if subject not in self.dicom_subjects:
             return None
-        return self.dicom_subjects[subject].get_series(study_instance_uid, series_number)
-
-
-
+        return self.dicom_subjects[subject].get_series(
+            study_instance_uid, series_number
+        )

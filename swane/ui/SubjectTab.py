@@ -4,11 +4,27 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
 from PySide6.QtSvgWidgets import QSvgWidget
-from PySide6.QtWidgets import (QTabWidget, QWidget, QGridLayout, QLabel, QHeaderView,
-                               QPushButton, QSizePolicy, QHBoxLayout, QSpacerItem,
-                               QGroupBox, QVBoxLayout, QMessageBox, QListWidget,
-                               QFileDialog, QTreeWidget, QErrorMessage, QFileSystemModel,
-                               QTreeView, QComboBox)
+from PySide6.QtWidgets import (
+    QTabWidget,
+    QWidget,
+    QGridLayout,
+    QLabel,
+    QHeaderView,
+    QPushButton,
+    QSizePolicy,
+    QHBoxLayout,
+    QSpacerItem,
+    QGroupBox,
+    QVBoxLayout,
+    QMessageBox,
+    QListWidget,
+    QFileDialog,
+    QTreeWidget,
+    QErrorMessage,
+    QFileSystemModel,
+    QTreeView,
+    QComboBox,
+)
 
 from swane import strings
 from swane.config.config_enums import GlobalPrefCategoryList
@@ -33,12 +49,14 @@ class SubjectTab(QTabWidget):
     Custom implementation of PySide QTabWidget to define a subject tab widget.
 
     """
-    
+
     DATATAB = 0
     EXECTAB = 1
     RESULTTAB = 2
 
-    def __init__(self, global_config: ConfigManager, subject: Subject, main_window, parent=None):
+    def __init__(
+        self, global_config: ConfigManager, subject: Subject, main_window, parent=None
+    ):
         super(SubjectTab, self).__init__(parent)
         self.global_config = global_config
         self.subject = subject
@@ -59,7 +77,9 @@ class SubjectTab(QTabWidget):
         self.scan_directory_watcher.directoryChanged.connect(self.clear_scan_result)
 
         self.result_directory_watcher = QFileSystemWatcher()
-        self.result_directory_watcher.directoryChanged.connect(self.enable_tab_if_result_dir)
+        self.result_directory_watcher.directoryChanged.connect(
+            self.enable_tab_if_result_dir
+        )
         self.result_directory_watcher.addPath(self.subject.folder)
 
         self.workflow_process = None
@@ -102,7 +122,7 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         if wf_report.signal_type == WorkflowSignals.WORKFLOW_STOP:
             self.enable_tab_if_result_dir(on_workflow_running=True)
             self.setTabEnabled(SubjectTab.DATATAB, True)
@@ -117,10 +137,12 @@ class SubjectTab(QTabWidget):
                 self.exec_button.setText(strings.subj_tab_wf_executed)
                 self.exec_button.setToolTip("")
 
-            shutdown = self.global_config.getboolean_safe(GlobalPrefCategoryList.MAIN, "shutdown")
+            shutdown = self.global_config.getboolean_safe(
+                GlobalPrefCategoryList.MAIN, "shutdown"
+            )
             if shutdown:
                 self.main_window.safe_shutdown_after_workflow(self.subject)
-            
+
             return
         elif wf_report.signal_type == WorkflowSignals.INVALID_SIGNAL:
             # Invalid signal sent from WF to UI, code error intercept
@@ -149,35 +171,49 @@ class SubjectTab(QTabWidget):
             mail_manager = self.global_config.get_mail_manager()
             if mail_manager is not None:
                 try:
-                    mail_manager.send_report(f"{self.subject.name} - {wf_report.workflow_name} - {wf_report.node_name} FAILED at {datetime.now()}")
+                    mail_manager.send_report(
+                        f"{self.subject.name} - {wf_report.workflow_name} - {wf_report.node_name} FAILED at {datetime.now()}"
+                    )
                 except:
                     pass
 
-        self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder.set_art(icon)
+        self.node_list[wf_report.workflow_name].node_list[
+            wf_report.node_name
+        ].node_holder.set_art(icon)
 
         if wf_report.info is not None:
-            self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder.setToolTip(0, wf_report.info)
+            self.node_list[wf_report.workflow_name].node_list[
+                wf_report.node_name
+            ].node_holder.setToolTip(0, wf_report.info)
 
         self.node_list[wf_report.workflow_name].node_holder.setExpanded(True)
 
         if icon == self.main_window.OK_ICON_FILE:
             completed = True
             for key in self.node_list[wf_report.workflow_name].node_list.keys():
-                if self.node_list[wf_report.workflow_name].node_list[key].node_holder.art != self.main_window.OK_ICON_FILE:
+                if (
+                    self.node_list[wf_report.workflow_name]
+                    .node_list[key]
+                    .node_holder.art
+                    != self.main_window.OK_ICON_FILE
+                ):
                     completed = False
                     break
             if completed:
-                self.node_list[wf_report.workflow_name].node_holder.set_art(self.main_window.OK_ICON_FILE)
+                self.node_list[wf_report.workflow_name].node_holder.set_art(
+                    self.main_window.OK_ICON_FILE
+                )
                 self.node_list[wf_report.workflow_name].node_holder.setExpanded(False)
                 self.node_list[wf_report.workflow_name].node_holder.completed = True
                 # Mail manager initialization
                 mail_manager = self.global_config.get_mail_manager()
                 if mail_manager is not None:
                     try:
-                        mail_manager.send_report(f"{self.subject.name} - {wf_report.workflow_name} COMPLETED at {datetime.now()}")
+                        mail_manager.send_report(
+                            f"{self.subject.name} - {wf_report.workflow_name} COMPLETED at {datetime.now()}"
+                        )
                     except:
                         pass
-
 
     def remove_running_icon(self):
         """
@@ -188,11 +224,16 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         for key1 in self.node_list.keys():
             for key2 in self.node_list[key1].node_list.keys():
-                if self.node_list[key1].node_list[key2].node_holder.art == self.main_window.LOADING_MOVIE_FILE:
-                    self.node_list[key1].node_list[key2].node_holder.set_art(self.main_window.VOID_SVG_FILE)
+                if (
+                    self.node_list[key1].node_list[key2].node_holder.art
+                    == self.main_window.LOADING_MOVIE_FILE
+                ):
+                    self.node_list[key1].node_list[key2].node_holder.set_art(
+                        self.main_window.VOID_SVG_FILE
+                    )
 
     def data_tab_ui(self):
         """
@@ -203,7 +244,7 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         # Horizontal Layout
         layout = QHBoxLayout()
 
@@ -217,27 +258,37 @@ class SubjectTab(QTabWidget):
         x = 0
 
         for data_input in self.subject.input_state_list:
-            self.input_report[data_input] = [QSvgWidget(self),
-                                             QLabel(data_input.value.label),
-                                             QLabel(""),
-                                             QPushButton(strings.subj_tab_import_button),
-                                             QPushButton(strings.subj_tab_clear_button),
-                                             None]
+            self.input_report[data_input] = [
+                QSvgWidget(self),
+                QLabel(data_input.value.label),
+                QLabel(""),
+                QPushButton(strings.subj_tab_import_button),
+                QPushButton(strings.subj_tab_clear_button),
+                None,
+            ]
             self.set_error(data_input, "")
             if data_input.value.tooltip != "":
                 # Add tooltips and append ⓘ character to label
-                self.input_report[data_input][1].setText(data_input.value.label+" "+strings.INFOCHAR)
+                self.input_report[data_input][1].setText(
+                    data_input.value.label + " " + strings.INFOCHAR
+                )
                 self.input_report[data_input][1].setToolTip(data_input.value.tooltip)
             self.input_report[data_input][1].setFont(bold_font)
             self.input_report[data_input][1].setAlignment(Qt.AlignLeft | Qt.AlignBottom)
             self.input_report[data_input][2].setAlignment(Qt.AlignLeft | Qt.AlignTop)
             self.input_report[data_input][2].setStyleSheet("margin-bottom: 20px")
             self.input_report[data_input][3].clicked.connect(
-                lambda checked=None, z=data_input: self.dicom_import_to_folder(z))
-            self.input_report[data_input][3].setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                lambda checked=None, z=data_input: self.dicom_import_to_folder(z)
+            )
+            self.input_report[data_input][3].setSizePolicy(
+                QSizePolicy.Fixed, QSizePolicy.Fixed
+            )
             self.input_report[data_input][4].clicked.connect(
-                lambda checked=None, z=data_input: self.clear_import_folder(z))
-            self.input_report[data_input][4].setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                lambda checked=None, z=data_input: self.clear_import_folder(z)
+            )
+            self.input_report[data_input][4].setSizePolicy(
+                QSizePolicy.Fixed, QSizePolicy.Fixed
+            )
 
             folder_layout.addWidget(self.input_report[data_input][0], (x * 2), 0, 2, 1)
             folder_layout.addWidget(self.input_report[data_input][1], (x * 2), 1)
@@ -245,7 +296,9 @@ class SubjectTab(QTabWidget):
             folder_layout.addWidget(self.input_report[data_input][3], (x * 2), 2)
             folder_layout.addWidget(self.input_report[data_input][4], (x * 2), 3)
 
-            folder_layout.addWidget(self.input_report[data_input][2], (x * 2) + 1, 1, 1, 3)
+            folder_layout.addWidget(
+                self.input_report[data_input][2], (x * 2) + 1, 1, 1, 3
+            )
             x += 1
 
         # Second Column: Series to be imported
@@ -264,7 +317,12 @@ class SubjectTab(QTabWidget):
         layout.addWidget(import_group_box, stretch=1)
         self.data_tab.setLayout(layout)
 
-    def dicom_import_to_folder(self, data_input: DataInputList, force_mod: bool = False, force_copy_list : list = None):
+    def dicom_import_to_folder(
+        self,
+        data_input: DataInputList,
+        force_mod: bool = False,
+        force_copy_list: list = None,
+    ):
         """
         Copies the files inside the selected folder in the input list into the folder specified by data_input var.
 
@@ -282,7 +340,7 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         if self.importable_series_list.currentRow() == -1 and force_copy_list is None:
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_selected_series_error)
@@ -291,27 +349,35 @@ class SubjectTab(QTabWidget):
 
         origin = force_copy_list
         if origin is None:
-            origin = self.dicom_scan_series_list[self.importable_series_list.currentRow()]
+            origin = self.dicom_scan_series_list[
+                self.importable_series_list.currentRow()
+            ]
 
         copy_list = origin[1]
         vols = origin[3]
         found_mod = origin[2].upper()
 
-        progress = PersistentProgressDialog(strings.subj_tab_dicom_copy, 0, len(copy_list) + 1, self)
+        progress = PersistentProgressDialog(
+            strings.subj_tab_dicom_copy, 0, len(copy_list) + 1, self
+        )
         self.set_loading(data_input)
 
         # Copy files and check for return
-        import_ret = self.subject.dicom_import_to_folder(data_input=data_input,
-                                                         copy_list=copy_list,
-                                                         vols=vols,
-                                                         mod=found_mod,
-                                                         force_modality=force_mod,
-                                                         progress_callback=progress.increase_value
-                                                         )
+        import_ret = self.subject.dicom_import_to_folder(
+            data_input=data_input,
+            copy_list=copy_list,
+            vols=vols,
+            mod=found_mod,
+            force_modality=force_mod,
+            progress_callback=progress.increase_value,
+        )
         if import_ret != SubjectRet.DataImportCompleted:
             if import_ret == SubjectRet.DataImportErrorVolumesMax:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.subj_tab_wrong_max_vols_check_msg % (vols, data_input.value.max_volumes))
+                msg_box.setText(
+                    strings.subj_tab_wrong_max_vols_check_msg
+                    % (vols, data_input.value.max_volumes)
+                )
                 msg_box.exec()
             elif import_ret == SubjectRet.DataInputNonEmpty:
                 msg_box = QMessageBox()
@@ -319,7 +385,10 @@ class SubjectTab(QTabWidget):
                 msg_box.exec()
             elif import_ret == SubjectRet.DataImportErrorVolumesMin:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.subj_tab_wrong_min_vols_check_msg % (vols, data_input.value.min_volumes))
+                msg_box.setText(
+                    strings.subj_tab_wrong_min_vols_check_msg
+                    % (vols, data_input.value.min_volumes)
+                )
                 msg_box.exec()
             elif import_ret == SubjectRet.DataImportErrorCopy:
                 msg_box = QMessageBox()
@@ -327,10 +396,15 @@ class SubjectTab(QTabWidget):
                 msg_box.exec()
             elif import_ret == SubjectRet.DataImportErrorModality:
                 msg_box = QMessageBox()
-                msg_box.setText(strings.subj_tab_wrong_type_check_msg % (found_mod, data_input.value.image_modality.value))
+                msg_box.setText(
+                    strings.subj_tab_wrong_type_check_msg
+                    % (found_mod, data_input.value.image_modality.value)
+                )
                 msg_box.setInformativeText(strings.subj_tab_wrong_type_check)
                 msg_box.setIcon(QMessageBox.Icon.Warning)
-                msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                msg_box.setStandardButtons(
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
                 msg_box.setDefaultButton(QMessageBox.StandardButton.No)
                 ret = msg_box.exec()
                 if ret == QMessageBox.StandardButton.Yes:
@@ -342,7 +416,11 @@ class SubjectTab(QTabWidget):
         progress.setRange(0, 0)
         progress.setLabelText(strings.subj_tab_dicom_check)
 
-        self.subject.check_input_folder(data_input, status_callback=self.input_check_update, progress_callback=progress.increase_value)
+        self.subject.check_input_folder(
+            data_input,
+            status_callback=self.input_check_update,
+            progress_callback=progress.increase_value,
+        )
         self.reset_workflow()
 
     def scan_dicom_folder(self):
@@ -355,21 +433,30 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
-        folder_path = QFileDialog.getExistingDirectory(self, strings.subj_tab_select_dicom_folder)
-        
+
+        folder_path = QFileDialog.getExistingDirectory(
+            self, strings.subj_tab_select_dicom_folder
+        )
+
         if not os.path.exists(folder_path):
             return
 
-        dicom_src_work = DicomSearchWorker(folder_path, classify=self.global_config.getboolean_safe(GlobalPrefCategoryList.MAIN, "auto_import"))
+        dicom_src_work = DicomSearchWorker(
+            folder_path,
+            classify=self.global_config.getboolean_safe(
+                GlobalPrefCategoryList.MAIN, "auto_import"
+            ),
+        )
         dicom_src_work.load_dir()
 
         if dicom_src_work.get_files_len() > 0:
             self.clear_scan_result()
             self.dicom_scan_series_list = []
-            progress = PersistentProgressDialog(strings.subj_tab_dicom_scan, 0, 0, parent=self.parent())
+            progress = PersistentProgressDialog(
+                strings.subj_tab_dicom_scan, 0, 0, parent=self.parent()
+            )
             progress.show()
-            progress.setMaximum(dicom_src_work.get_files_len()+1)
+            progress.setMaximum(dicom_src_work.get_files_len() + 1)
             dicom_src_work.signal.sig_loop.connect(lambda i: progress.increase_value(i))
             dicom_src_work.signal.sig_finish.connect(self.show_scan_result)
             QThreadPool.globalInstance().start(dicom_src_work)
@@ -388,7 +475,7 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         layout = QGridLayout()
 
         # First Column: NODE LIST
@@ -400,8 +487,12 @@ class SubjectTab(QTabWidget):
         layout.addWidget(self.workflow_type_combo, 0, 0)
 
         self.generate_workflow_button = QPushButton(strings.GENBUTTONTEXT)
-        self.generate_workflow_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
-        self.generate_workflow_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.generate_workflow_button.setFixedHeight(
+            self.main_window.NON_UNICODE_BUTTON_HEIGHT
+        )
+        self.generate_workflow_button.setSizePolicy(
+            QSizePolicy.Minimum, QSizePolicy.Fixed
+        )
         self.generate_workflow_button.clicked.connect(self.generate_workflow)
 
         layout.addWidget(self.generate_workflow_button, 1, 0)
@@ -411,7 +502,9 @@ class SubjectTab(QTabWidget):
         node_list_width = 320
         self.node_list_treeWidget.setFixedWidth(node_list_width)
         self.node_list_treeWidget.header().setMinimumSectionSize(node_list_width)
-        self.node_list_treeWidget.header().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.node_list_treeWidget.header().setSectionResizeMode(
+            QHeaderView.ResizeToContents
+        )
         self.node_list_treeWidget.header().setStretchLastSection(False)
         self.node_list_treeWidget.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.node_list_treeWidget.horizontalScrollBar().setEnabled(True)
@@ -421,7 +514,9 @@ class SubjectTab(QTabWidget):
 
         # Second Column: Graphviz Graph Layout
         self.subject_config_button = QPushButton(strings.SUBJCONFIGBUTTONTEXT)
-        self.subject_config_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.subject_config_button.setFixedHeight(
+            self.main_window.NON_UNICODE_BUTTON_HEIGHT
+        )
         self.subject_config_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         self.subject_config_button.clicked.connect(self.edit_subject_config)
         layout.addWidget(self.subject_config_button, 0, 1)
@@ -429,7 +524,9 @@ class SubjectTab(QTabWidget):
         self.exec_button = QPushButton(strings.EXECBUTTONTEXT)
         self.exec_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
         self.exec_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        self.exec_button.clicked.connect(partial(self.toggle_workflow_execution, None, None))
+        self.exec_button.clicked.connect(
+            partial(self.toggle_workflow_execution, None, None)
+        )
         self.exec_button_set_enabled(False)
 
         layout.addWidget(self.exec_button, 1, 1)
@@ -448,7 +545,9 @@ class SubjectTab(QTabWidget):
 
         """
 
-        preference_window = PreferencesWindow(self.subject.config, self.subject.dependency_manager, True, self)
+        preference_window = PreferencesWindow(
+            self.subject.config, self.subject.dependency_manager, True, self
+        )
         ret = preference_window.exec()
         if ret != 0:
             self.reset_workflow()
@@ -487,9 +586,9 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         generate_workflow_return = self.subject.generate_workflow()
-        
+
         if generate_workflow_return == SubjectRet.GenWfMissingRequisites:
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.subj_tab_missing_fsl_error)
@@ -498,17 +597,27 @@ class SubjectTab(QTabWidget):
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.subj_tab_wf_gen_error)
             return
-        
+
         self.node_list_treeWidget.clear()
         self.node_list = self.subject.workflow.get_node_array()
-        
+
         # Graphviz analysis graphs drawing
         for node in self.node_list.keys():
-            self.node_list[node].node_holder = CustomTreeWidgetItem(self.node_list_treeWidget, self.node_list_treeWidget, self.node_list[node].long_name)
-            if len(self.node_list[node].node_list.keys()) > 0:                    
+            self.node_list[node].node_holder = CustomTreeWidgetItem(
+                self.node_list_treeWidget,
+                self.node_list_treeWidget,
+                self.node_list[node].long_name,
+            )
+            if len(self.node_list[node].node_list.keys()) > 0:
                 for sub_node in self.node_list[node].node_list.keys():
-                    self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(self.node_list[node].node_holder, self.node_list_treeWidget, self.node_list[node].node_list[sub_node].long_name)
-        
+                    self.node_list[node].node_list[sub_node].node_holder = (
+                        CustomTreeWidgetItem(
+                            self.node_list[node].node_holder,
+                            self.node_list_treeWidget,
+                            self.node_list[node].node_list[sub_node].long_name,
+                        )
+                    )
+
         # UI updating
         self.exec_button_set_enabled(True)
         self.generate_workflow_button.setEnabled(False)
@@ -530,12 +639,14 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         if item.parent() is None:
             graph_file = self.subject.graph_file(item.get_text())
             if os.path.exists(graph_file):
                 self.exec_graph.load(graph_file)
-                self.exec_graph.renderer().setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+                self.exec_graph.renderer().setAspectRatioMode(
+                    Qt.AspectRatioMode.KeepAspectRatio
+                )
 
     @staticmethod
     def no_close_event(event):
@@ -552,10 +663,12 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         event.ignore()
 
-    def toggle_workflow_execution(self, resume: bool = None, resume_freesurfer: bool = None):
+    def toggle_workflow_execution(
+        self, resume: bool = None, resume_freesurfer: bool = None
+    ):
         """
         If the workflow is not started, executes it.
         If the workflow is executing, kills it.
@@ -565,36 +678,56 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         # Workflow not started
         if not self.subject.is_workflow_process_alive():
-            workflow_start_ret = self.subject.start_workflow(resume=resume, resume_freesurfer=resume_freesurfer, update_node_callback=self.update_node_list)
+            workflow_start_ret = self.subject.start_workflow(
+                resume=resume,
+                resume_freesurfer=resume_freesurfer,
+                update_node_callback=self.update_node_list,
+            )
             if workflow_start_ret == SubjectRet.ExecWfResume:
                 msg_box = QMessageBox()
                 msg_box.setText(strings.subj_tab_old_wf_found)
                 msg_box.setIcon(QMessageBox.Icon.Question)
-                msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                msg_box.button(QMessageBox.StandardButton.Yes).setText(strings.subj_tab_old_wf_resume)
-                msg_box.button(QMessageBox.StandardButton.No).setText(strings.subj_tab_old_wf_reset)
+                msg_box.setStandardButtons(
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                msg_box.button(QMessageBox.StandardButton.Yes).setText(
+                    strings.subj_tab_old_wf_resume
+                )
+                msg_box.button(QMessageBox.StandardButton.No).setText(
+                    strings.subj_tab_old_wf_reset
+                )
                 msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
                 msg_box.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
                 msg_box.closeEvent = self.no_close_event
                 ret = msg_box.exec()
                 resume = ret == QMessageBox.StandardButton.Yes
-                self.toggle_workflow_execution(resume=resume, resume_freesurfer=resume_freesurfer)
+                self.toggle_workflow_execution(
+                    resume=resume, resume_freesurfer=resume_freesurfer
+                )
             elif workflow_start_ret == SubjectRet.ExecWfResumeFreesurfer:
                 msg_box = QMessageBox()
                 msg_box.setText(strings.subj_tab_old_fs_found)
                 msg_box.setIcon(QMessageBox.Icon.Question)
-                msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                msg_box.button(QMessageBox.StandardButton.Yes).setText(strings.subj_tab_old_fs_resume)
-                msg_box.button(QMessageBox.StandardButton.No).setText(strings.subj_tab_old_fs_reset)
+                msg_box.setStandardButtons(
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                msg_box.button(QMessageBox.StandardButton.Yes).setText(
+                    strings.subj_tab_old_fs_resume
+                )
+                msg_box.button(QMessageBox.StandardButton.No).setText(
+                    strings.subj_tab_old_fs_reset
+                )
                 msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
                 msg_box.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
                 msg_box.closeEvent = self.no_close_event
                 ret = msg_box.exec()
                 resume_freesurfer = ret == QMessageBox.StandardButton.Yes
-                self.toggle_workflow_execution(resume=resume, resume_freesurfer=resume_freesurfer)
+                self.toggle_workflow_execution(
+                    resume=resume, resume_freesurfer=resume_freesurfer
+                )
             elif workflow_start_ret == SubjectRet.ExecWfStatusError:
                 # Already running, should not be possible
                 pass
@@ -612,11 +745,13 @@ class SubjectTab(QTabWidget):
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_wf_stop)
             msg_box.setIcon(QMessageBox.Icon.Question)
-            msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            msg_box.setStandardButtons(
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
             msg_box.setDefaultButton(QMessageBox.StandardButton.No)
             msg_box.closeEvent = self.no_close_event
             ret = msg_box.exec()
-            
+
             if ret == QMessageBox.StandardButton.No:
                 return
 
@@ -639,10 +774,14 @@ class SubjectTab(QTabWidget):
         try:
             if not DependencyManager.is_slicer(self.global_config):
                 self.generate_scene_button.setEnabled(False)
-                self.generate_scene_button.setToolTip(strings.subj_tab_generate_scene_button_disabled_tooltip)
+                self.generate_scene_button.setToolTip(
+                    strings.subj_tab_generate_scene_button_disabled_tooltip
+                )
             else:
                 self.generate_scene_button.setEnabled(True)
-                self.generate_scene_button.setToolTip(strings.subj_tab_generate_scene_button_tooltip)
+                self.generate_scene_button.setToolTip(
+                    strings.subj_tab_generate_scene_button_tooltip
+                )
         except:
             pass
 
@@ -653,16 +792,24 @@ class SubjectTab(QTabWidget):
         try:
             if not DependencyManager.is_slicer(self.global_config):
                 self.load_scene_button.setEnabled(False)
-                self.load_scene_button.setText(strings.subj_tab_load_scene_button + " " + strings.INFOCHAR)
-                self.load_scene_button.setToolTip(strings.subj_tab_generate_scene_button_disabled_tooltip)
+                self.load_scene_button.setText(
+                    strings.subj_tab_load_scene_button + " " + strings.INFOCHAR
+                )
+                self.load_scene_button.setToolTip(
+                    strings.subj_tab_generate_scene_button_disabled_tooltip
+                )
             elif os.path.exists(self.subject.scene_path()):
                 self.load_scene_button.setEnabled(True)
                 self.load_scene_button.setToolTip("")
                 self.load_scene_button.setText(strings.subj_tab_load_scene_button)
             else:
                 self.load_scene_button.setEnabled(False)
-                self.load_scene_button.setToolTip(strings.subj_tab_load_scene_button_tooltip)
-                self.load_scene_button.setText(strings.subj_tab_load_scene_button + " " + strings.INFOCHAR)
+                self.load_scene_button.setToolTip(
+                    strings.subj_tab_load_scene_button_tooltip
+                )
+                self.load_scene_button.setText(
+                    strings.subj_tab_load_scene_button + " " + strings.INFOCHAR
+                )
         except:
             pass
 
@@ -675,33 +822,47 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         result_tab_layout = QGridLayout()
         self.result_tab.setLayout(result_tab_layout)
 
         self.generate_scene_button = QPushButton(strings.subj_tab_generate_scene_button)
         self.generate_scene_button.clicked.connect(self.generate_scene)
-        self.generate_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.generate_scene_button.setFixedHeight(
+            self.main_window.NON_UNICODE_BUTTON_HEIGHT
+        )
         self.generate_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.export_results_button_update_state()
         result_tab_layout.addWidget(self.generate_scene_button, 0, 0)
 
-        horizontal_spacer = QSpacerItem(20, 40, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        horizontal_spacer = QSpacerItem(
+            20, 40, QSizePolicy.Expanding, QSizePolicy.Minimum
+        )
         result_tab_layout.addItem(horizontal_spacer, 0, 1, 1, 1)
 
         self.load_scene_button = QPushButton(strings.subj_tab_load_scene_button)
         self.load_scene_button.clicked.connect(self.load_scene)
-        self.load_scene_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.load_scene_button.setFixedHeight(
+            self.main_window.NON_UNICODE_BUTTON_HEIGHT
+        )
         self.load_scene_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.load_scene_button_update_state()
         result_tab_layout.addWidget(self.load_scene_button, 0, 2)
 
-        self.open_results_directory_button = QPushButton(strings.subj_tab_open_results_directory)
-        self.open_results_directory_button.clicked.connect(
-            lambda pushed=False, results_dir=self.subject.result_dir(): open_results_directory(pushed, results_dir)
+        self.open_results_directory_button = QPushButton(
+            strings.subj_tab_open_results_directory
         )
-        self.open_results_directory_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.open_results_directory_button.setFixedHeight(self.main_window.NON_UNICODE_BUTTON_HEIGHT)
+        self.open_results_directory_button.clicked.connect(
+            lambda pushed=False, results_dir=self.subject.result_dir(): open_results_directory(
+                pushed, results_dir
+            )
+        )
+        self.open_results_directory_button.setSizePolicy(
+            QSizePolicy.Fixed, QSizePolicy.Fixed
+        )
+        self.open_results_directory_button.setFixedHeight(
+            self.main_window.NON_UNICODE_BUTTON_HEIGHT
+        )
         result_tab_layout.addWidget(self.open_results_directory_button, 0, 3)
 
         self.results_model = QFileSystemModel()
@@ -720,10 +881,14 @@ class SubjectTab(QTabWidget):
         The progress dialog shown.
 
         """
-        
-        progress = PersistentProgressDialog(strings.subj_tab_exporting_start, 0, 0, parent=self)
+
+        progress = PersistentProgressDialog(
+            strings.subj_tab_exporting_start, 0, 0, parent=self
+        )
         progress.show()
-        self.subject.generate_scene(lambda msg: SubjectTab.slicer_thread_signal(msg, progress))
+        self.subject.generate_scene(
+            lambda msg: SubjectTab.slicer_thread_signal(msg, progress)
+        )
         return progress
 
     @staticmethod
@@ -743,13 +908,18 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         if msg == SlicerExportWorker.END_MSG:
             progress.done(1)
         else:
             progress.setLabelText(strings.subj_tab_exporting_prefix + msg)
 
-    def input_check_update(self, data_input: DataInputList, state: SubjectRet, dicom_src_worker: DicomSearchWorker = None):
+    def input_check_update(
+        self,
+        data_input: DataInputList,
+        state: SubjectRet,
+        dicom_src_worker: DicomSearchWorker = None,
+    ):
         """
         Function used as callback after subject dicom folder check
 
@@ -765,28 +935,47 @@ class SubjectTab(QTabWidget):
         if data_input not in self.input_report:
             return
         if state == SubjectRet.DataInputWarningNoDicom:
-            self.set_error(data_input, strings.subj_tab_no_dicom_error + dicom_src_worker.dicom_dir)
+            self.set_error(
+                data_input, strings.subj_tab_no_dicom_error + dicom_src_worker.dicom_dir
+            )
         elif state == SubjectRet.DataInputWarningMultiSubj:
-            self.set_warn(data_input, strings.subj_tab_multi_subj_error + dicom_src_worker.dicom_dir)
+            self.set_warn(
+                data_input,
+                strings.subj_tab_multi_subj_error + dicom_src_worker.dicom_dir,
+            )
         elif state == SubjectRet.DataInputWarningMultiStudy:
-            self.set_warn(data_input, strings.subj_tab_multi_exam_error + dicom_src_worker.dicom_dir)
+            self.set_warn(
+                data_input,
+                strings.subj_tab_multi_exam_error + dicom_src_worker.dicom_dir,
+            )
         elif state == SubjectRet.DataInputWarningMultiSeries:
-            self.set_warn(data_input, strings.subj_tab_multi_series_error + dicom_src_worker.dicom_dir)
+            self.set_warn(
+                data_input,
+                strings.subj_tab_multi_series_error + dicom_src_worker.dicom_dir,
+            )
         elif state == SubjectRet.DataInputLoading:
             self.set_loading(data_input)
         elif state == SubjectRet.DataInputValid:
 
             subject_list = dicom_src_worker.tree.get_subject_list()
             exam_list = dicom_src_worker.tree.get_studies_list(subject_list[0])
-            series_list = dicom_src_worker.tree.get_series_list(subject_list[0], exam_list[0])
-            series = dicom_src_worker.tree.get_series(subject_list[0], exam_list[0], series_list[0])
-            subject_name = dicom_src_worker.tree.dicom_subjects[subject_list[0]].subject_name
+            series_list = dicom_src_worker.tree.get_series_list(
+                subject_list[0], exam_list[0]
+            )
+            series = dicom_src_worker.tree.get_series(
+                subject_list[0], exam_list[0], series_list[0]
+            )
+            subject_name = dicom_src_worker.tree.dicom_subjects[
+                subject_list[0]
+            ].subject_name
             series_description = series.description
             vols = series.volumes
             mod = series.modality
             frames = series.frames
 
-            label = SubjectTab.label_from_dicom(frames, subject_name, mod, series_description, vols)
+            label = SubjectTab.label_from_dicom(
+                frames, subject_name, mod, series_description, vols
+            )
 
             self.set_ok(data_input, label)
             self.enable_exec_tab()
@@ -802,7 +991,9 @@ class SubjectTab(QTabWidget):
 
         """
 
-        index = self.workflow_type_combo.findData(self.subject.config.get_subject_workflow_type().name)
+        index = self.workflow_type_combo.findData(
+            self.subject.config.get_subject_workflow_type().name
+        )
         self.workflow_type_combo.setCurrentIndex(index)
         # Set after subject loading to prevent the onchanged fire on previous line command
         self.workflow_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)
@@ -811,11 +1002,16 @@ class SubjectTab(QTabWidget):
         dicom_scanners, total_files = self.subject.prepare_scan_dicom_folders()
 
         if total_files > 0:
-            progress = PersistentProgressDialog(strings.subj_tab_subj_loading, 0, 0, parent=self.parent())
+            progress = PersistentProgressDialog(
+                strings.subj_tab_subj_loading, 0, 0, parent=self.parent()
+            )
             progress.show()
             progress.setMaximum(total_files)
-            self.subject.execute_scan_dicom_folders(dicom_scanners, status_callback=self.input_check_update,
-                                                    progress_callback=progress.increase_value)
+            self.subject.execute_scan_dicom_folders(
+                dicom_scanners,
+                status_callback=self.input_check_update,
+                progress_callback=progress.increase_value,
+            )
 
         # Update UI after loading dicom
         self.setTabEnabled(SubjectTab.DATATAB, True)
@@ -826,7 +1022,9 @@ class SubjectTab(QTabWidget):
 
         self.enable_tab_if_result_dir()
 
-    def enable_tab_if_result_dir(self, changed_path: str = "", on_workflow_running: bool = False):
+    def enable_tab_if_result_dir(
+        self, changed_path: str = "", on_workflow_running: bool = False
+    ):
         """
         Enables Results tab, if any.
 
@@ -846,7 +1044,7 @@ class SubjectTab(QTabWidget):
 
         if self.subject.is_workflow_process_alive() and not on_workflow_running:
             return
-        
+
         if os.path.exists(scene_dir):
             self.setTabEnabled(SubjectTab.RESULTTAB, True)
             self.results_model.setRootPath(scene_dir)
@@ -875,7 +1073,9 @@ class SubjectTab(QTabWidget):
 
         src_path = self.subject.dicom_folder(data_input)
 
-        progress = PersistentProgressDialog(strings.subj_tab_dicom_clearing + src_path, 0, 0, self)
+        progress = PersistentProgressDialog(
+            strings.subj_tab_dicom_clearing + src_path, 0, 0, self
+        )
         progress.show()
 
         self.subject.clear_import_folder(data_input)
@@ -888,23 +1088,37 @@ class SubjectTab(QTabWidget):
         self.reset_workflow()
         self.check_venous_volumes()
 
-        if data_input == DataInputList.VENOUS and self.subject.input_state_list[DataInputList.VENOUS2].loaded:
+        if (
+            data_input == DataInputList.VENOUS
+            and self.subject.input_state_list[DataInputList.VENOUS2].loaded
+        ):
             self.clear_import_folder(DataInputList.VENOUS2)
 
     def check_venous_volumes(self):
         """
         Display informative warnings in venous and venous2 data input rows to help user in data loading
         """
-        phases = self.subject.input_state_list[DataInputList.VENOUS].volumes + self.subject.input_state_list[DataInputList.VENOUS2].volumes
+        phases = (
+            self.subject.input_state_list[DataInputList.VENOUS].volumes
+            + self.subject.input_state_list[DataInputList.VENOUS2].volumes
+        )
         if phases == 0:
             self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
         elif phases == 1:
             if self.subject.input_state_list[DataInputList.VENOUS].loaded:
-                self.set_warn(DataInputList.VENOUS, "Series has only one phase, load the second phase below", False)
+                self.set_warn(
+                    DataInputList.VENOUS,
+                    "Series has only one phase, load the second phase below",
+                    False,
+                )
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
             if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
                 # this should not be possible!
-                self.set_warn(DataInputList.VENOUS2, "Series has only one phase, load the second phase above", False)
+                self.set_warn(
+                    DataInputList.VENOUS2,
+                    "Series has only one phase, load the second phase above",
+                    False,
+                )
         elif phases == 2:
             if self.subject.input_state_list[DataInputList.VENOUS].loaded:
                 self.set_ok(DataInputList.VENOUS, None)
@@ -914,10 +1128,18 @@ class SubjectTab(QTabWidget):
         else:
             # something gone wrong, more than 2 phases!
             if self.subject.input_state_list[DataInputList.VENOUS].loaded:
-                self.set_warn(DataInputList.VENOUS, "Too many venous phases loaded, delete some!", False)
+                self.set_warn(
+                    DataInputList.VENOUS,
+                    "Too many venous phases loaded, delete some!",
+                    False,
+                )
                 self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
             if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
-                self.set_warn(DataInputList.VENOUS2, "Too many venous phases loaded, delete some!", False)
+                self.set_warn(
+                    DataInputList.VENOUS2,
+                    "Too many venous phases loaded, delete some!",
+                    False,
+                )
 
     def exec_button_set_enabled(self, enabled: bool):
         """
@@ -964,7 +1186,9 @@ class SubjectTab(QTabWidget):
             self.workflow_had_error = False
 
     @staticmethod
-    def label_from_dicom(frames: int, subject_name: str, mod: str, series_description: str, vols: int) -> str:
+    def label_from_dicom(
+        frames: int, subject_name: str, mod: str, series_description: str, vols: int
+    ) -> str:
         """
         Compose dicom scan result into a readable label
 
@@ -988,8 +1212,18 @@ class SubjectTab(QTabWidget):
         """
         try:
             # TODO: show correct image number for multiframe dicom
-            label = subject_name + "-" + mod + "-" + series_description + ": " + str(
-                frames) + " images, " + str(vols) + " "
+            label = (
+                subject_name
+                + "-"
+                + mod
+                + "-"
+                + series_description
+                + ": "
+                + str(frames)
+                + " images, "
+                + str(vols)
+                + " "
+            )
             if vols > 1:
                 label += "volumes"
             else:
@@ -1012,7 +1246,7 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         folder_path = dicom_src_work.dicom_dir
         self.scan_directory_watcher.addPath(folder_path)
         subject_list = dicom_src_work.tree.get_subject_list()
@@ -1020,55 +1254,86 @@ class SubjectTab(QTabWidget):
         if len(subject_list) == 0:
             msg_box = QMessageBox()
             if len(dicom_src_work.error_message) > 0:
-                msg_box.setText(strings.subj_tab_unsupported_files.format(str(dicom_src_work.error_message)))
+                msg_box.setText(
+                    strings.subj_tab_unsupported_files.format(
+                        str(dicom_src_work.error_message)
+                    )
+                )
             else:
                 msg_box.setText(strings.subj_tab_no_dicom_error + folder_path)
             msg_box.exec()
             return
-        
+
         if len(subject_list) > 1:
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_multi_subj_error + folder_path)
             msg_box.exec()
             return
-        
+
         studies_list = dicom_src_work.tree.get_studies_list(subject_list[0])
-        
+
         for study in studies_list:
             series_list = dicom_src_work.tree.get_series_list(subject_list[0], study)
             for series in series_list:
-                dicom_series = dicom_src_work.tree.get_series(subject_list[0], study, series)
+                dicom_series = dicom_src_work.tree.get_series(
+                    subject_list[0], study, series
+                )
                 frames = dicom_series.frames
                 if frames == 0:
                     continue
-                subject_name = dicom_src_work.tree.dicom_subjects[subject_list[0]].subject_name
+                subject_name = dicom_src_work.tree.dicom_subjects[
+                    subject_list[0]
+                ].subject_name
                 mod = dicom_series.modality
                 series_description = dicom_series.description
                 vols = dicom_series.volumes
-                label = SubjectTab.label_from_dicom(frames, subject_name, mod, series_description, vols)
+                label = SubjectTab.label_from_dicom(
+                    frames, subject_name, mod, series_description, vols
+                )
 
                 self.dicom_scan_series_list.append(
-                    [label, dicom_series.dicom_locs, mod, vols, dicom_series.classification])
+                    [
+                        label,
+                        dicom_series.dicom_locs,
+                        mod,
+                        vols,
+                        dicom_series.classification,
+                    ]
+                )
 
         for series in self.dicom_scan_series_list:
             self.importable_series_list.addItem(series[0])
 
-        if self.global_config.getboolean_safe(GlobalPrefCategoryList.MAIN, "auto_import"):
+        if self.global_config.getboolean_safe(
+            GlobalPrefCategoryList.MAIN, "auto_import"
+        ):
             for data_input in self.subject.input_state_list:
                 if not self.subject.input_state_list[data_input].loaded:
                     for series in self.dicom_scan_series_list:
-                        if series[4]==data_input.value.name:
+                        if series[4] == data_input.value.name:
                             msg_box = QMessageBox()
-                            msg_box.setText(strings.subj_tab_found_series_type.format(series_description=series[0],data_label=data_input.value.label))
+                            msg_box.setText(
+                                strings.subj_tab_found_series_type.format(
+                                    series_description=series[0],
+                                    data_label=data_input.value.label,
+                                )
+                            )
                             msg_box.setIcon(QMessageBox.Icon.Question)
-                            msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                            msg_box.setStandardButtons(
+                                QMessageBox.StandardButton.Yes
+                                | QMessageBox.StandardButton.No
+                            )
                             msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
-                            msg_box.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+                            msg_box.setWindowFlags(
+                                Qt.CustomizeWindowHint | Qt.WindowTitleHint
+                            )
                             msg_box.closeEvent = self.no_close_event
                             ret = msg_box.exec()
                             import_ret = ret == QMessageBox.StandardButton.Yes
                             if import_ret:
-                                self.dicom_import_to_folder(data_input, force_copy_list=series)
+                                self.dicom_import_to_folder(
+                                    data_input, force_copy_list=series
+                                )
                                 break
 
     def clear_scan_result(self):
@@ -1078,7 +1343,9 @@ class SubjectTab(QTabWidget):
         self.importable_series_list.clear()
         self.dicom_scan_series_list = None
         if len(self.scan_directory_watcher.directories()) > 0:
-            self.scan_directory_watcher.removePaths(self.scan_directory_watcher.directories())
+            self.scan_directory_watcher.removePaths(
+                self.scan_directory_watcher.directories()
+            )
 
     def is_data_loading(self) -> bool:
         """
@@ -1091,7 +1358,15 @@ class SubjectTab(QTabWidget):
                 return True
         return False
 
-    def update_input_report(self, data_input: DataInputList, icon: str, tooltip: str, import_enable: bool, clear_enable: bool, text: str = None):
+    def update_input_report(
+        self,
+        data_input: DataInputList,
+        icon: str,
+        tooltip: str,
+        import_enable: bool,
+        clear_enable: bool,
+        text: str = None,
+    ):
         """
         Generic update function for series labels.
 
@@ -1119,7 +1394,9 @@ class SubjectTab(QTabWidget):
         if text is not None:
             self.input_report[data_input][2].setText(text)
 
-    def set_warn(self, data_input: DataInputList, tooltip: str, clear_text: bool = True):
+    def set_warn(
+        self, data_input: DataInputList, tooltip: str, clear_text: bool = True
+    ):
         """
         Set a warning message and icon near a series label.
 
@@ -1147,7 +1424,7 @@ class SubjectTab(QTabWidget):
             tooltip=tooltip,
             import_enable=False,
             clear_enable=True,
-            text=text
+            text=text,
         )
 
     def set_error(self, data_input: DataInputList, tooltip: str):
@@ -1168,7 +1445,7 @@ class SubjectTab(QTabWidget):
             tooltip=tooltip,
             import_enable=True,
             clear_enable=False,
-            text=""
+            text="",
         )
 
     def set_ok(self, data_input: DataInputList, text: str):
@@ -1218,16 +1495,18 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        
+
         enable = self.subject.can_generate_workflow()
         self.setTabEnabled(SubjectTab.EXECTAB, enable)
 
     def load_scene(self):
         """
-            Visualize the workflow results into 3D Slicer.
+        Visualize the workflow results into 3D Slicer.
         """
 
-        slicer_open_thread = SlicerViewerWorker(self.global_config.get_slicer_path(), self.subject.scene_path())
+        slicer_open_thread = SlicerViewerWorker(
+            self.global_config.get_slicer_path(), self.subject.scene_path()
+        )
         QThreadPool.globalInstance().start(slicer_open_thread)
 
     def setTabEnabled(self, index: int, enabled: bool):
@@ -1242,10 +1521,17 @@ class SubjectTab(QTabWidget):
             The new tab status
         """
         if index == SubjectTab.EXECTAB and not enabled:
-            if not self.subject.dependency_manager.is_fsl() or not self.subject.dependency_manager.is_dcm2niix():
-                self.setTabToolTip(index, strings.subj_tab_tabtooltip_exec_disabled_dependency)
+            if (
+                not self.subject.dependency_manager.is_fsl()
+                or not self.subject.dependency_manager.is_dcm2niix()
+            ):
+                self.setTabToolTip(
+                    index, strings.subj_tab_tabtooltip_exec_disabled_dependency
+                )
             else:
-                self.setTabToolTip(index, strings.subj_tab_tabtooltip_exec_disabled_series)
+                self.setTabToolTip(
+                    index, strings.subj_tab_tabtooltip_exec_disabled_series
+                )
         elif index == SubjectTab.RESULTTAB and not enabled:
             self.setTabToolTip(index, strings.subj_tab_tabtooltip_result_disabled)
         elif index == SubjectTab.DATATAB and not enabled:
@@ -1267,6 +1553,8 @@ class SubjectTab(QTabWidget):
         """
         super().setTabToolTip(index, tooltip)
         if tooltip == "" and self.tabText(index).endswith(strings.INFOCHAR):
-            self.setTabText(index, self.tabText(index).replace(" "+strings.INFOCHAR, ""))
+            self.setTabText(
+                index, self.tabText(index).replace(" " + strings.INFOCHAR, "")
+            )
         elif tooltip != "" and not self.tabText(index).endswith(strings.INFOCHAR):
             self.setTabText(index, self.tabText(index) + " " + strings.INFOCHAR)
