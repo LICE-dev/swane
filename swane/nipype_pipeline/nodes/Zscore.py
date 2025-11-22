@@ -1,22 +1,28 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
-from nipype.interfaces.fsl import (BinaryMaths, ImageStats, ApplyMask)
+from nipype.interfaces.fsl import BinaryMaths, ImageStats, ApplyMask
 from os.path import abspath
 import os
-from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File, isdefined)
+from nipype.interfaces.base import (
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    TraitedSpec,
+    File,
+    isdefined,
+)
 
 
 # NODO PER CALCOLARE Z SCORE DA ROI
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class ZscoreInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='the input image')
-    ROI_file = File(exists=True, mandatory=True, desc='the input image')
-    out_file = File(desc='the output image')
+    in_file = File(exists=True, mandatory=True, desc="the input image")
+    ROI_file = File(exists=True, mandatory=True, desc="the input image")
+    out_file = File(desc="the output image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class ZscoreOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='the output image')
+    out_file = File(exists=True, desc="the output image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
@@ -25,7 +31,7 @@ class Zscore(BaseInterface):
     Calculates the z-score index of an image compared with a ROI.
 
     """
-    
+
     input_spec = ZscoreInputSpec
     output_spec = ZscoreOutputSpec
 
@@ -71,5 +77,5 @@ class Zscore(BaseInterface):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['out_file'] = self._gen_outfilename()
+        outputs["out_file"] = self._gen_outfilename()
         return outputs

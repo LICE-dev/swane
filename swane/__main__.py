@@ -18,7 +18,7 @@ def main():
     current_exit_code = EXIT_CODE_REBOOT
 
     while current_exit_code == EXIT_CODE_REBOOT:
-        
+
         # Singleton for SWANe application
         if not QApplication.instance():
             app = QApplication(sys.argv)
@@ -29,7 +29,7 @@ def main():
         app.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
         # SWANe App Name definition
         app.setApplicationDisplayName(strings.APPNAME)
-        
+
         # SWANe Configuration loading
         global_config = ConfigManager()
 
@@ -42,7 +42,7 @@ def main():
             msg_box.exec()
             sys.exit(-1)
         else:
-            global_config[GlobalPrefCategoryList.MAIN]['last_pid'] = str(os.getpid())
+            global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = str(os.getpid())
             global_config.save()
 
         # MainWindow in a varariable to prenvent garbage collector deletion (might cause crash)

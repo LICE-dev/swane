@@ -126,6 +126,27 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 ## Changelog
 
+### [0.1.5] - 2025-11-22
+
+#### Added
+
+- **ImageType series error shown after DICOM folder scan**: the error is shown only if no valid series are found into the folder and list all the wrong ImageType found in the path.
+- **Shutdown SWANe at Analysis End**: if enabled, it turns off the OS when SWANe ends all the started analyses without error.
+- **Automatic series classification**: if enabled, activates a new module that automatically classifies subject series at their load in Data Load Subtab.
+- **SWANe Assistant GPTs link**: added a button into the client footer that links to SWANe Assistant GPTs.
+- **UBUNTU ONLY**: check xclip dependency existance.
+
+#### Changed
+
+- multiframe series reading improved
+- networkx version requisites
+- nipype version requisites
+- using typing package to ensure SWANe compatibility with older python versions
+
+#### Fixed
+
+- Minor bug in subject workflow status tracing.
+
 ### [0.1.4] - 2025-02-18
 
 #### Added

@@ -1,0 +1,45 @@
+name: Auto Format with Black
+
+on:
+  push:
+    branches:
+      - dev   # puoi lasciare 'dev' come trigger
+
+jobs:
+  auto-format:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install black
+        run: pip install black
+
+      - name: Run black
+        run: python3 -m black .
+
+      - name: Create Pull Request with formatted code
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          base: dev
+          branch: auto-format
+          branch-suffix: timestamp
+          delete-branch: true
+          title: "Auto-format code with black"
+          commit-message: "Apply black auto-formatting"
+          body: |
+            This PR applies automatic formatting using `black`.
+            Generated automatically by GitHub Actions.

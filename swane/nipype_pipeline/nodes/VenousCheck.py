@@ -6,24 +6,26 @@ from nipype.interfaces.fsl import ImageStats
 from os.path import abspath
 from swane.config.config_enums import VEIN_DETECTION_MODE
 from nipype.interfaces.base import traits
-from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File)
+from nipype.interfaces.base import (
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    TraitedSpec,
+    File,
+)
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class VenousCheckInputSpec(BaseInterfaceInputSpec):
     in_files = InputMultiObject(File(exists=True), desc="List of splitted file")
-    detection_mode = traits.Enum(
-        VEIN_DETECTION_MODE,
-        argstr="-m %d",
-        usedefault=True)
-    out_file_veins = File(desc='the output venous image')
-    out_file_anat = File(desc='the output anatomic image')
+    detection_mode = traits.Enum(VEIN_DETECTION_MODE, argstr="-m %d", usedefault=True)
+    out_file_veins = File(desc="the output venous image")
+    out_file_anat = File(desc="the output anatomic image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class VenousCheckOutputSpec(TraitedSpec):
-    out_file_veins = File(desc='the output venous image')
-    out_file_anat = File(desc='the output anatomic image')
+    out_file_veins = File(desc="the output venous image")
+    out_file_anat = File(desc="the output anatomic image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
@@ -32,7 +34,7 @@ class VenousCheck(BaseInterface):
     Recognises the venous phase from the anatomic image of a phase contrast sequence based criteria specified by user.
 
     """
-    
+
     input_spec = VenousCheckInputSpec
     output_spec = VenousCheckOutputSpec
 
@@ -76,6 +78,6 @@ class VenousCheck(BaseInterface):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['out_file_veins'] = abspath("veins.nii.gz")
-        outputs['out_file_anat'] = abspath("veins_anat.nii.gz")
+        outputs["out_file_veins"] = abspath("veins.nii.gz")
+        outputs["out_file_anat"] = abspath("veins_anat.nii.gz")
         return outputs

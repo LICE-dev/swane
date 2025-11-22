@@ -1,23 +1,29 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 import shutil
-from nipype.interfaces.fsl import (BinaryMaths, UnaryMaths, ImageStats, Threshold)
+from nipype.interfaces.fsl import BinaryMaths, UnaryMaths, ImageStats, Threshold
 from os.path import abspath
 import math
-from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, TraitedSpec, File, isdefined)
+from nipype.interfaces.base import (
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    TraitedSpec,
+    File,
+    isdefined,
+)
 
 
 # nodo per rimozione outliers nel FLAT1
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class FLAT1OutliersMaskInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='the input image')
-    mask_file = File(exists=True, mandatory=True, desc='the original mask image')
-    out_file = File(desc='the output mask name')
+    in_file = File(exists=True, mandatory=True, desc="the input image")
+    mask_file = File(exists=True, mandatory=True, desc="the original mask image")
+    out_file = File(desc="the output mask name")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class FLAT1OutliersMaskOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='the output image')
+    out_file = File(exists=True, desc="the output image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
@@ -26,7 +32,7 @@ class FLAT1OutliersMask(BaseInterface):
     Creates a mask that can be used to remove the outliers in FLAT1 workflow.
 
     """
-    
+
     input_spec = FLAT1OutliersMaskInputSpec
     output_spec = FLAT1OutliersMaskOutputSpec
 
@@ -71,5 +77,5 @@ class FLAT1OutliersMask(BaseInterface):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['out_file'] = self._gen_outfilename()
+        outputs["out_file"] = self._gen_outfilename()
         return outputs
