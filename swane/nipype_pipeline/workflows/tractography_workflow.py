@@ -13,7 +13,9 @@ from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_
 SIDES = ["lh", "rh"]
 
 
-def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
+def tractography_workflow(
+    name: str, config: SectionProxy, base_dir: str = "/"
+) -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
 
@@ -49,7 +51,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
     -------
     workflow : CustomWorkflow
         The xtract workflow.
-        
+
     Output Node Fields
     ----------
     fdt_paths_rh : path
@@ -75,27 +77,40 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
     if not os.path.exists(os.path.join(XTRACT_DATA_DIR, name + "_l")):
         return None
 
-    workflow = CustomWorkflow(name='tract_' + name, base_dir=base_dir)
-    
+    workflow = CustomWorkflow(name="tract_" + name, base_dir=base_dir)
+
     inputnode = Node(
-        IdentityInterface(fields=['fsamples', 'mask', 'phsamples', 'thsamples', 'ref_brain',
-                                  'diff2ref_mat', "ref2diff_mat", "mni2ref_warp",
-                                  ]),
-        name='inputnode')
+        IdentityInterface(
+            fields=[
+                "fsamples",
+                "mask",
+                "phsamples",
+                "thsamples",
+                "ref_brain",
+                "diff2ref_mat",
+                "ref2diff_mat",
+                "mni2ref_warp",
+            ]
+        ),
+        name="inputnode",
+    )
 
     outputnode = Node(
-        IdentityInterface(fields=['fdt_paths_rh', 'fdt_paths_lh', 'waytotal_rh', 'waytotal_lh']),
-        name='outputnode')
+        IdentityInterface(
+            fields=["fdt_paths_rh", "fdt_paths_lh", "waytotal_rh", "waytotal_lh"]
+        ),
+        name="outputnode",
+    )
 
-    is_cuda = config.getboolean_safe('cuda')
+    is_cuda = config.getboolean_safe("cuda")
     if is_cuda:
         # if cuda is enabled only 1 process is launched
         track_threads = 1
     else:
-        track_threads = config.getint_safe('track_procs')
+        track_threads = config.getint_safe("track_procs")
 
     # NODE 1: Random seed genration for cache preservation
-    random_seed = Node(RandomSeedGenerator(), name='random_seed')
+    random_seed = Node(RandomSeedGenerator(), name="random_seed")
     random_seed.inputs.seeds_n = track_threads
     workflow.connect(inputnode, "mask", random_seed, "mask")
 
@@ -128,7 +143,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
             return None
         if len(target_files) == 0:
             return None
-        
+
         # NODE 2: Seed ROI nonlinear transformation in T13D reference space
         seed_2_ref = Node(ApplyWarp(), name="seed_2_ref_%s_%s" % (name, side))
         seed_2_ref.long_name = side + " seed ROI %s"
@@ -136,7 +151,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
         seed_2_ref.inputs.in_file = seed_file
         workflow.connect(inputnode, "ref_brain", seed_2_ref, "ref_file")
         workflow.connect(inputnode, "mni2ref_warp", seed_2_ref, "field_file")
-        
+
         # NODE 3: Seed ROI bynarization
         seed_bin = Node(ImageMaths(), name="seed_bin_%s_%s" % (name, side))
         seed_bin.long_name = side + " seed ROI binarization"
@@ -144,7 +159,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
         seed_bin.inputs.out_data_type = "char"
         seed_bin.inputs.suffix = "_bin"
         workflow.connect(seed_2_ref, "out_file", seed_bin, "in_file")
-        
+
         # NODE 4: Target ROIs nonlinear transformation in T13D reference space
         targets_2_ref = Node(ApplyWarp(), name="targets_2_ref_%s_%s" % (name, side))
         targets_2_ref.long_name = side + " target ROIs %s"
@@ -154,7 +169,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
             targets_2_ref.inputs.in_file = target_files[0]
         workflow.connect(inputnode, "ref_brain", targets_2_ref, "ref_file")
         workflow.connect(inputnode, "mni2ref_warp", targets_2_ref, "field_file")
-        
+
         # NODE 5: Target ROIs bynarization
         targets_bin = Node(ImageMaths(), name="targets_bin_%s_%s" % (name, side))
         targets_bin.long_name = side + " target ROIs binarization"
@@ -162,9 +177,13 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
         targets_bin.inputs.out_data_type = "char"
         targets_bin.inputs.suffix = "_bin"
         workflow.connect(targets_2_ref, "out_file", targets_bin, "in_file")
-        
+
         # NODE 10: Tractography
-        probtrackx = MapNode(CustomProbTrackX2(), name="probtrackx_%s_%s" % (name, side), iterfield=["rseed"])
+        probtrackx = MapNode(
+            CustomProbTrackX2(),
+            name="probtrackx_%s_%s" % (name, side),
+            iterfield=["random_seed"],
+        )
         probtrackx.long_name = side + " %s"
         probtrackx.inputs.n_samples = n_samples
         probtrackx.inputs.loop_check = True
@@ -182,12 +201,16 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
         workflow.connect(inputnode, "ref2diff_mat", probtrackx, "xfm")
         workflow.connect(inputnode, "diff2ref_mat", probtrackx, "inv_xfm")
         workflow.connect(seed_bin, "out_file", probtrackx, "seed")
-        workflow.connect(random_seed, "seeds", probtrackx, "rseed")
-        
+        workflow.connect(random_seed, "seeds", probtrackx, "random_seed")
+
         # Check the number of target ROIs
         if len(target_files) > 1:
-            merge_targets = JoinNode(MergeTargets(), name="merge_targets_%s_%s" % (name, side),
-                                     joinsource=targets_2_ref, joinfield="target_files")
+            merge_targets = JoinNode(
+                MergeTargets(),
+                name="merge_targets_%s_%s" % (name, side),
+                joinsource=targets_2_ref,
+                joinfield="target_files",
+            )
             merge_targets.long_name = side + " targets ROI merging"
 
             workflow.connect(targets_bin, "out_file", merge_targets, "target_files")
@@ -195,11 +218,15 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
             workflow.connect(merge_targets, "out_file", probtrackx, "waypoints")
         else:
             workflow.connect(targets_bin, "out_file", probtrackx, "waypoints")
-        
+
         # Check if inverted run is required in protocol
         if is_invert:
             # NODE 11: Inverted tractography
-            probtrackx_inverted = MapNode(CustomProbTrackX2(), name="probtrackx_inverted_%s_%s" % (name, side), iterfield=["rseed"])
+            probtrackx_inverted = MapNode(
+                CustomProbTrackX2(),
+                name="probtrackx_inverted_%s_%s" % (name, side),
+                iterfield=["random_seed"],
+            )
             probtrackx_inverted.long_name = side + " inverse %s"
             probtrackx_inverted.inputs.n_samples = n_samples
             probtrackx_inverted.inputs.loop_check = True
@@ -217,8 +244,8 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
             workflow.connect(inputnode, "diff2ref_mat", probtrackx_inverted, "inv_xfm")
             workflow.connect(targets_bin, "out_file", probtrackx_inverted, "seed")
             workflow.connect(seed_bin, "out_file", probtrackx_inverted, "waypoints")
-            workflow.connect(random_seed, "seeds", probtrackx_inverted, "rseed")
-        
+            workflow.connect(random_seed, "seeds", probtrackx_inverted, "random_seed")
+
         # Check for exclusion ROI in protocol
         if os.path.exists(exclude_file):
             # NODE 6: Exclusion ROI nonlinear transformation in T13D reference space
@@ -240,7 +267,9 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
             workflow.connect(exclude_bin, "out_file", probtrackx, "avoid_mp")
 
             if is_invert:
-                workflow.connect(exclude_bin, "out_file", probtrackx_inverted, "avoid_mp")
+                workflow.connect(
+                    exclude_bin, "out_file", probtrackx_inverted, "avoid_mp"
+                )
 
         # Check for stop ROI in protocol
         if os.path.exists(stop_file):
@@ -266,7 +295,7 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
                 workflow.connect(stop_bin, "out_file", probtrackx_inverted, "stop_mask")
 
         # NODE 14: Sum tractography and inverted tractography results
-        sum_multi_tracks = Node(SumMultiTracks(), name='sumTrack_%s_%s' % (name, side))
+        sum_multi_tracks = Node(SumMultiTracks(), name="sumTrack_%s_%s" % (name, side))
         sum_multi_tracks.long_name = side + " %s"
         sum_multi_tracks.inputs.out_file = "r-%s_%s.nii.gz" % (name, side)
 
@@ -274,23 +303,31 @@ def tractography_workflow(name: str, config: SectionProxy, base_dir: str = "/") 
             # NODE 12: Merge tractography and inverted tractography fdt_paths
             merge_paths = Node(Merge(2), name="merge_paths_%s_%s" % (name, side))
             merge_paths.long_name = side + " Direct and inverse tractography merging"
-            workflow.connect(probtrackx, 'fdt_paths', merge_paths, 'in1')
-            workflow.connect(probtrackx_inverted, 'fdt_paths', merge_paths, 'in2')
+            workflow.connect(probtrackx, "fdt_paths", merge_paths, "in1")
+            workflow.connect(probtrackx_inverted, "fdt_paths", merge_paths, "in2")
 
             # NODE 13: Merge tractography and inverted tractography way_total
-            merge_waytotals = Node(Merge(2), name="merge_waytotals_%s_%s" % (name, side))
+            merge_waytotals = Node(
+                Merge(2), name="merge_waytotals_%s_%s" % (name, side)
+            )
             merge_waytotals.long_name = side + " Direct and inverse waytotal merging"
-            workflow.connect(probtrackx, 'way_total', merge_waytotals, 'in1')
-            workflow.connect(probtrackx_inverted, 'way_total', merge_waytotals, 'in2')
+            workflow.connect(probtrackx, "way_total", merge_waytotals, "in1")
+            workflow.connect(probtrackx_inverted, "way_total", merge_waytotals, "in2")
 
             workflow.connect(merge_paths, "out", sum_multi_tracks, "path_files")
             workflow.connect(merge_waytotals, "out", sum_multi_tracks, "waytotal_files")
 
         else:
             workflow.connect(probtrackx, "fdt_paths", sum_multi_tracks, "path_files")
-            workflow.connect(probtrackx, "way_total", sum_multi_tracks, "waytotal_files")
+            workflow.connect(
+                probtrackx, "way_total", sum_multi_tracks, "waytotal_files"
+            )
 
-        workflow.connect(sum_multi_tracks, "out_file", outputnode, "fdt_paths_%s" % side)
-        workflow.connect(sum_multi_tracks, "waytotal_sum", outputnode, "waytotal_%s" % side)
+        workflow.connect(
+            sum_multi_tracks, "out_file", outputnode, "fdt_paths_%s" % side
+        )
+        workflow.connect(
+            sum_multi_tracks, "waytotal_sum", outputnode, "waytotal_%s" % side
+        )
 
     return workflow

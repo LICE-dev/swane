@@ -6,7 +6,9 @@ from nipype.interfaces.base import InputMultiPath, File
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.utils.ImageMathsInputSpec)  -*-
 class SumMultiVolsInputSpec(ImageMathsInputSpec):
-    vol_files = InputMultiPath(File(exists=True), mandatory=True, desc="list of path file to sum togheter")
+    vol_files = InputMultiPath(
+        File(exists=True), mandatory=True, desc="list of path file to sum togheter"
+    )
     in_file = File(exists=True, argstr="%s", position=1)
 
 
@@ -16,7 +18,7 @@ class SumMultiVols(ImageMaths):
     Sum multiple volumes.
 
     """
-    
+
     input_spec = SumMultiVolsInputSpec
 
     def _parse_inputs(self, skip=None):

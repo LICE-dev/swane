@@ -1,6 +1,13 @@
 import swane_supplement
 
-from nipype.interfaces.fsl import (ApplyWarp, ApplyMask, BinaryMaths, FAST, ImageStats, SpatialFilter)
+from nipype.interfaces.fsl import (
+    ApplyWarp,
+    ApplyMask,
+    BinaryMaths,
+    FAST,
+    ImageStats,
+    SpatialFilter,
+)
 from nipype.pipeline.engine import Node
 
 from swane.nipype_pipeline.nodes.utils import getn
@@ -24,7 +31,7 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
         The file path of the MNI1 template.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
-        
+
     Input Node Fields
     ----------
     ref_brain : path
@@ -35,12 +42,12 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
         Nonlinear registration warp from T13D reference space to MNI1 atlas.
     ref_2_mni1_inverse_warp : path
         Nonlinear registration inverse warp from MNI1 atlas space to T13D reference.
-        
+
     Returns
     -------
     workflow : CustomWorkflow
         The FLAT1 workflow.
-        
+
     Output Node Fields
     ----------
     extension_z : path
@@ -58,27 +65,36 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
         Divided image FLAIR/T13D.
 
     """
-    
+
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=['ref_brain', 'flair_brain', 'ref_2_mni1_warp', 'ref_2_mni1_inverse_warp']),
-        name='inputnode')
-    
+        IdentityInterface(
+            fields=[
+                "ref_brain",
+                "flair_brain",
+                "ref_2_mni1_warp",
+                "ref_2_mni1_inverse_warp",
+            ]
+        ),
+        name="inputnode",
+    )
+
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=['extension_z', 'junction_z', 'binary_flair']),
-        name='outputnode')
+        IdentityInterface(fields=["extension_z", "junction_z", "binary_flair"]),
+        name="outputnode",
+    )
 
     # NODE 1: three class fast segmentation
     fast = Node(FAST(), name="%s_fast" % name)
-    fast.inputs.img_type = 1 #param -t
-    fast.inputs.number_classes = 3 #param n
-    fast.inputs.hyper = 0.1 #param -H
-    fast.inputs.bias_lowpass = 40 #param -l
-    fast.inputs.output_biascorrected = True #param -B
-    fast.inputs.bias_iters = 4 #param -I
+    fast.inputs.img_type = 1  # param -t
+    fast.inputs.number_classes = 3  # param n
+    fast.inputs.hyper = 0.1  # param -H
+    fast.inputs.bias_lowpass = 40  # param -l
+    fast.inputs.output_biascorrected = True  # param -B
+    fast.inputs.bias_iters = 4  # param -I
     workflow.add_nodes([fast])
     workflow.connect(inputnode, "ref_brain", fast, "in_files")
 
@@ -101,14 +117,18 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     gm_2_mni1 = Node(ApplyWarp(), name="%s_gm2mni1" % name)
     gm_2_mni1.long_name = "Grey matter %s to MNI space"
     gm_2_mni1.inputs.ref_file = mni1_dir
-    workflow.connect([(fast, gm_2_mni1, [(('partial_volume_files', getn, 1), 'in_file')])])
+    workflow.connect(
+        [(fast, gm_2_mni1, [(("partial_volume_files", getn, 1), "in_file")])]
+    )
     workflow.connect(inputnode, "ref_2_mni1_warp", gm_2_mni1, "field_file")
 
     # NODE 5: White matter nonlinear transformation in MNI1 atlas space
     wm_2_mni1 = Node(ApplyWarp(), name="%s_wm2mni1" % name)
     wm_2_mni1.long_name = "White matter %s to MNI space"
     wm_2_mni1.inputs.ref_file = mni1_dir
-    workflow.connect([(fast, wm_2_mni1, [(('partial_volume_files', getn, 2), 'in_file')])])
+    workflow.connect(
+        [(fast, wm_2_mni1, [(("partial_volume_files", getn, 2), "in_file")])]
+    )
     workflow.connect(inputnode, "ref_2_mni1_warp", wm_2_mni1, "field_file")
 
     # NODE 6: Divided image generation from FLAIR/T1
@@ -163,7 +183,7 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     # workflow.connect(FLAT1_wmMask,"out_file",FLAT1_wm_std,"in_file")
 
     # NODE 13: Mask generation with values between mean white matter and mean gray matter values
-    binary_flair = Node(ThrROI(), name='%s_binaryFLAIR' % name)
+    binary_flair = Node(ThrROI(), name="%s_binaryFLAIR" % name)
     binary_flair.long_name = "Mean based masking"
     binary_flair.inputs.out_file = "binary_flair.nii.gz"
     workflow.connect(cortex_mask, "out_file", binary_flair, "in_file")
@@ -173,20 +193,20 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     # NODE 14: Junction map generation
     convolution_flair = Node(SpatialFilter(), name="%s_convolution_flair" % name)
     convolution_flair.long_name = "junction map generation"
-    convolution_flair.inputs.operation = "mean" #Param -fmean
-    convolution_flair.inputs.kernel_shape = "boxv" #Param -kernel
-    convolution_flair.inputs.kernel_size = 5 #Param -kernel value
+    convolution_flair.inputs.operation = "mean"  # Param -fmean
+    convolution_flair.inputs.kernel_shape = "boxv"  # Param -kernel
+    convolution_flair.inputs.kernel_size = 5  # Param -kernel value
     convolution_flair.inputs.out_file = "convolution_flair.nii.gz"
     workflow.connect(binary_flair, "out_file", convolution_flair, "in_file")
 
     # NODE 13: Junction map mean value calculation
     junction_mean = Node(BinaryMaths(), name="%s_junction_mean" % name)
     junction_mean.long_name = "junction variation from mean atlas"
-    junction_mean.inputs.operation = "sub" #Param -sub
+    junction_mean.inputs.operation = "sub"  # Param -sub
     junction_mean.inputs.operand_file = swane_supplement.mean_flair
     junction_mean.inputs.out_file = "junction_flair.nii.gz"
     workflow.connect(convolution_flair, "out_file", junction_mean, "in_file")
-    
+
     # NODE 14: Junction z-score calculation
     junction_z = Node(BinaryMaths(), name="%s_junctionz" % name)
     junction_z.long_name = "junction z score calculation"
@@ -223,13 +243,17 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     workflow.connect(cerebellum_mean, "out_stat", normalised_gm_mask, "operand_value")
 
     # NODE 19: Extension map generation
-    smoothed_image_extension = Node(SpatialFilter(), name="%s_smoothed_image_extension" % name)
+    smoothed_image_extension = Node(
+        SpatialFilter(), name="%s_smoothed_image_extension" % name
+    )
     smoothed_image_extension.long_name = "extension map generation"
-    smoothed_image_extension.inputs.operation = "mean" #Param -fmean
-    smoothed_image_extension.inputs.kernel_shape = "boxv" #Param -kernel
-    smoothed_image_extension.inputs.kernel_size = 5 #Param -kernel value
+    smoothed_image_extension.inputs.operation = "mean"  # Param -fmean
+    smoothed_image_extension.inputs.kernel_shape = "boxv"  # Param -kernel
+    smoothed_image_extension.inputs.kernel_size = 5  # Param -kernel value
     smoothed_image_extension.inputs.out_file = "smoothed_image_extension.nii.gz"
-    workflow.connect(normalised_gm_mask, "out_file", smoothed_image_extension, "in_file")
+    workflow.connect(
+        normalised_gm_mask, "out_file", smoothed_image_extension, "in_file"
+    )
 
     # NODE 20: Extension map mean value calculation
     extension_mean = Node(BinaryMaths(), name="%s_image_extension" % name)
@@ -238,7 +262,7 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     extension_mean.inputs.operand_file = swane_supplement.mean_extension
     extension_mean.inputs.out_file = "extension_image.nii.gz"
     workflow.connect(smoothed_image_extension, "out_file", extension_mean, "in_file")
-    
+
     # NODE 21: Extension z-score calculation
     extension_z = Node(BinaryMaths(), name="%s_image_extensionz" % name)
     extension_z.long_name = "extension z score calculation"
@@ -260,7 +284,9 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     extension_z_2_ref.long_name = "extension %s to reference space"
     extension_z_2_ref.inputs.out_file = "r-extension_z.nii.gz"
     workflow.connect(no_cereb_extension_z, "out_file", extension_z_2_ref, "in_file")
-    workflow.connect(inputnode, "ref_2_mni1_inverse_warp", extension_z_2_ref, "field_file")
+    workflow.connect(
+        inputnode, "ref_2_mni1_inverse_warp", extension_z_2_ref, "field_file"
+    )
     workflow.connect(inputnode, "ref_brain", extension_z_2_ref, "ref_file")
 
     # NODE 24: Junction z-score nonlinear transformation in reference space
@@ -268,7 +294,9 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     junction_z_2_ref.long_name = "junction %s to reference space"
     junction_z_2_ref.inputs.out_file = "r-junction_z.nii.gz"
     workflow.connect(junction_z, "out_file", junction_z_2_ref, "in_file")
-    workflow.connect(inputnode, "ref_2_mni1_inverse_warp", junction_z_2_ref, "field_file")
+    workflow.connect(
+        inputnode, "ref_2_mni1_inverse_warp", junction_z_2_ref, "field_file"
+    )
     workflow.connect(inputnode, "ref_brain", junction_z_2_ref, "ref_file")
 
     # NODE 25: Divided image nonlinear transformation in reference space
@@ -276,7 +304,9 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     binary_flair_2_ref.long_name = "Normalized Flair %s to reference space"
     binary_flair_2_ref.inputs.out_file = "r-binary_flair.nii.gz"
     workflow.connect(binary_flair, "out_file", binary_flair_2_ref, "in_file")
-    workflow.connect(inputnode, "ref_2_mni1_inverse_warp", binary_flair_2_ref, "field_file")
+    workflow.connect(
+        inputnode, "ref_2_mni1_inverse_warp", binary_flair_2_ref, "field_file"
+    )
     workflow.connect(inputnode, "ref_brain", binary_flair_2_ref, "ref_file")
 
     workflow.connect(extension_z_2_ref, "out_file", outputnode, "extension_z")

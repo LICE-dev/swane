@@ -17,7 +17,7 @@ class CryptographyManager:
     """
 
     password = str(uuid.getnode()).encode()
-    salt = b'\x84mt\xec\xcc\xd1\n\xe5\xe8\x86`\xce\xe3\x9aa\xcd'
+    salt = b"\x84mt\xec\xcc\xd1\n\xe5\xe8\x86`\xce\xe3\x9aa\xcd"
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
@@ -25,7 +25,6 @@ class CryptographyManager:
         iterations=390000,
     )
     cryptography_key = base64.urlsafe_b64encode(kdf.derive(password))
-
 
     @staticmethod
     def encrypt(string: str) -> str:
@@ -38,4 +37,3 @@ class CryptographyManager:
         fernet = Fernet(CryptographyManager.cryptography_key)
         decMessage = fernet.decrypt(string.encode()).decode()
         return str(decMessage)
-

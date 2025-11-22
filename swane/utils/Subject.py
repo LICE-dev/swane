@@ -1,7 +1,6 @@
 import os
 import shutil
 
-from swane.config.preference_list import WF_PREFERENCES
 from swane.utils.DataInputList import DataInputList, ImageModality
 from enum import Enum, auto
 from swane.config.ConfigManager import ConfigManager
@@ -18,7 +17,6 @@ from multiprocessing import Queue
 from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from swane.workers.WorkflowProcess import WorkflowProcess
 from swane.workers.SlicerExportWorker import SlicerExportWorker
-from swane.utils.DicomTree import DicomTree
 
 
 class SubjectRet(Enum):
@@ -34,7 +32,7 @@ class SubjectRet(Enum):
     DataInputWarningMultiSubj = auto()
     DataInputWarningMultiStudy = auto()
     DataInputWarningMultiSeries = auto()
-    DataInputValid = ()
+    DataInputValid = auto()
     DataImportErrorVolumesMax = auto()
     DataImportErrorVolumesMin = auto()
     DataImportErrorModality = auto()
@@ -116,7 +114,7 @@ class Subject:
         total_files = 0
         for data_input in self.input_state_list:
             dicom_scanners[data_input] = self.gen_dicom_search_worker(data_input)
-            total_files = total_files + dicom_scanners[data_input].get_files_len()
+            total_files = total_files + dicom_scanners[data_input].get_files_len() + 1
         return dicom_scanners, total_files
 
     def gen_dicom_search_worker(self, data_input: DataInputList) -> DicomSearchWorker:
@@ -239,7 +237,7 @@ class Subject:
 
         if progress_callback is not None:
             dicom_src_work.signal.sig_loop.connect(
-                lambda i, maximum=dicom_src_work.get_files_len(): progress_callback(
+                lambda i, maximum=dicom_src_work.get_files_len() + 1: progress_callback(
                     i, maximum
                 )
             )
@@ -291,7 +289,9 @@ class Subject:
             )
             return
 
-        series_list = dicom_src_work.tree.get_series_list(subjects_list[0], studies_list[0])
+        series_list = dicom_src_work.tree.get_series_list(
+            subjects_list[0], studies_list[0]
+        )
 
         if len(series_list) != 1:
             status_callback(
@@ -299,7 +299,9 @@ class Subject:
             )
             return
 
-        series = dicom_src_work.tree.get_series(subjects_list[0], studies_list[0], series_list[0])
+        series = dicom_src_work.tree.get_series(
+            subjects_list[0], studies_list[0], series_list[0]
+        )
 
         self.input_state_list[data_input].loaded = True
         self.input_state_list[data_input].volumes = series.volumes
@@ -754,6 +756,13 @@ class Subject:
         Delete any previous workflow execution
         """
         shutil.rmtree(self.workflow_dir(), ignore_errors=True)
+        self.result_dir()
+
+    def delete_result_dir(self):
+        """
+        Delete any previous result
+        """
+        shutil.rmtree(self.result_dir(), ignore_errors=True)
 
     def freesurfer_dir(self) -> str:
         """
@@ -809,6 +818,7 @@ class Subject:
                 return SubjectRet.ExecWfResume
             elif not resume:
                 self.delete_workflow_dir()
+                self.delete_result_dir()
 
         # Checks for a previous workflow FreeSurfer execution
         if self.config.get_workflow_freesurfer_pref() and self.freesurfer_dir_exists():
@@ -883,7 +893,7 @@ class Subject:
             self.global_config.get_slicer_path(),
             self.result_dir(),
             self.global_config.get_slicer_scene_ext(),
-            self.config
+            self.config,
         )
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)

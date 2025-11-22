@@ -5,6 +5,7 @@ import sys
 import os
 import subprocess
 
+
 def load_anat(scene_dir: str, volume_name: str, color_node_ID: str = None):
     """
     Creates a scalar node from a NIFTI file.
@@ -24,7 +25,7 @@ def load_anat(scene_dir: str, volume_name: str, color_node_ID: str = None):
         The scalar node generated from the NIFTI file.
 
     """
-    
+
     file = os.path.join(scene_dir, volume_name + ".nii.gz")
     node = None
     if os.path.exists(file):
@@ -37,7 +38,7 @@ def load_anat(scene_dir: str, volume_name: str, color_node_ID: str = None):
         if node is not None and color_node_ID is not None:
             node.GetDisplayNode().SetAndObserveColorNodeID(color_node_ID)
             return
-        
+
     return node
 
 
@@ -55,14 +56,16 @@ def lesion_segment(scene_dir: str):
     None.
 
     """
-    
+
     file = os.path.join(scene_dir, "seg_lesions.seg.nrrd")
     if os.path.exists(file):
         print("SLICERLOADER: Loading existing lesion segment")
         slicer.util.loadSegmentation(file)
     else:
         print("SLICERLOADER: Creating lesion segment")
-        seg_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSegmentationNode', "seg_lesions")
+        seg_node = slicer.mrmlScene.AddNewNodeByClass(
+            "vtkMRMLSegmentationNode", "seg_lesions"
+        )
         seg_node.CreateDefaultDisplayNodes()
         seg_node.GetSegmentation().AddEmptySegment("Lesion", "Lesion", [1, 0, 0])
         seg_node.CreateClosedSurfaceRepresentation()
@@ -91,21 +94,25 @@ def load_freesurfer_surf(scene_dir: str, node_name: str, ref_node):
         The slicer node with loaded surface.
 
     """
-    
+
     file = os.path.join(scene_dir, node_name)
     surf_node = None
-    
+
     if os.path.exists(file):
         try:
             print("SLICERLOADER: Loading surface " + node_name)
             loaded_nodes = vtk.vtkCollection()
-            surf_node = slicer.app.ioManager().loadNodes("FreeSurfer model", {"fileName": file, "referenceVolumeID": ref_node.GetID()}, loaded_nodes)
+            surf_node = slicer.app.ioManager().loadNodes(
+                "FreeSurfer model",
+                {"fileName": file, "referenceVolumeID": ref_node.GetID()},
+                loaded_nodes,
+            )
             if surf_node:
                 surf_node = list(loaded_nodes)[0]
                 surf_node.GetDisplayNode().SetColor(0.82, 0.82, 0.82)
         except:
             pass
-        
+
     return surf_node
 
 
@@ -128,13 +135,17 @@ def load_freesurfer_overlay(scene_dir: str, node_name: str, surf_node):
     None.
 
     """
-    
+
     file = os.path.join(scene_dir, node_name)
     if os.path.exists(file):
         try:
             print("SLICERLOADER: Loading surface overlay " + node_name)
-            overlay_node = slicer.util.loadNodeFromFile(file, 'FreeSurferScalarOverlayFile', {"modelNodeId": surf_node.GetID()})
-            overlay_node.GetDisplayNode().SetAndObserveColorNodeID('vtkMRMLColorTableNodeFileColdToHotRainbow.txt')
+            overlay_node = slicer.util.loadNodeFromFile(
+                file, "FreeSurferScalarOverlayFile", {"modelNodeId": surf_node.GetID()}
+            )
+            overlay_node.GetDisplayNode().SetAndObserveColorNodeID(
+                "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"
+            )
             overlay_node.GetDisplayNode().SetScalarVisibility(False)
         except:
             pass
@@ -154,19 +165,23 @@ def load_freesurfer_segmentation_file(seg_file: str):
     None.
 
     """
-    
+
     if os.path.exists(seg_file):
         try:
             # OLD COMMON METHOD
             # slicer.util.loadNodeFromFile(seg_file, 'FreeSurferSegmentationFile')
-            
+
             # WARNING: SlicerFreesurfer plugin bug causing Crash on ubuntu with the new method.
             # Preserving old method to ensure functionality with older version of the plugin.
             if "linux" in sys.platform:
-                slicer.util.loadVolume(seg_file, {"labelmap": True, "colorNodeID": "vtkMRMLColorTableNodeFile"})
+                slicer.util.loadVolume(
+                    seg_file,
+                    {"labelmap": True, "colorNodeID": "vtkMRMLColorTableNodeFile"},
+                )
             else:
-                slicer.util.getModuleLogic('FreeSurferImporter').LoadFreeSurferSegmentation(seg_file)
-    
+                slicer.util.getModuleLogic(
+                    "FreeSurferImporter"
+                ).LoadFreeSurferSegmentation(seg_file)
 
         except:
             pass
@@ -189,7 +204,11 @@ def load_freesurfer(scene_dir: str, ref_node):
 
     """
 
-    seg_list = ["r-aparc_aseg.mgz", "segmentHA/lh.hippoAmygLabels.mgz", "segmentHA/rh.hippoAmygLabels.mgz"]
+    seg_list = [
+        "r-aparc_aseg.mgz",
+        "segmentHA/lh.hippoAmygLabels.mgz",
+        "segmentHA/rh.hippoAmygLabels.mgz",
+    ]
     for file in seg_list:
         seg_file = os.path.join(scene_dir, file)
         load_freesurfer_segmentation_file(seg_file)
@@ -201,7 +220,14 @@ def load_freesurfer(scene_dir: str, ref_node):
     for surf in surfs:
         load_freesurfer_surf(scene_dir, surf, ref_node)
 
-    overlays = ['pet_surf', 'pet_ai_surf', 'pet_zscore_surf', 'asl_surf', 'asl_ai_surf', 'asl_zscore_surf']
+    overlays = [
+        "pet_surf",
+        "pet_ai_surf",
+        "pet_zscore_surf",
+        "asl_surf",
+        "asl_ai_surf",
+        "asl_zscore_surf",
+    ]
     for overlay in overlays:
         load_freesurfer_overlay(scene_dir, overlay + "_lh.mgz", lh_pial)
         load_freesurfer_overlay(scene_dir, overlay + "_rh.mgz", rh_pial)
@@ -225,7 +251,7 @@ def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 
     None.
 
     """
-    
+
     vein_volume_name = "r-veins_inskull"
     vein_node = load_anat(scene_dir, vein_volume_name)
     if vein_node is None:
@@ -233,13 +259,18 @@ def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 
     print("SLICERLOADER: Creating 3D model: Veins")
 
     try:
-        command = "fslstats " + os.path.join(scene_dir, vein_volume_name+".nii.gz") + " -P " +str(vein_threshold)
-        output = subprocess.run(command, shell=True,
-                                stdout=subprocess.PIPE).stdout.decode('utf-8')
+        command = (
+            "fslstats "
+            + os.path.join(scene_dir, vein_volume_name + ".nii.gz")
+            + " -P "
+            + str(vein_threshold)
+        )
+        output = subprocess.run(
+            command, shell=True, stdout=subprocess.PIPE
+        ).stdout.decode("utf-8")
         thr = float(output)
     except:
         thr = 6
-
 
     vein_model = slicer.vtkMRMLModelNode()
     slicer.mrmlScene.AddNode(vein_model)
@@ -257,12 +288,14 @@ def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 
     my_storage_node = vein_model.CreateDefaultStorageNode()
     my_storage_node.SetFileName(os.path.join(scene_dir, "veins.vtk"))
     my_storage_node.WriteData(vein_model)
-    
+
     if remove_vein:
         slicer.mrmlScene.RemoveNode(vein_node)
 
 
-def tract_model(segmentation_node, dti_dir: str, tract: [], side: str, dti_threshold: float=0.0035):
+def tract_model(
+    segmentation_node, dti_dir: str, tract: [], side: str, dti_threshold: float = 0.0035
+):
     """
     Creates the 3d model of a tract.
 
@@ -287,16 +320,18 @@ def tract_model(segmentation_node, dti_dir: str, tract: [], side: str, dti_thres
     None.
 
     """
-    
-    tract_file = os.path.join(dti_dir, "r-" + tract['name'] + "_" + side + ".nii.gz")
+
+    tract_file = os.path.join(dti_dir, "r-" + tract["name"] + "_" + side + ".nii.gz")
     if not os.path.exists(tract_file):
         return
 
-    waytotal_file = os.path.join(dti_dir, "r-" + tract['name'] + "_" + side + "_waytotal")
+    waytotal_file = os.path.join(
+        dti_dir, "r-" + tract["name"] + "_" + side + "_waytotal"
+    )
     waytotal = 0
     if os.path.exists(waytotal_file):
         try:
-            with open(waytotal_file, 'r') as file:
+            with open(waytotal_file, "r") as file:
                 for line in file.readlines():
                     waytotal = int(line)
         except:
@@ -305,7 +340,7 @@ def tract_model(segmentation_node, dti_dir: str, tract: [], side: str, dti_thres
     if waytotal > 0:
         thr = waytotal * dti_threshold
     else:
-        thr = tract['thr']
+        thr = tract["thr"]
 
     tract_node = slicer.util.loadVolume(tract_file)
     segmentation_node.SetReferenceImageGeometryParameterFromVolumeNode(tract_node)
@@ -319,9 +354,11 @@ def tract_model(segmentation_node, dti_dir: str, tract: [], side: str, dti_thres
     segment_editor_widget.setSourceVolumeNode(tract_node)
 
     # Create segment
-    tract_segment_id = segmentation_node.GetSegmentation().AddEmptySegment(tract['name'], tract['name'], tract['color'])
+    tract_segment_id = segmentation_node.GetSegmentation().AddEmptySegment(
+        tract["name"], tract["name"], tract["color"]
+    )
     segment_editor_node.SetSelectedSegmentID(tract_segment_id)
-    
+
     # Fill by thresholding
     segment_editor_widget.setActiveEffectByName("Threshold")
     effect = segment_editor_widget.activeEffect()
@@ -348,30 +385,37 @@ def load_fmri(scene_dir: str):
     None.
 
     """
-    
+
     fmri_path = os.path.join(scene_dir, "fMRI")
     if not os.path.exists(fmri_path):
         return
     print("SLICERLOADER: Loading fMRI")
     for file in os.listdir(fmri_path):
-        if file.endswith('.nii.gz'):
-            func_node = load_anat(fmri_path, file.replace(".nii.gz", ""), 'vtkMRMLPETProceduralColorNodePET-Rainbow2')
+        if file.endswith(".nii.gz"):
+            func_node = load_anat(
+                fmri_path,
+                file.replace(".nii.gz", ""),
+                "vtkMRMLPETProceduralColorNodePET-Rainbow2",
+            )
+
 
 def main_tract(dti_dir: str, scene_dir: str):
     sides = ["rh", "lh"]
     tracts = [
         {"name": "cst", "thr": "500", "color": [0, 1, 0]},
         {"name": "af", "thr": "1500", "color": [1, 0, 1]},
-        {"name": "or", "thr": "500", "color": [1, 1, 0]}
+        {"name": "or", "thr": "500", "color": [1, 1, 0]},
     ]
 
     print("SLICERLOADER: Creating DTI tracts 3D models (some minutes!)")
 
     for side in sides:
         # Create segmentation
-        segmentation_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode", "tracts_" + side)
+        segmentation_node = slicer.mrmlScene.AddNewNodeByClass(
+            "vtkMRMLSegmentationNode", "tracts_" + side
+        )
         segmentation_node.CreateDefaultDisplayNodes()  # only needed for display
-        
+
         # DTI Threshold preferences parsing
         if sys.argv[2] is not None:
             try:
@@ -379,12 +423,17 @@ def main_tract(dti_dir: str, scene_dir: str):
             except:
                 dti_threshold = 0.0035
         for tract in tracts:
-            tract_model(segmentation_node, dti_dir, tract, side, dti_threshold=dti_threshold)
-            
+            tract_model(
+                segmentation_node, dti_dir, tract, side, dti_threshold=dti_threshold
+            )
+
         segmentation_node.CreateClosedSurfaceRepresentation()
         my_storage_node = segmentation_node.CreateDefaultStorageNode()
-        my_storage_node.SetFileName(os.path.join(scene_dir, "tracts_" + side + ".seg.nrrd"))
+        my_storage_node.SetFileName(
+            os.path.join(scene_dir, "tracts_" + side + ".seg.nrrd")
+        )
         my_storage_node.WriteData(segmentation_node)
+
 
 ###############################################################################
 
@@ -404,26 +453,40 @@ else:
 
         # lesion_segment(sceneDir)
 
-        baseList = ['ref_brain', 'r-flair_brain', 'r-flair', 'r-mdc_brain', 'r-mdc', 'r-FA', 'r-flair2d_tra_brain',
-                    'r-flair2d_cor_brain', 'r-flair2d_sag_brain', 'r-t2_cor_brain', 'r-t2_cor', 'r-binary_flair',
-                    'r-junction_z', 'r-extension_z']
+        baseList = [
+            "ref_brain",
+            "r-flair_brain",
+            "r-flair",
+            "r-mdc_brain",
+            "r-mdc",
+            "r-FA",
+            "r-flair2d_tra_brain",
+            "r-flair2d_cor_brain",
+            "r-flair2d_sag_brain",
+            "r-t2_cor_brain",
+            "r-t2_cor",
+            "r-binary_flair",
+            "r-junction_z",
+            "r-extension_z",
+        ]
 
         for volume in baseList:
             load_anat(results_folder, volume)
 
-        colorList = [('r-asl_ai', 'vtkMRMLColorTableNodeFileDivergingBlueRed.txt'),
-                     ('r-pet_ai', 'vtkMRMLColorTableNodeFileDivergingBlueRed.txt'),
-                     ('r-pet', 'vtkMRMLColorTableNodeFileColdToHotRainbow.txt'),
-                     ('r-pet_zscore', 'vtkMRMLColorTableNodeFileColdToHotRainbow.txt'),
-                     ('r-asl', 'vtkMRMLColorTableNodeFileColdToHotRainbow.txt'),
-                     ('r-asl_zscore', 'vtkMRMLColorTableNodeFileColdToHotRainbow.txt'),
-                     ]
+        colorList = [
+            ("r-asl_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt"),
+            ("r-pet_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt"),
+            ("r-pet", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"),
+            ("r-pet_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"),
+            ("r-asl", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"),
+            ("r-asl_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"),
+        ]
 
         for volume in colorList:
             load_anat(results_folder, volume[0], volume[1])
 
         load_fmri(results_folder)
-        
+
         # Vein Threshold preferences parsing
         if sys.argv[3] is not None:
             try:
@@ -436,8 +499,8 @@ else:
         load_freesurfer(results_folder, refNode)
 
         ext = "mrb"
-        
-        #TODO valutare
+
+        # TODO valutare
         # Saving in MRML doesn't work well, disable extension choice for now
         # if sys.argv[4] is not None and sys.argv[1] == "mrml":
         #     ext = "mrml"

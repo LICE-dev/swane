@@ -6,7 +6,7 @@ from packaging import version
 from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 from enum import Enum, auto
-import GPUtil
+from nipype.utils.gpu_count import gpu_count
 import platform
 
 
@@ -22,7 +22,12 @@ class Dependence:
     An object with a dependence information
     """
 
-    def __init__(self, state: DependenceStatus, label: str, state2: DependenceStatus = DependenceStatus.MISSING):
+    def __init__(
+        self,
+        state: DependenceStatus,
+        label: str,
+        state2: DependenceStatus = DependenceStatus.MISSING,
+    ):
         """
         Parameters
         ----------
@@ -39,7 +44,12 @@ class Dependence:
         self.label = None
         self.update(state, label, state2)
 
-    def update(self, state: DependenceStatus, label: str, state2: DependenceStatus = DependenceStatus.MISSING):
+    def update(
+        self,
+        state: DependenceStatus,
+        label: str,
+        state2: DependenceStatus = DependenceStatus.MISSING,
+    ):
         """
         Parameters
         ----------
@@ -141,7 +151,7 @@ class DependencyManager:
             return False
 
         current_slicer_path = config.get_slicer_path()
-        if current_slicer_path == '' or not os.path.exists(current_slicer_path):
+        if current_slicer_path == "" or not os.path.exists(current_slicer_path):
             return False
 
         return True
@@ -189,7 +199,9 @@ class DependencyManager:
         if slicer_version is None or slicer_version == "":
             return False
         try:
-            return version.parse(slicer_version) >= version.parse(DependencyManager.MIN_SLICER_VERSION)
+            return version.parse(slicer_version) >= version.parse(
+                DependencyManager.MIN_SLICER_VERSION
+            )
         except:
             return False
 
@@ -207,10 +219,10 @@ class DependencyManager:
         from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 
         # if user set manually a Slicer path it is saved with a * as first character to force check that folder
-        if current_slicer_path != '' and current_slicer_path[0] == "*":
+        if current_slicer_path != "" and current_slicer_path[0] == "*":
             current_slicer_path = current_slicer_path[1:]
         if not os.path.exists(current_slicer_path):
-            current_slicer_path = ''
+            current_slicer_path = ""
 
         check_slicer_work = SlicerCheckWorker(current_slicer_path)
         check_slicer_work.signal.slicer.connect(callback_func)
@@ -225,8 +237,13 @@ class DependencyManager:
         """
         dcm2niix_version = dcm2nii.Info.version()
         if dcm2niix_version is None:
-            return Dependence(DependenceStatus.MISSING, strings.check_dep_dcm2niix_error)
-        return Dependence(DependenceStatus.DETECTED, strings.check_dep_dcm2niix_found % str(dcm2niix_version))
+            return Dependence(
+                DependenceStatus.MISSING, strings.check_dep_dcm2niix_error
+            )
+        return Dependence(
+            DependenceStatus.DETECTED,
+            strings.check_dep_dcm2niix_found % str(dcm2niix_version),
+        )
 
     @staticmethod
     def check_fsl() -> Dependence:
@@ -247,13 +264,21 @@ class DependencyManager:
         if platform.system() == "Linux":
             locale_en = os.system(DependencyManager.FLS_LOCALE_COMMAND)
             if locale_en != 0:
-                return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_no_locale)
+                return Dependence(
+                    DependenceStatus.MISSING, strings.check_dep_fsl_no_locale
+                )
 
         # check fsl version
         if found_version < version.parse(DependencyManager.MIN_FSL_VERSION):
-            return Dependence(DependenceStatus.WARNING, strings.check_dep_fsl_wrong_version % (fsl_version, DependencyManager.MIN_FSL_VERSION))
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_fsl_wrong_version
+                % (fsl_version, DependencyManager.MIN_FSL_VERSION),
+            )
 
-        return Dependence(DependenceStatus.DETECTED, strings.check_dep_fsl_found % fsl_version)
+        return Dependence(
+            DependenceStatus.DETECTED, strings.check_dep_fsl_found % fsl_version
+        )
 
     @staticmethod
     def check_graphviz() -> Dependence:
@@ -276,15 +301,27 @@ class DependencyManager:
 
         # FS installed
         if freesurfer.base.Info.version() is None:
-            return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error1, DependenceStatus.MISSING)
+            return Dependence(
+                DependenceStatus.MISSING,
+                strings.check_dep_fs_error1,
+                DependenceStatus.MISSING,
+            )
         freesurfer_version = str(freesurfer.base.Info.looseversion())
 
         # FS version file presence
         if "FREESURFER_HOME" not in os.environ:
-            return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error2 % freesurfer_version, DependenceStatus.MISSING)
+            return Dependence(
+                DependenceStatus.MISSING,
+                strings.check_dep_fs_error2 % freesurfer_version,
+                DependenceStatus.MISSING,
+            )
         license_file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
         if not os.path.exists(license_file):
-            return Dependence(DependenceStatus.MISSING, strings.check_dep_fs_error4 % freesurfer_version, DependenceStatus.MISSING)
+            return Dependence(
+                DependenceStatus.MISSING,
+                strings.check_dep_fs_error4 % freesurfer_version,
+                DependenceStatus.MISSING,
+            )
         try:
             found_version = version.parse(freesurfer_version)
         except:
@@ -292,19 +329,35 @@ class DependencyManager:
 
         # FS minimum version
         if found_version < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
-            return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_wrong_version % (freesurfer_version, DependencyManager.MIN_FREESURFER_VERSION))
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_fs_wrong_version
+                % (freesurfer_version, DependencyManager.MIN_FREESURFER_VERSION),
+            )
 
         # tcsh shell installed
         if which(DependencyManager.FSL_TCSH_COMMAND) is None:
-            return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_no_tcsh % freesurfer_version, DependenceStatus.MISSING)
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_fs_no_tcsh % freesurfer_version,
+                DependenceStatus.MISSING,
+            )
 
         # FS matlab runtime
         mrc = os.system(DependencyManager.FREESURFER_MATLAB_COMMAND)
         if mrc != 0:
             # TODO: facciamo un parse dell'output del comando per dare all'utente il comando di installazione? o forse è meglio non basarsi sul formato attuale dell'output e linkare direttamente la pagina ufficiale?
-            return Dependence(DependenceStatus.WARNING, strings.check_dep_fs_error3 % freesurfer_version, DependenceStatus.MISSING)
-        return Dependence(DependenceStatus.DETECTED, strings.check_dep_fs_found % freesurfer_version, DependenceStatus.DETECTED)
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_fs_error3 % freesurfer_version,
+                DependenceStatus.MISSING,
+            )
+        return Dependence(
+            DependenceStatus.DETECTED,
+            strings.check_dep_fs_found % freesurfer_version,
+            DependenceStatus.DETECTED,
+        )
 
     @staticmethod
     def is_cuda():
-        return len(GPUtil.getGPUs()) > 0
+        return gpu_count() > 0

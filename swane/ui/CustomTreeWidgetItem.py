@@ -1,4 +1,11 @@
-from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QTreeWidgetItem, QSpacerItem, QTreeWidget
+from PySide6.QtWidgets import (
+    QWidget,
+    QLabel,
+    QHBoxLayout,
+    QTreeWidgetItem,
+    QSpacerItem,
+    QTreeWidget,
+)
 from PySide6.QtSvgWidgets import QSvgWidget
 from swane import strings
 
@@ -11,7 +18,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
 
     def __init__(self, parent, tree: QTreeWidget, text: str, art: str = None):
         super(CustomTreeWidgetItem, self).__init__(parent)
-        
+
         self.widget = QWidget()
         self.widget.setLayout(QHBoxLayout())
         self.artLabel = QSvgWidget()
@@ -20,13 +27,13 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         self.set_art(art)
         self.textLabel = QLabel(text)
         self.resize_text_label()
-        
+
         self.widget.layout().addWidget(self.artLabel)
         self.widget.layout().addWidget(self.textLabel)
         self.widget.layout().addSpacerItem(QSpacerItem(25, 0))
 
         tree.setItemWidget(self, 0, self.widget)
-        
+
         self.completed = False
         self.art = None
 
@@ -55,7 +62,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         None.
 
         """
-        
+
         self.textLabel.setText(text)
         self.resize_text_label()
 
@@ -69,9 +76,12 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         None.
 
         """
-        
-        self.textLabel.setMinimumWidth(self.textLabel.fontMetrics().boundingRect(self.textLabel.text()).width() + 10)
-        
+
+        self.textLabel.setMinimumWidth(
+            self.textLabel.fontMetrics().boundingRect(self.textLabel.text()).width()
+            + 10
+        )
+
     def get_text(self) -> str:
         """
         Get the tree item text from its label.
@@ -82,9 +92,9 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
             The item text.
 
         """
-        
+
         return self.textLabel.text()
-    
+
     def set_art(self, art: str):
         """
         Set the icon of the tree item.
@@ -99,8 +109,8 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         None.
 
         """
-        
+
         self.art = art
-        
+
         if art is not None:
             self.artLabel.load(art)

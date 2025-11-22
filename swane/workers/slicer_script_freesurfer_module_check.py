@@ -3,7 +3,7 @@
 
 import sys
 
-# Check FreeSurfer imported module into 3D Slicer 
-if hasattr(slicer.moduleNames, 'FreeSurferImporter'):
-    print('MODULE FOUND')
+# Check FreeSurfer imported module into 3D Slicer
+if hasattr(slicer.moduleNames, "FreeSurferImporter"):
+    print("MODULE FOUND")
 sys.exit(0)
