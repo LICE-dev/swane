@@ -317,13 +317,13 @@ for x in range(FMRI_NUM):
         input_type=InputTypes.INT,
         label="Delete start volumes",
         default=0,
-        range=[1, 500],
+        range=[0, 500],
     )
     WF_PREFERENCES[category]["del_end_vols"] = PreferenceEntry(
         input_type=InputTypes.INT,
         label="Delete end volumes",
         default=0,
-        range=[1, 500],
+        range=[0, 500],
     )
 
 GLOBAL_PREFERENCES = {}
