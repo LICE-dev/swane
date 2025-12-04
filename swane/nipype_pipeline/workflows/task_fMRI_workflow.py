@@ -117,7 +117,7 @@ def task_fMRI_workflow(
 
     # NODE 4: Delete specified volumes at start and end of sequence
     del_vols = Node(DeleteVolumes(), name="%s_del_vols" % name)
-    del_vols.long_name = "Extreme volumes deletion"
+    del_vols.long_name = "Edge volumes trimming"
     del_vols.inputs.del_start_vols = del_start_vols
     del_vols.inputs.del_end_vols = del_end_vols
     workflow.connect(conversion, "converted_files", del_vols, "in_file")
