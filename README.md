@@ -126,6 +126,14 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 
 ## Changelog
 
+### [0.1.5.1] - 2025-12-04
+
+#### Changed
+
+- **Python requirement**: from >=3.7 to >=3.10.
+- **nibabel requirement**: from <=5.3.0 to >=5.3.0,<6.
+- **fMRI Delete Start Volumes preference**: from range[1,500] to range[0,500].
+
 ### [0.1.5] - 2025-11-22
 
 #### Added
