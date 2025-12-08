@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
             .height()
         )
 
-    def open_subject_tab(self, subject: Subject):
+    def open_subject_tab(self, subject: Subject, check_dicom_folders : bool = True):
         """
         Load a checked and valid subject folder.
 
@@ -119,6 +119,9 @@ class MainWindow(QMainWindow):
         ----------
         subject : str
             The subject to load in the tab.
+
+        check_dicom_folders : bool
+            If True, check for dicom files in the fubject folders. Default is True.
 
         Returns
         -------
@@ -134,7 +137,7 @@ class MainWindow(QMainWindow):
         self.main_tab.addTab(this_tab, os.path.basename(subject.name))
         self.main_tab.setCurrentWidget(this_tab)
 
-        this_tab.load_subject()
+        this_tab.load_subject(check_dicom_folders)
 
     def check_subject_limit(self) -> bool:
         """
@@ -323,7 +326,7 @@ class MainWindow(QMainWindow):
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_new_subj_created + subject_name)
             msg_box.exec()
-            self.open_subject_tab(subject)
+            self.open_subject_tab(subject,check_dicom_folders=False)
 
     def set_main_working_directory(self):
         """
