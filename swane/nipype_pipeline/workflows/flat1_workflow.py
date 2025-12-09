@@ -7,6 +7,7 @@ from nipype.interfaces.fsl import (
     FAST,
     ImageStats,
     SpatialFilter,
+    Threshold
 )
 from nipype.pipeline.engine import Node
 
@@ -144,12 +145,21 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     #outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
     #workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
 
+    # Remove the upper 1% of values to trim values from incorrect registration
+    outliers_removal = Node(Threshold(), name="%s_outliers_mask" % name)
+    outliers_removal.inputs.thresh = 98
+    outliers_removal.inputs.use_robust_range = True
+    outliers_removal.inputs.use_nonzero_voxels = True
+    outliers_removal.inputs.direction = "above"
+    workflow.connect(flair_div_ref, "out_file", outliers_removal, "in_file")
+
     # NODE 8: Cerebellum removal from divided image
     cortex_mask = Node(ApplyMask(), name="%s_cortexMask" % name)
     cortex_mask.long_name = "outliers %s"
     cortex_mask.inputs.mask_file = swane_supplement.cortex_mas
     #workflow.connect(outliers_mask, "out_file", cortex_mask, "mask_file")
-    workflow.connect(flair_div_ref, "out_file", cortex_mask, "in_file")
+    #workflow.connect(flair_div_ref, "out_file", cortex_mask, "in_file")
+    workflow.connect(outliers_removal, "out_file", cortex_mask, "in_file")
 
     # NODE 9: Masking for gray matter on t1_restore in MNI1
     gm_mask = Node(ApplyMask(), name="%s_gmMask" % name)
