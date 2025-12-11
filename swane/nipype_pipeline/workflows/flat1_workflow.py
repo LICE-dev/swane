@@ -140,15 +140,15 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
 
     # Skip this step, sometimes causes wrong cortical segmentation!
     # NODE 7: Outliers removal from mask
-    #outliers_mask = Node(FLAT1OutliersMask(), name="%s_outliers_mask" % name)
-    #outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
-    #workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
+    # outliers_mask = Node(FLAT1OutliersMask(), name="%s_outliers_mask" % name)
+    # outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
+    # workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
 
     # NODE 8: Cerebellum removal from divided image
     cortex_mask = Node(ApplyMask(), name="%s_cortexMask" % name)
     cortex_mask.long_name = "outliers %s"
     cortex_mask.inputs.mask_file = swane_supplement.cortex_mas
-    #workflow.connect(outliers_mask, "out_file", cortex_mask, "mask_file")
+    # workflow.connect(outliers_mask, "out_file", cortex_mask, "mask_file")
     workflow.connect(flair_div_ref, "out_file", cortex_mask, "in_file")
 
     # NODE 9: Masking for gray matter on t1_restore in MNI1
