@@ -141,9 +141,9 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
 
     # Skip this step, sometimes causes wrong cortical segmentation!
     # NODE 7: Outliers removal from mask
-    #outliers_mask = Node(FLAT1OutliersMask(), name="%s_outliers_mask" % name)
-    #outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
-    #workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
+    # outliers_mask = Node(FLAT1OutliersMask(), name="%s_outliers_mask" % name)
+    # outliers_mask.inputs.mask_file = swane_supplement.cortex_mas
+    # workflow.connect(flair_div_ref, "out_file", outliers_mask, "in_file")
 
     # Remove the upper 1% of values to trim values from incorrect registration
     outliers_removal = Node(Threshold(), name="%s_outliers_mask" % name)
