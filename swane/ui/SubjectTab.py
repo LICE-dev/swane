@@ -981,9 +981,14 @@ class SubjectTab(QTabWidget):
             self.enable_exec_tab()
             self.check_venous_volumes()
 
-    def load_subject(self):
+    def load_subject(self, check_dicom_folders: bool = True):
         """
         Loads the subject configuration and folder.
+
+        Parameters
+        ----------
+        check_dicom_folders : bool
+            If True, check for dicom files in the fubject folders. Default is True.
 
         Returns
         -------
@@ -998,20 +1003,21 @@ class SubjectTab(QTabWidget):
         # Set after subject loading to prevent the onchanged fire on previous line command
         self.workflow_type_combo.currentIndexChanged.connect(self.on_wf_type_changed)
 
-        # Scan subject dicom folder
-        dicom_scanners, total_files = self.subject.prepare_scan_dicom_folders()
+        if check_dicom_folders:
+            # Scan subject dicom folder
+            dicom_scanners, total_files = self.subject.prepare_scan_dicom_folders()
 
-        if total_files > 0:
-            progress = PersistentProgressDialog(
-                strings.subj_tab_subj_loading, 0, 0, parent=self.parent()
-            )
-            progress.show()
-            progress.setMaximum(total_files)
-            self.subject.execute_scan_dicom_folders(
-                dicom_scanners,
-                status_callback=self.input_check_update,
-                progress_callback=progress.increase_value,
-            )
+            if total_files > 0:
+                progress = PersistentProgressDialog(
+                    strings.subj_tab_subj_loading, 0, 0, parent=self.parent()
+                )
+                progress.show()
+                progress.setMaximum(total_files)
+                self.subject.execute_scan_dicom_folders(
+                    dicom_scanners,
+                    status_callback=self.input_check_update,
+                    progress_callback=progress.increase_value,
+                )
 
         # Update UI after loading dicom
         self.setTabEnabled(SubjectTab.DATATAB, True)
