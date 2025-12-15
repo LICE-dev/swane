@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
             .height()
         )
 
-    def open_subject_tab(self, subject: Subject, check_dicom_folders : bool = True):
+    def open_subject_tab(self, subject: Subject, check_dicom_folders: bool = True):
         """
         Load a checked and valid subject folder.
 
@@ -326,7 +326,7 @@ class MainWindow(QMainWindow):
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_new_subj_created + subject_name)
             msg_box.exec()
-            self.open_subject_tab(subject,check_dicom_folders=False)
+            self.open_subject_tab(subject, check_dicom_folders=False)
 
     def set_main_working_directory(self):
         """

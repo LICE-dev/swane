@@ -117,7 +117,7 @@ def freesurfer_workflow(
         # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
         recon_all.inputs.openmp = max_cpu
         recon_all.n_procs = recon_all.inputs.openmp
-    else:
+    elif max_cpu > 1:
         # for hard cap we use half of max_cpu setting, but at least 1
         recon_all.inputs.openmp = max(trunc(max_cpu / 2), 1)
         recon_all.n_procs = recon_all.inputs.openmp * 2

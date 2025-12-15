@@ -981,7 +981,7 @@ class SubjectTab(QTabWidget):
             self.enable_exec_tab()
             self.check_venous_volumes()
 
-    def load_subject(self, check_dicom_folders : bool = True):
+    def load_subject(self, check_dicom_folders: bool = True):
         """
         Loads the subject configuration and folder.
 
