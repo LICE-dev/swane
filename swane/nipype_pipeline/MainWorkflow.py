@@ -284,7 +284,8 @@ class MainWorkflow(CustomWorkflow):
 
         flair_inputnode = self.flair.get_node("inputnode")
         flair_inputnode.inputs.output_name = "flair"
-        self.connect(self.t1, "outputnode.ref_brain", self.flair, "inputnode.reference")
+        self.connect(self.t1, "outputnode.ref", self.flair, "inputnode.reference")
+        self.connect(self.t1, "outputnode.ref_brain", self.flair, "inputnode.reference_brain")
 
         self.flair.sink_result(
             save_path=self.base_dir,
@@ -296,7 +297,7 @@ class MainWorkflow(CustomWorkflow):
         self.flair.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
-            result_name="betted_registered_file",
+            result_name="registered_file_brain",
             sub_folder=self.Result_DIR,
         )
 
@@ -387,14 +388,13 @@ class MainWorkflow(CustomWorkflow):
 
                 flair2d_inputnode = self.flair2d.get_node("inputnode")
                 flair2d_inputnode.inputs.output_name = "flair2d_%s" % plane
-                self.connect(
-                    self.t1, "outputnode.ref_brain", self.flair2d, "inputnode.reference"
-                )
+                self.connect(self.t1, "outputnode.ref", self.flair2d, "inputnode.reference")
+                self.connect(self.t1, "outputnode.ref_brain", self.flair2d, "inputnode.reference_brain")
 
                 self.flair2d.sink_result(
                     save_path=self.base_dir,
                     result_node="outputnode",
-                    result_name="betted_registered_file",
+                    result_name="registered_file_brain",
                     sub_folder=self.Result_DIR,
                 )
 
@@ -419,9 +419,8 @@ class MainWorkflow(CustomWorkflow):
         t2_cor_inputnode = self.t2_cor.get_node("inputnode")
         t2_cor_inputnode.inputs.output_name = "t2_cor"
         self.connect(self.t1, "outputnode.ref", self.t2_cor, "inputnode.reference")
-        self.connect(
-            self.t1, "outputnode.ref_mask", self.t2_cor, "inputnode.brain_mask"
-        )
+        self.connect(self.t1, "outputnode.ref_brain", self.t2_cor, "inputnode.reference_brain")
+        self.connect(self.t1, "outputnode.ref_mask", self.t2_cor, "inputnode.brain_mask")
 
         self.t2_cor.sink_result(
             save_path=self.base_dir,
@@ -433,7 +432,7 @@ class MainWorkflow(CustomWorkflow):
         self.t2_cor.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
-            result_name="betted_registered_file",
+            result_name="registered_file_brain",
             sub_folder=self.Result_DIR,
         )
 
@@ -453,7 +452,8 @@ class MainWorkflow(CustomWorkflow):
 
         mdc_inputnode = self.mdc.get_node("inputnode")
         mdc_inputnode.inputs.output_name = "mdc"
-        self.connect(self.t1, "outputnode.ref_brain", self.mdc, "inputnode.reference")
+        self.connect(self.t1, "outputnode.ref_brain", self.mdc, "inputnode.reference_brain")
+        self.connect(self.t1, "outputnode.ref", self.mdc, "inputnode.reference")
 
         self.mdc.sink_result(
             save_path=self.base_dir,
@@ -465,7 +465,7 @@ class MainWorkflow(CustomWorkflow):
         self.mdc.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
-            result_name="betted_registered_file",
+            result_name="registered_file_brain",
             sub_folder=self.Result_DIR,
         )
 

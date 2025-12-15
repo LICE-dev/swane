@@ -3,9 +3,10 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
 from configparser import SectionProxy
-from swane.utils.DataInputList import DataInputList
+from swane.utils.DependencyManager import DependencyManager
 from nipype.interfaces.fsl import BET, RobustFOV
 from nipype.interfaces.utility import IdentityInterface
+from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 
 from nipype import Node
 
@@ -79,18 +80,23 @@ def ref_workflow(
     workflow.connect(ref_robustfov, "out_roi", ref_reScale, "in_file")
 
     # NODE 5: Scalp removal
-    ref_BET = Node(BET(), name="%s_BET" % name)
-    ref_BET.inputs.mask = True
-    ref_BET.inputs.frac = config.getfloat_safe("bet_thr")
-    if config.getboolean_safe("bet_bias_correction"):
-        ref_BET.inputs.reduce_bias = True
+    if DependencyManager.is_freesurfer_synth():
+        ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name)
+        ref_deskull.inputs.mask_file = "ref_brain_mask.nii.gz"
+        ref_deskull.inputs.exclude_csf = True
     else:
-        ref_BET.inputs.robust = True
+        ref_deskull = Node(BET(), name="%s_BET" % name)
+        ref_deskull.inputs.mask = True
+        ref_deskull.inputs.frac = config.getfloat_safe("bet_thr")
+        if config.getboolean_safe("bet_bias_correction"):
+            ref_deskull.inputs.reduce_bias = True
+        else:
+            ref_deskull.inputs.robust = True
 
-    workflow.connect(ref_reScale, "out_file", ref_BET, "in_file")
+    workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
     workflow.connect(ref_reScale, "out_file", outputnode, "ref")
-    workflow.connect(ref_BET, "out_file", outputnode, "ref_brain")
-    workflow.connect(ref_BET, "mask_file", outputnode, "ref_mask")
+    workflow.connect(ref_deskull, "out_file", outputnode, "ref_brain")
+    workflow.connect(ref_deskull, "mask_file", outputnode, "ref_mask")
 
     return workflow
