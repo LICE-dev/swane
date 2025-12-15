@@ -102,13 +102,15 @@ def linear_reg_workflow(
         return "r-%s.nii.gz" % basename
 
     if DependencyManager.is_freesurfer_synth():
-
         # Affine registration to reference space
         reg_2_ref = Node(SynthMorphReg(), name = "%s_2_ref" % name)
         reg_2_ref._mem_gb = 9
         reg_2_ref.long_name = "%s to reference space"
         reg_2_ref.inputs.warp_file = "%s_2_ref.lta" % name
-        reg_2_ref.inputs.model = "affine"
+        if is_volumetric:
+            reg_2_ref.inputs.model = "affine"
+        else:
+            reg_2_ref.inputs.model = "rigid"
         workflow.connect(robustfov, "out_roi", reg_2_ref, "in_file")
         workflow.connect(inputnode, "reference", reg_2_ref, "reference")
         workflow.connect(
@@ -128,7 +130,6 @@ def linear_reg_workflow(
         workflow.connect(reg_2_ref, "warp_file", outputnode, "out_matrix_file")
 
     else:
-
         if is_partial_coverage:
             # NODE 4a: Linear registration to reference space
             flirt_2_ref = Node(FLIRT(), name="%s_2_ref" % name)
