@@ -483,7 +483,7 @@ class MainWorkflow(CustomWorkflow):
         )
         self.asl.long_name = "Arterial Spin Labelling analysis"
 
-        self.connect(self.t1, "outputnode.ref_brain", self.asl, "inputnode.reference")
+        self.connect(self.t1, "outputnode.ref", self.asl, "inputnode.reference")
         self.connect(self.t1, "outputnode.ref_mask", self.asl, "inputnode.brain_mask")
 
         self.asl.sink_result(
