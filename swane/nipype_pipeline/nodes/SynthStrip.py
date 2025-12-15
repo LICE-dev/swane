@@ -61,6 +61,7 @@ class SynthStrip(FSCommand):
 
     def _list_outputs(self):
         outputs = super()._list_outputs()
+
         if isdefined(self.inputs.mask_file):
             outputs["mask_file"] = os.path.abspath(self.inputs.mask_file)
         return outputs
