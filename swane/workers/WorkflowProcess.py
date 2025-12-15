@@ -2,6 +2,7 @@
 
 from nipype import logging as nipype_log, config
 import os
+import psutil
 import traceback
 from multiprocessing import Process, Event
 from threading import Thread
@@ -79,6 +80,10 @@ class WorkflowProcess(Process):
             plugin_args["n_procs"] = self.workflow.max_cpu
         if self.workflow.max_gpu > 0:
             plugin_args["n_gpu_proc"] = self.workflow.max_gpu
+
+        plugin_args["memory_gb"] = psutil.virtual_memory().total / (1024 ** 3)
+        # Assign to niype 85% of total system RAM
+        plugin_args["memory_gb"] = plugin_args["memory_gb"] * 0.85
 
         try:
             # this is useful to generate resource monitor files in subject directory

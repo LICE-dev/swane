@@ -10,6 +10,8 @@ from swane.nipype_pipeline.nodes.CustomLabel2Vol import CustomLabel2Vol
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
 from swane.config.config_enums import CORE_LIMIT
 from nipype.interfaces.utility import IdentityInterface
+import psutil
+from swane.utils.DependencyManager import DependencyManager
 
 FS_DIR = "FS"
 
@@ -122,6 +124,15 @@ def freesurfer_workflow(
         recon_all.inputs.openmp = max(trunc(max_cpu / 2), 1)
         recon_all.n_procs = recon_all.inputs.openmp * 2
 
+    # RAM profile
+    recon_all._mem_gb = 5 # 5 is enough for old recon-all
+    system_mem = psutil.virtual_memory().total / (1024 ** 3)
+    if DependencyManager.is_freesurfer_synth():
+        if system_mem >= 13:
+            recon_all._mem_gb = 13 # new recon-all needs a lot of RAM
+        else:
+            recon_all.inputs.environ["FS_V8_XOPTS"] = 0 # force old recon-all on low-RAM systems
+
     recon_all.inputs.directive = "all"
     recon_all.inputs.args = "-no-isrunning"
     workflow.add_nodes([recon_all])
@@ -217,6 +228,7 @@ def freesurfer_workflow(
     if is_hippo_amyg_labels:
         # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
         segmentHA = Node(SegmentHA(), name="segmentHA")
+        segmentHA._mem_gb = 5
         if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
             segmentHA.inputs.num_cpu = cpu_count()
         elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
