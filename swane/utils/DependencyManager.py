@@ -1,4 +1,5 @@
 import os
+from os import getenvb
 from shutil import which
 from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane import strings
@@ -78,6 +79,7 @@ class DependencyManager:
 
     MIN_FSL_VERSION = "6.0.6"
     MIN_FREESURFER_VERSION = "7.3.2"
+    SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
     FSL_TCSH_COMMAND = "tcsh"
@@ -133,6 +135,23 @@ class DependencyManager:
 
         """
         return self.freesurfer.state2 != DependenceStatus.MISSING
+
+    @staticmethod
+    def is_freesurfer_synth() -> bool:
+        """
+        Returns
+        -------
+        True if freesurfer version contains synth commands.
+
+        """
+        freesurfer_version = str(freesurfer.base.Info.looseversion())
+        try:
+            found_version = version.parse(freesurfer_version)
+        except:
+            return False
+
+        # FS minimum version
+        return found_version >= version.parse(DependencyManager.SYNTH_FREESURFER_VERSION)
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -315,7 +334,9 @@ class DependencyManager:
                 strings.check_dep_fs_error2 % freesurfer_version,
                 DependenceStatus.MISSING,
             )
-        license_file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
+        license_file = os.getenv("FS_LICENSE")
+        if license_file is None or not os.path.exists(license_file):
+            license_file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
         if not os.path.exists(license_file):
             return Dependence(
                 DependenceStatus.MISSING,
