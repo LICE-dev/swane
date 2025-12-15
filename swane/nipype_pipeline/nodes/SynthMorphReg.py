@@ -79,7 +79,7 @@ class SynthMorphReg(FSCommand):
         outputs = super()._list_outputs()
         for name in ["warp_file", "inv_warp_file"]:
             ext = ".mgz"
-            if self.inputs.model == "affine":
+            if self.inputs.model in ["affine", "rigid"]:
                 ext = ".lta"
             out_file = fname_presuffix(self.inputs.in_file, suffix="_"+name+ext, use_ext=False)
             outputs[name] = os.path.abspath(out_file)
