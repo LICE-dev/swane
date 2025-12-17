@@ -245,11 +245,16 @@ check_dep_fs_error4 = (
     "FreeSurfer detected (%s). License key missing (<a "
     "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instruction</a>)"
 )
-check_dep_fs_wrong_version = (
+check_dep_fs_outdated_version = (
     "FreeSurfer version outdated (found %s, required %s). Please "
     "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a>"
 )
-check_dep_fs_no_tcsh = "FreeSurfer detected (%s) but tcsh is not installed."
+check_dep_fs_synth_version = (
+    "FreeSurfer detected (found %s, recommended %s). Please "
+    "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a> to speed up processing greatly."
+)
+check_dep_fs_no_tcsh = "FreeSurfer detected (%s), but tcsh is not installed."
+check_dep_fs_low_ram = "FreeSurfer detected (%s). With less than %dGB of RAM, processing will be slower."
 check_dep_graph_error = "Graphviz not detected (<a href='https://graphviz.org/download/'>Installation info</a>)"
 check_dep_graph_found = "Graphviz detected"
 check_dep_slicer_error1 = (
