@@ -60,7 +60,7 @@ def nonlinear_reg_workflow(name: str, base_dir: str = "/") -> CustomWorkflow:
         # Affine registration to reference space
         reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name)
         reg_2_ref._mem_gb = 13
-        reg_2_ref.long_name = "%s to reference space"
+        reg_2_ref.long_name = "%s to atlas space"
         reg_2_ref.inputs.model = "joint"
         workflow.connect(inputnode, "in_file", reg_2_ref, "in_file")
         workflow.connect(inputnode, "atlas", reg_2_ref, "reference")
