@@ -17,7 +17,6 @@ from swane.nipype_pipeline.nodes.AsymmetryIndex import AsymmetryIndex
 from swane.nipype_pipeline.nodes.Zscore import Zscore
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
-from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 import swane_supplement

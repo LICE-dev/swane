@@ -1,5 +1,5 @@
 from nipype import Node, IdentityInterface
-from nipype.interfaces.fsl import FLIRT, FNIRT, InvWarp, SwapDimensions
+from nipype.interfaces.fsl import FLIRT, FNIRT, InvWarp
 from swane.utils.DependencyManager import DependencyManager
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
