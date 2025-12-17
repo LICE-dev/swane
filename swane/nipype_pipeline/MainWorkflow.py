@@ -730,24 +730,17 @@ class MainWorkflow(CustomWorkflow):
 
         # DTI analysis
         dti_dir = self.subject_input_state_list.get_dicom_dir(DIL.DTI)
-        mni_dir = abspath(
-            os.path.join(
-                os.environ["FSLDIR"], "data/standard/MNI152_T1_2mm_brain.nii.gz"
-            )
-        )
 
         self.dti_preproc = dti_preproc_workflow(
             name=DIL.DTI.value.workflow_name,
             dti_dir=dti_dir,
             config=self.subject_config[DIL.DTI],
-            mni_dir=mni_dir,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
-        self.connect(
-            self.t1, "outputnode.ref_brain", self.dti_preproc, "inputnode.ref_brain"
-        )
+        self.connect(self.t1, "outputnode.ref_brain", self.dti_preproc, "inputnode.ref_brain")
+        self.connect(self.t1, "outputnode.ref", self.dti_preproc, "inputnode.ref")
 
         self.dti_preproc.sink_result(
             save_path=self.base_dir,
