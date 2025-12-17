@@ -713,9 +713,8 @@ class MainWorkflow(CustomWorkflow):
         )
         self.venous.long_name = "Venous MRA analysis"
 
-        self.connect(
-            self.t1, "outputnode.ref_brain", self.venous, "inputnode.ref_brain"
-        )
+        self.connect(self.t1, "outputnode.ref_brain", self.venous, "inputnode.ref_brain")
+        self.connect(self.t1, "outputnode.ref", self.venous, "inputnode.ref")
 
         self.venous.sink_result(
             save_path=self.base_dir,

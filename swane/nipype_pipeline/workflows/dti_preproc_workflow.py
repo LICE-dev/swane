@@ -137,7 +137,7 @@ def dti_preproc_workflow(
 
     # NODE 3: Scalp removal from b0 image
     if DependencyManager.is_freesurfer_synth():
-        b0_deskull = Node(SynthStrip(), name="%s_synthstrip" % name)
+        b0_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=3)
         b0_deskull.inputs.mask_file = "nodif_brain_mask.nii.gz"
         workflow.connect(nodif, "roi_file", b0_deskull, "in_file")
     else:
@@ -198,9 +198,8 @@ def dti_preproc_workflow(
 
     # NODE 6: b0 image linear registration in reference space
     if DependencyManager.is_freesurfer_synth():
-        dif2ref = Node(SynthMorphReg(), name="diff2ref_synthreg")
+        dif2ref = Node(SynthMorphReg(), name="diff2ref_synthreg", mem_gb=9)
         dif2ref.long_name = "%s to reference space"
-        dif2ref._mem_gb = 9
         dif2ref.long_name = "%s to reference space"
         dif2ref.inputs.model = "affine"
         workflow.connect(nodif, "roi_file", dif2ref, "in_file")
@@ -260,8 +259,7 @@ def dti_preproc_workflow(
 
     if is_tractography:
         if DependencyManager.is_freesurfer_synth():
-            mni_2_ref = Node(SynthMorphReg(), name="mni_2_ref_synthreg")
-            mni_2_ref._mem_gb = 13
+            mni_2_ref = Node(SynthMorphReg(), name="mni_2_ref_synthreg", mem_gb=13)
             mni_2_ref.long_name = "%s to atlas space"
             mni_2_ref.inputs.model = "joint"
             mni_dir = abspath(
