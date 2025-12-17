@@ -153,8 +153,7 @@ def func_map_workflow(
     # NODE 4: Registration matrix calculation in reference space
     if DependencyManager.is_freesurfer_synth():
         # Affine registration to reference space
-        reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name)
-        reg_2_ref._mem_gb = 9
+        reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name, mem_gb=9)
         reg_2_ref.long_name = "%s to reference space"
         reg_2_ref.inputs.model = "affine"
         workflow.connect(reorient, "out_file", reg_2_ref, "in_file")

@@ -103,8 +103,7 @@ def linear_reg_workflow(
 
     if DependencyManager.is_freesurfer_synth():
         # Affine registration to reference space
-        reg_2_ref = Node(SynthMorphReg(), name = "%s_2_ref" % name)
-        reg_2_ref._mem_gb = 9
+        reg_2_ref = Node(SynthMorphReg(), name = "%s_2_ref" % name, mem_gb=9)
         reg_2_ref.long_name = "%s to reference space"
         reg_2_ref.inputs.warp_file = "%s_2_ref.lta" % name
         if is_volumetric:
@@ -118,7 +117,7 @@ def linear_reg_workflow(
         )
 
         # Scalp removal
-        ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name)
+        ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=3)
         ref_deskull.inputs.exclude_csf = True
         workflow.connect(reg_2_ref, "out_file", ref_deskull, "in_file")
         workflow.connect(

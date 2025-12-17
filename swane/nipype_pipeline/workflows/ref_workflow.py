@@ -81,7 +81,7 @@ def ref_workflow(
 
     # NODE 5: Scalp removal
     if DependencyManager.is_freesurfer_synth():
-        ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name)
+        ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=3)
         ref_deskull.inputs.mask_file = "ref_brain_mask.nii.gz"
         ref_deskull.inputs.exclude_csf = True
     else:
