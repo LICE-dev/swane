@@ -1,5 +1,5 @@
 import os
-from os import getenvb
+from psutil import virtual_memory
 from shutil import which
 from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane import strings
@@ -80,6 +80,7 @@ class DependencyManager:
     MIN_FSL_VERSION = "6.0.6"
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
+    SYNTH_FREESURFER_RAM_REQUIREMENT = 15
     MIN_SLICER_VERSION = "5.2.1"
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
     FSL_TCSH_COMMAND = "tcsh"
@@ -150,8 +151,12 @@ class DependencyManager:
         except:
             return False
 
-        # FS minimum version
-        return found_version >= version.parse(DependencyManager.SYNTH_FREESURFER_VERSION)
+        #FS version for synth tools
+        if found_version < version.parse(DependencyManager.SYNTH_FREESURFER_VERSION):
+            return False
+        else:
+            # RAM requirement for synth tools
+            return virtual_memory().total / (1024 ** 3) >= DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -352,7 +357,7 @@ class DependencyManager:
         if found_version < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
             return Dependence(
                 DependenceStatus.WARNING,
-                strings.check_dep_fs_wrong_version
+                strings.check_dep_fs_outdated_version
                 % (freesurfer_version, DependencyManager.MIN_FREESURFER_VERSION),
             )
 
@@ -361,6 +366,15 @@ class DependencyManager:
             return Dependence(
                 DependenceStatus.WARNING,
                 strings.check_dep_fs_no_tcsh % freesurfer_version,
+                DependenceStatus.MISSING,
+            )
+
+        # FS recommended version
+        if found_version < version.parse(DependencyManager.SYNTH_FREESURFER_VERSION):
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_fs_synth_version % (freesurfer_version,
+                                                DependencyManager.SYNTH_FREESURFER_VERSION),
                 DependenceStatus.MISSING,
             )
 
@@ -373,6 +387,15 @@ class DependencyManager:
                 strings.check_dep_fs_error3 % freesurfer_version,
                 DependenceStatus.MISSING,
             )
+
+        # RAM requirement to fully use freesurrfer
+        if virtual_memory().total / (1024 ** 3) < DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT:
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_fs_low_ram % (freesurfer_version, DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT),
+                DependenceStatus.MISSING,
+            )
+
         return Dependence(
             DependenceStatus.DETECTED,
             strings.check_dep_fs_found % freesurfer_version,
