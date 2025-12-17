@@ -10,9 +10,7 @@ from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
 from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
 from swane.utils.DependencyManager import DependencyManager
-from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
-from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 
 SIDES = ["lh", "rh"]
 
