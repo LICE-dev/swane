@@ -120,16 +120,16 @@ def venous_ct_workflow(
         workflow.connect(veins_reOrient, "out_file", basal_2_ref, "in_file")
         workflow.connect(inputnode, "ref", basal_2_ref, "reference")
 
-        contrast_2_basal = MapNode(
-            SynthMorphReg(),
-            name="contrast_2_basal_synthreg",
-            mem_gb=9,
-            iterfield=["in_file"],
-        )
-        contrast_2_basal.long_name = "%s to basal scan"
-        contrast_2_basal.inputs.model = "affine"
-        workflow.connect(veins2_reOrient, "out_file", contrast_2_basal, "in_file")
-        workflow.connect(veins_reOrient, "out_file", contrast_2_basal, "reference")
+        # contrast_2_basal = MapNode(
+        #     SynthMorphReg(),
+        #     name="contrast_2_basal_synthreg",
+        #     mem_gb=9,
+        #     iterfield=["in_file"],
+        # )
+        # contrast_2_basal.long_name = "%s to basal scan"
+        # contrast_2_basal.inputs.model = "affine"
+        # workflow.connect(veins2_reOrient, "out_file", contrast_2_basal, "in_file")
+        # workflow.connect(veins_reOrient, "out_file", contrast_2_basal, "reference")
     else:
         basal_2_ref = Node(FLIRT(), name="veins_ct_flirt_2_ref")
         basal_2_ref.long_name = "%s to reference space"
@@ -143,21 +143,21 @@ def venous_ct_workflow(
         workflow.connect(veins_reOrient, "out_file", basal_2_ref, "in_file")
         workflow.connect(inputnode, "ref", basal_2_ref, "reference")
 
-        contrast_2_basal = MapNode(
-            FLIRT(),
-            name="veins_ct_flirt_2_contrast",
-            iterfield=["in_file"],
-        )
-        contrast_2_basal.long_name = "%s to basal scan"
-        contrast_2_basal.inputs.out_matrix_file = "veins2ref.mat"
-        contrast_2_basal.inputs.cost = "mutualinfo"
-        contrast_2_basal.inputs.searchr_x = [-90, 90]
-        contrast_2_basal.inputs.searchr_y = [-90, 90]
-        contrast_2_basal.inputs.searchr_z = [-90, 90]
-        contrast_2_basal.inputs.dof = 6
-        contrast_2_basal.inputs.interp = "trilinear"
-        workflow.connect(veins2_reOrient, "out_file", contrast_2_basal, "in_file")
-        workflow.connect(veins_reOrient, "out_file", contrast_2_basal, "reference")
+    contrast_2_basal = MapNode(
+        FLIRT(),
+        name="veins_ct_flirt_2_contrast",
+        iterfield=["in_file"],
+    )
+    contrast_2_basal.long_name = "%s to basal scan"
+    contrast_2_basal.inputs.out_matrix_file = "veins2ref.mat"
+    contrast_2_basal.inputs.cost = "mutualinfo"
+    contrast_2_basal.inputs.searchr_x = [-90, 90]
+    contrast_2_basal.inputs.searchr_y = [-90, 90]
+    contrast_2_basal.inputs.searchr_z = [-90, 90]
+    contrast_2_basal.inputs.dof = 6
+    contrast_2_basal.inputs.interp = "trilinear"
+    workflow.connect(veins2_reOrient, "out_file", contrast_2_basal, "in_file")
+    workflow.connect(veins_reOrient, "out_file", contrast_2_basal, "reference")
 
     # NODE 9: Subtract basal from contrast scan
     veins_subtraction = MapNode(
@@ -193,8 +193,8 @@ def venous_ct_workflow(
     veins_rescale.long_name = "intensity normalization"
 
     # Function to define the operation string
-    def rescale_string(range):
-        op_string = "-mul 100 -div %f" % range[1]
+    def rescale_string(intensity_range):
+        op_string = "-mul 100 -div %f" % intensity_range[1]
         return op_string
 
     workflow.connect(
