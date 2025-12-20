@@ -188,8 +188,8 @@ def venous_mra_workflow(
     veins_rescale.inputs.out_file = "r-veins_inskull.nii.gz"
 
     # Function to define the operation string
-    def rescale_string(range):
-        op_string = "-mul 100 -div %f" % range[1]
+    def rescale_string(intensity_range):
+        op_string = "-mul 100 -div %f" % intensity_range[1]
         return op_string
 
     workflow.connect(
