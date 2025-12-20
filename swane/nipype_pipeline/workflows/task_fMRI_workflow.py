@@ -164,6 +164,7 @@ def task_fMRI_workflow(
     workflow.connect(extract_ref, "roi_file", motion_correct, "ref_file")
 
     # NODE 8: Perform slice timing correction if needed
+    # TODO: per resting state NON usare lo slice timing correction
     slice_timing_correction = Node(
         CustomSliceTimer(), name="%s_timing_correction" % name
     )
@@ -320,10 +321,14 @@ def task_fMRI_workflow(
     # NODE 26: Perform temporal highpass filtering on the data
     highpass = Node(ImageMaths(), name="%s_highpass" % name)
     highpass.long_name = "Highpass temporal filtering"
+    # TODO: per resting state generare hpstring in genSpec con input hpcutoff=100, il cutoff è 100/(2TR)
     highpass.inputs.suffix = "_tempfilt"
     highpass.inputs.suffix = "_hpf"
     workflow.connect(genSpec, "hpstring", highpass, "op_string")
     workflow.connect(intnorm, "out_file", highpass, "in_file")
+
+    # TODO: per resting state usare l'out_file di highpass con questo comando:
+    # melodic -i filtered_func_data -o filtered_func_data.ica -v --nobet --bgthreshold=1 --tr=$fmri(tr) -d 0 --mmthresh=\"0.5\" --report --guireport=../../report.html "
 
     # NODE 27: Coregister the mean functional image to the structural image
     flirt_2_ref = Node(FLIRT(), name="%s_flirt_2_ref" % name)
