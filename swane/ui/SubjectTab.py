@@ -1093,15 +1093,20 @@ class SubjectTab(QTabWidget):
         progress.accept()
 
         self.reset_workflow()
+
+        for data_input in DataInputList:
+            if data_input in self.subject.input_state_list and data_input.value.parent_input is not None:
+                parent_is_loaded = self.subject.input_state_list[DataInputList[data_input.value.parent_input]].loaded
+                if not parent_is_loaded and self.subject.input_state_list[data_input].loaded:
+                    self.clear_import_folder(data_input)
+                    return
+
         self.check_input_parent()
 
     def check_input_parent(self):
         for data_input in DataInputList:
             if data_input in self.subject.input_state_list and data_input.value.parent_input is not None:
                 parent_is_loaded = self.subject.input_state_list[DataInputList[data_input.value.parent_input]].loaded
-                if not parent_is_loaded and self.subject.input_state_list[data_input].loaded:
-                    #self.clear_import_folder(data_input)
-                    return
                 self.input_report[data_input][3].setEnabled(parent_is_loaded)
 
         self.check_venous_volumes()
