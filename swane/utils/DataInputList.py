@@ -16,6 +16,7 @@ class DataInput(PrefCategory):
         workflow_name: str = None,
         max_volumes: int = 1,
         min_volumes: int = 1,
+        parent_input=None
     ):
         super().__init__(name, label)
         self.tooltip = tooltip
@@ -25,10 +26,13 @@ class DataInput(PrefCategory):
         self.volumes = 0
         self.max_volumes = max_volumes
         self.min_volumes = min_volumes
-        if workflow_name is None:
-            self.workflow_name = self.name
-        else:
+        self.parent_input: DataInput = parent_input
+        if workflow_name is not None:
             self.workflow_name = workflow_name
+        elif parent_input is not None:
+            self.workflow_name = parent_input
+        else:
+            self.workflow_name = self.name
 
     def is_image_modality(self, image_modality_found: str) -> bool:
         try:
@@ -50,12 +54,39 @@ class DataInputList(Enum):
         label="Venous MRA - Phase contrast",
         tooltip="If you have anatomic and venous volumes in a single sequence, load it here. Otherwise, load one of the two volume (which one is not important)",
         max_volumes=2,
+        optional=True,
     )
     VENOUS2 = DataInput(
         name=VENOUS.name + "2",
         label="Venous MRA - Second volume (optional)",
         tooltip="If you have anatomic and venous volumes in two different sequences, load the remaining volume here. Otherwise, leave this slot empty",
-        workflow_name=VENOUS.name,
+        # workflow_name=VENOUS.name,
+        parent_input="VENOUS"
+    )
+    VENOUS_CT = DataInput(
+        name="venous_ct",
+        label="Venous CT",
+        tooltip="Load non contrast scan here and contrast scans in subsequent \"Venous CT - contrast\" slots",
+        optional=True,
+        image_modality=ImageModality.CT
+    )
+    VENOUS_CT2 = DataInput(
+        name=VENOUS_CT.name + "2",
+        label="Venous CT - Contrast",
+        parent_input="VENOUS_CT",
+        image_modality=ImageModality.CT
+    )
+    VENOUS_CT3 = DataInput(
+        name=VENOUS_CT.name + "3",
+        label="Venous CT - Contrast",
+        parent_input="VENOUS_CT",
+        image_modality=ImageModality.CT
+    )
+    VENOUS_CT4 = DataInput(
+        name=VENOUS_CT.name + "4",
+        label="Venous CT - Contrast",
+        parent_input="VENOUS_CT",
+        image_modality=ImageModality.CT
     )
     DTI = DataInput(
         name="dti", label="Diffusion Tensor Imaging", max_volumes=-1, min_volumes=4

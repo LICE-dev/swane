@@ -58,6 +58,7 @@ class SLICE_TIMING(Enum):
 class ImageModality(Enum):
     RM = "mr"
     PET = "pt"
+    CT = "ct"
 
     @staticmethod
     def from_string(mod_string: str):

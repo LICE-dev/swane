@@ -979,7 +979,8 @@ class SubjectTab(QTabWidget):
 
             self.set_ok(data_input, label)
             self.enable_exec_tab()
-            self.check_venous_volumes()
+
+        self.check_input_parent()
 
     def load_subject(self, check_dicom_folders: bool = True):
         """
@@ -1092,18 +1093,26 @@ class SubjectTab(QTabWidget):
         progress.accept()
 
         self.reset_workflow()
-        self.check_venous_volumes()
+        self.check_input_parent()
 
-        if (
-            data_input == DataInputList.VENOUS
-            and self.subject.input_state_list[DataInputList.VENOUS2].loaded
-        ):
-            self.clear_import_folder(DataInputList.VENOUS2)
+    def check_input_parent(self):
+        for data_input in DataInputList:
+            if data_input in self.subject.input_state_list and data_input.value.parent_input is not None:
+                parent_is_loaded = self.subject.input_state_list[DataInputList[data_input.value.parent_input]].loaded
+                if not parent_is_loaded and self.subject.input_state_list[data_input].loaded:
+                    #self.clear_import_folder(data_input)
+                    return
+                self.input_report[data_input][3].setEnabled(parent_is_loaded)
+
+        self.check_venous_volumes()
 
     def check_venous_volumes(self):
         """
         Display informative warnings in venous and venous2 data input rows to help user in data loading
         """
+        if not self.global_config.is_optional_series_enabled(DataInputList.VENOUS):
+            return
+
         phases = (
             self.subject.input_state_list[DataInputList.VENOUS].volumes
             + self.subject.input_state_list[DataInputList.VENOUS2].volumes
