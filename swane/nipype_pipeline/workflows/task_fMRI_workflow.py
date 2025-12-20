@@ -320,6 +320,7 @@ def task_fMRI_workflow(
     # NODE 26: Perform temporal highpass filtering on the data
     highpass = Node(ImageMaths(), name="%s_highpass" % name)
     highpass.long_name = "Highpass temporal filtering"
+    # TODO: per resting state generare hpstring in genSpec con input hpcutoff=100, il cutoff è 100/(2TR)
     highpass.inputs.suffix = "_tempfilt"
     highpass.inputs.suffix = "_hpf"
     workflow.connect(genSpec, "hpstring", highpass, "op_string")
