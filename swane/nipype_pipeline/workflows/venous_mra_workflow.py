@@ -20,11 +20,11 @@ from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 from swane.utils.DependencyManager import DependencyManager
 
-def venous_workflow(
+def venous_mra_workflow(
     name: str,
-    venous_dir: str,
+    venous_mr_dir: str,
     config: SectionProxy,
-    venous2_dir: str = None,
+    venous2_mr_dir: str = None,
     base_dir: str = "/",
 ) -> CustomWorkflow:
     """
@@ -35,11 +35,11 @@ def venous_workflow(
     ----------
     name : str
         The workflow name.
-    venous_dir : path
+    venous_mr_dir : path
         The directory path of the venous phase contrast DICOM files.
     config: SectionProxy
         workflow settings.
-    venous2_dir : path
+    venous2_mr_dir : path
         If veins phase is divided from anatomic phase, use this param to load the second DICOM files directory.
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
@@ -73,7 +73,7 @@ def venous_workflow(
 
     # NODE 1a: Conversion dicom -> nifti
     veins_conv = Node(CustomDcm2niix(), name="veins_conv")
-    veins_conv.inputs.source_dir = venous_dir
+    veins_conv.inputs.source_dir = venous_mr_dir
     veins_conv.inputs.bids_format = False
     veins_conv.inputs.out_filename = "veins"
     veins_conv.inputs.name_conflicts = 1
@@ -89,7 +89,7 @@ def venous_workflow(
     vein_detection_mode = config.getenum_safe("vein_detection_mode")
     veins_check.inputs.detection_mode = vein_detection_mode
     # If the phases are in the same sequence
-    if venous2_dir is None:
+    if venous2_mr_dir is None:
         # NODE 3a: Divide the two phases from the phase contrast
         veins_split = Node(Split(), name="veins_split")
         veins_split.long_name = "volumes splitting"
@@ -100,7 +100,7 @@ def venous_workflow(
     else:
         # NODE 1b: Conversion dicom -> nifti
         veins2_conv = Node(CustomDcm2niix(), name="veins2_conv")
-        veins2_conv.inputs.source_dir = venous2_dir
+        veins2_conv.inputs.source_dir = venous2_mr_dir
         veins2_conv.inputs.bids_format = False
         veins2_conv.inputs.out_filename = "veins2"
         veins2_conv.inputs.name_conflicts = 1

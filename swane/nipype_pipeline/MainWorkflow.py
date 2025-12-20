@@ -23,7 +23,8 @@ from swane.nipype_pipeline.workflows.ref_workflow import ref_workflow
 from swane.nipype_pipeline.workflows.freesurfer_workflow import freesurfer_workflow
 from swane.nipype_pipeline.workflows.flat1_workflow import flat1_workflow
 from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
-from swane.nipype_pipeline.workflows.venous_workflow import venous_workflow
+from swane.nipype_pipeline.workflows.venous_mra_workflow import venous_mra_workflow
+from swane.nipype_pipeline.workflows.vernous_ct_workflow import venous_ct_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import (
     tractography_workflow,
@@ -105,7 +106,8 @@ class MainWorkflow(CustomWorkflow):
         self.launch_mdc_analysis()
         self.launch_asl_analysis()
         self.launch_pet_analysis()
-        self.launch_venous_analysis()
+        self.launch_venous_ct_analysis()
+        self.launch_venous_mra_analysis()
         self.launch_dti_analysis()
         self.launch_fMRI_analysis()
 
@@ -691,32 +693,67 @@ class MainWorkflow(CustomWorkflow):
                     sub_folder=self.Result_DIR,
                 )
 
-    def launch_venous_analysis(self):
+    def launch_venous_ct_analysis(self):
         if (
-            not self.subject_input_state_list[DIL.VENOUS].loaded
+            not DIL.VENOUS_CT in self.subject_input_state_list
+            or not self.subject_input_state_list[DIL.VENOUS_CT].loaded
+            or not self.subject_input_state_list[DIL.VENOUS_CT2].loaded
+        ):
+            return
+
+        # Venous MRA analysis
+        venous_ct_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT)
+        venous2_ct_dir = [self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT2)]
+        if self.subject_input_state_list[DIL.VENOUS_CT3].loaded:
+            venous2_ct_dir.append(self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT3))
+        if self.subject_input_state_list[DIL.VENOUS_CT4].loaded:
+            venous2_ct_dir.append(self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT4))
+        self.venous_ct = venous_ct_workflow(
+            DIL.VENOUS.value.workflow_name,
+            venous_ct_dir=venous_ct_dir,
+            config=self.subject_config[DIL.VENOUS],
+            venous2_ct_dir=venous2_ct_dir,
+        )
+        self.venous_ct.long_name = "Venous CT analysis"
+
+        self.connect(self.t1, "outputnode.ref_brain", self.venous_ct, "inputnode.ref_brain")
+        self.connect(self.t1, "outputnode.ref", self.venous_ct, "inputnode.ref")
+
+        self.venous_ct.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="veins",
+            sub_folder=self.Result_DIR,
+        )
+
+
+    def launch_venous_mra_analysis(self):
+        if (
+            not DIL.VENOUS in self.subject_input_state_list
+            or not self.subject_input_state_list[DIL.VENOUS].loaded
             or not self.subject_input_state_list[DIL.VENOUS].volumes
             + self.subject_input_state_list[DIL.VENOUS2].volumes
             == 2
         ):
             return
 
-        # Venous analysis
-        venous_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS)
-        venous2_dir = None
+        # Venous MRA analysis
+        venous_mr_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS)
+        venous2_mr_dir = None
         if self.subject_input_state_list[DIL.VENOUS2].loaded:
-            venous2_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS2)
-        self.venous = venous_workflow(
+            venous2_mr_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS2)
+        self.venous_mra = venous_mra_workflow(
             DIL.VENOUS.value.workflow_name,
-            venous_dir,
-            self.subject_config[DIL.VENOUS],
-            venous2_dir,
+            venous_mr_dir=venous_mr_dir,
+            config=self.subject_config[DIL.VENOUS],
+            venous2_mr_dir=venous2_mr_dir,
         )
-        self.venous.long_name = "Venous MRA analysis"
+        self.venous_mra.long_name = "Venous MRA analysis"
 
-        self.connect(self.t1, "outputnode.ref_brain", self.venous, "inputnode.ref_brain")
-        self.connect(self.t1, "outputnode.ref", self.venous, "inputnode.ref")
+        self.connect(self.t1, "outputnode.ref_brain", self.venous_mra, "inputnode.ref_brain")
+        self.connect(self.t1, "outputnode.ref", self.venous_mra, "inputnode.ref")
 
-        self.venous.sink_result(
+        self.venous_mra.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
             result_name="veins",
