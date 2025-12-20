@@ -14,10 +14,10 @@ from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.FMRIGenSpec import FMRIGenSpec
 from swane.config.config_enums import BLOCK_DESIGN
-from swane.nipype_pipeline.workflows.preproc_fMRI_workflow import preproc_fMRI_workflow
+from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 
 
-def task_fMRI_workflow(
+def fMRI_task_workflow(
     name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/"
 ) -> CustomWorkflow:
     """
@@ -67,8 +67,8 @@ def task_fMRI_workflow(
     if block_design == BLOCK_DESIGN.RARB:
         hpcutoff = hpcutoff * 2
 
-    workflow = preproc_fMRI_workflow(name=name, dicom_dir=dicom_dir, TR=TR, slice_timing=slice_timing, n_vols=n_vols,
-                                     hpcutoff=hpcutoff, del_start_vols=del_start_vols,  del_end_vols=del_end_vols,
+    workflow = fMRI_preproc_workflow(name=name, dicom_dir=dicom_dir, TR=TR, slice_timing=slice_timing, n_vols=n_vols,
+                                     hpcutoff=hpcutoff, del_start_vols=del_start_vols, del_end_vols=del_end_vols,
                                      base_dir=base_dir)
 
     # Output Node

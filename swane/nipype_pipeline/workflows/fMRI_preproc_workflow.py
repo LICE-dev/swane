@@ -17,7 +17,7 @@ from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
 from swane.config.config_enums import SLICE_TIMING
 
-def preproc_fMRI_workflow(
+def fMRI_preproc_workflow(
     name: str, dicom_dir: str,
     TR: float, slice_timing: SLICE_TIMING, n_vols: int, del_start_vols: int, del_end_vols: int, hpcutoff: int,
     base_dir: str = "/"

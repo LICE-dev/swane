@@ -15,7 +15,7 @@ from swane.config.config_enums import (
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
-from swane.nipype_pipeline.workflows.task_fMRI_workflow import task_fMRI_workflow
+from swane.nipype_pipeline.workflows.fMRI_task_workflow import fMRI_task_workflow
 from swane.nipype_pipeline.workflows.nonlinear_reg_workflow import (
     nonlinear_reg_workflow,
 )
@@ -869,7 +869,7 @@ class MainWorkflow(CustomWorkflow):
                 continue
 
             dicom_dir = self.subject_input_state_list.get_dicom_dir(DIL["FMRI_%d" % y])
-            self.fMRI = task_fMRI_workflow(
+            self.fMRI = fMRI_task_workflow(
                 name=DIL["FMRI_%d" % y].value.workflow_name,
                 dicom_dir=dicom_dir,
                 config=self.subject_config[DIL["FMRI_%d" % y]],
