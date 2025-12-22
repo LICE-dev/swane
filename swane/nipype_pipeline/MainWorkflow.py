@@ -24,7 +24,7 @@ from swane.nipype_pipeline.workflows.freesurfer_workflow import freesurfer_workf
 from swane.nipype_pipeline.workflows.flat1_workflow import flat1_workflow
 from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_mra_workflow import venous_mra_workflow
-from swane.nipype_pipeline.workflows.vernous_ct_workflow import venous_ct_workflow
+from swane.nipype_pipeline.workflows.venous_ct_workflow import venous_ct_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import (
     tractography_workflow,
