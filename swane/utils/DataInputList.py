@@ -97,6 +97,12 @@ class DataInputList(Enum):
         tooltip="CBF images from an ASL sequence",
     )
     PET = DataInput(name="pet", label="PET", image_modality=ImageModality.PET)
+    SEEG_CT = DataInput(
+        name="seeg_ct",
+        label="Stereo-EEG CT",
+        optional=True,
+        image_modality=ImageModality.CT
+    )
 
     # An Enum usually contains EVERY variable defined in its __init__, we want to ignore some used for loop only
     _ignore_ = "DataInputList i"

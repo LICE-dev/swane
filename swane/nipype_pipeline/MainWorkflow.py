@@ -26,6 +26,7 @@ from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_mra_workflow import venous_mra_workflow
 from swane.nipype_pipeline.workflows.venous_ct_workflow import venous_ct_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
+from swane.nipype_pipeline.workflows.seeg_ct_workflow import seeg_ct_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import (
     tractography_workflow,
     SIDES,
@@ -108,6 +109,7 @@ class MainWorkflow(CustomWorkflow):
         self.launch_pet_analysis()
         self.launch_venous_ct_analysis()
         self.launch_venous_mra_analysis()
+        self.launch_seeg_ct_analysis()
         self.launch_dti_analysis()
         self.launch_fMRI_analysis()
 
@@ -701,7 +703,7 @@ class MainWorkflow(CustomWorkflow):
         ):
             return
 
-        # Venous MRA analysis
+        # Venous CT analysis
         venous_ct_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT)
         venous2_ct_dir = [self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT2)]
         if self.subject_input_state_list[DIL.VENOUS_CT3].loaded:
@@ -709,9 +711,9 @@ class MainWorkflow(CustomWorkflow):
         if self.subject_input_state_list[DIL.VENOUS_CT4].loaded:
             venous2_ct_dir.append(self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT4))
         self.venous_ct = venous_ct_workflow(
-            DIL.VENOUS.value.workflow_name,
+            DIL.VENOUS_CT.value.workflow_name,
             venous_ct_dir=venous_ct_dir,
-            config=self.subject_config[DIL.VENOUS],
+            #config=self.subject_config[DIL.VENOUS_CT],
             venous2_ct_dir=venous2_ct_dir,
         )
         self.venous_ct.long_name = "Venous CT analysis"
@@ -725,7 +727,6 @@ class MainWorkflow(CustomWorkflow):
             result_name="veins",
             sub_folder=self.Result_DIR,
         )
-
 
     def launch_venous_mra_analysis(self):
         if (
@@ -757,6 +758,33 @@ class MainWorkflow(CustomWorkflow):
             save_path=self.base_dir,
             result_node="outputnode",
             result_name="veins",
+            sub_folder=self.Result_DIR,
+        )
+
+    def launch_seeg_ct_analysis(self):
+        if (
+            not DIL.SEEG_CT in self.subject_input_state_list
+            or not self.subject_input_state_list[DIL.SEEG_CT].loaded
+        ):
+            return
+
+        # SEEG CT analysis
+        seeg_ct_dir = self.subject_input_state_list.get_dicom_dir(DIL.SEEG_CT)
+        self.seeg_ct_dir = seeg_ct_workflow(
+            DIL.SEEG_CT.value.workflow_name,
+            seeg_ct_dir=seeg_ct_dir,
+            #config=self.subject_config[DIL.SEEG_CT]
+        )
+        self.seeg_ct_dir.long_name = "Venous CT analysis"
+
+        self.connect(self.t1, "outputnode.ref_brain", self.seeg_ct_dir, "inputnode.ref_brain")
+        self.connect(self.t1, "outputnode.ref", self.seeg_ct_dir, "inputnode.ref")
+        self.connect(self.t1, "outputnode.ref_mask", self.seeg_ct_dir, "inputnode.brain_mask")
+
+        self.seeg_ct_dir.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="electrodes",
             sub_folder=self.Result_DIR,
         )
 

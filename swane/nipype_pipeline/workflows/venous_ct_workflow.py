@@ -21,7 +21,7 @@ from swane.utils.DependencyManager import DependencyManager
 def venous_ct_workflow(
     name: str,
     venous_ct_dir: str,
-    config: SectionProxy,
+    #config: SectionProxy,
     venous2_ct_dir: list,
     base_dir: str = "/",
 ) -> CustomWorkflow:
@@ -62,7 +62,6 @@ def venous_ct_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
-    print(1)
 
     # Input Node
     inputnode = Node(IdentityInterface(fields=["ref_brain", "ref"]), name="inputnode")
