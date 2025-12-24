@@ -713,7 +713,7 @@ class MainWorkflow(CustomWorkflow):
         self.venous_ct = venous_ct_workflow(
             DIL.VENOUS_CT.value.workflow_name,
             venous_ct_dir=venous_ct_dir,
-            #config=self.subject_config[DIL.VENOUS_CT],
+            config=self.subject_config[DIL.VENOUS_CT],
             venous2_ct_dir=venous2_ct_dir,
         )
         self.venous_ct.long_name = "Venous CT analysis"
@@ -773,7 +773,7 @@ class MainWorkflow(CustomWorkflow):
         self.seeg_ct_dir = seeg_ct_workflow(
             DIL.SEEG_CT.value.workflow_name,
             seeg_ct_dir=seeg_ct_dir,
-            #config=self.subject_config[DIL.SEEG_CT]
+            config=self.subject_config[DIL.SEEG_CT]
         )
         self.seeg_ct_dir.long_name = "Venous CT analysis"
 

@@ -21,7 +21,7 @@ from swane.utils.DependencyManager import DependencyManager
 def venous_ct_workflow(
     name: str,
     venous_ct_dir: str,
-    #config: SectionProxy,
+    config: SectionProxy,
     venous2_ct_dir: list,
     base_dir: str = "/",
 ) -> CustomWorkflow:
@@ -106,29 +106,16 @@ def venous_ct_workflow(
     else:
         deskull = Node(BET(), name="veins_ct_bet")
         deskull.inputs.mask = True
-        deskull.inputs.threshold = True
-        #deskull.inputs.surfaces = True
+        deskull.inputs.frac = config.getfloat_safe("bet_thr")
         workflow.connect(veins_reOrient, "out_file", deskull, "in_file")
 
     # NODE 7: Linear registration of veins to reference space
-    # NODE 8: Linear registration of contrast to basal veins
     if DependencyManager.is_freesurfer_synth():
         basal_2_ref = Node(SynthMorphReg(), name="veins_ct_synthreg", mem_gb=9)
         basal_2_ref.long_name = "%s to reference space"
         basal_2_ref.inputs.model = "affine"
         workflow.connect(veins_reOrient, "out_file", basal_2_ref, "in_file")
         workflow.connect(inputnode, "ref", basal_2_ref, "reference")
-
-        # contrast_2_basal = MapNode(
-        #     SynthMorphReg(),
-        #     name="contrast_2_basal_synthreg",
-        #     mem_gb=9,
-        #     iterfield=["in_file"],
-        # )
-        # contrast_2_basal.long_name = "%s to basal scan"
-        # contrast_2_basal.inputs.model = "affine"
-        # workflow.connect(veins2_reOrient, "out_file", contrast_2_basal, "in_file")
-        # workflow.connect(veins_reOrient, "out_file", contrast_2_basal, "reference")
     else:
         basal_2_ref = Node(FLIRT(), name="veins_ct_flirt_2_ref")
         basal_2_ref.long_name = "%s to reference space"
@@ -142,6 +129,7 @@ def venous_ct_workflow(
         workflow.connect(veins_reOrient, "out_file", basal_2_ref, "in_file")
         workflow.connect(inputnode, "ref", basal_2_ref, "reference")
 
+    # NODE 8: Linear registration of contrast to basal veins
     contrast_2_basal = MapNode(
         FLIRT(),
         name="veins_ct_flirt_2_contrast",

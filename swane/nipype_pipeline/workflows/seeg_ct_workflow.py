@@ -3,7 +3,8 @@ from nipype.interfaces.fsl import (
     ApplyMask,
     ApplyXFM,
     ImageMaths,
-    Threshold
+    Threshold,
+    ErodeImage, BinaryMaths
 )
 from nipype import Node, IdentityInterface
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
@@ -16,7 +17,7 @@ from swane.utils.DependencyManager import DependencyManager
 def seeg_ct_workflow(
     name: str,
     seeg_ct_dir: str,
-    #config: SectionProxy,
+    config: SectionProxy,
     base_dir: str = "/",
 ) -> CustomWorkflow:
     """
@@ -55,6 +56,7 @@ def seeg_ct_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+    electrode_thr = config.getint_safe("electrode_threshold")
 
     # Input Node
     inputnode = Node(IdentityInterface(fields=["ref_brain", "ref", "brain_mask"]), name="inputnode")
@@ -83,7 +85,7 @@ def seeg_ct_workflow(
 
         seeg_electrodes_thr = Node(Threshold(), name="seeg_electrodes_thr")
         seeg_electrodes_thr.long_name = "Electrode thresholding"
-        seeg_electrodes_thr.inputs.thresh = 2000
+        seeg_electrodes_thr.inputs.thresh = electrode_thr
         workflow.connect(seeg_ct_reOrient, "out_file", seeg_electrodes_thr, "in_file")
 
         electrodes_weight_bin = Node(ImageMaths(), name="electrodes_weight_bin")
@@ -135,6 +137,31 @@ def seeg_ct_workflow(
         workflow.connect(seeg_ct_reOrient, "out_file", seeg_ct_2_ref_flirt, "in_file")
         workflow.connect(inputnode, "ref", seeg_ct_2_ref_flirt, "reference")
 
-    workflow.connect(seeg_ct_2_ref_flirt, "out_file", outputnode, "electrodes")
+    # Electrode mask in ref space
+    seeg_electrodes_thr_ref = Node(Threshold(), name="seeg_electrodes_thr_ref")
+    seeg_electrodes_thr_ref.long_name = "Electrode thresholding"
+    seeg_electrodes_thr_ref.inputs.thresh = electrode_thr
+    workflow.connect(seeg_ct_2_ref_flirt, "out_file", seeg_electrodes_thr_ref, "in_file")
+
+    # Erode brain mask
+    ref_brain_erode = Node(ErodeImage(), name="ref_brain_erode")
+    ref_brain_erode.long_name = "Erode brain mask borders"
+    ref_brain_erode.inputs.args = "-ero"
+    workflow.connect(inputnode, "brain_mask", ref_brain_erode, "in_file")
+
+    # Mask seeg ct
+    seeg_ct_brain = Node(ApplyMask(), name="seeg_ct_brain")
+    workflow.connect(seeg_ct_2_ref_flirt, "out_file", seeg_ct_brain, "in_file")
+    workflow.connect(ref_brain_erode, "out_file", seeg_ct_brain, "mask_file")
+
+    # Add outskull elecrode in
+    seeg_electodes = Node(BinaryMaths(), name="seeg_electodes")
+    seeg_electodes.long_name = "Electrodes+brain image calculation"
+    seeg_electodes.inputs.out_file = "r-seeg_electrodes.nii.gz"
+    seeg_electodes.inputs.operation = "add"
+    workflow.connect(seeg_ct_brain, "out_file", seeg_electodes, "in_file")
+    workflow.connect(seeg_electrodes_thr_ref, "out_file", seeg_electodes, "operand_file")
+
+    workflow.connect(seeg_electodes, "out_file", outputnode, "electrodes")
 
     return workflow
