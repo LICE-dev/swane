@@ -220,6 +220,22 @@ WF_PREFERENCES[category]["ai_threshold"] = PreferenceEntry(
     pref_requirement={DataInputList.PET: [("ai", True)]},
     pref_requirement_fail_tooltip="Requires PET Asymmetry Index",
 )
+category = DataInputList.SEEG_CT
+WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]["electrode_threshold"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Threshold for electrode identification",
+    default=2000,
+)
+category = DataInputList.VENOUS_CT
+WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Threshold value for skull removal",
+    default=0.1,
+    tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
+    range=[0, 1],
+)
 category = DataInputList.DTI
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["old_eddy_correct"] = PreferenceEntry(
