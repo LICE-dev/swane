@@ -93,6 +93,7 @@ class SubjectTab(QTabWidget):
         self.subject_config_button = None
         self.exec_button = None
         self.exec_graph = None
+        self.node_info_grid = None
         self.load_scene_button = None
         self.open_results_directory_button = None
         self.results_model = None
@@ -532,6 +533,21 @@ class SubjectTab(QTabWidget):
         layout.addWidget(self.exec_button, 1, 1)
         self.exec_graph = QSvgWidget()
         layout.addWidget(self.exec_graph, 2, 1)
+        node_info_widget = QWidget()
+        layout.addWidget(node_info_widget, 2, 1)
+
+        self.node_info_grid = {"widget": node_info_widget}
+        info_grid = QGridLayout()
+        info_grid.addWidget(QLabel("Node name: "), 0, 0)
+        info_grid.addWidget(QLabel("Node folder: "), 1, 0)
+        info_grid.addWidget(QLabel("Node command: "), 2, 0)
+        self.node_info_grid["node_name"] = QLabel("empty")
+        self.node_info_grid["node_folder"] = QLabel("empty")
+        self.node_info_grid["node_command"] = QLabel("empty")
+        info_grid.addWidget(self.node_info_grid["node_name"], 0, 1)
+        info_grid.addWidget(self.node_info_grid["node_folder"], 1, 1)
+        info_grid.addWidget(self.node_info_grid["node_command"], 2, 1)
+        node_info_widget.setLayout(info_grid)
 
         self.exec_tab.setLayout(layout)
 
@@ -647,6 +663,15 @@ class SubjectTab(QTabWidget):
                 self.exec_graph.renderer().setAspectRatioMode(
                     Qt.AspectRatioMode.KeepAspectRatio
                 )
+                self.node_info_grid["widget"].hide()
+                self.exec_graph.show()
+        else:
+            self.node_info_grid["widget"].show()
+            self.node_info_grid["node_name"].setText("test")
+            self.node_info_grid["node_folder"].setText("test")
+            self.node_info_grid["node_command"].setText("test")
+            self.exec_graph.hide()
+
 
     @staticmethod
     def no_close_event(event):
