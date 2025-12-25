@@ -887,12 +887,15 @@ class SubjectTab(QTabWidget):
         )
         result_tab_layout.addWidget(self.open_results_directory_button, 0, 3)
 
-        self.results_model = QFileSystemModel()
         self.result_tree = QTreeView(parent=self)
         self.result_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.result_tree.setModel(self.results_model)
+        self.reset_result_tree_model()
 
         result_tab_layout.addWidget(self.result_tree, 1, 0, 1, 4)
+
+    def reset_result_tree_model(self):
+        self.results_model = QFileSystemModel()
+        self.result_tree.setModel(self.results_model)
 
     def generate_scene(self) -> PersistentProgressDialog:
         """
@@ -1069,21 +1072,23 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        scene_dir = self.subject.result_dir()
+        result_dir = self.subject.result_dir()
 
-        if self.subject.is_workflow_process_alive() and not on_workflow_running:
+        print(1)
+
+        if not os.path.exists(result_dir):
+            self.setTabEnabled(SubjectTab.RESULTTAB, False)
+            self.result_directory_watcher.removePaths([result_dir])
+            self.reset_result_tree_model()
+        elif self.subject.is_workflow_process_alive() and not on_workflow_running:
             return
-
-        if os.path.exists(scene_dir):
+        else:
             self.setTabEnabled(SubjectTab.RESULTTAB, True)
-            self.results_model.setRootPath(scene_dir)
+            self.results_model.setRootPath(result_dir)
             index_root = self.results_model.index(self.results_model.rootPath())
             self.result_tree.setRootIndex(index_root)
-            self.result_directory_watcher.addPath(scene_dir)
+            self.result_directory_watcher.addPath(result_dir)
             self.load_scene_button_update_state()
-        else:
-            self.setTabEnabled(SubjectTab.RESULTTAB, False)
-            self.result_directory_watcher.removePaths([scene_dir])
 
     def clear_import_folder(self, data_input: DataInputList):
         """
