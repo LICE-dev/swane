@@ -57,6 +57,7 @@ def seeg_ct_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
     electrode_thr = config.getint_safe("electrode_threshold")
+    erode_kernel_size = config.getfloat_safe("erode_kernel_size")
 
     # Input Node
     inputnode = Node(IdentityInterface(fields=["ref_brain", "ref", "brain_mask"]), name="inputnode")
@@ -146,7 +147,8 @@ def seeg_ct_workflow(
     # Erode brain mask
     ref_brain_erode = Node(ErodeImage(), name="ref_brain_erode")
     ref_brain_erode.long_name = "Erode brain mask borders"
-    ref_brain_erode.inputs.args = "-ero"
+    ref_brain_erode.inputs.kernel_shape = "box"
+    ref_brain_erode.inputs.kernel_size = erode_kernel_size
     workflow.connect(inputnode, "brain_mask", ref_brain_erode, "in_file")
 
     # Mask seeg ct

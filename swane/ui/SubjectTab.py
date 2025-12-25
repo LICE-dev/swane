@@ -1074,8 +1074,6 @@ class SubjectTab(QTabWidget):
         """
         result_dir = self.subject.result_dir()
 
-        print(1)
-
         if not os.path.exists(result_dir):
             self.setTabEnabled(SubjectTab.RESULTTAB, False)
             self.result_directory_watcher.removePaths([result_dir])

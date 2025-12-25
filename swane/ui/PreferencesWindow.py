@@ -73,6 +73,8 @@ class PreferencesWindow(QDialog):
         for category in default_pref_list:
             if str(category) not in my_config:
                 continue
+            if category not in self.parent().subject.input_state_list:
+                continue
             if (
                 is_workflow
                 and not my_config.global_config
