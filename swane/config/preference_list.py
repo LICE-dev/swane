@@ -227,6 +227,13 @@ WF_PREFERENCES[category]["electrode_threshold"] = PreferenceEntry(
     label="Threshold for electrode identification",
     default=2000,
 )
+WF_PREFERENCES[category]["erode_kernel_size"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Kernel dimension for brain mask erosion",
+    tooltip="Increase this value if final electrode mask includes skull",
+    default=3,
+    range=[1, 20]
+)
 category = DataInputList.VENOUS_CT
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
