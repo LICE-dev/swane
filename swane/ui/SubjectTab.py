@@ -143,7 +143,6 @@ class SubjectTab(QTabWidget):
             )
             if shutdown:
                 self.main_window.safe_shutdown_after_workflow(self.subject)
-
             return
         elif wf_report.signal_type == WorkflowSignals.INVALID_SIGNAL:
             # Invalid signal sent from WF to UI, code error intercept
@@ -154,12 +153,18 @@ class SubjectTab(QTabWidget):
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_wf_invalid_signal)
             msg_box.exec()
-
-        # TODO - To be implemented for RAM usage info by each workflow
-        # if msg == WorkflowProcess.WORKFLOW_INSUFFICIENT_RESOURCES:
-        #     msg_box = QMessageBox()
-        #     msg_box.setText(strings.pttab_wf_insufficient_resources)
-        #     msg_box.exec()
+            self.workflow_had_error = True
+            return
+        elif wf_report.signal_type == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES:
+            try:
+                self.workflow_process.stop_event.set()
+            except:
+                pass
+            msg_box = QMessageBox()
+            msg_box.setText(strings.subj_tab_wf_insufficient_resources)
+            msg_box.exec()
+            self.workflow_had_error = True
+            return
 
         if wf_report.signal_type == WorkflowSignals.NODE_STARTED:
             icon = self.main_window.LOADING_MOVIE_FILE
