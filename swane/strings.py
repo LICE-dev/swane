@@ -184,6 +184,19 @@ subj_tab_unsupported_files = (
     + " works on primary non derived DICOM images.\nFolder contains ImageType combinations that are not accepted: {}"
 )
 
+sub_tab_node_name_label = "Node"
+sub_tab_node_status_label = "Status"
+sub_tab_node_status_not_started = "Not started"
+sub_tab_node_status_running = "Execution started at"
+sub_tab_node_status_completed = "Completed at"
+sub_tab_node_status_failed = "Failed"
+sub_tab_node_dir_label = "Directory"
+sub_tab_node_command_label = "Command"
+sub_tab_node_duration_label = "Duration"
+sub_tab_node_cpu_label = "CPU %"
+sub_tab_node_ram_label = "Mem (GB)"
+sub_tab_node_output_label = "Output"
+
 # Wf Preference Window
 wf_pref_window_title_user = " - Workflow preferences"
 
