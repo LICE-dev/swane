@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import (
-    QWidget, QGridLayout, QLabel, QPushButton, QTextEdit, QSpacerItem, QSizePolicy
+    QWidget, QGridLayout, QLabel, QPushButton, QTextEdit, QSpacerItem, QSizePolicy, QPlainTextEdit
 )
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics
 from swane import strings
 from nipype.utils.filemanip import loadpkl
 import os
@@ -12,6 +12,7 @@ from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from multiprocessing import cpu_count
 from nipype.interfaces.base.support import Bunch
 from nipype.interfaces.base import traits
+import math
 
 
 class NipypeNodeRuntimeWidget(QWidget):
@@ -108,19 +109,39 @@ class NipypeNodeRuntimeWidget(QWidget):
                 command = f.read().strip()
 
         if command:
-            cmd = QTextEdit(command)
+            cmd = QPlainTextEdit(command)
             cmd.setReadOnly(True)
-            cmd.setMaximumHeight(60)
-            cmd.setMinimumHeight(self.MIN_ROW_HEIGHT * 2)
-            cmd.setLineWrapMode(QTextEdit.WidgetWidth)
-            cmd.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            cmd.setLineWrapMode(QPlainTextEdit.WidgetWidth)
             cmd.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            cmd.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            font = QFont()
-            font.setFamily("Monospace")
+            cmd.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+            font = cmd.font()
             font.setPointSize(font.pointSize() - 1)
             cmd.setFont(font)
+
+            text_len = len(command)
+            lines_needed = math.ceil(text_len / 75)
+            fm = QFontMetrics(font)
+            line_height = fm.lineSpacing()*lines_needed
+            lines = max(1, command.count("\n") + 1)
+            max_lines = 3
+            visible_lines = min(lines, max_lines)
+
+            # Consider document margin + extra padding
+            margin = cmd.document().documentMargin()
+            cmd.setFixedHeight(line_height * visible_lines + 2 * margin + 8)
+
+            cmd.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+            cmd.setStyleSheet("""
+                QPlainTextEdit {
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                }
+            """)
+
             self.grid.addWidget(cmd, self._row, 1, 1, 6)
+
         else:
             self._add_value("—", self._row, 1, colspan=6)
 
