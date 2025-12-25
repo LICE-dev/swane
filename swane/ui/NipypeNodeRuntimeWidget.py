@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QGridLayout, QLabel, QPushButton, QTextEdit, QSpacerItem, QSizePolicy
 )
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QFont
 from swane import strings
 from nipype.utils.filemanip import loadpkl
 import os
@@ -10,6 +10,8 @@ from datetime import datetime
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from multiprocessing import cpu_count
+from nipype.interfaces.base.support import Bunch
+from nipype.interfaces.base import traits
 
 
 class NipypeNodeRuntimeWidget(QWidget):
@@ -112,7 +114,12 @@ class NipypeNodeRuntimeWidget(QWidget):
             cmd.setMinimumHeight(self.MIN_ROW_HEIGHT * 2)
             cmd.setLineWrapMode(QTextEdit.WidgetWidth)
             cmd.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            cmd.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             cmd.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            font = QFont()
+            font.setFamily("Monospace")
+            font.setPointSize(font.pointSize() - 1)
+            cmd.setFont(font)
             self.grid.addWidget(cmd, self._row, 1, 1, 6)
         else:
             self._add_value("—", self._row, 1, colspan=6)
@@ -120,34 +127,35 @@ class NipypeNodeRuntimeWidget(QWidget):
         self._row += 1
 
         # ---------------- Result (if it exists) ----------------
-
-
         if os.path.exists(result_file):
             res = loadpkl(result_file)
             rt = res.runtime
             outputs = res.outputs
 
             # -------- Runtime info --------
-            # Assume rt.duration is in seconds (float)
-            seconds = int(rt.duration)  # drop decimals
-            minutes = seconds // 60
-            seconds = seconds % 60
-            formatted_duration = f"{minutes}m {seconds}s"
-            if minutes == 0:
-                formatted_duration = f"{seconds}s"
-            self._add_label(strings.sub_tab_node_duration_label, self._row, 0)
-            self._add_value(formatted_duration, self._row, 1)
+            # Skip if node is MapNode
+            is_mapnode = isinstance(rt, (list, tuple))
+            if not is_mapnode:
+                try:
+                    # Assume rt.duration is in seconds (float)
+                    seconds = int(rt.duration)  # drop decimals
+                    minutes = seconds // 60
+                    seconds = seconds % 60
+                    formatted_duration = f"{minutes}m {seconds}s"
+                    if minutes == 0:
+                        formatted_duration = f"{seconds}s"
+                    self._add_label(strings.sub_tab_node_duration_label, self._row, 0)
+                    self._add_value(formatted_duration, self._row, 1)
 
-            self._add_label(strings.sub_tab_node_cpu_label, self._row, 2)
-            try:
-                scaled_cpu_perc = rt.cpu_percent / cpu_count()
-            except:
-                scaled_cpu_perc = rt.cpu_percent
-            self._add_value(f"{scaled_cpu_perc:.1f}", self._row, 3)
+                    self._add_label(strings.sub_tab_node_cpu_label, self._row, 2)
+                    scaled_cpu_perc = rt.cpu_percent / cpu_count()
+                    self._add_value(f"{scaled_cpu_perc:.1f}", self._row, 3)
 
-            self._add_label(strings.sub_tab_node_ram_label, self._row, 4)
-            self._add_value(f"{rt.mem_peak_gb:.3f}", self._row, 5)
-            self._row += 1
+                    self._add_label(strings.sub_tab_node_ram_label, self._row, 4)
+                    self._add_value(f"{rt.mem_peak_gb:.3f}", self._row, 5)
+                    self._row += 1
+                except:
+                    pass
 
             # -------- Outputs --------
             self._add_label(strings.sub_tab_node_output_label, self._row, 0)
@@ -207,23 +215,19 @@ class NipypeNodeRuntimeWidget(QWidget):
         self.grid.addWidget(btn, row, col, 1, 6)
 
     def _add_output_view(self, outputs, row, col):
-        """
-        Add a read-only text area displaying the node outputs.
-        Skips internal traits and events.
-        """
         text = QTextEdit()
         text.setReadOnly(True)
-        text.setMinimumHeight(self.MIN_ROW_HEIGHT * 4)  # make outputs taller
+        text.setMinimumHeight(self.MIN_ROW_HEIGHT * 4)
 
         lines = []
 
-        if outputs:
+        # -------------------------
+        # Case 1: OutputSpec (Node)
+        # -------------------------
+        if hasattr(outputs, "traits"):
             for name, trait in outputs.traits().items():
 
-                # Skip events and internal traits
-                if trait.is_event:
-                    continue
-                if name.startswith("_"):
+                if trait.is_event or name.startswith("_"):
                     continue
 
                 try:
@@ -231,14 +235,72 @@ class NipypeNodeRuntimeWidget(QWidget):
                 except Exception:
                     continue
 
-                if value in (None, "", [], ()):
+                if not self._is_valid_output_value(value):
                     continue
 
                 if isinstance(value, (list, tuple)):
                     for v in value:
-                        lines.append(f"{name}: {v}")
+                        if self._is_valid_output_value(v):
+                            lines.append(f"{self._fmt_output_name(name)}: {v}")
                 else:
-                    lines.append(f"{name}: {value}")
+                    lines.append(f"{self._fmt_output_name(name)}: {value}")
+
+        # -------------------------
+        # Case 2: MapNode single iteration (Bunch)
+        # -------------------------
+        elif isinstance(outputs, Bunch):
+            for key, value in outputs.items():
+
+                if not self._is_valid_output_value(value):
+                    continue
+
+                if isinstance(value, (list, tuple)):
+                    for v in value:
+                        if self._is_valid_output_value(v):
+                            lines.append(f"{self._fmt_output_name(key)}: {v}")
+                else:
+                    lines.append(f"{self._fmt_output_name(key)}: {value}")
+
+        # -------------------------
+        # Case 3: MapNode multiple iterations
+        # -------------------------
+        elif isinstance(outputs, (list, tuple)):
+            for idx, bunch in enumerate(outputs):
+                if not isinstance(bunch, Bunch):
+                    continue
+
+                sub_lines = []
+                for key, value in bunch.items():
+                    if not self._is_valid_output_value(value):
+                        continue
+                    sub_lines.append(f"  {self._fmt_output_name(key)}: {value}")
+
+                if sub_lines:
+                    lines.append(f"[{idx}]")
+                    lines.extend(sub_lines)
+
+        # -------------------------
+        # Case 4: Nothing usable
+        # -------------------------
+        else:
+            pass
 
         text.setText("\n".join(lines) if lines else "—")
         self.grid.addWidget(text, row, col, 1, 6)
+
+    def _is_valid_output_value(self, value):
+        if value is None:
+            return False
+        if value is traits.Undefined:
+            return False
+        if value == "<undefined>":
+            return False
+        if value == "":
+            return False
+        if isinstance(value, (list, tuple)) and not value:
+            return False
+        return True
+
+    def _fmt_output_name(self, name):
+        return f"<i><u>{name}</u></i>"
+
