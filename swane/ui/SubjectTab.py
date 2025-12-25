@@ -1,7 +1,7 @@
 import os
 from functools import partial
 from datetime import datetime
-from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
+from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
     QTreeView,
     QComboBox,
 )
-
 from swane import strings
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.workers.SlicerExportWorker import SlicerExportWorker
@@ -34,6 +33,7 @@ from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
+from swane.ui.NipypeNodeRuntimeWidget import NipypeNodeRuntimeWidget
 from swane.config.ConfigManager import ConfigManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.DataInputList import DataInputList
@@ -93,7 +93,7 @@ class SubjectTab(QTabWidget):
         self.subject_config_button = None
         self.exec_button = None
         self.exec_graph = None
-        self.node_info_grid = None
+        self.node_runtime_widget: NipypeNodeRuntimeWidget
         self.load_scene_button = None
         self.open_results_directory_button = None
         self.results_model = None
@@ -181,6 +181,13 @@ class SubjectTab(QTabWidget):
         self.node_list[wf_report.workflow_name].node_list[
             wf_report.node_name
         ].node_holder.set_art(icon)
+
+        if self.node_list[wf_report.workflow_name].node_list[
+            wf_report.node_name
+        ].node_holder.isSelected():
+            # Add a minimum delay to wait fornipype file after node start signal
+            QTimer.singleShot(150, lambda: self.tree_item_clicked(
+                self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder, 0))
 
         if wf_report.info is not None:
             self.node_list[wf_report.workflow_name].node_list[
@@ -533,21 +540,8 @@ class SubjectTab(QTabWidget):
         layout.addWidget(self.exec_button, 1, 1)
         self.exec_graph = QSvgWidget()
         layout.addWidget(self.exec_graph, 2, 1)
-        node_info_widget = QWidget()
-        layout.addWidget(node_info_widget, 2, 1)
-
-        self.node_info_grid = {"widget": node_info_widget}
-        info_grid = QGridLayout()
-        info_grid.addWidget(QLabel("Node name: "), 0, 0)
-        info_grid.addWidget(QLabel("Node folder: "), 1, 0)
-        info_grid.addWidget(QLabel("Node command: "), 2, 0)
-        self.node_info_grid["node_name"] = QLabel("empty")
-        self.node_info_grid["node_folder"] = QLabel("empty")
-        self.node_info_grid["node_command"] = QLabel("empty")
-        info_grid.addWidget(self.node_info_grid["node_name"], 0, 1)
-        info_grid.addWidget(self.node_info_grid["node_folder"], 1, 1)
-        info_grid.addWidget(self.node_info_grid["node_command"], 2, 1)
-        node_info_widget.setLayout(info_grid)
+        self.node_runtime_widget = NipypeNodeRuntimeWidget()
+        layout.addWidget(self.node_runtime_widget, 2, 1)
 
         self.exec_tab.setLayout(layout)
 
@@ -623,16 +617,17 @@ class SubjectTab(QTabWidget):
                 self.node_list_treeWidget,
                 self.node_list_treeWidget,
                 self.node_list[node].long_name,
+                self.node_list[node].fullname,
             )
             if len(self.node_list[node].node_list.keys()) > 0:
                 for sub_node in self.node_list[node].node_list.keys():
-                    self.node_list[node].node_list[sub_node].node_holder = (
-                        CustomTreeWidgetItem(
+                    self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(
                             self.node_list[node].node_holder,
                             self.node_list_treeWidget,
                             self.node_list[node].node_list[sub_node].long_name,
+                            self.node_list[node].node_list[sub_node].fullname,
                         )
-                    )
+                    self.node_list[node].node_list[sub_node].node_holder.node_name = node+"."+sub_node
 
         # UI updating
         self.exec_button_set_enabled(True)
@@ -663,15 +658,12 @@ class SubjectTab(QTabWidget):
                 self.exec_graph.renderer().setAspectRatioMode(
                     Qt.AspectRatioMode.KeepAspectRatio
                 )
-                self.node_info_grid["widget"].hide()
+                self.node_runtime_widget.hide()
                 self.exec_graph.show()
         else:
-            self.node_info_grid["widget"].show()
-            self.node_info_grid["node_name"].setText("test")
-            self.node_info_grid["node_folder"].setText("test")
-            self.node_info_grid["node_command"].setText("test")
             self.exec_graph.hide()
-
+            self.node_runtime_widget.show()
+            self.node_runtime_widget.load_node_result(self.subject.workflow_dir(), item)
 
     @staticmethod
     def no_close_event(event):
@@ -1224,6 +1216,7 @@ class SubjectTab(QTabWidget):
         if self.subject.reset_workflow(force):
             self.node_list_treeWidget.clear()
             self.exec_graph.load(self.main_window.VOID_SVG_FILE)
+            self.node_runtime_widget.clear()
             self.exec_button_set_enabled(False)
             self.generate_workflow_button.setEnabled(True)
             self.workflow_type_combo.setEnabled(True)

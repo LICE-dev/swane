@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtSvgWidgets import QSvgWidget
 from swane import strings
-
+import swane_supplement
+from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
 
 class CustomTreeWidgetItem(QTreeWidgetItem):
     """
@@ -16,7 +17,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
 
     """
 
-    def __init__(self, parent, tree: QTreeWidget, text: str, art: str = None):
+    def __init__(self, parent, tree: QTreeWidget, text: str, node_name: str, art: str = None):
         super(CustomTreeWidgetItem, self).__init__(parent)
 
         self.widget = QWidget()
@@ -35,7 +36,8 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         tree.setItemWidget(self, 0, self.widget)
 
         self.completed = False
-        self.art = None
+
+        self.node_name = node_name
 
     def setToolTip(self, column, toolTip):
         """
@@ -114,3 +116,25 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
 
         if art is not None:
             self.artLabel.load(art)
+
+    def get_status(self) -> WorkflowSignals|None:
+        """
+        Set the icon of the tree item.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        status: WorkflowSignals|None
+
+        """
+        if self.art == swane_supplement.errorIcon_file:
+            return WorkflowSignals.NODE_ERROR
+        elif self.art == swane_supplement.loadingMovie_file:
+            return WorkflowSignals.NODE_STARTED
+        elif self.art == swane_supplement.okIcon_file:
+            return WorkflowSignals.NODE_COMPLETED
+        else:
+            return None
