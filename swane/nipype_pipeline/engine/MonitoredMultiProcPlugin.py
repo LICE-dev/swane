@@ -37,6 +37,8 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
 
     def _report_crash(self, node, result=None):
         # This class implements signaling for generic node error
+
+        crash_file = super(MonitoredMultiProcPlugin, self)._report_crash(node, result)
         try:
             info = None
             for line in result["traceback"]:
@@ -54,12 +56,13 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                     long_name=node.fullname,
                     signal_type=WorkflowSignals.NODE_ERROR,
                     info=info,
+                    crash_file = crash_file
                 )
             )
         except:
             traceback.print_exc()
 
-        return super(MonitoredMultiProcPlugin, self)._report_crash(node, result)
+        return crash_file
 
     def _submit_job(self, node, updatehash=False):
         # This class implements signaling for generic node start

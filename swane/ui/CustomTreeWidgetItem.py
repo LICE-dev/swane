@@ -28,6 +28,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         self.set_art(art)
         self.textLabel = QLabel(text)
         self.resize_text_label()
+        self.crash_file = None
 
         self.widget.layout().addWidget(self.artLabel)
         self.widget.layout().addWidget(self.textLabel)
