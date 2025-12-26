@@ -10,11 +10,12 @@ from nipype.interfaces.fsl import (
 from nipype import Node, IdentityInterface, MapNode
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.SumMultiVols import SumMultiVols
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
+from swane.nipype_pipeline.nodes.SumMultiVols import SumMultiVols
+from swane.nipype_pipeline.nodes.SegmentEndocranium import SegmentEndocranium
 from configparser import SectionProxy
 from swane.utils.DependencyManager import DependencyManager
 
@@ -67,7 +68,7 @@ def venous_ct_workflow(
     inputnode = Node(IdentityInterface(fields=["ref_brain", "ref"]), name="inputnode")
 
     # Output Node
-    outputnode = Node(IdentityInterface(fields=["veins"]), name="outputnode")
+    outputnode = Node(IdentityInterface(fields=["veins","debug"]), name="outputnode")
 
     # NODE 1: Conversion dicom -> nifti
     veins_conv = Node(CustomDcm2niix(), name="veins_ct_conv")
@@ -104,9 +105,13 @@ def venous_ct_workflow(
         deskull.inputs.mask_file = "vein_mask.nii.gz"
         workflow.connect(veins_reOrient, "out_file", deskull, "in_file")
     else:
-        deskull = Node(BET(), name="veins_ct_bet")
-        deskull.inputs.mask = True
-        deskull.inputs.frac = config.getfloat_safe("bet_thr")
+        deskull = Node(SegmentEndocranium(), name="segment_endocranium")
+        deskull.inputs.slicer_cmd = "/home/mau/Slicer-5.6.1-linux-amd64/Slicer"
+        #deskull.inputs.debug = True
+        #deskull.inputs.debug_dir = "/home/mau/fabemdebug"
+        #deskull = Node(BET(), name="veins_ct_bet")
+        #deskull.inputs.mask = True
+        #deskull.inputs.frac = config.getfloat_safe("bet_thr")
         workflow.connect(veins_reOrient, "out_file", deskull, "in_file")
 
     # NODE 7: Linear registration of veins to reference space
@@ -167,7 +172,7 @@ def venous_ct_workflow(
     veins_inskull_mask = Node(ApplyMask(), name="veins_ct_mask")
     veins_inskull_mask.long_name = "%s inskull veins"
     workflow.connect(veins_sum, "out_file", veins_inskull_mask, "in_file")
-    workflow.connect(deskull, "mask_file", veins_inskull_mask, "mask_file")
+    workflow.connect(deskull, "out_file", veins_inskull_mask, "mask_file")
 
     # NODE 12: Get the max value of venous phase
     veins_range = Node(ImageStats(), name="veins_ct_range")
