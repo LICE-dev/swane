@@ -182,6 +182,8 @@ class SubjectTab(QTabWidget):
                     )
                 except:
                     pass
+            if wf_report.crash_file is not None:
+                self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder.crash_file = wf_report.crash_file
 
         self.node_list[wf_report.workflow_name].node_list[
             wf_report.node_name

@@ -70,6 +70,7 @@ class NipypeNodeRuntimeWidget(QWidget):
             return
 
         status_text = "—"
+        crash_file = None
         node_pickle_file = os.path.join(node_dir, NipypeNodeRuntimeWidget.NODE_FILE_NAME)
         result_file = os.path.join(node_dir, NipypeNodeRuntimeWidget.RESULT_FILE_NAME % node_name)
         if status is WorkflowSignals.NODE_STARTED:
@@ -84,6 +85,7 @@ class NipypeNodeRuntimeWidget(QWidget):
                 status_text = f"{strings.sub_tab_node_status_completed} {start_time_str}"
         elif status is WorkflowSignals.NODE_ERROR:
             status_text = strings.sub_tab_node_status_failed
+            crash_file = item.crash_file
 
         self._add_label(strings.sub_tab_node_status_label, self._row, 0)
         self._add_value(status_text, self._row, 1, colspan=6)
@@ -92,7 +94,7 @@ class NipypeNodeRuntimeWidget(QWidget):
         # ---------------- Directory ----------------
         self._add_label(strings.sub_tab_node_dir_label, self._row, 0)
         if os.path.exists(node_dir):
-            self._add_directory_button(node_dir, self._row, 1)
+            self._add_path_button(node_dir, self._row, 1)
         else:
             self._add_spacer()
             return
@@ -147,8 +149,17 @@ class NipypeNodeRuntimeWidget(QWidget):
 
         self._row += 1
 
+        # ---------------- Crash (if it exists) ----------------
+        if status is WorkflowSignals.NODE_ERROR and crash_file is not None and os.path.exists(crash_file):
+            self._add_label(strings.sub_tab_node_crash_label, self._row, 0)
+            self._add_path_button(crash_file, self._row, 1)
+            self._row += 1
+
+            self._add_spacer()
+            return
+
         # ---------------- Result (if it exists) ----------------
-        if os.path.exists(result_file):
+        if status is WorkflowSignals.NODE_COMPLETED and os.path.exists(result_file):
             res = loadpkl(result_file)
             rt = res.runtime
             outputs = res.outputs
@@ -220,13 +231,17 @@ class NipypeNodeRuntimeWidget(QWidget):
         label.setMinimumHeight(self.MIN_ROW_HEIGHT)
         self.grid.addWidget(label, row, col, 1, colspan)
 
-    def _add_directory_button(self, path, row, col):
+    def _add_path_button(self, path, row, col):
         """Add a clickable directory button that opens in the system file manager."""
         if not path:
             self._add_value("—", row, col, colspan=6)
             return
 
-        btn = QPushButton(path)
+        str = path
+        if os.path.isfile(path):
+            str = os.path.basename(path)
+
+        btn = QPushButton(str)
         btn.setFlat(True)
         btn.setStyleSheet("text-align:left; color:#1a73e8;")
         btn.clicked.connect(
