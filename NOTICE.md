@@ -9,10 +9,8 @@ with the --no-main-window 3D Slicer argument.
 
 **License**: BSD 2-Clause License
 
-**Copyright**: Copyright (c) 2019, SlicerMorph Project All rights reserved.
+**Copyright**: (c) 2019, SlicerMorph Project All rights reserved.
 
----
-### BSD 2-Clause License
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -34,6 +32,7 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+---
 ## Nipype derived code
 
 This project makes use of code, procedures and concepts derived from 
@@ -45,11 +44,7 @@ is included in `slicer/nipype_pipeline` directory.
 
 **License**: Apache License, Version 2.0
 
-**Copyright**: Copyright (c) 2009-2016, Nipype developers
-
----
-### Apache License, Version 2.0
-Copyright (c) 2009-2016, Nipype developers
+**Copyright**: (c) 2009-2016, Nipype developers
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
