@@ -24,6 +24,8 @@ setup(
         "Operating System :: MacOS",
         "Operating System :: POSIX :: Linux",
     ],
+    # TODO: forse dobbiamo citare tutte le sottolicenze
+    # https://packaging.python.org/en/latest/guides/licensing-examples-and-user-scenarios/#my-package-includes-other-code-under-different-licenses
     license="MIT",
     install_requires=[
         "networkx==3.4.2",
