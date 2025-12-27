@@ -3,7 +3,7 @@ import sys
 import vtk
 import vtkITK
 import argparse
-
+import qt
 
 # ------------------------------------------------------------
 # Utility: export single segment to NIfTI
@@ -228,4 +228,6 @@ print("[OK] Endocranium mask exported:", out_endocranium)
 # ------------------------------------------------------------
 # Exit Slicer
 # ------------------------------------------------------------
-slicer.app.exit()
+segmentEditorWidget = None
+segmentEditorNode = None
+qt.QTimer.singleShot(0, slicer.app.quit)
