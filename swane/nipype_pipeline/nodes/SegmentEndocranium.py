@@ -9,31 +9,23 @@ import os
 
 
 class SegmentEndocraniumInputSpec(CommandLineInputSpec):
+
     slicer_cmd = File(
         exists=True,
         mandatory=True,
-        desc="Path all'eseguibile Slicer"
+        desc="Slicer executable path"
     )
 
     in_file = File(
         exists=True,
         mandatory=True,
         desc="Original CT image",
-        argstr="%s",
-        position=2
+        argstr="--input %s"
     )
 
     out_file = File(
         desc="Endocranium mask file name",
-        argstr="%s",
-        position=3,
-        genfile=True
-    )
-
-    out_skull = File(
-        desc="Skull mask file name",
-        argstr="%s",
-        position=4,
+        argstr="--output %s",
         genfile=True
     )
 
@@ -41,8 +33,21 @@ class SegmentEndocraniumInputSpec(CommandLineInputSpec):
         3.0,
         usedefault=True,
         desc="Kernel size in mm",
-        argstr="%f",
-        position=5
+        argstr="--kernel-mm %.2f"
+    )
+
+    oversampling = traits.Float(
+        1.0,
+        usedefault=True,
+        desc="Wrap solidify oversampling",
+        argstr="--oversampling %.2f"
+    )
+
+    iterations = traits.Int(
+        3,
+        usedefault=True,
+        desc="Shrinkwrap iterations",
+        argstr="--iterations %d"
     )
 
 
@@ -52,10 +57,6 @@ class SegmentEndocraniumOutputSpec(TraitedSpec):
         desc="Endocranium mask"
     )
 
-    out_skull = File(
-        exists=True,
-        desc="Skull mask"
-    )
 
 class SegmentEndocranium(CommandLine):
     input_spec = SegmentEndocraniumInputSpec
@@ -75,7 +76,7 @@ class SegmentEndocranium(CommandLine):
 
         if not os.path.exists(worker_path):
             raise FileNotFoundError(f"Worker not found: {worker_path}")
-        self._cmd = f"{self.inputs.slicer_cmd} --no-main-window --python-script {worker_path}"
+        self._cmd = f"{self.inputs.slicer_cmd} --no-splash --no-main-window --python-script {worker_path}"
 
     def _format_arg(self, name, spec, value):
         return super()._format_arg(name, spec, value)
@@ -83,17 +84,9 @@ class SegmentEndocranium(CommandLine):
     def _gen_filename(self, name):
         if name == "out_file":
             return os.path.abspath("inskull_mask.nii.gz")
-        if name == "out_skull":
-            return os.path.abspath("skull_masked_volume.nii.gz")
         return None
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs["out_file"] = os.path.abspath(self.inputs.out_file)
-        outputs["out_skull"] = os.path.abspath(self.inputs.out_skull)
         return outputs
-
-    @property
-    def _command(self):
-
-        return f"{self.inputs.slicer_cmd} --no-main-window --python-script {worker_path}"

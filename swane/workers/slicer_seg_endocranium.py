@@ -1,36 +1,20 @@
 import slicer
 import sys
-import os
+import vtk
 import vtkITK
-import vtk
-
-import vtk
-import slicer
+import argparse
 
 
+# ------------------------------------------------------------
+# Utility: export single segment to NIfTI
+# ------------------------------------------------------------
 def export_segment_as_nifti(segmentationNode, segmentId, referenceVolumeNode, out_file):
-    """
-    Esporta un singolo segmento come NIfTI, headless-safe.
-    - segmentationNode: vtkMRMLSegmentationNode
-    - segmentId: string
-    - referenceVolumeNode: vtkMRMLScalarVolumeNode
-    - out_file: path NIfTI (.nii o .nii.gz)
-    """
 
-    # Controlli tipi nodi
-    if segmentationNode is None or segmentationNode.GetClassName() != "vtkMRMLSegmentationNode":
-        raise ValueError("segmentationNode deve essere vtkMRMLSegmentationNode")
-    if referenceVolumeNode is None or referenceVolumeNode.GetClassName() != "vtkMRMLScalarVolumeNode":
-        raise ValueError("referenceVolumeNode deve essere vtkMRMLScalarVolumeNode")
-
-    # Crea nodo temporaneo labelmap
     labelmapNode = slicer.mrmlScene.AddNewNodeByClass(
         "vtkMRMLLabelMapVolumeNode",
         "TempLabelmapNode"
     )
 
-    # Export del segmento
-    # Positional arguments obbligatori, senza keyword arguments
     slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
         segmentationNode,
         [segmentId],
@@ -38,25 +22,20 @@ def export_segment_as_nifti(segmentationNode, segmentId, referenceVolumeNode, ou
         referenceVolumeNode
     )
 
-    # Salva NIfTI
     slicer.util.saveNode(labelmapNode, out_file)
-
-    # Pulizia nodo temporaneo
     slicer.mrmlScene.RemoveNode(labelmapNode)
 
 
+# ------------------------------------------------------------
+# Headless morphological closing smoothing
+# ------------------------------------------------------------
 def smooth_segment_morphological_closing(
     segmentationNode,
     segmentId,
     referenceVolumeNode,
     kernelSizeMm
 ):
-    """
-    Headless replacement for SegmentEditorSmoothingEffect.smoothSelectedSegment
-    (MORPHOLOGICAL_CLOSING only)
-    """
 
-    # 1. Export segment to labelmap
     labelmapNode = slicer.mrmlScene.AddNewNodeByClass(
         "vtkMRMLLabelMapVolumeNode"
     )
@@ -69,21 +48,14 @@ def smooth_segment_morphological_closing(
     )
 
     imageData = labelmapNode.GetImageData()
-
-    # 2. Compute kernel size in voxels
     spacing = imageData.GetSpacing()
+
     kernelSizeVoxel = [
         int(round((kernelSizeMm / spacing[i] + 1) / 2) * 2 - 1)
         for i in range(3)
     ]
+    kernelSizeVoxel = [k if k % 2 == 1 else k + 1 for k in kernelSizeVoxel]
 
-    # Ensure odd kernel size
-    kernelSizeVoxel = [
-        k if k % 2 == 1 else k + 1
-        for k in kernelSizeVoxel
-    ]
-
-    # 3. Morphological closing (dilation + erosion)
     closeFilter = vtk.vtkImageOpenClose3D()
     closeFilter.SetInputData(imageData)
     closeFilter.SetKernelSize(
@@ -95,137 +67,165 @@ def smooth_segment_morphological_closing(
     closeFilter.SetCloseValue(1)
     closeFilter.Update()
 
-    smoothedImage = closeFilter.GetOutput()
-
-    # 4. Import back into segmentation (overwrite)
     slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(
         labelmapNode,
         segmentationNode
     )
 
-    # Cleanup
     slicer.mrmlScene.RemoveNode(labelmapNode)
 
 
-# ---- Arguments ----
-in_file = sys.argv[1]
-out_file = sys.argv[2]   # .nii o .nii.gz
-skull_mask = sys.argv[3]   # .nii o .nii.gz
-smoothingKernelSize = float(sys.argv[4])
-splitCavitiesDiameter = 15
+# ------------------------------------------------------------
+# Argument parsing (named arguments)
+# ------------------------------------------------------------
+parser = argparse.ArgumentParser(description="Endocranium segmentation with Wrap Solidify (headless)")
 
-if not out_file.endswith((".nii", ".nii.gz")):
-    raise ValueError("out_file deve essere .nii o .nii.gz")
+parser.add_argument("--input", required=True, help="Input CT volume (NIfTI)")
+parser.add_argument("--output", required=True, help="Output endocranium mask (NIfTI)")
+parser.add_argument("--kernel-mm", type=float, default=3.0, help="Smoothing kernel size in mm")
+parser.add_argument("--oversampling", type=float, default=1.0, help="Wrap Solidify remesh oversampling")
+parser.add_argument("--iterations", type=int, default=2, help="Shrinkwrap iterations")
+parser.add_argument("--split-diameter", type=float, default=15.0, help="Split cavities diameter (mm)")
 
-# ---- Load volume ----
+args = parser.parse_args(sys.argv[1:])
+
+in_file = args.input
+out_endocranium = args.output
+smoothingKernelSize = args.kernel_mm
+oversampling = args.oversampling
+shrinkwrapIterations = args.iterations
+splitCavitiesDiameter = args.split_diameter
+
+
+# ------------------------------------------------------------
+# Load input volume
+# ------------------------------------------------------------
 inputVolume = slicer.util.loadVolume(in_file)
 if not inputVolume:
-    raise RuntimeError(f"Errore caricamento volume: {in_file}")
-
-# ---- Seg node ----
-outputSegmentation = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
-outputSegmentation.SetName("Endocranium")
-outputSegmentation.CreateDefaultDisplayNodes()
-outputSegmentation.SetReferenceImageGeometryParameterFromVolumeNode(inputVolume)
+    raise RuntimeError(f"Cannot load volume: {in_file}")
 
 
+# ------------------------------------------------------------
+# Create segmentation
+# ------------------------------------------------------------
+segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
+segmentationNode.CreateDefaultDisplayNodes()
+segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(inputVolume)
+
+seg = segmentationNode.GetSegmentation()
+
+
+# ------------------------------------------------------------
+# Automatic bone threshold
+# ------------------------------------------------------------
 thresholdCalculator = vtkITK.vtkITKImageThresholdCalculator()
 thresholdCalculator.SetInputData(inputVolume.GetImageData())
 thresholdCalculator.SetMethodToMaximumEntropy()
 thresholdCalculator.Update()
+
 boneThresholdValue = thresholdCalculator.GetThreshold()
 volumeScalarRange = inputVolume.GetImageData().GetScalarRange()
-print(f"Volume minimum = {volumeScalarRange[0]}, maximum = {volumeScalarRange[1]}, bone threshold = {boneThresholdValue}")
 
-# Set up segmentation
-outputSegmentation.CreateDefaultDisplayNodes()
-outputSegmentation.SetReferenceImageGeometryParameterFromVolumeNode(inputVolume)
+print(f"[INFO] Bone threshold = {boneThresholdValue}")
 
-# Create segment editor to get access to effects
+
+# ------------------------------------------------------------
+# Segment Editor setup (headless)
+# ------------------------------------------------------------
 segmentEditorWidget = slicer.qMRMLSegmentEditorWidget()
 segmentEditorWidget.setMRMLScene(slicer.mrmlScene)
-if not segmentEditorWidget.effectByName("Wrap Solidify"):
-  raise NotImplementedError("SurfaceWrapSolidify extension is required")
 
 segmentEditorNode = slicer.vtkMRMLSegmentEditorNode()
 slicer.mrmlScene.AddNode(segmentEditorNode)
+
 segmentEditorWidget.setMRMLSegmentEditorNode(segmentEditorNode)
-segmentEditorWidget.setSegmentationNode(outputSegmentation)
+segmentEditorWidget.setSegmentationNode(segmentationNode)
 segmentEditorWidget.setSourceVolumeNode(inputVolume)
-# Create bone segment by thresholding
-boneSegmentID = outputSegmentation.GetSegmentation().AddEmptySegment("bone")
-segmentEditorNode.SetSelectedSegmentID(boneSegmentID)
+
+
+# ------------------------------------------------------------
+# 1. bone_raw (threshold)
+# ------------------------------------------------------------
+boneRawID = seg.AddEmptySegment("bone_raw")
+segmentEditorNode.SetSelectedSegmentID(boneRawID)
+
 segmentEditorWidget.setActiveEffectByName("Threshold")
-
-
 effect = segmentEditorWidget.activeEffect()
 effect.setParameter("MinimumThreshold", str(boneThresholdValue))
 effect.setParameter("MaximumThreshold", str(volumeScalarRange[1]))
-effect.setParameter("SmoothingMethod", "MORPHOLOGICAL_CLOSING")
-effect.setParameter("KernelSizeMm", str(smoothingKernelSize))
 effect.self().onApply()
 
+
+# ------------------------------------------------------------
+# 2. bone_smooth (copy + smoothing)
+# ------------------------------------------------------------
+boneSmoothID = seg.AddEmptySegment("bone_smooth")
+
+seg.GetSegment(boneSmoothID).DeepCopy(
+    seg.GetSegment(boneRawID)
+)
+
 smooth_segment_morphological_closing(
-    segmentationNode=outputSegmentation,
-    segmentId=boneSegmentID,
+    segmentationNode=segmentationNode,
+    segmentId=boneSmoothID,
     referenceVolumeNode=inputVolume,
     kernelSizeMm=smoothingKernelSize
 )
 
-# Solidify bone
+segmentationNode.Modified()
+slicer.mrmlScene.Modified()
+
+
+# ------------------------------------------------------------
+# 3. Wrap Solidify (ONLY on bone_smooth)
+# ------------------------------------------------------------
+segmentEditorNode.SetSelectedSegmentID(boneSmoothID)
+
 segmentEditorWidget.setActiveEffectByName("Wrap Solidify")
 effect = segmentEditorWidget.activeEffect()
 wrapEffect = effect.self()
 logic = wrapEffect.logic
 
-wrapEffect.segmentationNode = outputSegmentation
-logic.segmentationNode = outputSegmentation
-wrapEffect.segmentId = segmentEditorNode.GetSelectedSegmentID()
-logic.segmentId = segmentEditorNode.GetSelectedSegmentID()
-assert isinstance(logic.segmentId, str)
+wrapEffect.segmentationNode = segmentationNode
+logic.segmentationNode = segmentationNode
+wrapEffect.segmentId = boneSmoothID
+logic.segmentId = boneSmoothID
 
 logic.region = "largestCavity"
 logic.regionSegmentId = ""
 logic.splitCavities = True
-logic.splitCavitiesDiameter = float(splitCavitiesDiameter)
-logic.outputType = "newSegment"
-logic.remeshOversampling = 2.5
-logic.smoothingFactor = 0.2
-logic.shrinkwrapIterations = 6
+logic.splitCavitiesDiameter = splitCavitiesDiameter
+
+logic.outputType = "segment"
+logic.remeshOversampling = oversampling
+logic.smoothingFactor = 0.1
+logic.shrinkwrapIterations = shrinkwrapIterations
+
 logic.carveHolesInOuterSurface = False
 logic.createShell = False
 logic.shellPreserveCracks = False
 logic.shellThickness = 1.5
-logic.outputType = 'segment'
+
 logic.saveIntermediateResults = False
 logic.outputModelNode = None
+
 logic.applyWrapSolidify()
 
-# ---- Converto to LabelMap ----
-labelmapNode = slicer.mrmlScene.AddNewNodeByClass(
-    "vtkMRMLLabelMapVolumeNode",
-    "EndocraniumLabel"
-)
 
-# Export last segment
-skullSegmentID = outputSegmentation.GetSegmentation().GetNthSegmentID(1)
-brainSegmentID = outputSegmentation.GetSegmentation().GetNthSegmentID(0)
-
+# ------------------------------------------------------------
+# Export output
+# ------------------------------------------------------------
 export_segment_as_nifti(
-    segmentationNode=outputSegmentation,
-    segmentId=skullSegmentID,
-    referenceVolumeNode=inputVolume,
-    out_file=out_file
+    segmentationNode,
+    boneSmoothID,
+    inputVolume,
+    out_endocranium
 )
 
-export_segment_as_nifti(
-    segmentationNode=outputSegmentation,
-    segmentId=brainSegmentID,
-    referenceVolumeNode=inputVolume,
-    out_file=skull_mask
-)
+print("[OK] Endocranium mask exported:", out_endocranium)
 
+
+# ------------------------------------------------------------
+# Exit Slicer
+# ------------------------------------------------------------
 slicer.app.exit()
-
-
-print(f"[OK] Endocranium salvato in NIfTI: {out_file}")
