@@ -24,6 +24,7 @@ def venous_ct_workflow(
     venous_ct_dir: str,
     config: SectionProxy,
     venous2_ct_dir: list,
+    slicer_path: str,
     base_dir: str = "/",
 ) -> CustomWorkflow:
     """
@@ -40,6 +41,8 @@ def venous_ct_workflow(
         workflow settings.
     venous2_ct_dir : list
         A list of directory paths of the contrast scans DICOM files.
+    slicer_path: path
+        Path to 3D Slicer executable
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -101,7 +104,10 @@ def venous_ct_workflow(
 
     # NODE 5: Scalp removal
     deskull = Node(SegmentEndocranium(), name="segment_endocranium", mem_gb=2.5)
-    deskull.inputs.slicer_cmd = "/home/mau/Slicer-5.6.1-linux-amd64/Slicer"
+    deskull.inputs.slicer_cmd = slicer_path
+    deskull.inputs.iterations = config.getint_safe("segment_endocranium_iteration")
+    deskull.inputs.smoothingKernelSize = config.getfloat_safe("segment_endocranium_kernel")
+    deskull.inputs.oversampling = config.getfloat_safe("segment_endocranium_oversampling")
     workflow.connect(veins_reOrient, "out_file", deskull, "in_file")
 
     # NODE 7: Linear registration of veins to reference space

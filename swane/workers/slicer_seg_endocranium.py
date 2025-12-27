@@ -4,6 +4,9 @@ import vtk
 import vtkITK
 import argparse
 import qt
+import os
+os.environ["QT_LOGGING_RULES"] = "*.warning=false"
+
 
 # ------------------------------------------------------------
 # Utility: export single segment to NIfTI

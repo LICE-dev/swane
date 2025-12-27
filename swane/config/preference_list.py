@@ -236,12 +236,26 @@ WF_PREFERENCES[category]["erode_kernel_size"] = PreferenceEntry(
 )
 category = DataInputList.VENOUS_CT
 WF_PREFERENCES[category] = {}
-WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
+WF_PREFERENCES[category]["segment_endocranium_iteration"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Iteration for brain extraction",
+    default=3,
+    tooltip="Number of shrink-wrap iterations (higher = more accurate, slower)",
+    range=[1, 15],
+)
+WF_PREFERENCES[category]["segment_endocranium_kernel"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
-    label="Threshold value for skull removal",
-    default=0.1,
-    tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
-    range=[0, 1],
+    label="Smoothing kernel size for brain extraction",
+    default=3.0,
+    tooltip="Size of the morphological smoothing kernel (larger = smoother, slower)",
+    range=[1, 10],
+)
+WF_PREFERENCES[category]["segment_endocranium_oversampling"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Mesh oversampling factor for brain extraction",
+    default=1.0,
+    tooltip="Surface remeshing resolution (higher = more detail, slower)",
+    range=[1, 5],
 )
 category = DataInputList.DTI
 WF_PREFERENCES[category] = {}
