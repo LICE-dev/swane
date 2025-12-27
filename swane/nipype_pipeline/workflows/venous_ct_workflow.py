@@ -100,19 +100,9 @@ def venous_ct_workflow(
     workflow.connect(veins2_conv, "converted_files", veins2_reOrient, "in_file")
 
     # NODE 5: Scalp removal
-    if DependencyManager.is_freesurfer_synth():
-        deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=3)
-        deskull.inputs.mask_file = "vein_mask.nii.gz"
-        workflow.connect(veins_reOrient, "out_file", deskull, "in_file")
-    else:
-        deskull = Node(SegmentEndocranium(), name="segment_endocranium")
-        deskull.inputs.slicer_cmd = "/home/mau/Slicer-5.6.1-linux-amd64/Slicer"
-        #deskull.inputs.debug = True
-        #deskull.inputs.debug_dir = "/home/mau/fabemdebug"
-        #deskull = Node(BET(), name="veins_ct_bet")
-        #deskull.inputs.mask = True
-        #deskull.inputs.frac = config.getfloat_safe("bet_thr")
-        workflow.connect(veins_reOrient, "out_file", deskull, "in_file")
+    deskull = Node(SegmentEndocranium(), name="segment_endocranium", mem_gb=2.5)
+    deskull.inputs.slicer_cmd = "/home/mau/Slicer-5.6.1-linux-amd64/Slicer"
+    workflow.connect(veins_reOrient, "out_file", deskull, "in_file")
 
     # NODE 7: Linear registration of veins to reference space
     if DependencyManager.is_freesurfer_synth():
