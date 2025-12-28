@@ -261,7 +261,7 @@ class SegmentEndocranium(BaseInterface):
         return _inputPd, _inputSpacing
 
     @staticmethod
-    def extend_binary_labelmap(binary_map, spacing, splitCavitiesDiameter):
+    def extend_binary_labelmap(binary_map, input_spacing, splitCavitiesRadius):
         """
         Replicates vtkITKImageMargin in Python
         by dilating a binary map by splitCavitiesDiameter/2 in mm.
@@ -270,25 +270,21 @@ class SegmentEndocranium(BaseInterface):
         ----------
         binary_map : np.ndarray
             Input binary map (0/1)
-        spacing : tuple of float
+        input_spacing : tuple of float
             Voxel spacing (sx, sy, sz) in mm
-        splitCavitiesDiameter : float
-            Diameter in mm for margin
+        splitCavitiesRadius : float
+            Radius in mm for margin
 
         Returns
         -------
         extended : np.ndarray
             Extended labelmap (0/255)
         """
-        # ---------------------------
-        # 1. Calculate radius in mm
-        # ---------------------------
-        splitCavitiesRadius = splitCavitiesDiameter / 2.0
 
         # ---------------------------
         # 2. Convert radius mm -> voxel for each dimension
         # ---------------------------
-        radius_voxel = [int(np.ceil(splitCavitiesRadius / s)) for s in spacing]
+        radius_voxel = [int(np.ceil(splitCavitiesRadius / s)) for s in input_spacing]
 
         # ---------------------------
         # 3. Create structuring element
@@ -424,8 +420,8 @@ class SegmentEndocranium(BaseInterface):
         # =========================
         # 4. KERNEL MORFOLOGICO (mm → voxel)
         # =========================
-        spacing = nii.header.get_zooms()[:3]
-
+        spacing = tuple(nii.header.get_zooms()[:3])  # (sx, sy, sz)
+        raise Exception(spacing)
         kernelSizeVoxel = [
             int(round((kernelSizeMm / spacing[i] + 1) / 2) * 2 - 1)
             for i in range(3)
