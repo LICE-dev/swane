@@ -638,6 +638,7 @@ class SubjectTab(QTabWidget):
 
         # UI updating
         self.exec_button_set_enabled(True)
+        self.node_runtime_widget.hide()
         self.generate_workflow_button.setEnabled(False)
 
     def tree_item_clicked(self, item, col: int):
