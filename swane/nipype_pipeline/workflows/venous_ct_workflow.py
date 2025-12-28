@@ -15,7 +15,7 @@ from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from swane.nipype_pipeline.nodes.SumMultiVols import SumMultiVols
-from swane.nipype_pipeline.nodes.SegmentEndocranium2 import SegmentEndocranium
+from swane.nipype_pipeline.nodes.SegmentEndocranium import SegmentEndocranium
 from configparser import SectionProxy
 from swane.utils.DependencyManager import DependencyManager
 
