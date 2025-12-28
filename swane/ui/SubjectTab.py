@@ -547,7 +547,7 @@ class SubjectTab(QTabWidget):
         layout.addWidget(self.exec_button, 1, 1)
         self.exec_graph = QSvgWidget()
         layout.addWidget(self.exec_graph, 2, 1)
-        self.node_runtime_widget = NipypeNodeRuntimeWidget()
+        self.node_runtime_widget = NipypeNodeRuntimeWidget(slicer_path=self.global_config.get_slicer_path())
         layout.addWidget(self.node_runtime_widget, 2, 1)
 
         self.exec_tab.setLayout(layout)

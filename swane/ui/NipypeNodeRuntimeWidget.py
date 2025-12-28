@@ -5,7 +5,6 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics
 from swane import strings
 from nipype.utils.filemanip import loadpkl
-import os
 from datetime import datetime
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
@@ -13,6 +12,8 @@ from multiprocessing import cpu_count
 from nipype.interfaces.base.support import Bunch
 from nipype.interfaces.base import traits
 import math
+import os
+import subprocess
 
 
 class NipypeNodeRuntimeWidget(QWidget):
@@ -25,8 +26,10 @@ class NipypeNodeRuntimeWidget(QWidget):
     COMMAND_FILE_NAME = "command.txt"
     RESULT_FILE_NAME = "result_%s.pklz"
     NODE_FILE_NAME = "_node.pklz"
+    IMAGE_EXTENSIONS = ('.nii', '.nii.gz', '.mgz', '.mgh')
 
-    def __init__(self, parent=None):
+
+    def __init__(self, slicer_path = None, parent=None):
         super().__init__(parent)
 
         # Create the grid layout
@@ -35,6 +38,27 @@ class NipypeNodeRuntimeWidget(QWidget):
         self.grid.setColumnStretch(6, 1)
 
         self._row = 0
+
+        self.slicer_path = slicer_path
+
+    def _open_in_slicer(self, path: str):
+        """Open an image file in 3D Slicer."""
+        if not path or not os.path.isfile(path):
+            return
+
+        if not self.slicer_path or not os.path.isfile(self.slicer_path):
+            print("Slicer executable not found")
+            return
+
+        try:
+            subprocess.Popen(
+                [self.slicer_path, path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except Exception as e:
+            print(f"Failed to open in Slicer: {e}")
+
 
     # ------------------------------------------------------------------
     # Main method to load node results
@@ -190,9 +214,10 @@ class NipypeNodeRuntimeWidget(QWidget):
                     pass
 
             # -------- Outputs --------
-            self._add_label(strings.sub_tab_node_output_label, self._row, 0)
-            self._add_output_view(outputs, self._row, 1)
             self._row += 1
+            self._add_label(strings.sub_tab_node_output_label, self._row, 0)
+            self._add_output_view(outputs, 1)
+
 
         self._add_spacer()
 
@@ -231,31 +256,49 @@ class NipypeNodeRuntimeWidget(QWidget):
         label.setMinimumHeight(self.MIN_ROW_HEIGHT)
         self.grid.addWidget(label, row, col, 1, colspan)
 
+    def _add_output_row(self, name, value, row, col):
+        """Add a single output row (label + value)."""
+
+        # nome output
+        name_lbl = QLabel(self._fmt_output_name(name))
+        name_lbl.setMinimumHeight(self.MIN_ROW_HEIGHT)
+        self.grid.addWidget(name_lbl, row, col)
+
+        # valore
+        if isinstance(value, str) and os.path.exists(value):
+            self._add_path_button(value, row, col + 1)
+        else:
+            self._add_value(str(value), row, col + 1, colspan=5)
+
     def _add_path_button(self, path, row, col):
-        """Add a clickable directory button that opens in the system file manager."""
-        if not path:
-            self._add_value("—", row, col, colspan=6)
-            return
+        is_image = (
+                os.path.isfile(path)
+                and path.lower().endswith(NipypeNodeRuntimeWidget.IMAGE_EXTENSIONS)
+                and self.slicer_path is not None
+                and os.path.isfile(self.slicer_path)
+        )
 
-        str = path
-        if os.path.isfile(path):
-            str = os.path.basename(path)
+        label = os.path.basename(path)
 
-        btn = QPushButton(str)
+        btn = QPushButton(label)
         btn.setFlat(True)
         btn.setStyleSheet("text-align:left; color:#1a73e8;")
-        btn.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(path))
-        )
         btn.setMinimumHeight(self.MIN_ROW_HEIGHT)
-        self.grid.addWidget(btn, row, col, 1, 6)
 
-    def _add_output_view(self, outputs, row, col):
-        text = QTextEdit()
-        text.setReadOnly(True)
-        text.setMinimumHeight(self.MIN_ROW_HEIGHT * 4)
+        if is_image:
+            btn.clicked.connect(
+                lambda _, p=path: self._open_in_slicer(p)
+            )
+            btn.setToolTip("Open in 3D Slicer")
+        else:
+            print(1)
+            btn.clicked.connect(
+                lambda _, p=path: QDesktopServices.openUrl(QUrl.fromLocalFile(p))
+            )
 
-        lines = []
+        self.grid.addWidget(btn, row, col, 1, 5)
+
+    def _add_output_view(self, outputs, col):
 
         # -------------------------
         # Case 1: OutputSpec (Node)
@@ -277,9 +320,11 @@ class NipypeNodeRuntimeWidget(QWidget):
                 if isinstance(value, (list, tuple)):
                     for v in value:
                         if self._is_valid_output_value(v):
-                            lines.append(f"{self._fmt_output_name(name)}: {v}")
+                            self._add_output_row(name, v, self._row, col)
+                            self._row += 1
                 else:
-                    lines.append(f"{self._fmt_output_name(name)}: {value}")
+                    self._add_output_row(name, value, self._row, col)
+                    self._row += 1
 
         # -------------------------
         # Case 2: MapNode single iteration (Bunch)
@@ -293,9 +338,11 @@ class NipypeNodeRuntimeWidget(QWidget):
                 if isinstance(value, (list, tuple)):
                     for v in value:
                         if self._is_valid_output_value(v):
-                            lines.append(f"{self._fmt_output_name(key)}: {v}")
+                            self._add_output_row(key, v, self._row, col)
+                            self._row += 1
                 else:
-                    lines.append(f"{self._fmt_output_name(key)}: {value}")
+                    self._add_output_row(key, value, self._row, col)
+                    self._row += 1
 
         # -------------------------
         # Case 3: MapNode multiple iterations
@@ -305,24 +352,24 @@ class NipypeNodeRuntimeWidget(QWidget):
                 if not isinstance(bunch, Bunch):
                     continue
 
-                sub_lines = []
+                # intestazione iterazione
+                hdr = QLabel(f"[{idx}]")
+                hdr.setStyleSheet("font-weight: bold;")
+                self.grid.addWidget(hdr, self._row, col, 1, 6)
+                self._row += 1
+
                 for key, value in bunch.items():
                     if not self._is_valid_output_value(value):
                         continue
-                    sub_lines.append(f"  {self._fmt_output_name(key)}: {value}")
 
-                if sub_lines:
-                    lines.append(f"[{idx}]")
-                    lines.extend(sub_lines)
+                    self._add_output_row(key, value, self._row, col)
+                    self._row += 1
 
         # -------------------------
         # Case 4: Nothing usable
         # -------------------------
         else:
-            pass
-
-        text.setText("\n".join(lines) if lines else "—")
-        self.grid.addWidget(text, row, col, 1, 6)
+            self._add_value("—", self._row, col, colspan=6)
 
     def _is_valid_output_value(self, value):
         if value is None:
