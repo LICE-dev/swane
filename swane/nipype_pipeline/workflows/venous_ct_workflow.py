@@ -15,7 +15,7 @@ from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from swane.nipype_pipeline.nodes.SumMultiVols import SumMultiVols
-from swane.nipype_pipeline.nodes.SegmentEndocranium import SegmentEndocranium
+from swane.nipype_pipeline.nodes.SegmentEndocranium2 import SegmentEndocranium
 from configparser import SectionProxy
 from swane.utils.DependencyManager import DependencyManager
 
@@ -121,7 +121,7 @@ def venous_ct_workflow(
         basal_2_ref = Node(FLIRT(), name="veins_ct_flirt_2_ref")
         basal_2_ref.long_name = "%s to reference space"
         basal_2_ref.inputs.out_matrix_file = "veins2ref.mat"
-        basal_2_ref.inputs.cost = "mutualinfo"
+        basal_2_ref.inputs.cost = "normcorr"
         basal_2_ref.inputs.searchr_x = [-90, 90]
         basal_2_ref.inputs.searchr_y = [-90, 90]
         basal_2_ref.inputs.searchr_z = [-90, 90]
