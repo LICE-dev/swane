@@ -68,23 +68,23 @@ class SegmentEndocranium(BaseInterface):
     output_spec = SegmentEndocraniumOutputSpec
 
     @staticmethod
-    def _polydataToLabelmap(polydata, spacing=1.0, extraMarginToBounds=0, referenceImage=None):
+    def _polydata_to_labelmap(polydata, spacing=1.0, extra_margin_to_bounds=0, reference_image=None):
 
-        binaryLabelmap = vtk.vtkImageData()
+        binary_labelmap = vtk.vtkImageData()
 
-        if referenceImage:
-            origin = referenceImage.GetOrigin()
-            spacing3 = referenceImage.GetSpacing()
-            extent = referenceImage.GetExtent()
+        if reference_image:
+            origin = reference_image.GetOrigin()
+            spacing3 = reference_image.GetSpacing()
+            extent = reference_image.GetExtent()
         else:
             bounds = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
             polydata.GetBounds(bounds)
-            bounds[0] -= extraMarginToBounds
-            bounds[2] -= extraMarginToBounds
-            bounds[4] -= extraMarginToBounds
-            bounds[1] += extraMarginToBounds
-            bounds[3] += extraMarginToBounds
-            bounds[5] += extraMarginToBounds
+            bounds[0] -= extra_margin_to_bounds
+            bounds[2] -= extra_margin_to_bounds
+            bounds[4] -= extra_margin_to_bounds
+            bounds[1] += extra_margin_to_bounds
+            bounds[3] += extra_margin_to_bounds
+            bounds[5] += extra_margin_to_bounds
 
             spacing3 = np.ones(3) * spacing
             dim = [0, 0, 0]
@@ -100,21 +100,21 @@ class SegmentEndocranium(BaseInterface):
 
             extent = [0, dim[0] - 1, 0, dim[1] - 1, 0, dim[2] - 1]
 
-        binaryLabelmap.SetOrigin(origin)
-        binaryLabelmap.SetSpacing(spacing3)
-        binaryLabelmap.SetExtent(extent)
+        binary_labelmap.SetOrigin(origin)
+        binary_labelmap.SetSpacing(spacing3)
+        binary_labelmap.SetExtent(extent)
 
-        binaryLabelmap.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)
-        binaryLabelmap.GetPointData().GetScalars().Fill(0)
+        binary_labelmap.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)
+        binary_labelmap.GetPointData().GetScalars().Fill(0)
 
         pol2stenc = vtk.vtkPolyDataToImageStencil()
         pol2stenc.SetInputData(polydata)
         pol2stenc.SetOutputOrigin(origin)
         pol2stenc.SetOutputSpacing(spacing3)
-        pol2stenc.SetOutputWholeExtent(binaryLabelmap.GetExtent())
+        pol2stenc.SetOutputWholeExtent(binary_labelmap.GetExtent())
 
         imgstenc = vtk.vtkImageStencil()
-        imgstenc.SetInputData(binaryLabelmap)
+        imgstenc.SetInputData(binary_labelmap)
         imgstenc.SetStencilConnection(pol2stenc.GetOutputPort())
         imgstenc.ReverseStencilOn()
         imgstenc.SetBackgroundValue(1)
@@ -123,13 +123,13 @@ class SegmentEndocranium(BaseInterface):
         return imgstenc.GetOutput()
 
     @staticmethod
-    def _labelmapToPolydata(labelmap, value=1):
-        discreteCubes = vtk.vtkDiscreteMarchingCubes()
-        discreteCubes.SetInputData(labelmap)
-        discreteCubes.SetValue(0, value)
+    def _labelmap_to_polydata(labelmap, value=1):
+        discrete_cubes = vtk.vtkDiscreteMarchingCubes()
+        discrete_cubes.SetInputData(labelmap)
+        discrete_cubes.SetValue(0, value)
 
         reverse = vtk.vtkReverseSense()
-        reverse.SetInputConnection(discreteCubes.GetOutputPort())
+        reverse.SetInputConnection(discrete_cubes.GetOutputPort())
         reverse.ReverseCellsOn()
         reverse.ReverseNormalsOn()
         reverse.Update()
@@ -137,33 +137,61 @@ class SegmentEndocranium(BaseInterface):
         return reverse.GetOutput()
 
     @staticmethod
-    def _remeshPolydata(polydata, spacing):
-        labelmap = SegmentEndocranium._polydataToLabelmap(polydata, spacing)
-        return SegmentEndocranium._labelmapToPolydata(labelmap)
+    def _remesh_polydata(polydata, spacing):
+        labelmap = SegmentEndocranium._polydata_to_labelmap(polydata, spacing)
+        return SegmentEndocranium._labelmap_to_polydata(labelmap)
 
-    def _shrinkWrap(self, regionPd, input_spacing, input_pd):
+    def _shrink_wrap(self, region_pd, input_spacing, input_pd, iterations=None):
+        """
+        Simula il filtro Shrinkwrap di Slicer:
+        - region_pd: mesh iniziale da smussare
+        - input_pd: mesh vincolo (input originale)
+        - input_spacing: scala voxel per oversampling
+        - iterations: numero iterazioni di shrinkwrap (default: self.inputs.iterations)
+        """
+        if iterations is None:
+            iterations = self.inputs.iterations
 
-        shrunkenPd = regionPd
         spacing = input_spacing / self.inputs.oversampling
 
-        for iterationIndex in range(self.inputs.iterations):
-            if shrunkenPd.GetNumberOfPoints() <= 1 or input_pd.GetNumberOfPoints() <= 1:
-                # we must not feed empty polydata into vtkSmoothPolyDataFilter because it would crash the application
-                raise ValueError("Mesh has become empty during shrink-wrap iterations")
-            smoothFilter = vtk.vtkSmoothPolyDataFilter()
-            smoothFilter.SetInputData(0, shrunkenPd)
-            smoothFilter.SetInputData(1, input_pd)  # constrain smoothed points to the input surface
-            smoothFilter.Update()
-            shrunkenPd = vtk.vtkPolyData()
-            shrunkenPd.DeepCopy(smoothFilter.GetOutput())
+        # Copia della mesh iniziale
+        smoothed = vtk.vtkPolyData()
+        smoothed.DeepCopy(region_pd)
 
-            remeshedPd = SegmentEndocranium._remeshPolydata(shrunkenPd, spacing)
-            shrunkenPd = vtk.vtkPolyData()
-            shrunkenPd.DeepCopy(remeshedPd)
+        # Locator per punti più vicini sulla mesh originale
+        locator = vtk.vtkPointLocator()
+        locator.SetDataSet(input_pd)
+        locator.BuildLocator()
 
-        return shrunkenPd
+        for it in range(iterations):
+            if smoothed.GetNumberOfPoints() <= 1 or input_pd.GetNumberOfPoints() <= 1:
+                raise ValueError("Mesh vuota durante shrink-wrap")
 
-    def _getInitialRegionPd(self, input_spacing, input_pd):
+            # 1️⃣ Smoothing semplice
+            smoother = vtk.vtkSmoothPolyDataFilter()
+            smoother.SetInputData(smoothed)
+            smoother.FeatureEdgeSmoothingOff()
+            smoother.BoundarySmoothingOff()
+            smoother.Update()
+            smoothed.DeepCopy(smoother.GetOutput())
+
+            # 2️⃣ Vincolo punti alla mesh originale
+            points = smoothed.GetPoints()
+            for pid in range(points.GetNumberOfPoints()):
+                pt = np.array(points.GetPoint(pid))
+                closest_id = locator.FindClosestPoint(pt)
+                closest_pt = np.array(input_pd.GetPoint(closest_id))
+                new_pt = pt * (1 - relaxation) + closest_pt * relaxation
+                points.SetPoint(pid, new_pt.tolist())
+            points.Modified()
+
+            # 3️⃣ (Opzionale) remesh per uniformità voxel
+            remeshed = SegmentEndocranium._remesh_polydata(smoothed, spacing)
+            smoothed.DeepCopy(remeshed)
+
+        return smoothed
+
+    def _get_initial_region_pd(self, input_spacing, input_pd):
         """Get initial shape that will be snapped to closest point of the input segment"""
 
         spacing = input_spacing / self.inputs.oversampling
@@ -172,31 +200,31 @@ class SegmentEndocranium(BaseInterface):
         bounds = np.zeros(6)
         input_pd.GetBounds(bounds)
         diameters = np.array([bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4]])
-        maxRadius = max(diameters) / 2.0
-        sphereSource = vtk.vtkSphereSource()
+        max_radius = max(diameters) / 2.0
+        sphere_source = vtk.vtkSphereSource()
         # to make sure the volume is fully included in the sphere, radius must be sqrt(2) times larger
-        sphereSource.SetRadius(maxRadius * 1.5)
+        sphere_source.SetRadius(max_radius * 1.5)
 
         # Set resolution to be about one magnitude lower than the final resolution
         # (by creating an initial surface element for about every 100th final element).
-        sphereSurfaceArea = 4 * math.pi * maxRadius * maxRadius
-        voxelSurfaceArea = spacing * spacing
-        numberOfSurfaceElements = sphereSurfaceArea / voxelSurfaceArea
-        numberOfIinitialSphereSurfaceElements = numberOfSurfaceElements / 100
-        sphereResolution = math.sqrt(numberOfIinitialSphereSurfaceElements)
+        sphere_surface_area = 4 * math.pi * max_radius * max_radius
+        voxel_surface_area = spacing * spacing
+        number_of_surface_elements = sphere_surface_area / voxel_surface_area
+        number_of_initial_sphere_surface_elements = number_of_surface_elements / 100
+        sphere_resolution = math.sqrt(number_of_initial_sphere_surface_elements)
         # Set resolution to minimum 10
-        sphereResolution = max(int(sphereResolution), 10)
-        sphereSource.SetPhiResolution(sphereResolution)
-        sphereSource.SetThetaResolution(sphereResolution)
-        sphereSource.SetCenter((bounds[0] + bounds[1]) / 2.0, (bounds[2] + bounds[3]) / 2.0,
+        sphere_resolution = max(int(sphere_resolution), 10)
+        sphere_source.SetPhiResolution(sphere_resolution)
+        sphere_source.SetThetaResolution(sphere_resolution)
+        sphere_source.SetCenter((bounds[0] + bounds[1]) / 2.0, (bounds[2] + bounds[3]) / 2.0,
                                (bounds[4] + bounds[5]) / 2.0)
-        sphereSource.Update()
-        initialRegionPd = sphereSource.GetOutput()
-        cleanPolyData = vtk.vtkCleanPolyData()
-        cleanPolyData.SetInputData(initialRegionPd)
-        cleanPolyData.Update()
-        initialRegionPd = cleanPolyData.GetOutput()
-        return initialRegionPd
+        sphere_source.Update()
+        initial_region_pd = sphere_source.GetOutput()
+        clean_poly_data = vtk.vtkCleanPolyData()
+        clean_poly_data.SetInputData(initial_region_pd)
+        clean_poly_data.Update()
+        initial_region_pd = clean_poly_data.GetOutput()
+        return initial_region_pd
 
     @staticmethod
     def update_input_pd_from_binary(binary_map, spacing):
@@ -261,7 +289,7 @@ class SegmentEndocranium(BaseInterface):
         return _inputPd, _inputSpacing
 
     @staticmethod
-    def extend_binary_labelmap(binary_map, input_spacing, splitCavitiesRadius):
+    def extend_binary_labelmap(binary_map, input_spacing, split_cavities_radius):
         """
         Replicates vtkITKImageMargin in Python
         by dilating a binary map by splitCavitiesDiameter/2 in mm.
@@ -272,7 +300,7 @@ class SegmentEndocranium(BaseInterface):
             Input binary map (0/1)
         input_spacing : tuple of float
             Voxel spacing (sx, sy, sz) in mm
-        splitCavitiesRadius : float
+        split_cavities_radius : float
             Radius in mm for margin
 
         Returns
@@ -284,7 +312,7 @@ class SegmentEndocranium(BaseInterface):
         # ---------------------------
         # 2. Convert radius mm -> voxel for each dimension
         # ---------------------------
-        radius_voxel = [int(np.ceil(splitCavitiesRadius / s)) for s in input_spacing]
+        radius_voxel = [int(np.ceil(split_cavities_radius / s)) for s in input_spacing]
 
         # ---------------------------
         # 3. Create structuring element
@@ -332,70 +360,94 @@ class SegmentEndocranium(BaseInterface):
         img.GetPointData().SetScalars(vtk_array)
         return img
 
-    def _extractCavity(self, shrunkenPd, input_spacing, input_pd):
-
+    def _extract_cavity(self, shrunken_pd, input_spacing, input_pd, spacing_tuple):
+        """
+        Estrae la cavità interna più grande a partire da una mesh shrunken_pd.
+        """
         spacing = input_spacing / self.inputs.oversampling
-        outsideObjectLabelmap = SegmentEndocranium._polydataToLabelmap(shrunkenPd, spacing)  # 0=outside, 1=inside
 
-        inputLabelmap = SegmentEndocranium._polydataToLabelmap(input_pd, referenceImage=outsideObjectLabelmap)
-        inputLabelmap_np = SegmentEndocranium.vtk_to_numpy_image(inputLabelmap)
+        # 1Converti la mesh "shrunken" in labelmap (0=outside, 1=inside)
+        outside_labelmap = SegmentEndocranium._polydata_to_labelmap(shrunken_pd, spacing)
 
-        splitCavitiesDiameter = 15
+        # Converti la mesh originale in labelmap, stessa estensione
+        input_labelmap = SegmentEndocranium._polydata_to_labelmap(input_pd, reference_image=outside_labelmap)
+        input_labelmap_np = SegmentEndocranium.vtk_to_numpy_image(input_labelmap)
 
-        # It is less accurate but more robust to dilate labelmap than grow polydata.
-        # Since accuracy is not important here, we dilate labelmap.
-        splitCavitiesRadius = splitCavitiesDiameter / 2.0
-        # Dilate
-        extendedInputLabelmap_np = self.extend_binary_labelmap(inputLabelmap_np, spacing, splitCavitiesRadius)
-        extendedInputLabelmap = SegmentEndocranium.numpy_to_vtk_image(extendedInputLabelmap_np, inputLabelmap)
+        # Dilata la maschera per colmare piccoli gap
+        split_cavities_radius = 7.5  # raggio mm = metà diametro desiderato
+        extended_np = self.extend_binary_labelmap(input_labelmap_np, spacing_tuple, split_cavities_radius)
 
-        outsideObjectLabelmapInverter = vtk.vtkImageThreshold()
-        outsideObjectLabelmapInverter.SetInputData(outsideObjectLabelmap)
-        outsideObjectLabelmapInverter.ThresholdByLower(0)
-        outsideObjectLabelmapInverter.SetInValue(1)  # backgroundValue
-        outsideObjectLabelmapInverter.SetOutValue(0)  # labelValue
-        outsideObjectLabelmapInverter.SetOutputScalarType(outsideObjectLabelmap.GetScalarType())
-        outsideObjectLabelmapInverter.Update()
+        # Converti a vtk
+        extended_vtk = SegmentEndocranium.numpy_to_vtk_image(extended_np, input_labelmap)
 
-        addImage = vtk.vtkImageMathematics()
-        addImage.SetInput1Data(outsideObjectLabelmapInverter.GetOutput())
-        addImage.SetInput2Data(extendedInputLabelmap)
-        addImage.SetOperationToMax()
-        addImage.Update()
-        internalHolesLabelmap = addImage.GetOutput()
-        # internal holes are 0, elsewhere >=1
+        # Inverti la maschera (0=cavità interna, 1=fuori)
+        inverter = vtk.vtkImageThreshold()
+        inverter.SetInputData(outside_labelmap)
+        inverter.ThresholdByLower(0)
+        inverter.SetInValue(1)  # background
+        inverter.SetOutValue(0)  # cavità
+        inverter.SetOutputScalarType(vtk.VTK_UNSIGNED_CHAR)
+        inverter.Update()
+        inverted_labelmap = inverter.GetOutput()
 
-        # Find largest internal hole
-        largestHoleExtract = vtk.vtkImageConnectivityFilter()
-        largestHoleExtract.SetScalarRange(-0.5, 0.5)
-        largestHoleExtract.SetInputData(internalHolesLabelmap)
-        largestHoleExtract.SetExtractionModeToLargestRegion()
-        largestHoleExtract.Update()
-        largestHolesLabelmap = largestHoleExtract.GetOutput()
+        # Combina con la maschera dilatata
+        combiner = vtk.vtkImageMathematics()
+        combiner.SetInput1Data(inverted_labelmap)
+        combiner.SetInput2Data(extended_vtk)
+        combiner.SetOperationToMax()
+        combiner.Update()
+        combined_labelmap = combiner.GetOutput()
 
-        # Convert back to polydata
-        initialRegionPd = vtk.vtkPolyData()
-        initialRegionPd.DeepCopy(SegmentEndocranium._labelmapToPolydata(largestHolesLabelmap, 0))
+        # Estrai la cavità più grande
+        conn_filter = vtk.vtkImageConnectivityFilter()
+        conn_filter.SetExtractionModeToLargestRegion()
+        conn_filter.SetScalarRange(1, 1)  # seleziona la cavità (0)
+        conn_filter.SetInputData(combined_labelmap)
+        conn_filter.Update()
+        largest_hole_labelmap = conn_filter.GetOutput()
 
-        return self._shrinkWrap(initialRegionPd, input_spacing, input_pd)
+        # Converti di nuovo in polydata
+        cavity_pd = SegmentEndocranium._labelmap_to_polydata(largest_hole_labelmap, value=0)
+
+        # Applica shrinkwrap sulla cavità
+        return self._shrink_wrap(cavity_pd, input_spacing, input_pd)
 
     @staticmethod
-    def _smoothPolydata(polydata, smoothingFactor):
-        passBand = pow(10.0, -4.0 * smoothingFactor)
-        smootherSinc = vtk.vtkWindowedSincPolyDataFilter()
-        smootherSinc.SetInputData(polydata)
-        smootherSinc.SetNumberOfIterations(20)
-        smootherSinc.FeatureEdgeSmoothingOff()
-        smootherSinc.BoundarySmoothingOff()
-        smootherSinc.NonManifoldSmoothingOn()
-        smootherSinc.NormalizeCoordinatesOn()
-        smootherSinc.Update()
-        return smootherSinc.GetOutput()
+    def _smooth_polydata(polydata, smoothing_factor):
+        pass_band = pow(10.0, -4.0 * smoothing_factor)
+        smoother_sinc = vtk.vtkWindowedSincPolyDataFilter()
+        smoother_sinc.SetInputData(polydata)
+        smoother_sinc.SetNumberOfIterations(20)
+        smoother_sinc.FeatureEdgeSmoothingOff()
+        smoother_sinc.BoundarySmoothingOff()
+        smoother_sinc.NonManifoldSmoothingOn()
+        smoother_sinc.NormalizeCoordinatesOn()
+        smoother_sinc.Update()
+        return smoother_sinc.GetOutput()
+
+    @staticmethod
+    def _align_polydata_to_reference(polydata, reference_vtk):
+        """
+        Trasla la mesh (polydata) in modo che coincida con l'origine del reference VTK.
+        """
+        origin = np.array(reference_vtk.GetOrigin())
+        # il polydata ha origine (0,0,0) -> trasla verso origin
+        transform = vtk.vtkTransform()
+        transform.Translate(origin)
+
+        transform_filter = vtk.vtkTransformPolyDataFilter()
+        transform_filter.SetInputData(polydata)
+        transform_filter.SetTransform(transform)
+        transform_filter.Update()
+
+        aligned_pd = vtk.vtkPolyData()
+        aligned_pd.DeepCopy(transform_filter.GetOutput())
+        return aligned_pd
 
     def _run_interface(self, runtime):
         self.inputs.out_file = self._gen_outfilename()
 
-        kernelSizeMm = self.inputs.smoothingKernelSize
+        kernel_size_mm = self.inputs.smoothingKernelSize
 
         # =========================
         # 1. CARICA NIFTI
@@ -406,9 +458,7 @@ class SegmentEndocranium(BaseInterface):
         # =========================
         # 2. MAXIMUM ENTROPY THRESHOLD
         # =========================
-        # Escludi background
         foreground = img[img > 0]
-
         threshold = threshold_yen(foreground)
         print(f"Maximum Entropy threshold: {threshold}")
 
@@ -420,49 +470,57 @@ class SegmentEndocranium(BaseInterface):
         # =========================
         # 4. KERNEL MORFOLOGICO (mm → voxel)
         # =========================
-        spacing = tuple(nii.header.get_zooms()[:3])  # (sx, sy, sz)
-        raise Exception(spacing)
-        kernelSizeVoxel = [
-            int(round((kernelSizeMm / spacing[i] + 1) / 2) * 2 - 1)
+        spacing_tuple = tuple(nii.header.get_zooms()[:3])
+        kernel_size_voxel = [
+            int(round((kernel_size_mm / spacing_tuple[i] + 1) / 2) * 2 - 1)
             for i in range(3)
         ]
-        kernelSizeVoxel = [k if k % 2 == 1 else k + 1 for k in kernelSizeVoxel]
-
-        print("Kernel size voxel:", kernelSizeVoxel)
-
-        structure = np.ones(kernelSizeVoxel, dtype=bool)
+        kernel_size_voxel = [k if k % 2 == 1 else k + 1 for k in kernel_size_voxel]
+        structure = np.ones(kernel_size_voxel, dtype=bool)
 
         # =========================
         # 5. CLOSING MORFOLOGICO
         # =========================
         binary_smoothed = binary_closing(binary, structure=structure)
-
-        # riempi buchi interni
         binary_smoothed = binary_fill_holes(binary_smoothed)
 
-        input_pd, input_spacing = self.update_input_pd_from_binary(binary_smoothed, spacing)
-
-        regionPd = self._getInitialRegionPd(input_spacing, input_pd)
-
-        shrunkenPd = vtk.vtkPolyData()
-        shrunkenPd.DeepCopy(self._shrinkWrap(regionPd, input_spacing, input_pd))
-
-        shrunkenPd.DeepCopy(self._extractCavity(shrunkenPd, input_spacing, input_pd))
-
-        shrunkenPd.DeepCopy(SegmentEndocranium._smoothPolydata(shrunkenPd, 0.2))
+        # =========================
+        # 6. CONVERTI LA MASCHERA IN VTK (riferimento)
+        # =========================
+        binary_smoothed_vtk = vtk.vtkImageData()
+        dims = binary_smoothed.shape
+        binary_flat = binary_smoothed.ravel().astype(np.uint8)
+        vtk_array = numpy_support.numpy_to_vtk(binary_flat, deep=True, array_type=vtk.VTK_UNSIGNED_CHAR)
+        binary_smoothed_vtk.SetDimensions(dims[::-1])  # VTK: x,y,z
+        binary_smoothed_vtk.SetSpacing(spacing_tuple)
+        binary_smoothed_vtk.SetOrigin(nii.affine[:3, 3])  # origine dal NIfTI
+        binary_smoothed_vtk.GetPointData().SetScalars(vtk_array)
 
         # =========================
-        # 6. SALVA NIFTI
+        # 7. POLYDATA DALLA MASCHERA
         # =========================
-        header = shrunkenPd.header.copy()
-        header.set_data_dtype(np.uint8)
+        input_pd, input_spacing = self.update_input_pd_from_binary(binary_smoothed, spacing_tuple)
+        region_pd = self._get_initial_region_pd(input_spacing, input_pd)
 
-        out = nib.Nifti1Image(
-            binary_smoothed.astype(np.uint8),
-            affine=shrunkenPd.affine,
-            header=header
+        shrunken_pd = self._shrink_wrap(region_pd, input_spacing, input_pd)
+        shrunken_pd = self._extract_cavity(shrunken_pd, input_spacing, input_pd, spacing_tuple)
+        shrunken_pd = SegmentEndocranium._smooth_polydata(shrunken_pd, 0.2)
+
+        # =========================
+        # 8. CONVERTI DI NUOVO IN VTK LABELMAP ALLINEATA
+        # =========================
+        shrunken_pd_aligned = self._align_polydata_to_reference(shrunken_pd, binary_smoothed_vtk)
+
+        shrunken_labelmap = SegmentEndocranium._polydata_to_labelmap(
+            shrunken_pd_aligned, reference_image=binary_smoothed_vtk
         )
 
+        shrunken_labelmap_np = SegmentEndocranium.vtk_to_numpy_image(shrunken_labelmap)
+
+        # =========================
+        # 9. SALVA NIFTI
+        # =========================
+        out = nib.Nifti1Image(shrunken_labelmap_np.astype(np.uint8), affine=nii.affine)
         nib.save(out, self.inputs.out_file)
 
         return runtime
