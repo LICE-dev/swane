@@ -203,8 +203,8 @@ class NipypeNodeRuntimeWidget(QWidget):
                     self._add_label(strings.sub_tab_node_duration_label, self._row, 0)
                     self._add_value(formatted_duration, self._row, 1)
 
-                    self._add_label(strings.sub_tab_node_cpu_label, self._row, 2)
                     scaled_cpu_perc = rt.cpu_percent / cpu_count()
+                    self._add_label(strings.sub_tab_node_cpu_label, self._row, 2)
                     self._add_value(f"{scaled_cpu_perc:.1f}", self._row, 3)
 
                     self._add_label(strings.sub_tab_node_ram_label, self._row, 4)
@@ -291,7 +291,6 @@ class NipypeNodeRuntimeWidget(QWidget):
             )
             btn.setToolTip("Open in 3D Slicer")
         else:
-            print(1)
             btn.clicked.connect(
                 lambda _, p=path: QDesktopServices.openUrl(QUrl.fromLocalFile(p))
             )
