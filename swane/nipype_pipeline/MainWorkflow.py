@@ -776,7 +776,7 @@ class MainWorkflow(CustomWorkflow):
             seeg_ct_dir=seeg_ct_dir,
             config=self.subject_config[DIL.SEEG_CT]
         )
-        self.seeg_ct_dir.long_name = "Venous CT analysis"
+        self.seeg_ct_dir.long_name = "SEEG CT analysis"
 
         self.connect(self.t1, "outputnode.ref_brain", self.seeg_ct_dir, "inputnode.ref_brain")
         self.connect(self.t1, "outputnode.ref", self.seeg_ct_dir, "inputnode.ref")
