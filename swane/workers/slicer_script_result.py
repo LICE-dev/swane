@@ -233,7 +233,33 @@ def load_freesurfer(scene_dir: str, ref_node):
         load_freesurfer_overlay(scene_dir, overlay + "_rh.mgz", rh_pial)
 
 
-def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 97.5):
+def create_grayscale_model(orig_node, model_name, threshold, scene_dir, file_name, model_color=None):
+    print("SLICERLOADER: Creating 3D model: " + model_name)
+    new_model = slicer.vtkMRMLModelNode()
+    new_model.SetName(model_name)
+    slicer.mrmlScene.AddNode(new_model)
+
+    parameters = {
+        "InputVolume": orig_node.GetID(),
+        "Threshold": threshold,
+        "OutputGeometry": new_model.GetID(),
+    }
+    gray_maker = slicer.modules.grayscalemodelmaker
+    slicer.cli.runSync(gray_maker, None, parameters)
+
+    new_model.CreateDefaultDisplayNodes()
+    if model_color is not None:
+        display_node = new_model.GetDisplayNode()
+        display_node.SetScalarVisibility(False)
+        display_node.SetColor(model_color)
+        display_node.SetOpacity(1.0)
+
+    my_storage_node = new_model.CreateDefaultStorageNode()
+    my_storage_node.SetFileName(os.path.join(scene_dir, file_name))
+    my_storage_node.WriteData(new_model)
+
+
+def load_vein(scene_dir: str, vein_threshold: float = 97.5):
     """
     Loads the veins files and creates their 3d model.
 
@@ -241,9 +267,7 @@ def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 
     ----------
     scene_dir : str
         The scene directory.
-    remove_vein : bool, optional
-        True if the model must remove the original veins images. The default is False.
-    vein_thresold : float, optional
+    vein_threshold : float, optional
         The threshold for the vein detection in 3D Slicer. The default is 97.5.
 
     Returns
@@ -252,45 +276,34 @@ def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 
 
     """
 
-    vein_volume_name = "r-veins_mra_inskull"
-    vein_node = load_anat(scene_dir, vein_volume_name)
-    if vein_node is None:
-        return
-    print("SLICERLOADER: Creating 3D model: Veins")
-
-    try:
-        command = (
-            "fslstats "
-            + os.path.join(scene_dir, vein_volume_name + ".nii.gz")
-            + " -P "
-            + str(vein_threshold)
-        )
-        output = subprocess.run(
-            command, shell=True, stdout=subprocess.PIPE
-        ).stdout.decode("utf-8")
-        thr = float(output)
-    except:
-        thr = 6
-
-    vein_model = slicer.vtkMRMLModelNode()
-    slicer.mrmlScene.AddNode(vein_model)
-
-    parameters = {
-        "InputVolume": vein_node.GetID(),
-        "Threshold": thr,
-        "OutputGeometry": vein_model.GetID(),
+    vein_list = {
+        "mra":  {"file_name": "r-veins_mra_inskull", "threshold": 97.5, "model_color": [0, 0, 1]},
+        "ct": {"file_name": "r-veins_ct_inskull", "threshold": 97.5, "model_color": [0, 0, 1]},
     }
 
-    gray_maker = slicer.modules.grayscalemodelmaker
-    slicer.cli.runSync(gray_maker, None, parameters)
-    vein_model.GetDisplayNode().SetColor(0, 0, 1)
-    vein_model.SetName("Veins")
-    my_storage_node = vein_model.CreateDefaultStorageNode()
-    my_storage_node.SetFileName(os.path.join(scene_dir, "veins.vtk"))
-    my_storage_node.WriteData(vein_model)
+    for vein in vein_list.values():
+        vein_volume_name = vein["file_name"]
+        vein_node = load_anat(scene_dir, vein_volume_name)
+        if vein_node is None:
+            continue
+        print("SLICERLOADER: Creating 3D model: Veins")
 
-    if remove_vein:
-        slicer.mrmlScene.RemoveNode(vein_node)
+        try:
+            command = (
+                "fslstats "
+                + os.path.join(scene_dir, vein_volume_name + ".nii.gz")
+                + " -P "
+                + str(vein["threshold"])
+            )
+            output = subprocess.run(
+                command, shell=True, stdout=subprocess.PIPE
+            ).stdout.decode("utf-8")
+            thr = float(output)
+        except:
+            thr = 6
+
+        create_grayscale_model(vein_node, "Veins", thr, scene_dir,
+                               vein_volume_name + ".vtk", vein["model_color"])
 
 
 def tract_model(
@@ -369,6 +382,35 @@ def tract_model(
     segment_editor_widget = None
     slicer.mrmlScene.RemoveNode(segment_editor_node)
     slicer.mrmlScene.RemoveNode(tract_node)
+
+
+def load_seeg(scene_dir: str, threshold: float = 900):
+    """
+    Creates the 3d model of a tract.
+
+    Parameters
+    ----------
+    scene_dir : str
+        The result directory.
+    threshold : float
+        The threshold for the model
+
+    Returns
+    -------
+    None.
+
+    """
+
+    seeg_volume_name = "r-seeg_electrodes"
+    seeg_node = load_anat(scene_dir, seeg_volume_name)
+    if seeg_node is None:
+        return
+
+    steel_blue = [70 / 255.0,
+        130 / 255.0,
+        180 / 255.0]
+    create_grayscale_model(seeg_node, "sEEG electrodes", threshold, scene_dir,
+                           "seeg_electrodes.vtk", steel_blue)
 
 
 def load_fmri(scene_dir: str):
@@ -487,14 +529,16 @@ else:
 
         load_fmri(results_folder)
 
+        load_seeg(results_folder, 900)
+
         # Vein Threshold preferences parsing
+        vein_threshold = 97.5
         if sys.argv[3] is not None:
             try:
                 vein_threshold = float(sys.argv[3])
             except:
-                vein_threshold = 97.5
-
-        load_vein(results_folder, vein_thresold=vein_threshold)
+                pass
+        load_vein(results_folder, vein_threshold=vein_threshold)
 
         load_freesurfer(results_folder, refNode)
 

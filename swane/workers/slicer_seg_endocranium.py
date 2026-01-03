@@ -155,6 +155,8 @@ segmentEditorNode.SetSelectedSegmentID(boneRawID)
 segmentEditorWidget.setActiveEffectByName("Threshold")
 effect = segmentEditorWidget.activeEffect()
 effect.setParameter("MinimumThreshold", str(boneThresholdValue))
+# TODO: for now we set 220 as fixed value, maybe we can implement a better way
+effect.setParameter("MinimumThreshold", "220")
 effect.setParameter("MaximumThreshold", str(volumeScalarRange[1]))
 effect.self().onApply()
 
