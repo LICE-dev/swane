@@ -254,8 +254,8 @@ check_dep_fs_error1 = (
 )
 check_dep_fs_error2 = "FreeSurfer detected (%s), but without environment configuration"
 check_dep_fs_error3 = (
-    "FreeSurfer detected (%s). OPTIONAL: Matlab Runtime is not installed (<a "
-    "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>installation instruction</a>)"
+    "FreeSurfer detected (%s). OPTIONAL: install Matlab Runtime (<a "
+    "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>instruction</a>)"
 )
 check_dep_fs_error4 = (
     "FreeSurfer detected (%s). License key missing (<a "

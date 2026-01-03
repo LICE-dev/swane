@@ -6,6 +6,7 @@ from nipype.interfaces.fsl import (
     BinaryMaths,
     ImageMaths,
     ApplyXFM,
+    RobustFOV,
 )
 from nipype import Node, IdentityInterface, MapNode
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
@@ -71,10 +72,11 @@ def venous_ct_workflow(
     inputnode = Node(IdentityInterface(fields=["ref_brain", "ref"]), name="inputnode")
 
     # Output Node
-    outputnode = Node(IdentityInterface(fields=["veins","contrast"]), name="outputnode")
+    outputnode = Node(IdentityInterface(fields=["veins","basal"]), name="outputnode")
 
     # NODE 1: Conversion dicom -> nifti
     veins_conv = Node(CustomDcm2niix(), name="veins_ct_conv")
+    veins_conv.long_name = "Basal Nifti conversion"
     veins_conv.inputs.source_dir = venous_ct_dir
     veins_conv.inputs.bids_format = False
     veins_conv.inputs.out_filename = "veins"
@@ -85,12 +87,17 @@ def venous_ct_workflow(
     veins_reOrient = Node(ForceOrient(), name="veins_ct_reOrient")
     workflow.connect(veins_conv, "converted_files", veins_reOrient, "in_file")
 
+    # NODE 3: Crop neck
+    veins_robustfov = Node(RobustFOV(), name="%s_robustfov" % name)
+    workflow.connect(veins_reOrient, "out_file", veins_robustfov, "in_file")
+
     # NODE 3: Conversion dicom -> nifti
     veins2_conv = MapNode(
         CustomDcm2niix(),
         name="veins_2conv",
         iterfield=["source_dir"],
     )
+    veins2_conv.long_name = "Contrast Nifti conversion"
     veins2_conv.inputs.source_dir = venous2_ct_dir
     veins2_conv.inputs.bids_format = False
 
@@ -102,33 +109,38 @@ def venous_ct_workflow(
     )
     workflow.connect(veins2_conv, "converted_files", veins2_reOrient, "in_file")
 
+    veins2_robustfov = MapNode(
+        RobustFOV(),
+        name="%s2_robustfov" % name,
+        iterfield=["in_file"],
+    )
+    workflow.connect(veins2_reOrient, "out_file", veins2_robustfov, "in_file")
+
     # NODE 5: Scalp removal
     deskull = Node(SegmentEndocranium(), name="segment_endocranium", mem_gb=2.5)
     deskull.inputs.slicer_cmd = slicer_path
     deskull.inputs.iterations = config.getint_safe("segment_endocranium_iteration")
     deskull.inputs.smoothingKernelSize = config.getfloat_safe("segment_endocranium_kernel")
     deskull.inputs.oversampling = config.getfloat_safe("segment_endocranium_oversampling")
-    workflow.connect(veins_reOrient, "out_file", deskull, "in_file")
+    workflow.connect(veins_robustfov, "out_roi", deskull, "in_file")
+
+    # NODE 6: Mask in radiological convention
+    veins_mask_reOrient = Node(ForceOrient(), name="veins_mask_reOrient")
+    workflow.connect(deskull, "out_file", veins_mask_reOrient, "in_file")
 
     # NODE 7: Linear registration of veins to reference space
-    if DependencyManager.is_freesurfer_synth():
-        basal_2_ref = Node(SynthMorphReg(), name="veins_ct_synthreg", mem_gb=9)
-        basal_2_ref.long_name = "%s to reference space"
-        basal_2_ref.inputs.model = "affine"
-        workflow.connect(veins_reOrient, "out_file", basal_2_ref, "in_file")
-        workflow.connect(inputnode, "ref", basal_2_ref, "reference")
-    else:
-        basal_2_ref = Node(FLIRT(), name="veins_ct_flirt_2_ref")
-        basal_2_ref.long_name = "%s to reference space"
-        basal_2_ref.inputs.out_matrix_file = "veins2ref.mat"
-        basal_2_ref.inputs.cost = "mutualinfo"
-        basal_2_ref.inputs.searchr_x = [-90, 90]
-        basal_2_ref.inputs.searchr_y = [-90, 90]
-        basal_2_ref.inputs.searchr_z = [-90, 90]
-        basal_2_ref.inputs.dof = 6
-        basal_2_ref.inputs.interp = "trilinear"
-        workflow.connect(veins_reOrient, "out_file", basal_2_ref, "in_file")
-        workflow.connect(inputnode, "ref", basal_2_ref, "reference")
+    basal_2_ref = Node(FLIRT(), name="veins_ct_flirt_2_ref")
+    basal_2_ref.long_name = "%s to reference space"
+    basal_2_ref.inputs.out_matrix_file = "veins2ref.mat"
+    basal_2_ref.inputs.cost = "mutualinfo"
+    basal_2_ref.inputs.searchr_x = [-90, 90]
+    basal_2_ref.inputs.searchr_y = [-90, 90]
+    basal_2_ref.inputs.searchr_z = [-90, 90]
+    basal_2_ref.inputs.dof = 6
+    basal_2_ref.inputs.interp = "trilinear"
+    workflow.connect(veins_robustfov, "out_roi", basal_2_ref, "in_file")
+    workflow.connect(inputnode, "ref", basal_2_ref, "reference")
+    workflow.connect(basal_2_ref, "out_file", outputnode, "basal")
 
     # NODE 8: Linear registration of contrast to basal veins
     contrast_2_basal = MapNode(
@@ -144,8 +156,8 @@ def venous_ct_workflow(
     contrast_2_basal.inputs.searchr_z = [-90, 90]
     contrast_2_basal.inputs.dof = 6
     contrast_2_basal.inputs.interp = "trilinear"
-    workflow.connect(veins2_reOrient, "out_file", contrast_2_basal, "in_file")
-    workflow.connect(veins_reOrient, "out_file", contrast_2_basal, "reference")
+    workflow.connect(veins2_robustfov, "out_roi", contrast_2_basal, "in_file")
+    workflow.connect(veins_robustfov, "out_roi", contrast_2_basal, "reference")
 
     # NODE 9: Subtract basal from contrast scan
     veins_subtraction = MapNode(
@@ -156,12 +168,12 @@ def venous_ct_workflow(
     veins_subtraction.long_name = "Subtract basal scan"
     veins_subtraction.inputs.operation = "sub"
     workflow.connect(contrast_2_basal, "out_file", veins_subtraction, "in_file")
-    workflow.connect(veins_reOrient, "out_file", veins_subtraction, "operand_file")
+    workflow.connect(veins_robustfov, "out_roi", veins_subtraction, "operand_file")
 
     # NODE 10: Sum all contrasts
     veins_sum = Node(SumMultiVols(), name="veins_ct_sum")
     veins_sum.long_name = "Sum contrast scans"
-    veins_sum.inputs.out_file = "test.nii.gz"
+    veins_sum.inputs.out_file = "vein_contrast_sum.nii.gz"
     workflow.connect(veins_subtraction, "out_file", veins_sum, "vol_files")
     workflow.connect(veins_subtraction, "out_file", outputnode, "contrast")
 
@@ -169,7 +181,7 @@ def venous_ct_workflow(
     veins_inskull_mask = Node(ApplyMask(), name="veins_ct_mask")
     veins_inskull_mask.long_name = "%s inskull veins"
     workflow.connect(veins_sum, "out_file", veins_inskull_mask, "in_file")
-    workflow.connect(deskull, "out_file", veins_inskull_mask, "mask_file")
+    workflow.connect(veins_mask_reOrient, "out_file", veins_inskull_mask, "mask_file")
 
     # NODE 12: Get the max value of venous phase
     veins_range = Node(ImageStats(), name="veins_ct_range")
@@ -191,20 +203,13 @@ def venous_ct_workflow(
     )
     workflow.connect(veins_inskull_mask, "out_file", veins_rescale, "in_file")
 
-    if DependencyManager.is_freesurfer_synth():
-        veins_2_ref = Node(SynthMorphApply(), name="veins_synthapply")
-        veins_2_ref.long_name = "%s in reference space"
-        veins_2_ref.inputs.out_file = "r-veins_ct_inskull.nii.gz"
-        workflow.connect(veins_rescale, "out_file", veins_2_ref, "in_file")
-        workflow.connect(basal_2_ref, "warp_file", veins_2_ref, "warp_file")
-    else:
-        veins_2_ref = Node(ApplyXFM(), name="veins_flirt")
-        veins_2_ref.long_name = "%s to reference space"
-        veins_2_ref.inputs.out_file = "r-ct_veins_inskull.nii.gz"
-        veins_2_ref.inputs.interp = "trilinear"
-        workflow.connect(veins_rescale, "out_file", veins_2_ref, "in_file")
-        workflow.connect(basal_2_ref, "out_matrix_file", veins_2_ref, "in_matrix_file")
-        workflow.connect(inputnode, "ref_brain", veins_2_ref, "reference")
+    veins_2_ref = Node(ApplyXFM(), name="veins_flirt")
+    veins_2_ref.long_name = "%s to reference space"
+    veins_2_ref.inputs.out_file = "r-veins_ct_inskull.nii.gz"
+    veins_2_ref.inputs.interp = "trilinear"
+    workflow.connect(veins_rescale, "out_file", veins_2_ref, "in_file")
+    workflow.connect(basal_2_ref, "out_matrix_file", veins_2_ref, "in_matrix_file")
+    workflow.connect(inputnode, "ref_brain", veins_2_ref, "reference")
 
     workflow.connect(veins_2_ref, "out_file", outputnode, "veins")
 
