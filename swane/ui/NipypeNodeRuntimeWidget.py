@@ -289,11 +289,12 @@ class NipypeNodeRuntimeWidget(QWidget):
             btn.clicked.connect(
                 lambda _, p=path: self._open_in_slicer(p)
             )
-            btn.setToolTip("Open in 3D Slicer")
+            btn.setToolTip(strings.sub_tab_node_slicer_button_tooltip)
         else:
             btn.clicked.connect(
                 lambda _, p=path: QDesktopServices.openUrl(QUrl.fromLocalFile(p))
             )
+            btn.setToolTip(strings.sub_tab_node_file_button_tooltip)
 
         self.grid.addWidget(btn, row, col, 1, 5)
 
