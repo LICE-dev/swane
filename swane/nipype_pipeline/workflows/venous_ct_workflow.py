@@ -71,7 +71,7 @@ def venous_ct_workflow(
     inputnode = Node(IdentityInterface(fields=["ref_brain", "ref"]), name="inputnode")
 
     # Output Node
-    outputnode = Node(IdentityInterface(fields=["veins","debug"]), name="outputnode")
+    outputnode = Node(IdentityInterface(fields=["veins","contrast"]), name="outputnode")
 
     # NODE 1: Conversion dicom -> nifti
     veins_conv = Node(CustomDcm2niix(), name="veins_ct_conv")
@@ -163,6 +163,7 @@ def venous_ct_workflow(
     veins_sum.long_name = "Sum contrast scans"
     veins_sum.inputs.out_file = "test.nii.gz"
     workflow.connect(veins_subtraction, "out_file", veins_sum, "vol_files")
+    workflow.connect(veins_subtraction, "out_file", outputnode, "contrast")
 
     # NODE 11: Apply brain mask
     veins_inskull_mask = Node(ApplyMask(), name="veins_ct_mask")
@@ -193,13 +194,13 @@ def venous_ct_workflow(
     if DependencyManager.is_freesurfer_synth():
         veins_2_ref = Node(SynthMorphApply(), name="veins_synthapply")
         veins_2_ref.long_name = "%s in reference space"
-        veins_2_ref.inputs.out_file = "r-veins_inskull.nii.gz"
+        veins_2_ref.inputs.out_file = "r-veins_ct_inskull.nii.gz"
         workflow.connect(veins_rescale, "out_file", veins_2_ref, "in_file")
         workflow.connect(basal_2_ref, "warp_file", veins_2_ref, "warp_file")
     else:
         veins_2_ref = Node(ApplyXFM(), name="veins_flirt")
         veins_2_ref.long_name = "%s to reference space"
-        veins_2_ref.inputs.out_file = "r-veins_inskull.nii.gz"
+        veins_2_ref.inputs.out_file = "r-ct_veins_inskull.nii.gz"
         veins_2_ref.inputs.interp = "trilinear"
         workflow.connect(veins_rescale, "out_file", veins_2_ref, "in_file")
         workflow.connect(basal_2_ref, "out_matrix_file", veins_2_ref, "in_matrix_file")

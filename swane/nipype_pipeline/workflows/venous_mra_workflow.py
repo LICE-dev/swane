@@ -185,7 +185,7 @@ def venous_mra_workflow(
     # NODE 10: Venous phase rescaling in 0-100
     veins_rescale = Node(ImageMaths(), name="veins_rescale")
     veins_rescale.long_name = "intensity normalization"
-    veins_rescale.inputs.out_file = "r-veins_inskull.nii.gz"
+    veins_rescale.inputs.out_file = "r-veins_mra_inskull.nii.gz"
 
     # Function to define the operation string
     def rescale_string(intensity_range):
