@@ -252,7 +252,7 @@ def load_vein(scene_dir: str, remove_vein: bool = False, vein_thresold: float = 
 
     """
 
-    vein_volume_name = "r-veins_inskull"
+    vein_volume_name = "r-veins_mra_inskull"
     vein_node = load_anat(scene_dir, vein_volume_name)
     if vein_node is None:
         return
