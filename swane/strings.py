@@ -197,6 +197,8 @@ sub_tab_node_duration_label = "Duration"
 sub_tab_node_cpu_label = "CPU %"
 sub_tab_node_ram_label = "Mem (GB)"
 sub_tab_node_output_label = "Output"
+sub_tab_node_slicer_button_tooltip = "Open in 3D Slicer"
+sub_tab_node_file_button_tooltip = "Show in File Manager"
 
 # Wf Preference Window
 wf_pref_window_title_user = " - Workflow preferences"

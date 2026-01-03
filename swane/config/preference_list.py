@@ -231,7 +231,7 @@ WF_PREFERENCES[category]["erode_kernel_size"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Kernel dimension for brain mask erosion",
     tooltip="Increase this value if final electrode mask includes skull",
-    default=3,
+    default=5,
     range=[1, 20]
 )
 category = DataInputList.VENOUS_CT
