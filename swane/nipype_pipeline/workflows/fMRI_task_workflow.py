@@ -36,7 +36,7 @@ def fMRI_task_workflow(
 
     Input Node Fields
     ----------
-    ref_BET : path
+    ref_brain : path
         Betted T13D.
 
     Output Node Fields
@@ -261,7 +261,7 @@ def fMRI_task_workflow(
                 )
             ]
         )
-        workflow.connect(inputnode, "ref_BET", cluster1_2_ref, "reference")
+        workflow.connect(inputnode, "ref_brain", cluster1_2_ref, "reference")
         workflow.connect(
             flirt_2_ref, "out_matrix_file", cluster1_2_ref, "in_matrix_file"
         )
@@ -332,7 +332,7 @@ def fMRI_task_workflow(
                 )
             ]
         )
-        workflow.connect(inputnode, "ref_BET", cluster2_2_ref, "reference")
+        workflow.connect(inputnode, "ref_brain", cluster2_2_ref, "reference")
         workflow.connect(
             flirt_2_ref, "out_matrix_file", cluster2_2_ref, "in_matrix_file"
         )
@@ -403,7 +403,7 @@ def fMRI_task_workflow(
                 )
             ]
         )
-        workflow.connect(inputnode, "ref_BET", cluster3_2_ref, "reference")
+        workflow.connect(inputnode, "ref_brain", cluster3_2_ref, "reference")
         workflow.connect(
             flirt_2_ref, "out_matrix_file", cluster3_2_ref, "in_matrix_file"
         )

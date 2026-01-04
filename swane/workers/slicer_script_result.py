@@ -4,6 +4,7 @@
 import sys
 import os
 import subprocess
+import SimpleITK as sitk
 
 
 def load_anat(scene_dir: str, volume_name: str, color_node_ID: str = None):
@@ -31,7 +32,15 @@ def load_anat(scene_dir: str, volume_name: str, color_node_ID: str = None):
     if os.path.exists(file):
         try:
             print("SLICERLOADER: Loading " + volume_name)
-            node = slicer.util.loadVolume(file)
+            reader = sitk.ImageFileReader()
+            reader.SetFileName(file)
+            reader.ReadImageInformation()  # legge solo header, niente voxel
+            if reader.GetDimension() == 4:
+                mvNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMultiVolumeNode", volume_name)
+                slicer.modules.multivolumeimporter.widgetRepresentation().self().read4DNIfTI(mvNode, file)
+            else:
+                node = slicer.util.loadVolume(file)
+
         except:
             pass
 
@@ -510,6 +519,7 @@ else:
             "r-binary_flair",
             "r-junction_z",
             "r-extension_z",
+            "r-melodic_IC",
         ]
 
         for volume in baseList:

@@ -131,9 +131,18 @@ class DataInputList(Enum):
         DataInputList["FMRI_%d" % i] = DataInput(
             name="fmri_%d" % i,
             label="Task fMRI - Sequence %d" % (i + 1),
+            optional=True,
             max_volumes=-1,
             min_volumes=4,
         )
+
+    FMRI_RS = DataInput(
+        name="fmri_resting_state",
+        label="Resting state fMRI",
+        optional=True,
+        max_volumes=-1,
+        min_volumes=4,
+    )
 
     def __str__(self):
         return self.value.name

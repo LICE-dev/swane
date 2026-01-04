@@ -16,6 +16,7 @@ from swane.config.config_enums import (
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
 from swane.nipype_pipeline.workflows.fMRI_task_workflow import fMRI_task_workflow
+from swane.nipype_pipeline.workflows.fMRI_resting_state_workflow import fMRI_resting_state_workflow
 from swane.nipype_pipeline.workflows.nonlinear_reg_workflow import (
     nonlinear_reg_workflow,
 )
@@ -111,7 +112,8 @@ class MainWorkflow(CustomWorkflow):
         self.launch_venous_mra_analysis()
         self.launch_seeg_ct_analysis()
         self.launch_dti_analysis()
-        self.launch_fMRI_analysis()
+        self.launch_fMRI_task_analysis()
+        self.launch_fMRI_resting_state_analysis()
 
         # Remove reference to original variables to prevent crash during subprocess spawn in MacOS
         # Maybe this can be solved setting fork subprocess method too
@@ -890,11 +892,12 @@ class MainWorkflow(CustomWorkflow):
                             sub_folder=self.Result_DIR + ".dti",
                         )
 
-    def launch_fMRI_analysis(self):
+    def launch_fMRI_task_analysis(self):
         # Check for Task FMRI sequences
         for y in range(FMRI_NUM):
 
-            if not self.subject_input_state_list[DIL["FMRI_%d" % y]].loaded:
+            if (not DIL["FMRI_%d" % y] in self.subject_input_state_list or
+                    not self.subject_input_state_list[DIL["FMRI_%d" % y]].loaded):
                 continue
 
             dicom_dir = self.subject_input_state_list.get_dicom_dir(DIL["FMRI_%d" % y])
@@ -906,7 +909,7 @@ class MainWorkflow(CustomWorkflow):
             )
             self.fMRI.long_name = "Task fMRI analysis - %d" % y
             self.connect(
-                self.t1, "outputnode.ref_brain", self.fMRI, "inputnode.ref_BET"
+                self.t1, "outputnode.ref_brain", self.fMRI, "inputnode.ref_brain"
             )
             for thresh_i in range(1, 4):
                 self.fMRI.sink_result(
@@ -925,3 +928,27 @@ class MainWorkflow(CustomWorkflow):
                         result_name="threshold_file_cont2_thresh%d" % thresh_i,
                         sub_folder=self.Result_DIR + ".fMRI",
                     )
+
+    def launch_fMRI_resting_state_analysis(self):
+        # Check for Resting state FMRI sequences
+        if (not DIL.FMRI_RS in self.subject_input_state_list
+                or not self.subject_input_state_list[DIL.FMRI_RS].loaded):
+            return
+
+        dicom_dir = self.subject_input_state_list.get_dicom_dir(DIL.FMRI_RS)
+        self.fMRI_resting_state = fMRI_resting_state_workflow(
+            name=DIL.FMRI_RS.value.workflow_name,
+            dicom_dir=dicom_dir,
+            config=self.subject_config[DIL.FMRI_RS],
+            base_dir=self.base_dir,
+        )
+        self.fMRI_resting_state.long_name = "Resting state fMRI analysis"
+        self.connect(
+            self.t1, "outputnode.ref_brain", self.fMRI_resting_state, "inputnode.ref_brain"
+        )
+        self.fMRI_resting_state.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="IC",
+            sub_folder=self.Result_DIR,
+        )
