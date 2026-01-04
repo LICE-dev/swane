@@ -11,7 +11,7 @@ class DataInput(PrefCategory):
         name: str,
         label: str = "",
         tooltip: str = "",
-        image_modality: ImageModality = ImageModality.RM,
+        image_modality: list[ImageModality] = [ImageModality.RM],
         optional: bool = False,
         workflow_name: str = None,
         max_volumes: int = 1,
@@ -34,15 +34,26 @@ class DataInput(PrefCategory):
         else:
             self.workflow_name = self.name
 
-    def is_image_modality(self, image_modality_found: str) -> bool:
+    def is_image_modality(self, image_modality_found: ImageModality) -> bool:
         try:
-            return (
-                self.image_modality == image_modality_found
-                or self.image_modality.value.lower()
-                == str(image_modality_found).lower()
-            )
+            if image_modality_found in self.image_modality:
+                return True
+            for this_modality in self.image_modality:
+                if this_modality.value.lower() == str(image_modality_found).lower():
+                    return True
         except:
             return False
+
+        return False
+
+    def get_modality_str(self):
+        mod_string = ""
+        for this_modality in self.image_modality:
+            if mod_string == "":
+                mod_string = this_modality.value.upper()
+            else:
+                mod_string += " or " + this_modality.value.upper()
+        return mod_string
 
 
 class DataInputList(Enum):
@@ -68,25 +79,25 @@ class DataInputList(Enum):
         label="Venous CT",
         tooltip="Load non contrast scan here and contrast scans in subsequent \"Venous CT - contrast\" slots",
         optional=True,
-        image_modality=ImageModality.CT
+        image_modality=[ImageModality.CT, ImageModality.XA]
     )
     VENOUS_CT2 = DataInput(
         name=VENOUS_CT.name + "2",
         label="Venous CT - Contrast",
         parent_input="VENOUS_CT",
-        image_modality=ImageModality.CT
+        image_modality=[ImageModality.CT, ImageModality.XA]
     )
     VENOUS_CT3 = DataInput(
         name=VENOUS_CT.name + "3",
         label="Venous CT - Contrast",
         parent_input="VENOUS_CT",
-        image_modality=ImageModality.CT
+        image_modality=[ImageModality.CT, ImageModality.XA]
     )
     VENOUS_CT4 = DataInput(
         name=VENOUS_CT.name + "4",
         label="Venous CT - Contrast",
         parent_input="VENOUS_CT",
-        image_modality=ImageModality.CT
+        image_modality=[ImageModality.CT, ImageModality.XA]
     )
     DTI = DataInput(
         name="dti", label="Diffusion Tensor Imaging", max_volumes=-1, min_volumes=4
@@ -96,12 +107,12 @@ class DataInputList(Enum):
         label="Arterial Spin Labeling",
         tooltip="CBF images from an ASL sequence",
     )
-    PET = DataInput(name="pet", label="PET", image_modality=ImageModality.PET)
+    PET = DataInput(name="pet", label="PET", image_modality=[ImageModality.PET])
     SEEG_CT = DataInput(
         name="seeg_ct",
         label="Stereo-EEG CT",
         optional=True,
-        image_modality=ImageModality.CT
+        image_modality=[ImageModality.CT]
     )
 
     # An Enum usually contains EVERY variable defined in its __init__, we want to ignore some used for loop only
