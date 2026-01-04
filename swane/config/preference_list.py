@@ -363,6 +363,36 @@ for x in range(FMRI_NUM):
         range=[0, 500],
     )
 
+category = DataInputList.FMRI_RS
+WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]["tr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Repetition Time (TR)",
+    tooltip="Set -1 for automatic detection",
+    default="-1.0",
+    range=[-1, 1000],
+)
+WF_PREFERENCES[category]["n_vols"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Number of volumes",
+    tooltip="Set -1 for automatic detection",
+    default="-1",
+    range=[-1, 1000],
+)
+WF_PREFERENCES[category]["del_start_vols"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Delete start volumes",
+    default=0,
+    range=[0, 500],
+)
+WF_PREFERENCES[category]["del_end_vols"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Delete end volumes",
+    default=0,
+    range=[0, 500],
+)
+
+
 GLOBAL_PREFERENCES = {}
 
 category = GlobalPrefCategoryList.MAIN

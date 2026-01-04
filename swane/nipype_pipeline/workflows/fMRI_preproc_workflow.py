@@ -48,7 +48,7 @@ def fMRI_preproc_workflow(
 
     Input Node Fields
     ----------
-    ref_BET : path
+    ref_brain : path
         Betted T13D.
 
     Output Node Fields
@@ -68,7 +68,7 @@ def fMRI_preproc_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["ref_BET"]), name="inputnode")
+    inputnode = Node(IdentityInterface(fields=["ref_brain"]), name="inputnode")
 
     # NODE 1: Conversion dicom -> nifti
     conversion = Node(CustomDcm2niix(), name="%s_conv" % name)
@@ -329,6 +329,6 @@ def fMRI_preproc_workflow(
     flirt_2_ref.inputs.searchr_z = [-90, 90]
     flirt_2_ref.inputs.dof = 6
     workflow.connect(meanfunc2, "out_file", flirt_2_ref, "in_file")
-    workflow.connect(inputnode, "ref_BET", flirt_2_ref, "reference")
+    workflow.connect(inputnode, "ref_brain", flirt_2_ref, "reference")
 
     return workflow
