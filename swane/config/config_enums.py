@@ -59,6 +59,7 @@ class ImageModality(Enum):
     RM = "mr"
     PET = "pt"
     CT = "ct"
+    XA = "xa"
 
     @staticmethod
     def from_string(mod_string: str):

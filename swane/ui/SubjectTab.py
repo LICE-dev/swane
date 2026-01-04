@@ -413,7 +413,7 @@ class SubjectTab(QTabWidget):
                 msg_box = QMessageBox()
                 msg_box.setText(
                     strings.subj_tab_wrong_type_check_msg
-                    % (found_mod, data_input.value.image_modality.value)
+                    % (found_mod, data_input.value.get_modality_str())
                 )
                 msg_box.setInformativeText(strings.subj_tab_wrong_type_check)
                 msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -422,6 +422,9 @@ class SubjectTab(QTabWidget):
                 )
                 msg_box.setDefaultButton(QMessageBox.StandardButton.No)
                 ret = msg_box.exec()
+
+                # We need to hide "old" progress to prevent a loading bar to appear during user choice
+                progress.deleteLater()
                 if ret == QMessageBox.StandardButton.Yes:
                     self.dicom_import_to_folder(data_input, force_mod=True)
             self.set_error(data_input, "")

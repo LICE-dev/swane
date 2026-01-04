@@ -123,7 +123,7 @@ class DicomSearchWorker(QRunnable):
                 # in GE la maggior parte delle ricostruzioni sono DERIVED\SECONDARY
                 if (
                     hasattr(ds, "ImageType")
-                    and ds.Modality == "MR"
+                    and ds.Modality != "XA" # xperct images are derived
                     and "DERIVED" in ds.ImageType
                     and "SECONDARY" in ds.ImageType
                     and "ASL" not in ds.ImageType
