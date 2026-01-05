@@ -138,47 +138,11 @@ def fMRI_resting_state_workflow(
     workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
     workflow.connect(inputnode, "ref_brain", fnirt, "in_file")
 
-    # NODE 3: Inverse matrix
-    invwarp = Node(InvWarp(), name="ref_2_mni_invwarp")
-    invwarp.long_name = "%s from atlas"
-    workflow.connect(fnirt, "fieldcoeff_file", invwarp, "warp")
-    workflow.connect(inputnode, "ref_brain", invwarp, "reference")
-
     apply_warp = Node(ApplyWarp(), name="func2mni")
     apply_warp.inputs.ref_file = mni2
     workflow.connect(flirt_2_ref, "out_matrix_file", apply_warp, "premat")
     workflow.connect(feature_spatial_prep, "out_file", apply_warp, "in_file")
     workflow.connect(fnirt, "fieldcoeff_file", apply_warp, "field_file")
-
-    ref_2_func = Node(ConvertXFM(), name="ref_2_func")
-    ref_2_func.inputs.invert_xfm = True
-    workflow.connect(flirt_2_ref, "out_matrix_file", ref_2_func, "in_file")
-
-    csf2func = Node(ApplyWarp(), name="csf2func")
-    csf2func.inputs.in_file = aroma_mask_csf
-    workflow.connect(feature_spatial_prep, "out_file", csf2func, "ref_file")
-    workflow.connect(ref_2_func, "out_file", csf2func, "postmat")
-    workflow.connect(invwarp, "inverse_warp", csf2func, "field_file")
-
-    edge2func = Node(ApplyWarp(), name="edge2func")
-    edge2func.inputs.in_file = aroma_mask_edge
-    workflow.connect(feature_spatial_prep, "out_file", edge2func, "ref_file")
-    workflow.connect(ref_2_func, "out_file", edge2func, "postmat")
-    workflow.connect(invwarp, "inverse_warp", edge2func, "field_file")
-
-    out2func = Node(ApplyWarp(), name="out2func")
-    out2func.inputs.in_file = aroma_mask_out
-    workflow.connect(feature_spatial_prep, "out_file", out2func, "ref_file")
-    workflow.connect(ref_2_func, "out_file", out2func, "postmat")
-    workflow.connect(invwarp, "inverse_warp", out2func, "field_file")
-
-    feature_spatial2 = Node(FeatureSpatial(), name="feature_spatial2")
-    workflow.connect(csf2func, "out_file", feature_spatial2, "mask_csf")
-    workflow.connect(edge2func, "out_file", feature_spatial2, "mask_edge")
-    workflow.connect(out2func, "out_file", feature_spatial2, "mask_out")
-    workflow.connect(feature_spatial_prep, "out_file", feature_spatial2, "in_file")
-
-
 
     ##########################################################
 
@@ -202,14 +166,8 @@ def fMRI_resting_state_workflow(
     workflow.connect(feature_spatial, "csf_fract", aroma_classification, "csf_fract")
     workflow.connect(feature_spatial, "edge_fract", aroma_classification, "edge_fract")
 
-    aroma_classification2 = Node(AromaClassification(), name="aroma_classification2")
-    workflow.connect(feature_frequency, "HFC", aroma_classification2, "HFC")
-    workflow.connect(feature_time_series, "max_rp_corr", aroma_classification2, "max_rp_corr")
-    workflow.connect(feature_spatial2, "csf_fract", aroma_classification2, "csf_fract")
-    workflow.connect(feature_spatial2, "edge_fract", aroma_classification2, "edge_fract")
-
     #workflow.connect(aroma_classification, "feature_scores", outputnode, "ica_aroma_results.@feature_scores")
     #workflow.connect(aroma_classification, "classified_motion_ics", aroma_datasink, "ica_aroma_results.@classified_motion_ics")
-    workflow.connect(aroma_classification2, "classification_overview", outputnode, "IC")
+    workflow.connect(aroma_classification, "classification_overview", outputnode, "IC")
 
     return workflow
