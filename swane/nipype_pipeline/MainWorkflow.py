@@ -883,13 +883,13 @@ class MainWorkflow(CustomWorkflow):
                             save_path=self.base_dir,
                             result_node="outputnode",
                             result_name="waytotal_%s" % side,
-                            sub_folder=self.Result_DIR + ".dti",
+                            sub_folder=os.path.join(self.Result_DIR, "dti"),
                         )
                         tract_workflow.sink_result(
                             save_path=self.base_dir,
                             result_node="outputnode",
                             result_name="fdt_paths_%s" % side,
-                            sub_folder=self.Result_DIR + ".dti",
+                            sub_folder=os.path.join(self.Result_DIR, "dti"),
                         )
 
     def launch_fMRI_task_analysis(self):
@@ -916,7 +916,7 @@ class MainWorkflow(CustomWorkflow):
                     save_path=self.base_dir,
                     result_node="outputnode",
                     result_name="threshold_file_cont1_thresh%d" % thresh_i,
-                    sub_folder=self.Result_DIR + ".fMRI",
+                    sub_folder=os.path.join(self.Result_DIR, "fMRI"),
                 )
                 if (
                     self.subject_config.getenum_safe(DIL["FMRI_%d" % y], "block_design")
@@ -926,7 +926,7 @@ class MainWorkflow(CustomWorkflow):
                         save_path=self.base_dir,
                         result_node="outputnode",
                         result_name="threshold_file_cont2_thresh%d" % thresh_i,
-                        sub_folder=self.Result_DIR + ".fMRI",
+                        sub_folder=os.path.join(self.Result_DIR, "fMRI"),
                     )
 
     def launch_fMRI_resting_state_analysis(self):
@@ -946,9 +946,10 @@ class MainWorkflow(CustomWorkflow):
         self.connect(
             self.t1, "outputnode.ref_brain", self.fMRI_resting_state, "inputnode.ref_brain"
         )
+
         self.fMRI_resting_state.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
-            result_name="IC",
-            sub_folder=self.Result_DIR,
+            result_name="thresh_zstat_files",
+            sub_folder=os.path.join(self.Result_DIR, "fMRI_resting_state"),
         )

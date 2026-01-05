@@ -1,7 +1,7 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 from nipype.pipeline.engine import Workflow
-from nipype import Node, logging
+from nipype import Node, logging, MapNode
 from nipype.interfaces.utility import IdentityInterface
 from nipype.interfaces.io import DataSink
 from swane.nipype_pipeline.engine.NodeListEntry import NodeListEntry
@@ -86,14 +86,16 @@ class CustomWorkflow(Workflow):
             + result_node.name
             + "_"
             + result_name.replace(".", "_"),
+            regexp_substitutions=[(r'_zstats_2_ref0[\d]', "")]
         )
         data_sink.long_name = "%s: " + result_name
         data_sink.inputs.base_directory = save_path
+        data_sink.inputs.container = sub_folder
 
         if regexp_substitutions is not None:
             data_sink.inputs.regexp_substitutions = regexp_substitutions
 
-        self.connect(result_node, result_name, data_sink, sub_folder)
+        self.connect(result_node, result_name, data_sink, "@file")
 
     def _get_dot(
         self, prefix=None, hierarchy=None, colored=False, simple_form=True, level=0
