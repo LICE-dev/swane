@@ -71,6 +71,7 @@ class CustomWorkflow(Workflow):
         result_name: str,
         sub_folder: str,
         regexp_substitutions: list[tuple[str, str]] = None,
+        remove_mapnode_subdir = False
     ):
         """
         Creates a sink_result Node to save the output files of a Workflow.
@@ -86,7 +87,6 @@ class CustomWorkflow(Workflow):
             + result_node.name
             + "_"
             + result_name.replace(".", "_"),
-            regexp_substitutions=[(r'_zstats_2_ref0[\d]', "")]
         )
         data_sink.long_name = "%s: " + result_name
         data_sink.inputs.base_directory = save_path
@@ -94,6 +94,8 @@ class CustomWorkflow(Workflow):
 
         if regexp_substitutions is not None:
             data_sink.inputs.regexp_substitutions = regexp_substitutions
+        elif remove_mapnode_subdir:
+            data_sink.inputs.regexp_substitutions = [(r"/_[^/]+[0-9]+(?=/[^/]+$)", "")]
 
         self.connect(result_node, result_name, data_sink, "@file")
 

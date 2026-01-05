@@ -87,6 +87,7 @@ def seeg_ct_workflow(
     electrodes_weight_map.inputs.op_string = "-thr %.10f -bin -mul -1 -add 1" % electrode_thr
     workflow.connect(seeg_ct_reOrient, "out_file", electrodes_weight_map, "in_file")
 
+    # Do not use synthmorph, FLIRT performs better on CT
     seeg_ct_2_ref_flirt = Node(FLIRT(), name="seeg_ct_2_ref_flirt")
     seeg_ct_2_ref_flirt.long_name = "%s to reference space"
     seeg_ct_2_ref_flirt.inputs.out_matrix_file = "seegct2ref.mat"
@@ -108,7 +109,7 @@ def seeg_ct_workflow(
 
     # No electode mask in ref space
     seeg_no_electrodes_thr_ref = Node(Threshold(), name="seeg_no_electrodes_thr_ref")
-    seeg_no_electrodes_thr_ref.long_name = "Electrode removing"
+    seeg_no_electrodes_thr_ref.long_name = "Brain segmentation"
     seeg_no_electrodes_thr_ref.inputs.thresh = electrode_thr
     seeg_no_electrodes_thr_ref.inputs.direction = "above"
     workflow.connect(seeg_ct_2_ref_flirt, "out_file", seeg_no_electrodes_thr_ref, "in_file")

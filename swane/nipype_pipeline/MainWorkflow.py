@@ -952,4 +952,5 @@ class MainWorkflow(CustomWorkflow):
             result_node="outputnode",
             result_name="thresh_zstat_files",
             sub_folder=os.path.join(self.Result_DIR, "fMRI_resting_state"),
+            remove_mapnode_subdir=True
         )

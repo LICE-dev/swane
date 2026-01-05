@@ -76,7 +76,7 @@ def venous_ct_workflow(
 
     # NODE 1: Conversion dicom -> nifti
     veins_conv = Node(CustomDcm2niix(), name="veins_ct_conv")
-    veins_conv.long_name = "Basal Nifti conversion"
+    veins_conv.long_name = "Non-contrast scan %s"
     veins_conv.inputs.source_dir = venous_ct_dir
     veins_conv.inputs.bids_format = False
     veins_conv.inputs.out_filename = "veins"
@@ -85,10 +85,12 @@ def venous_ct_workflow(
 
     # NODE 2: Orienting in radiological convention
     veins_reOrient = Node(ForceOrient(), name="veins_ct_reOrient")
+    veins_reOrient.long_name = "Non-contrast scan %s"
     workflow.connect(veins_conv, "converted_files", veins_reOrient, "in_file")
 
     # NODE 3: Crop neck
     veins_robustfov = Node(RobustFOV(), name="%s_robustfov" % name)
+    veins_robustfov.long_name = "Non-contrast scan %s"
     workflow.connect(veins_reOrient, "out_file", veins_robustfov, "in_file")
 
     # NODE 3: Conversion dicom -> nifti
@@ -97,7 +99,7 @@ def venous_ct_workflow(
         name="veins_2conv",
         iterfield=["source_dir"],
     )
-    veins2_conv.long_name = "Contrast Nifti conversion"
+    veins2_conv.long_name = "Contrast scan %s"
     veins2_conv.inputs.source_dir = venous2_ct_dir
     veins2_conv.inputs.bids_format = False
 
@@ -107,6 +109,7 @@ def venous_ct_workflow(
         name="veins2_ct_reOrient",
         iterfield=["in_file"],
     )
+    veins2_reOrient.long_name = "Contrast scan %s"
     workflow.connect(veins2_conv, "converted_files", veins2_reOrient, "in_file")
 
     veins2_robustfov = MapNode(
@@ -114,10 +117,12 @@ def venous_ct_workflow(
         name="%s2_robustfov" % name,
         iterfield=["in_file"],
     )
+    veins2_robustfov.long_name = "Contrast scan %s"
     workflow.connect(veins2_reOrient, "out_file", veins2_robustfov, "in_file")
 
     # NODE 5: Scalp removal
     deskull = Node(SegmentEndocranium(), name="segment_endocranium", mem_gb=2.5)
+    deskull.long_name = "Non-contrast scan %s"
     deskull.inputs.slicer_cmd = slicer_path
     deskull.inputs.iterations = config.getint_safe("segment_endocranium_iteration")
     deskull.inputs.smoothingKernelSize = config.getfloat_safe("segment_endocranium_kernel")
@@ -126,9 +131,11 @@ def venous_ct_workflow(
 
     # NODE 6: Mask in radiological convention
     veins_mask_reOrient = Node(ForceOrient(), name="veins_mask_reOrient")
+    veins_mask_reOrient.long_name = "Inskull mask %s"
     workflow.connect(deskull, "out_file", veins_mask_reOrient, "in_file")
 
     # NODE 7: Linear registration of veins to reference space
+    # Do not use synthmorph, FLIRT performs better on CT
     basal_2_ref = Node(FLIRT(), name="veins_ct_flirt_2_ref")
     basal_2_ref.long_name = "%s to reference space"
     basal_2_ref.inputs.out_matrix_file = "veins2ref.mat"
@@ -143,12 +150,13 @@ def venous_ct_workflow(
     workflow.connect(basal_2_ref, "out_file", outputnode, "basal")
 
     # NODE 8: Linear registration of contrast to basal veins
+    # Do not use synthmorph, FLIRT performs better on CT
     contrast_2_basal = MapNode(
         FLIRT(),
         name="veins_ct_flirt_2_contrast",
         iterfield=["in_file"],
     )
-    contrast_2_basal.long_name = "%s to basal scan"
+    contrast_2_basal.long_name = "%s to non-contrast scan"
     contrast_2_basal.inputs.out_matrix_file = "veins2ref.mat"
     contrast_2_basal.inputs.cost = "mutualinfo"
     contrast_2_basal.inputs.searchr_x = [-90, 90]
@@ -165,7 +173,7 @@ def venous_ct_workflow(
         name="veins_ct_subtraction",
         iterfield=["in_file"],
     )
-    veins_subtraction.long_name = "Subtract basal scan"
+    veins_subtraction.long_name = "Subtract non-contrast scan"
     veins_subtraction.inputs.operation = "sub"
     workflow.connect(contrast_2_basal, "out_file", veins_subtraction, "in_file")
     workflow.connect(veins_robustfov, "out_roi", veins_subtraction, "operand_file")
