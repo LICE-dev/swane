@@ -316,9 +316,6 @@ def fMRI_preproc_workflow(
     #workflow.connect(genSpec, "hpstring", highpass, "op_string")
     workflow.connect(intnorm, "out_file", highpass, "in_file")
 
-    # TODO: per resting state usare l'out_file di highpass con questo comando:
-    # melodic -i filtered_func_data -o filtered_func_data.ica -v --nobet --bgthreshold=1 --tr=$fmri(tr) -d 0 --mmthresh=\"0.5\" --report --guireport=../../report.html "
-
     # NODE 27: Coregister the mean functional image to the structural image
     flirt_2_ref = Node(FLIRT(), name="%s_flirt_2_ref" % name)
     flirt_2_ref.long_name = "%s to reference space"

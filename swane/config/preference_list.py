@@ -391,7 +391,11 @@ WF_PREFERENCES[category]["del_end_vols"] = PreferenceEntry(
     default=0,
     range=[0, 500],
 )
-
+WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="ICA-AROMA denoising",
+    default="true",
+)
 
 GLOBAL_PREFERENCES = {}
 
