@@ -14,6 +14,7 @@ from nipype.interfaces.base import traits
 import math
 import os
 import subprocess
+from numpy import ndarray
 
 
 class NipypeNodeRuntimeWidget(QWidget):
@@ -84,6 +85,7 @@ class NipypeNodeRuntimeWidget(QWidget):
         self._row += 1
 
         status = item.get_status()
+        # status = WorkflowSignals.NODE_COMPLETED
         if status is None:
             self._add_label(strings.sub_tab_node_status_label, self._row, 0)
             self._add_value(strings.sub_tab_node_status_not_started, self._row, 1, colspan=6)
@@ -376,12 +378,14 @@ class NipypeNodeRuntimeWidget(QWidget):
             return False
         if value is traits.Undefined:
             return False
-        if value == "<undefined>":
-            return False
-        if value == "":
-            return False
-        if isinstance(value, (list, tuple)) and not value:
-            return False
+        if isinstance(value, (list, tuple, ndarray)):
+            if len(value)==0:
+                return False
+        else:
+            if value == "<undefined>":
+                return False
+            if value == "":
+                return False
         return True
 
     def _fmt_output_name(self, name):

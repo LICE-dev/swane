@@ -68,7 +68,7 @@ def fMRI_resting_state_workflow(
     outputnode = Node(
         IdentityInterface(
             fields=[
-                "thresh_zstat_files",
+                "thresh_zstat_files","aroma_classification"
             ]
         ),
         name="outputnode",
@@ -177,7 +177,7 @@ def fMRI_resting_state_workflow(
 
         #workflow.connect(aroma_classification, "feature_scores", outputnode, "ica_aroma_results.@feature_scores")
         #workflow.connect(aroma_classification, "classified_motion_ics", aroma_datasink, "ica_aroma_results.@classified_motion_ics")
-        #workflow.connect(aroma_classification, "classification_overview", outputnode, "IC")
+        workflow.connect(aroma_classification, "classification_overview", outputnode, "aroma_classification")
 
         nonaggr_denoising = Node(FilterRegressor(), name="nonaggr_denoising", mem_gb=5)
         nonaggr_denoising.inputs.out_file = "denoised_func_data_nonaggr.nii.gz"

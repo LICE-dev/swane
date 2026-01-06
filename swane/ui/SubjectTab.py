@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QFileSystemModel,
     QTreeView,
     QComboBox,
+    QScrollArea
 )
 from swane import strings
 from swane.config.config_enums import GlobalPrefCategoryList
@@ -551,7 +552,13 @@ class SubjectTab(QTabWidget):
         self.exec_graph = QSvgWidget()
         layout.addWidget(self.exec_graph, 2, 1)
         self.node_runtime_widget = NipypeNodeRuntimeWidget(slicer_path=self.global_config.get_slicer_path())
-        layout.addWidget(self.node_runtime_widget, 2, 1)
+        scroll = QScrollArea()
+        scroll.setWidget(self.node_runtime_widget)
+        scroll.setWidgetResizable(True)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        layout.addWidget(scroll, 2, 1)
 
         self.exec_tab.setLayout(layout)
 
