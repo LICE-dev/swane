@@ -284,6 +284,7 @@ def fMRI_preproc_workflow(
 
     # NODE 25: Merge TR and meanfunc3 for generate highpass filtering string
     mergenode2 = Node(Merge(2), name="%s_merge_tr_meanfunc3" % name)
+    mergenode2.long_name = "Highpass filtering setup"
     workflow.connect(getTR, "TR", mergenode2, "in1")
     workflow.connect(meanfunc3, "out_file", mergenode2, "in2")
 
