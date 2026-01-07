@@ -7,8 +7,13 @@ em.interactive = False  # prevent display of popups
 restart = False
 
 extension_list = ["SlicerFreeSurfer", "SurfaceWrapSolidify"]
+errors = False
+
 for extensionName in extension_list:
     if not hasattr(slicer.moduleNames, extensionName) and not em.installExtensionFromServer(extensionName, restart):
-        raise ValueError(f"Failed to install {extensionName} extension")
-print("MODULE FOUND")
+        errors = True
+
+if not errors:
+    print("MODULE FOUND")
+
 sys.exit(0)

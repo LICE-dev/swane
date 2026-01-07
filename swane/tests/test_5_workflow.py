@@ -46,17 +46,15 @@ def import_from_path(
     patient.reset_workflow()
     worker = DicomSearchWorker(dicom_path)
     worker.run()
-    patient_list = worker.get_subject_list()
-    exam_list = worker.get_exam_list(patient_list[0])
-    series_list = worker.get_series_list(patient_list[0], exam_list[0])
-    image_list, patient_name, mod, series_description, vols = worker.get_series_info(
-        patient_list[0], exam_list[0], series_list[0]
-    )
+    patient_list = worker.tree.get_subject_list()
+    exam_list = worker.tree.get_studies_list(patient_list[0])
+    series_list = worker.tree.get_series_list(patient_list[0], exam_list[0])
+    series = worker.tree.get_series(patient_list[0], exam_list[0], series_list[0])
     import_ret = patient.dicom_import_to_folder(
         data_input=data_input,
-        copy_list=image_list,
-        vols=vols,
-        mod=mod,
+        copy_list=series.dicom_locs,
+        vols=series.volumes,
+        mod=series.modality,
         force_modality=True,
     )
     assert import_ret == SubjectRet.DataImportCompleted
@@ -65,10 +63,13 @@ def import_from_path(
     call_back.assert_called_with(ANY, SubjectRet.DataInputValid, ANY)
 
 
+# To use this test create subj_1 and load all "base" sequences from swane, first
+
 class TestWorkflow:
     TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "workflow", "subjects")
     TEST_PATIENT_NAME = "pt_01"
     DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "dicom")
+    DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT = 100000 # Prevent new nodes
 
     TESTS = {
         # 'test_name': {

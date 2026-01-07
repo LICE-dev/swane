@@ -273,6 +273,14 @@ WF_PREFERENCES[category]["segment_endocranium_oversampling"] = PreferenceEntry(
     tooltip="Surface remeshing resolution (higher = more detail, slower)",
     range=[1, 5],
 )
+WF_PREFERENCES[category]["vein_segment_threshold"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Threshold (%) for 3DSlicer Vein Segment",
+    default=97.5,
+    range=[0.1, 100],
+    decimals=1,
+    suffix="%",
+)
 category = DataInputList.DTI
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["old_eddy_correct"] = PreferenceEntry(
