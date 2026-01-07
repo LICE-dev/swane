@@ -26,6 +26,8 @@ class PreferenceEntry:
     hidden = False
     value_enum = None
     default_at_startup = False
+    special_value_text = ""
+    suffix = ""
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -51,6 +53,8 @@ class PreferenceEntry:
             "informative_text": dict,
             "box_text": str,
             "hidden": bool,
+            "special_value_text" : str,
+            "suffix": str,
             # "value_enum": Enum
         }
         if key in types:

@@ -89,6 +89,7 @@ parser.add_argument("--kernel-mm", type=float, default=3.0, help="Smoothing kern
 parser.add_argument("--oversampling", type=float, default=1.0, help="Wrap Solidify remesh oversampling")
 parser.add_argument("--iterations", type=int, default=2, help="Shrinkwrap iterations")
 parser.add_argument("--split-diameter", type=float, default=30.0, help="Split cavities diameter (mm)")
+parser.add_argument("--skull_threshold", type=int, default=-1, help="Threshold for skull segmentation")
 
 args = parser.parse_args(sys.argv[1:])
 
@@ -98,6 +99,7 @@ smoothingKernelSize = args.kernel_mm
 oversampling = args.oversampling
 shrinkwrapIterations = args.iterations
 splitCavitiesDiameter = args.split_diameter
+skull_threshold = args.skull_threshold
 
 
 # ------------------------------------------------------------
@@ -121,15 +123,15 @@ seg = segmentationNode.GetSegmentation()
 # ------------------------------------------------------------
 # Automatic bone threshold
 # ------------------------------------------------------------
-thresholdCalculator = vtkITK.vtkITKImageThresholdCalculator()
-thresholdCalculator.SetInputData(inputVolume.GetImageData())
-thresholdCalculator.SetMethodToMaximumEntropy()
-thresholdCalculator.Update()
+if skull_threshold == -1:
+    thresholdCalculator = vtkITK.vtkITKImageThresholdCalculator()
+    thresholdCalculator.SetInputData(inputVolume.GetImageData())
+    thresholdCalculator.SetMethodToMaximumEntropy()
+    thresholdCalculator.Update()
+    skull_threshold = thresholdCalculator.GetThreshold()
 
-boneThresholdValue = thresholdCalculator.GetThreshold()
+print(f"[INFO] Bone threshold = {skull_threshold}")
 volumeScalarRange = inputVolume.GetImageData().GetScalarRange()
-
-print(f"[INFO] Bone threshold = {boneThresholdValue}")
 
 
 # ------------------------------------------------------------
@@ -154,9 +156,7 @@ segmentEditorNode.SetSelectedSegmentID(boneRawID)
 
 segmentEditorWidget.setActiveEffectByName("Threshold")
 effect = segmentEditorWidget.activeEffect()
-effect.setParameter("MinimumThreshold", str(boneThresholdValue))
-# TODO: for now we set 220 as fixed value, maybe we can implement a better way
-effect.setParameter("MinimumThreshold", "220")
+effect.setParameter("MinimumThreshold", str(skull_threshold))
 effect.setParameter("MaximumThreshold", str(volumeScalarRange[1]))
 effect.self().onApply()
 

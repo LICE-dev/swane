@@ -60,19 +60,19 @@ class DataInputList(Enum):
     T13D = DataInput(name="t13d", label="3D T1w")
     FLAIR3D = DataInput(name="flair3d", label="3D Flair")
     MDC = DataInput(name="mdc", label="Post-contrast 3D T1w")
-    VENOUS = DataInput(
-        name="venous",
+    VENOUS_MR = DataInput(
+        name="venous_mr",
         label="Venous MRA - Phase contrast",
         tooltip="If you have anatomic and venous volumes in a single sequence, load it here. Otherwise, load one of the two volume (which one is not important)",
         max_volumes=2,
         optional=True,
     )
-    VENOUS2 = DataInput(
-        name=VENOUS.name + "2",
+    VENOUS_MR2 = DataInput(
+        name=VENOUS_MR.name + "2",
         label="Venous MRA - Second volume (optional)",
         tooltip="If you have anatomic and venous volumes in two different sequences, load the remaining volume here. Otherwise, leave this slot empty",
         # workflow_name=VENOUS.name,
-        parent_input="VENOUS"
+        parent_input="VENOUS_MR"
     )
     VENOUS_CT = DataInput(
         name="venous_ct",

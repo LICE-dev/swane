@@ -1,13 +1,10 @@
-from nipype import Node, IdentityInterface, SelectFiles, JoinNode, MapNode, Function, Merge
+from nipype import Node, IdentityInterface, SelectFiles, MapNode, Merge
 from nipype.interfaces.fsl import (
     MELODIC,
     ApplyXFM,
-    ImageMaths,
     FLIRT,
     FNIRT,
     ApplyWarp,
-    InvWarp,
-    ConvertXFM,
     FilterRegressor
 
 )
@@ -84,6 +81,7 @@ def fMRI_resting_state_workflow(
     inputnode = workflow.get_node("inputnode")
 
     input_list = Node(Merge(1), name="merge_node")
+    input_list.long_name = "Select input for Melodic"
     workflow.connect(highpass, "out_file", input_list, "in1")
 
     melodic = Node(MELODIC(), name="melodic")
@@ -110,17 +108,39 @@ def fMRI_resting_state_workflow(
     workflow.connect(melodic, "out_dir", melodic_output, "melodic_dir")
     workflow.connect(melodic, "out_dir", melodic_output, "base_directory")
 
+    # Function to generate the name for the file of registered output zstats
+    def registered_file_name(in_file_names):
+        """
+        Adds prefix 'r-' and use 2 digid number at end.
+        Example: 'zstat1.nii.gz' -> 'r-zstat01.nii.gz'
+        """
+        from os.path import basename
+        import re
+        out_files = []
+        for f in in_file_names:
+            name = basename(f)
+            # Cerca un numero prima dell'estensione .nii o .nii.gz
+            m = re.search(r"(\d+)(\.nii(?:\.gz)?)$", name)
+            if m:
+                num = int(m.group(1))
+                ext = m.group(2)
+                new_name = re.sub(r"\d+(\.nii(?:\.gz)?)$", f"{num:02d}{ext}", name)
+            else:
+                new_name = name
+            out_files.append("r-" + new_name)
+        return out_files
+
     zstats_2_ref = MapNode(
         ApplyXFM(),
         name="zstats_2_ref",
-        iterfield="in_file"
+        iterfield=["in_file","out_file"]
     )
     workflow.connect(flirt_2_ref, "out_matrix_file", zstats_2_ref, "in_matrix_file")
     workflow.connect(inputnode, "ref_brain", zstats_2_ref, "reference")
 
-
     if not run_aroma:
         workflow.connect(melodic_output, "thresh_zstat_files", zstats_2_ref, "in_file")
+        workflow.connect(melodic_output, ("thresh_zstat_files", registered_file_name), zstats_2_ref, "out_file")
     else:
         feature_spatial_prep = Node(FeatureSpatialPrep(), name="feature_spatial_prep")
         workflow.connect(melodic_output, "thresh_zstat_files", feature_spatial_prep, "in_files")
@@ -186,6 +206,7 @@ def fMRI_resting_state_workflow(
         workflow.connect(aroma_classification, "motion_ics", nonaggr_denoising, "filter_columns")
 
         input_list_denoised = Node(Merge(1), name="input_list_denoised")
+        input_list_denoised.long_name = "Denoised input for Melodic"
         workflow.connect(nonaggr_denoising, "out_file", input_list_denoised, "in1")
 
         melodic_denoised = Node(MELODIC(), name="melodic_denoised")
@@ -205,6 +226,7 @@ def fMRI_resting_state_workflow(
         workflow.connect(melodic_denoised, "out_dir", melodic_output_denoised, "base_directory")
 
         workflow.connect(melodic_output_denoised, "thresh_zstat_files", zstats_2_ref, "in_file")
+        workflow.connect(melodic_output_denoised, ("thresh_zstat_files", registered_file_name), zstats_2_ref, "out_file")
 
     workflow.connect(zstats_2_ref, "out_file", outputnode, "thresh_zstat_files")
 

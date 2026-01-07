@@ -152,7 +152,7 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     range=[0, 1],
 )
 
-category = DataInputList.VENOUS
+category = DataInputList.VENOUS_MR
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
@@ -173,6 +173,7 @@ WF_PREFERENCES[category]["vein_segment_threshold"] = PreferenceEntry(
     default=97.5,
     range=[0.1, 100],
     decimals=1,
+    suffix="%",
 )
 
 category = DataInputList.ASL
@@ -194,6 +195,7 @@ WF_PREFERENCES[category]["ai_threshold"] = PreferenceEntry(
     tooltip="100 for no thresholding, suggested 80-90",
     default=85,
     range=[0, 100],
+    suffix="%",
     pref_requirement={DataInputList.ASL: [("ai", True)]},
     pref_requirement_fail_tooltip="Requires ASL Asymmetry Index",
 )
@@ -217,6 +219,7 @@ WF_PREFERENCES[category]["ai_threshold"] = PreferenceEntry(
     tooltip="100 for no thresholding, suggested 80-90",
     default=85,
     range=[0, 100],
+    suffix="%",
     pref_requirement={DataInputList.PET: [("ai", True)]},
     pref_requirement_fail_tooltip="Requires PET Asymmetry Index",
 )
@@ -225,6 +228,8 @@ WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["electrode_threshold"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Threshold for electrode identification",
+    range=[0,4000],
+    suffix="HU",
     default=2000,
 )
 WF_PREFERENCES[category]["erode_kernel_size"] = PreferenceEntry(
@@ -232,10 +237,20 @@ WF_PREFERENCES[category]["erode_kernel_size"] = PreferenceEntry(
     label="Kernel dimension for brain mask erosion",
     tooltip="Increase this value if final electrode mask includes skull",
     default=5,
+    suffix="mm",
     range=[1, 20]
 )
 category = DataInputList.VENOUS_CT
 WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]["skull_threshold"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Threshold for skull identification",
+    tooltip="To use 3D Slicer automatic threshold use -1",
+    range=[-1,4000],
+    suffix="HU",
+    default=-1,
+    special_value_text = "Auto",
+)
 WF_PREFERENCES[category]["segment_endocranium_iteration"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Iteration for brain extraction",
@@ -247,6 +262,7 @@ WF_PREFERENCES[category]["segment_endocranium_kernel"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Smoothing kernel size for brain extraction",
     default=3.0,
+    suffix="mm",
     tooltip="Size of the morphological smoothing kernel (larger = smoother, slower)",
     range=[1, 10],
 )
@@ -322,12 +338,14 @@ for x in range(FMRI_NUM):
         input_type=InputTypes.INT,
         label="Tasks duration (sec)",
         default=30,
+        suffix="s",
         range=[1, 500],
     )
     WF_PREFERENCES[category]["rest_duration"] = PreferenceEntry(
         input_type=InputTypes.INT,
         label="Rest duration (sec)",
         default=30,
+        suffix="s",
         range=[0, 500],
     )
     WF_PREFERENCES[category]["tr"] = PreferenceEntry(
@@ -335,7 +353,9 @@ for x in range(FMRI_NUM):
         label="Repetition Time (TR)",
         tooltip="Set -1 for automatic detection",
         default="-1.0",
+        suffix="s",
         range=[-1, 1000],
+        special_value_text = "Auto",
     )
     WF_PREFERENCES[category]["n_vols"] = PreferenceEntry(
         input_type=InputTypes.INT,
@@ -343,6 +363,7 @@ for x in range(FMRI_NUM):
         tooltip="Set -1 for automatic detection",
         default="-1",
         range=[-1, 1000],
+        special_value_text="Auto",
     )
     WF_PREFERENCES[category]["slice_timing"] = PreferenceEntry(
         input_type=InputTypes.ENUM,
@@ -370,7 +391,9 @@ WF_PREFERENCES[category]["tr"] = PreferenceEntry(
     label="Repetition Time (TR)",
     tooltip="Set -1 for automatic detection",
     default="-1.0",
+    suffix="s",
     range=[-1, 1000],
+    special_value_text = "Auto",
 )
 WF_PREFERENCES[category]["n_vols"] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -378,6 +401,7 @@ WF_PREFERENCES[category]["n_vols"] = PreferenceEntry(
     tooltip="Set -1 for automatic detection",
     default="-1",
     range=[-1, 1000],
+    special_value_text = "Auto",
 )
 WF_PREFERENCES[category]["del_start_vols"] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -490,6 +514,7 @@ GLOBAL_PREFERENCES[category]["max_subj_cu"] = PreferenceEntry(
     tooltip="To use all CPU cores set value equal to -1",
     default=str(suggested_max_cpu),
     range=[-1, 30],
+    special_value_text = "No limit",
 )
 GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,

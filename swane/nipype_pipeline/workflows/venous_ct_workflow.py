@@ -99,7 +99,7 @@ def venous_ct_workflow(
         name="veins_2conv",
         iterfield=["source_dir"],
     )
-    veins2_conv.long_name = "Contrast scan %s"
+    veins2_conv.long_name = "Contrast scans %s"
     veins2_conv.inputs.source_dir = venous2_ct_dir
     veins2_conv.inputs.bids_format = False
 
@@ -109,7 +109,7 @@ def venous_ct_workflow(
         name="veins2_ct_reOrient",
         iterfield=["in_file"],
     )
-    veins2_reOrient.long_name = "Contrast scan %s"
+    veins2_reOrient.long_name = "Contrast scans %s"
     workflow.connect(veins2_conv, "converted_files", veins2_reOrient, "in_file")
 
     veins2_robustfov = MapNode(
@@ -117,7 +117,7 @@ def venous_ct_workflow(
         name="%s2_robustfov" % name,
         iterfield=["in_file"],
     )
-    veins2_robustfov.long_name = "Contrast scan %s"
+    veins2_robustfov.long_name = "Contrast scans %s"
     workflow.connect(veins2_reOrient, "out_file", veins2_robustfov, "in_file")
 
     # NODE 5: Scalp removal
@@ -127,6 +127,7 @@ def venous_ct_workflow(
     deskull.inputs.iterations = config.getint_safe("segment_endocranium_iteration")
     deskull.inputs.smoothingKernelSize = config.getfloat_safe("segment_endocranium_kernel")
     deskull.inputs.oversampling = config.getfloat_safe("segment_endocranium_oversampling")
+    deskull.inputs.skull_threshold = config.getint_safe("skull_threshold")
     workflow.connect(veins_robustfov, "out_roi", deskull, "in_file")
 
     # NODE 6: Mask in radiological convention

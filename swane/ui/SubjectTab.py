@@ -1154,48 +1154,48 @@ class SubjectTab(QTabWidget):
         """
         Display informative warnings in venous and venous2 data input rows to help user in data loading
         """
-        if not self.global_config.is_optional_series_enabled(DataInputList.VENOUS):
+        if not self.global_config.is_optional_series_enabled(DataInputList.VENOUS_MR):
             return
 
         phases = (
-            self.subject.input_state_list[DataInputList.VENOUS].volumes
-            + self.subject.input_state_list[DataInputList.VENOUS2].volumes
+            self.subject.input_state_list[DataInputList.VENOUS_MR].volumes
+            + self.subject.input_state_list[DataInputList.VENOUS_MR2].volumes
         )
         if phases == 0:
-            self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
+            self.input_report[DataInputList.VENOUS_MR2][3].setEnabled(False)
         elif phases == 1:
-            if self.subject.input_state_list[DataInputList.VENOUS].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS_MR].loaded:
                 self.set_warn(
-                    DataInputList.VENOUS,
+                    DataInputList.VENOUS_MR,
                     "Series has only one phase, load the second phase below",
                     False,
                 )
-                self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
+                self.input_report[DataInputList.VENOUS_MR2][3].setEnabled(True)
+            if self.subject.input_state_list[DataInputList.VENOUS_MR2].loaded:
                 # this should not be possible!
                 self.set_warn(
-                    DataInputList.VENOUS2,
+                    DataInputList.VENOUS_MR2,
                     "Series has only one phase, load the second phase above",
                     False,
                 )
         elif phases == 2:
-            if self.subject.input_state_list[DataInputList.VENOUS].loaded:
-                self.set_ok(DataInputList.VENOUS, None)
-                self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
-            if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
-                self.set_ok(DataInputList.VENOUS2, None)
+            if self.subject.input_state_list[DataInputList.VENOUS_MR].loaded:
+                self.set_ok(DataInputList.VENOUS_MR, None)
+                self.input_report[DataInputList.VENOUS_MR2][3].setEnabled(False)
+            if self.subject.input_state_list[DataInputList.VENOUS_MR2].loaded:
+                self.set_ok(DataInputList.VENOUS_MR2, None)
         else:
             # something gone wrong, more than 2 phases!
-            if self.subject.input_state_list[DataInputList.VENOUS].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS_MR].loaded:
                 self.set_warn(
-                    DataInputList.VENOUS,
+                    DataInputList.VENOUS_MR,
                     "Too many venous phases loaded, delete some!",
                     False,
                 )
-                self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
+                self.input_report[DataInputList.VENOUS_MR2][3].setEnabled(True)
+            if self.subject.input_state_list[DataInputList.VENOUS_MR2].loaded:
                 self.set_warn(
-                    DataInputList.VENOUS2,
+                    DataInputList.VENOUS_MR2,
                     "Too many venous phases loaded, delete some!",
                     False,
                 )

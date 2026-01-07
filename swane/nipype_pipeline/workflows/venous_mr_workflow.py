@@ -20,7 +20,7 @@ from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 from swane.utils.DependencyManager import DependencyManager
 
-def venous_mra_workflow(
+def venous_mr_workflow(
     name: str,
     venous_mr_dir: str,
     config: SectionProxy,
