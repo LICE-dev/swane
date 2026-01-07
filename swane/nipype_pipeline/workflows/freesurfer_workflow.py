@@ -107,29 +107,29 @@ def freesurfer_workflow(
     recon_all = Node(ReconAll(), name="reconAll")
     recon_all.inputs.subject_id = FS_DIR
 
-    # parallel option split some steps in right and left
-    if max_cpu > 1:
-        recon_all.inputs.parallel = True
-
-    # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
-    if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
-        # no limit
-        recon_all.inputs.openmp = cpu_count()
-    elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
-        # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
-        recon_all.inputs.openmp = max_cpu
-        recon_all.n_procs = recon_all.inputs.openmp
-    elif max_cpu > 1:
-        # for hard cap we use half of max_cpu setting, but at least 1
-        recon_all.inputs.openmp = max(trunc(max_cpu / 2), 1)
-        recon_all.n_procs = recon_all.inputs.openmp * 2
-
     # RAM profile
-    recon_all._mem_gb = 5 # 5 is enough for old recon-all
+    recon_all._mem_gb = 5  # 5 is enough for old recon-all
     if DependencyManager.is_freesurfer_new_reconall():
-        recon_all._mem_gb = DependencyManager.NEWRECONALL_FREESURFER_RAM_REQUIREMENT # new recon-all needs a lot of RAM
+        recon_all._mem_gb = DependencyManager.NEWRECONALL_FREESURFER_RAM_REQUIREMENT  # new recon-all needs a lot of RAM
+        # New reconall may heavily increase RAM usage with more than 1 cpu, for now skip openmp if using synth tools
     else:
-        recon_all.inputs.environ["FS_V8_XOPTS"] = "0" # force old recon-all on low-RAM systems
+        recon_all.inputs.environ["FS_V8_XOPTS"] = "0"  # force old recon-all on low-RAM systems
+        # parallel option splits some steps in right and left
+        if max_cpu > 1:
+            recon_all.inputs.parallel = True
+
+        # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
+        if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
+            # no limit
+            recon_all.inputs.openmp = cpu_count()
+        elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
+            # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
+            recon_all.inputs.openmp = max_cpu
+            recon_all.n_procs = recon_all.inputs.openmp
+        elif max_cpu > 1:
+            # for hard cap we use half of max_cpu setting, but at least 1
+            recon_all.inputs.openmp = max(trunc(max_cpu / 2), 1)
+            recon_all.n_procs = recon_all.inputs.openmp * 2
 
     recon_all.inputs.directive = "all"
     recon_all.inputs.args = "-no-isrunning"

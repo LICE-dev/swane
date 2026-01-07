@@ -185,6 +185,8 @@ class MainWorkflow(CustomWorkflow):
         self.is_tractography = self.subject_config.getboolean_safe(
             DIL.DTI, "tractography"
         )
+        # Check if Slicer is installed to allow venous ct segmente_endocranium
+        self.is_slicer = self.dependency_manager.is_slicer(self.global_config)
 
     def launch_3dt1_analysis(self):
         ref_dir = self.subject_input_state_list.get_dicom_dir(DIL.T13D)
@@ -699,7 +701,8 @@ class MainWorkflow(CustomWorkflow):
 
     def launch_venous_ct_analysis(self):
         if (
-            not DIL.VENOUS_CT in self.subject_input_state_list
+            not self.is_slicer
+            or not DIL.VENOUS_CT in self.subject_input_state_list
             or not self.subject_input_state_list[DIL.VENOUS_CT].loaded
             or not self.subject_input_state_list[DIL.VENOUS_CT2].loaded
         ):
