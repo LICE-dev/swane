@@ -216,48 +216,48 @@ class TestWorkflow:
             },
         },
         "venous_phase1+2": {
-            "data": {DataInputList.VENOUS: "twovol"},
+            "data": {DataInputList.VENOUS_MR: "twovol"},
             "preferences": {},
             "check_nodes": {
-                DataInputList.VENOUS.value.workflow_name: [
+                DataInputList.VENOUS_MR.value.workflow_name: [
                     [
                         "veins_bet",
                         "frac",
-                        WF_PREFERENCES[DataInputList.VENOUS]["bet_thr"].default,
+                        WF_PREFERENCES[DataInputList.VENOUS_MR]["bet_thr"].default,
                     ],
                     ["veins_split"],
                 ],
             },
         },
         "venous_phase1only": {
-            "data": {DataInputList.VENOUS: "singlevol"},
+            "data": {DataInputList.VENOUS_MR: "singlevol"},
             "preferences": {},
             "check_nodes": {
-                "-%s" % DataInputList.VENOUS.value.workflow_name: [],
+                "-%s" % DataInputList.VENOUS_MR.value.workflow_name: [],
             },
         },
         "venous_invalid_phase_detection": {
-            "data": {DataInputList.VENOUS: "twovol"},
-            "preferences": {DataInputList.VENOUS: [["vein_detection_mode", "invalid"]]},
+            "data": {DataInputList.VENOUS_MR: "twovol"},
+            "preferences": {DataInputList.VENOUS_MR: [["vein_detection_mode", "invalid"]]},
             "check_nodes": {
-                DataInputList.VENOUS.value.workflow_name: [
+                DataInputList.VENOUS_MR.value.workflow_name: [
                     ["veins_check", "detection_mode", VEIN_DETECTION_MODE.SD]
                 ],
             },
         },
         "venous_phase1+phase2": {
             "data": {
-                DataInputList.VENOUS: "singlevol",
-                DataInputList.VENOUS2: "singlevol",
+                DataInputList.VENOUS_MR: "singlevol",
+                DataInputList.VENOUS_MR2: "singlevol",
             },
             "preferences": {
-                DataInputList.VENOUS: [
+                DataInputList.VENOUS_MR: [
                     ["bet_thr", "0"],
                     ["vein_detection_mode", VEIN_DETECTION_MODE.FIRST.name],
                 ]
             },
             "check_nodes": {
-                DataInputList.VENOUS.value.workflow_name: [
+                DataInputList.VENOUS_MR.value.workflow_name: [
                     ["veins_bet", "frac", 0],
                     ["veins2_conv"],
                     ["veins_check", "detection_mode", VEIN_DETECTION_MODE.FIRST],

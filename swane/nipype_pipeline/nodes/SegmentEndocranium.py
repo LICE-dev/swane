@@ -50,6 +50,13 @@ class SegmentEndocraniumInputSpec(CommandLineInputSpec):
         argstr="--iterations %d"
     )
 
+    skull_threshold = traits.Int(
+        -1,
+        usedefault=True,
+        desc="Threshold for skull segmentation, -1 use Slicer maximum entropy automatic thresholding",
+        argstr="--skull_threshold %d"
+    )
+
 
 class SegmentEndocraniumOutputSpec(TraitedSpec):
     out_file = File(

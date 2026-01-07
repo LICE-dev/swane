@@ -32,7 +32,7 @@ class SlicerExportWorker(QRunnable):
     def run(self):
 
         vein_threshold = self.config.getfloat_safe(
-            DataInputList.VENOUS, "vein_segment_threshold"
+            DataInputList.VENOUS_MR, "vein_segment_threshold"
         )
         dti_threshold = self.config.getfloat_safe(
             DataInputList.DTI, "tractography_threshold"

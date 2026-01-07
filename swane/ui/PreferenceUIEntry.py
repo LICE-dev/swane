@@ -64,6 +64,8 @@ class PreferenceUIEntry:
         self.input_type = entry.input_type
         self.restart = entry.restart
         self.informative_text = entry.informative_text
+        self.special_value_text = entry.special_value_text
+        self.suffix = entry.suffix
         self.input_field, self.button = self.gen_input_field()
         self.informative_text_label = self.gen_informative_text_label()
         if self.input_type == InputTypes.ENUM and entry.value_enum is not None:
@@ -169,10 +171,7 @@ class PreferenceUIEntry:
         else:
             field = QLineEdit()
 
-        if (
-            self.input_type == InputTypes.FILE
-            or self.input_type == InputTypes.DIRECTORY
-        ):
+        if self.input_type in (InputTypes.FILE, InputTypes.DIRECTORY):
             field.setReadOnly(True)
             button = QPushButton()
             pixmap = getattr(QStyle, "SP_DirOpenIcon")
@@ -183,6 +182,12 @@ class PreferenceUIEntry:
         if self.input_type == InputTypes.PASSWORD:
             field.setEchoMode(QLineEdit.PasswordEchoOnEdit)
             field.editingFinished.connect(partial(self.encrypt_password, field))
+
+        if self.input_type in (InputTypes.INT, InputTypes.FLOAT):
+            if self.special_value_text:
+                field.setSpecialValueText(self.special_value_text)
+            if self.suffix:
+                field.setSuffix(self.suffix)
 
         return field, button
 
@@ -262,6 +267,8 @@ class PreferenceUIEntry:
         else:
             value = config[self.category][self.key]
 
+        self.check_range(value)
+
         self.set_value(value)
 
         # Convert Enum to their label for compare reason
@@ -308,6 +315,14 @@ class PreferenceUIEntry:
 
         self.input_field.setDecimals(decimals)
         self.input_field.setSingleStep(single_step)
+
+    def check_range(self, value):
+        if self.input_type not in (InputTypes.INT, InputTypes.FLOAT):
+            return
+        if value < self.input_field.minimum():
+            self.input_field.setMinimum(value-abs(value))
+        elif value > self.input_field.maximum():
+            self.input_field.setMaximum(value+abs(value))
 
     def set_value(self, value, reset_change_state: bool = False):
         """

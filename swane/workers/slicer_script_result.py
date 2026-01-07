@@ -5,6 +5,7 @@ import sys
 import os
 import subprocess
 import SimpleITK as sitk
+import glob
 
 
 def load_anat(scene_dir: str, volume_name: str, color_node_ID: str = None):
@@ -27,7 +28,9 @@ def load_anat(scene_dir: str, volume_name: str, color_node_ID: str = None):
 
     """
 
-    file = os.path.join(scene_dir, volume_name + ".nii.gz")
+    file = os.path.join(scene_dir, volume_name)
+    if not file.endswith(".nii.gz"):
+        file += ".nii.gz"
     node = None
     if os.path.exists(file):
         try:
@@ -36,17 +39,17 @@ def load_anat(scene_dir: str, volume_name: str, color_node_ID: str = None):
             reader.SetFileName(file)
             reader.ReadImageInformation()  # legge solo header, niente voxel
             if reader.GetDimension() == 4:
-                mvNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMultiVolumeNode", volume_name)
-                slicer.modules.multivolumeimporter.widgetRepresentation().self().read4DNIfTI(mvNode, file)
+                node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMultiVolumeNode", volume_name)
+                slicer.modules.multivolumeimporter.widgetRepresentation().self().read4DNIfTI(node, file)
             else:
                 node = slicer.util.loadVolume(file)
 
         except:
             pass
 
-        if node is not None and color_node_ID is not None:
+        if node and color_node_ID:
+            node.CreateDefaultDisplayNodes()
             node.GetDisplayNode().SetAndObserveColorNodeID(color_node_ID)
-            return
 
     return node
 
@@ -422,7 +425,7 @@ def load_seeg(scene_dir: str, threshold: float = 900):
                            "seeg_electrodes.vtk", steel_blue)
 
 
-def load_fmri(scene_dir: str):
+def load_fmri_task(scene_dir: str):
     """
     Loads the fMRI results.
 
@@ -448,6 +451,16 @@ def load_fmri(scene_dir: str):
                 file.replace(".nii.gz", ""),
                 "vtkMRMLPETProceduralColorNodePET-Rainbow2",
             )
+
+
+def load_fmri_resting_state(scene_dir):
+    fmri_resting_state_dir = os.path.join(scene_dir,"fMRI_resting_state")
+    print(fmri_resting_state_dir)
+    pattern = "r-*[0-9].nii.gz"
+    zstat_files = glob.glob(pattern, root_dir=fmri_resting_state_dir)
+    for zstat_file in sorted(zstat_files):
+        print(zstat_file)
+        load_anat(fmri_resting_state_dir, zstat_file, "vtkMRMLColorTableNodeFileColdToHotRainbow.txt")
 
 
 def main_tract(dti_dir: str, scene_dir: str):
@@ -486,6 +499,30 @@ def main_tract(dti_dir: str, scene_dir: str):
         my_storage_node.WriteData(segmentation_node)
 
 
+def show_node(node):
+    orientations = {
+        "Red": "Sagittal",
+        "Yellow": "Coronal",
+        "Green": "Axial",
+    }
+    for name, orientation in orientations.items():
+        sliceNode = slicer.mrmlScene.GetFirstNodeByName(name)
+        if not sliceNode:
+            sliceNode = slicer.mrmlScene.AddNewNodeByClass(
+                "vtkMRMLSliceNode", name
+            )
+            sliceNode.SetSingletonTag(name)
+            sliceNode.SetOrientation(orientation)
+
+        compNode = slicer.mrmlScene.GetFirstNodeByName(f"{name} Composite")
+        if not compNode:
+            compNode = slicer.mrmlScene.AddNewNodeByClass(
+                "vtkMRMLSliceCompositeNode", f"{name} Composite"
+            )
+            compNode.SetSingletonTag(name)
+
+        compNode.SetBackgroundVolumeID(node.GetID())
+
 ###############################################################################
 
 # slicerpython execution code
@@ -498,11 +535,6 @@ else:
     refNode = load_anat(results_folder, "ref")
     if refNode is not None:
 
-        dtiDir = os.path.join(results_folder, "dti")
-        if os.path.isdir(dtiDir):
-            main_tract(dtiDir, results_folder)
-
-        # lesion_segment(sceneDir)
 
         baseList = [
             "ref_brain",
@@ -537,7 +569,8 @@ else:
         for volume in colorList:
             load_anat(results_folder, volume[0], volume[1])
 
-        load_fmri(results_folder)
+        load_fmri_task(results_folder)
+        load_fmri_resting_state(results_folder)
 
         load_seeg(results_folder, 900)
 
@@ -552,13 +585,9 @@ else:
 
         load_freesurfer(results_folder, refNode)
 
+        show_node(refNode)
+
         ext = "mrb"
-
-        # TODO valutare
-        # Saving in MRML doesn't work well, disable extension choice for now
-        # if sys.argv[4] is not None and sys.argv[1] == "mrml":
-        #     ext = "mrml"
-
         print("SLICERLOADER: Saving multimodale scene (some minutes)")
         slicer.util.saveScene(os.path.join(results_folder, "scene." + ext))
 
