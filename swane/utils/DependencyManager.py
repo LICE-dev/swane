@@ -81,6 +81,7 @@ class DependencyManager:
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
     SYNTH_FREESURFER_RAM_REQUIREMENT = 15
+    NEWRECONALL_FREESURFER_RAM_REQUIREMENT = 30
     MIN_SLICER_VERSION = "5.2.1"
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
     FSL_TCSH_COMMAND = "tcsh"
@@ -157,6 +158,18 @@ class DependencyManager:
         else:
             # RAM requirement for synth tools
             return virtual_memory().total / (1024 ** 3) >= DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT
+
+    @staticmethod
+    def is_freesurfer_new_reconall() -> bool:
+        """
+        Returns
+        -------
+        True if freesurfer version contains synth commands and system has enough RAM for new reconall.
+
+        """
+        if not DependencyManager.is_freesurfer_synth():
+            return False
+        return virtual_memory().total / (1024 ** 3) >= DependencyManager.NEWRECONALL_FREESURFER_RAM_REQUIREMENT
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:

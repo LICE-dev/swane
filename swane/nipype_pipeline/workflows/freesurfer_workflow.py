@@ -126,12 +126,10 @@ def freesurfer_workflow(
 
     # RAM profile
     recon_all._mem_gb = 5 # 5 is enough for old recon-all
-    system_mem = psutil.virtual_memory().total / (1024 ** 3)
-    if DependencyManager.is_freesurfer_synth():
-        if system_mem >= 13:
-            recon_all._mem_gb = 13 # new recon-all needs a lot of RAM
-        else:
-            recon_all.inputs.environ["FS_V8_XOPTS"] = 0 # force old recon-all on low-RAM systems
+    if DependencyManager.is_freesurfer_new_reconall():
+        recon_all._mem_gb = DependencyManager.NEWRECONALL_FREESURFER_RAM_REQUIREMENT # new recon-all needs a lot of RAM
+    else:
+        recon_all.inputs.environ["FS_V8_XOPTS"] = "0" # force old recon-all on low-RAM systems
 
     recon_all.inputs.directive = "all"
     recon_all.inputs.args = "-no-isrunning"
