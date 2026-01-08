@@ -228,7 +228,7 @@ WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["electrode_threshold"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Threshold for electrode identification",
-    range=[0,4000],
+    range=[0, 4000],
     suffix="HU",
     default=2000,
 )
@@ -238,7 +238,7 @@ WF_PREFERENCES[category]["erode_kernel_size"] = PreferenceEntry(
     tooltip="Increase this value if final electrode mask includes skull",
     default=5,
     suffix="mm",
-    range=[1, 20]
+    range=[1, 20],
 )
 category = DataInputList.VENOUS_CT
 WF_PREFERENCES[category] = {}
@@ -246,10 +246,10 @@ WF_PREFERENCES[category]["skull_threshold"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Threshold for skull identification",
     tooltip="To use 3D Slicer automatic threshold use -1",
-    range=[-1,4000],
+    range=[-1, 4000],
     suffix="HU",
     default=-1,
-    special_value_text = "Auto",
+    special_value_text="Auto",
 )
 WF_PREFERENCES[category]["segment_endocranium_iteration"] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -363,7 +363,7 @@ for x in range(FMRI_NUM):
         default="-1.0",
         suffix="s",
         range=[-1, 1000],
-        special_value_text = "Auto",
+        special_value_text="Auto",
     )
     WF_PREFERENCES[category]["n_vols"] = PreferenceEntry(
         input_type=InputTypes.INT,
@@ -401,7 +401,7 @@ WF_PREFERENCES[category]["tr"] = PreferenceEntry(
     default="-1.0",
     suffix="s",
     range=[-1, 1000],
-    special_value_text = "Auto",
+    special_value_text="Auto",
 )
 WF_PREFERENCES[category]["n_vols"] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -409,7 +409,7 @@ WF_PREFERENCES[category]["n_vols"] = PreferenceEntry(
     tooltip="Set -1 for automatic detection",
     default="-1",
     range=[-1, 1000],
-    special_value_text = "Auto",
+    special_value_text="Auto",
 )
 WF_PREFERENCES[category]["del_start_vols"] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -522,7 +522,7 @@ GLOBAL_PREFERENCES[category]["max_subj_cu"] = PreferenceEntry(
     tooltip="To use all CPU cores set value equal to -1",
     default=str(suggested_max_cpu),
     range=[-1, 30],
-    special_value_text = "No limit",
+    special_value_text="No limit",
 )
 GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,

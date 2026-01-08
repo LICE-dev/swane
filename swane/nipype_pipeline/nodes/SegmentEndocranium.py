@@ -3,66 +3,48 @@ from nipype.interfaces.base import (
     CommandLineInputSpec,
     TraitedSpec,
     File,
-    traits
+    traits,
 )
 import os
 
 
 class SegmentEndocraniumInputSpec(CommandLineInputSpec):
 
-    slicer_cmd = File(
-        exists=True,
-        mandatory=True,
-        desc="Slicer executable path"
-    )
+    slicer_cmd = File(exists=True, mandatory=True, desc="Slicer executable path")
 
     in_file = File(
-        exists=True,
-        mandatory=True,
-        desc="Original CT image",
-        argstr="--input %s"
+        exists=True, mandatory=True, desc="Original CT image", argstr="--input %s"
     )
 
     out_file = File(
-        desc="Endocranium mask file name",
-        argstr="--output %s",
-        genfile=True
+        desc="Endocranium mask file name", argstr="--output %s", genfile=True
     )
 
     smoothingKernelSize = traits.Float(
-        3.0,
-        usedefault=True,
-        desc="Kernel size in mm",
-        argstr="--kernel-mm %.2f"
+        3.0, usedefault=True, desc="Kernel size in mm", argstr="--kernel-mm %.2f"
     )
 
     oversampling = traits.Float(
         1.0,
         usedefault=True,
         desc="Wrap solidify oversampling",
-        argstr="--oversampling %.2f"
+        argstr="--oversampling %.2f",
     )
 
     iterations = traits.Int(
-        3,
-        usedefault=True,
-        desc="Shrinkwrap iterations",
-        argstr="--iterations %d"
+        3, usedefault=True, desc="Shrinkwrap iterations", argstr="--iterations %d"
     )
 
     skull_threshold = traits.Int(
         -1,
         usedefault=True,
         desc="Threshold for skull segmentation, -1 use Slicer maximum entropy automatic thresholding",
-        argstr="--skull_threshold %d"
+        argstr="--skull_threshold %d",
     )
 
 
 class SegmentEndocraniumOutputSpec(TraitedSpec):
-    out_file = File(
-        exists=True,
-        desc="Endocranium mask"
-    )
+    out_file = File(exists=True, desc="Endocranium mask")
 
 
 class SegmentEndocranium(CommandLine):

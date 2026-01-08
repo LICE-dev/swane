@@ -166,7 +166,10 @@ def func_map_workflow(
     else:
         func_2_ref_flirt = Node(FLIRT(), name="%s_2_ref_flirt" % name)
         func_2_ref_flirt.long_name = "%s to reference space"
-        if config.getenum_safe("cost_func") is BETWEEN_MOD_FLIRT_COST.MULTUAL_INFORMATION:
+        if (
+            config.getenum_safe("cost_func")
+            is BETWEEN_MOD_FLIRT_COST.MULTUAL_INFORMATION
+        ):
             cost = "mutualinfo"
         elif (
             config.getenum_safe("cost_func")
@@ -299,7 +302,6 @@ def func_map_workflow(
         threshold = abs(threshold / 100)
         ai_threshold.inputs.op_string = "-thr %f -uthr %f" % (-threshold, threshold)
         workflow.connect(ai, "out_file", ai_threshold, "in_file")
-
 
         if DependencyManager.is_freesurfer_synth():
             # NODE 15: AI Nonlinear transformation to reference space
