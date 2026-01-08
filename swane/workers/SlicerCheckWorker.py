@@ -103,12 +103,12 @@ class SlicerCheckWorker(QRunnable):
                 else:
                     # Try to automatically install Slicer extensions
                     cmd3 = (
-                            cmd
-                            + " --no-splash --no-main-window --python-script "
-                            + os.path.join(
-                        os.path.dirname(__file__),
-                        "slicer_script_module_install.py",
-                    )
+                        cmd
+                        + " --no-splash --no-main-window --python-script "
+                        + os.path.join(
+                            os.path.dirname(__file__),
+                            "slicer_script_module_install.py",
+                        )
                     )
                     output3 = subprocess.run(
                         cmd3, shell=True, stdout=subprocess.PIPE

@@ -67,7 +67,9 @@ def linear_reg_workflow(
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=["reference", "reference_brain", "output_name", "brain_mask"]),
+        IdentityInterface(
+            fields=["reference", "reference_brain", "output_name", "brain_mask"]
+        ),
         name="inputnode",
     )
 
@@ -103,7 +105,7 @@ def linear_reg_workflow(
 
     if DependencyManager.is_freesurfer_synth():
         # Affine registration to reference space
-        reg_2_ref = Node(SynthMorphReg(), name = "%s_2_ref" % name, mem_gb=9)
+        reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name, mem_gb=9)
         reg_2_ref.long_name = "%s to reference space"
         reg_2_ref.inputs.warp_file = "%s_2_ref.lta" % name
         if is_volumetric:
@@ -161,7 +163,9 @@ def linear_reg_workflow(
             workflow.connect(
                 brain_masking, "out_file", outputnode, "registered_file_brain"
             )
-            workflow.connect(flirt_2_ref, "out_matrix_file", outputnode, "out_matrix_file")
+            workflow.connect(
+                flirt_2_ref, "out_matrix_file", outputnode, "out_matrix_file"
+            )
 
         else:
             # NODE 4b: Scalp removal
@@ -207,14 +211,20 @@ def linear_reg_workflow(
                 unbet_flirt.inputs.interp = "trilinear"
 
             workflow.connect(robustfov, "out_roi", unbet_flirt, "in_file")
-            workflow.connect(flirt_2_ref, "out_matrix_file", unbet_flirt, "in_matrix_file")
+            workflow.connect(
+                flirt_2_ref, "out_matrix_file", unbet_flirt, "in_matrix_file"
+            )
             workflow.connect(
                 inputnode, ("output_name", get_unbetted_name), unbet_flirt, "out_file"
             )
             workflow.connect(inputnode, "reference", unbet_flirt, "reference")
 
-            workflow.connect(flirt_2_ref, "out_file", outputnode, "registered_file_brain")
+            workflow.connect(
+                flirt_2_ref, "out_file", outputnode, "registered_file_brain"
+            )
             workflow.connect(unbet_flirt, "out_file", outputnode, "registered_file")
-            workflow.connect(flirt_2_ref, "out_matrix_file", outputnode, "out_matrix_file")
+            workflow.connect(
+                flirt_2_ref, "out_matrix_file", outputnode, "out_matrix_file"
+            )
 
     return workflow
