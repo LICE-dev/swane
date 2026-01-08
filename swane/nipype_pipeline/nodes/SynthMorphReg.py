@@ -27,10 +27,13 @@ class SynthMorphRegInputSpec(FSTraitedSpec):
         desc="the reference image",
     )
     model = traits.Enum(
-        "joint", "deform", "affine", "rigid",
+        "joint",
+        "deform",
+        "affine",
+        "rigid",
         desc="Transformation model",
         argstr="-m %s",
-        usedefault=True
+        usedefault=True,
     )
     out_file = File(
         argstr="-o %s",
@@ -43,17 +46,17 @@ class SynthMorphRegInputSpec(FSTraitedSpec):
     initial_mat = File(
         exists=True,
         argstr="-i %s",
-        desc="Apply a matrix to moving before the registration")
+        desc="Apply a matrix to moving before the registration",
+    )
     warp_file = File(
-        argstr="-t %s",
-        genfile=True,
-        hash_files=False,
-        desc="the warp filename")
+        argstr="-t %s", genfile=True, hash_files=False, desc="the warp filename"
+    )
     inv_warp_file = File(
         argstr="-T %s",
         genfile=True,
         hash_files=False,
-        desc="the inversion warp filename")
+        desc="the inversion warp filename",
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -74,14 +77,17 @@ class SynthMorphReg(FSCommand):
     output_spec = SynthMorphRegOutputSpec
     _cmd = "mri_synthmorph register"
 
-
     def _list_outputs(self):
         outputs = super()._list_outputs()
         for name in ["warp_file", "inv_warp_file"]:
             ext = ".nii.gz"
             if self.inputs.model in ["affine", "rigid"]:
                 ext = ".lta"
-            out_file = os.path.basename(fname_presuffix(self.inputs.in_file, suffix="_"+name+ext, use_ext=False))
+            out_file = os.path.basename(
+                fname_presuffix(
+                    self.inputs.in_file, suffix="_" + name + ext, use_ext=False
+                )
+            )
             outputs[name] = os.path.abspath(out_file)
         return outputs
 
