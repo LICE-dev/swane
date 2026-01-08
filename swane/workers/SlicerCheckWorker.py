@@ -101,16 +101,14 @@ class SlicerCheckWorker(QRunnable):
                     )
                     state = DependenceStatus.WARNING
                 else:
-                    # if version check is passed, check for freesurfer module
-                    # TODO: we can try to install missing feesurfer module automatically.
-                    #   see slicer_script_freesurfer_module_install.py for example
+                    # Try to automatically install Slicer extensions
                     cmd3 = (
-                        cmd
-                        + " --no-splash --no-main-window --python-script "
-                        + os.path.join(
-                            os.path.dirname(__file__),
-                            "slicer_script_freesurfer_module_check.py",
-                        )
+                            cmd
+                            + " --no-splash --no-main-window --python-script "
+                            + os.path.join(
+                        os.path.dirname(__file__),
+                        "slicer_script_module_install.py",
+                    )
                     )
                     output3 = subprocess.run(
                         cmd3, shell=True, stdout=subprocess.PIPE

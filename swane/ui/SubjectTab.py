@@ -1,7 +1,7 @@
 import os
 from functools import partial
 from datetime import datetime
-from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher
+from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
@@ -24,8 +24,8 @@ from PySide6.QtWidgets import (
     QFileSystemModel,
     QTreeView,
     QComboBox,
+    QScrollArea
 )
-
 from swane import strings
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.workers.SlicerExportWorker import SlicerExportWorker
@@ -34,6 +34,7 @@ from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
+from swane.ui.NipypeNodeRuntimeWidget import NipypeNodeRuntimeWidget
 from swane.config.ConfigManager import ConfigManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.DataInputList import DataInputList
@@ -93,6 +94,7 @@ class SubjectTab(QTabWidget):
         self.subject_config_button = None
         self.exec_button = None
         self.exec_graph = None
+        self.node_runtime_widget: NipypeNodeRuntimeWidget
         self.load_scene_button = None
         self.open_results_directory_button = None
         self.results_model = None
@@ -142,7 +144,6 @@ class SubjectTab(QTabWidget):
             )
             if shutdown:
                 self.main_window.safe_shutdown_after_workflow(self.subject)
-
             return
         elif wf_report.signal_type == WorkflowSignals.INVALID_SIGNAL:
             # Invalid signal sent from WF to UI, code error intercept
@@ -153,12 +154,18 @@ class SubjectTab(QTabWidget):
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_wf_invalid_signal)
             msg_box.exec()
-
-        # TODO - To be implemented for RAM usage info by each workflow
-        # if msg == WorkflowProcess.WORKFLOW_INSUFFICIENT_RESOURCES:
-        #     msg_box = QMessageBox()
-        #     msg_box.setText(strings.pttab_wf_insufficient_resources)
-        #     msg_box.exec()
+            self.workflow_had_error = True
+            return
+        elif wf_report.signal_type == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES:
+            try:
+                self.workflow_process.stop_event.set()
+            except:
+                pass
+            msg_box = QMessageBox()
+            msg_box.setText(strings.subj_tab_wf_insufficient_resources)
+            msg_box.exec()
+            self.workflow_had_error = True
+            return
 
         if wf_report.signal_type == WorkflowSignals.NODE_STARTED:
             icon = self.main_window.LOADING_MOVIE_FILE
@@ -176,10 +183,19 @@ class SubjectTab(QTabWidget):
                     )
                 except:
                     pass
+            if wf_report.crash_file is not None:
+                self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder.crash_file = wf_report.crash_file
 
         self.node_list[wf_report.workflow_name].node_list[
             wf_report.node_name
         ].node_holder.set_art(icon)
+
+        if self.node_list[wf_report.workflow_name].node_list[
+            wf_report.node_name
+        ].node_holder.isSelected():
+            # Add a minimum delay to wait fornipype file after node start signal
+            QTimer.singleShot(150, lambda: self.tree_item_clicked(
+                self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder, 0))
 
         if wf_report.info is not None:
             self.node_list[wf_report.workflow_name].node_list[
@@ -398,7 +414,7 @@ class SubjectTab(QTabWidget):
                 msg_box = QMessageBox()
                 msg_box.setText(
                     strings.subj_tab_wrong_type_check_msg
-                    % (found_mod, data_input.value.image_modality.value)
+                    % (found_mod, data_input.value.get_modality_str())
                 )
                 msg_box.setInformativeText(strings.subj_tab_wrong_type_check)
                 msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -407,6 +423,9 @@ class SubjectTab(QTabWidget):
                 )
                 msg_box.setDefaultButton(QMessageBox.StandardButton.No)
                 ret = msg_box.exec()
+
+                # We need to hide "old" progress to prevent a loading bar to appear during user choice
+                progress.deleteLater()
                 if ret == QMessageBox.StandardButton.Yes:
                     self.dicom_import_to_folder(data_input, force_mod=True)
             self.set_error(data_input, "")
@@ -532,6 +551,14 @@ class SubjectTab(QTabWidget):
         layout.addWidget(self.exec_button, 1, 1)
         self.exec_graph = QSvgWidget()
         layout.addWidget(self.exec_graph, 2, 1)
+        self.node_runtime_widget = NipypeNodeRuntimeWidget(slicer_path=self.global_config.get_slicer_path())
+        scroll = QScrollArea()
+        scroll.setWidget(self.node_runtime_widget)
+        scroll.setWidgetResizable(True)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        layout.addWidget(scroll, 2, 1)
 
         self.exec_tab.setLayout(layout)
 
@@ -607,19 +634,22 @@ class SubjectTab(QTabWidget):
                 self.node_list_treeWidget,
                 self.node_list_treeWidget,
                 self.node_list[node].long_name,
+                self.node_list[node].fullname,
             )
             if len(self.node_list[node].node_list.keys()) > 0:
                 for sub_node in self.node_list[node].node_list.keys():
-                    self.node_list[node].node_list[sub_node].node_holder = (
-                        CustomTreeWidgetItem(
+                    self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(
                             self.node_list[node].node_holder,
                             self.node_list_treeWidget,
                             self.node_list[node].node_list[sub_node].long_name,
+                            self.node_list[node].node_list[sub_node].fullname,
                         )
-                    )
+                    self.node_list[node].node_list[sub_node].node_holder.node_name = node+"."+sub_node
 
         # UI updating
         self.exec_button_set_enabled(True)
+        self.node_runtime_widget.hide()
+        self.exec_graph.hide()
         self.generate_workflow_button.setEnabled(False)
 
     def tree_item_clicked(self, item, col: int):
@@ -647,6 +677,12 @@ class SubjectTab(QTabWidget):
                 self.exec_graph.renderer().setAspectRatioMode(
                     Qt.AspectRatioMode.KeepAspectRatio
                 )
+                self.node_runtime_widget.hide()
+                self.exec_graph.show()
+        else:
+            self.exec_graph.hide()
+            self.node_runtime_widget.show()
+            self.node_runtime_widget.load_node_result(self.subject.workflow_dir(), item)
 
     @staticmethod
     def no_close_event(event):
@@ -865,12 +901,15 @@ class SubjectTab(QTabWidget):
         )
         result_tab_layout.addWidget(self.open_results_directory_button, 0, 3)
 
-        self.results_model = QFileSystemModel()
         self.result_tree = QTreeView(parent=self)
         self.result_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.result_tree.setModel(self.results_model)
+        self.reset_result_tree_model()
 
         result_tab_layout.addWidget(self.result_tree, 1, 0, 1, 4)
+
+    def reset_result_tree_model(self):
+        self.results_model = QFileSystemModel()
+        self.result_tree.setModel(self.results_model)
 
     def generate_scene(self) -> PersistentProgressDialog:
         """
@@ -979,7 +1018,8 @@ class SubjectTab(QTabWidget):
 
             self.set_ok(data_input, label)
             self.enable_exec_tab()
-            self.check_venous_volumes()
+
+        self.check_input_parent()
 
     def load_subject(self, check_dicom_folders: bool = True):
         """
@@ -1046,21 +1086,21 @@ class SubjectTab(QTabWidget):
         None.
 
         """
-        scene_dir = self.subject.result_dir()
+        result_dir = self.subject.result_dir()
 
-        if self.subject.is_workflow_process_alive() and not on_workflow_running:
+        if not os.path.exists(result_dir):
+            self.setTabEnabled(SubjectTab.RESULTTAB, False)
+            self.result_directory_watcher.removePaths([result_dir])
+            self.reset_result_tree_model()
+        elif self.subject.is_workflow_process_alive() and not on_workflow_running:
             return
-
-        if os.path.exists(scene_dir):
+        else:
             self.setTabEnabled(SubjectTab.RESULTTAB, True)
-            self.results_model.setRootPath(scene_dir)
+            self.results_model.setRootPath(result_dir)
             index_root = self.results_model.index(self.results_model.rootPath())
             self.result_tree.setRootIndex(index_root)
-            self.result_directory_watcher.addPath(scene_dir)
+            self.result_directory_watcher.addPath(result_dir)
             self.load_scene_button_update_state()
-        else:
-            self.setTabEnabled(SubjectTab.RESULTTAB, False)
-            self.result_directory_watcher.removePaths([scene_dir])
 
     def clear_import_folder(self, data_input: DataInputList):
         """
@@ -1092,57 +1132,70 @@ class SubjectTab(QTabWidget):
         progress.accept()
 
         self.reset_workflow()
-        self.check_venous_volumes()
 
-        if (
-            data_input == DataInputList.VENOUS
-            and self.subject.input_state_list[DataInputList.VENOUS2].loaded
-        ):
-            self.clear_import_folder(DataInputList.VENOUS2)
+        for data_input in DataInputList:
+            if data_input in self.subject.input_state_list and data_input.value.parent_input is not None:
+                parent_is_loaded = self.subject.input_state_list[DataInputList[data_input.value.parent_input]].loaded
+                if not parent_is_loaded and self.subject.input_state_list[data_input].loaded:
+                    self.clear_import_folder(data_input)
+                    return
+
+        self.check_input_parent()
+
+    def check_input_parent(self):
+        for data_input in DataInputList:
+            if data_input in self.subject.input_state_list and data_input.value.parent_input is not None:
+                parent_is_loaded = self.subject.input_state_list[DataInputList[data_input.value.parent_input]].loaded
+                self.input_report[data_input][3].setEnabled(parent_is_loaded)
+
+        self.check_venous_volumes()
 
     def check_venous_volumes(self):
         """
         Display informative warnings in venous and venous2 data input rows to help user in data loading
         """
+        if not self.global_config.is_optional_series_enabled(DataInputList.VENOUS_MR):
+            return
+
         phases = (
-            self.subject.input_state_list[DataInputList.VENOUS].volumes
-            + self.subject.input_state_list[DataInputList.VENOUS2].volumes
+            self.subject.input_state_list[DataInputList.VENOUS_MR].volumes
+            + self.subject.input_state_list[DataInputList.VENOUS_MR2].volumes
         )
         if phases == 0:
-            self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
+            self.input_report[DataInputList.VENOUS_MR2][3].setEnabled(False)
         elif phases == 1:
-            if self.subject.input_state_list[DataInputList.VENOUS].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS_MR].loaded:
                 self.set_warn(
-                    DataInputList.VENOUS,
+                    DataInputList.VENOUS_MR,
                     "Series has only one phase, load the second phase below",
                     False,
                 )
-                self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
+                self.input_report[DataInputList.VENOUS_MR2][3].setEnabled(True)
+            if self.subject.input_state_list[DataInputList.VENOUS_MR2].loaded:
                 # this should not be possible!
                 self.set_warn(
-                    DataInputList.VENOUS2,
+                    DataInputList.VENOUS_MR2,
                     "Series has only one phase, load the second phase above",
                     False,
                 )
         elif phases == 2:
-            if self.subject.input_state_list[DataInputList.VENOUS].loaded:
-                self.set_ok(DataInputList.VENOUS, None)
-                self.input_report[DataInputList.VENOUS2][3].setEnabled(False)
-            if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
-                self.set_ok(DataInputList.VENOUS2, None)
+            if self.subject.input_state_list[DataInputList.VENOUS_MR].loaded:
+                self.set_ok(DataInputList.VENOUS_MR, None)
+                self.input_report[DataInputList.VENOUS_MR2][3].setEnabled(False)
+            if self.subject.input_state_list[DataInputList.VENOUS_MR2].loaded:
+                self.set_ok(DataInputList.VENOUS_MR2, None)
         else:
             # something gone wrong, more than 2 phases!
-            if self.subject.input_state_list[DataInputList.VENOUS].loaded:
+            if self.subject.input_state_list[DataInputList.VENOUS_MR].loaded:
                 self.set_warn(
-                    DataInputList.VENOUS,
+                    DataInputList.VENOUS_MR,
                     "Too many venous phases loaded, delete some!",
                     False,
                 )
-                self.input_report[DataInputList.VENOUS2][3].setEnabled(True)
-            if self.subject.input_state_list[DataInputList.VENOUS2].loaded:
+                self.input_report[DataInputList.VENOUS_MR2][3].setEnabled(True)
+            if self.subject.input_state_list[DataInputList.VENOUS_MR2].loaded:
                 self.set_warn(
-                    DataInputList.VENOUS2,
+                    DataInputList.VENOUS_MR2,
                     "Too many venous phases loaded, delete some!",
                     False,
                 )
@@ -1185,6 +1238,7 @@ class SubjectTab(QTabWidget):
         if self.subject.reset_workflow(force):
             self.node_list_treeWidget.clear()
             self.exec_graph.load(self.main_window.VOID_SVG_FILE)
+            self.node_runtime_widget.clear()
             self.exec_button_set_enabled(False)
             self.generate_workflow_button.setEnabled(True)
             self.workflow_type_combo.setEnabled(True)

@@ -184,6 +184,22 @@ subj_tab_unsupported_files = (
     + " works on primary non derived DICOM images.\nFolder contains ImageType combinations that are not accepted: {}"
 )
 
+sub_tab_node_name_label = "Node"
+sub_tab_node_status_label = "Status"
+sub_tab_node_status_not_started = "Not started"
+sub_tab_node_status_running = "Execution started at"
+sub_tab_node_status_completed = "Completed at"
+sub_tab_node_status_failed = "Failed"
+sub_tab_node_dir_label = "Directory"
+sub_tab_node_crash_label = "Crash file"
+sub_tab_node_command_label = "Command"
+sub_tab_node_duration_label = "Duration"
+sub_tab_node_cpu_label = "CPU %"
+sub_tab_node_ram_label = "Mem (GB)"
+sub_tab_node_output_label = "Output"
+sub_tab_node_slicer_button_tooltip = "Open in 3D Slicer"
+sub_tab_node_file_button_tooltip = "Show in File Manager"
+
 # Wf Preference Window
 wf_pref_window_title_user = " - Workflow preferences"
 
@@ -238,18 +254,23 @@ check_dep_fs_error1 = (
 )
 check_dep_fs_error2 = "FreeSurfer detected (%s), but without environment configuration"
 check_dep_fs_error3 = (
-    "FreeSurfer detected (%s). Matlab Runtime is not installed (<a "
-    "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>installation instruction</a>)"
+    "FreeSurfer detected (%s). OPTIONAL: install Matlab Runtime (<a "
+    "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>instructions</a>)"
 )
 check_dep_fs_error4 = (
     "FreeSurfer detected (%s). License key missing (<a "
-    "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instruction</a>)"
+    "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instructions</a>)"
 )
-check_dep_fs_wrong_version = (
+check_dep_fs_outdated_version = (
     "FreeSurfer version outdated (found %s, required %s). Please "
     "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a>"
 )
-check_dep_fs_no_tcsh = "FreeSurfer detected (%s) but tcsh is not installed."
+check_dep_fs_synth_version = (
+    "FreeSurfer detected (found %s, recommended %s). Please "
+    "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a> to speed up processing greatly."
+)
+check_dep_fs_no_tcsh = "FreeSurfer detected (%s), but tcsh is not installed."
+check_dep_fs_low_ram = "FreeSurfer detected (%s). With less than %dGB of RAM, processing will be slower."
 check_dep_graph_error = "Graphviz not detected (<a href='https://graphviz.org/download/'>Installation info</a>)"
 check_dep_graph_found = "Graphviz detected"
 check_dep_slicer_error1 = (
@@ -257,7 +278,7 @@ check_dep_slicer_error1 = (
     "/getting_started.html#installing-3d-slicer/'>Installation info</a>)"
 )
 check_dep_slicer_error2 = (
-    "Slicer detected but without SlicerFreeSurfer extension (<a "
+    "Required Slicer modules SlicerFreeSurfer and SurfaceWrapSolidify are missing (<a "
     "href='https://slicer.readthedocs.io/en/latest/user_guide/extensions_manager.html?highlight"
     "=extension%20manager'>Extensions Manager info</a>)"
 )
@@ -292,8 +313,12 @@ node_names["CustomDcm2niix"] = "nifti conversion"
 node_names["RobustFOV"] = "neck removal"
 node_names["ForceOrient"] = "standard orientation"
 node_names["BET"] = "scalp removal"
+node_names["SegmentEndocranium"] = "scalp removal"
+node_names["SynthStrip"] = "scalp removal"
+node_names["SynthMorphReg"] = "registration"
 node_names["FLIRT"] = "linear registration"
 node_names["ApplyXFM"] = "linear transformation"
+node_names["SynthMorphApply"] = "linear transformation"
 node_names["FNIRT"] = "nonlinear registration"
 node_names["ApplyWarp"] = "nonlinear transformation"
 node_names["InvWarp"] = "inverse transformation"
@@ -323,3 +348,14 @@ node_names["Cluster"] = "cluster extraction"
 node_names["SampleToSurface"] = "surface projection"
 node_names["FAST"] = "Tissue segmentation"
 node_names["FLAT1OutliersMask"] = "outliers mask generation"
+node_names["MELODIC"] = "Melodic - IC Analysis"
+node_names["SelectFiles"] = "Melodic - Output selection"
+node_names["FeatureSpatialPrep"] = "Aroma - Preprocessing"
+node_names["FeatureSpatial"] = "Aroma - Spatial feature"
+node_names["FeatureTimeSeries"] = "Aroma - Time feature"
+node_names["FeatureFrequency"] = "Aroma - Frequency feature"
+node_names["AromaClassification"] = "Aroma - Noise classification"
+node_names["FilterRegressor"] = "Aroma - Denoising"
+node_names["FeatureFrequency"] = "Aroma - Frequency feature"
+node_names["FeatureFrequency"] = "Aroma - Frequency feature"
+

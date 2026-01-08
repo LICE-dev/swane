@@ -25,6 +25,7 @@ def change_test_dir(request):
 def global_config():
     global_config = ConfigManager(global_base_folder=os.getcwd())
     global_config.set_main_working_directory(TestSubject.TEST_MAIN_WORKING_DIRECTORY)
+    global_config["optional_series"]["fmri_0"] = "true"
     return global_config
 
 
@@ -113,17 +114,16 @@ class TestSubject:
         series_path = os.path.join(TestDicomSearchWorker.DICOM_DIRS["SINGLE_VOL"][0])
         worker = DicomSearchWorker(series_path)
         worker.run()
-        subject_list = worker.get_subject_list()
-        exam_list = worker.get_exam_list(subject_list[0])
-        series_list = worker.get_series_list(subject_list[0], exam_list[0])
-        image_list, subject_name, mod, series_description, vols = (
-            worker.get_series_info(subject_list[0], exam_list[0], series_list[0])
-        )
+        subject_list = worker.tree.get_subject_list()
+        exam_list = worker.tree.get_studies_list(subject_list[0])
+        series_list = worker.tree.get_series_list(subject_list[0], exam_list[0])
+        series = worker.tree.get_series(subject_list[0], exam_list[0], series_list[0])
+
         import_ret = test_subject.dicom_import_to_folder(
             data_input=DataInputList.T13D,
-            copy_list=image_list,
-            vols=vols,
-            mod=mod,
+            copy_list=series.dicom_locs,
+            vols=series.volumes,
+            mod=series.modality,
             force_modality=False,
         )
         assert (
@@ -133,9 +133,9 @@ class TestSubject:
         test_subject.input_state_list[DataInputList.T13D].loaded = True
         import_ret = test_subject.dicom_import_to_folder(
             data_input=DataInputList.T13D,
-            copy_list=image_list,
-            vols=vols,
-            mod=mod,
+            copy_list=series.dicom_locs,
+            vols=series.volumes,
+            mod=series.modality,
             force_modality=False,
         )
         assert (
@@ -143,14 +143,14 @@ class TestSubject:
         ), "Importing in non empty-folder error"
 
         assert test_subject.dicom_folder_count(DataInputList.T13D) == len(
-            image_list
+            series.dicom_locs
         ), "Copied files number different from image list length"
 
         import_ret = test_subject.dicom_import_to_folder(
             data_input=DataInputList["FMRI_0"],
-            copy_list=image_list,
-            vols=vols,
-            mod=mod,
+            copy_list=series.dicom_locs,
+            vols=series.volumes,
+            mod=series.modality,
             force_modality=False,
         )
         assert (
@@ -159,8 +159,8 @@ class TestSubject:
 
         import_ret = test_subject.dicom_import_to_folder(
             data_input=DataInputList.FLAIR3D,
-            copy_list=image_list,
-            vols=vols,
+            copy_list=series.dicom_locs,
+            vols=series.volumes,
             mod="pt",
             force_modality=False,
         )
@@ -170,8 +170,8 @@ class TestSubject:
 
         import_ret = test_subject.dicom_import_to_folder(
             data_input=DataInputList.FLAIR3D,
-            copy_list=image_list,
-            vols=vols,
+            copy_list=series.dicom_locs,
+            vols=series.volumes,
             mod="pt",
             force_modality=True,
         )
@@ -181,17 +181,15 @@ class TestSubject:
         series_path = os.path.join(TestDicomSearchWorker.DICOM_DIRS["MULTI_VOL"][0])
         worker = DicomSearchWorker(series_path)
         worker.run()
-        subject_list = worker.get_subject_list()
-        exam_list = worker.get_exam_list(subject_list[0])
-        series_list = worker.get_series_list(subject_list[0], exam_list[0])
-        image_list, subject_name, mod, series_description, vols = (
-            worker.get_series_info(subject_list[0], exam_list[0], series_list[0])
-        )
+        subject_list = worker.tree.get_subject_list()
+        exam_list = worker.tree.get_studies_list(subject_list[0])
+        series_list = worker.tree.get_series_list(subject_list[0], exam_list[0])
+        series = worker.tree.get_series(subject_list[0], exam_list[0], series_list[0])
         import_ret = test_subject.dicom_import_to_folder(
             data_input=DataInputList.FLAIR3D,
-            copy_list=image_list,
-            vols=vols,
-            mod=mod,
+            copy_list=series.dicom_locs,
+            vols=series.volumes,
+            mod=series.modality,
             force_modality=False,
         )
         assert (

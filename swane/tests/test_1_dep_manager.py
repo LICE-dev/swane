@@ -171,7 +171,7 @@ class TestDependencyManager:
             os.path.dirname(__file__),
             "..",
             "workers",
-            "slicer_script_freesurfer_module_install.py",
+            "slicer_script_module_install.py",
         )
         os.system(cmd + " --no-main-window --python-script " + install_script)
         slicer_check_worker = SlicerCheckWorker(cmd)

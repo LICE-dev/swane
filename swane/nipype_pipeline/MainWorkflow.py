@@ -15,7 +15,8 @@ from swane.config.config_enums import (
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
-from swane.nipype_pipeline.workflows.task_fMRI_workflow import task_fMRI_workflow
+from swane.nipype_pipeline.workflows.fMRI_task_workflow import fMRI_task_workflow
+from swane.nipype_pipeline.workflows.fMRI_resting_state_workflow import fMRI_resting_state_workflow
 from swane.nipype_pipeline.workflows.nonlinear_reg_workflow import (
     nonlinear_reg_workflow,
 )
@@ -23,8 +24,10 @@ from swane.nipype_pipeline.workflows.ref_workflow import ref_workflow
 from swane.nipype_pipeline.workflows.freesurfer_workflow import freesurfer_workflow
 from swane.nipype_pipeline.workflows.flat1_workflow import flat1_workflow
 from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
-from swane.nipype_pipeline.workflows.venous_workflow import venous_workflow
+from swane.nipype_pipeline.workflows.venous_mr_workflow import venous_mr_workflow
+from swane.nipype_pipeline.workflows.venous_ct_workflow import venous_ct_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
+from swane.nipype_pipeline.workflows.seeg_ct_workflow import seeg_ct_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import (
     tractography_workflow,
     SIDES,
@@ -105,9 +108,12 @@ class MainWorkflow(CustomWorkflow):
         self.launch_mdc_analysis()
         self.launch_asl_analysis()
         self.launch_pet_analysis()
-        self.launch_venous_analysis()
+        self.launch_venous_ct_analysis()
+        self.launch_venous_mr_analysis()
+        self.launch_seeg_ct_analysis()
         self.launch_dti_analysis()
-        self.launch_fMRI_analysis()
+        self.launch_fMRI_task_analysis()
+        self.launch_fMRI_resting_state_analysis()
 
         # Remove reference to original variables to prevent crash during subprocess spawn in MacOS
         # Maybe this can be solved setting fork subprocess method too
@@ -179,6 +185,8 @@ class MainWorkflow(CustomWorkflow):
         self.is_tractography = self.subject_config.getboolean_safe(
             DIL.DTI, "tractography"
         )
+        # Check if Slicer is installed to allow venous ct segmente_endocranium
+        self.is_slicer = self.dependency_manager.is_slicer(self.global_config)
 
     def launch_3dt1_analysis(self):
         ref_dir = self.subject_input_state_list.get_dicom_dir(DIL.T13D)
@@ -284,7 +292,8 @@ class MainWorkflow(CustomWorkflow):
 
         flair_inputnode = self.flair.get_node("inputnode")
         flair_inputnode.inputs.output_name = "flair"
-        self.connect(self.t1, "outputnode.ref_brain", self.flair, "inputnode.reference")
+        self.connect(self.t1, "outputnode.ref", self.flair, "inputnode.reference")
+        self.connect(self.t1, "outputnode.ref_brain", self.flair, "inputnode.reference_brain")
 
         self.flair.sink_result(
             save_path=self.base_dir,
@@ -296,7 +305,7 @@ class MainWorkflow(CustomWorkflow):
         self.flair.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
-            result_name="betted_registered_file",
+            result_name="registered_file_brain",
             sub_folder=self.Result_DIR,
         )
 
@@ -387,14 +396,13 @@ class MainWorkflow(CustomWorkflow):
 
                 flair2d_inputnode = self.flair2d.get_node("inputnode")
                 flair2d_inputnode.inputs.output_name = "flair2d_%s" % plane
-                self.connect(
-                    self.t1, "outputnode.ref_brain", self.flair2d, "inputnode.reference"
-                )
+                self.connect(self.t1, "outputnode.ref", self.flair2d, "inputnode.reference")
+                self.connect(self.t1, "outputnode.ref_brain", self.flair2d, "inputnode.reference_brain")
 
                 self.flair2d.sink_result(
                     save_path=self.base_dir,
                     result_node="outputnode",
-                    result_name="betted_registered_file",
+                    result_name="registered_file_brain",
                     sub_folder=self.Result_DIR,
                 )
 
@@ -419,9 +427,8 @@ class MainWorkflow(CustomWorkflow):
         t2_cor_inputnode = self.t2_cor.get_node("inputnode")
         t2_cor_inputnode.inputs.output_name = "t2_cor"
         self.connect(self.t1, "outputnode.ref", self.t2_cor, "inputnode.reference")
-        self.connect(
-            self.t1, "outputnode.ref_mask", self.t2_cor, "inputnode.brain_mask"
-        )
+        self.connect(self.t1, "outputnode.ref_brain", self.t2_cor, "inputnode.reference_brain")
+        self.connect(self.t1, "outputnode.ref_mask", self.t2_cor, "inputnode.brain_mask")
 
         self.t2_cor.sink_result(
             save_path=self.base_dir,
@@ -433,7 +440,7 @@ class MainWorkflow(CustomWorkflow):
         self.t2_cor.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
-            result_name="betted_registered_file",
+            result_name="registered_file_brain",
             sub_folder=self.Result_DIR,
         )
 
@@ -453,7 +460,8 @@ class MainWorkflow(CustomWorkflow):
 
         mdc_inputnode = self.mdc.get_node("inputnode")
         mdc_inputnode.inputs.output_name = "mdc"
-        self.connect(self.t1, "outputnode.ref_brain", self.mdc, "inputnode.reference")
+        self.connect(self.t1, "outputnode.ref_brain", self.mdc, "inputnode.reference_brain")
+        self.connect(self.t1, "outputnode.ref", self.mdc, "inputnode.reference")
 
         self.mdc.sink_result(
             save_path=self.base_dir,
@@ -465,7 +473,7 @@ class MainWorkflow(CustomWorkflow):
         self.mdc.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
-            result_name="betted_registered_file",
+            result_name="registered_file_brain",
             sub_folder=self.Result_DIR,
         )
 
@@ -483,7 +491,7 @@ class MainWorkflow(CustomWorkflow):
         )
         self.asl.long_name = "Arterial Spin Labelling analysis"
 
-        self.connect(self.t1, "outputnode.ref_brain", self.asl, "inputnode.reference")
+        self.connect(self.t1, "outputnode.ref", self.asl, "inputnode.reference")
         self.connect(self.t1, "outputnode.ref_mask", self.asl, "inputnode.brain_mask")
 
         self.asl.sink_result(
@@ -691,36 +699,98 @@ class MainWorkflow(CustomWorkflow):
                     sub_folder=self.Result_DIR,
                 )
 
-    def launch_venous_analysis(self):
+    def launch_venous_ct_analysis(self):
         if (
-            not self.subject_input_state_list[DIL.VENOUS].loaded
-            or not self.subject_input_state_list[DIL.VENOUS].volumes
-            + self.subject_input_state_list[DIL.VENOUS2].volumes
+            not self.is_slicer
+            or not DIL.VENOUS_CT in self.subject_input_state_list
+            or not self.subject_input_state_list[DIL.VENOUS_CT].loaded
+            or not self.subject_input_state_list[DIL.VENOUS_CT2].loaded
+        ):
+            return
+
+        # Venous CT analysis
+        venous_ct_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT)
+        venous2_ct_dir = [self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT2)]
+        if self.subject_input_state_list[DIL.VENOUS_CT3].loaded:
+            venous2_ct_dir.append(self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT3))
+        if self.subject_input_state_list[DIL.VENOUS_CT4].loaded:
+            venous2_ct_dir.append(self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_CT4))
+        self.venous_ct = venous_ct_workflow(
+            DIL.VENOUS_CT.value.workflow_name,
+            venous_ct_dir=venous_ct_dir,
+            config=self.subject_config[DIL.VENOUS_CT],
+            venous2_ct_dir=venous2_ct_dir,
+            slicer_path=self.global_config.get_slicer_path()
+        )
+        self.venous_ct.long_name = "Venous CT analysis"
+
+        self.connect(self.t1, "outputnode.ref_brain", self.venous_ct, "inputnode.ref_brain")
+        self.connect(self.t1, "outputnode.ref", self.venous_ct, "inputnode.ref")
+
+        self.venous_ct.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="veins",
+            sub_folder=self.Result_DIR,
+        )
+
+    def launch_venous_mr_analysis(self):
+        if (
+            not DIL.VENOUS_MR in self.subject_input_state_list
+            or not self.subject_input_state_list[DIL.VENOUS_MR].loaded
+            or not self.subject_input_state_list[DIL.VENOUS_MR].volumes
+            + self.subject_input_state_list[DIL.VENOUS_MR2].volumes
             == 2
         ):
             return
 
-        # Venous analysis
-        venous_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS)
-        venous2_dir = None
-        if self.subject_input_state_list[DIL.VENOUS2].loaded:
-            venous2_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS2)
-        self.venous = venous_workflow(
-            DIL.VENOUS.value.workflow_name,
-            venous_dir,
-            self.subject_config[DIL.VENOUS],
-            venous2_dir,
+        # Venous MRA analysis
+        venous_mr_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_MR)
+        venous2_mr_dir = None
+        if self.subject_input_state_list[DIL.VENOUS_MR2].loaded:
+            venous2_mr_dir = self.subject_input_state_list.get_dicom_dir(DIL.VENOUS_MR2)
+        self.venous_mr = venous_mr_workflow(
+            DIL.VENOUS_MR.value.workflow_name,
+            venous_mr_dir=venous_mr_dir,
+            config=self.subject_config[DIL.VENOUS_MR],
+            venous2_mr_dir=venous2_mr_dir,
         )
-        self.venous.long_name = "Venous MRA analysis"
+        self.venous_mr.long_name = "Venous MRA analysis"
 
-        self.connect(
-            self.t1, "outputnode.ref_brain", self.venous, "inputnode.ref_brain"
-        )
+        self.connect(self.t1, "outputnode.ref_brain", self.venous_mr, "inputnode.ref_brain")
+        self.connect(self.t1, "outputnode.ref", self.venous_mr, "inputnode.ref")
 
-        self.venous.sink_result(
+        self.venous_mr.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
             result_name="veins",
+            sub_folder=self.Result_DIR,
+        )
+
+    def launch_seeg_ct_analysis(self):
+        if (
+            not DIL.SEEG_CT in self.subject_input_state_list
+            or not self.subject_input_state_list[DIL.SEEG_CT].loaded
+        ):
+            return
+
+        # SEEG CT analysis
+        seeg_ct_dir = self.subject_input_state_list.get_dicom_dir(DIL.SEEG_CT)
+        self.seeg_ct_dir = seeg_ct_workflow(
+            DIL.SEEG_CT.value.workflow_name,
+            seeg_ct_dir=seeg_ct_dir,
+            config=self.subject_config[DIL.SEEG_CT]
+        )
+        self.seeg_ct_dir.long_name = "SEEG CT analysis"
+
+        self.connect(self.t1, "outputnode.ref_brain", self.seeg_ct_dir, "inputnode.ref_brain")
+        self.connect(self.t1, "outputnode.ref", self.seeg_ct_dir, "inputnode.ref")
+        self.connect(self.t1, "outputnode.ref_mask", self.seeg_ct_dir, "inputnode.brain_mask")
+
+        self.seeg_ct_dir.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="electrodes",
             sub_folder=self.Result_DIR,
         )
 
@@ -730,24 +800,17 @@ class MainWorkflow(CustomWorkflow):
 
         # DTI analysis
         dti_dir = self.subject_input_state_list.get_dicom_dir(DIL.DTI)
-        mni_dir = abspath(
-            os.path.join(
-                os.environ["FSLDIR"], "data/standard/MNI152_T1_2mm_brain.nii.gz"
-            )
-        )
 
         self.dti_preproc = dti_preproc_workflow(
             name=DIL.DTI.value.workflow_name,
             dti_dir=dti_dir,
             config=self.subject_config[DIL.DTI],
-            mni_dir=mni_dir,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
-        self.connect(
-            self.t1, "outputnode.ref_brain", self.dti_preproc, "inputnode.ref_brain"
-        )
+        self.connect(self.t1, "outputnode.ref_brain", self.dti_preproc, "inputnode.ref_brain")
+        self.connect(self.t1, "outputnode.ref", self.dti_preproc, "inputnode.ref")
 
         self.dti_preproc.sink_result(
             save_path=self.base_dir,
@@ -823,24 +886,25 @@ class MainWorkflow(CustomWorkflow):
                             save_path=self.base_dir,
                             result_node="outputnode",
                             result_name="waytotal_%s" % side,
-                            sub_folder=self.Result_DIR + ".dti",
+                            sub_folder=os.path.join(self.Result_DIR, "dti"),
                         )
                         tract_workflow.sink_result(
                             save_path=self.base_dir,
                             result_node="outputnode",
                             result_name="fdt_paths_%s" % side,
-                            sub_folder=self.Result_DIR + ".dti",
+                            sub_folder=os.path.join(self.Result_DIR, "dti"),
                         )
 
-    def launch_fMRI_analysis(self):
+    def launch_fMRI_task_analysis(self):
         # Check for Task FMRI sequences
         for y in range(FMRI_NUM):
 
-            if not self.subject_input_state_list[DIL["FMRI_%d" % y]].loaded:
+            if (not DIL["FMRI_%d" % y] in self.subject_input_state_list or
+                    not self.subject_input_state_list[DIL["FMRI_%d" % y]].loaded):
                 continue
 
             dicom_dir = self.subject_input_state_list.get_dicom_dir(DIL["FMRI_%d" % y])
-            self.fMRI = task_fMRI_workflow(
+            self.fMRI = fMRI_task_workflow(
                 name=DIL["FMRI_%d" % y].value.workflow_name,
                 dicom_dir=dicom_dir,
                 config=self.subject_config[DIL["FMRI_%d" % y]],
@@ -848,14 +912,14 @@ class MainWorkflow(CustomWorkflow):
             )
             self.fMRI.long_name = "Task fMRI analysis - %d" % y
             self.connect(
-                self.t1, "outputnode.ref_brain", self.fMRI, "inputnode.ref_BET"
+                self.t1, "outputnode.ref_brain", self.fMRI, "inputnode.ref_brain"
             )
             for thresh_i in range(1, 4):
                 self.fMRI.sink_result(
                     save_path=self.base_dir,
                     result_node="outputnode",
                     result_name="threshold_file_cont1_thresh%d" % thresh_i,
-                    sub_folder=self.Result_DIR + ".fMRI",
+                    sub_folder=os.path.join(self.Result_DIR, "fMRI"),
                 )
                 if (
                     self.subject_config.getenum_safe(DIL["FMRI_%d" % y], "block_design")
@@ -865,5 +929,31 @@ class MainWorkflow(CustomWorkflow):
                         save_path=self.base_dir,
                         result_node="outputnode",
                         result_name="threshold_file_cont2_thresh%d" % thresh_i,
-                        sub_folder=self.Result_DIR + ".fMRI",
+                        sub_folder=os.path.join(self.Result_DIR, "fMRI"),
                     )
+
+    def launch_fMRI_resting_state_analysis(self):
+        # Check for Resting state FMRI sequences
+        if (not DIL.FMRI_RS in self.subject_input_state_list
+                or not self.subject_input_state_list[DIL.FMRI_RS].loaded):
+            return
+
+        dicom_dir = self.subject_input_state_list.get_dicom_dir(DIL.FMRI_RS)
+        self.fMRI_resting_state = fMRI_resting_state_workflow(
+            name=DIL.FMRI_RS.value.workflow_name,
+            dicom_dir=dicom_dir,
+            config=self.subject_config[DIL.FMRI_RS],
+            base_dir=self.base_dir,
+        )
+        self.fMRI_resting_state.long_name = "Resting state fMRI analysis"
+        self.connect(
+            self.t1, "outputnode.ref_brain", self.fMRI_resting_state, "inputnode.ref_brain"
+        )
+
+        self.fMRI_resting_state.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="thresh_zstat_files",
+            sub_folder=os.path.join(self.Result_DIR, "fMRI_resting_state"),
+            remove_mapnode_subdir=True
+        )
