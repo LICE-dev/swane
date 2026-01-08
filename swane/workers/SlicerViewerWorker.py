@@ -30,10 +30,9 @@ class SlicerViewerWorker(QRunnable):
 
     def run(self):
         cmd = (
-            self.slicer_path
-            + " --python-code 'slicer.util.loadScene(\""
-            + self.scene_path
-            + "\")'"
+                self.slicer_path
+                + " "
+                + self.scene_path
         )
         popen = subprocess.Popen(
             cmd,

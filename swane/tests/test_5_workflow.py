@@ -46,17 +46,15 @@ def import_from_path(
     patient.reset_workflow()
     worker = DicomSearchWorker(dicom_path)
     worker.run()
-    patient_list = worker.get_subject_list()
-    exam_list = worker.get_exam_list(patient_list[0])
-    series_list = worker.get_series_list(patient_list[0], exam_list[0])
-    image_list, patient_name, mod, series_description, vols = worker.get_series_info(
-        patient_list[0], exam_list[0], series_list[0]
-    )
+    patient_list = worker.tree.get_subject_list()
+    exam_list = worker.tree.get_studies_list(patient_list[0])
+    series_list = worker.tree.get_series_list(patient_list[0], exam_list[0])
+    series = worker.tree.get_series(patient_list[0], exam_list[0], series_list[0])
     import_ret = patient.dicom_import_to_folder(
         data_input=data_input,
-        copy_list=image_list,
-        vols=vols,
-        mod=mod,
+        copy_list=series.dicom_locs,
+        vols=series.volumes,
+        mod=series.modality,
         force_modality=True,
     )
     assert import_ret == SubjectRet.DataImportCompleted
@@ -65,10 +63,13 @@ def import_from_path(
     call_back.assert_called_with(ANY, SubjectRet.DataInputValid, ANY)
 
 
+# To use this test create subj_1 and load all "base" sequences from swane, first
+
 class TestWorkflow:
     TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "workflow", "subjects")
     TEST_PATIENT_NAME = "pt_01"
     DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "dicom")
+    DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT = 100000 # Prevent new nodes
 
     TESTS = {
         # 'test_name': {
@@ -216,48 +217,48 @@ class TestWorkflow:
             },
         },
         "venous_phase1+2": {
-            "data": {DataInputList.VENOUS: "twovol"},
+            "data": {DataInputList.VENOUS_MR: "twovol"},
             "preferences": {},
             "check_nodes": {
-                DataInputList.VENOUS.value.workflow_name: [
+                DataInputList.VENOUS_MR.value.workflow_name: [
                     [
                         "veins_bet",
                         "frac",
-                        WF_PREFERENCES[DataInputList.VENOUS]["bet_thr"].default,
+                        WF_PREFERENCES[DataInputList.VENOUS_MR]["bet_thr"].default,
                     ],
                     ["veins_split"],
                 ],
             },
         },
         "venous_phase1only": {
-            "data": {DataInputList.VENOUS: "singlevol"},
+            "data": {DataInputList.VENOUS_MR: "singlevol"},
             "preferences": {},
             "check_nodes": {
-                "-%s" % DataInputList.VENOUS.value.workflow_name: [],
+                "-%s" % DataInputList.VENOUS_MR.value.workflow_name: [],
             },
         },
         "venous_invalid_phase_detection": {
-            "data": {DataInputList.VENOUS: "twovol"},
-            "preferences": {DataInputList.VENOUS: [["vein_detection_mode", "invalid"]]},
+            "data": {DataInputList.VENOUS_MR: "twovol"},
+            "preferences": {DataInputList.VENOUS_MR: [["vein_detection_mode", "invalid"]]},
             "check_nodes": {
-                DataInputList.VENOUS.value.workflow_name: [
+                DataInputList.VENOUS_MR.value.workflow_name: [
                     ["veins_check", "detection_mode", VEIN_DETECTION_MODE.SD]
                 ],
             },
         },
         "venous_phase1+phase2": {
             "data": {
-                DataInputList.VENOUS: "singlevol",
-                DataInputList.VENOUS2: "singlevol",
+                DataInputList.VENOUS_MR: "singlevol",
+                DataInputList.VENOUS_MR2: "singlevol",
             },
             "preferences": {
-                DataInputList.VENOUS: [
+                DataInputList.VENOUS_MR: [
                     ["bet_thr", "0"],
                     ["vein_detection_mode", VEIN_DETECTION_MODE.FIRST.name],
                 ]
             },
             "check_nodes": {
-                DataInputList.VENOUS.value.workflow_name: [
+                DataInputList.VENOUS_MR.value.workflow_name: [
                     ["veins_bet", "frac", 0],
                     ["veins2_conv"],
                     ["veins_check", "detection_mode", VEIN_DETECTION_MODE.FIRST],

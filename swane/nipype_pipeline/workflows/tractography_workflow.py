@@ -9,6 +9,8 @@ from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
 from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
+from swane.utils.DependencyManager import DependencyManager
+from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 
 SIDES = ["lh", "rh"]
 
@@ -145,38 +147,57 @@ def tractography_workflow(
             return None
 
         # NODE 2: Seed ROI nonlinear transformation in T13D reference space
-        seed_2_ref = Node(ApplyWarp(), name="seed_2_ref_%s_%s" % (name, side))
-        seed_2_ref.long_name = side + " seed ROI %s"
-        seed_2_ref.inputs.out_file = "r-seed_%s_%s.nii.gz" % (name, side)
-        seed_2_ref.inputs.in_file = seed_file
-        workflow.connect(inputnode, "ref_brain", seed_2_ref, "ref_file")
-        workflow.connect(inputnode, "mni2ref_warp", seed_2_ref, "field_file")
+        if DependencyManager.is_freesurfer_synth():
+            seed_2_ref = Node(SynthMorphApply(), name="seed_2_ref_%s_%s" % (name, side))
+            seed_2_ref.long_name = side + " seed ROI %s"
+            seed_2_ref.inputs.in_file = seed_file
+            seed_2_ref.inputs.method = "nearest"
+            workflow.connect(inputnode, "mni2ref_warp", seed_2_ref, "warp_file")
+        else:
+            seed_2_ref = Node(ApplyWarp(), name="seed_2_ref_%s_%s" % (name, side))
+            seed_2_ref.long_name = side + " seed ROI %s"
+            seed_2_ref.inputs.out_file = "r-seed_%s_%s.nii.gz" % (name, side)
+            seed_2_ref.inputs.in_file = seed_file
+            seed_2_ref.inputs.interp = "nn"
+            workflow.connect(inputnode, "ref_brain", seed_2_ref, "ref_file")
+            workflow.connect(inputnode, "mni2ref_warp", seed_2_ref, "field_file")
 
         # NODE 3: Seed ROI bynarization
-        seed_bin = Node(ImageMaths(), name="seed_bin_%s_%s" % (name, side))
-        seed_bin.long_name = side + " seed ROI binarization"
-        seed_bin.inputs.op_string = "-thr 0.1 -bin"
-        seed_bin.inputs.out_data_type = "char"
-        seed_bin.inputs.suffix = "_bin"
-        workflow.connect(seed_2_ref, "out_file", seed_bin, "in_file")
+        # seed_bin = Node(ImageMaths(), name="seed_bin_%s_%s" % (name, side))
+        # seed_bin.long_name = side + " seed ROI binarization"
+        # seed_bin.inputs.op_string = "-thr 0.1 -bin"
+        # seed_bin.inputs.out_data_type = "char"
+        # seed_bin.inputs.suffix = "_bin"
+        # workflow.connect(seed_2_ref, "out_file", seed_bin, "in_file")
 
         # NODE 4: Target ROIs nonlinear transformation in T13D reference space
-        targets_2_ref = Node(ApplyWarp(), name="targets_2_ref_%s_%s" % (name, side))
-        targets_2_ref.long_name = side + " target ROIs %s"
-        if len(target_files) > 1:
-            targets_2_ref.iterables = ("in_file", target_files)
+        if DependencyManager.is_freesurfer_synth():
+            targets_2_ref = Node(SynthMorphApply(), name="targets_2_ref_%s_%s" % (name, side))
+            targets_2_ref.long_name = side + " target ROIs %s"
+            targets_2_ref.inputs.method = "nearest"
+            if len(target_files) > 1:
+                targets_2_ref.iterables = ("in_file", target_files)
+            else:
+                targets_2_ref.inputs.in_file = target_files[0]
+            workflow.connect(inputnode, "mni2ref_warp", targets_2_ref, "warp_file")
         else:
-            targets_2_ref.inputs.in_file = target_files[0]
-        workflow.connect(inputnode, "ref_brain", targets_2_ref, "ref_file")
-        workflow.connect(inputnode, "mni2ref_warp", targets_2_ref, "field_file")
+            targets_2_ref = Node(ApplyWarp(), name="targets_2_ref_%s_%s" % (name, side))
+            targets_2_ref.long_name = side + " target ROIs %s"
+            targets_2_ref.inputs.interp = "nn"
+            if len(target_files) > 1:
+                targets_2_ref.iterables = ("in_file", target_files)
+            else:
+                targets_2_ref.inputs.in_file = target_files[0]
+            workflow.connect(inputnode, "ref_brain", targets_2_ref, "ref_file")
+            workflow.connect(inputnode, "mni2ref_warp", targets_2_ref, "field_file")
 
         # NODE 5: Target ROIs bynarization
-        targets_bin = Node(ImageMaths(), name="targets_bin_%s_%s" % (name, side))
-        targets_bin.long_name = side + " target ROIs binarization"
-        targets_bin.inputs.op_string = "-thr 0.1 -bin"
-        targets_bin.inputs.out_data_type = "char"
-        targets_bin.inputs.suffix = "_bin"
-        workflow.connect(targets_2_ref, "out_file", targets_bin, "in_file")
+        # targets_bin = Node(ImageMaths(), name="targets_bin_%s_%s" % (name, side))
+        # targets_bin.long_name = side + " target ROIs binarization"
+        # targets_bin.inputs.op_string = "-thr 0.1 -bin"
+        # targets_bin.inputs.out_data_type = "char"
+        # targets_bin.inputs.suffix = "_bin"
+        # workflow.connect(targets_2_ref, "out_file", targets_bin, "in_file")
 
         # NODE 10: Tractography
         probtrackx = MapNode(
@@ -200,7 +221,7 @@ def tractography_workflow(
         workflow.connect(inputnode, "thsamples", probtrackx, "thsamples")
         workflow.connect(inputnode, "ref2diff_mat", probtrackx, "xfm")
         workflow.connect(inputnode, "diff2ref_mat", probtrackx, "inv_xfm")
-        workflow.connect(seed_bin, "out_file", probtrackx, "seed")
+        workflow.connect(seed_2_ref, "out_file", probtrackx, "seed")
         workflow.connect(random_seed, "seeds", probtrackx, "random_seed")
 
         # Check the number of target ROIs
@@ -213,11 +234,11 @@ def tractography_workflow(
             )
             merge_targets.long_name = side + " targets ROI merging"
 
-            workflow.connect(targets_bin, "out_file", merge_targets, "target_files")
+            workflow.connect(targets_2_ref, "out_file", merge_targets, "target_files")
 
             workflow.connect(merge_targets, "out_file", probtrackx, "waypoints")
         else:
-            workflow.connect(targets_bin, "out_file", probtrackx, "waypoints")
+            workflow.connect(targets_2_ref, "out_file", probtrackx, "waypoints")
 
         # Check if inverted run is required in protocol
         if is_invert:
@@ -242,57 +263,73 @@ def tractography_workflow(
             workflow.connect(inputnode, "thsamples", probtrackx_inverted, "thsamples")
             workflow.connect(inputnode, "ref2diff_mat", probtrackx_inverted, "xfm")
             workflow.connect(inputnode, "diff2ref_mat", probtrackx_inverted, "inv_xfm")
-            workflow.connect(targets_bin, "out_file", probtrackx_inverted, "seed")
-            workflow.connect(seed_bin, "out_file", probtrackx_inverted, "waypoints")
+            workflow.connect(targets_2_ref, "out_file", probtrackx_inverted, "seed")
+            workflow.connect(seed_2_ref, "out_file", probtrackx_inverted, "waypoints")
             workflow.connect(random_seed, "seeds", probtrackx_inverted, "random_seed")
 
         # Check for exclusion ROI in protocol
         if os.path.exists(exclude_file):
             # NODE 6: Exclusion ROI nonlinear transformation in T13D reference space
-            exclude_2_ref = Node(ApplyWarp(), name="exclude_2_ref_%s_%s" % (name, side))
-            exclude_2_ref.long_name = side + " exclusion ROI %s"
-            exclude_2_ref.inputs.out_file = "r-exclude_%s_%s.nii.gz" % (name, side)
-            exclude_2_ref.inputs.in_file = exclude_file
-            workflow.connect(inputnode, "ref_brain", exclude_2_ref, "ref_file")
-            workflow.connect(inputnode, "mni2ref_warp", exclude_2_ref, "field_file")
+            if DependencyManager.is_freesurfer_synth():
+                exclude_2_ref = Node(SynthMorphApply(), name="exclude_2_ref_%s_%s" % (name, side))
+                exclude_2_ref.long_name = side + " exclusion ROI %s"
+                exclude_2_ref.inputs.in_file = exclude_file
+                exclude_2_ref.inputs.method = "nearest"
+                workflow.connect(inputnode, "mni2ref_warp", exclude_2_ref, "warp_file")
+            else:
+                exclude_2_ref = Node(ApplyWarp(), name="exclude_2_ref_%s_%s" % (name, side))
+                exclude_2_ref.long_name = side + " exclusion ROI %s"
+                exclude_2_ref.inputs.out_file = "r-exclude_%s_%s.nii.gz" % (name, side)
+                exclude_2_ref.inputs.in_file = exclude_file
+                exclude_2_ref.inputs.interp = "nn"
+                workflow.connect(inputnode, "ref_brain", exclude_2_ref, "ref_file")
+                workflow.connect(inputnode, "mni2ref_warp", exclude_2_ref, "field_file")
 
             # NODE 7: Exclusion ROI bynarization
-            exclude_bin = Node(ImageMaths(), name="exclude_bin_%s_%s" % (name, side))
-            exclude_bin.long_name = side + " exclusion ROI binarization"
-            exclude_bin.inputs.op_string = "-thr 0.1 -bin"
-            exclude_bin.inputs.out_data_type = "char"
-            exclude_bin.inputs.suffix = "_bin"
-            workflow.connect(exclude_2_ref, "out_file", exclude_bin, "in_file")
+            # exclude_bin = Node(ImageMaths(), name="exclude_bin_%s_%s" % (name, side))
+            # exclude_bin.long_name = side + " exclusion ROI binarization"
+            # exclude_bin.inputs.op_string = "-thr 0.1 -bin"
+            # exclude_bin.inputs.out_data_type = "char"
+            # exclude_bin.inputs.suffix = "_bin"
+            # workflow.connect(exclude_2_ref, "out_file", exclude_bin, "in_file")
 
-            workflow.connect(exclude_bin, "out_file", probtrackx, "avoid_mp")
+            workflow.connect(exclude_2_ref, "out_file", probtrackx, "avoid_mp")
 
             if is_invert:
                 workflow.connect(
-                    exclude_bin, "out_file", probtrackx_inverted, "avoid_mp"
+                    exclude_2_ref, "out_file", probtrackx_inverted, "avoid_mp"
                 )
 
         # Check for stop ROI in protocol
         if os.path.exists(stop_file):
             # NODE 8: stop ROI nonlinear transformation in T13D reference space
-            stop_2_ref = Node(ApplyWarp(), name="stop_2_ref_%s_%s" % (name, side))
-            stop_2_ref.long_name = side + " stop ROI %s"
-            stop_2_ref.inputs.out_file = "r-stop_%s_%s.nii.gz" % (name, side)
-            stop_2_ref.inputs.in_file = stop_file
-            workflow.connect(inputnode, "ref_brain", stop_2_ref, "ref_file")
-            workflow.connect(inputnode, "mni2ref_warp", stop_2_ref, "field_file")
+            if DependencyManager.is_freesurfer_synth():
+                stop_2_ref = Node(SynthMorphApply(), name="stop_2_ref_%s_%s" % (name, side))
+                stop_2_ref.long_name = side + " stop ROI %s"
+                stop_2_ref.inputs.in_file = stop_file
+                stop_2_ref.inputs.method = "nearest"
+                workflow.connect(inputnode, "mni2ref_warp", stop_2_ref, "warp_file")
+            else:
+                stop_2_ref = Node(ApplyWarp(), name="stop_2_ref_%s_%s" % (name, side))
+                stop_2_ref.long_name = side + " stop ROI %s"
+                stop_2_ref.inputs.out_file = "r-stop_%s_%s.nii.gz" % (name, side)
+                stop_2_ref.inputs.in_file = stop_file
+                stop_2_ref.inputs.interp = "nn"
+                workflow.connect(inputnode, "ref_brain", stop_2_ref, "ref_file")
+                workflow.connect(inputnode, "mni2ref_warp", stop_2_ref, "field_file")
 
             # NODE 9: stop ROI bynarization
-            stop_bin = Node(ImageMaths(), name="stop_bin_%s_%s" % (name, side))
-            stop_bin.long_name = side + " stop ROI binarization"
-            stop_bin.inputs.op_string = "-thr 0.1 -bin"
-            stop_bin.inputs.out_data_type = "char"
-            stop_bin.inputs.suffix = "_bin"
-            workflow.connect(stop_2_ref, "out_file", stop_bin, "in_file")
+            # stop_bin = Node(ImageMaths(), name="stop_bin_%s_%s" % (name, side))
+            # stop_bin.long_name = side + " stop ROI binarization"
+            # stop_bin.inputs.op_string = "-thr 0.1 -bin"
+            # stop_bin.inputs.out_data_type = "char"
+            # stop_bin.inputs.suffix = "_bin"
+            # workflow.connect(stop_2_ref, "out_file", stop_bin, "in_file")
 
-            workflow.connect(stop_bin, "out_file", probtrackx, "stop_mask")
+            workflow.connect(stop_2_ref, "out_file", probtrackx, "stop_mask")
 
             if is_invert:
-                workflow.connect(stop_bin, "out_file", probtrackx_inverted, "stop_mask")
+                workflow.connect(stop_2_ref, "out_file", probtrackx_inverted, "stop_mask")
 
         # NODE 14: Sum tractography and inverted tractography results
         sum_multi_tracks = Node(SumMultiTracks(), name="sumTrack_%s_%s" % (name, side))

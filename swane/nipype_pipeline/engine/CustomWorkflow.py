@@ -1,7 +1,7 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 from nipype.pipeline.engine import Workflow
-from nipype import Node, logging
+from nipype import Node, logging, MapNode
 from nipype.interfaces.utility import IdentityInterface
 from nipype.interfaces.io import DataSink
 from swane.nipype_pipeline.engine.NodeListEntry import NodeListEntry
@@ -59,6 +59,7 @@ class CustomWorkflow(Workflow):
 
             outlist[node.name] = NodeListEntry()
             outlist[node.name].long_name = self.format_node_name(node)
+            outlist[node.name].fullname = node.fullname
             if isinstance(node, CustomWorkflow):
                 outlist[node.name].node_list = node.get_node_array()
         return outlist
@@ -70,6 +71,7 @@ class CustomWorkflow(Workflow):
         result_name: str,
         sub_folder: str,
         regexp_substitutions: list[tuple[str, str]] = None,
+        remove_mapnode_subdir = False
     ):
         """
         Creates a sink_result Node to save the output files of a Workflow.
@@ -88,11 +90,14 @@ class CustomWorkflow(Workflow):
         )
         data_sink.long_name = "%s: " + result_name
         data_sink.inputs.base_directory = save_path
+        data_sink.inputs.container = sub_folder
 
         if regexp_substitutions is not None:
             data_sink.inputs.regexp_substitutions = regexp_substitutions
+        elif remove_mapnode_subdir:
+            data_sink.inputs.regexp_substitutions = [(r"/_[^/]+[0-9]+(?=/[^/]+$)", "")]
 
-        self.connect(result_node, result_name, data_sink, sub_folder)
+        self.connect(result_node, result_name, data_sink, "@file")
 
     def _get_dot(
         self, prefix=None, hierarchy=None, colored=False, simple_form=True, level=0

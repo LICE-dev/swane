@@ -19,6 +19,7 @@ class WorkflowReport:
         signal_type: WorkflowSignals = WorkflowSignals.NODE_STARTED,
         long_name: str = None,
         info: str = None,
+        crash_file: str = None
     ):
         """
 
@@ -45,3 +46,4 @@ class WorkflowReport:
                 long_name = split[2]
             self.node_name = long_name
         self.info = info
+        self.crash_file = crash_file

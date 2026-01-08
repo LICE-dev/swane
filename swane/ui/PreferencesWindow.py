@@ -76,7 +76,8 @@ class PreferencesWindow(QDialog):
             if (
                 is_workflow
                 and not my_config.global_config
-                and not self.parent().subject.input_state_list[category].loaded
+                and (category not in self.parent().subject.input_state_list or
+                     not self.parent().subject.input_state_list[category].loaded)
             ):
                 continue
 
