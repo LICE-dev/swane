@@ -36,6 +36,7 @@ setup(
         "psutil==7.0.0",
         "swane_supplement>=0.1.2",
         "matplotlib==3.10.1",
+        # todo: METTIAMO NIBABEL 5.2 come minima per essere più inclusivi?
         "nibabel>=5.3.0,<6",
         "packaging",
         "PySide6_VerticalQTabWidget==0.0.3",

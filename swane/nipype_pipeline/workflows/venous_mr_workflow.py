@@ -125,7 +125,7 @@ def venous_mr_workflow(
 
     # NODE 5: Scalp removal and in skull structures segmentation
     if DependencyManager.is_freesurfer_synth():
-        deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=3)
+        deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
         deskull.inputs.mask_file = "vein_mask.nii.gz"
         workflow.connect(veins_check, "out_file_anat", deskull, "in_file")
 

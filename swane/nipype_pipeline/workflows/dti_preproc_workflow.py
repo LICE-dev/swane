@@ -137,7 +137,7 @@ def dti_preproc_workflow(
 
     # NODE 3: Scalp removal from b0 image
     if DependencyManager.is_freesurfer_synth():
-        b0_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=3)
+        b0_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
         b0_deskull.inputs.mask_file = "nodif_brain_mask.nii.gz"
         workflow.connect(nodif, "roi_file", b0_deskull, "in_file")
     else:
