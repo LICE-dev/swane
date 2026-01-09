@@ -56,7 +56,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                     long_name=node.fullname,
                     signal_type=WorkflowSignals.NODE_ERROR,
                     info=info,
-                    crash_file = crash_file
+                    crash_file=crash_file,
                 )
             )
         except:

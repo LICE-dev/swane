@@ -20,6 +20,7 @@ from swane.nipype_pipeline.nodes.SegmentEndocranium import SegmentEndocranium
 from configparser import SectionProxy
 from swane.utils.DependencyManager import DependencyManager
 
+
 def venous_ct_workflow(
     name: str,
     venous_ct_dir: str,
@@ -72,7 +73,7 @@ def venous_ct_workflow(
     inputnode = Node(IdentityInterface(fields=["ref_brain", "ref"]), name="inputnode")
 
     # Output Node
-    outputnode = Node(IdentityInterface(fields=["veins","basal"]), name="outputnode")
+    outputnode = Node(IdentityInterface(fields=["veins", "basal"]), name="outputnode")
 
     # NODE 1: Conversion dicom -> nifti
     veins_conv = Node(CustomDcm2niix(), name="veins_ct_conv")
@@ -125,8 +126,12 @@ def venous_ct_workflow(
     deskull.long_name = "Non-contrast scan %s"
     deskull.inputs.slicer_cmd = slicer_path
     deskull.inputs.iterations = config.getint_safe("segment_endocranium_iteration")
-    deskull.inputs.smoothingKernelSize = config.getfloat_safe("segment_endocranium_kernel")
-    deskull.inputs.oversampling = config.getfloat_safe("segment_endocranium_oversampling")
+    deskull.inputs.smoothingKernelSize = config.getfloat_safe(
+        "segment_endocranium_kernel"
+    )
+    deskull.inputs.oversampling = config.getfloat_safe(
+        "segment_endocranium_oversampling"
+    )
     deskull.inputs.skull_threshold = config.getint_safe("skull_threshold")
     workflow.connect(veins_robustfov, "out_roi", deskull, "in_file")
 

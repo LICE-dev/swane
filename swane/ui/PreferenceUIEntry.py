@@ -320,9 +320,9 @@ class PreferenceUIEntry:
         if self.input_type not in (InputTypes.INT, InputTypes.FLOAT):
             return
         if value < self.input_field.minimum():
-            self.input_field.setMinimum(value-abs(value))
+            self.input_field.setMinimum(value - abs(value))
         elif value > self.input_field.maximum():
-            self.input_field.setMaximum(value+abs(value))
+            self.input_field.setMaximum(value + abs(value))
 
     def set_value(self, value, reset_change_state: bool = False):
         """

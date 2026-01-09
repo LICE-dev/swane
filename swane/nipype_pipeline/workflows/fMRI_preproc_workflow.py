@@ -17,10 +17,17 @@ from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
 from swane.config.config_enums import SLICE_TIMING
 
+
 def fMRI_preproc_workflow(
-    name: str, dicom_dir: str,
-    TR: float, slice_timing: SLICE_TIMING, n_vols: int, del_start_vols: int, del_end_vols: int, hpcutoff: int,
-    base_dir: str = "/"
+    name: str,
+    dicom_dir: str,
+    TR: float,
+    slice_timing: SLICE_TIMING,
+    n_vols: int,
+    del_start_vols: int,
+    del_end_vols: int,
+    hpcutoff: int,
+    base_dir: str = "/",
 ) -> CustomWorkflow:
     """
     fMRI first level anlysis for a single task with constant task-rest paradigm.
@@ -314,7 +321,7 @@ def fMRI_preproc_workflow(
         ]
     )
 
-    #workflow.connect(genSpec, "hpstring", highpass, "op_string")
+    # workflow.connect(genSpec, "hpstring", highpass, "op_string")
     workflow.connect(intnorm, "out_file", highpass, "in_file")
 
     # NODE 27: Coregister the mean functional image to the structural image

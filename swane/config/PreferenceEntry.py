@@ -53,7 +53,7 @@ class PreferenceEntry:
             "informative_text": dict,
             "box_text": str,
             "hidden": bool,
-            "special_value_text" : str,
+            "special_value_text": str,
             "suffix": str,
             # "value_enum": Enum
         }

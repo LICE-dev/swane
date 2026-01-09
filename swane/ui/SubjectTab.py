@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QFileSystemModel,
     QTreeView,
     QComboBox,
-    QScrollArea
+    QScrollArea,
 )
 from swane import strings
 from swane.config.config_enums import GlobalPrefCategoryList
@@ -184,18 +184,29 @@ class SubjectTab(QTabWidget):
                 except:
                     pass
             if wf_report.crash_file is not None:
-                self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder.crash_file = wf_report.crash_file
+                self.node_list[wf_report.workflow_name].node_list[
+                    wf_report.node_name
+                ].node_holder.crash_file = wf_report.crash_file
 
         self.node_list[wf_report.workflow_name].node_list[
             wf_report.node_name
         ].node_holder.set_art(icon)
 
-        if self.node_list[wf_report.workflow_name].node_list[
-            wf_report.node_name
-        ].node_holder.isSelected():
+        if (
+            self.node_list[wf_report.workflow_name]
+            .node_list[wf_report.node_name]
+            .node_holder.isSelected()
+        ):
             # Add a minimum delay to wait fornipype file after node start signal
-            QTimer.singleShot(150, lambda: self.tree_item_clicked(
-                self.node_list[wf_report.workflow_name].node_list[wf_report.node_name].node_holder, 0))
+            QTimer.singleShot(
+                150,
+                lambda: self.tree_item_clicked(
+                    self.node_list[wf_report.workflow_name]
+                    .node_list[wf_report.node_name]
+                    .node_holder,
+                    0,
+                ),
+            )
 
         if wf_report.info is not None:
             self.node_list[wf_report.workflow_name].node_list[
@@ -551,7 +562,9 @@ class SubjectTab(QTabWidget):
         layout.addWidget(self.exec_button, 1, 1)
         self.exec_graph = QSvgWidget()
         layout.addWidget(self.exec_graph, 2, 1)
-        self.node_runtime_widget = NipypeNodeRuntimeWidget(slicer_path=self.global_config.get_slicer_path())
+        self.node_runtime_widget = NipypeNodeRuntimeWidget(
+            slicer_path=self.global_config.get_slicer_path()
+        )
         scroll = QScrollArea()
         scroll.setWidget(self.node_runtime_widget)
         scroll.setWidgetResizable(True)
@@ -638,13 +651,17 @@ class SubjectTab(QTabWidget):
             )
             if len(self.node_list[node].node_list.keys()) > 0:
                 for sub_node in self.node_list[node].node_list.keys():
-                    self.node_list[node].node_list[sub_node].node_holder = CustomTreeWidgetItem(
+                    self.node_list[node].node_list[sub_node].node_holder = (
+                        CustomTreeWidgetItem(
                             self.node_list[node].node_holder,
                             self.node_list_treeWidget,
                             self.node_list[node].node_list[sub_node].long_name,
                             self.node_list[node].node_list[sub_node].fullname,
                         )
-                    self.node_list[node].node_list[sub_node].node_holder.node_name = node+"."+sub_node
+                    )
+                    self.node_list[node].node_list[sub_node].node_holder.node_name = (
+                        node + "." + sub_node
+                    )
 
         # UI updating
         self.exec_button_set_enabled(True)
@@ -1134,9 +1151,17 @@ class SubjectTab(QTabWidget):
         self.reset_workflow()
 
         for data_input in DataInputList:
-            if data_input in self.subject.input_state_list and data_input.value.parent_input is not None:
-                parent_is_loaded = self.subject.input_state_list[DataInputList[data_input.value.parent_input]].loaded
-                if not parent_is_loaded and self.subject.input_state_list[data_input].loaded:
+            if (
+                data_input in self.subject.input_state_list
+                and data_input.value.parent_input is not None
+            ):
+                parent_is_loaded = self.subject.input_state_list[
+                    DataInputList[data_input.value.parent_input]
+                ].loaded
+                if (
+                    not parent_is_loaded
+                    and self.subject.input_state_list[data_input].loaded
+                ):
                     self.clear_import_folder(data_input)
                     return
 
@@ -1144,8 +1169,13 @@ class SubjectTab(QTabWidget):
 
     def check_input_parent(self):
         for data_input in DataInputList:
-            if data_input in self.subject.input_state_list and data_input.value.parent_input is not None:
-                parent_is_loaded = self.subject.input_state_list[DataInputList[data_input.value.parent_input]].loaded
+            if (
+                data_input in self.subject.input_state_list
+                and data_input.value.parent_input is not None
+            ):
+                parent_is_loaded = self.subject.input_state_list[
+                    DataInputList[data_input.value.parent_input]
+                ].loaded
                 self.input_report[data_input][3].setEnabled(parent_is_loaded)
 
         self.check_venous_volumes()
