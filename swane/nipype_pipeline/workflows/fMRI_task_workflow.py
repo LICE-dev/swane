@@ -67,9 +67,17 @@ def fMRI_task_workflow(
     if block_design == BLOCK_DESIGN.RARB:
         hpcutoff = hpcutoff * 2
 
-    workflow = fMRI_preproc_workflow(name=name, dicom_dir=dicom_dir, TR=TR, slice_timing=slice_timing, n_vols=n_vols,
-                                     hpcutoff=hpcutoff, del_start_vols=del_start_vols, del_end_vols=del_end_vols,
-                                     base_dir=base_dir)
+    workflow = fMRI_preproc_workflow(
+        name=name,
+        dicom_dir=dicom_dir,
+        TR=TR,
+        slice_timing=slice_timing,
+        n_vols=n_vols,
+        hpcutoff=hpcutoff,
+        del_start_vols=del_start_vols,
+        del_end_vols=del_end_vols,
+        base_dir=base_dir,
+    )
 
     # Output Node
     outputnode = Node(
@@ -95,7 +103,6 @@ def fMRI_task_workflow(
     highpass = workflow.get_node("%s_highpass" % name)
     inputnode = workflow.get_node("inputnode")
 
-
     # NODE 25: Generate the Bunch containing fMRI specifications
     genSpec = Node(FMRIGenSpec(), name="%s_genSpec" % name)
     genSpec.inputs.block_design = block_design
@@ -105,7 +112,6 @@ def fMRI_task_workflow(
     genSpec.inputs.task_b_name = task_b_name
     workflow.connect(getTR, "TR", genSpec, "TR")
     workflow.connect(del_vols, "nvols", genSpec, "nvols")
-
 
     # NODE 28: Determine which of the images in the functional series are outliers
     # based on deviations in intensity and/or movement.

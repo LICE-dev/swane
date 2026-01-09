@@ -24,11 +24,13 @@ import glob
 import subprocess
 import argparse
 import SimpleITK as sitk
+
 os.environ["QT_LOGGING_RULES"] = "*.warning=false"
 
 # -----------------------------
 # Utility Functions
 # -----------------------------
+
 
 def load_anat(scene_dir: str, volume_name: str, color_node_id: str = None):
     """
@@ -62,8 +64,12 @@ def load_anat(scene_dir: str, volume_name: str, color_node_id: str = None):
         reader.SetFileName(file_path)
         reader.ReadImageInformation()
         if reader.GetDimension() == 4:
-            node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMultiVolumeNode", volume_name)
-            slicer.modules.multivolumeimporter.widgetRepresentation().self().read4DNIfTI(node, file_path)
+            node = slicer.mrmlScene.AddNewNodeByClass(
+                "vtkMRMLMultiVolumeNode", volume_name
+            )
+            slicer.modules.multivolumeimporter.widgetRepresentation().self().read4DNIfTI(
+                node, file_path
+            )
         else:
             node = slicer.util.loadVolume(file_path)
         if node and color_node_id:
@@ -94,7 +100,9 @@ def lesion_segment(scene_dir: str):
         slicer.util.loadSegmentation(seg_file)
     else:
         print("SLICERLOADER: Creating new lesion segment")
-        seg_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode", "seg_lesions")
+        seg_node = slicer.mrmlScene.AddNewNodeByClass(
+            "vtkMRMLSegmentationNode", "seg_lesions"
+        )
         seg_node.CreateDefaultDisplayNodes()
         seg_node.GetSegmentation().AddEmptySegment("Lesion", "Lesion", [1, 0, 0])
         seg_node.CreateClosedSurfaceRepresentation()
@@ -106,6 +114,7 @@ def lesion_segment(scene_dir: str):
 # -----------------------------
 # FreeSurfer Loader Functions
 # -----------------------------
+
 
 def load_freesurfer_surf(scene_dir: str, node_name: str, ref_node):
     """
@@ -136,7 +145,9 @@ def load_freesurfer_surf(scene_dir: str, node_name: str, ref_node):
             {"fileName": file_path, "referenceVolumeID": ref_node.GetID()},
             loaded_nodes,
         )
-        surf_node = list(loaded_nodes)[0] if loaded_nodes.GetNumberOfItems() > 0 else None
+        surf_node = (
+            list(loaded_nodes)[0] if loaded_nodes.GetNumberOfItems() > 0 else None
+        )
         if surf_node:
             surf_node.GetDisplayNode().SetColor(0.82, 0.82, 0.82)
         return surf_node
@@ -182,6 +193,7 @@ def load_freesurfer_overlay(scene_dir: str, node_name: str, surf_node):
 # Argparse for Input Handling
 # -----------------------------
 
+
 def parse_arguments():
     """
     Parse command-line arguments for the Slicer Python script.
@@ -223,6 +235,7 @@ def parse_arguments():
 # FMRI Loader Functions
 # -----------------------------
 
+
 def load_fmri_task(scene_dir: str):
     """
     Load task-based fMRI results into Slicer.
@@ -246,7 +259,7 @@ def load_fmri_task(scene_dir: str):
             load_anat(
                 fmri_path,
                 file.replace(".nii.gz", ""),
-                "vtkMRMLPETProceduralColorNodePET-Rainbow2"
+                "vtkMRMLPETProceduralColorNodePET-Rainbow2",
             )
 
 
@@ -270,11 +283,7 @@ def load_fmri_resting_state(scene_dir: str):
     pattern = "r-*[0-9].nii.gz"
     zstat_files = glob.glob(pattern, root_dir=fmri_dir)
     for zstat_file in sorted(zstat_files):
-        load_anat(
-            fmri_dir,
-            zstat_file,
-            "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"
-        )
+        load_anat(fmri_dir, zstat_file, "vtkMRMLColorTableNodeFileColdToHotRainbow.txt")
 
 
 def create_grayscale_model(
@@ -283,7 +292,7 @@ def create_grayscale_model(
     threshold: float,
     scene_dir: str,
     file_name: str,
-    model_color: list = None
+    model_color: list = None,
 ):
     """
     Create a 3D surface model from a grayscale volume using a threshold.
@@ -338,11 +347,15 @@ def create_grayscale_model(
     storage_node.SetFileName(os.path.join(scene_dir, file_name))
     storage_node.WriteData(new_model)
 
+
 # -----------------------------
 # Vein Loader Functions
 # -----------------------------
 
-def load_vein(scene_dir: str, vein_threshold_mr: float = 97.5, vein_threshold_ct: float = 97.5):
+
+def load_vein(
+    scene_dir: str, vein_threshold_mr: float = 97.5, vein_threshold_ct: float = 97.5
+):
     """
     Load veins and create 3D models using thresholding.
 
@@ -360,8 +373,16 @@ def load_vein(scene_dir: str, vein_threshold_mr: float = 97.5, vein_threshold_ct
     None
     """
     veins = {
-        "mra": {"file_name": "r-veins_mra_inskull", "threshold": vein_threshold_mr, "color": [0, 0, 1]},
-        "ct": {"file_name": "r-veins_ct_inskull", "threshold": vein_threshold_ct, "color": [0, 0, 1]},
+        "mra": {
+            "file_name": "r-veins_mra_inskull",
+            "threshold": vein_threshold_mr,
+            "color": [0, 0, 1],
+        },
+        "ct": {
+            "file_name": "r-veins_ct_inskull",
+            "threshold": vein_threshold_ct,
+            "color": [0, 0, 1],
+        },
     }
 
     for vein in veins.values():
@@ -373,7 +394,9 @@ def load_vein(scene_dir: str, vein_threshold_mr: float = 97.5, vein_threshold_ct
         # Attempt to compute threshold using FSL stats if available
         try:
             command = f"fslstats {os.path.join(scene_dir, vein['file_name'] + '.nii.gz')} -P {vein['threshold']}"
-            output = subprocess.run(command, shell=True, stdout=subprocess.PIPE).stdout.decode("utf-8")
+            output = subprocess.run(
+                command, shell=True, stdout=subprocess.PIPE
+            ).stdout.decode("utf-8")
             thr = float(output)
         except Exception:
             thr = 6  # fallback threshold
@@ -384,13 +407,14 @@ def load_vein(scene_dir: str, vein_threshold_mr: float = 97.5, vein_threshold_ct
             thr,
             scene_dir,
             vein["file_name"] + ".vtk",
-            vein["color"]
+            vein["color"],
         )
 
 
 # -----------------------------
 # FreeSurfer Loader Functions
 # -----------------------------
+
 
 def load_freesurfer_segmentation_file(seg_file: str):
     """
@@ -415,13 +439,16 @@ def load_freesurfer_segmentation_file(seg_file: str):
         # On Linux, use the old method to prevent Slicer FreeSurfer plugin crashes
         if "linux" in sys.platform:
             slicer.util.loadVolume(
-                seg_file,
-                {"labelmap": True, "colorNodeID": "vtkMRMLColorTableNodeFile"}
+                seg_file, {"labelmap": True, "colorNodeID": "vtkMRMLColorTableNodeFile"}
             )
         else:
             # On Windows/macOS, use FreeSurferImporter plugin logic
-            slicer.util.getModuleLogic("FreeSurferImporter").LoadFreeSurferSegmentation(seg_file)
-        print(f"SLICERLOADER: Loaded FreeSurfer segmentation: {os.path.basename(seg_file)}")
+            slicer.util.getModuleLogic("FreeSurferImporter").LoadFreeSurferSegmentation(
+                seg_file
+            )
+        print(
+            f"SLICERLOADER: Loaded FreeSurfer segmentation: {os.path.basename(seg_file)}"
+        )
     except Exception as e:
         print(f"SLICERLOADER: Failed to load segmentation {seg_file}: {e}")
 
@@ -475,6 +502,7 @@ def load_freesurfer(scene_dir: str, ref_node):
 # Scene Viewer / Display
 # -----------------------------
 
+
 def show_node(node):
     """
     Set the provided node as background in all slice views (Red, Yellow, Green).
@@ -499,7 +527,9 @@ def show_node(node):
 
         comp_node = slicer.mrmlScene.GetFirstNodeByName(f"{name} Composite")
         if not comp_node:
-            comp_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSliceCompositeNode", f"{name} Composite")
+            comp_node = slicer.mrmlScene.AddNewNodeByClass(
+                "vtkMRMLSliceCompositeNode", f"{name} Composite"
+            )
             comp_node.SetSingletonTag(name)
 
         comp_node.SetBackgroundVolumeID(node.GetID())
@@ -510,7 +540,7 @@ def tract_model(
     dti_dir: str,
     tract: dict,
     side: str,
-    dti_threshold: float = 0.0035
+    dti_threshold: float = 0.0035,
 ):
     """
     Create a single DTI tract segment using a probabilistic tractography map.
@@ -602,9 +632,7 @@ def tract_model(
     segment_editor_widget = slicer.qMRMLSegmentEditorWidget()
     segment_editor_widget.setMRMLScene(slicer.mrmlScene)
 
-    segment_editor_node = slicer.mrmlScene.AddNewNodeByClass(
-        "vtkMRMLSegmentEditorNode"
-    )
+    segment_editor_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentEditorNode")
 
     segment_editor_widget.setMRMLSegmentEditorNode(segment_editor_node)
     segment_editor_widget.setSegmentationNode(segmentation_node)
@@ -614,9 +642,7 @@ def tract_model(
     # Create new empty segment for this tract
     # ------------------------------------------------------------------
     segment_id = segmentation_node.GetSegmentation().AddEmptySegment(
-        tract["name"],
-        tract["name"],
-        tract["color"]
+        tract["name"], tract["name"], tract["color"]
     )
     segment_editor_node.SetSelectedSegmentID(segment_id)
 
@@ -652,12 +678,7 @@ def tract_model(
     slicer.mrmlScene.RemoveNode(tract_node)
 
 
-
-def main_tract(
-    dti_dir: str,
-    scene_dir: str,
-    dti_threshold: float = 0.0035
-):
+def main_tract(dti_dir: str, scene_dir: str, dti_threshold: float = 0.0035):
     """
     Create DTI tractography segmentations and export them as 3D models.
 
@@ -688,8 +709,8 @@ def main_tract(
     sides = ["rh", "lh"]
     tracts = [
         {"name": "cst", "thr": 500, "color": [0, 1, 0]},
-        {"name": "af",  "thr": 1500, "color": [1, 0, 1]},
-        {"name": "or",  "thr": 500, "color": [1, 1, 0]},
+        {"name": "af", "thr": 1500, "color": [1, 0, 1]},
+        {"name": "or", "thr": 500, "color": [1, 1, 0]},
     ]
 
     print("SLICERLOADER: Creating DTI tract 3D models (this may take a few minutes)")
@@ -697,8 +718,7 @@ def main_tract(
     for side in sides:
         # Create a segmentation node for the current hemisphere
         segmentation_node = slicer.mrmlScene.AddNewNodeByClass(
-            "vtkMRMLSegmentationNode",
-            f"tracts_{side}"
+            "vtkMRMLSegmentationNode", f"tracts_{side}"
         )
         segmentation_node.CreateDefaultDisplayNodes()
 
@@ -708,7 +728,7 @@ def main_tract(
                 dti_dir=dti_dir,
                 tract=tract,
                 side=side,
-                dti_threshold=dti_threshold
+                dti_threshold=dti_threshold,
             )
 
         # Generate 3D surface representation
@@ -745,11 +765,15 @@ def load_seeg(scene_dir: str, threshold: float = 900):
     if seeg_node is None:
         return
 
-    steel_blue = [70 / 255.0,
-        130 / 255.0,
-        180 / 255.0]
-    create_grayscale_model(seeg_node, "sEEG electrodes", threshold, scene_dir,
-                           "seeg_electrodes.vtk", steel_blue)
+    steel_blue = [70 / 255.0, 130 / 255.0, 180 / 255.0]
+    create_grayscale_model(
+        seeg_node,
+        "sEEG electrodes",
+        threshold,
+        scene_dir,
+        "seeg_electrodes.vtk",
+        steel_blue,
+    )
 
 
 # -----------------------------
@@ -776,10 +800,21 @@ def main_export():
 
     # Load base anatomical volumes
     base_volumes = [
-        "ref_brain", "r-flair_brain", "r-flair", "r-mdc_brain", "r-mdc",
-        "r-FA", "r-flair2d_tra_brain", "r-flair2d_cor_brain", "r-flair2d_sag_brain",
-        "r-t2_cor_brain", "r-t2_cor", "r-binary_flair", "r-junction_z",
-        "r-extension_z", "r-melodic_IC",
+        "ref_brain",
+        "r-flair_brain",
+        "r-flair",
+        "r-mdc_brain",
+        "r-mdc",
+        "r-FA",
+        "r-flair2d_tra_brain",
+        "r-flair2d_cor_brain",
+        "r-flair2d_sag_brain",
+        "r-t2_cor_brain",
+        "r-t2_cor",
+        "r-binary_flair",
+        "r-junction_z",
+        "r-extension_z",
+        "r-melodic_IC",
     ]
     for vol in base_volumes:
         load_anat(results_folder, vol)
@@ -797,10 +832,14 @@ def main_export():
         load_anat(results_folder, vol_name, color_node)
 
     # Example: load lesions, fMRI, veins, FreeSurfer
-    #lesion_segment(results_folder)
+    # lesion_segment(results_folder)
     load_fmri_task(results_folder)
     load_fmri_resting_state(results_folder)
-    load_vein(results_folder, vein_threshold_mr=args.vein_threshold_mr, vein_threshold_ct=args.vein_threshold_ct)
+    load_vein(
+        results_folder,
+        vein_threshold_mr=args.vein_threshold_mr,
+        vein_threshold_ct=args.vein_threshold_ct,
+    )
     load_freesurfer(results_folder, ref_node)
     dtiDir = os.path.join(results_folder, "dti")
     if os.path.isdir(dtiDir):

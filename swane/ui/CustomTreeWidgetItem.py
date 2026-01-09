@@ -11,13 +11,16 @@ from swane import strings
 import swane_supplement
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
 
+
 class CustomTreeWidgetItem(QTreeWidgetItem):
     """
     Custom implementation of PySide QTreeWidgetItem to define the Workflows Tree items.
 
     """
 
-    def __init__(self, parent, tree: QTreeWidget, text: str, node_name: str, art: str = None):
+    def __init__(
+        self, parent, tree: QTreeWidget, text: str, node_name: str, art: str = None
+    ):
         super(CustomTreeWidgetItem, self).__init__(parent)
 
         self.widget = QWidget()
@@ -118,7 +121,7 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         if art is not None:
             self.artLabel.load(art)
 
-    def get_status(self) -> WorkflowSignals|None:
+    def get_status(self) -> WorkflowSignals | None:
         """
         Set the icon of the tree item.
 

@@ -172,7 +172,9 @@ def tractography_workflow(
 
         # NODE 4: Target ROIs nonlinear transformation in T13D reference space
         if DependencyManager.is_freesurfer_synth():
-            targets_2_ref = Node(SynthMorphApply(), name="targets_2_ref_%s_%s" % (name, side))
+            targets_2_ref = Node(
+                SynthMorphApply(), name="targets_2_ref_%s_%s" % (name, side)
+            )
             targets_2_ref.long_name = side + " target ROIs %s"
             targets_2_ref.inputs.method = "nearest"
             if len(target_files) > 1:
@@ -271,13 +273,17 @@ def tractography_workflow(
         if os.path.exists(exclude_file):
             # NODE 6: Exclusion ROI nonlinear transformation in T13D reference space
             if DependencyManager.is_freesurfer_synth():
-                exclude_2_ref = Node(SynthMorphApply(), name="exclude_2_ref_%s_%s" % (name, side))
+                exclude_2_ref = Node(
+                    SynthMorphApply(), name="exclude_2_ref_%s_%s" % (name, side)
+                )
                 exclude_2_ref.long_name = side + " exclusion ROI %s"
                 exclude_2_ref.inputs.in_file = exclude_file
                 exclude_2_ref.inputs.method = "nearest"
                 workflow.connect(inputnode, "mni2ref_warp", exclude_2_ref, "warp_file")
             else:
-                exclude_2_ref = Node(ApplyWarp(), name="exclude_2_ref_%s_%s" % (name, side))
+                exclude_2_ref = Node(
+                    ApplyWarp(), name="exclude_2_ref_%s_%s" % (name, side)
+                )
                 exclude_2_ref.long_name = side + " exclusion ROI %s"
                 exclude_2_ref.inputs.out_file = "r-exclude_%s_%s.nii.gz" % (name, side)
                 exclude_2_ref.inputs.in_file = exclude_file
@@ -304,7 +310,9 @@ def tractography_workflow(
         if os.path.exists(stop_file):
             # NODE 8: stop ROI nonlinear transformation in T13D reference space
             if DependencyManager.is_freesurfer_synth():
-                stop_2_ref = Node(SynthMorphApply(), name="stop_2_ref_%s_%s" % (name, side))
+                stop_2_ref = Node(
+                    SynthMorphApply(), name="stop_2_ref_%s_%s" % (name, side)
+                )
                 stop_2_ref.long_name = side + " stop ROI %s"
                 stop_2_ref.inputs.in_file = stop_file
                 stop_2_ref.inputs.method = "nearest"
@@ -329,7 +337,9 @@ def tractography_workflow(
             workflow.connect(stop_2_ref, "out_file", probtrackx, "stop_mask")
 
             if is_invert:
-                workflow.connect(stop_2_ref, "out_file", probtrackx_inverted, "stop_mask")
+                workflow.connect(
+                    stop_2_ref, "out_file", probtrackx_inverted, "stop_mask"
+                )
 
         # NODE 14: Sum tractography and inverted tractography results
         sum_multi_tracks = Node(SumMultiTracks(), name="sumTrack_%s_%s" % (name, side))

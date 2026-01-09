@@ -71,7 +71,7 @@ class CustomWorkflow(Workflow):
         result_name: str,
         sub_folder: str,
         regexp_substitutions: list[tuple[str, str]] = None,
-        remove_mapnode_subdir = False
+        remove_mapnode_subdir=False,
     ):
         """
         Creates a sink_result Node to save the output files of a Workflow.

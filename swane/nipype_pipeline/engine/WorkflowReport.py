@@ -19,7 +19,7 @@ class WorkflowReport:
         signal_type: WorkflowSignals = WorkflowSignals.NODE_STARTED,
         long_name: str = None,
         info: str = None,
-        crash_file: str = None
+        crash_file: str = None,
     ):
         """
 

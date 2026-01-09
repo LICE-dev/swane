@@ -5,6 +5,7 @@ import vtkITK
 import argparse
 import qt
 import os
+
 os.environ["QT_LOGGING_RULES"] = "*.warning=false"
 
 
@@ -14,15 +15,11 @@ os.environ["QT_LOGGING_RULES"] = "*.warning=false"
 def export_segment_as_nifti(segmentationNode, segmentId, referenceVolumeNode, out_file):
 
     labelmapNode = slicer.mrmlScene.AddNewNodeByClass(
-        "vtkMRMLLabelMapVolumeNode",
-        "TempLabelmapNode"
+        "vtkMRMLLabelMapVolumeNode", "TempLabelmapNode"
     )
 
     slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
-        segmentationNode,
-        [segmentId],
-        labelmapNode,
-        referenceVolumeNode
+        segmentationNode, [segmentId], labelmapNode, referenceVolumeNode
     )
 
     slicer.util.saveNode(labelmapNode, out_file)
@@ -33,46 +30,34 @@ def export_segment_as_nifti(segmentationNode, segmentId, referenceVolumeNode, ou
 # Headless morphological closing smoothing
 # ------------------------------------------------------------
 def smooth_segment_morphological_closing(
-    segmentationNode,
-    segmentId,
-    referenceVolumeNode,
-    kernelSizeMm
+    segmentationNode, segmentId, referenceVolumeNode, kernelSizeMm
 ):
 
-    labelmapNode = slicer.mrmlScene.AddNewNodeByClass(
-        "vtkMRMLLabelMapVolumeNode"
-    )
+    labelmapNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
 
     slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
-        segmentationNode,
-        [segmentId],
-        labelmapNode,
-        referenceVolumeNode
+        segmentationNode, [segmentId], labelmapNode, referenceVolumeNode
     )
 
     imageData = labelmapNode.GetImageData()
     spacing = imageData.GetSpacing()
 
     kernelSizeVoxel = [
-        int(round((kernelSizeMm / spacing[i] + 1) / 2) * 2 - 1)
-        for i in range(3)
+        int(round((kernelSizeMm / spacing[i] + 1) / 2) * 2 - 1) for i in range(3)
     ]
     kernelSizeVoxel = [k if k % 2 == 1 else k + 1 for k in kernelSizeVoxel]
 
     closeFilter = vtk.vtkImageOpenClose3D()
     closeFilter.SetInputData(imageData)
     closeFilter.SetKernelSize(
-        kernelSizeVoxel[0],
-        kernelSizeVoxel[1],
-        kernelSizeVoxel[2]
+        kernelSizeVoxel[0], kernelSizeVoxel[1], kernelSizeVoxel[2]
     )
     closeFilter.SetOpenValue(0)
     closeFilter.SetCloseValue(1)
     closeFilter.Update()
 
     slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(
-        labelmapNode,
-        segmentationNode
+        labelmapNode, segmentationNode
     )
 
     slicer.mrmlScene.RemoveNode(labelmapNode)
@@ -81,15 +66,25 @@ def smooth_segment_morphological_closing(
 # ------------------------------------------------------------
 # Argument parsing (named arguments)
 # ------------------------------------------------------------
-parser = argparse.ArgumentParser(description="Endocranium segmentation with Wrap Solidify (headless)")
+parser = argparse.ArgumentParser(
+    description="Endocranium segmentation with Wrap Solidify (headless)"
+)
 
 parser.add_argument("--input", required=True, help="Input CT volume (NIfTI)")
 parser.add_argument("--output", required=True, help="Output endocranium mask (NIfTI)")
-parser.add_argument("--kernel-mm", type=float, default=3.0, help="Smoothing kernel size in mm")
-parser.add_argument("--oversampling", type=float, default=1.0, help="Wrap Solidify remesh oversampling")
+parser.add_argument(
+    "--kernel-mm", type=float, default=3.0, help="Smoothing kernel size in mm"
+)
+parser.add_argument(
+    "--oversampling", type=float, default=1.0, help="Wrap Solidify remesh oversampling"
+)
 parser.add_argument("--iterations", type=int, default=2, help="Shrinkwrap iterations")
-parser.add_argument("--split-diameter", type=float, default=30.0, help="Split cavities diameter (mm)")
-parser.add_argument("--skull_threshold", type=int, default=-1, help="Threshold for skull segmentation")
+parser.add_argument(
+    "--split-diameter", type=float, default=30.0, help="Split cavities diameter (mm)"
+)
+parser.add_argument(
+    "--skull_threshold", type=int, default=-1, help="Threshold for skull segmentation"
+)
 
 args = parser.parse_args(sys.argv[1:])
 
@@ -166,15 +161,13 @@ effect.self().onApply()
 # ------------------------------------------------------------
 boneSmoothID = seg.AddEmptySegment("bone_smooth")
 
-seg.GetSegment(boneSmoothID).DeepCopy(
-    seg.GetSegment(boneRawID)
-)
+seg.GetSegment(boneSmoothID).DeepCopy(seg.GetSegment(boneRawID))
 
 smooth_segment_morphological_closing(
     segmentationNode=segmentationNode,
     segmentId=boneSmoothID,
     referenceVolumeNode=inputVolume,
-    kernelSizeMm=smoothingKernelSize
+    kernelSizeMm=smoothingKernelSize,
 )
 
 segmentationNode.Modified()
@@ -220,12 +213,7 @@ logic.applyWrapSolidify()
 # ------------------------------------------------------------
 # Export output
 # ------------------------------------------------------------
-export_segment_as_nifti(
-    segmentationNode,
-    boneSmoothID,
-    inputVolume,
-    out_endocranium
-)
+export_segment_as_nifti(segmentationNode, boneSmoothID, inputVolume, out_endocranium)
 
 print("[OK] Endocranium mask exported:", out_endocranium)
 

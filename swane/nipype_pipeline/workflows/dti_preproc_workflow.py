@@ -28,7 +28,6 @@ import os
 from os.path import abspath
 
 
-
 def dti_preproc_workflow(
     name: str,
     dti_dir: str,
@@ -93,7 +92,7 @@ def dti_preproc_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["ref_brain","ref"]), name="inputnode")
+    inputnode = Node(IdentityInterface(fields=["ref_brain", "ref"]), name="inputnode")
 
     # Output Node
     outputnode = Node(
@@ -212,12 +211,12 @@ def dti_preproc_workflow(
 
         diff2ref_xfm = Node(LTAConvert(), name="diff2ref_xfm")
         diff2ref_xfm.long_name = "Transformation matrix conversion"
-        diff2ref_xfm.inputs.out_fsl="diff2ref.mat"
+        diff2ref_xfm.inputs.out_fsl = "diff2ref.mat"
         workflow.connect(dif2ref, "warp_file", diff2ref_xfm, "in_lta")
 
         ref2diff_xfm = Node(LTAConvert(), name="ref2diff_xfm")
         ref2diff_xfm.long_name = "Inverse transformation matrix conversion"
-        ref2diff_xfm.inputs.out_fsl="ref2diff.mat"
+        ref2diff_xfm.inputs.out_fsl = "ref2diff.mat"
         workflow.connect(dif2ref, "inv_warp_file", ref2diff_xfm, "in_lta")
 
         workflow.connect(fa_2_ref, "out_file", outputnode, "FA")
@@ -263,9 +262,7 @@ def dti_preproc_workflow(
             mni_2_ref.long_name = "%s to atlas space"
             mni_2_ref.inputs.model = "joint"
             mni_dir = abspath(
-                os.path.join(
-                    os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm.nii.gz"
-                )
+                os.path.join(os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm.nii.gz")
             )
             mni_2_ref.inputs.in_file = mni_dir
             workflow.connect(inputnode, "ref", mni_2_ref, "reference")
@@ -300,7 +297,9 @@ def dti_preproc_workflow(
             )
             workflow.connect(inputnode, "ref_brain", mni_2_ref_fnirt, "ref_file")
 
-            workflow.connect(mni_2_ref_fnirt, "fieldcoeff_file", outputnode, "mni2ref_warp")
+            workflow.connect(
+                mni_2_ref_fnirt, "fieldcoeff_file", outputnode, "mni2ref_warp"
+            )
 
         # NODE 8: Bayesian estimation of diffusion parameters
         bedpostx = Node(BEDPOSTX5(), name="dti_bedpostx")
