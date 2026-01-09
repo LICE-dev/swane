@@ -117,7 +117,7 @@ def linear_reg_workflow(
         )
 
         # Scalp removal
-        ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=3)
+        ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
         ref_deskull.inputs.exclude_csf = True
         workflow.connect(reg_2_ref, "out_file", ref_deskull, "in_file")
         workflow.connect(
