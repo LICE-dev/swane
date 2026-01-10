@@ -66,6 +66,8 @@ Prior to release 0.12, Nipype was licensed under a BSD license.
 
 This project includes images derived from ICBM 2009c Nonlinear Symmetric 
 Atlas (https://nist.mni.mcgill.ca/icbm-152-nonlinear-atlases-2009/).
+These images are distributed inside swane-supplement package.
+
 
 **Copyright**: (c) 1993-2004 Louis Collins, McConnell Brain Imaging Centre, Montreal 
 Neurological Institute, McGill University
