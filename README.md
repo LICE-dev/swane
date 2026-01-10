@@ -122,9 +122,30 @@ You can contact us at the following e-mail: [dev@lice.it](mailto:dev@lice.it).
 ## License
 
 This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LICENSE) file for details
+This project includes subsection derived from other software, which licenses can be found in the [NOTICE](NOTICE.md) file
 
 
 ## Changelog
+
+### [0.2] - 2026-01-XX
+
+#### Added
+
+- **Venous CT Workflow**
+- **Stereo-EEG CT Workflow**
+- **Resting State fMRI Workflow**
+- information window for running and completed workflow steps
+- FreeSurfer Synth tools support
+
+#### Changed
+
+- **Venous MRA** and **Task fMRI** now flagged as optional analyses
+- Recon-all core management improved
+- Preferences window layout improved
+
+#### Fixed
+
+- Result tab now correctly refreshes the file list after workflow fresh execution.
 
 ### [0.1.5.2] - 2025-12-11
 
@@ -137,6 +158,7 @@ This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LI
 - **Python requirement**: from >=3.7 to >=3.10.
 - **nibabel requirement**: from <=5.3.0 to >=5.3.0,<6.
 - **fMRI Delete Start Volumes preference**: from range[1,500] to range[0,500].
+- DICON scan improved
 
 ### [0.1.5.1] - 2025-12-04
 
