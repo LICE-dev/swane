@@ -75,7 +75,7 @@ def fMRI_resting_state_workflow(
         base_dir=base_dir,
     )
 
-    #TODO: preference per melodic dim e per soglia
+    # TODO: preference per melodic dim e per soglia
 
     # Output Node
     outputnode = Node(
