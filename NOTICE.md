@@ -1,7 +1,8 @@
 ## Slicer --no-main-window compatibility code
 
-This project makes use of procedures and concepts derived from SlicerMorph (https://github.com/SlicerMorph/SlicerMorph),
-which is licensed under the BSD 2-Clause License.
+This project makes use of procedures and concepts derived from SlicerMorph
+(https://github.com/SlicerMorph/SlicerMorph), which is licensed under the 
+BSD 2-Clause License.
 These concepts have been adapted and reimplemented in
 `swane/workers/slicer_seg_endocranium.py` to provide compatibility
 with the --no-main-window 3D Slicer argument.
@@ -59,3 +60,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 Prior to release 0.12, Nipype was licensed under a BSD license.
+
+---
+## Images derived from ICBM 2009c Nonlinear Symmetric Atlas
+
+This project includes images derived from ICBM 2009c Nonlinear Symmetric 
+Atlas (https://nist.mni.mcgill.ca/icbm-152-nonlinear-atlases-2009/).
+
+**Copyright**: (c) 1993-2004 Louis Collins, McConnell Brain Imaging Centre, Montreal 
+Neurological Institute, McGill University
+
+**License**: Permission to use, copy, modify, and distribute this software and its documentation 
+for any purpose and without fee is hereby granted, provided that the above copyright 
+notice appears in all copies. The authors and McGill University make no represe.

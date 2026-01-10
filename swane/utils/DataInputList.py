@@ -138,7 +138,7 @@ class DataInputList(Enum):
 
     FMRI_RS = DataInput(
         name="fmri_resting_state",
-        label="Resting state fMRI",
+        label="Resting State fMRI",
         optional=True,
         max_volumes=-1,
         min_volumes=4,
