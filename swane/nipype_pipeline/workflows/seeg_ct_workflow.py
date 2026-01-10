@@ -6,7 +6,7 @@ from nipype.interfaces.fsl import (
     Threshold,
     ErodeImage,
     DilateImage,
-    BinaryMaths
+    BinaryMaths,
 )
 from nipype import Node, IdentityInterface
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
@@ -15,6 +15,7 @@ from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from configparser import SectionProxy
 from swane.utils.DependencyManager import DependencyManager
+
 
 def seeg_ct_workflow(
     name: str,
@@ -62,10 +63,14 @@ def seeg_ct_workflow(
     erode_kernel_size = config.getfloat_safe("erode_kernel_size")
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["ref_brain", "ref", "brain_mask"]), name="inputnode")
+    inputnode = Node(
+        IdentityInterface(fields=["ref_brain", "ref", "brain_mask"]), name="inputnode"
+    )
 
     # Output Node
-    outputnode = Node(IdentityInterface(fields=["electrodes", "mat"]), name="outputnode")
+    outputnode = Node(
+        IdentityInterface(fields=["electrodes", "mat"]), name="outputnode"
+    )
 
     # NODE 1: Conversion dicom -> nifti
     seeg_ct_conv = Node(CustomDcm2niix(), name="seeg_ct_conv")
@@ -84,7 +89,9 @@ def seeg_ct_workflow(
     # NODE 3: Weight map generation
     electrodes_weight_map = Node(ImageMaths(), name="electrodes_weight_bin")
     electrodes_weight_map.long_name = "Electrode weight map for registration"
-    electrodes_weight_map.inputs.op_string = "-thr %.10f -bin -mul -1 -add 1" % electrode_thr
+    electrodes_weight_map.inputs.op_string = (
+        "-thr %.10f -bin -mul -1 -add 1" % electrode_thr
+    )
     workflow.connect(seeg_ct_reOrient, "out_file", electrodes_weight_map, "in_file")
 
     # Do not use synthmorph, FLIRT performs better on CT
@@ -97,7 +104,9 @@ def seeg_ct_workflow(
     seeg_ct_2_ref_flirt.inputs.searchr_z = [-90, 90]
     seeg_ct_2_ref_flirt.inputs.dof = 6
     seeg_ct_2_ref_flirt.inputs.interp = "trilinear"
-    workflow.connect(electrodes_weight_map, "out_file", seeg_ct_2_ref_flirt, "in_weight")
+    workflow.connect(
+        electrodes_weight_map, "out_file", seeg_ct_2_ref_flirt, "in_weight"
+    )
     workflow.connect(seeg_ct_reOrient, "out_file", seeg_ct_2_ref_flirt, "in_file")
     workflow.connect(inputnode, "ref", seeg_ct_2_ref_flirt, "reference")
 
@@ -105,14 +114,18 @@ def seeg_ct_workflow(
     seeg_electrodes_thr_ref = Node(Threshold(), name="seeg_electrodes_thr_ref")
     seeg_electrodes_thr_ref.long_name = "Electrode segmentation"
     seeg_electrodes_thr_ref.inputs.thresh = electrode_thr
-    workflow.connect(seeg_ct_2_ref_flirt, "out_file", seeg_electrodes_thr_ref, "in_file")
+    workflow.connect(
+        seeg_ct_2_ref_flirt, "out_file", seeg_electrodes_thr_ref, "in_file"
+    )
 
     # No electode mask in ref space
     seeg_no_electrodes_thr_ref = Node(Threshold(), name="seeg_no_electrodes_thr_ref")
     seeg_no_electrodes_thr_ref.long_name = "Brain segmentation"
     seeg_no_electrodes_thr_ref.inputs.thresh = electrode_thr
     seeg_no_electrodes_thr_ref.inputs.direction = "above"
-    workflow.connect(seeg_ct_2_ref_flirt, "out_file", seeg_no_electrodes_thr_ref, "in_file")
+    workflow.connect(
+        seeg_ct_2_ref_flirt, "out_file", seeg_no_electrodes_thr_ref, "in_file"
+    )
 
     # Erode brain mask
     ref_brain_erode = Node(ErodeImage(), name="ref_brain_erode")
@@ -125,7 +138,7 @@ def seeg_ct_workflow(
     ref_brain_dilate = Node(DilateImage(), name="ref_brain_dilate")
     ref_brain_dilate.long_name = "Dilate brain mask borders"
     ref_brain_dilate.inputs.operation = "mean"
-    #ref_brain_dilate.inputs.kernel_size = 3
+    # ref_brain_dilate.inputs.kernel_size = 3
     workflow.connect(inputnode, "brain_mask", ref_brain_dilate, "in_file")
 
     # Mask seeg ct
@@ -137,7 +150,9 @@ def seeg_ct_workflow(
     # Mask electrode at near-skull dimension
     seeg_ct_electrode_skull = Node(ApplyMask(), name="seeg_ct_electrode_skull")
     seeg_ct_electrode_skull.long_name = "Skull %s"
-    workflow.connect(seeg_electrodes_thr_ref, "out_file", seeg_ct_electrode_skull, "in_file")
+    workflow.connect(
+        seeg_electrodes_thr_ref, "out_file", seeg_ct_electrode_skull, "in_file"
+    )
     workflow.connect(ref_brain_dilate, "out_file", seeg_ct_electrode_skull, "mask_file")
 
     # Add outskull elecrode in
@@ -146,7 +161,9 @@ def seeg_ct_workflow(
     seeg_electodes.inputs.out_file = "r-seeg_electrodes.nii.gz"
     seeg_electodes.inputs.operation = "add"
     workflow.connect(seeg_ct_brain, "out_file", seeg_electodes, "in_file")
-    workflow.connect(seeg_ct_electrode_skull, "out_file", seeg_electodes, "operand_file")
+    workflow.connect(
+        seeg_ct_electrode_skull, "out_file", seeg_electodes, "operand_file"
+    )
 
     workflow.connect(seeg_electodes, "out_file", outputnode, "electrodes")
 
