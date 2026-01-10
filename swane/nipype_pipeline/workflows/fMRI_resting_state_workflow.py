@@ -5,17 +5,23 @@ from nipype.interfaces.fsl import (
     FLIRT,
     FNIRT,
     ApplyWarp,
-    FilterRegressor
-
+    FilterRegressor,
 )
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 from swane.config.config_enums import SLICE_TIMING
-from ica_aroma_py.services.ICA_AROMA_nodes import (FeatureTimeSeries, FeatureFrequency,
-                              AromaClassification, FeatureSpatial, FeatureSpatialPrep, IsoResample)
+from ica_aroma_py.services.ICA_AROMA_nodes import (
+    FeatureTimeSeries,
+    FeatureFrequency,
+    AromaClassification,
+    FeatureSpatial,
+    FeatureSpatialPrep,
+    IsoResample,
+)
 from ica_aroma_py import aroma_mask_out, aroma_mask_edge, aroma_mask_csf
 import os
+
 
 def fMRI_resting_state_workflow(
     name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/"
@@ -57,17 +63,21 @@ def fMRI_resting_state_workflow(
     del_end_vols = config.getint_safe("del_end_vols")
     run_aroma = config.getboolean_safe("aroma")
 
-    workflow = fMRI_preproc_workflow(name=name, dicom_dir=dicom_dir, TR=TR, slice_timing=SLICE_TIMING.UNKNOWN, n_vols=n_vols,
-                                     hpcutoff=100, del_start_vols=del_start_vols, del_end_vols=del_end_vols,
-                                     base_dir=base_dir)
+    workflow = fMRI_preproc_workflow(
+        name=name,
+        dicom_dir=dicom_dir,
+        TR=TR,
+        slice_timing=SLICE_TIMING.UNKNOWN,
+        n_vols=n_vols,
+        hpcutoff=100,
+        del_start_vols=del_start_vols,
+        del_end_vols=del_end_vols,
+        base_dir=base_dir,
+    )
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(
-            fields=[
-                "thresh_zstat_files","aroma_classification"
-            ]
-        ),
+        IdentityInterface(fields=["thresh_zstat_files", "aroma_classification"]),
         name="outputnode",
     )
 
@@ -77,7 +87,9 @@ def fMRI_resting_state_workflow(
     motion_correct = workflow.get_node("%s_motion_correct" % name)
     dilatemask = workflow.get_node("%s_dilatemask" % name)
     flirt_2_ref = workflow.get_node("%s_flirt_2_ref" % name)
-    highpass = workflow.get_node("%s_highpass" % name) # this is the final preprocessing file
+    highpass = workflow.get_node(
+        "%s_highpass" % name
+    )  # this is the final preprocessing file
     inputnode = workflow.get_node("inputnode")
 
     input_list = Node(Merge(1), name="merge_node")
@@ -98,10 +110,12 @@ def fMRI_resting_state_workflow(
         workflow.connect(dilatemask, "out_file", melodic, "mask")
     workflow.connect(getTR, "TR", melodic, "tr_sec")
 
-    templates = dict(IC="melodic_IC.nii.gz",
-                     mel_mix="melodic_mix",
-                     mel_ft_mix="melodic_FTmix",
-                     thresh_zstat_files="stats/thresh_zstat*.nii.gz")
+    templates = dict(
+        IC="melodic_IC.nii.gz",
+        mel_mix="melodic_mix",
+        mel_ft_mix="melodic_FTmix",
+        thresh_zstat_files="stats/thresh_zstat*.nii.gz",
+    )
 
     melodic_output = Node(SelectFiles(templates), name="melodic_output")
     melodic_output.inputs.sorted = True
@@ -116,6 +130,7 @@ def fMRI_resting_state_workflow(
         """
         from os.path import basename
         import re
+
         out_files = []
         for f in in_file_names:
             name = basename(f)
@@ -131,24 +146,29 @@ def fMRI_resting_state_workflow(
         return out_files
 
     zstats_2_ref = MapNode(
-        ApplyXFM(),
-        name="zstats_2_ref",
-        iterfield=["in_file","out_file"]
+        ApplyXFM(), name="zstats_2_ref", iterfield=["in_file", "out_file"]
     )
     workflow.connect(flirt_2_ref, "out_matrix_file", zstats_2_ref, "in_matrix_file")
     workflow.connect(inputnode, "ref_brain", zstats_2_ref, "reference")
 
     if not run_aroma:
         workflow.connect(melodic_output, "thresh_zstat_files", zstats_2_ref, "in_file")
-        workflow.connect(melodic_output, ("thresh_zstat_files", registered_file_name), zstats_2_ref, "out_file")
+        workflow.connect(
+            melodic_output,
+            ("thresh_zstat_files", registered_file_name),
+            zstats_2_ref,
+            "out_file",
+        )
     else:
         feature_spatial_prep = Node(FeatureSpatialPrep(), name="feature_spatial_prep")
-        workflow.connect(melodic_output, "thresh_zstat_files", feature_spatial_prep, "in_files")
+        workflow.connect(
+            melodic_output, "thresh_zstat_files", feature_spatial_prep, "in_files"
+        )
         workflow.connect(meanfuncmask, "mask_file", feature_spatial_prep, "mask_file")
 
-
-
-        mni2 = os.path.join(os.environ["FSLDIR"], 'data', 'standard', 'MNI152_T1_2mm_brain.nii.gz')
+        mni2 = os.path.join(
+            os.environ["FSLDIR"], "data", "standard", "MNI152_T1_2mm_brain.nii.gz"
+        )
 
         flirt = Node(FLIRT(), name="ref_2_mni_flirt")
         flirt.long_name = "%s to atlas"
@@ -191,19 +211,32 @@ def fMRI_resting_state_workflow(
 
         aroma_classification = Node(AromaClassification(), name="aroma_classification")
         workflow.connect(feature_frequency, "HFC", aroma_classification, "HFC")
-        workflow.connect(feature_time_series, "max_rp_corr", aroma_classification, "max_rp_corr")
-        workflow.connect(feature_spatial, "csf_fract", aroma_classification, "csf_fract")
-        workflow.connect(feature_spatial, "edge_fract", aroma_classification, "edge_fract")
+        workflow.connect(
+            feature_time_series, "max_rp_corr", aroma_classification, "max_rp_corr"
+        )
+        workflow.connect(
+            feature_spatial, "csf_fract", aroma_classification, "csf_fract"
+        )
+        workflow.connect(
+            feature_spatial, "edge_fract", aroma_classification, "edge_fract"
+        )
 
-        #workflow.connect(aroma_classification, "feature_scores", outputnode, "ica_aroma_results.@feature_scores")
-        #workflow.connect(aroma_classification, "classified_motion_ics", aroma_datasink, "ica_aroma_results.@classified_motion_ics")
-        workflow.connect(aroma_classification, "classification_overview", outputnode, "aroma_classification")
+        # workflow.connect(aroma_classification, "feature_scores", outputnode, "ica_aroma_results.@feature_scores")
+        # workflow.connect(aroma_classification, "classified_motion_ics", aroma_datasink, "ica_aroma_results.@classified_motion_ics")
+        workflow.connect(
+            aroma_classification,
+            "classification_overview",
+            outputnode,
+            "aroma_classification",
+        )
 
         nonaggr_denoising = Node(FilterRegressor(), name="nonaggr_denoising", mem_gb=5)
         nonaggr_denoising.inputs.out_file = "denoised_func_data_nonaggr.nii.gz"
         workflow.connect(highpass, "out_file", nonaggr_denoising, "in_file")
         workflow.connect(melodic_output, "mel_mix", nonaggr_denoising, "design_file")
-        workflow.connect(aroma_classification, "motion_ics", nonaggr_denoising, "filter_columns")
+        workflow.connect(
+            aroma_classification, "motion_ics", nonaggr_denoising, "filter_columns"
+        )
 
         input_list_denoised = Node(Merge(1), name="input_list_denoised")
         input_list_denoised.long_name = "Denoised input for Melodic"
@@ -220,15 +253,27 @@ def fMRI_resting_state_workflow(
         workflow.connect(dilatemask, "out_file", melodic_denoised, "mask")
         workflow.connect(getTR, "TR", melodic_denoised, "tr_sec")
 
-        melodic_output_denoised = Node(SelectFiles(templates), name="melodic_output_denoised")
+        melodic_output_denoised = Node(
+            SelectFiles(templates), name="melodic_output_denoised"
+        )
         melodic_output_denoised.inputs.sorted = True
-        workflow.connect(melodic_denoised, "out_dir", melodic_output_denoised, "melodic_dir")
-        workflow.connect(melodic_denoised, "out_dir", melodic_output_denoised, "base_directory")
+        workflow.connect(
+            melodic_denoised, "out_dir", melodic_output_denoised, "melodic_dir"
+        )
+        workflow.connect(
+            melodic_denoised, "out_dir", melodic_output_denoised, "base_directory"
+        )
 
-        workflow.connect(melodic_output_denoised, "thresh_zstat_files", zstats_2_ref, "in_file")
-        workflow.connect(melodic_output_denoised, ("thresh_zstat_files", registered_file_name), zstats_2_ref, "out_file")
+        workflow.connect(
+            melodic_output_denoised, "thresh_zstat_files", zstats_2_ref, "in_file"
+        )
+        workflow.connect(
+            melodic_output_denoised,
+            ("thresh_zstat_files", registered_file_name),
+            zstats_2_ref,
+            "out_file",
+        )
 
     workflow.connect(zstats_2_ref, "out_file", outputnode, "thresh_zstat_files")
-
 
     return workflow

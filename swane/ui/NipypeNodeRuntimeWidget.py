@@ -1,5 +1,12 @@
 from PySide6.QtWidgets import (
-    QWidget, QGridLayout, QLabel, QPushButton, QTextEdit, QSpacerItem, QSizePolicy, QPlainTextEdit
+    QWidget,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QTextEdit,
+    QSpacerItem,
+    QSizePolicy,
+    QPlainTextEdit,
 )
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics
@@ -27,10 +34,9 @@ class NipypeNodeRuntimeWidget(QWidget):
     COMMAND_FILE_NAME = "command.txt"
     RESULT_FILE_NAME = "result_%s.pklz"
     NODE_FILE_NAME = "_node.pklz"
-    IMAGE_EXTENSIONS = ('.nii', '.nii.gz', '.mgz', '.mgh')
+    IMAGE_EXTENSIONS = (".nii", ".nii.gz", ".mgz", ".mgh")
 
-
-    def __init__(self, slicer_path = None, parent=None):
+    def __init__(self, slicer_path=None, parent=None):
         super().__init__(parent)
 
         # Create the grid layout
@@ -55,11 +61,10 @@ class NipypeNodeRuntimeWidget(QWidget):
             subprocess.Popen(
                 [self.slicer_path, path],
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                stderr=subprocess.DEVNULL,
             )
         except Exception as e:
             print(f"Failed to open in Slicer: {e}")
-
 
     # ------------------------------------------------------------------
     # Main method to load node results
@@ -88,7 +93,9 @@ class NipypeNodeRuntimeWidget(QWidget):
         # status = WorkflowSignals.NODE_COMPLETED
         if status is None:
             self._add_label(strings.sub_tab_node_status_label, self._row, 0)
-            self._add_value(strings.sub_tab_node_status_not_started, self._row, 1, colspan=6)
+            self._add_value(
+                strings.sub_tab_node_status_not_started, self._row, 1, colspan=6
+            )
             self._row += 1
 
             self._add_spacer()
@@ -97,18 +104,30 @@ class NipypeNodeRuntimeWidget(QWidget):
 
         status_text = "—"
         crash_file = None
-        node_pickle_file = os.path.join(node_dir, NipypeNodeRuntimeWidget.NODE_FILE_NAME)
-        result_file = os.path.join(node_dir, NipypeNodeRuntimeWidget.RESULT_FILE_NAME % node_name)
+        node_pickle_file = os.path.join(
+            node_dir, NipypeNodeRuntimeWidget.NODE_FILE_NAME
+        )
+        result_file = os.path.join(
+            node_dir, NipypeNodeRuntimeWidget.RESULT_FILE_NAME % node_name
+        )
         if status is WorkflowSignals.NODE_STARTED:
             if os.path.exists(node_pickle_file):
-                start_ts = os.path.getctime(node_pickle_file)  # creation time in seconds
-                start_time_str = datetime.fromtimestamp(start_ts).strftime("%Y-%m-%d %H:%M:%S")
+                start_ts = os.path.getctime(
+                    node_pickle_file
+                )  # creation time in seconds
+                start_time_str = datetime.fromtimestamp(start_ts).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
                 status_text = f"{strings.sub_tab_node_status_running} {start_time_str}"
         elif status is WorkflowSignals.NODE_COMPLETED:
             if os.path.exists(result_file):
                 start_ts = os.path.getctime(result_file)  # creation time in seconds
-                start_time_str = datetime.fromtimestamp(start_ts).strftime("%Y-%m-%d %H:%M:%S")
-                status_text = f"{strings.sub_tab_node_status_completed} {start_time_str}"
+                start_time_str = datetime.fromtimestamp(start_ts).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+                status_text = (
+                    f"{strings.sub_tab_node_status_completed} {start_time_str}"
+                )
         elif status is WorkflowSignals.NODE_ERROR:
             status_text = strings.sub_tab_node_status_failed
             crash_file = item.crash_file
@@ -150,7 +169,7 @@ class NipypeNodeRuntimeWidget(QWidget):
             text_len = len(command)
             lines_needed = math.ceil(text_len / 75)
             fm = QFontMetrics(font)
-            line_height = fm.lineSpacing()*lines_needed
+            line_height = fm.lineSpacing() * lines_needed
             lines = max(1, command.count("\n") + 1)
             max_lines = 3
             visible_lines = min(lines, max_lines)
@@ -161,12 +180,14 @@ class NipypeNodeRuntimeWidget(QWidget):
 
             cmd.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-            cmd.setStyleSheet("""
+            cmd.setStyleSheet(
+                """
                 QPlainTextEdit {
                     padding-top: 4px;
                     padding-bottom: 4px;
                 }
-            """)
+            """
+            )
 
             self.grid.addWidget(cmd, self._row, 1, 1, 6)
 
@@ -176,7 +197,11 @@ class NipypeNodeRuntimeWidget(QWidget):
         self._row += 1
 
         # ---------------- Crash (if it exists) ----------------
-        if status is WorkflowSignals.NODE_ERROR and crash_file is not None and os.path.exists(crash_file):
+        if (
+            status is WorkflowSignals.NODE_ERROR
+            and crash_file is not None
+            and os.path.exists(crash_file)
+        ):
             self._add_label(strings.sub_tab_node_crash_label, self._row, 0)
             self._add_path_button(crash_file, self._row, 1)
             self._row += 1
@@ -219,7 +244,6 @@ class NipypeNodeRuntimeWidget(QWidget):
             self._row += 1
             self._add_label(strings.sub_tab_node_output_label, self._row, 0)
             self._add_output_view(outputs, 1)
-
 
         self._add_spacer()
 
@@ -274,10 +298,10 @@ class NipypeNodeRuntimeWidget(QWidget):
 
     def _add_path_button(self, path, row, col):
         is_image = (
-                os.path.isfile(path)
-                and path.lower().endswith(NipypeNodeRuntimeWidget.IMAGE_EXTENSIONS)
-                and self.slicer_path is not None
-                and os.path.isfile(self.slicer_path)
+            os.path.isfile(path)
+            and path.lower().endswith(NipypeNodeRuntimeWidget.IMAGE_EXTENSIONS)
+            and self.slicer_path is not None
+            and os.path.isfile(self.slicer_path)
         )
 
         label = os.path.basename(path)
@@ -288,9 +312,7 @@ class NipypeNodeRuntimeWidget(QWidget):
         btn.setMinimumHeight(self.MIN_ROW_HEIGHT)
 
         if is_image:
-            btn.clicked.connect(
-                lambda _, p=path: self._open_in_slicer(p)
-            )
+            btn.clicked.connect(lambda _, p=path: self._open_in_slicer(p))
             btn.setToolTip(strings.sub_tab_node_slicer_button_tooltip)
         else:
             btn.clicked.connect(
@@ -379,7 +401,7 @@ class NipypeNodeRuntimeWidget(QWidget):
         if value is traits.Undefined:
             return False
         if isinstance(value, (list, tuple, ndarray)):
-            if len(value)==0:
+            if len(value) == 0:
                 return False
         else:
             if value == "<undefined>":
@@ -390,4 +412,3 @@ class NipypeNodeRuntimeWidget(QWidget):
 
     def _fmt_output_name(self, name):
         return f"<i><u>{name}</u></i>"
-

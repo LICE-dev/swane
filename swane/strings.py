@@ -270,7 +270,9 @@ check_dep_fs_synth_version = (
     "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a> to speed up processing greatly."
 )
 check_dep_fs_no_tcsh = "FreeSurfer detected (%s), but tcsh is not installed."
-check_dep_fs_low_ram = "FreeSurfer detected (%s). With less than %dGB of RAM, processing will be slower."
+check_dep_fs_low_ram = (
+    "FreeSurfer detected (%s). With less than %dGB of RAM, processing will be slower."
+)
 check_dep_graph_error = "Graphviz not detected (<a href='https://graphviz.org/download/'>Installation info</a>)"
 check_dep_graph_found = "Graphviz detected"
 check_dep_slicer_error1 = (
@@ -358,4 +360,3 @@ node_names["AromaClassification"] = "Aroma - Noise classification"
 node_names["FilterRegressor"] = "Aroma - Denoising"
 node_names["FeatureFrequency"] = "Aroma - Frequency feature"
 node_names["FeatureFrequency"] = "Aroma - Frequency feature"
-

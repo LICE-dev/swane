@@ -110,10 +110,14 @@ def freesurfer_workflow(
     # RAM profile
     recon_all._mem_gb = 5  # 5 is enough for old recon-all
     if DependencyManager.is_freesurfer_new_reconall():
-        recon_all._mem_gb = DependencyManager.NEWRECONALL_FREESURFER_RAM_REQUIREMENT  # new recon-all needs a lot of RAM
+        recon_all._mem_gb = (
+            DependencyManager.NEWRECONALL_FREESURFER_RAM_REQUIREMENT
+        )  # new recon-all needs a lot of RAM
         # New reconall may heavily increase RAM usage with more than 1 cpu, for now skip openmp if using synth tools
     else:
-        recon_all.inputs.environ["FS_V8_XOPTS"] = "0"  # force old recon-all on low-RAM systems
+        recon_all.inputs.environ["FS_V8_XOPTS"] = (
+            "0"  # force old recon-all on low-RAM systems
+        )
         # parallel option splits some steps in right and left
         if max_cpu > 1:
             recon_all.inputs.parallel = True

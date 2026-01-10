@@ -81,7 +81,7 @@ class WorkflowProcess(Process):
         if self.workflow.max_gpu > 0:
             plugin_args["n_gpu_proc"] = self.workflow.max_gpu
 
-        plugin_args["memory_gb"] = virtual_memory().total / (1024 ** 3)
+        plugin_args["memory_gb"] = virtual_memory().total / (1024**3)
         # Assign to niype 85% of total system RAM
         plugin_args["memory_gb"] = plugin_args["memory_gb"] * 0.85
 

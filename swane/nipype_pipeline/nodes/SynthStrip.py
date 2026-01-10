@@ -44,7 +44,9 @@ class SynthStripInputSpec(FSTraitedSpec):
         argstr="--model %s",
         desc="alternative model weights",
     )
-    border = traits.Float(desc="mask border threshold in mm, defaults to 1", argstr="-f %.2f")
+    border = traits.Float(
+        desc="mask border threshold in mm, defaults to 1", argstr="-f %.2f"
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-

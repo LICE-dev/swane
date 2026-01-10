@@ -36,16 +36,20 @@ class SynthMorphApplyInputSpec(FSTraitedSpec):
         desc="the moved image filename",
     )
     update_voxel = traits.Bool(
-        desc="update voxel matrix instead of resampling",
-        argstr="-H"
+        desc="update voxel matrix instead of resampling", argstr="-H"
     )
     method = traits.Enum(
-        "linear", "nearest",
+        "linear",
+        "nearest",
         desc="Interpolation method, use linear for images and nearest for segmentation",
         argstr="-m %s",
     )
     type = traits.Enum(
-        "float32", "uint8", "uint16", "int16", "int32",
+        "float32",
+        "uint8",
+        "uint16",
+        "int16",
+        "int32",
         desc="Output data type",
         argstr="-t %s",
     )

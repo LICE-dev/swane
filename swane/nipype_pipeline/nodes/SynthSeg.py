@@ -25,16 +25,29 @@ class SynthSegInputSpec(FSTraitedSpec):
         keep_extension=True,
         desc="name of output skull stripped image",
     )
-    parcellation = traits.Bool(desc="perform cortical parcellation in addition to whole-brain segmentation", argstr="--parc")
-    robust = traits.Bool(desc="use the variant for increased robustness", argstr="--robust")
-    fast = traits.Bool(desc="disable some postprocessing operations for faster prediction", argstr="--fast")
+    parcellation = traits.Bool(
+        desc="perform cortical parcellation in addition to whole-brain segmentation",
+        argstr="--parc",
+    )
+    robust = traits.Bool(
+        desc="use the variant for increased robustness", argstr="--robust"
+    )
+    fast = traits.Bool(
+        desc="disable some postprocessing operations for faster prediction",
+        argstr="--fast",
+    )
     use_cpu = traits.Bool(desc="run on the CPU rather than the GPU", argstr="--cpu")
-    use_gpu = traits.Bool(True, usedefault=True, desc="run on the GPU rather than the GPU")
+    use_gpu = traits.Bool(
+        True, usedefault=True, desc="run on the GPU rather than the GPU"
+    )
 
-
-    version_1 = traits.Bool(desc="run the first version of SynthSeg (SynthSeg 1.0)", argstr="--v1")
+    version_1 = traits.Bool(
+        desc="run the first version of SynthSeg (SynthSeg 1.0)", argstr="--v1"
+    )
     ct = traits.Bool(desc="processing CT scans ", argstr="--ct")
-    photo = traits.Bool(desc="processing stacks of 3D reconstructed dissection photos", argstr="--photo")
+    photo = traits.Bool(
+        desc="processing stacks of 3D reconstructed dissection photos", argstr="--photo"
+    )
 
     volume_file = File(
         argstr="--vol %s",
@@ -111,7 +124,6 @@ class SynthSeg(FSCommand):
     def _list_outputs(self):
         outputs = super()._list_outputs()
         for name in ["volume_file", "qc_file", "post_file", "resampled_file"]:
-            if isdefined(getattr(self.inputs,name)):
-                outputs[name] = getattr(self.inputs,name)
+            if isdefined(getattr(self.inputs, name)):
+                outputs[name] = getattr(self.inputs, name)
         return outputs
-    

@@ -10,7 +10,9 @@ extension_list = ["SlicerFreeSurfer", "SurfaceWrapSolidify"]
 errors = False
 
 for extensionName in extension_list:
-    if not hasattr(slicer.moduleNames, extensionName) and not em.installExtensionFromServer(extensionName, restart):
+    if not hasattr(
+        slicer.moduleNames, extensionName
+    ) and not em.installExtensionFromServer(extensionName, restart):
         errors = True
 
 if not errors:

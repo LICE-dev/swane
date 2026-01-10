@@ -20,6 +20,7 @@ from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 from swane.utils.DependencyManager import DependencyManager
 
+
 def venous_mr_workflow(
     name: str,
     venous_mr_dir: str,
@@ -144,7 +145,7 @@ def venous_mr_workflow(
     # NODE 8: Linear transformation of in skull venous phase in reference space
     if DependencyManager.is_freesurfer_synth():
         # Affine registration to reference space
-        anat_2_ref = Node(SynthMorphReg(), name = "anat_synthreg", mem_gb=9)
+        anat_2_ref = Node(SynthMorphReg(), name="anat_synthreg", mem_gb=9)
         anat_2_ref.long_name = "%s to reference space"
         anat_2_ref.inputs.model = "affine"
         workflow.connect(veins_check, "out_file_anat", anat_2_ref, "in_file")

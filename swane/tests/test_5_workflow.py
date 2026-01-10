@@ -65,11 +65,12 @@ def import_from_path(
 
 # To use this test create subj_1 and load all "base" sequences from swane, first
 
+
 class TestWorkflow:
     TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "workflow", "subjects")
     TEST_PATIENT_NAME = "pt_01"
     DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "dicom")
-    DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT = 100000 # Prevent new nodes
+    DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT = 100000  # Prevent new nodes
 
     TESTS = {
         # 'test_name': {
@@ -239,7 +240,9 @@ class TestWorkflow:
         },
         "venous_invalid_phase_detection": {
             "data": {DataInputList.VENOUS_MR: "twovol"},
-            "preferences": {DataInputList.VENOUS_MR: [["vein_detection_mode", "invalid"]]},
+            "preferences": {
+                DataInputList.VENOUS_MR: [["vein_detection_mode", "invalid"]]
+            },
             "check_nodes": {
                 DataInputList.VENOUS_MR.value.workflow_name: [
                     ["veins_check", "detection_mode", VEIN_DETECTION_MODE.SD]

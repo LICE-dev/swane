@@ -16,7 +16,7 @@ class DataInput(PrefCategory):
         workflow_name: str = None,
         max_volumes: int = 1,
         min_volumes: int = 1,
-        parent_input=None
+        parent_input=None,
     ):
         super().__init__(name, label)
         self.tooltip = tooltip
@@ -72,32 +72,32 @@ class DataInputList(Enum):
         label="Venous MRA - Second volume (optional)",
         tooltip="If you have anatomic and venous volumes in two different sequences, load the remaining volume here. Otherwise, leave this slot empty",
         # workflow_name=VENOUS.name,
-        parent_input="VENOUS_MR"
+        parent_input="VENOUS_MR",
     )
     VENOUS_CT = DataInput(
         name="venous_ct",
         label="Venous CT",
-        tooltip="Load non contrast scan here and contrast scans in subsequent \"Venous CT - contrast\" slots",
+        tooltip='Load non contrast scan here and contrast scans in subsequent "Venous CT - contrast" slots',
         optional=True,
-        image_modality=[ImageModality.CT, ImageModality.XA]
+        image_modality=[ImageModality.CT, ImageModality.XA],
     )
     VENOUS_CT2 = DataInput(
         name=VENOUS_CT.name + "2",
         label="Venous CT - Contrast",
         parent_input="VENOUS_CT",
-        image_modality=[ImageModality.CT, ImageModality.XA]
+        image_modality=[ImageModality.CT, ImageModality.XA],
     )
     VENOUS_CT3 = DataInput(
         name=VENOUS_CT.name + "3",
         label="Venous CT - Contrast",
         parent_input="VENOUS_CT",
-        image_modality=[ImageModality.CT, ImageModality.XA]
+        image_modality=[ImageModality.CT, ImageModality.XA],
     )
     VENOUS_CT4 = DataInput(
         name=VENOUS_CT.name + "4",
         label="Venous CT - Contrast",
         parent_input="VENOUS_CT",
-        image_modality=[ImageModality.CT, ImageModality.XA]
+        image_modality=[ImageModality.CT, ImageModality.XA],
     )
     DTI = DataInput(
         name="dti", label="Diffusion Tensor Imaging", max_volumes=-1, min_volumes=4
@@ -112,7 +112,7 @@ class DataInputList(Enum):
         name="seeg_ct",
         label="Stereo-EEG CT",
         optional=True,
-        image_modality=[ImageModality.CT]
+        image_modality=[ImageModality.CT],
     )
 
     # An Enum usually contains EVERY variable defined in its __init__, we want to ignore some used for loop only

@@ -311,26 +311,30 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     # workflow.connect(outliers_mask, "out_file", no_cereb_extension_z, "mask_file")
     no_cereb_extension_z.inputs.mask_file = swane_supplement.cortex_mas
 
-
-
     if DependencyManager.is_freesurfer_synth():
         extension_z_2_ref = Node(SynthMorphApply(), name="%s_extensionz2ref" % name)
         extension_z_2_ref.long_name = "extension %s to reference space"
         extension_z_2_ref.inputs.out_file = "r-extension_z.nii.gz"
         workflow.connect(no_cereb_extension_z, "out_file", extension_z_2_ref, "in_file")
-        workflow.connect(inputnode, "ref_2_mni1_inverse_warp", extension_z_2_ref, "warp_file")
+        workflow.connect(
+            inputnode, "ref_2_mni1_inverse_warp", extension_z_2_ref, "warp_file"
+        )
 
         junction_z_2_ref = Node(SynthMorphApply(), name="%s_junctionz2ref" % name)
         junction_z_2_ref.long_name = "junction %s to reference space"
         junction_z_2_ref.inputs.out_file = "r-junction_z.nii.gz"
         workflow.connect(junction_z, "out_file", junction_z_2_ref, "in_file")
-        workflow.connect(inputnode, "ref_2_mni1_inverse_warp", junction_z_2_ref, "warp_file")
+        workflow.connect(
+            inputnode, "ref_2_mni1_inverse_warp", junction_z_2_ref, "warp_file"
+        )
 
         binary_flair_2_ref = Node(SynthMorphApply(), name="%s_binaryFLAIR2ref" % name)
         binary_flair_2_ref.long_name = "Binary Flair %s to reference space"
         binary_flair_2_ref.inputs.out_file = "r-binary_flair.nii.gz"
         workflow.connect(binary_flair, "out_file", binary_flair_2_ref, "in_file")
-        workflow.connect(inputnode, "ref_2_mni1_inverse_warp", binary_flair_2_ref, "warp_file")
+        workflow.connect(
+            inputnode, "ref_2_mni1_inverse_warp", binary_flair_2_ref, "warp_file"
+        )
     else:
         # NODE 23: Extension z-score nonlinear transformation in reference space
         extension_z_2_ref = Node(ApplyWarp(), name="%s_extensionz2ref" % name)
