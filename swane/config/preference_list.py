@@ -435,7 +435,7 @@ WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
     label="Threshold for mixture model estimation",
     tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives",
     default=0.50,
-    decimal= 2,
+    decimal=2,
     range=[0, 1],
 )
 WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
@@ -561,7 +561,7 @@ GLOBAL_PREFERENCES[category]["exclude_synth"] = PreferenceEntry(
     tooltip="On some system Synth tools may crash, use this preference to disable thier execution",
     default="false",
     dependency="is_freesurfer_synth",
-    dependency_fail_tooltip="Synth tools not available without FreeSurfer 8.1.0 and at least 15GB RAM"
+    dependency_fail_tooltip="Synth tools not available without FreeSurfer 8.1.0 and at least 15GB RAM",
 )
 GLOBAL_PREFERENCES[category]["cuda"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,

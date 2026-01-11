@@ -11,7 +11,11 @@ from nipype import Node
 
 
 def ref_workflow(
-    name: str, dicom_dir: str, config: SectionProxy, use_synth: bool, base_dir: str = "/"
+    name: str,
+    dicom_dir: str,
+    config: SectionProxy,
+    use_synth: bool,
+    base_dir: str = "/",
 ) -> CustomWorkflow:
     """
     T13D workflow to use as reference.

@@ -14,13 +14,14 @@ from swane.utils.DependencyManager import DependencyManager
 
 FS_DIR = "FS"
 
+
 def freesurfer_workflow(
     name: str,
     is_hippo_amyg_labels: bool,
     use_synth: bool,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP
+    multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP,
 ) -> CustomWorkflow:
     """
     Freesurfer cortical reconstruction, white matter ROI, basal ganglia and thalami ROI.
