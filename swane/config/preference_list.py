@@ -423,6 +423,21 @@ WF_PREFERENCES[category]["del_end_vols"] = PreferenceEntry(
     default=0,
     range=[0, 500],
 )
+WF_PREFERENCES[category]["melodic_dim"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Independent Components to estimate",
+    tooltip="Set 0 for automatic detection",
+    default=0,
+    range=[0, 200],
+)
+WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Threshold for mixture model estimation",
+    tooltip="Use 0.5 for alternative hypotesis, more to exclude false-positives",
+    default=0.50,
+    decimal= 2,
+    range=[0, 1],
+)
 WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="ICA-AROMA denoising",
@@ -539,6 +554,14 @@ GLOBAL_PREFERENCES[category]["multicore_node_limit"] = PreferenceEntry(
         CORE_LIMIT.SOFT_CAP: "Multi-core steps use up to twice the subject CPU core limit",
         CORE_LIMIT.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
     },
+)
+GLOBAL_PREFERENCES[category]["exclude_synth"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Exclude FreeSurfer Synth tools",
+    tooltip="On some system Synth tools may crash, use this preference to disable thier execution",
+    default="false",
+    dependency="is_freesurfer_synth",
+    dependency_fail_tooltip="Synth tools not available without FreeSurfer 8.1.0 and at least 15GB RAM"
 )
 GLOBAL_PREFERENCES[category]["cuda"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,

@@ -13,12 +13,11 @@ from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.nodes.utils import getn
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
-from swane.utils.DependencyManager import DependencyManager
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from nipype.interfaces.utility import IdentityInterface
 
 
-def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkflow:
+def flat1_workflow(name: str, mni1_dir: str, use_synth: bool, base_dir: str = "/") -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
     a mean template.
@@ -29,6 +28,8 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
         The workflow name.
     mni1_dir : path
         The file path of the MNI1 template.
+    use_synth: bool
+        if workflow should use FreeSurfer Synth tools.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -98,7 +99,7 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     workflow.add_nodes([fast])
     workflow.connect(inputnode, "ref_brain", fast, "in_files")
 
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         flair_2_mni1 = Node(SynthMorphApply(), name="%s_flair2mni1" % name)
         flair_2_mni1.long_name = "Flair %s to MNI space"
         workflow.connect(inputnode, "flair_brain", flair_2_mni1, "in_file")
@@ -311,7 +312,7 @@ def flat1_workflow(name: str, mni1_dir: str, base_dir: str = "/") -> CustomWorkf
     # workflow.connect(outliers_mask, "out_file", no_cereb_extension_z, "mask_file")
     no_cereb_extension_z.inputs.mask_file = swane_supplement.cortex_mas
 
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         extension_z_2_ref = Node(SynthMorphApply(), name="%s_extensionz2ref" % name)
         extension_z_2_ref.long_name = "extension %s to reference space"
         extension_z_2_ref.inputs.out_file = "r-extension_z.nii.gz"

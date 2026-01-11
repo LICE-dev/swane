@@ -189,6 +189,11 @@ class MainWorkflow(CustomWorkflow):
         )
         # Check if Slicer is installed to allow venous ct segmente_endocranium
         self.is_slicer = self.dependency_manager.is_slicer(self.global_config)
+        # Check if workflow should use synth tools
+        self.use_synth = (
+                DependencyManager.is_freesurfer_synth()
+                and not self.global_config.getboolean_safe(GlobalPrefCategoryList.PERFORMANCE,"exclude_synth")
+        )
 
     def launch_3dt1_analysis(self):
         ref_dir = self.subject_input_state_list.get_dicom_dir(DIL.T13D)
@@ -196,6 +201,7 @@ class MainWorkflow(CustomWorkflow):
             name=DIL.T13D.value.workflow_name,
             dicom_dir=ref_dir,
             config=self.subject_config[DIL.T13D],
+            use_synth=self.use_synth,
         )
         self.t1.long_name = "3D T1w analysis"
         self.add_nodes([self.t1])
@@ -218,7 +224,7 @@ class MainWorkflow(CustomWorkflow):
             return
 
         # Non linear registration for Asymmetry Index
-        self.sym = nonlinear_reg_workflow(name="sym")
+        self.sym = nonlinear_reg_workflow(name="sym", use_synth=self.use_synth)
         self.sym.long_name = "Symmetric atlas registration"
 
         sym_inputnode = self.sym.get_node("inputnode")
@@ -236,6 +242,7 @@ class MainWorkflow(CustomWorkflow):
             is_hippo_amyg_labels=self.is_hippo_amyg_labels,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
+            use_synth=(self.use_synth and DependencyManager.is_freesurfer_new_reconall()),
         )
         self.freesurfer.long_name = "Freesurfer analysis"
 
@@ -288,6 +295,7 @@ class MainWorkflow(CustomWorkflow):
             name=DIL.FLAIR3D.value.workflow_name,
             dicom_dir=flair_dir,
             config=self.subject_config[DIL.FLAIR3D],
+            use_synth=self.use_synth,
         )
         self.flair.long_name = "3D Flair analysis"
         self.add_nodes([self.flair])
@@ -325,7 +333,7 @@ class MainWorkflow(CustomWorkflow):
             return
 
         # Non linear registration to MNI1mm Atlas for FLAT1
-        self.mni1 = nonlinear_reg_workflow(name="mni1")
+        self.mni1 = nonlinear_reg_workflow(name="mni1", use_synth=self.use_synth)
         self.mni1.long_name = "MNI atlas registration"
 
         mni1_inputnode = self.mni1.get_node("inputnode")
@@ -338,7 +346,11 @@ class MainWorkflow(CustomWorkflow):
         self.connect(self.t1, "outputnode.ref_brain", self.mni1, "inputnode.in_file")
 
         # FLAT1 analysis
-        self.flat1 = flat1_workflow(name="FLAT1", mni1_dir=mni1_path)
+        self.flat1 = flat1_workflow(
+            name="FLAT1",
+            mni1_dir=mni1_path,
+            use_synth=self.use_synth
+        )
         self.flat1.long_name = "FLAT1 analysis"
 
         self.connect(self.t1, "outputnode.ref_brain", self.flat1, "inputnode.ref_brain")
@@ -394,6 +406,7 @@ class MainWorkflow(CustomWorkflow):
                     dicom_dir=flair_dir,
                     config=None,
                     is_volumetric=False,
+                    use_synth=self.use_synth,
                 )
                 self.flair2d.long_name = "2D %s FLAIR analysis" % plane.value
                 self.add_nodes([self.flair2d])
@@ -431,6 +444,7 @@ class MainWorkflow(CustomWorkflow):
             config=None,
             is_volumetric=False,
             is_partial_coverage=True,
+            use_synth=self.use_synth,
         )
         self.t2_cor.long_name = "2D coronal T2 analysis"
         self.add_nodes([self.t2_cor])
@@ -469,6 +483,7 @@ class MainWorkflow(CustomWorkflow):
             name=DIL.MDC.value.workflow_name,
             dicom_dir=mdc_dir,
             config=self.subject_config[DIL.MDC],
+            use_synth=self.use_synth,
         )
         self.mdc.long_name = "Post-contrast 3D T1w analysis"
         self.add_nodes([self.mdc])
@@ -505,6 +520,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=asl_dir,
             is_freesurfer=self.is_freesurfer,
             config=self.subject_config[DIL.ASL],
+            use_synth=self.use_synth,
         )
         self.asl.long_name = "Arterial Spin Labelling analysis"
 
@@ -614,6 +630,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=pet_dir,
             is_freesurfer=self.is_freesurfer,
             config=self.subject_config[DIL.PET],
+            use_synth=self.use_synth,
         )
         self.pet.long_name = "Pet analysis"
 
@@ -777,6 +794,7 @@ class MainWorkflow(CustomWorkflow):
             venous_mr_dir=venous_mr_dir,
             config=self.subject_config[DIL.VENOUS_MR],
             venous2_mr_dir=venous2_mr_dir,
+            use_synth=self.use_synth,
         )
         self.venous_mr.long_name = "Venous MRA analysis"
 
@@ -836,6 +854,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.DTI],
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
+            use_synth=self.use_synth,
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
         self.connect(
@@ -859,7 +878,9 @@ class MainWorkflow(CustomWorkflow):
                     continue
 
                 tract_workflow = tractography_workflow(
-                    tract, self.subject_config[DIL.DTI]
+                    name=tract,
+                    config=self.subject_config[DIL.DTI],
+                    use_synth=self.use_synth,
                 )
                 if tract_workflow is not None:
                     tract_workflow.long_name = TRACTS[tract][0] + " tractography"

@@ -12,9 +12,7 @@ from nipype import Node, IdentityInterface
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from configparser import SectionProxy
-from swane.utils.DependencyManager import DependencyManager
 
 
 def seeg_ct_workflow(

@@ -21,7 +21,6 @@ from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 import swane_supplement
 from swane.config.config_enums import BETWEEN_MOD_FLIRT_COST
-from swane.utils.DependencyManager import DependencyManager
 
 
 def func_map_workflow(
@@ -29,6 +28,7 @@ def func_map_workflow(
     dicom_dir: str,
     is_freesurfer: bool,
     config: SectionProxy,
+    use_synth: bool,
     base_dir: str = "/",
 ) -> CustomWorkflow:
     """
@@ -47,6 +47,8 @@ def func_map_workflow(
         True if the reconall is available.
     config: SectionProxy
         workflow settings.
+    use_synth: bool
+        if workflow should use FreeSurfer Synth tools.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -150,7 +152,7 @@ def func_map_workflow(
     workflow.connect(reorient, "out_file", smooth, "in_file")
 
     # NODE 4: Registration matrix calculation in reference space
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         # Affine registration to reference space
         reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name, mem_gb=9)
         reg_2_ref.long_name = "%s to reference space"
@@ -268,7 +270,7 @@ def func_map_workflow(
     if is_ai:
         sym_template = swane_supplement.sym_template
 
-        if DependencyManager.is_freesurfer_synth():
+        if use_synth:
             # NODE 11: Nonlinear transformation of the images in symmetric atlas
             func_2_sym_warp = Node(SynthMorphApply(), name="%s_2_sym_warp" % name)
             workflow.connect(smooth_2_ref, "out_file", func_2_sym_warp, "in_file")
@@ -303,7 +305,7 @@ def func_map_workflow(
         ai_threshold.inputs.op_string = "-thr %f -uthr %f" % (-threshold, threshold)
         workflow.connect(ai, "out_file", ai_threshold, "in_file")
 
-        if DependencyManager.is_freesurfer_synth():
+        if use_synth:
             # NODE 15: AI Nonlinear transformation to reference space
             ai_2_ref = Node(SynthMorphApply(), name="%s_ai_2_ref" % name)
             workflow.connect(ai_threshold, "out_file", ai_2_ref, "in_file")

@@ -7,13 +7,13 @@ from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
-from swane.utils.DependencyManager import DependencyManager
 
 
 def linear_reg_workflow(
     name: str,
     dicom_dir: str,
     config: SectionProxy,
+    use_synth: bool,
     base_dir: str = "/",
     is_volumetric: bool = True,
     is_partial_coverage: bool = False,
@@ -29,6 +29,8 @@ def linear_reg_workflow(
         The file path of the DICOM files.
     config: SectionProxy
         workflow settings.
+    use_synth: bool
+        if workflow should use FreeSurfer Synth tools.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
     is_volumetric : bool, optional
@@ -103,7 +105,7 @@ def linear_reg_workflow(
     def get_unbetted_name(basename):
         return "r-%s.nii.gz" % basename
 
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         # Affine registration to reference space
         reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name, mem_gb=9)
         reg_2_ref.long_name = "%s to reference space"
