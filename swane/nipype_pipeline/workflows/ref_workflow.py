@@ -3,7 +3,6 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
 from configparser import SectionProxy
-from swane.utils.DependencyManager import DependencyManager
 from nipype.interfaces.fsl import BET, RobustFOV
 from nipype.interfaces.utility import IdentityInterface
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
@@ -12,7 +11,7 @@ from nipype import Node
 
 
 def ref_workflow(
-    name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/"
+    name: str, dicom_dir: str, config: SectionProxy, use_synth: bool, base_dir: str = "/"
 ) -> CustomWorkflow:
     """
     T13D workflow to use as reference.
@@ -25,6 +24,8 @@ def ref_workflow(
         The file path of the DICOM files.
     config: SectionProxy
         workflow settings.
+    use_synth: bool
+        if workflow should use FreeSurfer Synth tools.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -80,7 +81,7 @@ def ref_workflow(
     workflow.connect(ref_robustfov, "out_roi", ref_reScale, "in_file")
 
     # NODE 5: Scalp removal
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
         ref_deskull.inputs.mask_file = "ref_brain_mask.nii.gz"
         ref_deskull.inputs.exclude_csf = True

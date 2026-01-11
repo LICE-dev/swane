@@ -23,7 +23,6 @@ from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
 from multiprocessing import cpu_count
-from swane.utils.DependencyManager import DependencyManager
 import os
 from os.path import abspath
 
@@ -32,6 +31,7 @@ def dti_preproc_workflow(
     name: str,
     dti_dir: str,
     config: SectionProxy,
+    use_synth: bool,
     base_dir: str = "/",
     max_cpu: int = 0,
     multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP,
@@ -51,6 +51,8 @@ def dti_preproc_workflow(
         The base directory path relative to parent workflow. The default is "/".
     config: SectionProxy
         workflow settings.
+    use_synth: bool
+        if workflow should use FreeSurfer Synth tools.
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
     multicore_node_limit: CORE_LIMIT, optional
@@ -135,7 +137,7 @@ def dti_preproc_workflow(
     workflow.connect(reorient, "out_file", nodif, "in_file")
 
     # NODE 3: Scalp removal from b0 image
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         b0_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
         b0_deskull.inputs.mask_file = "nodif_brain_mask.nii.gz"
         workflow.connect(nodif, "roi_file", b0_deskull, "in_file")
@@ -196,7 +198,7 @@ def dti_preproc_workflow(
     workflow.connect(conversion, "bvals", dtifit, "bvals")
 
     # NODE 6: b0 image linear registration in reference space
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         dif2ref = Node(SynthMorphReg(), name="diff2ref_synthreg", mem_gb=9)
         dif2ref.long_name = "%s to reference space"
         dif2ref.long_name = "%s to reference space"
@@ -257,7 +259,7 @@ def dti_preproc_workflow(
     is_tractography = config.getboolean_safe("tractography")
 
     if is_tractography:
-        if DependencyManager.is_freesurfer_synth():
+        if use_synth:
             mni_2_ref = Node(SynthMorphReg(), name="mni_2_ref_synthreg", mem_gb=13)
             mni_2_ref.long_name = "%s to atlas space"
             mni_2_ref.inputs.model = "joint"

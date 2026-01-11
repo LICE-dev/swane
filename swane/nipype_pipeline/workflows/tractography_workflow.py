@@ -9,14 +9,13 @@ from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
 from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
-from swane.utils.DependencyManager import DependencyManager
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 
 SIDES = ["lh", "rh"]
 
 
 def tractography_workflow(
-    name: str, config: SectionProxy, base_dir: str = "/"
+    name: str, config: SectionProxy, use_synth: bool, base_dir: str = "/"
 ) -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
@@ -27,6 +26,8 @@ def tractography_workflow(
         The workflow and tract name.
     config: SectionProxy
         The subject workflow preferences.
+    use_synth: bool
+        if workflow should use FreeSurfer Synth tools.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -147,7 +148,7 @@ def tractography_workflow(
             return None
 
         # NODE 2: Seed ROI nonlinear transformation in T13D reference space
-        if DependencyManager.is_freesurfer_synth():
+        if use_synth:
             seed_2_ref = Node(SynthMorphApply(), name="seed_2_ref_%s_%s" % (name, side))
             seed_2_ref.long_name = side + " seed ROI %s"
             seed_2_ref.inputs.in_file = seed_file
@@ -171,7 +172,7 @@ def tractography_workflow(
         # workflow.connect(seed_2_ref, "out_file", seed_bin, "in_file")
 
         # NODE 4: Target ROIs nonlinear transformation in T13D reference space
-        if DependencyManager.is_freesurfer_synth():
+        if use_synth:
             targets_2_ref = Node(
                 SynthMorphApply(), name="targets_2_ref_%s_%s" % (name, side)
             )
@@ -272,7 +273,7 @@ def tractography_workflow(
         # Check for exclusion ROI in protocol
         if os.path.exists(exclude_file):
             # NODE 6: Exclusion ROI nonlinear transformation in T13D reference space
-            if DependencyManager.is_freesurfer_synth():
+            if use_synth:
                 exclude_2_ref = Node(
                     SynthMorphApply(), name="exclude_2_ref_%s_%s" % (name, side)
                 )
@@ -309,7 +310,7 @@ def tractography_workflow(
         # Check for stop ROI in protocol
         if os.path.exists(stop_file):
             # NODE 8: stop ROI nonlinear transformation in T13D reference space
-            if DependencyManager.is_freesurfer_synth():
+            if use_synth:
                 stop_2_ref = Node(
                     SynthMorphApply(), name="stop_2_ref_%s_%s" % (name, side)
                 )

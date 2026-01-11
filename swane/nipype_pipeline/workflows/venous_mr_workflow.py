@@ -18,13 +18,13 @@ from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
-from swane.utils.DependencyManager import DependencyManager
 
 
 def venous_mr_workflow(
     name: str,
     venous_mr_dir: str,
     config: SectionProxy,
+    use_synth: bool,
     venous2_mr_dir: str = None,
     base_dir: str = "/",
 ) -> CustomWorkflow:
@@ -40,6 +40,8 @@ def venous_mr_workflow(
         The directory path of the venous phase contrast DICOM files.
     config: SectionProxy
         workflow settings.
+    use_synth: bool
+        if workflow should use FreeSurfer Synth tools.
     venous2_mr_dir : path
         If veins phase is divided from anatomic phase, use this param to load the second DICOM files directory.
     base_dir : str, optional
@@ -125,7 +127,7 @@ def venous_mr_workflow(
     workflow.connect(veins_check, "out_file_veins", veins_inskull_mask, "in_file")
 
     # NODE 5: Scalp removal and in skull structures segmentation
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
         deskull.inputs.mask_file = "vein_mask.nii.gz"
         workflow.connect(veins_check, "out_file_anat", deskull, "in_file")
@@ -143,7 +145,7 @@ def venous_mr_workflow(
 
     # NODE 7: Linear registration of anatomic phase to reference space
     # NODE 8: Linear transformation of in skull venous phase in reference space
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         # Affine registration to reference space
         anat_2_ref = Node(SynthMorphReg(), name="anat_synthreg", mem_gb=9)
         anat_2_ref.long_name = "%s to reference space"

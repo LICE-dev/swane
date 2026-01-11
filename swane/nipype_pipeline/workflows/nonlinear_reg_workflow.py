@@ -1,12 +1,11 @@
 from nipype import Node, IdentityInterface
 from nipype.interfaces.fsl import FLIRT, FNIRT, InvWarp
-from swane.utils.DependencyManager import DependencyManager
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 
 
 # TODO check base_dir = "./"
-def nonlinear_reg_workflow(name: str, base_dir: str = "/") -> CustomWorkflow:
+def nonlinear_reg_workflow(name: str, use_synth: bool, base_dir: str = "/") -> CustomWorkflow:
     """
     Transforms input images in a reference space through a nonlinear registration.
     For symmetric atlas, make a RL swapped to unswapped nonlinear registration.
@@ -15,6 +14,8 @@ def nonlinear_reg_workflow(name: str, base_dir: str = "/") -> CustomWorkflow:
     ----------
     name : str
         The workflow name.
+    use_synth: bool
+        if workflow should use FreeSurfer Synth tools.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -56,7 +57,7 @@ def nonlinear_reg_workflow(name: str, base_dir: str = "/") -> CustomWorkflow:
         name="outputnode",
     )
 
-    if DependencyManager.is_freesurfer_synth():
+    if use_synth:
         # Affine registration to reference space
         reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name, mem_gb=13)
         reg_2_ref.long_name = "%s to atlas space"
