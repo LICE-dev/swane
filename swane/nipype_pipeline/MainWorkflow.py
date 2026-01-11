@@ -191,8 +191,10 @@ class MainWorkflow(CustomWorkflow):
         self.is_slicer = self.dependency_manager.is_slicer(self.global_config)
         # Check if workflow should use synth tools
         self.use_synth = (
-                DependencyManager.is_freesurfer_synth()
-                and not self.global_config.getboolean_safe(GlobalPrefCategoryList.PERFORMANCE,"exclude_synth")
+            DependencyManager.is_freesurfer_synth()
+            and not self.global_config.getboolean_safe(
+                GlobalPrefCategoryList.PERFORMANCE, "exclude_synth"
+            )
         )
 
     def launch_3dt1_analysis(self):
@@ -242,7 +244,9 @@ class MainWorkflow(CustomWorkflow):
             is_hippo_amyg_labels=self.is_hippo_amyg_labels,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
-            use_synth=(self.use_synth and DependencyManager.is_freesurfer_new_reconall()),
+            use_synth=(
+                self.use_synth and DependencyManager.is_freesurfer_new_reconall()
+            ),
         )
         self.freesurfer.long_name = "Freesurfer analysis"
 
@@ -347,9 +351,7 @@ class MainWorkflow(CustomWorkflow):
 
         # FLAT1 analysis
         self.flat1 = flat1_workflow(
-            name="FLAT1",
-            mni1_dir=mni1_path,
-            use_synth=self.use_synth
+            name="FLAT1", mni1_dir=mni1_path, use_synth=self.use_synth
         )
         self.flat1.long_name = "FLAT1 analysis"
 

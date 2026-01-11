@@ -5,7 +5,9 @@ from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 
 
 # TODO check base_dir = "./"
-def nonlinear_reg_workflow(name: str, use_synth: bool, base_dir: str = "/") -> CustomWorkflow:
+def nonlinear_reg_workflow(
+    name: str, use_synth: bool, base_dir: str = "/"
+) -> CustomWorkflow:
     """
     Transforms input images in a reference space through a nonlinear registration.
     For symmetric atlas, make a RL swapped to unswapped nonlinear registration.

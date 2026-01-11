@@ -17,7 +17,9 @@ from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from nipype.interfaces.utility import IdentityInterface
 
 
-def flat1_workflow(name: str, mni1_dir: str, use_synth: bool, base_dir: str = "/") -> CustomWorkflow:
+def flat1_workflow(
+    name: str, mni1_dir: str, use_synth: bool, base_dir: str = "/"
+) -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
     a mean template.
