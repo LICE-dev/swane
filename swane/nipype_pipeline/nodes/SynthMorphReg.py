@@ -79,16 +79,24 @@ class SynthMorphReg(FSCommand):
 
     def _list_outputs(self):
         outputs = super()._list_outputs()
+
         for name in ["warp_file", "inv_warp_file"]:
-            ext = ".nii.gz"
-            if self.inputs.model in ["affine", "rigid"]:
-                ext = ".lta"
-            out_file = os.path.basename(
-                fname_presuffix(
-                    self.inputs.in_file, suffix="_" + name + ext, use_ext=False
+            if isdefined(getattr(self.inputs, name)):
+                # usa il valore passato dall’utente
+                outputs[name] = os.path.abspath(getattr(self.inputs, name))
+            else:
+                # genera il nome di default
+                ext = ".nii.gz"
+                if self.inputs.model in ["affine", "rigid"]:
+                    ext = ".lta"
+
+                out_file = fname_presuffix(
+                    self.inputs.in_file,
+                    suffix=f"_{name}{ext}",
+                    use_ext=False,
                 )
-            )
-            outputs[name] = os.path.abspath(out_file)
+                outputs[name] = os.path.abspath(out_file)
+
         return outputs
 
     def _gen_filename(self, name):

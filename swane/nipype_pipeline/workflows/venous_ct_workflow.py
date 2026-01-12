@@ -1,5 +1,4 @@
 from nipype.interfaces.fsl import (
-    BET,
     FLIRT,
     ApplyMask,
     ImageStats,

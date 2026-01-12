@@ -201,7 +201,7 @@ class MainWorkflow(CustomWorkflow):
             name=DIL.T13D.value.workflow_name,
             dicom_dir=ref_dir,
             config=self.subject_config[DIL.T13D],
-            use_synth=self.use_synth,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.t1.long_name = "3D T1w analysis"
         self.add_nodes([self.t1])
@@ -295,7 +295,7 @@ class MainWorkflow(CustomWorkflow):
             name=DIL.FLAIR3D.value.workflow_name,
             dicom_dir=flair_dir,
             config=self.subject_config[DIL.FLAIR3D],
-            use_synth=self.use_synth,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.flair.long_name = "3D Flair analysis"
         self.add_nodes([self.flair])
@@ -406,7 +406,7 @@ class MainWorkflow(CustomWorkflow):
                     dicom_dir=flair_dir,
                     config=None,
                     is_volumetric=False,
-                    use_synth=self.use_synth,
+                    synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
                 )
                 self.flair2d.long_name = "2D %s FLAIR analysis" % plane.value
                 self.add_nodes([self.flair2d])
@@ -444,7 +444,7 @@ class MainWorkflow(CustomWorkflow):
             config=None,
             is_volumetric=False,
             is_partial_coverage=True,
-            use_synth=self.use_synth,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.t2_cor.long_name = "2D coronal T2 analysis"
         self.add_nodes([self.t2_cor])
@@ -483,7 +483,7 @@ class MainWorkflow(CustomWorkflow):
             name=DIL.MDC.value.workflow_name,
             dicom_dir=mdc_dir,
             config=self.subject_config[DIL.MDC],
-            use_synth=self.use_synth,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.mdc.long_name = "Post-contrast 3D T1w analysis"
         self.add_nodes([self.mdc])
@@ -794,7 +794,7 @@ class MainWorkflow(CustomWorkflow):
             venous_mr_dir=venous_mr_dir,
             config=self.subject_config[DIL.VENOUS_MR],
             venous2_mr_dir=venous2_mr_dir,
-            use_synth=self.use_synth,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.venous_mr.long_name = "Venous MRA analysis"
 
@@ -854,7 +854,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.DTI],
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
-            use_synth=self.use_synth,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
         self.connect(

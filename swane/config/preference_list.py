@@ -580,6 +580,29 @@ GLOBAL_PREFERENCES[category]["max_subj_gpu"] = PreferenceEntry(
     pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [("cuda", True)]},
     pref_requirement_fail_tooltip="Requires CUDA",
 )
+category = GlobalPrefCategoryList.SYNTH
+GLOBAL_PREFERENCES[category] = {}
+GLOBAL_PREFERENCES[category]["strip"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SynthStrip for brain extraction",
+    default=False,
+    dependency="is_freesurfer_synth",
+    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0 and at least 15GB RAM"
+)
+GLOBAL_PREFERENCES[category]["morph"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SynthMorph registration",
+    default=False,
+    dependency="is_freesurfer_synth",
+    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0 and at least 15GB RAM"
+)
+GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use Synth tools during recon-all",
+    default=False,
+    dependency="is_freesurfer_new_reconall",
+    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0 and at least 20GB RAM"
+)
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}
 for data_input in DataInputList:

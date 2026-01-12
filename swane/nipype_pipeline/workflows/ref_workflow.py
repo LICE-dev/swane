@@ -2,16 +2,16 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
+from swane.nipype_pipeline.nodes.utils import get_deskull_node
 from configparser import SectionProxy
-from nipype.interfaces.fsl import BET, RobustFOV
+from nipype.interfaces.fsl import RobustFOV
 from nipype.interfaces.utility import IdentityInterface
-from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 
 from nipype import Node
 
 
 def ref_workflow(
-    name: str, dicom_dir: str, config: SectionProxy, use_synth: bool, base_dir: str = "/"
+    name: str, dicom_dir: str, config: SectionProxy, synth_config: SectionProxy, base_dir: str = "/"
 ) -> CustomWorkflow:
     """
     T13D workflow to use as reference.
@@ -24,8 +24,8 @@ def ref_workflow(
         The file path of the DICOM files.
     config: SectionProxy
         workflow settings.
-    use_synth: bool
-        if workflow should use FreeSurfer Synth tools.
+    synth_config: SectionProxy
+        Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -81,19 +81,15 @@ def ref_workflow(
     workflow.connect(ref_robustfov, "out_roi", ref_reScale, "in_file")
 
     # NODE 5: Scalp removal
-    if use_synth:
-        ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
-        ref_deskull.inputs.mask_file = "ref_brain_mask.nii.gz"
-        ref_deskull.inputs.exclude_csf = True
-    else:
-        ref_deskull = Node(BET(), name="%s_BET" % name)
-        ref_deskull.inputs.mask = True
-        ref_deskull.inputs.frac = config.getfloat_safe("bet_thr")
-        if config.getboolean_safe("bet_bias_correction"):
-            ref_deskull.inputs.reduce_bias = True
-        else:
-            ref_deskull.inputs.robust = True
-
+    ref_deskull = get_deskull_node(
+        name="ref_deskull",
+        use_synth=synth_config.getboolean_safe("strip"),
+        mask=True,
+        bet_thr=config.getfloat_safe("bet_thr"),
+        bet_robust=True,
+        bet_bias_correction=config.getboolean_safe("bet_bias_correction"),
+        synth_exclude_csf=True
+    )
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
     workflow.connect(ref_reScale, "out_file", outputnode, "ref")
