@@ -199,7 +199,7 @@ class SubjectTab(QTabWidget):
         ):
             # Add a minimum delay to wait fornipype file after node start signal
             QTimer.singleShot(
-                150,
+                400,
                 lambda: self.tree_item_clicked(
                     self.node_list[wf_report.workflow_name]
                     .node_list[wf_report.node_name]

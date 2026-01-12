@@ -5,15 +5,16 @@ from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from nipype import Node
-from nipype.interfaces.utility import IdentityInterface
+from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
+from swane.nipype_pipeline.nodes.utils import get_deskull_node, get_registration_node, apply_registration_node
 
 
 def linear_reg_workflow(
     name: str,
     dicom_dir: str,
     config: SectionProxy,
-    use_synth: bool,
+    synth_config: SectionProxy,
     base_dir: str = "/",
     is_volumetric: bool = True,
     is_partial_coverage: bool = False,
@@ -29,8 +30,8 @@ def linear_reg_workflow(
         The file path of the DICOM files.
     config: SectionProxy
         workflow settings.
-    use_synth: bool
-        if workflow should use FreeSurfer Synth tools.
+    synth_config: SectionProxy
+        FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
     is_volumetric : bool, optional
@@ -101,11 +102,90 @@ def linear_reg_workflow(
 
     def get_betted_name(basename):
         return "r-%s_brain.nii.gz" % basename
+    betted_name = Node(
+        Function(
+            input_names=['basename'],
+            output_names=['out_file'],
+            function=get_betted_name
+        ),
+        name='betted_name'
+    )
+    betted_name.long_name="Registered file name"
+    workflow.connect(inputnode,"output_name", betted_name, "basename")
 
     def get_unbetted_name(basename):
         return "r-%s.nii.gz" % basename
+    unbetted_name = Node(
+        Function(
+            input_names=['basename'],
+            output_names=['out_file'],
+            function=get_unbetted_name
+        ),
+        name='unbetted_name'
+    )
+    unbetted_name.long_name = "Deskulled registered file name"
+    workflow.connect(inputnode, "output_name", unbetted_name, "basename")
 
-    if use_synth:
+    bet_thr = None if not config else config.getfloat_safe("bet_thr")
+    bet_bias_correction = False if not config else config.getboolean_safe("bet_bias_correction")
+
+    if is_partial_coverage:
+        moving_brain = [robustfov, "out_roi"]
+    else:
+        deskull = get_deskull_node(
+            name=name+"_deskull",
+            use_synth=synth_config.getboolean_safe("strip"),
+            mask=True,
+            bet_thr=bet_thr,
+            bet_robust=True,
+            bet_bias_correction=bet_bias_correction,
+        )
+        workflow.connect(robustfov, "out_roi", deskull, "in_file")
+        moving_brain = [deskull, "out_file"]
+
+    reg_wrap = get_registration_node(
+        name=name,
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        moving=[robustfov, "out_roi"],
+        moving_brain=moving_brain,
+        reference=[inputnode, "reference"],
+        is_volumetric=is_volumetric,
+        out_file=[unbetted_name,"out_file"],
+        flirt_cost="mutualinfo"
+    )
+
+    if is_partial_coverage:
+        brain_masking = Node(ApplyMask(), name="%s_brain_mask" % name)
+        brain_masking.long_name = "Brain %s"
+        workflow.connect(reg_wrap.out_registered_node, reg_wrap.out_registered_image, brain_masking, "in_file")
+        workflow.connect(betted_name, "out_file", brain_masking, "out_file")
+        workflow.connect(inputnode, "brain_mask", brain_masking, "mask_file")
+        workflow.connect(brain_masking, "out_file", outputnode, "registered_file_brain")
+    else:
+        deskull_2_ref = apply_registration_node(
+            name=name,
+            use_synth=synth_config.getboolean_safe("morph"),
+            workflow=workflow,
+            warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+            moving=[deskull,"out_file"],
+            reference=[inputnode, "reference"],
+            out_file=[betted_name, "out_file"],
+            non_linear=False,
+        )
+        workflow.connect(deskull_2_ref, "out_file", outputnode, "registered_file_brain")
+
+    workflow.connect(reg_wrap.out_registered_node, reg_wrap.out_registered_image,outputnode, "registered_file")
+    workflow.connect(reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "out_matrix_file")
+
+    return workflow
+
+
+
+
+
+"""
+    if synth_config:
         # Affine registration to reference space
         reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name, mem_gb=9)
         reg_2_ref.long_name = "%s to reference space"
@@ -230,3 +310,4 @@ def linear_reg_workflow(
             )
 
     return workflow
+"""

@@ -1,5 +1,4 @@
 from nipype.interfaces.fsl import (
-    BET,
     FLIRT,
     Split,
     ApplyMask,
@@ -15,16 +14,16 @@ from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.VenousCheck import VenousCheck
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
-from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
+from swane.nipype_pipeline.nodes.utils import get_deskull_node
 
 
 def venous_mr_workflow(
     name: str,
     venous_mr_dir: str,
     config: SectionProxy,
-    use_synth: bool,
+    synth_config: SectionProxy,
     venous2_mr_dir: str = None,
     base_dir: str = "/",
 ) -> CustomWorkflow:
@@ -40,8 +39,8 @@ def venous_mr_workflow(
         The directory path of the venous phase contrast DICOM files.
     config: SectionProxy
         workflow settings.
-    use_synth: bool
-        if workflow should use FreeSurfer Synth tools.
+    synth_config: SectionProxy
+        FreeSurfer Synth tools settings.
     venous2_mr_dir : path
         If veins phase is divided from anatomic phase, use this param to load the second DICOM files directory.
     base_dir : str, optional
@@ -121,31 +120,25 @@ def venous_mr_workflow(
 
         workflow.connect(veins_merge, "out", veins_check, "in_files")
 
+    # NODE 5: Scalp removal and in skull structures segmentation
+    deskull = get_deskull_node(
+        name="vein_mr_deskull",
+        use_synth=synth_config.getboolean_safe("strip"),
+        mask=True,
+        bet_thr=config.getfloat_safe("bet_thr"),
+        bet_surfaces=True,
+    )
+    workflow.connect(veins_check, "out_file_anat", deskull, "in_file")
+
     # NODE 6: Apply in skull mask to venous phase
     veins_inskull_mask = Node(ApplyMask(), name="veins_inskull_mask")
     veins_inskull_mask.long_name = "%s inskull veins"
     workflow.connect(veins_check, "out_file_veins", veins_inskull_mask, "in_file")
-
-    # NODE 5: Scalp removal and in skull structures segmentation
-    if use_synth:
-        deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
-        deskull.inputs.mask_file = "vein_mask.nii.gz"
-        workflow.connect(veins_check, "out_file_anat", deskull, "in_file")
-
-        workflow.connect(deskull, "mask_file", veins_inskull_mask, "mask_file")
-    else:
-        deskull = Node(BET(), name="veins_bet")
-        deskull.inputs.mask = True
-        deskull.inputs.threshold = True
-        deskull.inputs.surfaces = True
-        deskull.inputs.frac = config.getfloat_safe("bet_thr")
-        workflow.connect(veins_check, "out_file_anat", deskull, "in_file")
-
-        workflow.connect(deskull, "inskull_mask_file", veins_inskull_mask, "mask_file")
+    workflow.connect(deskull, deskull.inskull_out_name, veins_inskull_mask, "mask_file")
 
     # NODE 7: Linear registration of anatomic phase to reference space
     # NODE 8: Linear transformation of in skull venous phase in reference space
-    if use_synth:
+    if synth_config.getboolean_safe("morph"):
         # Affine registration to reference space
         anat_2_ref = Node(SynthMorphReg(), name="anat_synthreg", mem_gb=9)
         anat_2_ref.long_name = "%s to reference space"
