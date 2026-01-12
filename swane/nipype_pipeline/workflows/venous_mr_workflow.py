@@ -1,10 +1,8 @@
 from nipype.interfaces.fsl import (
-    FLIRT,
     Split,
     ApplyMask,
     ImageStats,
     ImageMaths,
-    ApplyXFM,
 )
 from nipype.interfaces.utility import Merge
 from nipype.pipeline.engine import Node
@@ -12,11 +10,10 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.VenousCheck import VenousCheck
-from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
-from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 from swane.nipype_pipeline.nodes.utils import get_deskull_node
+from swane.nipype_pipeline.nodes.utils import apply_registration_node, get_registration_node
 
 
 def venous_mr_workflow(
@@ -48,9 +45,9 @@ def venous_mr_workflow(
 
     Input Node Fields
     ----------
-    ref : path
+    reference : path
         T13D.
-    ref_brain : path
+    reference_brain : path
         Betted T13D.
 
     Returns
@@ -68,7 +65,7 @@ def venous_mr_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["ref_brain", "ref"]), name="inputnode")
+    inputnode = Node(IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode")
 
     # Output Node
     outputnode = Node(IdentityInterface(fields=["veins"]), name="outputnode")
@@ -138,39 +135,27 @@ def venous_mr_workflow(
 
     # NODE 7: Linear registration of anatomic phase to reference space
     # NODE 8: Linear transformation of in skull venous phase in reference space
-    if synth_config.getboolean_safe("morph"):
-        # Affine registration to reference space
-        anat_2_ref = Node(SynthMorphReg(), name="anat_synthreg", mem_gb=9)
-        anat_2_ref.long_name = "%s to reference space"
-        anat_2_ref.inputs.model = "affine"
-        workflow.connect(veins_check, "out_file_anat", anat_2_ref, "in_file")
-        workflow.connect(inputnode, "ref", anat_2_ref, "reference")
 
-        veins_2_ref = Node(SynthMorphApply(), name="veins_synthapply")
-        veins_2_ref.long_name = "%s in reference space"
-        veins_2_ref.inputs.out_file = "r-veins_inskull.nii.gz"
-        workflow.connect(veins_inskull_mask, "out_file", veins_2_ref, "in_file")
-        workflow.connect(anat_2_ref, "warp_file", veins_2_ref, "warp_file")
-    else:
-        anat_2_ref = Node(FLIRT(), name="anat_flirt")
-        anat_2_ref.long_name = "%s to reference space"
-        anat_2_ref.inputs.out_matrix_file = "veins2ref.mat"
-        anat_2_ref.inputs.cost = "mutualinfo"
-        anat_2_ref.inputs.searchr_x = [-90, 90]
-        anat_2_ref.inputs.searchr_y = [-90, 90]
-        anat_2_ref.inputs.searchr_z = [-90, 90]
-        anat_2_ref.inputs.dof = 6
-        anat_2_ref.inputs.interp = "trilinear"
-        workflow.connect(deskull, "out_file", anat_2_ref, "in_file")
-        workflow.connect(inputnode, "ref_brain", anat_2_ref, "reference")
+    anat_2_ref = get_registration_node(
+        name="anat_2_ref",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        moving=[veins_check, "out_file_anat"],
+        moving_brain=[veins_check, "out_file_anat"],
+        reference=[inputnode, "reference"],
+        reference_brain=[inputnode, "reference_brain"],
+        flirt_cost="mutualinfo",
+    )
 
-        veins_2_ref = Node(ApplyXFM(), name="veins_flirt")
-        veins_2_ref.long_name = "%s to reference space"
-        veins_2_ref.inputs.out_file = "r-veins_inskull.nii.gz"
-        veins_2_ref.inputs.interp = "trilinear"
-        workflow.connect(veins_inskull_mask, "out_file", veins_2_ref, "in_file")
-        workflow.connect(anat_2_ref, "out_matrix_file", veins_2_ref, "in_matrix_file")
-        workflow.connect(inputnode, "ref_brain", veins_2_ref, "reference")
+    veins_2_ref = apply_registration_node(
+        name="veins_2_ref",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[anat_2_ref.out_registered_node, anat_2_ref.warp],
+        moving=[veins_inskull_mask, "out_file"],
+        reference=[inputnode, "reference"],
+        non_linear=False,
+    )
 
     # NODE 9: Get the max value of venous phase
     veins_range = Node(ImageStats(), name="veins_range")

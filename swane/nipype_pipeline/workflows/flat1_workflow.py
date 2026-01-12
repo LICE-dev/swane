@@ -1,7 +1,8 @@
+from configparser import SectionProxy
+
 import swane_supplement
 
 from nipype.interfaces.fsl import (
-    ApplyWarp,
     ApplyMask,
     BinaryMaths,
     FAST,
@@ -10,14 +11,13 @@ from nipype.interfaces.fsl import (
     Threshold,
 )
 from nipype.pipeline.engine import Node
-from swane.nipype_pipeline.nodes.utils import getn
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
-from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
-from nipype.interfaces.utility import IdentityInterface
+from nipype.interfaces.utility import IdentityInterface, Function
+from swane.nipype_pipeline.nodes.utils import apply_registration_node
 
 
-def flat1_workflow(name: str, mni1_dir: str, use_synth: bool, base_dir: str = "/") -> CustomWorkflow:
+def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
     a mean template.
@@ -28,8 +28,8 @@ def flat1_workflow(name: str, mni1_dir: str, use_synth: bool, base_dir: str = "/
         The workflow name.
     mni1_dir : path
         The file path of the MNI1 template.
-    use_synth: bool
-        if workflow should use FreeSurfer Synth tools.
+    synth_config: SectionProxy
+        reeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -99,67 +99,59 @@ def flat1_workflow(name: str, mni1_dir: str, use_synth: bool, base_dir: str = "/
     workflow.add_nodes([fast])
     workflow.connect(inputnode, "ref_brain", fast, "in_files")
 
-    if use_synth:
-        flair_2_mni1 = Node(SynthMorphApply(), name="%s_flair2mni1" % name)
-        flair_2_mni1.long_name = "Flair %s to MNI space"
-        workflow.connect(inputnode, "flair_brain", flair_2_mni1, "in_file")
-        workflow.connect(inputnode, "ref_2_mni1_warp", flair_2_mni1, "warp_file")
+    def pick_first_two(file_list):
+        return file_list[1], file_list[2]
 
-        restore_2_mni1 = Node(SynthMorphApply(), name="%s_restore2mni1" % name)
-        restore_2_mni1.long_name = "T1 %s to MNI space"
-        workflow.connect(fast, "restored_image", restore_2_mni1, "in_file")
-        workflow.connect(inputnode, "ref_2_mni1_warp", restore_2_mni1, "warp_file")
+    fast_segment_split = Node(
+        Function(
+            input_names=['file_list'],
+            output_names=['gm_seg', 'wm_seg'],
+            function=pick_first_two
+        ),
+        name='fast_segment_split'
+    )
+    fast_segment_split.long_name = "Segment identification"
+    workflow.connect(fast, "partial_volume_files", fast_segment_split, "file_list")
 
-        gm_2_mni1 = Node(SynthMorphApply(), name="%s_gm2mni1" % name)
-        gm_2_mni1.long_name = "Grey matter %s to MNI space"
-        gm_2_mni1.inputs.method = "nearest"
-        workflow.connect(
-            [(fast, gm_2_mni1, [(("partial_volume_files", getn, 1), "in_file")])]
-        )
-        workflow.connect(inputnode, "ref_2_mni1_warp", gm_2_mni1, "warp_file")
+    flair_2_mni1 = apply_registration_node(
+        name="flair_2_mni1",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[inputnode, "ref_2_mni1_warp"],
+        moving=[inputnode, "flair_brain"],
+        reference=mni1_dir,
+        non_linear=True,
+    )
 
-        wm_2_mni1 = Node(SynthMorphApply(), name="%s_wm2mni1" % name)
-        wm_2_mni1.long_name = "White matter %s to MNI space"
-        wm_2_mni1.inputs.method = "nearest"
-        workflow.connect(
-            [(fast, wm_2_mni1, [(("partial_volume_files", getn, 2), "in_file")])]
-        )
-        workflow.connect(inputnode, "ref_2_mni1_warp", wm_2_mni1, "warp_file")
+    restore_2_mni1 = apply_registration_node(
+        name="restore_2_mni1",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[inputnode, "ref_2_mni1_warp"],
+        moving=[fast, "restored_image"],
+        reference=mni1_dir,
+        non_linear=True,
+    )
 
-    else:
-        # NODE 2: FLAIR nonlinear transformation in MNI1 atlas space
-        flair_2_mni1 = Node(ApplyWarp(), name="%s_flair2mni1" % name)
-        flair_2_mni1.long_name = "Flair %s to MNI space"
-        flair_2_mni1.inputs.ref_file = mni1_dir
-        workflow.connect(inputnode, "flair_brain", flair_2_mni1, "in_file")
-        workflow.connect(inputnode, "ref_2_mni1_warp", flair_2_mni1, "field_file")
+    gm_2_mni1 = apply_registration_node(
+        name="gm_2_mni1",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[inputnode, "ref_2_mni1_warp"],
+        moving=[fast_segment_split, "gm_seg"],
+        reference=mni1_dir,
+        non_linear=True,
+    )
 
-        # NODE 3: t1_restore nonlinear transformation in MNI1 atlas space
-        restore_2_mni1 = Node(ApplyWarp(), name="%s_restore2mni1" % name)
-        restore_2_mni1.long_name = "T1 %s to MNI space"
-        restore_2_mni1.inputs.ref_file = mni1_dir
-        workflow.connect(fast, "restored_image", restore_2_mni1, "in_file")
-        workflow.connect(inputnode, "ref_2_mni1_warp", restore_2_mni1, "field_file")
-
-        # NODE 4: Gray matter nonlinear transformation in MNI1 atlas space
-        gm_2_mni1 = Node(ApplyWarp(), name="%s_gm2mni1" % name)
-        gm_2_mni1.long_name = "Grey matter %s to MNI space"
-        gm_2_mni1.inputs.ref_file = mni1_dir
-        gm_2_mni1.inputs.interp = "nn"
-        workflow.connect(
-            [(fast, gm_2_mni1, [(("partial_volume_files", getn, 1), "in_file")])]
-        )
-        workflow.connect(inputnode, "ref_2_mni1_warp", gm_2_mni1, "field_file")
-
-        # NODE 5: White matter nonlinear transformation in MNI1 atlas space
-        wm_2_mni1 = Node(ApplyWarp(), name="%s_wm2mni1" % name)
-        wm_2_mni1.long_name = "White matter %s to MNI space"
-        wm_2_mni1.inputs.ref_file = mni1_dir
-        wm_2_mni1.inputs.interp = "nn"
-        workflow.connect(
-            [(fast, wm_2_mni1, [(("partial_volume_files", getn, 2), "in_file")])]
-        )
-        workflow.connect(inputnode, "ref_2_mni1_warp", wm_2_mni1, "field_file")
+    wm_2_mni1 = apply_registration_node(
+        name="wm_2_mni1",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[inputnode, "ref_2_mni1_warp"],
+        moving=[fast_segment_split, "wm_seg"],
+        reference=mni1_dir,
+        non_linear=True,
+    )
 
     # NODE 6: Divided image generation from FLAIR/T1
     flair_div_ref = Node(BinaryMaths(), name="%s_flairDIVref" % name)
@@ -312,60 +304,38 @@ def flat1_workflow(name: str, mni1_dir: str, use_synth: bool, base_dir: str = "/
     # workflow.connect(outliers_mask, "out_file", no_cereb_extension_z, "mask_file")
     no_cereb_extension_z.inputs.mask_file = swane_supplement.cortex_mas
 
-    if use_synth:
-        extension_z_2_ref = Node(SynthMorphApply(), name="%s_extensionz2ref" % name)
-        extension_z_2_ref.long_name = "extension %s to reference space"
-        extension_z_2_ref.inputs.out_file = "r-extension_z.nii.gz"
-        workflow.connect(no_cereb_extension_z, "out_file", extension_z_2_ref, "in_file")
-        workflow.connect(
-            inputnode, "ref_2_mni1_inverse_warp", extension_z_2_ref, "warp_file"
-        )
+    extension_z_2_ref = apply_registration_node(
+        name="extension_z_2_ref",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[inputnode, "ref_2_mni1_inverse_warp"],
+        moving=[no_cereb_extension_z, "out_file"],
+        reference=[inputnode, "ref_brain"],
+        non_linear=True,
+        out_file="r-extension_z.nii.gz"
+    )
 
-        junction_z_2_ref = Node(SynthMorphApply(), name="%s_junctionz2ref" % name)
-        junction_z_2_ref.long_name = "junction %s to reference space"
-        junction_z_2_ref.inputs.out_file = "r-junction_z.nii.gz"
-        workflow.connect(junction_z, "out_file", junction_z_2_ref, "in_file")
-        workflow.connect(
-            inputnode, "ref_2_mni1_inverse_warp", junction_z_2_ref, "warp_file"
-        )
+    junction_z_2_ref = apply_registration_node(
+        name="junction_z_2_ref",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[inputnode, "ref_2_mni1_inverse_warp"],
+        moving=[junction_z, "out_file"],
+        reference=[inputnode, "ref_brain"],
+        non_linear=True,
+        out_file="r-junction_z.nii.gz"
+    )
 
-        binary_flair_2_ref = Node(SynthMorphApply(), name="%s_binaryFLAIR2ref" % name)
-        binary_flair_2_ref.long_name = "Binary Flair %s to reference space"
-        binary_flair_2_ref.inputs.out_file = "r-binary_flair.nii.gz"
-        workflow.connect(binary_flair, "out_file", binary_flair_2_ref, "in_file")
-        workflow.connect(
-            inputnode, "ref_2_mni1_inverse_warp", binary_flair_2_ref, "warp_file"
-        )
-    else:
-        # NODE 23: Extension z-score nonlinear transformation in reference space
-        extension_z_2_ref = Node(ApplyWarp(), name="%s_extensionz2ref" % name)
-        extension_z_2_ref.long_name = "extension %s to reference space"
-        extension_z_2_ref.inputs.out_file = "r-extension_z.nii.gz"
-        workflow.connect(no_cereb_extension_z, "out_file", extension_z_2_ref, "in_file")
-        workflow.connect(
-            inputnode, "ref_2_mni1_inverse_warp", extension_z_2_ref, "field_file"
-        )
-        workflow.connect(inputnode, "ref_brain", extension_z_2_ref, "ref_file")
-
-        # NODE 24: Junction z-score nonlinear transformation in reference space
-        junction_z_2_ref = Node(ApplyWarp(), name="%s_junctionz2ref" % name)
-        junction_z_2_ref.long_name = "junction %s to reference space"
-        junction_z_2_ref.inputs.out_file = "r-junction_z.nii.gz"
-        workflow.connect(junction_z, "out_file", junction_z_2_ref, "in_file")
-        workflow.connect(
-            inputnode, "ref_2_mni1_inverse_warp", junction_z_2_ref, "field_file"
-        )
-        workflow.connect(inputnode, "ref_brain", junction_z_2_ref, "ref_file")
-
-        # NODE 25: Divided image nonlinear transformation in reference space
-        binary_flair_2_ref = Node(ApplyWarp(), name="%s_binaryFLAIR2ref" % name)
-        binary_flair_2_ref.long_name = "Binary Flair %s to reference space"
-        binary_flair_2_ref.inputs.out_file = "r-binary_flair.nii.gz"
-        workflow.connect(binary_flair, "out_file", binary_flair_2_ref, "in_file")
-        workflow.connect(
-            inputnode, "ref_2_mni1_inverse_warp", binary_flair_2_ref, "field_file"
-        )
-        workflow.connect(inputnode, "ref_brain", binary_flair_2_ref, "ref_file")
+    binary_flair_2_ref = apply_registration_node(
+        name="binary_flair_2_ref",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[inputnode, "ref_2_mni1_inverse_warp"],
+        moving=[binary_flair, "out_file"],
+        reference=[inputnode, "ref_brain"],
+        non_linear=True,
+        out_file="r-binary_flair.nii.gz"
+    )
 
     workflow.connect(extension_z_2_ref, "out_file", outputnode, "extension_z")
     workflow.connect(junction_z_2_ref, "out_file", outputnode, "junction_z")

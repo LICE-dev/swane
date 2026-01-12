@@ -75,8 +75,8 @@ class RegistrationNodeWrapper:
         self.out_registered_node=out_registered_node
         self.out_registered_image=out_registered_image
         self.warp = warp
-        self.inv_warp_node = warp
-        self.inv_warp = warp
+        self.inv_warp_node = inv_warp_node
+        self.inv_warp = inv_warp
 
 
 def get_registration_node(
@@ -84,18 +84,23 @@ def get_registration_node(
         use_synth: bool,
         workflow:CustomWorkflow,
         moving:str|list[Node|str],
-        moving_brain:str|list[Node|str],
         reference:str|list[Node|str],
+        moving_brain:str|list[Node|str]=None,
+        reference_brain:str|list[Node|str]=None,
         non_linear: bool=False,
         inverse:bool=False,
         out_file:str|list[Node|str]=None,
         is_volumetric:bool=True,
         flirt_cost:str="mutualinfo",
+        flirt_search:int=90,
 )->RegistrationNodeWrapper:
 
     # Sometimes we want to use flirt on unbetted images to take advantage of skull for registration
     if moving_brain is None:
         moving_brain=moving
+
+    if reference_brain is None:
+        reference_brain=reference
 
     if use_synth:
         # Prepare node inputs value
@@ -135,9 +140,9 @@ def get_registration_node(
     else:
         if non_linear:
             flirt = Node(FLIRT(), name=name+"_flirt")
-            flirt.inputs.searchr_x = [-90, 90]
-            flirt.inputs.searchr_y = [-90, 90]
-            flirt.inputs.searchr_z = [-90, 90]
+            flirt.inputs.searchr_x = [flirt_search, flirt_search]
+            flirt.inputs.searchr_y = [-flirt_search, flirt_search]
+            flirt.inputs.searchr_z = [-flirt_search, flirt_search]
             flirt.inputs.dof = 12
             # TODO consider switch to same-modality cost function
             flirt.inputs.cost = flirt_cost
@@ -145,10 +150,10 @@ def get_registration_node(
                 flirt.inputs.in_file = moving_brain
             else:
                 workflow.connect(moving_brain[0], moving_brain[1], flirt, "in_file")
-            if type(reference)==str:
-                flirt.inputs.reference = reference
+            if type(reference_brain)==str:
+                flirt.inputs.reference = reference_brain
             else:
-                workflow.connect(reference[0], reference[1], flirt, "reference")
+                workflow.connect(reference_brain[0], reference_brain[1], flirt, "reference")
 
             fnirt = Node(FNIRT(), name=name+"_fnirt")
             fnirt.long_name = "%s to atlas"
@@ -168,30 +173,30 @@ def get_registration_node(
             else:
                 workflow.connect(reference[0], reference[1], fnirt, "ref_file")
 
-            invwarp = None
+            inv_warp = None
             if inverse:
-                invwarp = Node(InvWarp(), name=name+"_invwarp")
-                workflow.connect(fnirt, "fieldcoeff_file", invwarp, "warp")
+                inv_warp = Node(InvWarp(), name=name+"_invwarp")
+                workflow.connect(fnirt, "fieldcoeff_file", inv_warp, "warp")
                 if type(moving) == str:
-                    invwarp.inputs.ref_file = moving
+                    inv_warp.inputs.ref_file = moving
                 else:
-                    workflow.connect(moving[0], moving[1], invwarp, "reference")
+                    workflow.connect(moving[0], moving[1], inv_warp, "reference")
 
             return RegistrationNodeWrapper(
                 input_node=flirt,
                 out_registered_node=fnirt,
                 out_registered_image="warped_file",
                 warp="fieldcoeff_file",
-                inv_warp_node=invwarp,
+                inv_warp_node=inv_warp,
                 inv_warp="inverse_warp"
             )
         else:
             flirt = Node(FLIRT(), name=name+"_flirt")
             if is_volumetric:
                 flirt.inputs.cost = flirt_cost
-                flirt.inputs.searchr_x = [-90, 90]
-                flirt.inputs.searchr_y = [-90, 90]
-                flirt.inputs.searchr_z = [-90, 90]
+                flirt.inputs.searchr_x = [-flirt_search, flirt_search]
+                flirt.inputs.searchr_y = [-flirt_search, flirt_search]
+                flirt.inputs.searchr_z = [-flirt_search, flirt_search]
                 flirt.inputs.dof = 6
                 flirt.inputs.interp = "trilinear"
             if out_file:
@@ -203,14 +208,14 @@ def get_registration_node(
                 flirt.inputs.in_file = moving_brain
             else:
                 workflow.connect(moving_brain[0], moving_brain[1], flirt, "in_file")
-            if type(reference) == str:
-                flirt.inputs.reference = reference
+            if type(reference_brain) == str:
+                flirt.inputs.reference = reference_brain
             else:
-                workflow.connect(reference[0], reference[1], flirt, "reference")
+                workflow.connect(reference_brain[0], reference_brain[1], flirt, "reference")
 
             inv_xfm = None
             if inverse:
-                inv_xfm = Node(InvWarp(), name=name+"_invwarp")
+                inv_xfm = Node(ConvertXFM(), name=name+"_invwarp")
                 inv_xfm.inputs.invert_xfm = True
                 workflow.connect(flirt, "out_matrix_file", inv_xfm, "in_file")
 
@@ -231,15 +236,20 @@ def apply_registration_node(
         warp:list[Node|str],
         moving:str|list[Node|str],
         reference:str|list[Node|str],
-        out_file:str|list[Node|str],
+        out_file:str|list[Node|str]=None,
         non_linear:bool=False,
-        pre_mat:list[Node|str]=None,
+        labelmap:bool=False,
 )->Node:
     if use_synth:
         apply_node = Node(SynthMorphApply(), name=name+"_morph_apply")
+        if labelmap:
+            apply_node.inputs.method = "nearest"
         workflow.connect(warp[0], warp[1], apply_node, "warp_file")
+
     elif non_linear:
         apply_node = Node(ApplyWarp(), name=name+"_apply_warp")
+        if labelmap:
+            apply_node.inputs.interp = "nn"
         workflow.connect(warp[0], warp[1], apply_node, "field_file")
         if type(reference) == str:
             apply_node.inputs.ref_file = reference
@@ -247,6 +257,7 @@ def apply_registration_node(
             workflow.connect(reference[0], reference[1], apply_node, "ref_file")
     else:
         apply_node = Node(ApplyXFM(), name=name + "_apply_xfm")
+        apply_node.inputs.interp = "nearestneighbour"
         workflow.connect(warp[0], warp[1], apply_node, "in_matrix_file")
         if type(reference) == str:
             apply_node.inputs.reference = reference
@@ -258,7 +269,9 @@ def apply_registration_node(
             apply_node.inputs.out_file = out_file
         else:
             workflow.connect(out_file[0], out_file[1], apply_node, "out_file")
-    if type(moving) == str:
+    if moving is None:
+        pass
+    elif type(moving) == str:
         apply_node.inputs.in_file = moving
     else:
         workflow.connect(moving[0], moving[1], apply_node, "in_file")
