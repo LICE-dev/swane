@@ -1,7 +1,6 @@
 from nipype.interfaces.fsl import (
     FLIRT,
     ApplyMask,
-    ApplyXFM,
     ImageMaths,
     Threshold,
     ErodeImage,

@@ -555,14 +555,6 @@ GLOBAL_PREFERENCES[category]["multicore_node_limit"] = PreferenceEntry(
         CORE_LIMIT.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
     },
 )
-GLOBAL_PREFERENCES[category]["exclude_synth"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Exclude FreeSurfer Synth tools",
-    tooltip="On some system Synth tools may crash, use this preference to disable thier execution",
-    default="false",
-    dependency="is_freesurfer_synth",
-    dependency_fail_tooltip="Synth tools not available without FreeSurfer 8.1.0 and at least 15GB RAM"
-)
 GLOBAL_PREFERENCES[category]["cuda"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Enable CUDA for GPUable commands",

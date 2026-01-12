@@ -189,11 +189,6 @@ class MainWorkflow(CustomWorkflow):
         )
         # Check if Slicer is installed to allow venous ct segmente_endocranium
         self.is_slicer = self.dependency_manager.is_slicer(self.global_config)
-        # Check if workflow should use synth tools
-        self.use_synth = (
-                DependencyManager.is_freesurfer_synth()
-                and not self.global_config.getboolean_safe(GlobalPrefCategoryList.PERFORMANCE,"exclude_synth")
-        )
 
     def launch_3dt1_analysis(self):
         ref_dir = self.subject_input_state_list.get_dicom_dir(DIL.T13D)
@@ -224,7 +219,10 @@ class MainWorkflow(CustomWorkflow):
             return
 
         # Non linear registration for Asymmetry Index
-        self.sym = nonlinear_reg_workflow(name="sym", use_synth=self.use_synth)
+        self.sym = nonlinear_reg_workflow(
+            name="sym",
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+        )
         self.sym.long_name = "Symmetric atlas registration"
 
         sym_inputnode = self.sym.get_node("inputnode")
@@ -242,13 +240,13 @@ class MainWorkflow(CustomWorkflow):
             is_hippo_amyg_labels=self.is_hippo_amyg_labels,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
-            use_synth=(self.use_synth and DependencyManager.is_freesurfer_new_reconall()),
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.freesurfer.long_name = "Freesurfer analysis"
 
         freesurfer_inputnode = self.freesurfer.get_node("inputnode")
         freesurfer_inputnode.inputs.subjects_dir = self.base_dir
-        self.connect(self.t1, "outputnode.ref", self.freesurfer, "inputnode.ref")
+        self.connect(self.t1, "outputnode.ref", self.freesurfer, "inputnode.reference")
 
         self.freesurfer.sink_result(
             save_path=self.base_dir,
@@ -333,7 +331,10 @@ class MainWorkflow(CustomWorkflow):
             return
 
         # Non linear registration to MNI1mm Atlas for FLAT1
-        self.mni1 = nonlinear_reg_workflow(name="mni1", use_synth=self.use_synth)
+        self.mni1 = nonlinear_reg_workflow(
+            name="mni1",
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+        )
         self.mni1.long_name = "MNI atlas registration"
 
         mni1_inputnode = self.mni1.get_node("inputnode")
@@ -349,7 +350,7 @@ class MainWorkflow(CustomWorkflow):
         self.flat1 = flat1_workflow(
             name="FLAT1",
             mni1_dir=mni1_path,
-            use_synth=self.use_synth
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.flat1.long_name = "FLAT1 analysis"
 
@@ -442,7 +443,7 @@ class MainWorkflow(CustomWorkflow):
             name=DIL.T2_COR.value.workflow_name,
             dicom_dir=t2_cor_dir,
             config=None,
-            is_volumetric=False,
+            is_volumetric=True, # perform better with volumetric settings
             is_partial_coverage=True,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
@@ -520,7 +521,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=asl_dir,
             is_freesurfer=self.is_freesurfer,
             config=self.subject_config[DIL.ASL],
-            use_synth=self.use_synth,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.asl.long_name = "Arterial Spin Labelling analysis"
 
@@ -630,7 +631,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=pet_dir,
             is_freesurfer=self.is_freesurfer,
             config=self.subject_config[DIL.PET],
-            use_synth=self.use_synth,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
         self.pet.long_name = "Pet analysis"
 
@@ -765,7 +766,7 @@ class MainWorkflow(CustomWorkflow):
         self.connect(
             self.t1, "outputnode.ref_brain", self.venous_ct, "inputnode.ref_brain"
         )
-        self.connect(self.t1, "outputnode.ref", self.venous_ct, "inputnode.ref")
+        self.connect(self.t1, "outputnode.ref", self.venous_ct, "inputnode.reference")
 
         self.venous_ct.sink_result(
             save_path=self.base_dir,
@@ -799,9 +800,9 @@ class MainWorkflow(CustomWorkflow):
         self.venous_mr.long_name = "Venous MRA analysis"
 
         self.connect(
-            self.t1, "outputnode.ref_brain", self.venous_mr, "inputnode.ref_brain"
+            self.t1, "outputnode.ref_brain", self.venous_mr, "inputnode.reference_brain"
         )
-        self.connect(self.t1, "outputnode.ref", self.venous_mr, "inputnode.ref")
+        self.connect(self.t1, "outputnode.ref", self.venous_mr, "inputnode.reference")
 
         self.venous_mr.sink_result(
             save_path=self.base_dir,
@@ -858,9 +859,9 @@ class MainWorkflow(CustomWorkflow):
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
         self.connect(
-            self.t1, "outputnode.ref_brain", self.dti_preproc, "inputnode.ref_brain"
+            self.t1, "outputnode.ref_brain", self.dti_preproc, "inputnode.reference_brain"
         )
-        self.connect(self.t1, "outputnode.ref", self.dti_preproc, "inputnode.ref")
+        self.connect(self.t1, "outputnode.ref", self.dti_preproc, "inputnode.reference")
 
         self.dti_preproc.sink_result(
             save_path=self.base_dir,
@@ -880,7 +881,7 @@ class MainWorkflow(CustomWorkflow):
                 tract_workflow = tractography_workflow(
                     name=tract,
                     config=self.subject_config[DIL.DTI],
-                    use_synth=self.use_synth,
+                    synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
                 )
                 if tract_workflow is not None:
                     tract_workflow.long_name = TRACTS[tract][0] + " tractography"
@@ -912,7 +913,7 @@ class MainWorkflow(CustomWorkflow):
                         self.t1,
                         "outputnode.ref_brain",
                         tract_workflow,
-                        "inputnode.ref_brain",
+                        "inputnode.reference_brain",
                     )
                     self.connect(
                         self.dti_preproc,

@@ -1,9 +1,7 @@
-from nipype.interfaces.fsl import BET, FLIRT, RobustFOV, ApplyXFM, ApplyMask
+from nipype.interfaces.fsl import RobustFOV, ApplyMask
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
-from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
@@ -128,9 +126,13 @@ def linear_reg_workflow(
 
     bet_thr = None if not config else config.getfloat_safe("bet_thr")
     bet_bias_correction = False if not config else config.getboolean_safe("bet_bias_correction")
+    flirt_search = 90
+    reference_brain = [inputnode, "reference_brain"]
 
     if is_partial_coverage:
         moving_brain = [robustfov, "out_roi"]
+        flirt_search = 40
+        reference_brain = [inputnode, "reference"]
     else:
         deskull = get_deskull_node(
             name=name+"_deskull",
@@ -150,9 +152,11 @@ def linear_reg_workflow(
         moving=[robustfov, "out_roi"],
         moving_brain=moving_brain,
         reference=[inputnode, "reference"],
+        reference_brain=reference_brain,
         is_volumetric=is_volumetric,
         out_file=[unbetted_name,"out_file"],
-        flirt_cost="mutualinfo"
+        flirt_cost="mutualinfo",
+        flirt_search=flirt_search
     )
 
     if is_partial_coverage:
@@ -179,135 +183,3 @@ def linear_reg_workflow(
     workflow.connect(reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "out_matrix_file")
 
     return workflow
-
-
-
-
-
-"""
-    if synth_config:
-        # Affine registration to reference space
-        reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name, mem_gb=9)
-        reg_2_ref.long_name = "%s to reference space"
-        reg_2_ref.inputs.warp_file = "%s_2_ref.lta" % name
-        if is_volumetric:
-            reg_2_ref.inputs.model = "affine"
-        else:
-            reg_2_ref.inputs.model = "rigid"
-        workflow.connect(robustfov, "out_roi", reg_2_ref, "in_file")
-        workflow.connect(inputnode, "reference", reg_2_ref, "reference")
-        workflow.connect(
-            inputnode, ("output_name", get_unbetted_name), reg_2_ref, "out_file"
-        )
-
-        # Scalp removal
-        ref_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
-        ref_deskull.inputs.exclude_csf = True
-        workflow.connect(reg_2_ref, "out_file", ref_deskull, "in_file")
-        workflow.connect(
-            inputnode, ("output_name", get_betted_name), ref_deskull, "out_file"
-        )
-
-        workflow.connect(reg_2_ref, "out_file", outputnode, "registered_file")
-        workflow.connect(ref_deskull, "out_file", outputnode, "registered_file_brain")
-        workflow.connect(reg_2_ref, "warp_file", outputnode, "out_matrix_file")
-
-    else:
-        if is_partial_coverage:
-            # NODE 4a: Linear registration to reference space
-            flirt_2_ref = Node(FLIRT(), name="%s_2_ref" % name)
-            flirt_2_ref.long_name = "%s to reference space"
-            flirt_2_ref.inputs.out_matrix_file = "%s_2_ref.mat" % name
-
-            flirt_2_ref.inputs.cost = "mutualinfo"
-            flirt_2_ref.inputs.searchr_x = [-40, 40]
-            flirt_2_ref.inputs.searchr_y = [-40, 40]
-            flirt_2_ref.inputs.searchr_z = [-40, 40]
-            flirt_2_ref.inputs.dof = 6
-            flirt_2_ref.inputs.interp = "trilinear"
-
-            workflow.connect(robustfov, "out_roi", flirt_2_ref, "in_file")
-            workflow.connect(
-                inputnode, ("output_name", get_unbetted_name), flirt_2_ref, "out_file"
-            )
-            workflow.connect(inputnode, "reference", flirt_2_ref, "reference")
-
-            # NODE 5a: Apply brain mask
-            brain_masking = Node(ApplyMask(), name="%s_brain_mask" % name)
-            brain_masking.long_name = "Brain %s"
-            workflow.connect(flirt_2_ref, "out_file", brain_masking, "in_file")
-            workflow.connect(
-                inputnode, ("output_name", get_betted_name), brain_masking, "out_file"
-            )
-            workflow.connect(inputnode, "brain_mask", brain_masking, "mask_file")
-
-            workflow.connect(flirt_2_ref, "out_file", outputnode, "registered_file")
-            workflow.connect(
-                brain_masking, "out_file", outputnode, "registered_file_brain"
-            )
-            workflow.connect(
-                flirt_2_ref, "out_matrix_file", outputnode, "out_matrix_file"
-            )
-
-        else:
-            # NODE 4b: Scalp removal
-            bet = Node(BET(), "%s_BET" % name)
-            if config is not None:
-                bet.inputs.frac = config.getfloat_safe("bet_thr")
-            if config is not None and config.getboolean_safe("bet_bias_correction"):
-                bet.inputs.reduce_bias = True
-            else:
-                bet.inputs.robust = True
-            bet.inputs.mask = True
-            workflow.connect(robustfov, "out_roi", bet, "in_file")
-
-            # NODE 5b: Linear registration to reference space
-            flirt_2_ref = Node(FLIRT(), name="%s_brain_2_ref" % name)
-            flirt_2_ref.long_name = "%s to reference space"
-            flirt_2_ref.inputs.out_matrix_file = "%s_2_ref.mat" % name
-
-            if is_volumetric:
-                flirt_2_ref.inputs.cost = "mutualinfo"
-                flirt_2_ref.inputs.searchr_x = [-90, 90]
-                flirt_2_ref.inputs.searchr_y = [-90, 90]
-                flirt_2_ref.inputs.searchr_z = [-90, 90]
-                flirt_2_ref.inputs.dof = 6
-                flirt_2_ref.inputs.interp = "trilinear"
-
-            workflow.connect(bet, "out_file", flirt_2_ref, "in_file")
-            workflow.connect(
-                inputnode, ("output_name", get_betted_name), flirt_2_ref, "out_file"
-            )
-            workflow.connect(inputnode, "reference_brain", flirt_2_ref, "reference")
-
-            # NODE 6b: Linear trasformation of unbetted series to reference space
-            unbet_flirt = Node(ApplyXFM(), name="%s_2_ref" % name)
-            unbet_flirt.long_name = "%s to reference space"
-
-            if is_volumetric:
-                unbet_flirt.inputs.cost = "mutualinfo"
-                unbet_flirt.inputs.searchr_x = [-90, 90]
-                unbet_flirt.inputs.searchr_y = [-90, 90]
-                unbet_flirt.inputs.searchr_z = [-90, 90]
-                unbet_flirt.inputs.dof = 6
-                unbet_flirt.inputs.interp = "trilinear"
-
-            workflow.connect(robustfov, "out_roi", unbet_flirt, "in_file")
-            workflow.connect(
-                flirt_2_ref, "out_matrix_file", unbet_flirt, "in_matrix_file"
-            )
-            workflow.connect(
-                inputnode, ("output_name", get_unbetted_name), unbet_flirt, "out_file"
-            )
-            workflow.connect(inputnode, "reference", unbet_flirt, "reference")
-
-            workflow.connect(
-                flirt_2_ref, "out_file", outputnode, "registered_file_brain"
-            )
-            workflow.connect(unbet_flirt, "out_file", outputnode, "registered_file")
-            workflow.connect(
-                flirt_2_ref, "out_matrix_file", outputnode, "out_matrix_file"
-            )
-
-    return workflow
-"""

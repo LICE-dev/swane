@@ -1,11 +1,8 @@
 from nipype.interfaces.freesurfer import SampleToSurface
 from nipype.interfaces.fsl import (
-    FLIRT,
     IsotropicSmooth,
-    ApplyWarp,
     ApplyMask,
     SwapDimensions,
-    ApplyXFM,
     ImageMaths,
 )
 from nipype.pipeline.engine import Node
@@ -15,12 +12,11 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.AsymmetryIndex import AsymmetryIndex
 from swane.nipype_pipeline.nodes.Zscore import Zscore
-from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
-from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 import swane_supplement
 from swane.config.config_enums import BETWEEN_MOD_FLIRT_COST
+from swane.nipype_pipeline.nodes.utils import apply_registration_node, get_registration_node
 
 
 def func_map_workflow(
@@ -28,7 +24,7 @@ def func_map_workflow(
     dicom_dir: str,
     is_freesurfer: bool,
     config: SectionProxy,
-    use_synth: bool,
+    synth_config: SectionProxy,
     base_dir: str = "/",
 ) -> CustomWorkflow:
     """
@@ -47,8 +43,8 @@ def func_map_workflow(
         True if the reconall is available.
     config: SectionProxy
         workflow settings.
-    use_synth: bool
-        if workflow should use FreeSurfer Synth tools.
+    synth_config: SectionProxy
+        FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -151,54 +147,41 @@ def func_map_workflow(
     smooth.inputs.sigma = 2
     workflow.connect(reorient, "out_file", smooth, "in_file")
 
-    # NODE 4: Registration matrix calculation in reference space
-    if use_synth:
-        # Affine registration to reference space
-        reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name, mem_gb=9)
-        reg_2_ref.long_name = "%s to reference space"
-        reg_2_ref.inputs.model = "affine"
-        workflow.connect(reorient, "out_file", reg_2_ref, "in_file")
-        workflow.connect(inputnode, "reference", reg_2_ref, "reference")
-
-        # Transformation of smoothed image in reference space
-        smooth_2_ref = Node(SynthMorphApply(), name="%s_smooth_2_ref_flirt" % name)
-        workflow.connect(smooth, "out_file", smooth_2_ref, "in_file")
-        workflow.connect(reg_2_ref, "warp_file", smooth_2_ref, "warp_file")
-
-    else:
-        func_2_ref_flirt = Node(FLIRT(), name="%s_2_ref_flirt" % name)
-        func_2_ref_flirt.long_name = "%s to reference space"
-        if (
+    if (
             config.getenum_safe("cost_func")
             is BETWEEN_MOD_FLIRT_COST.MULTUAL_INFORMATION
-        ):
-            cost = "mutualinfo"
-        elif (
+    ):
+        cost = "mutualinfo"
+    elif (
             config.getenum_safe("cost_func")
             is BETWEEN_MOD_FLIRT_COST.NORMALIZED_MUTUAL_INFORMATION
-        ):
-            cost = "normmi"
-        else:
-            cost = "corratio"
-        func_2_ref_flirt.inputs.cost = cost
-        func_2_ref_flirt.inputs.searchr_x = [-90, 90]
-        func_2_ref_flirt.inputs.searchr_y = [-90, 90]
-        func_2_ref_flirt.inputs.searchr_z = [-90, 90]
-        func_2_ref_flirt.inputs.dof = 6
-        func_2_ref_flirt.inputs.interp = "trilinear"
-        workflow.connect(reorient, "out_file", func_2_ref_flirt, "in_file")
-        workflow.connect(inputnode, "reference", func_2_ref_flirt, "reference")
+    ):
+        cost = "normmi"
+    else:
+        cost = "corratio"
 
-        # NODE 5: Smooth volume linear transformation in reference space
-        smooth_2_ref = Node(ApplyXFM(), name="%s_smooth_2_ref_flirt" % name)
-        smooth_2_ref.long_name = "%s to reference space"
-        smooth_2_ref.inputs.out_file = "r-%s.nii.gz" % name
-        smooth_2_ref.inputs.interp = "trilinear"
-        workflow.connect(smooth, "out_file", smooth_2_ref, "in_file")
-        workflow.connect(inputnode, "reference", smooth_2_ref, "reference")
-        workflow.connect(
-            func_2_ref_flirt, "out_matrix_file", smooth_2_ref, "in_matrix_file"
-        )
+    reg_wrap = get_registration_node(
+        name="%s_2_ref" % name,
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        moving=[reorient, "out_file"],
+        moving_brain=[reorient, "out_file"],
+        reference=[inputnode, "reference"],
+        is_volumetric=True,
+        flirt_cost=cost,
+        non_linear=False
+    )
+
+    smooth_2_ref = apply_registration_node(
+        name="%s_smooth_2_ref_flirt" % name,
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        moving=[smooth, "out_file"],
+        reference=[inputnode, "reference"],
+        non_linear=False,
+    )
+    workflow.connect(smooth_2_ref, "out_file", outputnode, "registered_file_brain")
 
     # NODE 6: Scalp removal
     mask = Node(ApplyMask(), name="%s_mask" % name)
@@ -270,19 +253,15 @@ def func_map_workflow(
     if is_ai:
         sym_template = swane_supplement.sym_template
 
-        if use_synth:
-            # NODE 11: Nonlinear transformation of the images in symmetric atlas
-            func_2_sym_warp = Node(SynthMorphApply(), name="%s_2_sym_warp" % name)
-            workflow.connect(smooth_2_ref, "out_file", func_2_sym_warp, "in_file")
-            workflow.connect(inputnode, "ref_2_sym_warp", func_2_sym_warp, "warp_file")
-
-        else:
-            # NODE 11: Nonlinear transformation of the images in symmetric atlas
-            func_2_sym_warp = Node(ApplyWarp(), name="%s_2_sym_warp" % name)
-            func_2_sym_warp.long_name = "%s to symmetric atlas"
-            func_2_sym_warp.inputs.ref_file = sym_template
-            workflow.connect(smooth_2_ref, "out_file", func_2_sym_warp, "in_file")
-            workflow.connect(inputnode, "ref_2_sym_warp", func_2_sym_warp, "field_file")
+        func_2_sym_warp = apply_registration_node(
+            name="%s_2_sym_warp" % name,
+            use_synth=synth_config.getboolean_safe("morph"),
+            workflow=workflow,
+            warp=[inputnode, "ref_2_sym_warp"],
+            moving=[smooth_2_ref, "out_file"],
+            reference=sym_template,
+            non_linear=True,
+        )
 
         # NODE 12: RL swap of image in symmetric atlas
         sym_swap = Node(SwapDimensions(), name="%s_sym_swap" % name)
@@ -305,20 +284,15 @@ def func_map_workflow(
         ai_threshold.inputs.op_string = "-thr %f -uthr %f" % (-threshold, threshold)
         workflow.connect(ai, "out_file", ai_threshold, "in_file")
 
-        if use_synth:
-            # NODE 15: AI Nonlinear transformation to reference space
-            ai_2_ref = Node(SynthMorphApply(), name="%s_ai_2_ref" % name)
-            workflow.connect(ai_threshold, "out_file", ai_2_ref, "in_file")
-            workflow.connect(inputnode, "ref_2_sym_invwarp", ai_2_ref, "warp_file")
-
-        else:
-            # NODE 15: AI Nonlinear transformation to reference space
-            ai_2_ref = Node(ApplyWarp(), name="%s_ai_2_ref" % name)
-            ai_2_ref.long_name = "asymmetry index %s from symmetric atlas"
-            ai_2_ref.inputs.out_file = "r-%s_ai.nii.gz" % name
-            workflow.connect(ai_threshold, "out_file", ai_2_ref, "in_file")
-            workflow.connect(inputnode, "ref_2_sym_invwarp", ai_2_ref, "field_file")
-            workflow.connect(inputnode, "reference", ai_2_ref, "ref_file")
+        ai_2_ref = apply_registration_node(
+            name="%s_ai_2_ref" % name,
+            use_synth=synth_config.getboolean_safe("morph"),
+            workflow=workflow,
+            warp=[inputnode, "ref_2_sym_invwarp"],
+            moving=[ai_threshold, "out_file"],
+            reference=[inputnode, "reference"],
+            non_linear=True,
+        )
 
         # NODE 16: AI scalp removal
         ai_mask = Node(ApplyMask(), name="%s_ai_mask" % name)

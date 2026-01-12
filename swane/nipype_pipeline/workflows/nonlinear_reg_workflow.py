@@ -1,11 +1,11 @@
 from nipype import Node, IdentityInterface
-from nipype.interfaces.fsl import FLIRT, FNIRT, InvWarp
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
+from configparser import SectionProxy
+from swane.nipype_pipeline.nodes.utils import get_registration_node
 
 
 # TODO check base_dir = "./"
-def nonlinear_reg_workflow(name: str, use_synth: bool, base_dir: str = "/") -> CustomWorkflow:
+def nonlinear_reg_workflow(name: str, synth_config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
     """
     Transforms input images in a reference space through a nonlinear registration.
     For symmetric atlas, make a RL swapped to unswapped nonlinear registration.
@@ -14,8 +14,8 @@ def nonlinear_reg_workflow(name: str, use_synth: bool, base_dir: str = "/") -> C
     ----------
     name : str
         The workflow name.
-    use_synth: bool
-        if workflow should use FreeSurfer Synth tools.
+    synth_config: SectionProxy
+        FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -52,54 +52,25 @@ def nonlinear_reg_workflow(name: str, use_synth: bool, base_dir: str = "/") -> C
     # Output Node
     outputnode = Node(
         IdentityInterface(
-            fields=["fieldcoeff_file", "inverse_warp", "out_matrix_file", "warped_file"]
+            fields=["fieldcoeff_file", "inverse_warp", "warped_file"]
         ),
         name="outputnode",
     )
 
-    if use_synth:
-        # Affine registration to reference space
-        reg_2_ref = Node(SynthMorphReg(), name="%s_2_ref" % name, mem_gb=13)
-        reg_2_ref.long_name = "%s to atlas space"
-        reg_2_ref.inputs.model = "joint"
-        workflow.connect(inputnode, "in_file", reg_2_ref, "in_file")
-        workflow.connect(inputnode, "atlas", reg_2_ref, "reference")
+    reg_wrap = get_registration_node(
+        name=name,
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        moving=[inputnode, "in_file"],
+        moving_brain=[inputnode, "in_file"],
+        reference=[inputnode, "atlas"],
+        flirt_cost="corratio",
+        inverse=True,
+        non_linear=True
+    )
 
-        workflow.connect(reg_2_ref, "warp_file", outputnode, "fieldcoeff_file")
-        workflow.connect(reg_2_ref, "inv_warp_file", outputnode, "inverse_warp")
-
-    else:
-        # NODE 1: Linear registration
-        flirt = Node(FLIRT(), name="ref_2_%s_flirt" % name)
-        flirt.long_name = "%s to atlas"
-        flirt.inputs.searchr_x = [-90, 90]
-        flirt.inputs.searchr_y = [-90, 90]
-        flirt.inputs.searchr_z = [-90, 90]
-        flirt.inputs.dof = 12
-        # TODO consider switch to same-modality cost function
-        flirt.inputs.cost = "corratio"
-        flirt.inputs.out_matrix_file = "ref_2_%s.mat" % name
-        workflow.add_nodes([flirt])
-        workflow.connect(inputnode, "in_file", flirt, "in_file")
-        workflow.connect(inputnode, "atlas", flirt, "reference")
-
-        # NODE 2: Nonlinear registration
-        fnirt = Node(FNIRT(), name="ref_2_%s_fnirt" % name)
-        fnirt.long_name = "%s to atlas"
-        fnirt.inputs.fieldcoeff_file = True
-        workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
-        workflow.connect(inputnode, "in_file", fnirt, "in_file")
-        workflow.connect(inputnode, "atlas", fnirt, "ref_file")
-
-        # NODE 3: Inverse matrix
-        invwarp = Node(InvWarp(), name="ref_2_%s_invwarp" % name)
-        invwarp.long_name = "%s from atlas"
-        workflow.connect(fnirt, "fieldcoeff_file", invwarp, "warp")
-        workflow.connect(inputnode, "in_file", invwarp, "reference")
-
-        workflow.connect(flirt, "out_matrix_file", outputnode, "out_matrix_file")
-        workflow.connect(fnirt, "fieldcoeff_file", outputnode, "fieldcoeff_file")
-        workflow.connect(fnirt, "warped_file", outputnode, "warped_file")
-        workflow.connect(invwarp, "inverse_warp", outputnode, "inverse_warp")
+    workflow.connect(reg_wrap.out_registered_node, reg_wrap.out_registered_image, outputnode, "warped_file")
+    workflow.connect(reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "fieldcoeff_file")
+    workflow.connect(reg_wrap.inv_warp_node, reg_wrap.inv_warp, outputnode, "inverse_warp")
 
     return workflow
