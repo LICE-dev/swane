@@ -128,6 +128,14 @@ class PreferencesWindow(QDialog):
                     # After the loop check if pref should be enabled
                     self.requirement_changed(False, category, key)
 
+                # Handle validation on change
+                if self.preferences[category][key].validate_on_change:
+                    self.inputs[x].connect_change(
+                        lambda checked, my_cat=category, my_key=key: self.validation_field_changed(
+                            checked, my_cat, my_key
+                        )
+                    )
+
                 # Data input requirements
                 if (
                     not my_config.global_config
@@ -270,6 +278,10 @@ class PreferencesWindow(QDialog):
                 )
                 return False
         return True
+
+    def validation_field_changed(self, checked, my_cat: str, my_key: str):
+        validation_holder = my_key + self.my_config.VALIDATION_SUFFIX
+        self.my_config[my_cat][validation_holder] = "true"
 
     def requirement_changed(self, checked, my_cat: str, my_key: str):
         """
