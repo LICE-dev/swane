@@ -10,6 +10,8 @@ from swane.utils.MailManager import MailManager
 
 class ConfigManager(configparser.ConfigParser):
 
+    VALIDATION_SUFFIX="_validation"
+
     # Overrides to accept non-str stringable object as section keys
     def __getitem__(self, key):
         return super().__getitem__(str(key))
@@ -125,6 +127,8 @@ class ConfigManager(configparser.ConfigParser):
                             self[category][pref] = str(
                                 GLOBAL_PREFERENCES[category][pref].default
                             )
+                        if GLOBAL_PREFERENCES[category][pref].validate_on_change:
+                            self[category][pref+ConfigManager.VALIDATION_SUFFIX]="true"
 
             for data_input in DataInputList:
                 if data_input in WF_PREFERENCES:
@@ -252,6 +256,16 @@ class ConfigManager(configparser.ConfigParser):
         if self.global_config:
             return self[GlobalPrefCategoryList.MAIN]["slicer_path"]
         return ""
+
+    def get_slicer_validator(self) -> bool:
+        """
+        Returns
+        -------
+        A bool, true if slicer executable validation needs to be checked
+        """
+        if self.global_config:
+            return self.getboolean_safe(GlobalPrefCategoryList.MAIN,"slicer_path"+self.VALIDATION_SUFFIX)
+        return False
 
     def set_slicer_path(self, slicer_path: str):
         """

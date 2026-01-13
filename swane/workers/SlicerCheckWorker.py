@@ -26,8 +26,10 @@ class SlicerCheckWorker(QRunnable):
         # If current_slicer_path doeas not exists, replace with a blank string
         # If it is a file, search in its directory
         if not os.path.exists(current_slicer_path):
+            print(2)
             current_slicer_path = ""
         elif os.path.isfile(current_slicer_path):
+            print(3)
             current_slicer_path = os.path.dirname(current_slicer_path)
 
         # Adjust search path based on OS
@@ -52,9 +54,11 @@ class SlicerCheckWorker(QRunnable):
                 + src_path
                 + " -executable -type f -wholename *bin/PythonSlicer -print -quit 2>/dev/null"
             )
+
             rel_path = "../Slicer"
 
         # Perform search with find
+        print(find_cmd)
         output = subprocess.run(
             find_cmd, shell=True, stdout=subprocess.PIPE
         ).stdout.decode("utf-8")
@@ -70,12 +74,15 @@ class SlicerCheckWorker(QRunnable):
         label = ""
         slicer_version = ""
 
+        print(1, self.current_slicer_path)
+
         while repeat:
             split, rel_path = SlicerCheckWorker.find_slicer_python(
                 self.current_slicer_path
             )
             # find slicerpython executable and go back to slicer executable with rel_path
             for entry in split:
+                print(entry)
                 cmd = os.path.abspath(os.path.join(os.path.dirname(entry), rel_path))
                 break
             if cmd == "" or not os.path.exists(cmd):
@@ -87,12 +94,14 @@ class SlicerCheckWorker(QRunnable):
                     repeat = False
                 label = strings.check_dep_slicer_error1
             else:
+                print(2)
                 # if slicer command is found, version check
                 repeat = False
                 cmd2 = cmd + " --version"
                 output2 = subprocess.run(
                     cmd2, shell=True, stdout=subprocess.PIPE
                 ).stdout.decode("utf-8")
+                print(output2)
                 slicer_version = output2.replace("Slicer ", "").replace("\n", "")
                 if not DependencyManager.check_slicer_version(slicer_version):
                     label = strings.check_dep_slicer_wrong_version % (

@@ -223,6 +223,9 @@ class DependencyManager:
         if not DependencyManager.check_slicer_version(config.get_slicer_version()):
             check_slicer = True
 
+        if config.get_slicer_validator():
+            check_slicer = True
+
         return check_slicer
 
     @staticmethod
@@ -261,9 +264,6 @@ class DependencyManager:
         """
         from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 
-        # if user set manually a Slicer path it is saved with a * as first character to force check that folder
-        if current_slicer_path != "" and current_slicer_path[0] == "*":
-            current_slicer_path = current_slicer_path[1:]
         if not os.path.exists(current_slicer_path):
             current_slicer_path = ""
 
