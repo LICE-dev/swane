@@ -128,6 +128,11 @@ class PreferenceUIEntry:
         informative_text_label = None
         if self.informative_text is not None:
             informative_text_label = QLabel()
+            font = informative_text_label.font()
+            font.setPointSize(max(font.pointSize() - 0.5, 1))
+            font.setItalic(True)
+            informative_text_label.setFont(font)
+            informative_text_label.setIndent(20)
             self.connect_change(self.set_informative_text)
         return informative_text_label
 

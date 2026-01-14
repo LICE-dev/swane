@@ -7,15 +7,17 @@ em.interactive = False  # prevent display of popups
 restart = False
 
 extension_list = sys.argv[1].split(',')
-errors = False
+errors = []
 
 for extensionName in extension_list:
     if not hasattr(
         slicer.moduleNames, extensionName
     ) and not em.installExtensionFromServer(extensionName, restart):
-        errors = True
+        errors.append(extensionName)
 
-if not errors:
+if len(errors) == 0:
     print("MODULE FOUND")
+else:
+    print("MODULE MISSING:" + ", ".join(errors))
 
 sys.exit(0)
