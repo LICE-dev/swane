@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QSpacerItem,
     QSizePolicy,
-    QPlainTextEdit,
+    QPlainTextEdit, QScrollArea,
 )
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics
@@ -24,7 +24,7 @@ import subprocess
 from numpy import ndarray
 
 
-class NipypeNodeRuntimeWidget(QWidget):
+class NipypeNodeRuntimeWidget(QScrollArea):
     """
     Widget displaying runtime information for a Nipype node.
     Each row has a fixed minimum height to keep the UI consistent.
@@ -40,8 +40,13 @@ class NipypeNodeRuntimeWidget(QWidget):
         super().__init__(parent)
 
         # Create the grid layout
+        self.setWidgetResizable(True)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.main_widget = QWidget()
+        self.setWidget(self.main_widget)
         self.grid = QGridLayout()
-        self.setLayout(self.grid)
+        self.main_widget.setLayout(self.grid)
         self.grid.setColumnStretch(6, 1)
 
         self._row = 0
