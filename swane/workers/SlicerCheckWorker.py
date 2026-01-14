@@ -103,13 +103,15 @@ class SlicerCheckWorker(QRunnable):
                     state = DependenceStatus.WARNING
                 else:
                     # Try to automatically install Slicer extensions
+                    module_list = ','.join(DependencyManager.SLICER_MODULES)
                     cmd3 = (
                         cmd
                         + " --no-splash --no-main-window --python-script "
                         + os.path.join(
                             os.path.dirname(__file__),
-                            "slicer_script_module_install.py",
+                            "slicer_script_module_install.py ",
                         )
+                        + module_list
                     )
                     output3 = subprocess.run(
                         cmd3, shell=True, stdout=subprocess.PIPE
@@ -118,7 +120,8 @@ class SlicerCheckWorker(QRunnable):
                         state = DependenceStatus.DETECTED
                         label = strings.check_dep_slicer_found % slicer_version
                     else:
-                        label = strings.check_dep_slicer_error2
+                        state = DependenceStatus.WARNING
+                        label = strings.check_dep_slicer_error2 % module_list
 
         self.signal.slicer.emit(cmd, slicer_version, label, state)
 

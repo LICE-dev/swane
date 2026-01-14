@@ -6,7 +6,7 @@ em = slicer.app.extensionsManagerModel()
 em.interactive = False  # prevent display of popups
 restart = False
 
-extension_list = ["SlicerFreeSurfer", "SurfaceWrapSolidify"]
+extension_list = sys.argv[1].split(',')
 errors = False
 
 for extensionName in extension_list:
