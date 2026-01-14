@@ -17,5 +17,3 @@ mean_flair = os.path.abspath(os.path.join(os.path.dirname(__file__), "resources/
 std_final_extension = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                                    "resources/FLAT1/std_final_extension.nii.gz"))
 std_final_flair = os.path.abspath(os.path.join(os.path.dirname(__file__), "resources/FLAT1/std_final_flair.nii.gz"))
-
-swane_slicer_module_zip = os.path.abspath(os.path.join(os.path.dirname(__file__), "resources/SwaneSlicerModule.zip"))
