@@ -267,6 +267,16 @@ class ConfigManager(configparser.ConfigParser):
             return self.getboolean_safe(GlobalPrefCategoryList.MAIN,"slicer_path"+self.VALIDATION_SUFFIX)
         return False
 
+    def set_slicer_validator(self, value:bool):
+        """
+        Returns
+        -------
+        A bool, true if slicer executable validation needs to be checked
+        """
+        if self.global_config:
+            self[GlobalPrefCategoryList.MAIN]["slicer_path"+self.VALIDATION_SUFFIX] = str(value)
+        return False
+
     def set_slicer_path(self, slicer_path: str):
         """
         Set the slicer executable path

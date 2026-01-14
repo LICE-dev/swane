@@ -280,9 +280,9 @@ check_dep_slicer_error1 = (
     "/getting_started.html#installing-3d-slicer/'>Installation info</a>)"
 )
 check_dep_slicer_error2 = (
-    "Required Slicer modules %s are missing (<a "
+    "Required Slicer modules (%s) are missing (<a "
     "href='https://slicer.readthedocs.io/en/latest/user_guide/extensions_manager.html?highlight"
-    "=extension%20manager'>Extensions Manager info</a>)"
+    "=extension%%20manager'>Extensions Manager info</a>)"
 )
 check_dep_slicer_wrong_version = (
     "Slicer version outdated (found %s, required %s). Please "

@@ -86,7 +86,7 @@ class DependencyManager:
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
     FSL_TCSH_COMMAND = "tcsh"
     FLS_LOCALE_COMMAND = "locale -a | grep en_US.utf8 >/dev/null || false "
-    SLICER_MODULES = ["SlicerFreeSurfer", "SurfaceWrapSolidify","blabla"]
+    SLICER_MODULES = ["SlicerFreeSurfer", "SurfaceWrapSolidify"]
 
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
