@@ -893,7 +893,6 @@ class MainWindow(QMainWindow):
             self.global_config.set_slicer_validator(False)
             self.global_config.save()
 
-
         for tab in self.subject_tab_array:
             tab.export_results_button_update_state()
             tab.load_scene_button_update_state()

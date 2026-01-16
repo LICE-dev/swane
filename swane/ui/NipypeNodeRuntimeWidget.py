@@ -6,7 +6,8 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QSpacerItem,
     QSizePolicy,
-    QPlainTextEdit, QScrollArea,
+    QPlainTextEdit,
+    QScrollArea,
 )
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics

@@ -158,7 +158,7 @@ def tractography_workflow(
             moving=seed_file,
             reference=[inputnode, "reference_brain"],
             non_linear=True,
-            labelmap=True
+            labelmap=True,
         )
 
         # NODE 4: Target ROIs nonlinear transformation in T13D reference space
@@ -172,7 +172,7 @@ def tractography_workflow(
             moving=None,
             reference=[inputnode, "reference_brain"],
             non_linear=True,
-            labelmap=True
+            labelmap=True,
         )
         if len(target_files) > 1:
             targets_2_ref.iterables = ("in_file", target_files)
@@ -238,7 +238,9 @@ def tractography_workflow(
             probtrackx_inverted.inputs.use_gpu = is_cuda
             workflow.connect(inputnode, "fsamples", probtrackx_inverted, "fsamples")
             workflow.connect(inputnode, "mask", probtrackx_inverted, "mask")
-            workflow.connect(inputnode, "reference_brain", probtrackx_inverted, "seed_ref")
+            workflow.connect(
+                inputnode, "reference_brain", probtrackx_inverted, "seed_ref"
+            )
             workflow.connect(inputnode, "phsamples", probtrackx_inverted, "phsamples")
             workflow.connect(inputnode, "thsamples", probtrackx_inverted, "thsamples")
             workflow.connect(inputnode, "ref2diff_mat", probtrackx_inverted, "xfm")
@@ -261,7 +263,7 @@ def tractography_workflow(
                 moving=exclude_file,
                 reference=[inputnode, "reference_brain"],
                 non_linear=True,
-                labelmap=True
+                labelmap=True,
             )
             workflow.connect(exclude_2_ref, "out_file", probtrackx, "avoid_mp")
 
@@ -283,7 +285,7 @@ def tractography_workflow(
                 moving=stop_file,
                 reference=[inputnode, "reference_brain"],
                 non_linear=True,
-                labelmap=True
+                labelmap=True,
             )
             workflow.connect(stop_2_ref, "out_file", probtrackx, "stop_mask")
 

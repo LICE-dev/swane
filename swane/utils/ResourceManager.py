@@ -18,20 +18,26 @@ class ResourceManager:
 
     @staticmethod
     def to_gb(bt: float) -> float:
-        return round(bt / (1024 ** 3), 2)
+        return round(bt / (1024**3), 2)
 
     @staticmethod
-    def total_memory_gb()->float:
+    def total_memory_gb() -> float:
         return ResourceManager.to_gb(virtual_memory().total)
 
     @staticmethod
     def get_minimum_ram() -> float:
-        minimum_ram = max(ResourceManager.MINIMUM_RAM, ResourceManager.get_ram_by_perc(ResourceManager.MINIMUM_RAM_PERC))
+        minimum_ram = max(
+            ResourceManager.MINIMUM_RAM,
+            ResourceManager.get_ram_by_perc(ResourceManager.MINIMUM_RAM_PERC),
+        )
         return min(minimum_ram, ResourceManager.total_memory_gb())
 
     @staticmethod
     def get_maximum_ram() -> float:
-        maximum_ram = max(ResourceManager.MINIMUM_RAM, ResourceManager.get_ram_by_perc(ResourceManager.MAXIMUM_RAM_PERC))
+        maximum_ram = max(
+            ResourceManager.MINIMUM_RAM,
+            ResourceManager.get_ram_by_perc(ResourceManager.MAXIMUM_RAM_PERC),
+        )
         return min(maximum_ram, ResourceManager.total_memory_gb())
 
     @staticmethod
@@ -73,11 +79,12 @@ class ResourceManager:
     def suggested_max_cpu():
         # TODO: ricontrolliamo questa!
         try:
-            return max(ceil(min(cpu_count() / 2, ResourceManager.total_memory_gb() / 3)), 1)
+            return max(
+                ceil(min(cpu_count() / 2, ResourceManager.total_memory_gb() / 3)), 1
+            )
         except:
             return 1
 
     @staticmethod
     def max_cpu():
         return cpu_count()
-

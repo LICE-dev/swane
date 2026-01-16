@@ -116,9 +116,14 @@ if not hasattr(slicer, "_hideZeroInstalled"):
     def check_patch(slicerrc_path):
         """Return True if the HideZero patch exists and is identical to our snippet."""
         content = SlicerCheckWorker.read_slicerrc(slicerrc_path)
-        if SlicerCheckWorker.BEGIN_MARKER in content and SlicerCheckWorker.END_MARKER in content:
+        if (
+            SlicerCheckWorker.BEGIN_MARKER in content
+            and SlicerCheckWorker.END_MARKER in content
+        ):
             start = content.index(SlicerCheckWorker.BEGIN_MARKER)
-            end = content.index(SlicerCheckWorker.END_MARKER) + len(SlicerCheckWorker.END_MARKER)
+            end = content.index(SlicerCheckWorker.END_MARKER) + len(
+                SlicerCheckWorker.END_MARKER
+            )
             current_patch = content[start:end]
             return current_patch.strip() == SlicerCheckWorker.HIDE_ZERO_CODE.strip()
         return False
@@ -152,16 +157,20 @@ if not hasattr(slicer, "_hideZeroInstalled"):
     def remove_patch(slicerrc_path, return_content=False):
         """Remove the HideZero patch from slicerrc.py."""
         content = SlicerCheckWorker.read_slicerrc(slicerrc_path)
-        if SlicerCheckWorker.BEGIN_MARKER in content and SlicerCheckWorker.END_MARKER in content:
+        if (
+            SlicerCheckWorker.BEGIN_MARKER in content
+            and SlicerCheckWorker.END_MARKER in content
+        ):
             start = content.index(SlicerCheckWorker.BEGIN_MARKER)
-            end = content.index(SlicerCheckWorker.END_MARKER) + len(SlicerCheckWorker.END_MARKER)
+            end = content.index(SlicerCheckWorker.END_MARKER) + len(
+                SlicerCheckWorker.END_MARKER
+            )
             new_content = content[:start] + content[end:]
             if return_content:
                 return new_content
             SlicerCheckWorker.write_slicerrc(slicerrc_path, new_content)
         elif return_content:
             return content
-
 
     def run(self):
         repeat = True
@@ -209,7 +218,7 @@ if not hasattr(slicer, "_hideZeroInstalled"):
                             os.path.dirname(__file__),
                             "slicer_script_module_install.py ",
                         )
-                        + ','.join(DependencyManager.SLICER_MODULES)
+                        + ",".join(DependencyManager.SLICER_MODULES)
                     )
                     output3 = subprocess.run(
                         cmd3, shell=True, stdout=subprocess.PIPE
@@ -219,10 +228,12 @@ if not hasattr(slicer, "_hideZeroInstalled"):
                         label = strings.check_dep_slicer_found % slicer_version
                         SlicerCheckWorker.add_slicer_startup_patch()
                     else:
-                        missing_modules = ', '.join(DependencyManager.SLICER_MODULES)
+                        missing_modules = ", ".join(DependencyManager.SLICER_MODULES)
                         for line in output3.splitlines():
                             if "MODULE MISSING:" in line:
-                                missing_modules = line.split("MODULE MISSING:", 1)[1].strip()
+                                missing_modules = line.split("MODULE MISSING:", 1)[
+                                    1
+                                ].strip()
                                 break
                         state = DependenceStatus.WARNING
                         label = strings.check_dep_slicer_error2 % missing_modules
