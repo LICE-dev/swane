@@ -39,6 +39,7 @@ class CustomWorkflow(Workflow):
         else:
             formatted_name = node.name
 
+        formatted_name = formatted_name.strip()
         formatted_name = formatted_name[0].upper() + formatted_name[1:]
         return formatted_name
 

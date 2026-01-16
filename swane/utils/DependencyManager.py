@@ -7,8 +7,8 @@ from packaging import version
 from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 from enum import Enum, auto
-from nipype.utils.gpu_count import gpu_count
 import platform
+
 
 
 class DependenceStatus(Enum):
@@ -80,12 +80,11 @@ class DependencyManager:
     MIN_FSL_VERSION = "6.0.6"
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
-    SYNTH_FREESURFER_RAM_REQUIREMENT = 15
-    NEWRECONALL_FREESURFER_RAM_REQUIREMENT = 20
     MIN_SLICER_VERSION = "5.2.1"
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
     FSL_TCSH_COMMAND = "tcsh"
     FLS_LOCALE_COMMAND = "locale -a | grep en_US.utf8 >/dev/null || false "
+    SLICER_MODULES = ["SlicerFreeSurfer", "SurfaceWrapSolidify"]
 
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
@@ -152,30 +151,7 @@ class DependencyManager:
         except:
             return False
 
-        # FS version for synth tools
-        if found_version < version.parse(DependencyManager.SYNTH_FREESURFER_VERSION):
-            return False
-        else:
-            # RAM requirement for synth tools
-            return (
-                virtual_memory().total / (1024**3)
-                >= DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT
-            )
-
-    @staticmethod
-    def is_freesurfer_new_reconall() -> bool:
-        """
-        Returns
-        -------
-        True if freesurfer version contains synth commands and system has enough RAM for new reconall.
-
-        """
-        if not DependencyManager.is_freesurfer_synth():
-            return False
-        return (
-            virtual_memory().total / (1024**3)
-            >= DependencyManager.NEWRECONALL_FREESURFER_RAM_REQUIREMENT
-        )
+        return found_version >= version.parse(DependencyManager.SYNTH_FREESURFER_VERSION)
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -223,6 +199,9 @@ class DependencyManager:
         if not DependencyManager.check_slicer_version(config.get_slicer_version()):
             check_slicer = True
 
+        if config.get_slicer_validator():
+            check_slicer = True
+
         return check_slicer
 
     @staticmethod
@@ -261,9 +240,6 @@ class DependencyManager:
         """
         from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 
-        # if user set manually a Slicer path it is saved with a * as first character to force check that folder
-        if current_slicer_path != "" and current_slicer_path[0] == "*":
-            current_slicer_path = current_slicer_path[1:]
         if not os.path.exists(current_slicer_path):
             current_slicer_path = ""
 
@@ -427,7 +403,3 @@ class DependencyManager:
             strings.check_dep_fs_found % freesurfer_version,
             DependenceStatus.DETECTED,
         )
-
-    @staticmethod
-    def is_cuda():
-        return gpu_count() > 0

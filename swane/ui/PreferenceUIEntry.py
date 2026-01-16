@@ -70,7 +70,6 @@ class PreferenceUIEntry:
         self.informative_text_label = self.gen_informative_text_label()
         if self.input_type == InputTypes.ENUM and entry.value_enum is not None:
             self.populate_combo(entry.value_enum)
-        self.validate_on_change = entry.validate_on_change
 
         # Apply values to GUI elements
         self.set_label_text(entry.label)
@@ -129,6 +128,11 @@ class PreferenceUIEntry:
         informative_text_label = None
         if self.informative_text is not None:
             informative_text_label = QLabel()
+            font = informative_text_label.font()
+            font.setPointSize(max(font.pointSize() - 0.5, 1))
+            font.setItalic(True)
+            informative_text_label.setFont(font)
+            informative_text_label.setIndent(20)
             self.connect_change(self.set_informative_text)
         return informative_text_label
 
@@ -221,9 +225,6 @@ class PreferenceUIEntry:
             msg_box.setText(error)
             msg_box.exec()
             return
-
-        if self.validate_on_change:
-            file_path = "*" + file_path
 
         self.set_value(file_path)
 

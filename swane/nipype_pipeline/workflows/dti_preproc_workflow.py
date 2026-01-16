@@ -1,12 +1,8 @@
 from nipype.interfaces.fsl import (
-    BET,
-    FLIRT,
     ConvertXFM,
     ExtractROI,
     EddyCorrect,
     DTIFit,
-    ApplyXFM,
-    FNIRT,
     BEDPOSTX5,
 )
 from nipype.interfaces.freesurfer.utils import LTAConvert
@@ -17,9 +13,7 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
 from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
-from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
-from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
-from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
+from swane.nipype_pipeline.nodes.utils import get_deskull_node, get_registration_node, apply_registration_node
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
 from multiprocessing import cpu_count
@@ -31,7 +25,7 @@ def dti_preproc_workflow(
     name: str,
     dti_dir: str,
     config: SectionProxy,
-    use_synth: bool,
+    synth_config: SectionProxy,
     base_dir: str = "/",
     max_cpu: int = 0,
     multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP,
@@ -51,8 +45,8 @@ def dti_preproc_workflow(
         The base directory path relative to parent workflow. The default is "/".
     config: SectionProxy
         workflow settings.
-    use_synth: bool
-        if workflow should use FreeSurfer Synth tools.
+    synth_config: SectionProxy
+        FreeSurfer Synth tools settings.
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
     multicore_node_limit: CORE_LIMIT, optional
@@ -60,9 +54,9 @@ def dti_preproc_workflow(
 
     Input Node Fields
     ----------
-    ref: path
+    reference: path
         T13D reference file.
-    ref_brain : path
+    reference_brain : path
         Betted T13D reference file.
 
     Returns
@@ -94,7 +88,7 @@ def dti_preproc_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["ref_brain", "ref"]), name="inputnode")
+    inputnode = Node(IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode")
 
     # Output Node
     outputnode = Node(
@@ -137,17 +131,17 @@ def dti_preproc_workflow(
     workflow.connect(reorient, "out_file", nodif, "in_file")
 
     # NODE 3: Scalp removal from b0 image
-    if use_synth:
-        b0_deskull = Node(SynthStrip(), name="%s_synthstrip" % name, mem_gb=5)
-        b0_deskull.inputs.mask_file = "nodif_brain_mask.nii.gz"
-        workflow.connect(nodif, "roi_file", b0_deskull, "in_file")
-    else:
-        b0_deskull = Node(BET(), name="nodif_BET")
-        b0_deskull.inputs.frac = 0.3
-        b0_deskull.inputs.robust = True
-        b0_deskull.inputs.threshold = True
-        b0_deskull.inputs.mask = True
-        workflow.connect(nodif, "roi_file", b0_deskull, "in_file")
+    b0_deskull = get_deskull_node(
+        name="dti_deskull",
+        name_prefix="DTI",
+        use_synth=synth_config.getboolean_safe("strip"),
+        mask=True,
+        bet_thr=0.3,
+        bet_robust=True,
+        bet_threshold=True,
+        out_file="nodif_brain.nii.gz",
+    )
+    workflow.connect(nodif, "roi_file", b0_deskull, "in_file")
 
     old_eddy_correct = config.getboolean_safe("old_eddy_correct")
     if old_eddy_correct:
@@ -198,110 +192,73 @@ def dti_preproc_workflow(
     workflow.connect(conversion, "bvals", dtifit, "bvals")
 
     # NODE 6: b0 image linear registration in reference space
-    if use_synth:
-        dif2ref = Node(SynthMorphReg(), name="diff2ref_synthreg", mem_gb=9)
-        dif2ref.long_name = "%s to reference space"
-        dif2ref.long_name = "%s to reference space"
-        dif2ref.inputs.model = "affine"
-        workflow.connect(nodif, "roi_file", dif2ref, "in_file")
-        workflow.connect(inputnode, "ref", dif2ref, "reference")
+    dif2ref = get_registration_node(
+        name="dif2ref",
+        name_prefix="DTI",
+        name_suffix="to reference",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        moving=[nodif, "roi_file"],
+        moving_brain=[b0_deskull, "out_file"],
+        reference=[inputnode, "reference"],
+        flirt_cost="corratio",
+        non_linear=False,
+        inverse=True,
+    )
 
-        fa_2_ref = Node(SynthMorphApply(), name="FA2ref_synthapp")
-        fa_2_ref.long_name = "FA %s in reference space"
-        workflow.connect(dtifit, "FA", fa_2_ref, "in_file")
-        workflow.connect(dif2ref, "warp_file", fa_2_ref, "warp_file")
+    # Output mat must be fsl format to be used directly in probtrackx
+    if synth_config.getboolean_safe("morph"):
+        dif2ref_xfm = Node(LTAConvert(), name="dif2ref_xfm")
+        dif2ref_xfm.long_name = "Matrix conversion"
+        dif2ref_xfm.inputs.out_fsl = "dif2ref.mat"
+        workflow.connect(dif2ref.out_registered_node, dif2ref.warp, dif2ref_xfm, "in_lta")
 
-        diff2ref_xfm = Node(LTAConvert(), name="diff2ref_xfm")
-        diff2ref_xfm.long_name = "Transformation matrix conversion"
-        diff2ref_xfm.inputs.out_fsl = "diff2ref.mat"
-        workflow.connect(dif2ref, "warp_file", diff2ref_xfm, "in_lta")
+        ref2dif_xfm = Node(LTAConvert(), name="ref2dif_xfm")
+        ref2dif_xfm.long_name = "Inverse matrix conversion"
+        ref2dif_xfm.inputs.out_fsl = "ref2dif.mat"
+        workflow.connect(dif2ref.inv_warp_node, dif2ref.inv_warp, ref2dif_xfm, "in_lta")
 
-        ref2diff_xfm = Node(LTAConvert(), name="ref2diff_xfm")
-        ref2diff_xfm.long_name = "Inverse transformation matrix conversion"
-        ref2diff_xfm.inputs.out_fsl = "ref2diff.mat"
-        workflow.connect(dif2ref, "inv_warp_file", ref2diff_xfm, "in_lta")
-
-        workflow.connect(fa_2_ref, "out_file", outputnode, "FA")
-        workflow.connect(diff2ref_xfm, "out_fsl", outputnode, "diff2ref_mat")
-        workflow.connect(ref2diff_xfm, "out_fsl", outputnode, "ref2diff_mat")
+        workflow.connect(dif2ref_xfm, "out_fsl", outputnode, "diff2ref_mat")
+        workflow.connect(ref2dif_xfm, "out_fsl", outputnode, "ref2diff_mat")
     else:
-        dif2ref = Node(FLIRT(), name="diff2ref_FLIRT")
-        dif2ref.long_name = "%s to reference space"
-        dif2ref.inputs.out_matrix_file = "diff2ref.mat"
-        dif2ref.inputs.cost = "corratio"
-        dif2ref.inputs.searchr_x = [-90, 90]
-        dif2ref.inputs.searchr_y = [-90, 90]
-        dif2ref.inputs.searchr_z = [-90, 90]
-        dif2ref.inputs.dof = 6
-        workflow.connect(b0_deskull, "out_file", dif2ref, "in_file")
-        workflow.connect(inputnode, "ref_brain", dif2ref, "reference")
+        workflow.connect(dif2ref.out_registered_node, dif2ref.warp, outputnode, "diff2ref_mat")
+        workflow.connect(dif2ref.inv_warp_node, dif2ref.inv_warp, outputnode, "ref2diff_mat")
 
-        # NODE 7: FA linear transformation in reference space
-        fa_2_ref = Node(ApplyXFM(), name="FA2ref_FLIRT")
-        fa_2_ref.long_name = "FA %s in reference space"
-        fa_2_ref.inputs.out_file = "r-FA.nii.gz"
-        fa_2_ref.inputs.interp = "trilinear"
-        workflow.connect(dtifit, "FA", fa_2_ref, "in_file")
-        workflow.connect(dif2ref, "out_matrix_file", fa_2_ref, "in_matrix_file")
-        workflow.connect(inputnode, "ref_brain", fa_2_ref, "reference")
+    fa_2_ref = apply_registration_node(
+        name="fa_2_ref",
+        name_prefix="FA",
+        name_suffix="to reference",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[dif2ref.out_registered_node, dif2ref.warp],
+        moving=[dtifit, "FA"],
+        reference=[inputnode, "reference"],
+        out_file="r-FA.nii.gz",
+        non_linear=False,
+    )
 
-        # NODE 9: Linear transformation inverse matrix calculation from diffusion to reference space
-        ref2diff_convert = Node(ConvertXFM(), name="ref2diff_convert")
-        ref2diff_convert.long_name = "inverse transformation from reference space"
-        ref2diff_convert.inputs.invert_xfm = True
-        ref2diff_convert.inputs.out_file = "ref2diff.mat"
-        workflow.connect(dif2ref, "out_matrix_file", ref2diff_convert, "in_file")
-
-        workflow.connect(fa_2_ref, "out_file", outputnode, "FA")
-        workflow.connect(dif2ref, "out_matrix_file", outputnode, "diff2ref_mat")
-        workflow.connect(ref2diff_convert, "out_file", outputnode, "ref2diff_mat")
+    workflow.connect(fa_2_ref, "out_file", outputnode, "FA")
 
     is_tractography = config.getboolean_safe("tractography")
-
     if is_tractography:
-        if use_synth:
-            mni_2_ref = Node(SynthMorphReg(), name="mni_2_ref_synthreg", mem_gb=13)
-            mni_2_ref.long_name = "%s to atlas space"
-            mni_2_ref.inputs.model = "joint"
-            mni_dir = abspath(
-                os.path.join(os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm.nii.gz")
-            )
-            mni_2_ref.inputs.in_file = mni_dir
-            workflow.connect(inputnode, "ref", mni_2_ref, "reference")
 
-            workflow.connect(mni_2_ref, "warp_file", outputnode, "mni2ref_warp")
-        else:
-            # NODE 1: Linear registration
-            mni_2_ref_flirt = Node(FLIRT(), name="mni_2_ref_flirt")
-            mni_2_ref_flirt.long_name = "atlas %s to diffusion space"
-            mni_2_ref_flirt.inputs.searchr_x = [-90, 90]
-            mni_2_ref_flirt.inputs.searchr_y = [-90, 90]
-            mni_2_ref_flirt.inputs.searchr_z = [-90, 90]
-            mni_2_ref_flirt.inputs.dof = 12
-            mni_2_ref_flirt.inputs.cost = "corratio"
-            mni_2_ref_flirt.inputs.out_matrix_file = "mni_2_ref.mat"
-            mni_dir = abspath(
-                os.path.join(
-                    os.environ["FSLDIR"], "data/standard/MNI152_T1_2mm_brain.nii.gz"
-                )
-            )
-            mni_2_ref_flirt.inputs.in_file = mni_dir
-            workflow.add_nodes([mni_2_ref_flirt])
-            workflow.connect(inputnode, "ref_brain", mni_2_ref_flirt, "reference")
+        mni = abspath(os.path.join(os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm.nii.gz"))
+        mni_brain = abspath(os.path.join(os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm_brain.nii.gz"))
 
-            # NODE 2: Nonlinear registration
-            mni_2_ref_fnirt = Node(FNIRT(), name="mni_2_ref_fnirt")
-            mni_2_ref_fnirt.long_name = "atlas %s to diffusion space"
-            mni_2_ref_fnirt.inputs.fieldcoeff_file = True
-            mni_2_ref_fnirt.inputs.in_file = mni_dir
-            workflow.connect(
-                mni_2_ref_flirt, "out_matrix_file", mni_2_ref_fnirt, "affine_file"
-            )
-            workflow.connect(inputnode, "ref_brain", mni_2_ref_fnirt, "ref_file")
-
-            workflow.connect(
-                mni_2_ref_fnirt, "fieldcoeff_file", outputnode, "mni2ref_warp"
-            )
+        mni_2_ref = get_registration_node(
+            name="mni_2_ref",
+            name_prefix="MNI atlas",
+            name_suffix="to reference",
+            use_synth=synth_config.getboolean_safe("morph"),
+            workflow=workflow,
+            moving=mni,
+            moving_brain=mni_brain,
+            reference=[inputnode, "reference"],
+            reference_brain=[inputnode, "reference_brain"],
+            flirt_cost="corratio",
+            non_linear=True
+        )
+        workflow.connect(mni_2_ref.out_registered_node, mni_2_ref.warp, outputnode, "mni2ref_warp")
 
         # NODE 8: Bayesian estimation of diffusion parameters
         bedpostx = Node(BEDPOSTX5(), name="dti_bedpostx")

@@ -32,7 +32,12 @@ os.environ["QT_LOGGING_RULES"] = "*.warning=false"
 # -----------------------------
 
 
-def load_anat(scene_dir: str, volume_name: str, color_node_id: str = None):
+def load_anat(
+    scene_dir: str,
+    volume_name: str,
+    color_node_id: str = None,
+    hide_zero: bool = False,
+):
     """
     Load an anatomical volume (NIfTI) into Slicer.
 
@@ -44,11 +49,12 @@ def load_anat(scene_dir: str, volume_name: str, color_node_id: str = None):
         Name of the NIfTI file (with or without ".nii.gz" extension).
     color_node_id : str, optional
         Slicer color node ID to assign to the loaded volume.
+    hide_zero : bool, optional
+        If True, hide voxels with value == 0 (display only).
 
     Returns
     -------
-    node : MRMLCore.vtkMRMLScalarVolumeNode or vtkMRMLMultiVolumeNode
-        The loaded Slicer volume node.
+    node : vtkMRMLScalarVolumeNode or vtkMRMLMultiVolumeNode
     """
     file_path = os.path.join(scene_dir, volume_name)
     if not file_path.endswith(".nii.gz"):
@@ -63,6 +69,8 @@ def load_anat(scene_dir: str, volume_name: str, color_node_id: str = None):
         reader = sitk.ImageFileReader()
         reader.SetFileName(file_path)
         reader.ReadImageInformation()
+
+        # --- Load ---
         if reader.GetDimension() == 4:
             node = slicer.mrmlScene.AddNewNodeByClass(
                 "vtkMRMLMultiVolumeNode", volume_name
@@ -72,10 +80,23 @@ def load_anat(scene_dir: str, volume_name: str, color_node_id: str = None):
             )
         else:
             node = slicer.util.loadVolume(file_path)
-        if node and color_node_id:
-            node.CreateDefaultDisplayNodes()
-            node.GetDisplayNode().SetAndObserveColorNodeID(color_node_id)
+
+        if not node:
+            return None
+
+        # --- Display ---
+        node.CreateDefaultDisplayNodes()
+        dn = node.GetDisplayNode()
+
+        if color_node_id:
+            dn.SetAndObserveColorNodeID(color_node_id)
+
+        # --- Hide zero (display-only) ---
+        if hide_zero:
+            node.SetAttribute("HideZero", "True")
+
         return node
+
     except Exception as e:
         print(f"SLICERLOADER: Failed to load {volume_name}: {e}")
         return None
@@ -787,7 +808,6 @@ def main_export():
 
     slicer.mrmlScene.Clear(0)
     results_folder = os.getcwd()
-    print(results_folder)
 
     if not os.path.isdir(results_folder):
         print("SLICERLOADER: Results folder not found")
@@ -821,15 +841,15 @@ def main_export():
 
     # Load colored volumes
     color_volumes = [
-        ("r-asl_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt"),
-        ("r-pet_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt"),
-        ("r-pet", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"),
-        ("r-pet_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"),
-        ("r-asl", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"),
-        ("r-asl_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt"),
+        ("r-asl_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False),
+        ("r-pet_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False),
+        ("r-pet", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True),
+        ("r-pet_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False),
+        ("r-asl", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True),
+        ("r-asl_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False),
     ]
-    for vol_name, color_node in color_volumes:
-        load_anat(results_folder, vol_name, color_node)
+    for vol_name, color_node, hide_zero in color_volumes:
+        load_anat(results_folder, vol_name, color_node_id=color_node, hide_zero=hide_zero)
 
     # Example: load lesions, fMRI, veins, FreeSurfer
     # lesion_segment(results_folder)
@@ -849,7 +869,6 @@ def main_export():
 
     print("SLICERLOADER: Saving Slicer scene")
     slicer.util.saveScene(os.path.join(results_folder, "scene.mrb"))
-
 
 main_export()
 qt.QTimer.singleShot(0, slicer.app.quit)
