@@ -5,7 +5,9 @@ from swane.nipype_pipeline.nodes.utils import get_registration_node
 
 
 # TODO check base_dir = "./"
-def nonlinear_reg_workflow(name: str, synth_config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
+def nonlinear_reg_workflow(
+    name: str, synth_config: SectionProxy, base_dir: str = "/"
+) -> CustomWorkflow:
     """
     Transforms input images in a reference space through a nonlinear registration.
     For symmetric atlas, make a RL swapped to unswapped nonlinear registration.
@@ -51,9 +53,7 @@ def nonlinear_reg_workflow(name: str, synth_config: SectionProxy, base_dir: str 
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(
-            fields=["fieldcoeff_file", "inverse_warp", "warped_file"]
-        ),
+        IdentityInterface(fields=["fieldcoeff_file", "inverse_warp", "warped_file"]),
         name="outputnode",
     )
 
@@ -68,11 +68,20 @@ def nonlinear_reg_workflow(name: str, synth_config: SectionProxy, base_dir: str 
         reference=[inputnode, "atlas"],
         flirt_cost="corratio",
         inverse=True,
-        non_linear=True
+        non_linear=True,
     )
 
-    workflow.connect(reg_wrap.out_registered_node, reg_wrap.out_registered_image, outputnode, "warped_file")
-    workflow.connect(reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "fieldcoeff_file")
-    workflow.connect(reg_wrap.inv_warp_node, reg_wrap.inv_warp, outputnode, "inverse_warp")
+    workflow.connect(
+        reg_wrap.out_registered_node,
+        reg_wrap.out_registered_image,
+        outputnode,
+        "warped_file",
+    )
+    workflow.connect(
+        reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "fieldcoeff_file"
+    )
+    workflow.connect(
+        reg_wrap.inv_warp_node, reg_wrap.inv_warp, outputnode, "inverse_warp"
+    )
 
     return workflow

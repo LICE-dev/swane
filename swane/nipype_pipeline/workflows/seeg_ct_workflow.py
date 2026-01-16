@@ -61,7 +61,8 @@ def seeg_ct_workflow(
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=["reference_brain", "reference", "brain_mask"]), name="inputnode"
+        IdentityInterface(fields=["reference_brain", "reference", "brain_mask"]),
+        name="inputnode",
     )
 
     # Output Node

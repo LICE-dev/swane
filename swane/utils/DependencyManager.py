@@ -10,7 +10,6 @@ from enum import Enum, auto
 import platform
 
 
-
 class DependenceStatus(Enum):
     DETECTED = auto()
     WARNING = auto()
@@ -151,7 +150,9 @@ class DependencyManager:
         except:
             return False
 
-        return found_version >= version.parse(DependencyManager.SYNTH_FREESURFER_VERSION)
+        return found_version >= version.parse(
+            DependencyManager.SYNTH_FREESURFER_VERSION
+        )
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:

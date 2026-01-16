@@ -849,7 +849,9 @@ def main_export():
         ("r-asl_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False),
     ]
     for vol_name, color_node, hide_zero in color_volumes:
-        load_anat(results_folder, vol_name, color_node_id=color_node, hide_zero=hide_zero)
+        load_anat(
+            results_folder, vol_name, color_node_id=color_node, hide_zero=hide_zero
+        )
 
     # Example: load lesions, fMRI, veins, FreeSurfer
     # lesion_segment(results_folder)
@@ -869,6 +871,7 @@ def main_export():
 
     print("SLICERLOADER: Saving Slicer scene")
     slicer.util.saveScene(os.path.join(results_folder, "scene.mrb"))
+
 
 main_export()
 qt.QTimer.singleShot(0, slicer.app.quit)

@@ -77,7 +77,7 @@ def fMRI_resting_state_workflow(
         base_dir=base_dir,
     )
 
-    #TODO: preference per melodic dim e per soglia
+    # TODO: preference per melodic dim e per soglia
 
     # Output Node
     outputnode = Node(
@@ -135,10 +135,12 @@ def fMRI_resting_state_workflow(
             preproc_melodic, "out_dir", preproc_melodic_output, "base_directory"
         )
 
-
         feature_spatial_prep = Node(FeatureSpatialPrep(), name="feature_spatial_prep")
         workflow.connect(
-            preproc_melodic_output, "thresh_zstat_files", feature_spatial_prep, "in_files"
+            preproc_melodic_output,
+            "thresh_zstat_files",
+            feature_spatial_prep,
+            "in_files",
         )
         workflow.connect(meanfuncmask, "mask_file", feature_spatial_prep, "mask_file")
 
@@ -179,11 +181,15 @@ def fMRI_resting_state_workflow(
 
         feature_time_series = Node(FeatureTimeSeries(), name="feature_time_series")
         workflow.connect(motion_correct, "par_file", feature_time_series, "mc")
-        workflow.connect(preproc_melodic_output, "mel_mix", feature_time_series, "mel_mix")
+        workflow.connect(
+            preproc_melodic_output, "mel_mix", feature_time_series, "mel_mix"
+        )
 
         feature_frequency = Node(FeatureFrequency(), name="feature_frequency")
         workflow.connect(getTR, "TR", feature_frequency, "TR")
-        workflow.connect(preproc_melodic_output, "mel_ft_mix", feature_frequency, "mel_ft_mix")
+        workflow.connect(
+            preproc_melodic_output, "mel_ft_mix", feature_frequency, "mel_ft_mix"
+        )
 
         aroma_classification = Node(AromaClassification(), name="aroma_classification")
         workflow.connect(feature_frequency, "HFC", aroma_classification, "HFC")
@@ -207,7 +213,9 @@ def fMRI_resting_state_workflow(
         nonaggr_denoising = Node(FilterRegressor(), name="nonaggr_denoising", mem_gb=5)
         nonaggr_denoising.inputs.out_file = "denoised_func_data_nonaggr.nii.gz"
         workflow.connect(highpass, "out_file", nonaggr_denoising, "in_file")
-        workflow.connect(preproc_melodic_output, "mel_mix", nonaggr_denoising, "design_file")
+        workflow.connect(
+            preproc_melodic_output, "mel_mix", nonaggr_denoising, "design_file"
+        )
         workflow.connect(
             aroma_classification, "motion_ics", nonaggr_denoising, "filter_columns"
         )

@@ -17,7 +17,9 @@ from nipype.interfaces.utility import IdentityInterface, Function
 from swane.nipype_pipeline.nodes.utils import apply_registration_node
 
 
-def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_dir: str = "/") -> CustomWorkflow:
+def flat1_workflow(
+    name: str, mni1_dir: str, synth_config: SectionProxy, base_dir: str = "/"
+) -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
     a mean template.
@@ -104,11 +106,11 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
 
     fast_segment_split = Node(
         Function(
-            input_names=['file_list'],
-            output_names=['gm_seg', 'wm_seg'],
-            function=pick_first_two
+            input_names=["file_list"],
+            output_names=["gm_seg", "wm_seg"],
+            function=pick_first_two,
         ),
-        name='fast_segment_split'
+        name="fast_segment_split",
     )
     fast_segment_split.long_name = "Segment identification"
     workflow.connect(fast, "partial_volume_files", fast_segment_split, "file_list")
@@ -323,7 +325,7 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
         moving=[no_cereb_extension_z, "out_file"],
         reference=[inputnode, "reference_brain"],
         non_linear=True,
-        out_file="r-extension_z.nii.gz"
+        out_file="r-extension_z.nii.gz",
     )
 
     junction_z_2_ref = apply_registration_node(
@@ -336,7 +338,7 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
         moving=[junction_z, "out_file"],
         reference=[inputnode, "reference_brain"],
         non_linear=True,
-        out_file="r-junction_z.nii.gz"
+        out_file="r-junction_z.nii.gz",
     )
 
     binary_flair_2_ref = apply_registration_node(
@@ -349,7 +351,7 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
         moving=[binary_flair, "out_file"],
         reference=[inputnode, "reference_brain"],
         non_linear=True,
-        out_file="r-binary_flair.nii.gz"
+        out_file="r-binary_flair.nii.gz",
     )
 
     workflow.connect(extension_z_2_ref, "out_file", outputnode, "extension_z")

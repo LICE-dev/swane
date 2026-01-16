@@ -442,7 +442,7 @@ WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
     label="Threshold for mixture model estimation",
     tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives",
     default=0.50,
-    decimal= 2,
+    decimal=2,
     range=[0, 1],
 )
 WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
@@ -596,9 +596,12 @@ GLOBAL_PREFERENCES[category]["strip"] = PreferenceEntry(
     dependency="is_freesurfer_synth",
     dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
     pref_requirement={
-        GlobalPrefCategoryList.PERFORMANCE: [("ram_gb", ResourceManager.synth_strip_ram_requirements())]},
-    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM" %
-                                  ResourceManager.synth_strip_ram_requirements()
+        GlobalPrefCategoryList.PERFORMANCE: [
+            ("ram_gb", ResourceManager.synth_strip_ram_requirements())
+        ]
+    },
+    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
+    % ResourceManager.synth_strip_ram_requirements(),
 )
 GLOBAL_PREFERENCES[category]["morph"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -607,9 +610,12 @@ GLOBAL_PREFERENCES[category]["morph"] = PreferenceEntry(
     dependency="is_freesurfer_synth",
     dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
     pref_requirement={
-        GlobalPrefCategoryList.PERFORMANCE: [("ram_gb", ResourceManager.synth_morph_ram_requirements())]},
-    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM" %
-                                  ResourceManager.synth_morph_ram_requirements()
+        GlobalPrefCategoryList.PERFORMANCE: [
+            ("ram_gb", ResourceManager.synth_morph_ram_requirements())
+        ]
+    },
+    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
+    % ResourceManager.synth_morph_ram_requirements(),
 )
 GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -618,9 +624,12 @@ GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
     dependency="is_freesurfer_synth",
     dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
     pref_requirement={
-        GlobalPrefCategoryList.PERFORMANCE: [("ram_gb", ResourceManager.synth_reconall_ram_requirements())]},
-    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM" %
-                                  ResourceManager.synth_reconall_ram_requirements()
+        GlobalPrefCategoryList.PERFORMANCE: [
+            ("ram_gb", ResourceManager.synth_reconall_ram_requirements())
+        ]
+    },
+    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
+    % ResourceManager.synth_reconall_ram_requirements(),
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}

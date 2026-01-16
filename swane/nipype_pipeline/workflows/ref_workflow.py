@@ -11,7 +11,11 @@ from nipype import Node
 
 
 def ref_workflow(
-    name: str, dicom_dir: str, config: SectionProxy, synth_config: SectionProxy, base_dir: str = "/"
+    name: str,
+    dicom_dir: str,
+    config: SectionProxy,
+    synth_config: SectionProxy,
+    base_dir: str = "/",
 ) -> CustomWorkflow:
     """
     T13D workflow to use as reference.
@@ -53,7 +57,8 @@ def ref_workflow(
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=["reference", "reference_brain", "ref_mask"]), name="outputnode"
+        IdentityInterface(fields=["reference", "reference_brain", "ref_mask"]),
+        name="outputnode",
     )
 
     # NODE 1: Conversion dicom -> nifti
@@ -88,7 +93,7 @@ def ref_workflow(
         bet_thr=config.getfloat_safe("bet_thr"),
         bet_robust=True,
         bet_bias_correction=config.getboolean_safe("bet_bias_correction"),
-        synth_exclude_csf=True
+        synth_exclude_csf=True,
     )
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
