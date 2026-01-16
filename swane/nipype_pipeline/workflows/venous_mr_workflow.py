@@ -13,7 +13,10 @@ from swane.nipype_pipeline.nodes.VenousCheck import VenousCheck
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 from swane.nipype_pipeline.nodes.utils import get_deskull_node
-from swane.nipype_pipeline.nodes.utils import apply_registration_node, get_registration_node
+from swane.nipype_pipeline.nodes.utils import (
+    apply_registration_node,
+    get_registration_node,
+)
 
 
 def venous_mr_workflow(
@@ -65,7 +68,9 @@ def venous_mr_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode")
+    inputnode = Node(
+        IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode"
+    )
 
     # Output Node
     outputnode = Node(IdentityInterface(fields=["veins"]), name="outputnode")

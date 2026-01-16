@@ -5,7 +5,11 @@ from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
-from swane.nipype_pipeline.nodes.utils import get_deskull_node, get_registration_node, apply_registration_node
+from swane.nipype_pipeline.nodes.utils import (
+    get_deskull_node,
+    get_registration_node,
+    apply_registration_node,
+)
 
 
 def linear_reg_workflow(
@@ -100,32 +104,36 @@ def linear_reg_workflow(
 
     def get_betted_name(basename):
         return "r-%s_brain.nii.gz" % basename
+
     betted_name = Node(
         Function(
-            input_names=['basename'],
-            output_names=['out_file'],
-            function=get_betted_name
+            input_names=["basename"],
+            output_names=["out_file"],
+            function=get_betted_name,
         ),
-        name='betted_name'
+        name="betted_name",
     )
-    betted_name.long_name="Registered file name"
-    workflow.connect(inputnode,"output_name", betted_name, "basename")
+    betted_name.long_name = "Registered file name"
+    workflow.connect(inputnode, "output_name", betted_name, "basename")
 
     def get_unbetted_name(basename):
         return "r-%s.nii.gz" % basename
+
     unbetted_name = Node(
         Function(
-            input_names=['basename'],
-            output_names=['out_file'],
-            function=get_unbetted_name
+            input_names=["basename"],
+            output_names=["out_file"],
+            function=get_unbetted_name,
         ),
-        name='unbetted_name'
+        name="unbetted_name",
     )
     unbetted_name.long_name = "Deskulled registered file name"
     workflow.connect(inputnode, "output_name", unbetted_name, "basename")
 
     bet_thr = None if not config else config.getfloat_safe("bet_thr")
-    bet_bias_correction = False if not config else config.getboolean_safe("bet_bias_correction")
+    bet_bias_correction = (
+        False if not config else config.getboolean_safe("bet_bias_correction")
+    )
     flirt_search = 90
     reference_brain = [inputnode, "reference_brain"]
 
@@ -135,7 +143,7 @@ def linear_reg_workflow(
         reference_brain = [inputnode, "reference"]
     else:
         deskull = get_deskull_node(
-            name=name+"_deskull",
+            name=name + "_deskull",
             name_prefix=name,
             use_synth=synth_config.getboolean_safe("strip"),
             mask=True,
@@ -157,15 +165,20 @@ def linear_reg_workflow(
         reference=[inputnode, "reference"],
         reference_brain=reference_brain,
         is_volumetric=is_volumetric,
-        out_file=[unbetted_name,"out_file"],
+        out_file=[unbetted_name, "out_file"],
         flirt_cost="mutualinfo",
-        flirt_search=flirt_search
+        flirt_search=flirt_search,
     )
 
     if is_partial_coverage:
         brain_masking = Node(ApplyMask(), name="%s_brain_mask" % name)
         brain_masking.long_name = "Brain %s"
-        workflow.connect(reg_wrap.out_registered_node, reg_wrap.out_registered_image, brain_masking, "in_file")
+        workflow.connect(
+            reg_wrap.out_registered_node,
+            reg_wrap.out_registered_image,
+            brain_masking,
+            "in_file",
+        )
         workflow.connect(betted_name, "out_file", brain_masking, "out_file")
         workflow.connect(inputnode, "brain_mask", brain_masking, "mask_file")
         workflow.connect(brain_masking, "out_file", outputnode, "registered_file_brain")
@@ -177,14 +190,21 @@ def linear_reg_workflow(
             use_synth=synth_config.getboolean_safe("morph"),
             workflow=workflow,
             warp=[reg_wrap.out_registered_node, reg_wrap.warp],
-            moving=[deskull,"out_file"],
+            moving=[deskull, "out_file"],
             reference=[inputnode, "reference"],
             out_file=[betted_name, "out_file"],
             non_linear=False,
         )
         workflow.connect(deskull_2_ref, "out_file", outputnode, "registered_file_brain")
 
-    workflow.connect(reg_wrap.out_registered_node, reg_wrap.out_registered_image,outputnode, "registered_file")
-    workflow.connect(reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "out_matrix_file")
+    workflow.connect(
+        reg_wrap.out_registered_node,
+        reg_wrap.out_registered_image,
+        outputnode,
+        "registered_file",
+    )
+    workflow.connect(
+        reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "out_matrix_file"
+    )
 
     return workflow

@@ -295,9 +295,11 @@ class PreferencesWindow(QDialog):
                 self.preferences[category][key].resource,
                 None,
             )
-            if (resource_check is None
-                    or not callable(resource_check)
-                    or not resource_check(config=self.my_config)):
+            if (
+                resource_check is None
+                or not callable(resource_check)
+                or not resource_check(config=self.my_config)
+            ):
                 self.inputs[x].disable(
                     self.preferences[category][key].resource_fail_tooltip
                 )
@@ -344,7 +346,10 @@ class PreferencesWindow(QDialog):
                         )
                         .name
                     )
-                elif self.inputs[req_x].input_type in (InputTypes.FLOAT, InputTypes.INT):
+                elif self.inputs[req_x].input_type in (
+                    InputTypes.FLOAT,
+                    InputTypes.INT,
+                ):
                     check = float(self.inputs[req_x].get_value()) >= req_key[1]
                 else:
                     check = req_key[1] = self.inputs[req_x].get_value()
