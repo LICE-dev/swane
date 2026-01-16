@@ -14,7 +14,7 @@ class ResourceManager:
 
     SYNTH_STRIP_RAM_REQUIREMENT = {"mac": 30, "linux": 5, "other": 5}
     SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 14, "linux": 14, "other": 14}
-    SYNTH_RECONALL_RAM_REQUIREMENT = {"mac": 30, "linux": 30, "other": 30}
+    SYNTH_RECONALL_RAM_REQUIREMENT = {"mac": 20, "linux": 20, "other": 20}
 
     @staticmethod
     def to_gb(bt: float) -> float:
