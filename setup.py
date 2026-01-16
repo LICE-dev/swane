@@ -43,7 +43,7 @@ setup(
         "numpy==2.2.4",
         "cryptography",
         "dicom-sequence-classifier==1.0.4",
-        "ica-aroma-py==0.1.2",
+        "ica_aroma_py==0.1.2",
     ],
     python_requires=">=3.10",
     entry_points={"gui_scripts": ["swane = swane.__main__:main"]},
