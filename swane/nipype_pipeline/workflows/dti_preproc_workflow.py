@@ -13,7 +13,11 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
 from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
-from swane.nipype_pipeline.nodes.utils import get_deskull_node, get_registration_node, apply_registration_node
+from swane.nipype_pipeline.nodes.utils import (
+    get_deskull_node,
+    get_registration_node,
+    apply_registration_node,
+)
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
 from multiprocessing import cpu_count
@@ -88,7 +92,9 @@ def dti_preproc_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode")
+    inputnode = Node(
+        IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode"
+    )
 
     # Output Node
     outputnode = Node(
@@ -211,7 +217,9 @@ def dti_preproc_workflow(
         dif2ref_xfm = Node(LTAConvert(), name="dif2ref_xfm")
         dif2ref_xfm.long_name = "Matrix conversion"
         dif2ref_xfm.inputs.out_fsl = "dif2ref.mat"
-        workflow.connect(dif2ref.out_registered_node, dif2ref.warp, dif2ref_xfm, "in_lta")
+        workflow.connect(
+            dif2ref.out_registered_node, dif2ref.warp, dif2ref_xfm, "in_lta"
+        )
 
         ref2dif_xfm = Node(LTAConvert(), name="ref2dif_xfm")
         ref2dif_xfm.long_name = "Inverse matrix conversion"
@@ -221,8 +229,12 @@ def dti_preproc_workflow(
         workflow.connect(dif2ref_xfm, "out_fsl", outputnode, "diff2ref_mat")
         workflow.connect(ref2dif_xfm, "out_fsl", outputnode, "ref2diff_mat")
     else:
-        workflow.connect(dif2ref.out_registered_node, dif2ref.warp, outputnode, "diff2ref_mat")
-        workflow.connect(dif2ref.inv_warp_node, dif2ref.inv_warp, outputnode, "ref2diff_mat")
+        workflow.connect(
+            dif2ref.out_registered_node, dif2ref.warp, outputnode, "diff2ref_mat"
+        )
+        workflow.connect(
+            dif2ref.inv_warp_node, dif2ref.inv_warp, outputnode, "ref2diff_mat"
+        )
 
     fa_2_ref = apply_registration_node(
         name="fa_2_ref",
@@ -242,8 +254,14 @@ def dti_preproc_workflow(
     is_tractography = config.getboolean_safe("tractography")
     if is_tractography:
 
-        mni = abspath(os.path.join(os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm.nii.gz"))
-        mni_brain = abspath(os.path.join(os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm_brain.nii.gz"))
+        mni = abspath(
+            os.path.join(os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm.nii.gz")
+        )
+        mni_brain = abspath(
+            os.path.join(
+                os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm_brain.nii.gz"
+            )
+        )
 
         mni_2_ref = get_registration_node(
             name="mni_2_ref",
@@ -256,9 +274,11 @@ def dti_preproc_workflow(
             reference=[inputnode, "reference"],
             reference_brain=[inputnode, "reference_brain"],
             flirt_cost="corratio",
-            non_linear=True
+            non_linear=True,
         )
-        workflow.connect(mni_2_ref.out_registered_node, mni_2_ref.warp, outputnode, "mni2ref_warp")
+        workflow.connect(
+            mni_2_ref.out_registered_node, mni_2_ref.warp, outputnode, "mni2ref_warp"
+        )
 
         # NODE 8: Bayesian estimation of diffusion parameters
         bedpostx = Node(BEDPOSTX5(), name="dti_bedpostx")

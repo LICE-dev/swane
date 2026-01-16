@@ -53,9 +53,9 @@ class MainWorkflow(CustomWorkflow):
     max_cpu: int = -1
     max_gpu: int = -1
     multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP
-    memory_gb : float = -1
+    memory_gb: float = -1
     is_freesurfer: bool = False
-    is_hippo_amyg_labels : bool = False
+    is_hippo_amyg_labels: bool = False
     is_flat1: bool = False
     is_tractography: bool = False
     is_slicer: bool = False
@@ -169,12 +169,14 @@ class MainWorkflow(CustomWorkflow):
             self.max_gpu = MonitoredMultiProcPlugin.gpu_count()
 
         # RAM management
-        self.memory_gb = self.global_config.getfloat_safe(GlobalPrefCategoryList.PERFORMANCE, "ram_gb")
+        self.memory_gb = self.global_config.getfloat_safe(
+            GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
+        )
 
         try:
             self.subject_config[DIL.DTI]["cuda"] = (
-                    ResourceManager.is_cuda()
-                    and self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"]
+                ResourceManager.is_cuda()
+                and self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"]
             )
             print(self.subject_config[DIL.DTI]["cuda"])
         except:
@@ -251,7 +253,9 @@ class MainWorkflow(CustomWorkflow):
         sym_inputnode = self.sym.get_node("inputnode")
         sym_template = swane_supplement.sym_template
         sym_inputnode.inputs.atlas = sym_template
-        self.connect(self.t1, "outputnode.reference_brain", self.sym, "inputnode.in_file")
+        self.connect(
+            self.t1, "outputnode.reference_brain", self.sym, "inputnode.in_file"
+        )
 
     def launch_freesurfer_analysis(self):
         if not self.is_freesurfer:
@@ -269,7 +273,9 @@ class MainWorkflow(CustomWorkflow):
 
         freesurfer_inputnode = self.freesurfer.get_node("inputnode")
         freesurfer_inputnode.inputs.subjects_dir = self.base_dir
-        self.connect(self.t1, "outputnode.reference", self.freesurfer, "inputnode.reference")
+        self.connect(
+            self.t1, "outputnode.reference", self.freesurfer, "inputnode.reference"
+        )
 
         self.freesurfer.sink_result(
             save_path=self.base_dir,
@@ -325,7 +331,10 @@ class MainWorkflow(CustomWorkflow):
         flair_inputnode.inputs.output_name = "flair"
         self.connect(self.t1, "outputnode.reference", self.flair, "inputnode.reference")
         self.connect(
-            self.t1, "outputnode.reference_brain", self.flair, "inputnode.reference_brain"
+            self.t1,
+            "outputnode.reference_brain",
+            self.flair,
+            "inputnode.reference_brain",
         )
 
         self.flair.sink_result(
@@ -367,7 +376,9 @@ class MainWorkflow(CustomWorkflow):
             )
         )
         mni1_inputnode.inputs.atlas = mni1_path
-        self.connect(self.t1, "outputnode.reference_brain", self.mni1, "inputnode.in_file")
+        self.connect(
+            self.t1, "outputnode.reference_brain", self.mni1, "inputnode.in_file"
+        )
 
         # FLAT1 analysis
         self.flat1 = flat1_workflow(
@@ -377,7 +388,12 @@ class MainWorkflow(CustomWorkflow):
         )
         self.flat1.long_name = "FLAT1 analysis"
 
-        self.connect(self.t1, "outputnode.reference_brain", self.flat1, "inputnode.reference_brain")
+        self.connect(
+            self.t1,
+            "outputnode.reference_brain",
+            self.flat1,
+            "inputnode.reference_brain",
+        )
         self.connect(
             self.flair,
             "outputnode.registered_file",
@@ -466,7 +482,7 @@ class MainWorkflow(CustomWorkflow):
             name=DIL.T2_COR.value.workflow_name,
             dicom_dir=t2_cor_dir,
             config=None,
-            is_volumetric=True, # perform better with volumetric settings
+            is_volumetric=True,  # perform better with volumetric settings
             is_partial_coverage=True,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
@@ -475,9 +491,14 @@ class MainWorkflow(CustomWorkflow):
 
         t2_cor_inputnode = self.t2_cor.get_node("inputnode")
         t2_cor_inputnode.inputs.output_name = "t2_cor"
-        self.connect(self.t1, "outputnode.reference", self.t2_cor, "inputnode.reference")
         self.connect(
-            self.t1, "outputnode.reference_brain", self.t2_cor, "inputnode.reference_brain"
+            self.t1, "outputnode.reference", self.t2_cor, "inputnode.reference"
+        )
+        self.connect(
+            self.t1,
+            "outputnode.reference_brain",
+            self.t2_cor,
+            "inputnode.reference_brain",
         )
         self.connect(
             self.t1, "outputnode.ref_mask", self.t2_cor, "inputnode.brain_mask"
@@ -787,9 +808,14 @@ class MainWorkflow(CustomWorkflow):
         self.venous_ct.long_name = "Venous CT analysis"
 
         self.connect(
-            self.t1, "outputnode.reference_brain", self.venous_ct, "inputnode.reference_brain"
+            self.t1,
+            "outputnode.reference_brain",
+            self.venous_ct,
+            "inputnode.reference_brain",
         )
-        self.connect(self.t1, "outputnode.reference", self.venous_ct, "inputnode.reference")
+        self.connect(
+            self.t1, "outputnode.reference", self.venous_ct, "inputnode.reference"
+        )
 
         self.venous_ct.sink_result(
             save_path=self.base_dir,
@@ -823,9 +849,14 @@ class MainWorkflow(CustomWorkflow):
         self.venous_mr.long_name = "Venous MRA analysis"
 
         self.connect(
-            self.t1, "outputnode.reference_brain", self.venous_mr, "inputnode.reference_brain"
+            self.t1,
+            "outputnode.reference_brain",
+            self.venous_mr,
+            "inputnode.reference_brain",
         )
-        self.connect(self.t1, "outputnode.reference", self.venous_mr, "inputnode.reference")
+        self.connect(
+            self.t1, "outputnode.reference", self.venous_mr, "inputnode.reference"
+        )
 
         self.venous_mr.sink_result(
             save_path=self.base_dir,
@@ -851,9 +882,14 @@ class MainWorkflow(CustomWorkflow):
         self.seeg_ct_dir.long_name = "SEEG CT analysis"
 
         self.connect(
-            self.t1, "outputnode.reference_brain", self.seeg_ct_dir, "inputnode.reference_brain"
+            self.t1,
+            "outputnode.reference_brain",
+            self.seeg_ct_dir,
+            "inputnode.reference_brain",
         )
-        self.connect(self.t1, "outputnode.reference", self.seeg_ct_dir, "inputnode.reference")
+        self.connect(
+            self.t1, "outputnode.reference", self.seeg_ct_dir, "inputnode.reference"
+        )
         self.connect(
             self.t1, "outputnode.ref_mask", self.seeg_ct_dir, "inputnode.brain_mask"
         )
@@ -882,9 +918,14 @@ class MainWorkflow(CustomWorkflow):
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
         self.connect(
-            self.t1, "outputnode.reference_brain", self.dti_preproc, "inputnode.reference_brain"
+            self.t1,
+            "outputnode.reference_brain",
+            self.dti_preproc,
+            "inputnode.reference_brain",
         )
-        self.connect(self.t1, "outputnode.reference", self.dti_preproc, "inputnode.reference")
+        self.connect(
+            self.t1, "outputnode.reference", self.dti_preproc, "inputnode.reference"
+        )
 
         self.dti_preproc.sink_result(
             save_path=self.base_dir,
@@ -990,7 +1031,10 @@ class MainWorkflow(CustomWorkflow):
             )
             self.fMRI.long_name = "Task fMRI analysis - %d" % y
             self.connect(
-                self.t1, "outputnode.reference_brain", self.fMRI, "inputnode.reference_brain"
+                self.t1,
+                "outputnode.reference_brain",
+                self.fMRI,
+                "inputnode.reference_brain",
             )
             for thresh_i in range(1, 4):
                 self.fMRI.sink_result(

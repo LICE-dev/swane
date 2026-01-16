@@ -65,7 +65,9 @@ def venous_ct_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode")
+    inputnode = Node(
+        IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode"
+    )
 
     # Output Node
     outputnode = Node(IdentityInterface(fields=["veins", "basal"]), name="outputnode")
