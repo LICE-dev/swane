@@ -1,9 +1,7 @@
 import os
 from swane.utils.DataInputList import DataInputList, FMRI_NUM
 from swane import __version__
-from multiprocessing import cpu_count
-from nipype.utils.profiler import get_system_total_memory_gb
-from math import ceil
+from swane.utils.ResourceManager import ResourceManager
 
 from swane import strings
 from swane.config.PreferenceEntry import PreferenceEntry
@@ -18,6 +16,7 @@ from swane.config.config_enums import (
     GlobalPrefCategoryList,
     BETWEEN_MOD_FLIRT_COST,
 )
+from swane.utils.platform_and_tools_utils import get_os_type
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
@@ -74,6 +73,9 @@ for k in list(TRACTS.keys()):
     if TRACTS[k][2] == 0:
         del TRACTS[k]
 
+from psutil import virtual_memory
+import math
+
 # WORKFLOW_TYPES = ["Structural Workflow", "Morpho-Functional Workflow"]
 # SLICER_EXTENSIONS = ["mrb", "mrml"]
 
@@ -102,12 +104,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
 )
+WF_PREFERENCES[category]["flat1"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="FLAT1 analysis",
+    default="true",
+    input_requirement=[DataInputList.FLAIR3D],
+    input_requirement_fail_tooltip="Requires both 3D T1w and 3D Flair",
+    section=True,
+)
 WF_PREFERENCES[category]["freesurfer"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="FreeSurfer analysis",
     default="true",
     dependency="is_freesurfer",
     dependency_fail_tooltip="Freesurfer not detected",
+    section=True,
 )
 WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -118,13 +129,7 @@ WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
     pref_requirement={DataInputList.T13D: [("freesurfer", True)]},
     pref_requirement_fail_tooltip="Requires Freesurfer analysis",
 )
-WF_PREFERENCES[category]["flat1"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="FLAT1 analysis",
-    default="true",
-    input_requirement=[DataInputList.FLAIR3D],
-    input_requirement_fail_tooltip="Requires both 3D T1w and 3D Flair",
-)
+
 
 category = DataInputList.FLAIR3D
 WF_PREFERENCES[category] = {}
@@ -300,6 +305,8 @@ WF_PREFERENCES[category]["tractography_threshold"] = PreferenceEntry(
     default=0.0035,
     range=[0.0001, 1],
     decimals=4,
+    pref_requirement={DataInputList.DTI: [("tractography", True)]},
+    pref_requirement_fail_tooltip="Tractography disabled",
 )
 WF_PREFERENCES[category]["track_procs"] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -525,24 +532,14 @@ GLOBAL_PREFERENCES[category]["max_subj"] = PreferenceEntry(
     default=1,
     range=[0, 5],
 )
-try:
-    suggested_max_cpu = max(
-        ceil(min(cpu_count() / 2, get_system_total_memory_gb() / 3)), 1
-    )
-except:
-    suggested_max_cpu = 1
-GLOBAL_PREFERENCES[category]["max_subj_cu"] = PreferenceEntry(
+GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="CPU core limit per subject",
     tooltip="To use all CPU cores set value equal to -1",
-    default=str(suggested_max_cpu),
-    range=[-1, 30],
+    default=ResourceManager.suggested_max_cpu(),
+    range=[-1, ResourceManager.max_cpu()],
     special_value_text="No limit",
-)
-GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Enable resource monitor",
-    default="false",
+    section=True,
 )
 GLOBAL_PREFERENCES[category]["multicore_node_limit"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
@@ -555,21 +552,25 @@ GLOBAL_PREFERENCES[category]["multicore_node_limit"] = PreferenceEntry(
         CORE_LIMIT.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
     },
 )
-GLOBAL_PREFERENCES[category]["exclude_synth"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Exclude FreeSurfer Synth tools",
-    tooltip="On some system Synth tools may crash, use this preference to disable thier execution",
-    default="false",
-    dependency="is_freesurfer_synth",
-    dependency_fail_tooltip="Synth tools not available without FreeSurfer 8.1.0 and at least 15GB RAM"
+
+GLOBAL_PREFERENCES[category]["ram_gb"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Estimated RAM allocation per subject",
+    tooltip="Minimum RAM allocation: %.2fGB" % ResourceManager.MINIMUM_RAM,
+    default=ResourceManager.get_default_ram(),
+    range=[ResourceManager.get_minimum_ram(), ResourceManager.get_maximum_ram()],
+    suffix="GB",
+    decimal=2,
+    section=True,
 )
 GLOBAL_PREFERENCES[category]["cuda"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Enable CUDA for GPUable commands",
     tooltip="NVIDIA GPU-based computation",
     default="false",
-    dependency="is_cuda",
-    dependency_fail_tooltip="GPU does not support CUDA",
+    resource="is_cuda",
+    resource_fail_tooltip="GPU does not support CUDA",
+    section=True,
 )
 GLOBAL_PREFERENCES[category]["max_subj_gpu"] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -579,6 +580,47 @@ GLOBAL_PREFERENCES[category]["max_subj_gpu"] = PreferenceEntry(
     range=[1, 5],
     pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [("cuda", True)]},
     pref_requirement_fail_tooltip="Requires CUDA",
+)
+GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Enable resource monitor",
+    default="false",
+    section=True,
+)
+category = GlobalPrefCategoryList.SYNTH
+GLOBAL_PREFERENCES[category] = {}
+GLOBAL_PREFERENCES[category]["strip"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SynthStrip for brain extraction",
+    default=False,
+    dependency="is_freesurfer_synth",
+    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
+    pref_requirement={
+        GlobalPrefCategoryList.PERFORMANCE: [("ram_gb", ResourceManager.synth_strip_ram_requirements())]},
+    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM" %
+                                  ResourceManager.synth_strip_ram_requirements()
+)
+GLOBAL_PREFERENCES[category]["morph"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SynthMorph registration",
+    default=False,
+    dependency="is_freesurfer_synth",
+    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
+    pref_requirement={
+        GlobalPrefCategoryList.PERFORMANCE: [("ram_gb", ResourceManager.synth_morph_ram_requirements())]},
+    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM" %
+                                  ResourceManager.synth_morph_ram_requirements()
+)
+GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use Synth tools during recon-all",
+    default=False,
+    dependency="is_freesurfer_synth",
+    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
+    pref_requirement={
+        GlobalPrefCategoryList.PERFORMANCE: [("ram_gb", ResourceManager.synth_reconall_ram_requirements())]},
+    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM" %
+                                  ResourceManager.synth_reconall_ram_requirements()
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}

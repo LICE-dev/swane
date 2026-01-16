@@ -1,5 +1,4 @@
 from nipype.interfaces.fsl import (
-    BET,
     FLIRT,
     ApplyMask,
     ImageStats,
@@ -46,9 +45,9 @@ def venous_ct_workflow(
 
     Input Node Fields
     ----------
-    ref : path
+    reference : path
         T13D.
-    ref_brain : path
+    reference_brain : path
         Betted T13D.
 
     Returns
@@ -66,7 +65,7 @@ def venous_ct_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["ref_brain", "ref"]), name="inputnode")
+    inputnode = Node(IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode")
 
     # Output Node
     outputnode = Node(IdentityInterface(fields=["veins", "basal"]), name="outputnode")
@@ -148,7 +147,7 @@ def venous_ct_workflow(
     basal_2_ref.inputs.dof = 6
     basal_2_ref.inputs.interp = "trilinear"
     workflow.connect(veins_robustfov, "out_roi", basal_2_ref, "in_file")
-    workflow.connect(inputnode, "ref", basal_2_ref, "reference")
+    workflow.connect(inputnode, "reference", basal_2_ref, "reference")
     workflow.connect(basal_2_ref, "out_file", outputnode, "basal")
 
     # NODE 8: Linear registration of contrast to basal veins
@@ -219,7 +218,7 @@ def venous_ct_workflow(
     veins_2_ref.inputs.interp = "trilinear"
     workflow.connect(veins_rescale, "out_file", veins_2_ref, "in_file")
     workflow.connect(basal_2_ref, "out_matrix_file", veins_2_ref, "in_matrix_file")
-    workflow.connect(inputnode, "ref_brain", veins_2_ref, "reference")
+    workflow.connect(inputnode, "reference_brain", veins_2_ref, "reference")
 
     workflow.connect(veins_2_ref, "out_file", outputnode, "veins")
 

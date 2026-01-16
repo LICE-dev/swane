@@ -78,6 +78,7 @@ class PLANES(Enum):
 class GlobalPrefCategoryList(Enum):
     MAIN = PrefCategory("main", "Global settings")
     PERFORMANCE = PrefCategory("performance", "Performance")
+    SYNTH = PrefCategory("synth", "Synth tools")
     OPTIONAL_SERIES = PrefCategory("optional_series", "Optional series")
     MAIL_SETTINGS = PrefCategory("mail_settings", "Mail settings")
 

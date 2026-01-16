@@ -42,7 +42,7 @@ def fMRI_resting_state_workflow(
 
     Input Node Fields
     ----------
-    ref_brain : path
+    reference_brain : path
         Betted T13D.
 
     Output Node Fields
@@ -155,7 +155,7 @@ def fMRI_resting_state_workflow(
         flirt.inputs.cost = "corratio"
         flirt.inputs.out_matrix_file = "ref_2_mni.mat"
         flirt.inputs.reference = mni2
-        workflow.connect(inputnode, "ref_brain", flirt, "in_file")
+        workflow.connect(inputnode, "reference_brain", flirt, "in_file")
 
         # NODE 2: Nonlinear registration
         fnirt = Node(FNIRT(), name="ref_2_mni_fnirt")
@@ -163,7 +163,7 @@ def fMRI_resting_state_workflow(
         fnirt.inputs.fieldcoeff_file = True
         fnirt.inputs.ref_file = mni2
         workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
-        workflow.connect(inputnode, "ref_brain", fnirt, "in_file")
+        workflow.connect(inputnode, "reference_brain", fnirt, "in_file")
 
         apply_warp = Node(ApplyWarp(), name="func2mni")
         apply_warp.inputs.ref_file = mni2
@@ -258,7 +258,7 @@ def fMRI_resting_state_workflow(
         ApplyXFM(), name="zstats_2_ref", iterfield=["in_file", "out_file"]
     )
     workflow.connect(flirt_2_ref, "out_matrix_file", zstats_2_ref, "in_matrix_file")
-    workflow.connect(inputnode, "ref_brain", zstats_2_ref, "reference")
+    workflow.connect(inputnode, "reference_brain", zstats_2_ref, "reference")
     workflow.connect(melodic_output, "thresh_zstat_files", zstats_2_ref, "in_file")
     workflow.connect(
         melodic_output,

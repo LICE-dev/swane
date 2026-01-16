@@ -1,7 +1,6 @@
 import os
 import glob
 from nipype import Node, IdentityInterface, MapNode, JoinNode, Merge
-from nipype.interfaces.fsl import ApplyWarp, ImageMaths
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
@@ -9,13 +8,14 @@ from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
 from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
-from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
+from swane.nipype_pipeline.nodes.utils import apply_registration_node
+
 
 SIDES = ["lh", "rh"]
 
 
 def tractography_workflow(
-    name: str, config: SectionProxy, use_synth: bool, base_dir: str = "/"
+    name: str, config: SectionProxy, synth_config: SectionProxy, base_dir: str = "/"
 ) -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
@@ -26,8 +26,8 @@ def tractography_workflow(
         The workflow and tract name.
     config: SectionProxy
         The subject workflow preferences.
-    use_synth: bool
-        if workflow should use FreeSurfer Synth tools.
+    synth_config: SectionProxy
+        FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -41,7 +41,7 @@ def tractography_workflow(
         Samples from the distribution on phi.
     thsamples : path
         Samples from the distribution on theta.
-    ref_brain : path
+    reference_brain : path
         Betted T13D.
     diff2ref_mat : path
         Linear registration matrix from diffusion to T13D reference space.
@@ -89,7 +89,7 @@ def tractography_workflow(
                 "mask",
                 "phsamples",
                 "thsamples",
-                "ref_brain",
+                "reference_brain",
                 "diff2ref_mat",
                 "ref2diff_mat",
                 "mni2ref_warp",
@@ -148,59 +148,36 @@ def tractography_workflow(
             return None
 
         # NODE 2: Seed ROI nonlinear transformation in T13D reference space
-        if use_synth:
-            seed_2_ref = Node(SynthMorphApply(), name="seed_2_ref_%s_%s" % (name, side))
-            seed_2_ref.long_name = side + " seed ROI %s"
-            seed_2_ref.inputs.in_file = seed_file
-            seed_2_ref.inputs.method = "nearest"
-            workflow.connect(inputnode, "mni2ref_warp", seed_2_ref, "warp_file")
-        else:
-            seed_2_ref = Node(ApplyWarp(), name="seed_2_ref_%s_%s" % (name, side))
-            seed_2_ref.long_name = side + " seed ROI %s"
-            seed_2_ref.inputs.out_file = "r-seed_%s_%s.nii.gz" % (name, side)
-            seed_2_ref.inputs.in_file = seed_file
-            seed_2_ref.inputs.interp = "nn"
-            workflow.connect(inputnode, "ref_brain", seed_2_ref, "ref_file")
-            workflow.connect(inputnode, "mni2ref_warp", seed_2_ref, "field_file")
-
-        # NODE 3: Seed ROI bynarization
-        # seed_bin = Node(ImageMaths(), name="seed_bin_%s_%s" % (name, side))
-        # seed_bin.long_name = side + " seed ROI binarization"
-        # seed_bin.inputs.op_string = "-thr 0.1 -bin"
-        # seed_bin.inputs.out_data_type = "char"
-        # seed_bin.inputs.suffix = "_bin"
-        # workflow.connect(seed_2_ref, "out_file", seed_bin, "in_file")
+        seed_2_ref = apply_registration_node(
+            name="seed_2_ref_%s_%s" % (name, side),
+            name_prefix="seed mask",
+            name_suffix="to reference",
+            use_synth=synth_config.getboolean_safe("morph"),
+            workflow=workflow,
+            warp=[inputnode, "mni2ref_warp"],
+            moving=seed_file,
+            reference=[inputnode, "reference_brain"],
+            non_linear=True,
+            labelmap=True
+        )
 
         # NODE 4: Target ROIs nonlinear transformation in T13D reference space
-        if use_synth:
-            targets_2_ref = Node(
-                SynthMorphApply(), name="targets_2_ref_%s_%s" % (name, side)
-            )
-            targets_2_ref.long_name = side + " target ROIs %s"
-            targets_2_ref.inputs.method = "nearest"
-            if len(target_files) > 1:
-                targets_2_ref.iterables = ("in_file", target_files)
-            else:
-                targets_2_ref.inputs.in_file = target_files[0]
-            workflow.connect(inputnode, "mni2ref_warp", targets_2_ref, "warp_file")
+        targets_2_ref = apply_registration_node(
+            name="targets_2_ref_%s_%s" % (name, side),
+            name_prefix="target mask",
+            name_suffix="to reference",
+            use_synth=synth_config.getboolean_safe("morph"),
+            workflow=workflow,
+            warp=[inputnode, "mni2ref_warp"],
+            moving=None,
+            reference=[inputnode, "reference_brain"],
+            non_linear=True,
+            labelmap=True
+        )
+        if len(target_files) > 1:
+            targets_2_ref.iterables = ("in_file", target_files)
         else:
-            targets_2_ref = Node(ApplyWarp(), name="targets_2_ref_%s_%s" % (name, side))
-            targets_2_ref.long_name = side + " target ROIs %s"
-            targets_2_ref.inputs.interp = "nn"
-            if len(target_files) > 1:
-                targets_2_ref.iterables = ("in_file", target_files)
-            else:
-                targets_2_ref.inputs.in_file = target_files[0]
-            workflow.connect(inputnode, "ref_brain", targets_2_ref, "ref_file")
-            workflow.connect(inputnode, "mni2ref_warp", targets_2_ref, "field_file")
-
-        # NODE 5: Target ROIs bynarization
-        # targets_bin = Node(ImageMaths(), name="targets_bin_%s_%s" % (name, side))
-        # targets_bin.long_name = side + " target ROIs binarization"
-        # targets_bin.inputs.op_string = "-thr 0.1 -bin"
-        # targets_bin.inputs.out_data_type = "char"
-        # targets_bin.inputs.suffix = "_bin"
-        # workflow.connect(targets_2_ref, "out_file", targets_bin, "in_file")
+            targets_2_ref.inputs.in_file = target_files[0]
 
         # NODE 10: Tractography
         probtrackx = MapNode(
@@ -219,7 +196,7 @@ def tractography_workflow(
         probtrackx.inputs.opd = True
         workflow.connect(inputnode, "fsamples", probtrackx, "fsamples")
         workflow.connect(inputnode, "mask", probtrackx, "mask")
-        workflow.connect(inputnode, "ref_brain", probtrackx, "seed_ref")
+        workflow.connect(inputnode, "reference_brain", probtrackx, "seed_ref")
         workflow.connect(inputnode, "phsamples", probtrackx, "phsamples")
         workflow.connect(inputnode, "thsamples", probtrackx, "thsamples")
         workflow.connect(inputnode, "ref2diff_mat", probtrackx, "xfm")
@@ -261,7 +238,7 @@ def tractography_workflow(
             probtrackx_inverted.inputs.use_gpu = is_cuda
             workflow.connect(inputnode, "fsamples", probtrackx_inverted, "fsamples")
             workflow.connect(inputnode, "mask", probtrackx_inverted, "mask")
-            workflow.connect(inputnode, "ref_brain", probtrackx_inverted, "seed_ref")
+            workflow.connect(inputnode, "reference_brain", probtrackx_inverted, "seed_ref")
             workflow.connect(inputnode, "phsamples", probtrackx_inverted, "phsamples")
             workflow.connect(inputnode, "thsamples", probtrackx_inverted, "thsamples")
             workflow.connect(inputnode, "ref2diff_mat", probtrackx_inverted, "xfm")
@@ -273,33 +250,19 @@ def tractography_workflow(
         # Check for exclusion ROI in protocol
         if os.path.exists(exclude_file):
             # NODE 6: Exclusion ROI nonlinear transformation in T13D reference space
-            if use_synth:
-                exclude_2_ref = Node(
-                    SynthMorphApply(), name="exclude_2_ref_%s_%s" % (name, side)
-                )
-                exclude_2_ref.long_name = side + " exclusion ROI %s"
-                exclude_2_ref.inputs.in_file = exclude_file
-                exclude_2_ref.inputs.method = "nearest"
-                workflow.connect(inputnode, "mni2ref_warp", exclude_2_ref, "warp_file")
-            else:
-                exclude_2_ref = Node(
-                    ApplyWarp(), name="exclude_2_ref_%s_%s" % (name, side)
-                )
-                exclude_2_ref.long_name = side + " exclusion ROI %s"
-                exclude_2_ref.inputs.out_file = "r-exclude_%s_%s.nii.gz" % (name, side)
-                exclude_2_ref.inputs.in_file = exclude_file
-                exclude_2_ref.inputs.interp = "nn"
-                workflow.connect(inputnode, "ref_brain", exclude_2_ref, "ref_file")
-                workflow.connect(inputnode, "mni2ref_warp", exclude_2_ref, "field_file")
 
-            # NODE 7: Exclusion ROI bynarization
-            # exclude_bin = Node(ImageMaths(), name="exclude_bin_%s_%s" % (name, side))
-            # exclude_bin.long_name = side + " exclusion ROI binarization"
-            # exclude_bin.inputs.op_string = "-thr 0.1 -bin"
-            # exclude_bin.inputs.out_data_type = "char"
-            # exclude_bin.inputs.suffix = "_bin"
-            # workflow.connect(exclude_2_ref, "out_file", exclude_bin, "in_file")
-
+            exclude_2_ref = apply_registration_node(
+                name="exclude_2_ref_%s_%s" % (name, side),
+                name_prefix="exclude mask",
+                name_suffix="to reference",
+                use_synth=synth_config.getboolean_safe("morph"),
+                workflow=workflow,
+                warp=[inputnode, "mni2ref_warp"],
+                moving=exclude_file,
+                reference=[inputnode, "reference_brain"],
+                non_linear=True,
+                labelmap=True
+            )
             workflow.connect(exclude_2_ref, "out_file", probtrackx, "avoid_mp")
 
             if is_invert:
@@ -310,31 +273,18 @@ def tractography_workflow(
         # Check for stop ROI in protocol
         if os.path.exists(stop_file):
             # NODE 8: stop ROI nonlinear transformation in T13D reference space
-            if use_synth:
-                stop_2_ref = Node(
-                    SynthMorphApply(), name="stop_2_ref_%s_%s" % (name, side)
-                )
-                stop_2_ref.long_name = side + " stop ROI %s"
-                stop_2_ref.inputs.in_file = stop_file
-                stop_2_ref.inputs.method = "nearest"
-                workflow.connect(inputnode, "mni2ref_warp", stop_2_ref, "warp_file")
-            else:
-                stop_2_ref = Node(ApplyWarp(), name="stop_2_ref_%s_%s" % (name, side))
-                stop_2_ref.long_name = side + " stop ROI %s"
-                stop_2_ref.inputs.out_file = "r-stop_%s_%s.nii.gz" % (name, side)
-                stop_2_ref.inputs.in_file = stop_file
-                stop_2_ref.inputs.interp = "nn"
-                workflow.connect(inputnode, "ref_brain", stop_2_ref, "ref_file")
-                workflow.connect(inputnode, "mni2ref_warp", stop_2_ref, "field_file")
-
-            # NODE 9: stop ROI bynarization
-            # stop_bin = Node(ImageMaths(), name="stop_bin_%s_%s" % (name, side))
-            # stop_bin.long_name = side + " stop ROI binarization"
-            # stop_bin.inputs.op_string = "-thr 0.1 -bin"
-            # stop_bin.inputs.out_data_type = "char"
-            # stop_bin.inputs.suffix = "_bin"
-            # workflow.connect(stop_2_ref, "out_file", stop_bin, "in_file")
-
+            stop_2_ref = apply_registration_node(
+                name="stop_2_ref_%s_%s" % (name, side),
+                name_prefix="stop mask",
+                name_suffix="to reference",
+                use_synth=synth_config.getboolean_safe("morph"),
+                workflow=workflow,
+                warp=[inputnode, "mni2ref_warp"],
+                moving=stop_file,
+                reference=[inputnode, "reference_brain"],
+                non_linear=True,
+                labelmap=True
+            )
             workflow.connect(stop_2_ref, "out_file", probtrackx, "stop_mask")
 
             if is_invert:

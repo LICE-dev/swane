@@ -1,7 +1,6 @@
 from nipype.interfaces.fsl import (
     FLIRT,
     ApplyMask,
-    ApplyXFM,
     ImageMaths,
     Threshold,
     ErodeImage,
@@ -37,9 +36,9 @@ def seeg_ct_workflow(
 
     Input Node Fields
     ----------
-    ref : path
+    reference : path
         T13D.
-    ref_brain : path
+    reference_brain : path
         Betted T13D.
     brain_mask : path
         Brain mask.
@@ -62,7 +61,7 @@ def seeg_ct_workflow(
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=["ref_brain", "ref", "brain_mask"]), name="inputnode"
+        IdentityInterface(fields=["reference_brain", "reference", "brain_mask"]), name="inputnode"
     )
 
     # Output Node
@@ -106,7 +105,7 @@ def seeg_ct_workflow(
         electrodes_weight_map, "out_file", seeg_ct_2_ref_flirt, "in_weight"
     )
     workflow.connect(seeg_ct_reOrient, "out_file", seeg_ct_2_ref_flirt, "in_file")
-    workflow.connect(inputnode, "ref", seeg_ct_2_ref_flirt, "reference")
+    workflow.connect(inputnode, "reference", seeg_ct_2_ref_flirt, "reference")
 
     # Electrode mask in ref space
     seeg_electrodes_thr_ref = Node(Threshold(), name="seeg_electrodes_thr_ref")

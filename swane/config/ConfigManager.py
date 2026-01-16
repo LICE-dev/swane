@@ -1,4 +1,7 @@
 import configparser
+from configparser import SectionProxy
+from typing import Literal, cast
+
 from swane import strings, __version__
 from swane.config.preference_list import *
 from swane.utils.CryptographyManager import CryptographyManager
@@ -10,8 +13,10 @@ from swane.utils.MailManager import MailManager
 
 class ConfigManager(configparser.ConfigParser):
 
+    VALIDATION_SUFFIX="_validation"
+
     # Overrides to accept non-str stringable object as section keys
-    def __getitem__(self, key):
+    def __getitem__(self, key: str|DataInputList|GlobalPrefCategoryList)  -> SectionProxy:
         return super().__getitem__(str(key))
 
     def __setitem__(self, key, value):
@@ -125,6 +130,8 @@ class ConfigManager(configparser.ConfigParser):
                             self[category][pref] = str(
                                 GLOBAL_PREFERENCES[category][pref].default
                             )
+                        if GLOBAL_PREFERENCES[category][pref].validate_on_change:
+                            self[category][pref+ConfigManager.VALIDATION_SUFFIX]="true"
 
             for data_input in DataInputList:
                 if data_input in WF_PREFERENCES:
@@ -252,6 +259,26 @@ class ConfigManager(configparser.ConfigParser):
         if self.global_config:
             return self[GlobalPrefCategoryList.MAIN]["slicer_path"]
         return ""
+
+    def get_slicer_validator(self) -> bool:
+        """
+        Returns
+        -------
+        A bool, true if slicer executable validation needs to be checked
+        """
+        if self.global_config:
+            return self.getboolean_safe(GlobalPrefCategoryList.MAIN,"slicer_path"+self.VALIDATION_SUFFIX)
+        return False
+
+    def set_slicer_validator(self, value:bool):
+        """
+        Returns
+        -------
+        A bool, true if slicer executable validation needs to be checked
+        """
+        if self.global_config:
+            self[GlobalPrefCategoryList.MAIN]["slicer_path"+self.VALIDATION_SUFFIX] = str(value)
+        return False
 
     def set_slicer_path(self, slicer_path: str):
         """
@@ -404,6 +431,16 @@ class ConfigManager(configparser.ConfigParser):
                     if dep_check is None or not callable(dep_check) or not dep_check():
                         self[category][key] = "false"
                         changed = True
+                        continue
+                if WF_PREFERENCES[category][key].resource is not None:
+                    resource_check = getattr(
+                        ResourceManager,
+                        WF_PREFERENCES[category][key].resource,
+                        None,
+                    )
+                    if resource_check is None or not callable(resource_check) or not resource_check(config=self):
+                        self[category][key] = "false"
+                        changed = True
         if changed:
             self.save()
 
@@ -416,7 +453,7 @@ class ConfigManager(configparser.ConfigParser):
         return self.getint_safe(GlobalPrefCategoryList.MAIN, "last_pid")
 
     def getboolean_safe(
-        self, section: str, option: str, *, raw=False, vars=None, **kwargs
+        self, section: str|GlobalPrefCategoryList|DataInputList, option: str, *, raw=False, vars=None, **kwargs
     ) -> bool:
         """
         Get an option value as bool or, if invalid, its default value
@@ -453,7 +490,7 @@ class ConfigManager(configparser.ConfigParser):
         raise Exception()
 
     def getint_safe(
-        self, section: str, option: str, *, raw=False, vars=None, **kwargs
+        self, section: str|GlobalPrefCategoryList|DataInputList, option: str, *, raw=False, vars=None, **kwargs
     ) -> int:
         """
         Get an option value as int or, if invalid, its default value
@@ -488,7 +525,7 @@ class ConfigManager(configparser.ConfigParser):
         raise Exception("Error for %s - %s" % (str(section), str(option)))
 
     def getfloat_safe(
-        self, section: str, option: str, *, raw=False, vars=None, **kwargs
+        self, section: str|GlobalPrefCategoryList|DataInputList, option: str, *, raw=False, vars=None, **kwargs
     ) -> float:
         """
         Get an option value as float or, if invalid, its default value
@@ -523,7 +560,7 @@ class ConfigManager(configparser.ConfigParser):
         raise Exception("Error for %s - %s" % (str(section), str(option)))
 
     def getenum_safe(
-        self, section: str, option: str, *, raw: bool = False, vars=None, **kwargs
+        self, section: str|GlobalPrefCategoryList|DataInputList, option: str, *, raw: bool = False, vars=None, **kwargs
     ) -> Enum:
         """
         Get an option value as Enum or, if invalid, its default value

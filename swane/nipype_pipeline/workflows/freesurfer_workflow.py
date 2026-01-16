@@ -1,3 +1,5 @@
+from configparser import SectionProxy
+
 from nipype.interfaces.freesurfer import ReconAll
 from nipype.interfaces.fsl import BinaryMaths
 from multiprocessing import cpu_count
@@ -17,7 +19,7 @@ FS_DIR = "FS"
 def freesurfer_workflow(
     name: str,
     is_hippo_amyg_labels: bool,
-    use_synth: bool,
+    synth_config: SectionProxy,
     base_dir: str = "/",
     max_cpu: int = 0,
     multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP
@@ -32,8 +34,8 @@ def freesurfer_workflow(
         The workflow name.
     is_hippo_amyg_labels : bool
         Enable segmentation of the hippocampal substructures and the nuclei of the amygdala.
-    use_synth: bool
-        if workflow should use FreeSurfer Synth tools.
+    synth_config: SectionProxy
+        FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
@@ -82,7 +84,7 @@ def freesurfer_workflow(
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=["ref", "subjects_dir"]), name="inputnode"
+        IdentityInterface(fields=["reference", "subjects_dir"]), name="inputnode"
     )
 
     # Output Node
@@ -110,7 +112,7 @@ def freesurfer_workflow(
 
     # RAM profile
     recon_all._mem_gb = 5  # 5 is enough for old recon-all
-    if use_synth:
+    if synth_config.getboolean_safe("reconall"):
         recon_all._mem_gb = (
             DependencyManager.NEWRECONALL_FREESURFER_RAM_REQUIREMENT
         )  # new recon-all needs a lot of RAM
@@ -139,7 +141,7 @@ def freesurfer_workflow(
     recon_all.inputs.directive = "all"
     recon_all.inputs.args = "-no-isrunning"
     workflow.add_nodes([recon_all])
-    workflow.connect(inputnode, "ref", recon_all, "T1_files")
+    workflow.connect(inputnode, "reference", recon_all, "T1_files")
     workflow.connect(inputnode, "subjects_dir", recon_all, "subjects_dir")
 
     # NODE 2: Aparcaseg linear transformation in reference space

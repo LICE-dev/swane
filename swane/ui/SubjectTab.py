@@ -199,7 +199,7 @@ class SubjectTab(QTabWidget):
         ):
             # Add a minimum delay to wait fornipype file after node start signal
             QTimer.singleShot(
-                150,
+                400,
                 lambda: self.tree_item_clicked(
                     self.node_list[wf_report.workflow_name]
                     .node_list[wf_report.node_name]
@@ -565,13 +565,7 @@ class SubjectTab(QTabWidget):
         self.node_runtime_widget = NipypeNodeRuntimeWidget(
             slicer_path=self.global_config.get_slicer_path()
         )
-        scroll = QScrollArea()
-        scroll.setWidget(self.node_runtime_widget)
-        scroll.setWidgetResizable(True)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-        layout.addWidget(scroll, 2, 1)
+        layout.addWidget(self.node_runtime_widget, 2, 1)
 
         self.exec_tab.setLayout(layout)
 
