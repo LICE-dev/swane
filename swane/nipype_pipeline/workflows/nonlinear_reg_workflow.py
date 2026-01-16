@@ -59,6 +59,8 @@ def nonlinear_reg_workflow(name: str, synth_config: SectionProxy, base_dir: str 
 
     reg_wrap = get_registration_node(
         name=name,
+        name_prefix="reference",
+        name_suffix="to atlas",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         moving=[inputnode, "in_file"],

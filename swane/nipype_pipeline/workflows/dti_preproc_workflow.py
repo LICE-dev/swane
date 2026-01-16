@@ -133,6 +133,7 @@ def dti_preproc_workflow(
     # NODE 3: Scalp removal from b0 image
     b0_deskull = get_deskull_node(
         name="dti_deskull",
+        name_prefix="DTI",
         use_synth=synth_config.getboolean_safe("strip"),
         mask=True,
         bet_thr=0.3,
@@ -193,6 +194,8 @@ def dti_preproc_workflow(
     # NODE 6: b0 image linear registration in reference space
     dif2ref = get_registration_node(
         name="dif2ref",
+        name_prefix="DTI",
+        name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         moving=[nodif, "roi_file"],
@@ -223,6 +226,8 @@ def dti_preproc_workflow(
 
     fa_2_ref = apply_registration_node(
         name="fa_2_ref",
+        name_prefix="FA",
+        name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         warp=[dif2ref.out_registered_node, dif2ref.warp],
@@ -242,6 +247,8 @@ def dti_preproc_workflow(
 
         mni_2_ref = get_registration_node(
             name="mni_2_ref",
+            name_prefix="MNI atlas",
+            name_suffix="to reference",
             use_synth=synth_config.getboolean_safe("morph"),
             workflow=workflow,
             moving=mni,

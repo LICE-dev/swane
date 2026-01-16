@@ -119,6 +119,7 @@ def venous_mr_workflow(
 
     # NODE 5: Scalp removal and in skull structures segmentation
     deskull = get_deskull_node(
+        name_prefix="anatomic phase",
         name="vein_mr_deskull",
         use_synth=synth_config.getboolean_safe("strip"),
         mask=True,
@@ -138,6 +139,8 @@ def venous_mr_workflow(
 
     anat_2_ref = get_registration_node(
         name="anat_2_ref",
+        name_prefix="anatomic phase",
+        name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         moving=[veins_check, "out_file_anat"],
@@ -148,6 +151,8 @@ def venous_mr_workflow(
     )
 
     veins_2_ref = apply_registration_node(
+        name_prefix="venous phase",
+        name_suffix="to reference",
         name="veins_2_ref",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,

@@ -162,6 +162,8 @@ def func_map_workflow(
 
     reg_wrap = get_registration_node(
         name="%s_2_ref" % name,
+        name_prefix=name,
+        name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         moving=[reorient, "out_file"],
@@ -174,6 +176,8 @@ def func_map_workflow(
 
     smooth_2_ref = apply_registration_node(
         name="%s_smooth_2_ref_flirt" % name,
+        name_prefix="Smoothed %s" % name,
+        name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         warp=[reg_wrap.out_registered_node, reg_wrap.warp],
@@ -255,6 +259,8 @@ def func_map_workflow(
 
         func_2_sym_warp = apply_registration_node(
             name="%s_2_sym_warp" % name,
+            name_prefix=name,
+            name_suffix="to symmetric atlas",
             use_synth=synth_config.getboolean_safe("morph"),
             workflow=workflow,
             warp=[inputnode, "ref_2_sym_warp"],
@@ -272,13 +278,14 @@ def func_map_workflow(
 
         # NODE 13: Asymmetry index calculation
         ai = Node(AsymmetryIndex(), name="%s_ai" % name)
-        ai.long_name = "asymmetry index"
+        ai.long_name = "Asymmetry Index (AI)"
         ai.inputs.out_file = "r-%s_ai.nii.gz" % name
         workflow.connect(func_2_sym_warp, "out_file", ai, "in_file")
         workflow.connect(sym_swap, "out_file", ai, "swapped_file")
 
         # NODE 14: AI thresholding
         ai_threshold = Node(ImageMaths(), name="%s_ai_threshold" % name)
+        ai_threshold.long_name = name + "AI thresholding"
         threshold = config.getint_safe("ai_threshold")
         threshold = abs(threshold / 100)
         ai_threshold.inputs.op_string = "-thr %f -uthr %f" % (-threshold, threshold)
@@ -286,6 +293,8 @@ def func_map_workflow(
 
         ai_2_ref = apply_registration_node(
             name="%s_ai_2_ref" % name,
+            name_prefix="AI",
+            name_suffix="to reference",
             use_synth=synth_config.getboolean_safe("morph"),
             workflow=workflow,
             warp=[inputnode, "ref_2_sym_invwarp"],
@@ -307,7 +316,7 @@ def func_map_workflow(
             for side in SIDES:
                 # NODE 17: Projection of AI on FreeSurfer pial surface
                 ai_surf = Node(SampleToSurface(), name="%s_ai_surf_%s" % (name, side))
-                ai_surf.long_name = side + " asymmetry index %s"
+                ai_surf.long_name = side + " AI %s"
                 ai_surf.inputs.hemi = side
                 ai_surf.inputs.out_file = "%s_ai_surf_%s.mgz" % (name, side)
                 ai_surf.inputs.cortex_mask = True

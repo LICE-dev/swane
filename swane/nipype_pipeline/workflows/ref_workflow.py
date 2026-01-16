@@ -42,9 +42,9 @@ def ref_workflow(
     ----------
     ref : path
         T13D.
-    ref_brain : path
+    reference_brain : path
         Betted T13D.
-    ref_mask : path
+    reference_mask : path
         Brain mask from T13D bet command.
 
     """
@@ -53,7 +53,7 @@ def ref_workflow(
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=["ref", "ref_brain", "ref_mask"]), name="outputnode"
+        IdentityInterface(fields=["reference", "reference_brain", "ref_mask"]), name="outputnode"
     )
 
     # NODE 1: Conversion dicom -> nifti
@@ -92,8 +92,8 @@ def ref_workflow(
     )
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
-    workflow.connect(ref_reScale, "out_file", outputnode, "ref")
-    workflow.connect(ref_deskull, "out_file", outputnode, "ref_brain")
+    workflow.connect(ref_reScale, "out_file", outputnode, "reference")
+    workflow.connect(ref_deskull, "out_file", outputnode, "reference_brain")
     workflow.connect(ref_deskull, "mask_file", outputnode, "ref_mask")
 
     return workflow

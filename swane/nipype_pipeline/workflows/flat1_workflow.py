@@ -35,7 +35,7 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
 
     Input Node Fields
     ----------
-    ref_brain : path
+    reference_brain : path
         Betted T13D reference file.
     flair_brain : path
         Betted FLAIR3D.
@@ -73,7 +73,7 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
     inputnode = Node(
         IdentityInterface(
             fields=[
-                "ref_brain",
+                "reference_brain",
                 "flair_brain",
                 "ref_2_mni1_warp",
                 "ref_2_mni1_inverse_warp",
@@ -97,7 +97,7 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
     fast.inputs.output_biascorrected = True  # param -B
     fast.inputs.bias_iters = 4  # param -I
     workflow.add_nodes([fast])
-    workflow.connect(inputnode, "ref_brain", fast, "in_files")
+    workflow.connect(inputnode, "reference_brain", fast, "in_files")
 
     def pick_first_two(file_list):
         return file_list[1], file_list[2]
@@ -115,6 +115,8 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
 
     flair_2_mni1 = apply_registration_node(
         name="flair_2_mni1",
+        name_prefix="flair",
+        name_suffix="MNI atlas",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
@@ -125,6 +127,8 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
 
     restore_2_mni1 = apply_registration_node(
         name="restore_2_mni1",
+        name_prefix="T1",
+        name_suffix="MNI atlas",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
@@ -135,6 +139,8 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
 
     gm_2_mni1 = apply_registration_node(
         name="gm_2_mni1",
+        name_prefix="Gray matter",
+        name_suffix="MNI atlas",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
@@ -145,6 +151,8 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
 
     wm_2_mni1 = apply_registration_node(
         name="wm_2_mni1",
+        name_prefix="White matter",
+        name_suffix="MNI atlas",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
@@ -162,6 +170,7 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
 
     # Remove the upper 1% of values to trim values from incorrect registration
     outliers_removal = Node(Threshold(), name="%s_outliers_mask" % name)
+    outliers_removal.long_name = "Outliers removal"
     outliers_removal.inputs.thresh = 98
     outliers_removal.inputs.use_robust_range = True
     outliers_removal.inputs.use_nonzero_voxels = True
@@ -306,33 +315,39 @@ def flat1_workflow(name: str, mni1_dir: str, synth_config: SectionProxy, base_di
 
     extension_z_2_ref = apply_registration_node(
         name="extension_z_2_ref",
+        name_prefix="Extension",
+        name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_inverse_warp"],
         moving=[no_cereb_extension_z, "out_file"],
-        reference=[inputnode, "ref_brain"],
+        reference=[inputnode, "reference_brain"],
         non_linear=True,
         out_file="r-extension_z.nii.gz"
     )
 
     junction_z_2_ref = apply_registration_node(
         name="junction_z_2_ref",
+        name_prefix="Junction",
+        name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_inverse_warp"],
         moving=[junction_z, "out_file"],
-        reference=[inputnode, "ref_brain"],
+        reference=[inputnode, "reference_brain"],
         non_linear=True,
         out_file="r-junction_z.nii.gz"
     )
 
     binary_flair_2_ref = apply_registration_node(
         name="binary_flair_2_ref",
+        name_prefix="Binary Flair",
+        name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_inverse_warp"],
         moving=[binary_flair, "out_file"],
-        reference=[inputnode, "ref_brain"],
+        reference=[inputnode, "reference_brain"],
         non_linear=True,
         out_file="r-binary_flair.nii.gz"
     )

@@ -150,6 +150,8 @@ def tractography_workflow(
         # NODE 2: Seed ROI nonlinear transformation in T13D reference space
         seed_2_ref = apply_registration_node(
             name="seed_2_ref_%s_%s" % (name, side),
+            name_prefix="seed mask",
+            name_suffix="to reference",
             use_synth=synth_config.getboolean_safe("morph"),
             workflow=workflow,
             warp=[inputnode, "mni2ref_warp"],
@@ -162,6 +164,8 @@ def tractography_workflow(
         # NODE 4: Target ROIs nonlinear transformation in T13D reference space
         targets_2_ref = apply_registration_node(
             name="targets_2_ref_%s_%s" % (name, side),
+            name_prefix="target mask",
+            name_suffix="to reference",
             use_synth=synth_config.getboolean_safe("morph"),
             workflow=workflow,
             warp=[inputnode, "mni2ref_warp"],
@@ -249,6 +253,8 @@ def tractography_workflow(
 
             exclude_2_ref = apply_registration_node(
                 name="exclude_2_ref_%s_%s" % (name, side),
+                name_prefix="exclude mask",
+                name_suffix="to reference",
                 use_synth=synth_config.getboolean_safe("morph"),
                 workflow=workflow,
                 warp=[inputnode, "mni2ref_warp"],
@@ -269,6 +275,8 @@ def tractography_workflow(
             # NODE 8: stop ROI nonlinear transformation in T13D reference space
             stop_2_ref = apply_registration_node(
                 name="stop_2_ref_%s_%s" % (name, side),
+                name_prefix="stop mask",
+                name_suffix="to reference",
                 use_synth=synth_config.getboolean_safe("morph"),
                 workflow=workflow,
                 warp=[inputnode, "mni2ref_warp"],
