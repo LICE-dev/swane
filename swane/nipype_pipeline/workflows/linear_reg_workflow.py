@@ -136,6 +136,7 @@ def linear_reg_workflow(
     else:
         deskull = get_deskull_node(
             name=name+"_deskull",
+            name_prefix=name,
             use_synth=synth_config.getboolean_safe("strip"),
             mask=True,
             bet_thr=bet_thr,
@@ -147,6 +148,8 @@ def linear_reg_workflow(
 
     reg_wrap = get_registration_node(
         name=name,
+        name_prefix=name,
+        name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
         moving=[robustfov, "out_roi"],
@@ -169,6 +172,8 @@ def linear_reg_workflow(
     else:
         deskull_2_ref = apply_registration_node(
             name=name,
+            name_prefix="Skull stripped image",
+            name_suffix="to reference",
             use_synth=synth_config.getboolean_safe("morph"),
             workflow=workflow,
             warp=[reg_wrap.out_registered_node, reg_wrap.warp],

@@ -141,7 +141,7 @@ def freesurfer_workflow(
     recon_all.inputs.directive = "all"
     recon_all.inputs.args = "-no-isrunning"
     workflow.add_nodes([recon_all])
-    workflow.connect(inputnode, "ref", recon_all, "T1_files")
+    workflow.connect(inputnode, "reference", recon_all, "T1_files")
     workflow.connect(inputnode, "subjects_dir", recon_all, "subjects_dir")
 
     # NODE 2: Aparcaseg linear transformation in reference space

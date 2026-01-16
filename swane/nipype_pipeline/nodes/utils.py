@@ -28,7 +28,7 @@ def get_deskull_node(
         bet_surfaces:bool=False,
         synth_exclude_csf:bool=False,
         out_file:str=None,
-
+        name_prefix:str="",
 )->Node:
     if use_synth:
         deskull_node = Node(SynthStrip(), name=name + "_synthstrip", mem_gb=5)
@@ -54,6 +54,7 @@ def get_deskull_node(
         elif bet_robust:
             deskull_node.inputs.robust = True
 
+    deskull_node.long_name = name_prefix + " %s"
     if out_file:
         deskull_node.inputs.out_file = out_file
 
@@ -93,6 +94,8 @@ def get_registration_node(
         is_volumetric:bool=True,
         flirt_cost:str="mutualinfo",
         flirt_search:int=90,
+        name_prefix:str="",
+        name_suffix:str="",
 )->RegistrationNodeWrapper:
 
     # Sometimes we want to use flirt on unbetted images to take advantage of skull for registration
@@ -112,7 +115,7 @@ def get_registration_node(
             model = "rigid"
 
         synth_morph_reg = Node(SynthMorphReg(), name=name+"_synthmorphreg", mem_gb=mem_gb)
-        synth_morph_reg.long_name = "%s to reference space"
+        synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
         if out_file:
             if type(out_file) == str:
@@ -140,6 +143,7 @@ def get_registration_node(
     else:
         if non_linear:
             flirt = Node(FLIRT(), name=name+"_flirt")
+            flirt.long_name = name_prefix + " %s " + name_suffix
             flirt.inputs.searchr_x = [flirt_search, flirt_search]
             flirt.inputs.searchr_y = [-flirt_search, flirt_search]
             flirt.inputs.searchr_z = [-flirt_search, flirt_search]
@@ -156,7 +160,7 @@ def get_registration_node(
                 workflow.connect(reference_brain[0], reference_brain[1], flirt, "reference")
 
             fnirt = Node(FNIRT(), name=name+"_fnirt")
-            fnirt.long_name = "%s to atlas"
+            fnirt.long_name = name_prefix + " %s " + name_suffix
             fnirt.inputs.fieldcoeff_file = True
             workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
             if out_file:
@@ -192,6 +196,7 @@ def get_registration_node(
             )
         else:
             flirt = Node(FLIRT(), name=name+"_flirt")
+            flirt.long_name = name_prefix + " %s " + name_suffix
             if is_volumetric:
                 flirt.inputs.cost = flirt_cost
                 flirt.inputs.searchr_x = [-flirt_search, flirt_search]
@@ -239,15 +244,19 @@ def apply_registration_node(
         out_file:str|list[Node|str]=None,
         non_linear:bool=False,
         labelmap:bool=False,
+        name_prefix:str="",
+        name_suffix:str="",
 )->Node:
     if use_synth:
         apply_node = Node(SynthMorphApply(), name=name+"_morph_apply")
+        apply_node.long_name = name_prefix + " %s " + name_suffix
         if labelmap:
             apply_node.inputs.method = "nearest"
         workflow.connect(warp[0], warp[1], apply_node, "warp_file")
 
     elif non_linear:
         apply_node = Node(ApplyWarp(), name=name+"_apply_warp")
+        apply_node.long_name = name_prefix + " %s " + name_suffix
         if labelmap:
             apply_node.inputs.interp = "nn"
         workflow.connect(warp[0], warp[1], apply_node, "field_file")
@@ -257,6 +266,7 @@ def apply_registration_node(
             workflow.connect(reference[0], reference[1], apply_node, "ref_file")
     else:
         apply_node = Node(ApplyXFM(), name=name + "_apply_xfm")
+        apply_node.long_name = name_prefix + " %s " + name_suffix
         apply_node.inputs.interp = "nearestneighbour"
         workflow.connect(warp[0], warp[1], apply_node, "in_matrix_file")
         if type(reference) == str:

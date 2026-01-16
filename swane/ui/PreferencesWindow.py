@@ -1,5 +1,4 @@
 from datetime import datetime
-from functools import partial
 import os
 from PySide6.QtWidgets import (
     QDialog,
@@ -10,6 +9,7 @@ from PySide6.QtWidgets import (
     QSpacerItem,
     QSizePolicy,
     QMessageBox,
+    QFrame,
 )
 from swane import strings, EXIT_CODE_REBOOT
 from swane.ui.PreferenceUIEntry import PreferenceUIEntry
@@ -21,6 +21,7 @@ from enum import Enum
 from swane.utils.CryptographyManager import CryptographyManager
 
 from swane.utils.MailManager import MailManager
+from swane.utils.ResourceManager import ResourceManager
 
 
 class PreferencesWindow(QDialog):
@@ -97,6 +98,16 @@ class PreferencesWindow(QDialog):
                     continue
                 if self.preferences[category][key].hidden:
                     continue
+
+                # Section frame
+                if self.preferences[category][key].section:
+                    line = QFrame()
+                    line.setFrameShape(QFrame.HLine)
+                    line.setFrameShadow(QFrame.Sunken)
+                    line.setStyleSheet("color: #b0b0b0;")
+                    grid.addWidget(line, x, 0, 1, 3)
+                    x += 1
+
                 self.input_keys[category][key] = x
                 self.inputs[x] = PreferenceUIEntry(
                     category=category,
@@ -105,6 +116,7 @@ class PreferencesWindow(QDialog):
                     entry=self.preferences[category][key],
                     parent=self,
                 )
+
                 # External dependencies check
                 self.check_dependency(category, key, x)
 
@@ -277,6 +289,19 @@ class PreferencesWindow(QDialog):
                     self.preferences[category][key].dependency_fail_tooltip
                 )
                 return False
+        if self.preferences[category][key].resource is not None:
+            resource_check = getattr(
+                ResourceManager,
+                self.preferences[category][key].resource,
+                None,
+            )
+            if (resource_check is None
+                    or not callable(resource_check)
+                    or not resource_check(config=self.my_config)):
+                self.inputs[x].disable(
+                    self.preferences[category][key].resource_fail_tooltip
+                )
+                return False
         return True
 
     def validation_field_changed(self, checked, my_cat: str, my_key: str):
@@ -319,8 +344,10 @@ class PreferencesWindow(QDialog):
                         )
                         .name
                     )
+                elif self.inputs[req_x].input_type in (InputTypes.FLOAT, InputTypes.INT):
+                    check = float(self.inputs[req_x].get_value()) >= req_key[1]
                 else:
-                    check = req_key[1] == self.inputs[req_x].input_field.get_value()
+                    check = req_key[1] = self.inputs[req_x].get_value()
 
                 if not check:
                     self.inputs[my_x].disable(
