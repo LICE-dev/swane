@@ -586,12 +586,12 @@ class MainWindow(QMainWindow):
         )
         button_action5.triggered.connect(self.edit_wf_config)
 
-        button_action6 = QAction(strings.menu_shutdown_pref, self)
-        button_action6.setCheckable(True)
-        button_action6.triggered.connect(self.toggle_shutdown_after_workflow)
+        button_action6 = QAction(strings.menu_start_preference_wizard, self)
+        button_action6.triggered.connect(self.start_preference_wizard)
         
-        button_action7 = QAction(strings.menu_start_preference_wizard, self)
-        button_action7.triggered.connect(self.start_preference_wizard)
+        button_action7 = QAction(strings.menu_shutdown_pref, self)
+        button_action7.setCheckable(True)
+        button_action7.triggered.connect(self.toggle_shutdown_after_workflow)
 
         button_action8 = QAction(strings.menu_about, self)
         button_action8.triggered.connect(self.about)
