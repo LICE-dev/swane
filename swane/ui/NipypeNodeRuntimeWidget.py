@@ -3,14 +3,13 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
     QPushButton,
-    QTextEdit,
     QSpacerItem,
     QSizePolicy,
     QPlainTextEdit,
     QScrollArea,
 )
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics
+from PySide6.QtGui import QDesktopServices, QFontMetrics
 from swane import strings
 from nipype.utils.filemanip import loadpkl
 from datetime import datetime
@@ -96,7 +95,7 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         self._row += 1
 
         status = item.get_status()
-        # status = WorkflowSignals.NODE_COMPLETED
+
         if status is None:
             self._add_label(strings.sub_tab_node_status_label, self._row, 0)
             self._add_value(

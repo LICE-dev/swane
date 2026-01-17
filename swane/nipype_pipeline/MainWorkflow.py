@@ -175,10 +175,9 @@ class MainWorkflow(CustomWorkflow):
 
         try:
             self.subject_config[DIL.DTI]["cuda"] = (
-                ResourceManager.is_cuda()
+                ResourceManager.is_cuda(self.global_config)
                 and self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"]
             )
-            print(self.subject_config[DIL.DTI]["cuda"])
         except:
             self.subject_config[DIL.DTI]["cuda"] = "false"
 
