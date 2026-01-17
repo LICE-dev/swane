@@ -20,6 +20,7 @@ from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
 from PySide6.QtCore import QCoreApplication, Qt, QThreadPool
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
+from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
 from swane.utils.DependencyManager import (
     DependencyManager,
     Dependence,
@@ -421,6 +422,31 @@ class MainWindow(QMainWindow):
             GlobalPrefCategoryList.MAIN, "shutdown"
         )
         self.global_config[GlobalPrefCategoryList.MAIN]["shutdown"] = str(not shutdown)
+        
+    def start_preference_wizard(self):
+        """
+        Open the Preference Wizard Window.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        if self.check_running_workflows():
+            msg_box = QMessageBox()
+            msg_box.setText(strings.mainwindow_pref_disabled_error)
+            msg_box.exec()
+            return
+
+        wf_preference_window = PreferenceWizardWindow(
+            self.global_config, self.dependency_manager
+        )
+        ret = wf_preference_window.exec()
+
+        if ret == -1:
+            # TODO - Perché questa guardia?
+            self.start_preference_wizard()
 
     def check_running_workflows(self, ignore_subj: Subject = None) -> bool:
         """
@@ -563,9 +589,12 @@ class MainWindow(QMainWindow):
         button_action6 = QAction(strings.menu_shutdown_pref, self)
         button_action6.setCheckable(True)
         button_action6.triggered.connect(self.toggle_shutdown_after_workflow)
+        
+        button_action7 = QAction(strings.menu_start_preference_wizard, self)
+        button_action7.triggered.connect(self.start_preference_wizard)
 
-        button_action7 = QAction(strings.menu_about, self)
-        button_action7.triggered.connect(self.about)
+        button_action8 = QAction(strings.menu_about, self)
+        button_action8.triggered.connect(self.about)
 
         # Menu definition and population
         menu = self.menuBar()
@@ -578,8 +607,9 @@ class MainWindow(QMainWindow):
         tool_menu.addAction(button_action4)
         tool_menu.addAction(button_action5)
         tool_menu.addAction(button_action6)
+        tool_menu.addAction(button_action7)
         help_menu = menu.addMenu(strings.menu_help_name)
-        help_menu.addAction(button_action7)
+        help_menu.addAction(button_action8)
 
         # Tab definition
         self.main_tab = QTabWidget(parent=self)

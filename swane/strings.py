@@ -93,6 +93,7 @@ menu_new_subj_tip = "Add a new subject in the main working directory"
 menu_exit = "E&xit " + APPNAME
 menu_pref = "Application &Settings..."
 menu_pref_tip = "Edit " + APPNAME + " settings"
+menu_start_preference_wizard = "Start workflow preference &Wizard"
 menu_wf_pref = "Default Workflow &Preferences..."
 menu_shutdown_pref = "Shutdown at Workflow end"
 menu_about = "&About " + APPNAME + "..."
@@ -227,6 +228,80 @@ pref_window_mail_test_fail = (
     "An error occurred, check " + APPNAME + " mail configuration"
 )
 pref_window_mail_test_success = "Mail sent succesfully, check in your inbox"
+
+# Preference Wizard Window
+preference_wizard_title = APPNAME + " Configuration Wizard"
+wizard_apply_button = "&Apply"
+wizard_back_button = "&Back"
+wizard_next_button = "&Next"
+wizard_finish_button = "&Finish"
+wizard_cancel_button = "&Cancel"
+wizard_start_button = "&Get Started"
+
+wizard_welcome_title = "Welcome to the " + APPNAME + " Configuration Wizard"
+wizard_welcome_text = (
+    "This wizard will guide you through selecting the optimal computational settings "
+    "for your research workflows.\n\n"
+    "It helps balance performance, resource usage, and advanced features so that SWANe can "
+    "process your data efficiently and reliably.\n\n"
+    "You’ll be able to:\n"
+    "• Select a performance profile that matches your priorities.\n"
+    "• Enable hardware acceleration if supported.\n"
+    "• Choose whether to use advanced models for improved results.\n"
+    "• Review a summary of your configuration before applying it.\n\n"
+    "These settings can always be adjusted later in Application Settings, or you can rerun "
+    "this wizard at any time from Menu → Configuration Wizard."
+)
+
+wizard_performance_title = "Choose your performance profile"
+wizard_performance_text = "This helps " + APPNAME + " optimize processing based on your system capabilities and research needs."
+performance_profile_max = "Maximum Performance"
+performance_profile_max_tooltip = "Use more system resources to complete tasks as quickly as possible."
+performance_profile_balanced = "Balanced"
+performance_profile_balanced_tooltip = "A compromise between speed and resource usage for most analyses."
+performance_profile_min = "Minimum Resource Usage"
+performance_profile_min_tooltip = "Minimize CPU and memory usage to keep the system responsive, even on limited hardware."
+
+wizard_hardware_accelleration_title = "Hardware Accelleration"
+wizard_hardware_accelleration_text = "Speed up computations by using supported hardware features."
+gpu_acceleration_enabled = "Use GPU acceleration when available"
+gpu_acceleration_enabled_tooltip = "This can accelerate advanced computations if the GPU is supported by your system."
+gpu_acceleration_disabled = "CPU only"
+gpu_acceleration_disabled_tooltip = "All processing will run on the CPU, even if GPU acceleration is available."
+gpu_not_available = "Not available (system limitations)"
+gpu_enabled = "Enabled"
+gpu_disabled = "Disabled (by user choice)"
+
+wizard_advanced_models_title = "Advanced Models"
+wizard_advanced_models_text = (
+    "Advanced models implement state-of-the-art deep learning algorithms that can improve results "
+    "and, in some cases, reduce analysis time.\n"
+    "They may require additional memory and processing power."
+)
+advanced_models_enabled = "Use advanced models when supported"
+advanced_models_enabled_tooltip = "Enable advanced methods when the system can handle them reliably."
+advanced_models_disabled = "Use standard methods only"
+advanced_models_disabled_tooltip = "Prefer lighter, more stable processing techniques with minimal resource usage."
+advanced_models_enabled = "Enabled\nAll advanced models are active and will be used when applicable."
+advanced_models_disabled = "Disabled\nAdvanced models were disabled based on your selection."
+
+wizard_review_title = "Review Your Configuration"
+wizard_review_text = "Please review your selections before applying them."
+wizard_review_tooltip = "Some options may be automatically adjusted to ensure stability and compatibility."
+
+wizard_applied_title = "Configuration applied successfully"
+wizard_applied_text = (
+    "Your settings have been applied.\n\n"
+    "These settings may influence analysis performance and memory usage.\n"
+    "You can always adjust them in more detail via Application Settings.\n\n"
+    "For additional guidance, documentation, and troubleshooting, visit the SWANe Wiki.\n"
+    "You can also rerun this wizard at any time from Menu → Configuration Wizard."
+)
+
+wizard_selected_profile = "Selecetd profile: {profile}"
+wizard_gpu_accelleration = "GPU acceleration:\n{gpu_status}"
+wizard_advanced_models = "Advanced models:\n{adv_status}"
+
 
 # Workflow
 check_dep_generic_error = "Dependency check error"
