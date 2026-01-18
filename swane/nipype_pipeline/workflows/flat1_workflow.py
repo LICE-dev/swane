@@ -14,6 +14,8 @@ from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
 from nipype.interfaces.utility import IdentityInterface, Function
+
+from swane.nipype_pipeline.nodes.ram_estimators import FastRamEstimator
 from swane.nipype_pipeline.nodes.utils import apply_registration_node
 
 
@@ -92,6 +94,7 @@ def flat1_workflow(
 
     # NODE 1: three class fast segmentation
     fast = Node(FAST(), name="%s_fast" % name, mem_gb=4)
+    fast.ram_estimator = FastRamEstimator()
     fast.inputs.img_type = 1  # param -t
     fast.inputs.number_classes = 3  # param n
     fast.inputs.hyper = 0.1  # param -H

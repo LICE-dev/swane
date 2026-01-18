@@ -31,3 +31,34 @@ class FnirtRamEstimator(NipypeRamEstimator):
             min_gb=2,          # FNIRT is never really small
             max_gb=8.0
         )
+
+class InvWarpRamEstimator(NipypeRamEstimator):
+    """
+    RAM estimator for FSL FNIRT.
+    Calibrated from empirical mem_peak_gb measurements.
+    """
+    def __init__(self):
+        super().__init__(
+            input_multipliers={
+                'warp': 32,    # contributes, but secondary
+                'reference': 180,   # warp field + gradients + pyramid
+            },
+            overhead_gb=2,
+            min_gb=2,
+            max_gb=8.0
+        )
+
+class FastRamEstimator(NipypeRamEstimator):
+    """
+    RAM estimator for FSL FNIRT.
+    Calibrated from empirical mem_peak_gb measurements.
+    """
+    def __init__(self):
+        super().__init__(
+            input_multipliers={
+                'in_files': 32,    # contributes, but secondary
+            },
+            overhead_gb=2,
+            min_gb=2,
+            max_gb=8.0
+        )

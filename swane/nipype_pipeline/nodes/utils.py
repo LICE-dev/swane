@@ -194,6 +194,7 @@ def get_registration_node(
             inv_warp = None
             if inverse:
                 inv_warp = Node(InvWarp(), name=name + "_invwarp")
+                inv_warp.ram_estimator = InvWarpRamEstimator()
                 workflow.connect(fnirt, "fieldcoeff_file", inv_warp, "warp")
                 if type(moving) == str:
                     inv_warp.inputs.ref_file = moving

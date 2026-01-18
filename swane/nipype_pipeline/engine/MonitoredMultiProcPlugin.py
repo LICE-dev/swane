@@ -1,7 +1,7 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 import traceback
-from nipype.interfaces.base import isdefined, File, InputMultiPath
+from nipype.interfaces.base import isdefined
 from nipype.pipeline.plugins.multiproc import MultiProcPlugin
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane import strings
@@ -18,8 +18,6 @@ from copy import deepcopy
 import nibabel as nib
 import math
 import os
-import numbers
-
 
 class NipypeRamEstimator:
     """

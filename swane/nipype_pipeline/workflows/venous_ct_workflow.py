@@ -15,6 +15,8 @@ from swane.nipype_pipeline.nodes.SumMultiVols import SumMultiVols
 from swane.nipype_pipeline.nodes.SegmentEndocranium import SegmentEndocranium
 from configparser import SectionProxy
 
+from swane.nipype_pipeline.nodes.ram_estimators import FlirtRamEstimator
+
 
 def venous_ct_workflow(
     name: str,
@@ -141,6 +143,7 @@ def venous_ct_workflow(
     # Do not use synthmorph, FLIRT performs better on CT
     basal_2_ref = Node(FLIRT(), name="veins_ct_flirt_2_ref")
     basal_2_ref.long_name = "%s to reference space"
+    basal_2_ref.ram_estimator = FlirtRamEstimator()
     basal_2_ref.inputs.out_matrix_file = "veins2ref.mat"
     basal_2_ref.inputs.cost = "mutualinfo"
     basal_2_ref.inputs.searchr_x = [-90, 90]
