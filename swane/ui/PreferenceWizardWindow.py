@@ -19,6 +19,9 @@ from PySide6.QtWidgets import (
 )
 
 from swane import strings
+from swane.config.ConfigManager import ConfigManager
+from swane.utils.ResourceManager import ResourceManager
+from swane.utils.DependencyManager import DependencyManager
 
 
 class PerformanceProfile(str, Enum):
@@ -108,7 +111,7 @@ class PreferenceWizardWindow(QDialog):
         
     """
 
-    def __init__(self, my_config, dependency_manager, parent=None):
+    def __init__(self, global_config: ConfigManager, dependency_manager: DependencyManager, parent=None):
         """
         Initializes the configuration wizard dialog and builds the page flow.
 
@@ -119,9 +122,9 @@ class PreferenceWizardWindow(QDialog):
 
         Parameters
         ----------
-        my_config : object
+        global_config : ConfigManager
             SWANe configuration handler instance.
-        dependency_manager : object
+        dependency_manager : DependencyManager
             SWANe dependency manager instance.
         parent : QWidget, optional
             Parent widget.
@@ -134,7 +137,7 @@ class PreferenceWizardWindow(QDialog):
     
         super(PreferenceWizardWindow, self).__init__(parent)
 
-        self.my_config = my_config
+        self.global_config = global_config
         self.dependency_manager = dependency_manager
         self.user_prefs = UserPreferences()
 
@@ -201,15 +204,7 @@ class PreferenceWizardWindow(QDialog):
             
         """
         
-        # TODO - Come fai a capire se CUDA è usabile?
-        
-        # Fallback to torch if installed
-        try:
-            import torch  # type: ignore
-
-            return bool(torch.cuda.is_available())
-        except Exception:
-            return False
+        return ResourceManager.is_cuda(self.global_config)
 
     # --------------------------
     # Pages builder
@@ -334,6 +329,7 @@ class PreferenceWizardWindow(QDialog):
         lay.addStretch(1)
         page.setLayout(lay)
 
+        # Custom Attribute to rename Next button
         page._wizard_next_label = strings.wizard_start_button  # type: ignore[attr-defined]
         return page
 

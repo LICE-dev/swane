@@ -1,7 +1,6 @@
 from math import ceil
 from psutil import virtual_memory, cpu_count
 from nipype.utils.gpu_count import gpu_count
-from swane.config.config_enums import GlobalPrefCategoryList
 from swane.utils.platform_and_tools_utils import get_os_type
 
 
