@@ -6,7 +6,6 @@ from swane.nipype_pipeline.nodes.utils import get_deskull_node
 from configparser import SectionProxy
 from nipype.interfaces.fsl import RobustFOV
 from nipype.interfaces.utility import IdentityInterface
-
 from nipype import Node
 
 

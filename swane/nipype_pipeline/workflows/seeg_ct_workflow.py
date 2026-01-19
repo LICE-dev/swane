@@ -13,6 +13,8 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from configparser import SectionProxy
 
+from swane.nipype_pipeline.nodes.ram_estimators import FlirtRamEstimator
+
 
 def seeg_ct_workflow(
     name: str,
@@ -95,6 +97,7 @@ def seeg_ct_workflow(
     # Do not use synthmorph, FLIRT performs better on CT
     seeg_ct_2_ref_flirt = Node(FLIRT(), name="seeg_ct_2_ref_flirt")
     seeg_ct_2_ref_flirt.long_name = "%s to reference space"
+    seeg_ct_2_ref_flirt.ram_estimator = FlirtRamEstimator()
     seeg_ct_2_ref_flirt.inputs.out_matrix_file = "seegct2ref.mat"
     seeg_ct_2_ref_flirt.inputs.cost = "mutualinfo"
     seeg_ct_2_ref_flirt.inputs.searchr_x = [-90, 90]
