@@ -285,6 +285,7 @@ class PreferencesWindow(QDialog):
                 None,
             )
             if dep_check is None or not callable(dep_check) or not dep_check():
+
                 self.inputs[x].disable(
                     self.preferences[category][key].dependency_fail_tooltip
                 )
@@ -304,6 +305,19 @@ class PreferencesWindow(QDialog):
                     self.preferences[category][key].resource_fail_tooltip
                 )
                 return False
+
+        # no need return false because combo should neve be completely disabled for subsection dep
+        if self.preferences[category][key].input_type == InputTypes.ENUM:
+            for enum_key in self.preferences[category][key].option_dependency:
+                dep_check = getattr(
+                    self.dependency_manager,
+                    self.preferences[category][key].option_dependency[enum_key][0],
+                    None,
+                )
+                if dep_check is not None and callable(dep_check) and not dep_check():
+                    tooltip = self.preferences[category][key].option_dependency[enum_key][1]
+                    self.inputs[x].disable_combo_option(enum_key, False, tooltip)
+
         return True
 
     def validation_field_changed(self, checked, my_cat: str, my_key: str):

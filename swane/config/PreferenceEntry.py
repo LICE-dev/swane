@@ -31,6 +31,10 @@ class PreferenceEntry:
     special_value_text = ""
     suffix = ""
     section = False
+    #option_requirement = {}
+    option_dependency = {}
+    #option_pref_requirement = {}
+
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -61,6 +65,9 @@ class PreferenceEntry:
             "special_value_text": str,
             "suffix": str,
             "section": bool,
+            #"option_requirement": dict,
+            "option_dependency": dict,
+            #"option_pref_requirement": dict,
             # "value_enum": Enum
         }
         if key in types:

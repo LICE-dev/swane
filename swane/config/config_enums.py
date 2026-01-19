@@ -47,6 +47,12 @@ class BLOCK_DESIGN(Enum):
     RARA = "rArA..."
     RARB = "rArBrArB..."
 
+class FREESURFER_STEP(Enum):
+    DISABLED = "Disabled"
+    PARC = "Only Cortical Parcellation (if available)"
+    PIAL = "Cortical Parcellation + Pial surface"
+    RECONALL = "Complete Recon-all run"
+    HYPPO = "Recon-all + Hippocampal subfields"
 
 class SLICE_TIMING(Enum):
     UNKNOWN = "Unknown"
