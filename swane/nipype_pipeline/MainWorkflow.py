@@ -41,7 +41,6 @@ from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
     MonitoredMultiProcPlugin,
 )
 
-
 DEBUG = False
 
 
