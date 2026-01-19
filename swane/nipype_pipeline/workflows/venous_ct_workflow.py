@@ -163,6 +163,7 @@ def venous_ct_workflow(
         iterfield=["in_file"],
     )
     contrast_2_basal.long_name = "%s to non-contrast scan"
+    contrast_2_basal.ram_estimator = FlirtRamEstimator()
     contrast_2_basal.inputs.out_matrix_file = "veins2ref.mat"
     contrast_2_basal.inputs.cost = "mutualinfo"
     contrast_2_basal.inputs.searchr_x = [-90, 90]
