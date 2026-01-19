@@ -185,14 +185,12 @@ class NipypeNodeRuntimeWidget(QScrollArea):
 
             cmd.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-            cmd.setStyleSheet(
-                """
+            cmd.setStyleSheet("""
                 QPlainTextEdit {
                     padding-top: 4px;
                     padding-bottom: 4px;
                 }
-            """
-            )
+            """)
 
             self.grid.addWidget(cmd, self._row, 1, 1, 6)
 
