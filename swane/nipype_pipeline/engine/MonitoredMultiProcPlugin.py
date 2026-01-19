@@ -71,8 +71,9 @@ class NipypeRamEstimator:
         """
         Estimate RAM usage based on Nipype input traits.
 
-        File-like traits contribute via voxel count.
-        Scalar traits contribute via their numeric value.
+        - File-like inputs contribute via voxel count
+        - Numeric inputs contribute via their numeric value
+        - Lists are supported for both files and numbers
 
         Returns
         -------
@@ -91,46 +92,81 @@ class NipypeRamEstimator:
                 debug_lines.append(f"{attr}: trait not found")
                 continue
 
-            trait = traits[attr]
             val = getattr(inputs, attr, None)
 
             if not isdefined(val) or val is None:
                 debug_lines.append(f"{attr}: undefined")
                 continue
 
-            # File-like traits
-            if trait.trait_type.__class__.__name__ in ("File", "ImageFile"):
-                paths = val if isinstance(val, (list, tuple)) else [val]
+            # --------------------------------------------------
+            # FILE-LIKE VALUES (string or list/tuple of strings)
+            # --------------------------------------------------
+            paths = None
+
+            if isinstance(val, str):
+                paths = [val]
+
+            elif isinstance(val, (list, tuple)) and any(isinstance(v, str) for v in val):
+                paths = [v for v in val if isinstance(v, str)]
+
+            if paths is not None:
                 vox_total = 0
+                valid_files = 0
 
                 for p in paths:
-                    if p and os.path.exists(p):
+                    if not isinstance(p, str) or not os.path.exists(p):
+                        continue
+                    try:
                         vox_total += self.voxels(p)
+                        valid_files += 1
+                    except Exception:
+                        # exists but not a readable image (e.g. txt)
+                        continue
 
-                contribution = vox_total * multiplier / (1024 ** 3) # convert to gb
+                if valid_files > 0:
+                    contribution = vox_total * multiplier / (1024 ** 3)
+                    total_gb += contribution
+
+                    debug_lines.append(
+                        f"{attr}: voxels={vox_total}, multiplier={multiplier}, "
+                        f"contribution={contribution:.3f} GB"
+                    )
+                else:
+                    debug_lines.append(f"{attr}: no readable image files")
+
+                continue
+
+            # --------------------------------------------------
+            # NUMERIC VALUES (scalar or list/tuple of numbers)
+            # --------------------------------------------------
+            values = None
+
+            if isinstance(val, (int, float)):
+                values = [val]
+
+            elif isinstance(val, (list, tuple)) and all(isinstance(v, (int, float)) for v in val):
+                values = val
+
+            if values is not None:
+                contribution = sum(float(v) for v in values) * multiplier
                 total_gb += contribution
 
                 debug_lines.append(
-                    f"{attr}: voxels={vox_total}, multiplier={multiplier}, "
+                    f"{attr}: values={values}, multiplier={multiplier}, "
                     f"contribution={contribution:.3f} GB"
                 )
+                continue
 
-            # Numeric traits
-            elif trait.trait_type.__class__.__name__ in ("Int", "Float"):
-                contribution = float(val) * multiplier
-                total_gb += contribution
+            # --------------------------------------------------
+            # UNSUPPORTED TYPE
+            # --------------------------------------------------
+            debug_lines.append(
+                f"{attr}: unsupported value type ({type(val).__name__})"
+            )
 
-                debug_lines.append(
-                    f"{attr}: value={val}, multiplier={multiplier}, "
-                    f"contribution={contribution:.3f} GB"
-                )
-
-            else:
-                debug_lines.append(
-                    f"{attr}: unsupported trait type "
-                    f"({trait.trait_type.__class__.__name__})"
-                )
-
+        # ------------------------------------------------------
+        # OVERHEAD + CLAMP
+        # ------------------------------------------------------
         mem_gb = total_gb + self.overhead_gb
         debug_lines.append(
             f"Overhead={self.overhead_gb} GB, total estimated RAM={mem_gb:.3f} GB"
@@ -279,7 +315,18 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             )
         except:
             traceback.print_exc()
-        return super(MonitoredMultiProcPlugin, self)._submit_mapnode(jobid)
+                
+        ret = super(MonitoredMultiProcPlugin, self)._submit_mapnode(jobid)
+
+        for sub_id, original_id in self.mapnodesubids.items():
+            print(jobid, sub_id, original_id, self.procs[original_id].fullname, self.procs[sub_id].fullname)
+        # we do this here to not subclass _submit_mapnode
+        if hasattr(self.procs[jobid], "ram_estimator"):
+            for sub_id, original_id in self.mapnodesubids.items():
+                if original_id == jobid:
+                    self.procs[sub_id].ram_estimator = self.procs[original_id].ram_estimator
+
+        return ret
 
     def _task_finished_cb(self, jobid, cached=False):
         # Implements signaling for generic node completion
