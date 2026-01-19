@@ -4,7 +4,6 @@ from swane import strings
 import subprocess
 from swane.utils.platform_and_tools_utils import is_command_available, is_linux, is_mac
 
-
 FSL_CONFLICT_PATH = "fsl/bin"
 FREESURFER_CONFIG_FILE = "SetUpFreeSurfer.sh"
 SHELL_PROFILE = {

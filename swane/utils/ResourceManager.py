@@ -71,7 +71,7 @@ class ResourceManager:
 
     @staticmethod
     # We need config argument to support prefenrence loop
-    def is_cuda(config):
+    def is_cuda():
         return gpu_count() > 0
 
     @staticmethod

@@ -298,7 +298,7 @@ class PreferencesWindow(QDialog):
             if (
                 resource_check is None
                 or not callable(resource_check)
-                or not resource_check(config=self.my_config)
+                or not resource_check()
             ):
                 self.inputs[x].disable(
                     self.preferences[category][key].resource_fail_tooltip

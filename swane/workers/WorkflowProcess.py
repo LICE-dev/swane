@@ -15,7 +15,6 @@ import logging as orig_log
 from swane.nipype_pipeline.MainWorkflow import MainWorkflow
 from multiprocessing import Queue
 
-
 LOG_DIR_NAME = "log"
 
 

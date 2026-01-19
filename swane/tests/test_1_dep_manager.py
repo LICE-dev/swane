@@ -10,7 +10,6 @@ from nipype.interfaces import fsl, dcm2nii, freesurfer
 from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 import distutils.dir_util
 
-
 # INSTALL REQUIRED LIB: pip3 install pytest pytest-qt pytest-xdist
 # START TEST: pytest swane/ --color=yes --verbose -n 3
 
