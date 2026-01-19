@@ -10,7 +10,6 @@ from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
 from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
 from swane.nipype_pipeline.nodes.utils import apply_registration_node
 
-
 SIDES = ["lh", "rh"]
 
 

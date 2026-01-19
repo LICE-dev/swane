@@ -8,6 +8,7 @@ from swane import strings
 import numpy as np
 from logging import INFO
 import logging
+
 logger = logging.getLogger("nipype.workflow")
 from nipype.pipeline.plugins.multiproc import indent
 from nipype import MapNode
@@ -19,6 +20,7 @@ import nibabel as nib
 import math
 import os
 
+
 class NipypeRamEstimator:
     """
     Base class for Nipype RAM estimators.
@@ -27,13 +29,7 @@ class NipypeRamEstimator:
     Returns both mem_gb and a debug string for reporting.
     """
 
-    def __init__(
-        self,
-        input_multipliers=None,
-        overhead_gb=0.3,
-        min_gb=0.5,
-        max_gb=8.0
-    ):
+    def __init__(self, input_multipliers=None, overhead_gb=0.3, min_gb=0.5, max_gb=8.0):
         """
         Parameters
         ----------
@@ -106,7 +102,9 @@ class NipypeRamEstimator:
             if isinstance(val, str):
                 paths = [val]
 
-            elif isinstance(val, (list, tuple)) and any(isinstance(v, str) for v in val):
+            elif isinstance(val, (list, tuple)) and any(
+                isinstance(v, str) for v in val
+            ):
                 paths = [v for v in val if isinstance(v, str)]
 
             if paths is not None:
@@ -124,7 +122,7 @@ class NipypeRamEstimator:
                         continue
 
                 if valid_files > 0:
-                    contribution = vox_total * multiplier / (1024 ** 3)
+                    contribution = vox_total * multiplier / (1024**3)
                     total_gb += contribution
 
                     debug_lines.append(
@@ -144,7 +142,9 @@ class NipypeRamEstimator:
             if isinstance(val, (int, float)):
                 values = [val]
 
-            elif isinstance(val, (list, tuple)) and all(isinstance(v, (int, float)) for v in val):
+            elif isinstance(val, (list, tuple)) and all(
+                isinstance(v, (int, float)) for v in val
+            ):
                 values = val
 
             if values is not None:
@@ -160,9 +160,7 @@ class NipypeRamEstimator:
             # --------------------------------------------------
             # UNSUPPORTED TYPE
             # --------------------------------------------------
-            debug_lines.append(
-                f"{attr}: unsupported value type ({type(val).__name__})"
-            )
+            debug_lines.append(f"{attr}: unsupported value type ({type(val).__name__})")
 
         # ------------------------------------------------------
         # OVERHEAD + CLAMP
@@ -219,8 +217,7 @@ def update_node_mem_gb(node):
     except Exception as e:
         if logger:
             logger.warning(
-                f"RAM estimator failed for node {node.name}: {e}",
-                exc_info=True
+                f"RAM estimator failed for node {node.name}: {e}", exc_info=True
             )
         # Do not block the node if estimation fails
         return
@@ -315,16 +312,24 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             )
         except:
             traceback.print_exc()
-                
+
         ret = super(MonitoredMultiProcPlugin, self)._submit_mapnode(jobid)
 
         for sub_id, original_id in self.mapnodesubids.items():
-            print(jobid, sub_id, original_id, self.procs[original_id].fullname, self.procs[sub_id].fullname)
+            print(
+                jobid,
+                sub_id,
+                original_id,
+                self.procs[original_id].fullname,
+                self.procs[sub_id].fullname,
+            )
         # we do this here to not subclass _submit_mapnode
         if hasattr(self.procs[jobid], "ram_estimator"):
             for sub_id, original_id in self.mapnodesubids.items():
                 if original_id == jobid:
-                    self.procs[sub_id].ram_estimator = self.procs[original_id].ram_estimator
+                    self.procs[sub_id].ram_estimator = self.procs[
+                        original_id
+                    ].ram_estimator
 
         return ret
 
@@ -342,7 +347,6 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 traceback.print_exc()
 
         return super(MonitoredMultiProcPlugin, self)._task_finished_cb(jobid, cached)
-
 
     def _send_procs_to_workers(self, updatehash=False, graph=None):
         """
@@ -443,9 +447,9 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
 
             # If node does not fit, skip at this moment
             if (
-                    next_job_th > free_processors
-                    or next_job_gb > free_memory_gb
-                    or (is_gpu_node and next_job_gpu_th > free_gpu_slots)
+                next_job_th > free_processors
+                or next_job_gb > free_memory_gb
+                or (is_gpu_node and next_job_gpu_th > free_gpu_slots)
             ):
                 logger.debug(
                     "Cannot allocate job %d (%0.2fGB, %d threads, %d GPU slots).",
@@ -520,4 +524,3 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 self.pending_tasks.insert(0, (tid, jobid))
             # Display stats next loop
             self._stats = None
-
