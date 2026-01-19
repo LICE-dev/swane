@@ -5,18 +5,7 @@ from swane.utils.ResourceManager import ResourceManager
 
 from swane import strings
 from swane.config.PreferenceEntry import PreferenceEntry
-from swane.config.config_enums import (
-    InputTypes,
-    WORKFLOW_TYPES,
-    SLICER_EXTENSIONS,
-    CORE_LIMIT,
-    VEIN_DETECTION_MODE,
-    BLOCK_DESIGN,
-    SLICE_TIMING,
-    GlobalPrefCategoryList,
-    BETWEEN_MOD_FLIRT_COST,
-)
-from swane.utils.platform_and_tools_utils import get_os_type
+from swane.config.config_enums import *
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
@@ -120,6 +109,15 @@ WF_PREFERENCES[category]["freesurfer"] = PreferenceEntry(
     dependency_fail_tooltip="Freesurfer not detected",
     section=True,
 )
+WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="FreeSurfer analysis step",
+    value_enum=FREESURFER_STEP,
+    default=FREESURFER_STEP.DISABLED,
+    dependency="is_freesurfer",
+    dependency_fail_tooltip="Requires Freesurfer analysis",
+    option_dependency={FREESURFER_STEP.HYPPO: ["is_freesurfer_matlab", "Matlab Runtime not detected"]}
+)
 WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="FreeSurfer hippocampal and amygdala subfields",
@@ -129,7 +127,6 @@ WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
     pref_requirement={DataInputList.T13D: [("freesurfer", True)]},
     pref_requirement_fail_tooltip="Requires Freesurfer analysis",
 )
-
 
 category = DataInputList.FLAIR3D
 WF_PREFERENCES[category] = {}

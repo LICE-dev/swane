@@ -244,6 +244,17 @@ class PreferenceUIEntry:
         for member in items:
             self.input_field.addItem(member.value, userData=member)
 
+    def disable_combo_option(self, enum, enabled, tooltip):
+        index = self.input_field.findData(enum)
+        if index != -1:
+            model = self.input_field.model()
+            item = model.item(index)
+            item.setEnabled(enabled)
+            if enabled:
+                tooltip = ""
+            item.setToolTip(tooltip)
+
+
     def set_value_from_config(self, config: ConfigManager):
         """
         Get the value of a preference forcing it's type based on self.input_type
