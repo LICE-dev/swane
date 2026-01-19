@@ -609,8 +609,7 @@ class MainWindow(QMainWindow):
         self.chatgpt_button.setToolTip(strings.mainwindow_chatgpt_tooltip)
         self.chatgpt_button.setMinimumHeight(28)
         self.chatgpt_button.setContentsMargins(4, 0, 4, 0)
-        self.chatgpt_button.setStyleSheet(
-            """
+        self.chatgpt_button.setStyleSheet("""
             QPushButton {
                 color: #ffffff;
                 background-color: rgba(0, 102, 204, 0.12);
@@ -626,8 +625,7 @@ class MainWindow(QMainWindow):
             QPushButton:pressed {
                 background-color: rgba(0, 102, 204, 0.24);
             }
-        """
-        )
+        """)
 
         def _open_chatgpt():
             import webbrowser
