@@ -13,6 +13,7 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
+from swane.nipype_pipeline.nodes.ram_estimators import *
 from nipype.utils.filemanip import fname_presuffix
 
 
@@ -153,6 +154,7 @@ def get_registration_node(
         if non_linear:
             flirt = Node(FLIRT(), name=name + "_flirt")
             flirt.long_name = name_prefix + " %s " + name_suffix
+            flirt.ram_estimator = FlirtRamEstimator()
             flirt.inputs.searchr_x = [flirt_search, flirt_search]
             flirt.inputs.searchr_y = [-flirt_search, flirt_search]
             flirt.inputs.searchr_z = [-flirt_search, flirt_search]
@@ -172,6 +174,7 @@ def get_registration_node(
 
             fnirt = Node(FNIRT(), name=name + "_fnirt")
             fnirt.long_name = name_prefix + " %s " + name_suffix
+            fnirt.ram_estimator = FnirtRamEstimator()
             fnirt.inputs.fieldcoeff_file = True
             workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
             if out_file:
@@ -191,6 +194,7 @@ def get_registration_node(
             inv_warp = None
             if inverse:
                 inv_warp = Node(InvWarp(), name=name + "_invwarp")
+                inv_warp.ram_estimator = InvWarpRamEstimator()
                 workflow.connect(fnirt, "fieldcoeff_file", inv_warp, "warp")
                 if type(moving) == str:
                     inv_warp.inputs.ref_file = moving
@@ -208,6 +212,7 @@ def get_registration_node(
         else:
             flirt = Node(FLIRT(), name=name + "_flirt")
             flirt.long_name = name_prefix + " %s " + name_suffix
+            flirt.ram_estimator = FlirtRamEstimator()
             if is_volumetric:
                 flirt.inputs.cost = flirt_cost
                 flirt.inputs.searchr_x = [-flirt_search, flirt_search]
