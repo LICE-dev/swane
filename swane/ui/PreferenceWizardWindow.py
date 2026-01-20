@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QButtonGroup,
     QFrame,
+    QCheckBox
 )
 
 from swane import strings
@@ -75,6 +76,14 @@ class UserPreferences:
 
     # Advanced models selection
     use_advanced_models: bool = False
+    
+    # Freesurfer outputs selection (only meaningful if freesurfer_capable=True)
+    freesurfer_capable: bool = False
+    matlab_capable: bool = False
+    cortilcal_parcellation_enabled: bool = False
+    surfaces_enabled: bool = False
+    hippocampal_segmentation_enabled: bool = False
+    full_reconall_enabled: bool = False
 
 
 class PreferenceWizardWindow(QDialog):
@@ -171,40 +180,19 @@ class PreferenceWizardWindow(QDialog):
 
         self.setLayout(root)
 
-        # Build wizard flow
-        self.user_prefs.gpu_capable = self.detect_gpu_capable()
+        # Capability detection
+        self.user_prefs.gpu_capable = ResourceManager.is_cuda()
         if self.user_prefs.gpu_capable:
             self.user_prefs.use_gpu_acceleration = True  # default choice if available
         else:
             self.user_prefs.use_gpu_acceleration = None
+            
+        self.user_prefs.freesurfer_capable = self.dependency_manager.is_freesurfer()
+        self.user_prefs.matlab_capable = self.dependency_manager.is_freesurfer_matlab()
 
+        # Build wizard flow
         self._build_pages()
         self._sync_ui()
-
-    # --------------------------
-    # Capability detection
-    # --------------------------
-
-    def detect_gpu_capable(self) -> bool:
-        """
-        Detects whether the current environment appears to support GPU/CUDA acceleration.
-
-        This method currently performs a best-effort detection using `torch` if available.
-        It is intended as a placeholder and may be replaced with a SWANe-native capability
-        check based on the project's dependency manager.
-
-        Parameters
-        ----------
-        None.
-
-        Returns
-        -------
-        bool
-            True if GPU/CUDA acceleration appears to be available, False otherwise.
-            
-        """
-        
-        return ResourceManager.is_cuda()
 
     # --------------------------
     # Pages builder
@@ -216,6 +204,7 @@ class PreferenceWizardWindow(QDialog):
 
         The Hardware Acceleration page is added only when the system is detected as
         GPU/CUDA capable.
+        The Freesurfer Outputs page is added only when FreeSurfer is detected.
 
         Parameters
         ----------
@@ -234,6 +223,10 @@ class PreferenceWizardWindow(QDialog):
             self._add_page(self._page_hardware_acceleration())
 
         self._add_page(self._page_advanced_models())
+        
+        if self.user_prefs.freesurfer_capable:
+            self._add_page(self._page_freesurfer_outputs())
+        
         self._add_page(self._page_review())
         self._add_page(self._page_applied())
 
@@ -467,6 +460,82 @@ class PreferenceWizardWindow(QDialog):
 
         rb_adv.setChecked(True)
         return page
+    
+    # --------------------------
+    # Page 5: FreeSurfer Outputs
+    # --------------------------
+
+    def _page_freesurfer_outputs(self) -> QWidget:
+        """
+        Creates the FreeSurfer Outputs selection wizard page.
+
+        The page allows choosing which FreeSurfer outputs SWANe should enable.
+        Options are independent and mapped to self.user_prefs:
+        - cortilcal_parcellation_enabled
+        - surfaces_enabled
+        - hippocampal_segmentation_enabled
+        - full_reconall_enabled
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        QWidget
+            The constructed FreeSurfer Outputs page widget.
+        """
+        page = QWidget()
+        lay = QVBoxLayout()
+
+        lay.addWidget(
+            self._make_title(
+                strings.wizard_freesurfer_outputs_title,
+                strings.wizard_freesurfer_outputs_tooltip,
+            )
+        )
+
+        self._cb_freesurfer_cortical_parcellation = QCheckBox(
+            f"{strings.freesurfer_outputs_cortical_parcellation}\n"
+            f"{strings.freesurfer_outputs_cortical_parcellation_tooltip}"
+        )
+        self._cb_freesurfer_cortical_parcellation.toggled.connect(
+            lambda checked: setattr(self.user_prefs, "cortilcal_parcellation_enabled", bool(checked))
+        )
+        lay.addWidget(self._cb_freesurfer_cortical_parcellation)
+        
+        self._cb_freesurfer_surfaces = QCheckBox(
+            f"{strings.freesurfer_outputs_surfaces}\n"
+            f"{strings.freesurfer_outputs_surfaces_tooltip}"
+        )
+        self._cb_freesurfer_surfaces.toggled.connect(
+            lambda checked: setattr(self.user_prefs, "surfaces_enabled", bool(checked))
+        )
+        lay.addWidget(self._cb_freesurfer_surfaces)
+        
+        if not self.user_prefs.matlab_capable:
+            self._cb_freesurfer_hippocampal_segmentation = QCheckBox(
+                f"{strings.freesurfer_outputs_hippocampal_segmentation}\n"
+                f"{strings.freesurfer_outputs_hippocampal_segmentation_tooltip}"
+            )
+            self._cb_freesurfer_hippocampal_segmentation.toggled.connect(
+                lambda checked: setattr(self.user_prefs, "hippocampal_segmentation_enabled", bool(checked))
+            )
+            lay.addWidget(self._cb_freesurfer_hippocampal_segmentation)
+            
+        self._cb_freesurfer_full_reconall = QCheckBox(
+            f"{strings.freesurfer_full_reconall}\n"
+            f"{strings.freesurfer_full_reconall_tooltip}"
+        )
+        self._cb_freesurfer_full_reconall.toggled.connect(
+            lambda checked: setattr(self.user_prefs, "full_reconall_enabled", bool(checked))
+        )
+        lay.addWidget(self._cb_freesurfer_full_reconall)
+
+        lay.addStretch(1)
+        page.setLayout(lay)
+
+        return page
 
     # --------------------------
     # Page 5: Review
@@ -614,6 +683,7 @@ class PreferenceWizardWindow(QDialog):
         - selected performance profile
         - GPU acceleration state (enabled/disabled/not available)
         - advanced models state
+        - FreeSurfer outputs state
 
         Parameters
         ----------
@@ -642,9 +712,32 @@ class PreferenceWizardWindow(QDialog):
             adv_txt = strings.advanced_models_disabled
 
         self._review_label.setText(
-            f"{strings.wizard_selected_profile.format(profile=profile)}\n\n"
-            f"{strings.wizard_gpu_accelleration.format(gpu_status=gpu_txt)}\n\n"
-            f"{strings.wizard_advanced_models.format(adv_status=adv_txt)}"
+            f"{strings.wizard_selected_profile.format(profile=profile)}<br /><br />"
+            f"{strings.wizard_gpu_accelleration.format(gpu_status=gpu_txt)}<br /><br />"
+            f"{strings.wizard_advanced_models.format(adv_status=adv_txt)}<br /><br />"
+        )
+        
+        freesurfer_info_text = ""
+        if not self.user_prefs.freesurfer_capable:
+            freesurfer_info_text = strings.wizard_freesurfer_outputs.format(fs_outputs="Not Detected")
+        else:
+            freesurfer_outputs_enabled = []
+            if self.user_prefs.cortilcal_parcellation_enabled:
+                freesurfer_outputs_enabled.append(strings.freesurfer_outputs_cortical_parcellation)
+            if self.user_prefs.surfaces_enabled:
+                freesurfer_outputs_enabled.append(strings.freesurfer_outputs_surfaces)
+            if self.user_prefs.hippocampal_segmentation_enabled:
+                freesurfer_outputs_enabled.append(strings.freesurfer_outputs_hippocampal_segmentation)
+            if self.user_prefs.full_reconall_enabled:
+                freesurfer_outputs_enabled.append(strings.freesurfer_full_reconall)
+        
+            if len(freesurfer_outputs_enabled) == 0:
+                freesurfer_info_text = strings.wizard_freesurfer_outputs.format(fs_outputs="Disabled")
+            else:
+                freesurfer_info_text = strings.wizard_freesurfer_outputs.format(fs_outputs=", ".join(freesurfer_outputs_enabled))
+                
+        self._review_label.setText(
+            self._review_label.text() + f"{freesurfer_info_text}"
         )
 
     # --------------------------

@@ -285,6 +285,29 @@ advanced_models_disabled_tooltip = "Prefer lighter, more stable processing techn
 advanced_models_enabled = "Enabled\nAll advanced models are active and will be used when applicable."
 advanced_models_disabled = "Disabled\nAdvanced models were disabled based on your selection."
 
+wizard_freesurfer_outputs_title = "FreeSurfer Outputs Selection"
+wizard_freesurfer_outputs_tooltip = (
+    "Select which FreeSurfer outputs you want to generate for your analyses.\n"
+    "You can choose multiple options or none.\n"
+    "More selections will increase processing time."
+)
+freesurfer_outputs_cortical_parcellation = "Cortical Parcellation"
+freesurfer_outputs_cortical_parcellation_tooltip = (
+    "Generates cortical parcellation maps using FreeSurfer's standard methods."
+)
+freesurfer_outputs_surfaces = "Cortical and Subcortical Surfaces"
+freesurfer_outputs_surfaces_tooltip = (
+    "Produces detailed cortical and subcortical surface models for surface-based analyses."
+)
+freesurfer_outputs_hippocampal_segmentation = "Hippocampal Subfield Segmentation"
+freesurfer_outputs_hippocampal_segmentation_tooltip = (
+    "Produces detailed segmentation of hippocampal subfields for advanced analyses."
+)
+freesurfer_full_reconall = "Full Recon-All Processing"
+freesurfer_full_reconall_tooltip = (
+    "Enables the complete Recon-All pipeline for comprehensive brain analysis."
+)
+
 wizard_review_title = "Review Your Configuration"
 wizard_review_text = "Please review your selections before applying them."
 wizard_review_tooltip = "Some options may be automatically adjusted to ensure stability and compatibility."
@@ -298,10 +321,10 @@ wizard_applied_text = (
     "You can also rerun this wizard at any time from Menu → Configuration Wizard."
 )
 
-wizard_selected_profile = "Selecetd profile: {profile}"
-wizard_gpu_accelleration = "GPU acceleration:\n{gpu_status}"
-wizard_advanced_models = "Advanced models:\n{adv_status}"
-
+wizard_selected_profile = "<b>Selected profile</b>: {profile}"
+wizard_gpu_accelleration = "<b>GPU acceleration</b>: {gpu_status}"
+wizard_advanced_models = "<b>Advanced models</b>: {adv_status}"
+wizard_freesurfer_outputs = "<b>FreeSurfer outputs</b>: {fs_outputs}"
 
 # Workflow
 check_dep_generic_error = "Dependency check error"
