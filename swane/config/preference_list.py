@@ -101,14 +101,6 @@ WF_PREFERENCES[category]["flat1"] = PreferenceEntry(
     input_requirement_fail_tooltip="Requires both 3D T1w and 3D Flair",
     section=True,
 )
-WF_PREFERENCES[category]["freesurfer"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="FreeSurfer analysis",
-    default="true",
-    dependency="is_freesurfer",
-    dependency_fail_tooltip="Freesurfer not detected",
-    section=True,
-)
 WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="FreeSurfer analysis step",
@@ -116,16 +108,27 @@ WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
     default=FREESURFER_STEP.DISABLED,
     dependency="is_freesurfer",
     dependency_fail_tooltip="Requires Freesurfer analysis",
-    option_dependency={FREESURFER_STEP.HYPPO: ["is_freesurfer_matlab", "Matlab Runtime not detected"]}
+    option_dependency= {FREESURFER_STEP.SYNTHSEG: ["is_freesurfer_synth", "Synth tools recon-all requires FreeSurfer 8.1.0"]},
+    option_pref_requirement = {
+        FREESURFER_STEP.SYNTHSEG: {GlobalPrefCategoryList.PERFORMANCE: [("ram_gb", ResourceManager.synth_seg_ram_requirements())]},
+    },
+    option_pref_requirement_fail_tooltip= {
+        FREESURFER_STEP.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM" % ResourceManager.synth_seg_ram_requirements(),
+    },
 )
+
 WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="FreeSurfer hippocampal and amygdala subfields",
     default="false",
     dependency="is_freesurfer_matlab",
     dependency_fail_tooltip="Matlab Runtime not detected",
-    pref_requirement={DataInputList.T13D: [("freesurfer", True)]},
-    pref_requirement_fail_tooltip="Requires Freesurfer analysis",
+    pref_requirement={
+        DataInputList.T13D: [
+            ("freesurfer_step", [FREESURFER_STEP.AUTORECON2, FREESURFER_STEP.RECONALL, FREESURFER_STEP.AUTORECON_PIAL])
+        ]
+    },
+    pref_requirement_fail_tooltip="Requires Freesurfer Preprocessing",
 )
 
 category = DataInputList.FLAIR3D

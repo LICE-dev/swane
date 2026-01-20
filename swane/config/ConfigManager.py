@@ -368,13 +368,13 @@ class ConfigManager(configparser.ConfigParser):
         """
         return self.getboolean_safe(DataInputList.T13D, "hippo_amyg_labels")
 
-    def get_workflow_freesurfer_pref(self) -> bool:
+    def get_workflow_freesurfer_pref(self) -> FREESURFER_STEP:
         """
         Returns
         -------
         True if freesurfer analysis is enabled
         """
-        return self.getboolean_safe(DataInputList.T13D, "freesurfer")
+        return self.getenum_safe(DataInputList.T13D, "freesurfer_step")
 
     def get_mail_manager(self) -> MailManager:
         """

@@ -1,7 +1,6 @@
 from math import ceil
 from psutil import virtual_memory, cpu_count
 from nipype.utils.gpu_count import gpu_count
-from swane.config.config_enums import GlobalPrefCategoryList
 from swane.utils.platform_and_tools_utils import get_os_type
 
 
@@ -14,6 +13,7 @@ class ResourceManager:
 
     SYNTH_STRIP_RAM_REQUIREMENT = {"mac": 30, "linux": 5, "other": 5}
     SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 14, "linux": 14, "other": 14}
+    SYNTH_SEG_RAM_REQUIREMENT = {"mac": 14, "linux": 14, "other": 14}
     SYNTH_RECONALL_RAM_REQUIREMENT = {"mac": 20, "linux": 20, "other": 20}
 
     @staticmethod
@@ -65,6 +65,10 @@ class ResourceManager:
     @staticmethod
     def synth_morph_ram_requirements():
         return ResourceManager.SYNTH_MORPH_RAM_REQUIREMENT[get_os_type()]
+
+    @staticmethod
+    def synth_seg_ram_requirements():
+        return ResourceManager.SYNTH_SEG_RAM_REQUIREMENT[get_os_type()]
 
     @staticmethod
     def synth_reconall_ram_requirements():
