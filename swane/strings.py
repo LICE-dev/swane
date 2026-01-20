@@ -274,7 +274,7 @@ gpu_disabled = "Disabled (by user choice)"
 
 wizard_advanced_models_title = "Advanced Models"
 wizard_advanced_models_text = (
-    "Advanced models implement state-of-the-art deep learning algorithms that can improve results "
+    "Advanced models implement state-of-the-art FreeSurferdeep learning algorithms (Synth Tools) that can improve results "
     "and, in some cases, reduce analysis time.\n"
     "They may require additional memory and processing power."
 )
@@ -282,8 +282,8 @@ advanced_models_enabled = "Use advanced models when supported"
 advanced_models_enabled_tooltip = "Enable advanced methods when the system can handle them reliably."
 advanced_models_disabled = "Use standard methods only"
 advanced_models_disabled_tooltip = "Prefer lighter, more stable processing techniques with minimal resource usage."
-advanced_models_enabled = "Enabled\nAll advanced models are active and will be used when applicable."
-advanced_models_disabled = "Disabled\nAdvanced models were disabled based on your selection."
+advanced_models_enabled = "Enabled<br />All advanced models are active and will be used when applicable."
+advanced_models_disabled = "Disabled<br />Advanced models were disabled based on your selection."
 
 wizard_freesurfer_outputs_title = "FreeSurfer Outputs Selection"
 wizard_freesurfer_outputs_tooltip = (

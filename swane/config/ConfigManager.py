@@ -734,3 +734,23 @@ class ConfigManager(configparser.ConfigParser):
         if value is not None:
             value = str(self.validate_type(section, option, value))
         super().set(section, option, value)
+        
+    def apply_resource_profile(self, profile: PerformanceProfile):
+
+        if not self.global_config:
+            return
+        
+        if profile == PerformanceProfile.LOW_RESOURCE:
+            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ResourceManager.get_minimum_ram())
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(ResourceManager.get_min_cpu())
+            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CORE_LIMIT.HARD_CAP.name
+
+        elif profile == PerformanceProfile.BALANCED:
+            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ResourceManager.get_default_ram())
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(ResourceManager.get_default_cpu())
+            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CORE_LIMIT.SOFT_CAP.name
+
+        elif profile == PerformanceProfile.MAX_PERF:
+            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ResourceManager.get_maximum_ram())
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(ResourceManager.get_max_cpu())
+            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CORE_LIMIT.NO_LIMIT.name

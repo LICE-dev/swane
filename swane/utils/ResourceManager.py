@@ -1,4 +1,4 @@
-from math import ceil
+from math import ceil, floor
 from psutil import virtual_memory, cpu_count
 from nipype.utils.gpu_count import gpu_count
 from swane.utils.platform_and_tools_utils import get_os_type
@@ -6,6 +6,8 @@ from swane.utils.platform_and_tools_utils import get_os_type
 
 class ResourceManager:
 
+    MINIMUM_CPU_MULTIPLIER = (1/3)
+    DEFAULT_CPU_MULTIPLIER = (1/2)
     MINIMUM_RAM = 5
     MINIMUM_RAM_PERC = 50
     MAXIMUM_RAM_PERC = 95
@@ -75,20 +77,24 @@ class ResourceManager:
         return ResourceManager.SYNTH_RECONALL_RAM_REQUIREMENT[get_os_type()]
 
     @staticmethod
-    # We need config argument to support prefenrence loop
+    def get_min_synth_ram_requirement():
+        return min(ResourceManager.synth_morph_ram_requirements(), 
+                   ResourceManager.synth_reconall_ram_requirements(),
+                   ResourceManager.synth_strip_ram_requirements())
+    
+    @staticmethod
     def is_cuda():
         return gpu_count() > 0
 
     @staticmethod
-    def suggested_max_cpu():
-        # TODO: ricontrolliamo questa!
-        try:
-            return max(
-                ceil(min(cpu_count() / 2, ResourceManager.total_memory_gb() / 3)), 1
-            )
-        except:
-            return 1
+    def get_min_cpu():
+        return max(1, floor(cpu_count() * ResourceManager.MINIMUM_CPU_MULTIPLIER))
+    
+    @staticmethod
+    def get_default_cpu():
+        return max(1, floor(cpu_count() * ResourceManager.DEFAULT_CPU_MULTIPLIER))
+
 
     @staticmethod
-    def max_cpu():
+    def get_max_cpu():
         return cpu_count()
