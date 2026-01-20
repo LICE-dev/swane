@@ -256,7 +256,6 @@ class PreferenceUIEntry:
             if not enabled and self.input_field.currentIndex() == index:
                 self.input_field.setCurrentIndex(0)
 
-
     def set_value_from_config(self, config: ConfigManager):
         """
         Get the value of a preference forcing it's type based on self.input_type
