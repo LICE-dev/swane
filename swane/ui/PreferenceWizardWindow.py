@@ -204,7 +204,7 @@ class PreferenceWizardWindow(QDialog):
             
         """
         
-        return ResourceManager.is_cuda(self.global_config)
+        return ResourceManager.is_cuda()
 
     # --------------------------
     # Pages builder
