@@ -1,5 +1,6 @@
 from enum import Enum, auto
 
+from swane import strings
 from swane.config.PrefCategory import PrefCategory
 
 
@@ -102,3 +103,21 @@ class GlobalPrefCategoryList(Enum):
 
     def __str__(self):
         return self.value.name
+
+
+class PerformanceProfile(str, Enum):
+    """
+    Enumeration of performance profiles selectable in the configuration wizard.
+
+    Each value represents a user-facing profile that SWANe can use to balance
+    performance and resource usage.
+
+    Notes
+    -----
+    The enum values are localized strings from `swane.strings`.
+    
+    """
+    
+    MAX_PERF = strings.performance_profile_max
+    BALANCED = strings.performance_profile_balanced
+    LOW_RESOURCE = strings.performance_profile_min

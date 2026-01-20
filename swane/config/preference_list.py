@@ -553,8 +553,8 @@ GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="CPU core limit per subject",
     tooltip="To use all CPU cores set value equal to -1",
-    default=ResourceManager.suggested_max_cpu(),
-    range=[-1, ResourceManager.max_cpu()],
+    default=ResourceManager.get_default_cpu(),
+    range=[-1, ResourceManager.get_max_cpu()],
     special_value_text="No limit",
     section=True,
 )

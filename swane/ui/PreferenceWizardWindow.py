@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import Optional
 
 from PySide6.QtCore import Qt
@@ -21,27 +20,10 @@ from PySide6.QtWidgets import (
 
 from swane import strings
 from swane.config.ConfigManager import ConfigManager
+from swane.config.config_enums import FREESURFER_STEP, GlobalPrefCategoryList, PerformanceProfile
+from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.DependencyManager import DependencyManager
-
-
-class PerformanceProfile(str, Enum):
-    """
-    Enumeration of performance profiles selectable in the configuration wizard.
-
-    Each value represents a user-facing profile that SWANe can use to balance
-    performance and resource usage.
-
-    Notes
-    -----
-    The enum values are localized strings from `swane.strings`.
-    
-    """
-    
-    MAX_PERF = strings.performance_profile_max
-    BALANCED = strings.performance_profile_balanced
-    LOW_RESOURCE = strings.performance_profile_min
-
 
 @dataclass
 class UserPreferences:
@@ -75,6 +57,7 @@ class UserPreferences:
     use_gpu_acceleration: Optional[bool] = None  # True/False if capable, None if not available
 
     # Advanced models selection
+    advanced_models_capable: bool = False
     use_advanced_models: bool = False
     
     # Freesurfer outputs selection (only meaningful if freesurfer_capable=True)
@@ -187,6 +170,11 @@ class PreferenceWizardWindow(QDialog):
         else:
             self.user_prefs.use_gpu_acceleration = None
             
+        available_ram = ResourceManager.get_maximum_ram()
+        self.user_prefs.advanced_models_capable = (
+            self.dependency_manager.is_freesurfer_synth() and available_ram >= ResourceManager.get_min_synth_ram_requirement()
+        )
+            
         self.user_prefs.freesurfer_capable = self.dependency_manager.is_freesurfer()
         self.user_prefs.matlab_capable = self.dependency_manager.is_freesurfer_matlab()
 
@@ -222,7 +210,8 @@ class PreferenceWizardWindow(QDialog):
         if self.user_prefs.gpu_capable:
             self._add_page(self._page_hardware_acceleration())
 
-        self._add_page(self._page_advanced_models())
+        if self.user_prefs.advanced_models_capable:
+            self._add_page(self._page_advanced_models())
         
         if self.user_prefs.freesurfer_capable:
             self._add_page(self._page_freesurfer_outputs())
@@ -695,33 +684,36 @@ class PreferenceWizardWindow(QDialog):
         
         """
     
+        self._review_label.setTextFormat(Qt.TextFormat.RichText)
+
+        parts: list[str] = []
+
         # Profile
         profile = self.user_prefs.performance_profile.value
+        parts.append(strings.wizard_selected_profile.format(profile=profile))
 
-        # GPU status
+        # GPU
         if not self.user_prefs.gpu_capable:
-            gpu_txt = strings.gpu_not_available
+            parts.append(f"{strings.wizard_gpu_accelleration}: Not Available")
         else:
-            gpu_txt = strings.gpu_enabled if self.user_prefs.use_gpu_acceleration else strings.gpu_disabled
+            parts.append(f"{strings.wizard_gpu_accelleration}: Enabled" if self.user_prefs.use_gpu_acceleration else f"{strings.wizard_gpu_accelleration}: Disabled")
 
-        # Advanced models status (placeholder logic for “partially enabled / not available”)
-        # Per ora: o enabled o disabled. Quando avremo info su RAM/compatibilità, possiamo aggiungere "partially".
-        if self.user_prefs.use_advanced_models:
-            adv_txt = strings.advanced_models_enabled
+        # Advanced models
+        if not getattr(self.user_prefs, "advanced_models_capable", True):
+            parts.append(
+                f"{strings.wizard_advanced_models}: Not Available (requires FreeSurfer >= {self.dependency_manager.SYNTH_FREESURFER_VERSION} and at least "
+                f"{ResourceManager.get_min_synth_ram_requirement()} GB)"
+            )
         else:
-            adv_txt = strings.advanced_models_disabled
+            parts.append(
+                f"{strings.wizard_advanced_models}: Enabled (based on system resources)" if self.user_prefs.use_advanced_models else f"{strings.wizard_advanced_models}:Disabled"
+            )
 
-        self._review_label.setText(
-            f"{strings.wizard_selected_profile.format(profile=profile)}<br /><br />"
-            f"{strings.wizard_gpu_accelleration.format(gpu_status=gpu_txt)}<br /><br />"
-            f"{strings.wizard_advanced_models.format(adv_status=adv_txt)}<br /><br />"
-        )
-        
-        freesurfer_info_text = ""
+        # FreeSurfer outputs
         if not self.user_prefs.freesurfer_capable:
             freesurfer_info_text = strings.wizard_freesurfer_outputs.format(fs_outputs="Not Detected")
         else:
-            freesurfer_outputs_enabled = []
+            freesurfer_outputs_enabled: list[str] = []
             if self.user_prefs.cortilcal_parcellation_enabled:
                 freesurfer_outputs_enabled.append(strings.freesurfer_outputs_cortical_parcellation)
             if self.user_prefs.surfaces_enabled:
@@ -730,16 +722,16 @@ class PreferenceWizardWindow(QDialog):
                 freesurfer_outputs_enabled.append(strings.freesurfer_outputs_hippocampal_segmentation)
             if self.user_prefs.full_reconall_enabled:
                 freesurfer_outputs_enabled.append(strings.freesurfer_full_reconall)
-        
-            if len(freesurfer_outputs_enabled) == 0:
-                freesurfer_info_text = strings.wizard_freesurfer_outputs.format(fs_outputs="Disabled")
-            else:
-                freesurfer_info_text = strings.wizard_freesurfer_outputs.format(fs_outputs=", ".join(freesurfer_outputs_enabled))
-                
-        self._review_label.setText(
-            self._review_label.text() + f"{freesurfer_info_text}"
-        )
 
+            fs_out = "Disabled" if not freesurfer_outputs_enabled else ", ".join(freesurfer_outputs_enabled)
+            freesurfer_info_text = strings.wizard_freesurfer_outputs.format(fs_outputs=fs_out)
+
+        parts.append(freesurfer_info_text)
+
+        # join with HTML line breaks
+        self._review_label.setText("<br /><br />".join(parts))
+    
+    
     # --------------------------
     # Navigation
     # --------------------------
@@ -926,12 +918,6 @@ class PreferenceWizardWindow(QDialog):
         `self.user_prefs` to the corresponding keys inside `self.my_config`, and for
         persisting those changes (e.g., by calling `self.my_config.save()`).
 
-        Notes
-        -----
-        This method is intentionally left unimplemented for now.
-        The exact mapping depends on the SWANe preference categories/keys that should be
-        updated (e.g., GLOBAL_PREFERENCES / WF_PREFERENCES).
-
         Parameters
         ----------
         None.
@@ -941,5 +927,31 @@ class PreferenceWizardWindow(QDialog):
         None.
         
         """
-        # TODO DA FARE
-        return
+        self.global_config.apply_resource_profile(self.user_prefs.performance_profile)
+        self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"] = str(self.user_prefs.use_gpu_acceleration)
+        
+        if self.user_prefs.use_advanced_models:
+            available_ram = self.global_config.getfloat_safe(GlobalPrefCategoryList.PERFORMANCE, "ram_gb")
+            self.global_config[GlobalPrefCategoryList.SYNTH]["strip"] = str(available_ram >= ResourceManager.synth_strip_ram_requirements())
+            self.global_config[GlobalPrefCategoryList.SYNTH]["morph"] = str(available_ram >= ResourceManager.synth_morph_ram_requirements())
+            self.global_config[GlobalPrefCategoryList.SYNTH]["reconall"] = str(available_ram >= ResourceManager.synth_reconall_ram_requirements())
+
+        self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.DISABLED.name
+        if (self.user_prefs.cortilcal_parcellation_enabled
+            and not self.user_prefs.hippocampal_segmentation_enabled
+            and not self.user_prefs.surfaces_enabled
+            and not self.user_prefs.full_reconall_enabled
+            and self.dependency_manager.is_freesurfer_synth()):
+            self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.SYNTHSEG.name
+        elif (self.user_prefs.full_reconall_enabled):
+            self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.RECONALL.name
+        elif (self.user_prefs.cortilcal_parcellation_enabled
+              or self.user_prefs.surfaces_enabled):
+            self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.AUTORECON_PIAL.name
+            
+        if self.user_prefs.hippocampal_segmentation_enabled:
+            if self.global_config.getenum_safe(DataInputList.T13D, "freesurfer_step") is FREESURFER_STEP.DISABLED:
+                self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.AUTORECON2.name
+            self.global_config[DataInputList.T13D]["hippo_amyg_labels"] = str(True)
+            
+        self.global_config.save()
