@@ -47,6 +47,7 @@ class BLOCK_DESIGN(Enum):
     RARA = "rArA..."
     RARB = "rArBrArB..."
 
+
 class FREESURFER_STEP(Enum):
     DISABLED = "Disabled"
     SYNTHSEG = "SynthSeg Cortical Parcellation only (if available)"
@@ -58,7 +59,12 @@ class FREESURFER_STEP(Enum):
         return self in {FREESURFER_STEP.AUTORECON_PIAL, FREESURFER_STEP.RECONALL}
 
     def has_parcellation(self):
-        return self in {FREESURFER_STEP.SYNTHSEG, FREESURFER_STEP.AUTORECON_PIAL, FREESURFER_STEP.RECONALL}
+        return self in {
+            FREESURFER_STEP.SYNTHSEG,
+            FREESURFER_STEP.AUTORECON_PIAL,
+            FREESURFER_STEP.RECONALL,
+        }
+
 
 class SLICE_TIMING(Enum):
     UNKNOWN = "Unknown"

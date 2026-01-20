@@ -35,7 +35,6 @@ class PreferenceEntry:
     option_pref_requirement = {}
     option_pref_requirement_fail_tooltip = {}
 
-
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             if hasattr(self, key) and PreferenceEntry.check_type(key, value):

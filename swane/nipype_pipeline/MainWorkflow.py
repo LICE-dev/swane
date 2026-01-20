@@ -13,7 +13,7 @@ from swane.config.config_enums import (
     CORE_LIMIT,
     BLOCK_DESIGN,
     GlobalPrefCategoryList,
-    FREESURFER_STEP
+    FREESURFER_STEP,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -188,8 +188,8 @@ class MainWorkflow(CustomWorkflow):
         if self.dependency_manager.is_freesurfer():
             self.freesurfer_step = self.subject_config.get_workflow_freesurfer_pref()
             self.is_hippo_amyg_labels = (
-                    self.dependency_manager.is_freesurfer_matlab()
-                    and self.subject_config.get_workflow_hippo_pref()
+                self.dependency_manager.is_freesurfer_matlab()
+                and self.subject_config.get_workflow_hippo_pref()
             )
 
         # Check for FLAT1 requirement and request
