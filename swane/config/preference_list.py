@@ -108,12 +108,22 @@ WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
     default=FREESURFER_STEP.DISABLED,
     dependency="is_freesurfer",
     dependency_fail_tooltip="Requires Freesurfer analysis",
-    option_dependency= {FREESURFER_STEP.SYNTHSEG: ["is_freesurfer_synth", "Synth tools recon-all requires FreeSurfer 8.1.0"]},
-    option_pref_requirement = {
-        FREESURFER_STEP.SYNTHSEG: {GlobalPrefCategoryList.PERFORMANCE: [("ram_gb", ResourceManager.synth_seg_ram_requirements())]},
+    option_dependency={
+        FREESURFER_STEP.SYNTHSEG: [
+            "is_freesurfer_synth",
+            "Synth tools recon-all requires FreeSurfer 8.1.0",
+        ]
     },
-    option_pref_requirement_fail_tooltip= {
-        FREESURFER_STEP.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM" % ResourceManager.synth_seg_ram_requirements(),
+    option_pref_requirement={
+        FREESURFER_STEP.SYNTHSEG: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.synth_seg_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        FREESURFER_STEP.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM"
+        % ResourceManager.synth_seg_ram_requirements(),
     },
 )
 
@@ -125,7 +135,14 @@ WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
     dependency_fail_tooltip="Matlab Runtime not detected",
     pref_requirement={
         DataInputList.T13D: [
-            ("freesurfer_step", [FREESURFER_STEP.AUTORECON2, FREESURFER_STEP.RECONALL, FREESURFER_STEP.AUTORECON_PIAL])
+            (
+                "freesurfer_step",
+                [
+                    FREESURFER_STEP.AUTORECON2,
+                    FREESURFER_STEP.RECONALL,
+                    FREESURFER_STEP.AUTORECON_PIAL,
+                ],
+            )
         ]
     },
     pref_requirement_fail_tooltip="Requires Freesurfer Preprocessing",

@@ -447,11 +447,21 @@ class ConfigManager(configparser.ConfigParser):
                     if value_enum in WF_PREFERENCES[section][option].option_dependency:
                         dep_check = getattr(
                             dependency_manager,
-                            WF_PREFERENCES[section][option].option_dependency[value_enum][0],
+                            WF_PREFERENCES[section][option].option_dependency[
+                                value_enum
+                            ][0],
                             None,
                         )
-                        if dep_check is not None and callable(dep_check) and not dep_check():
-                            self[section][option] = str(self._section_defaults[str(section)][str(option)].default)
+                        if (
+                            dep_check is not None
+                            and callable(dep_check)
+                            and not dep_check()
+                        ):
+                            self[section][option] = str(
+                                self._section_defaults[str(section)][
+                                    str(option)
+                                ].default
+                            )
 
                 if WF_PREFERENCES[section][option].resource is not None:
                     resource_check = getattr(

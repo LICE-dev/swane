@@ -136,8 +136,12 @@ def freesurfer_workflow(
         synth_seg2nii.inputs.interp = "nearest"
         workflow.connect(synth_seg, "out_file", synth_seg2nii, "source_file")
         workflow.connect(inputnode, "reference", synth_seg2nii, "target_file")
-        workflow.connect(synth_seg2nii, "transformed_file", outputnode, "vol_label_file_nii")
-        workflow.connect(synth_seg2nii, "transformed_file", segmentation_holder, "seg_nii")
+        workflow.connect(
+            synth_seg2nii, "transformed_file", outputnode, "vol_label_file_nii"
+        )
+        workflow.connect(
+            synth_seg2nii, "transformed_file", segmentation_holder, "seg_nii"
+        )
     else:
         # Resources setup
         reconall_mem_gb = 5
@@ -147,7 +151,9 @@ def freesurfer_workflow(
         reconall_nprocs = 1
 
         if synth_config.getboolean_safe("reconall"):
-            reconall_mem_gb = ResourceManager.synth_reconall_ram_requirements()  # new recon-all needs a lot of RAM
+            reconall_mem_gb = (
+                ResourceManager.synth_reconall_ram_requirements()
+            )  # new recon-all needs a lot of RAM
             # New reconall may heavily increase RAM usage with more than 1 cpu, for now skip openmp if using synth tools
         else:
             reconall_environ = {"FS_V8_XOPTS": "0"}
@@ -167,17 +173,16 @@ def freesurfer_workflow(
                 reconall_openmp = max(trunc(max_cpu / 2), 1)
                 reconall_nprocs = reconall_openmp * 2
 
-
         # NODE 1: Freesurfer autorecon1
         recon_all_recon1 = Node(ReconAll(), name="recon_all_recon1")
-        recon_all_recon1.long_name ="%s: Preprocessing"
+        recon_all_recon1.long_name = "%s: Preprocessing"
         recon_all_recon1.inputs.subject_id = FS_DIR
         recon_all_recon1._mem_gb = reconall_mem_gb
         recon_all_recon1.inputs.environ = reconall_environ
         recon_all_recon1.inputs.parallel = reconall_parallel
         recon_all_recon1.inputs.openmp = reconall_openmp
         recon_all_recon1.n_procs = reconall_nprocs
-        recon_all_recon1.inputs.directive = 'autorecon1'
+        recon_all_recon1.inputs.directive = "autorecon1"
         recon_all_recon1.inputs.args = "-no-isrunning"
         workflow.connect(inputnode, "reference", recon_all_recon1, "T1_files")
         workflow.connect(inputnode, "subjects_dir", recon_all_recon1, "subjects_dir")
@@ -193,9 +198,11 @@ def freesurfer_workflow(
         recon_all_recon2.inputs.parallel = reconall_parallel
         recon_all_recon2.inputs.openmp = reconall_openmp
         recon_all_recon2.n_procs = reconall_nprocs
-        recon_all_recon2.inputs.directive = 'autorecon2'
+        recon_all_recon2.inputs.directive = "autorecon2"
         recon_all_recon2.inputs.args = "-no-isrunning"
-        workflow.connect(recon_all_recon1, "subjects_dir", recon_all_recon2, "subjects_dir")
+        workflow.connect(
+            recon_all_recon1, "subjects_dir", recon_all_recon2, "subjects_dir"
+        )
         workflow.connect(recon_all_recon1, "subject_id", recon_all_recon2, "subject_id")
 
         if step in [FREESURFER_STEP.AUTORECON_PIAL, FREESURFER_STEP.RECONALL]:
@@ -207,10 +214,14 @@ def freesurfer_workflow(
             recon_all_recon_pial.inputs.parallel = reconall_parallel
             recon_all_recon_pial.inputs.openmp = reconall_openmp
             recon_all_recon_pial.n_procs = reconall_nprocs
-            recon_all_recon_pial.inputs.directive = 'autorecon-pial'
+            recon_all_recon_pial.inputs.directive = "autorecon-pial"
             recon_all_recon_pial.inputs.args = "-no-isrunning"
-            workflow.connect(recon_all_recon2, "subjects_dir", recon_all_recon_pial, "subjects_dir")
-            workflow.connect(recon_all_recon2, "subject_id", recon_all_recon_pial, "subject_id")
+            workflow.connect(
+                recon_all_recon2, "subjects_dir", recon_all_recon_pial, "subjects_dir"
+            )
+            workflow.connect(
+                recon_all_recon2, "subject_id", recon_all_recon_pial, "subject_id"
+            )
 
             workflow.connect(recon_all_recon_pial, "pial", outputnode, "pial")
             workflow.connect(recon_all_recon_pial, "white", outputnode, "white")
@@ -222,10 +233,18 @@ def freesurfer_workflow(
             aparc_aseg2ref.inputs.reg_header = True
             aparc_aseg2ref.inputs.interp = "nearest"
             workflow.connect(
-                [(recon_all_recon_pial, aparc_aseg2ref, [(("aparc_aseg", getn, 0), "source_file")])]
+                [
+                    (
+                        recon_all_recon_pial,
+                        aparc_aseg2ref,
+                        [(("aparc_aseg", getn, 0), "source_file")],
+                    )
+                ]
             )
             workflow.connect(inputnode, "reference", aparc_aseg2ref, "target_file")
-            workflow.connect(aparc_aseg2ref, "transformed_file", outputnode, "vol_label_file")
+            workflow.connect(
+                aparc_aseg2ref, "transformed_file", outputnode, "vol_label_file"
+            )
 
             aparc_aseg2nii = Node(ApplyVolTransform(), name="aparc_aseg2nii")
             aparc_aseg2nii.long_name = "Parcellation Nifti conversion"
@@ -233,11 +252,21 @@ def freesurfer_workflow(
             aparc_aseg2nii.inputs.reg_header = True
             aparc_aseg2nii.inputs.interp = "nearest"
             workflow.connect(
-                [(recon_all_recon_pial, aparc_aseg2nii, [(("aparc_aseg", getn, 0), "source_file")])]
+                [
+                    (
+                        recon_all_recon_pial,
+                        aparc_aseg2nii,
+                        [(("aparc_aseg", getn, 0), "source_file")],
+                    )
+                ]
             )
             workflow.connect(inputnode, "reference", aparc_aseg2nii, "target_file")
-            workflow.connect(aparc_aseg2nii, "transformed_file", outputnode, "vol_label_file_nii")
-            workflow.connect(aparc_aseg2nii, "transformed_file", segmentation_holder, "seg_nii")
+            workflow.connect(
+                aparc_aseg2nii, "transformed_file", outputnode, "vol_label_file_nii"
+            )
+            workflow.connect(
+                aparc_aseg2nii, "transformed_file", segmentation_holder, "seg_nii"
+            )
 
         else:
             segmentation_holder = None
@@ -252,8 +281,12 @@ def freesurfer_workflow(
             recon_all_recon3.n_procs = reconall_nprocs
             recon_all_recon3.inputs.directive = "autorecon3"
             recon_all_recon3.inputs.args = "-no-isrunning"
-            workflow.connect(recon_all_recon_pial, "subjects_dir", recon_all_recon3, "subjects_dir")
-            workflow.connect(recon_all_recon_pial, "subject_id", recon_all_recon3, "subject_id")
+            workflow.connect(
+                recon_all_recon_pial, "subjects_dir", recon_all_recon3, "subjects_dir"
+            )
+            workflow.connect(
+                recon_all_recon_pial, "subject_id", recon_all_recon3, "subject_id"
+            )
 
         if is_hippo_amyg_labels:
             # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
@@ -266,14 +299,16 @@ def freesurfer_workflow(
             else:
                 segment_ha.inputs.num_cpu = max_cpu
                 segment_ha.n_procs = segment_ha.inputs.num_cpu
-            workflow.connect(recon_all_recon2, "subjects_dir", segment_ha, "subjects_dir")
+            workflow.connect(
+                recon_all_recon2, "subjects_dir", segment_ha, "subjects_dir"
+            )
             workflow.connect(recon_all_recon2, "subject_id", segment_ha, "subject_id")
             workflow.connect(
                 segment_ha, "lh_hippoAmygLabels", outputnode, "lh_hippoAmygLabels"
             )
             workflow.connect(
                 segment_ha, "rh_hippoAmygLabels", outputnode, "rh_hippoAmygLabels"
-                )
+            )
 
     if segmentation_holder is not None:
         # NODE 7: Left basal ganglia and thalamus binary ROI
