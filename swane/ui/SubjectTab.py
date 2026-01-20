@@ -580,7 +580,11 @@ class SubjectTab(QTabWidget):
         """
 
         preference_window = PreferencesWindow(
-            self.subject.config, self.subject.dependency_manager, True, self
+            self.subject.global_config,
+            self.subject.dependency_manager,
+            True,
+            subj_config=self.subject.config,
+            parent=self,
         )
         ret = preference_window.exec()
         if ret != 0:

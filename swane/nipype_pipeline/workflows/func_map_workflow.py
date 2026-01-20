@@ -15,7 +15,7 @@ from swane.nipype_pipeline.nodes.Zscore import Zscore
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 import swane_supplement
-from swane.config.config_enums import BETWEEN_MOD_FLIRT_COST
+from swane.config.config_enums import BETWEEN_MOD_FLIRT_COST, FREESURFER_STEP
 from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     get_registration_node,
@@ -25,7 +25,7 @@ from swane.nipype_pipeline.nodes.utils import (
 def func_map_workflow(
     name: str,
     dicom_dir: str,
-    is_freesurfer: bool,
+    freesurfer_step: FREESURFER_STEP,
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
@@ -42,8 +42,8 @@ def func_map_workflow(
         The workflow name.
     dicom_dir : path
         The file path of the DICOM files.
-    is_freesurfer : bool
-        True if the reconall is available.
+    freesurfer_step : FREESURFER_STEP
+        reconall step available.
     config: SectionProxy
         workflow settings.
     synth_config: SectionProxy
@@ -196,7 +196,7 @@ def func_map_workflow(
 
     workflow.connect(mask, "out_file", outputnode, "registered_file")
 
-    if is_freesurfer:
+    if freesurfer_step.has_surface():
         # NODE 7: Projection of the map on FreeSurfer pial surface
         for side in SIDES:
             func_surf = Node(SampleToSurface(), name="%s_surf_%s" % (name, side))
@@ -218,6 +218,7 @@ def func_map_workflow(
 
             workflow.connect(func_surf, "out_file", outputnode, "surf_%s" % side)
 
+    if freesurfer_step.has_parcellation():
         # NODE 8: z-score calculation
         zscore = Node(Zscore(), name="%s_zscore" % name)
         zscore.long_name = "internal zscore"
@@ -227,30 +228,31 @@ def func_map_workflow(
 
         workflow.connect(zscore, "out_file", outputnode, "zscore")
 
-        # NODE 10: Projection of z-score on FreeSurfer pial surface
-        for side in SIDES:
-            zscore_surf_lh = Node(
-                SampleToSurface(), name="%s_zscore_surf_%s" % (name, side)
-            )
-            zscore_surf_lh.long_name = side + " zscore %s"
-            zscore_surf_lh.inputs.hemi = side
-            zscore_surf_lh.inputs.out_file = "%s_zscore_surf_%s.mgz" % (name, side)
-            zscore_surf_lh.inputs.cortex_mask = True
-            zscore_surf_lh.inputs.reg_header = True
-            zscore_surf_lh.inputs.sampling_method = "point"
-            zscore_surf_lh.inputs.sampling_range = 0.5
-            zscore_surf_lh.inputs.sampling_units = "frac"
-            workflow.connect(zscore, "out_file", zscore_surf_lh, "source_file")
-            workflow.connect(
-                inputnode, "freesurfer_subjects_dir", zscore_surf_lh, "subjects_dir"
-            )
-            workflow.connect(
-                inputnode, "freesurfer_subject_id", zscore_surf_lh, "subject_id"
-            )
+        if freesurfer_step.has_surface():
+            # NODE 10: Projection of z-score on FreeSurfer pial surface
+            for side in SIDES:
+                zscore_surf_lh = Node(
+                    SampleToSurface(), name="%s_zscore_surf_%s" % (name, side)
+                )
+                zscore_surf_lh.long_name = side + " zscore %s"
+                zscore_surf_lh.inputs.hemi = side
+                zscore_surf_lh.inputs.out_file = "%s_zscore_surf_%s.mgz" % (name, side)
+                zscore_surf_lh.inputs.cortex_mask = True
+                zscore_surf_lh.inputs.reg_header = True
+                zscore_surf_lh.inputs.sampling_method = "point"
+                zscore_surf_lh.inputs.sampling_range = 0.5
+                zscore_surf_lh.inputs.sampling_units = "frac"
+                workflow.connect(zscore, "out_file", zscore_surf_lh, "source_file")
+                workflow.connect(
+                    inputnode, "freesurfer_subjects_dir", zscore_surf_lh, "subjects_dir"
+                )
+                workflow.connect(
+                    inputnode, "freesurfer_subject_id", zscore_surf_lh, "subject_id"
+                )
 
-            workflow.connect(
-                zscore_surf_lh, "out_file", outputnode, "zscore_surf_%s" % side
-            )
+                workflow.connect(
+                    zscore_surf_lh, "out_file", outputnode, "zscore_surf_%s" % side
+                )
 
     is_ai = config.getboolean_safe("ai")
 
@@ -285,7 +287,7 @@ def func_map_workflow(
 
         # NODE 14: AI thresholding
         ai_threshold = Node(ImageMaths(), name="%s_ai_threshold" % name)
-        ai_threshold.long_name = name + "AI thresholding"
+        ai_threshold.long_name = name + " AI thresholding"
         threshold = config.getint_safe("ai_threshold")
         threshold = abs(threshold / 100)
         ai_threshold.inputs.op_string = "-thr %f -uthr %f" % (-threshold, threshold)
@@ -312,7 +314,7 @@ def func_map_workflow(
 
         workflow.connect(ai_mask, "out_file", outputnode, "ai")
 
-        if is_freesurfer:
+        if freesurfer_step.has_surface():
             for side in SIDES:
                 # NODE 17: Projection of AI on FreeSurfer pial surface
                 ai_surf = Node(SampleToSurface(), name="%s_ai_surf_%s" % (name, side))
