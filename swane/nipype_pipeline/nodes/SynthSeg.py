@@ -40,7 +40,8 @@ class SynthSegInputSpec(FSTraitedSpec):
     use_gpu = traits.Bool(
         True, usedefault=True, desc="run on the GPU rather than the CPU"
     )
-    keep_geometry = traits.Bool(argstr="--keepgeom", desc="Force output geometry to be the same as input"
+    keep_geometry = traits.Bool(
+        argstr="--keepgeom", desc="Force output geometry to be the same as input"
     )
 
     version_1 = traits.Bool(
