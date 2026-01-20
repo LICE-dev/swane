@@ -49,10 +49,16 @@ class BLOCK_DESIGN(Enum):
 
 class FREESURFER_STEP(Enum):
     DISABLED = "Disabled"
-    PARC = "Only Cortical Parcellation (if available)"
-    PIAL = "Cortical Parcellation + Pial surface"
-    RECONALL = "Complete Recon-all run"
-    HYPPO = "Recon-all + Hippocampal subfields"
+    SYNTHSEG = "SynthSeg Cortical Parcellation only (if available)"
+    AUTORECON2 = "Preprocessing only"
+    AUTORECON_PIAL = "Surfaces + Cortical Parcellation"
+    RECONALL = "Complete Recon-all"
+
+    def has_surface(self):
+        return self in {FREESURFER_STEP.AUTORECON_PIAL, FREESURFER_STEP.RECONALL}
+
+    def has_parcellation(self):
+        return self in {FREESURFER_STEP.SYNTHSEG, FREESURFER_STEP.AUTORECON_PIAL, FREESURFER_STEP.RECONALL}
 
 class SLICE_TIMING(Enum):
     UNKNOWN = "Unknown"

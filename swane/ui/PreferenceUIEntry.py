@@ -253,6 +253,8 @@ class PreferenceUIEntry:
             if enabled:
                 tooltip = ""
             item.setToolTip(tooltip)
+            if not enabled and self.input_field.currentIndex() == index:
+                self.input_field.setCurrentIndex(0)
 
 
     def set_value_from_config(self, config: ConfigManager):
