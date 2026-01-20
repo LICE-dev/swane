@@ -502,7 +502,7 @@ class PreferenceWizardWindow(QDialog):
         )
         lay.addWidget(self._cb_freesurfer_surfaces)
         
-        if not self.user_prefs.matlab_capable:
+        if self.user_prefs.matlab_capable:
             self._cb_freesurfer_hippocampal_segmentation = QCheckBox(
                 f"{strings.freesurfer_outputs_hippocampal_segmentation}\n"
                 f"{strings.freesurfer_outputs_hippocampal_segmentation_tooltip}"
@@ -694,19 +694,19 @@ class PreferenceWizardWindow(QDialog):
 
         # GPU
         if not self.user_prefs.gpu_capable:
-            parts.append(f"{strings.wizard_gpu_accelleration}: Not Available")
+            parts.append(strings.wizard_gpu_accelleration.format(gpu_status="Not Available"))
         else:
-            parts.append(f"{strings.wizard_gpu_accelleration}: Enabled" if self.user_prefs.use_gpu_acceleration else f"{strings.wizard_gpu_accelleration}: Disabled")
+            parts.append(strings.wizard_gpu_accelleration.format(gpu_status="Enabled") if self.user_prefs.use_gpu_acceleration else strings.wizard_gpu_accelleration.format(gpu_status="Disabled"))
 
         # Advanced models
         if not getattr(self.user_prefs, "advanced_models_capable", True):
             parts.append(
-                f"{strings.wizard_advanced_models}: Not Available (requires FreeSurfer >= {self.dependency_manager.SYNTH_FREESURFER_VERSION} and at least "
-                f"{ResourceManager.get_min_synth_ram_requirement()} GB)"
+                strings.wizard_advanced_models.format(adv_status=f"Not Available (requires FreeSurfer >= {self.dependency_manager.SYNTH_FREESURFER_VERSION} and at least "
+                f"{ResourceManager.get_min_synth_ram_requirement()} GB)")
             )
         else:
             parts.append(
-                f"{strings.wizard_advanced_models}: Enabled (based on system resources)" if self.user_prefs.use_advanced_models else f"{strings.wizard_advanced_models}:Disabled"
+                strings.wizard_advanced_models.format(adv_status="Enabled (based on system resources") if self.user_prefs.use_advanced_models else strings.wizard_advanced_models.format(adv_status="Disabled")
             )
 
         # FreeSurfer outputs

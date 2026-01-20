@@ -268,9 +268,6 @@ gpu_acceleration_enabled = "Use GPU acceleration when available"
 gpu_acceleration_enabled_tooltip = "This can accelerate advanced computations if the GPU is supported by your system."
 gpu_acceleration_disabled = "CPU only"
 gpu_acceleration_disabled_tooltip = "All processing will run on the CPU, even if GPU acceleration is available."
-gpu_not_available = "Not available (system limitations)"
-gpu_enabled = "Enabled"
-gpu_disabled = "Disabled (by user choice)"
 
 wizard_advanced_models_title = "Advanced Models"
 wizard_advanced_models_text = (
@@ -279,11 +276,9 @@ wizard_advanced_models_text = (
     "They may require additional memory and processing power."
 )
 advanced_models_enabled = "Use advanced models when supported"
-advanced_models_enabled_tooltip = "Enable advanced methods when the system can handle them reliably."
-advanced_models_disabled = "Use standard methods only"
+advanced_models_enabled_tooltip = "Enable advanced models when the system can handle them reliably."
+advanced_models_disabled = "Use standard models only"
 advanced_models_disabled_tooltip = "Prefer lighter, more stable processing techniques with minimal resource usage."
-advanced_models_enabled = "Enabled<br />All advanced models are active and will be used when applicable."
-advanced_models_disabled = "Disabled<br />Advanced models were disabled based on your selection."
 
 wizard_freesurfer_outputs_title = "FreeSurfer Outputs Selection"
 wizard_freesurfer_outputs_tooltip = (
@@ -295,13 +290,13 @@ freesurfer_outputs_cortical_parcellation = "Cortical Parcellation"
 freesurfer_outputs_cortical_parcellation_tooltip = (
     "Generates cortical parcellation maps using FreeSurfer's standard methods."
 )
-freesurfer_outputs_surfaces = "Cortical and Subcortical Surfaces"
+freesurfer_outputs_surfaces = "Surfaces"
 freesurfer_outputs_surfaces_tooltip = (
-    "Produces detailed cortical and subcortical surface models for surface-based analyses."
+    "Produces white matter and pial 3D models surface models for surface-based analyses."
 )
-freesurfer_outputs_hippocampal_segmentation = "Hippocampal Subfield Segmentation"
+freesurfer_outputs_hippocampal_segmentation = "Hippocampal/Amigdala Subfield Segmentation"
 freesurfer_outputs_hippocampal_segmentation_tooltip = (
-    "Produces detailed segmentation of hippocampal subfields for advanced analyses."
+    "Produces detailed hippocampal and amigdala subfields segmentation for advanced analyses."
 )
 freesurfer_full_reconall = "Full Recon-All Processing"
 freesurfer_full_reconall_tooltip = (
