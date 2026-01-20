@@ -23,7 +23,7 @@ class SynthSegInputSpec(FSTraitedSpec):
         name_source=["in_file"],
         name_template="%s_segmentation",
         keep_extension=True,
-        desc="name of output skull stripped image",
+        desc="name of output segmentation image",
     )
     parcellation = traits.Bool(
         desc="perform cortical parcellation in addition to whole-brain segmentation",
@@ -38,7 +38,10 @@ class SynthSegInputSpec(FSTraitedSpec):
     )
     use_cpu = traits.Bool(desc="run on the CPU rather than the GPU", argstr="--cpu")
     use_gpu = traits.Bool(
-        True, usedefault=True, desc="run on the GPU rather than the GPU"
+        True, usedefault=True, desc="run on the GPU rather than the CPU"
+    )
+    keep_geometry = traits.Bool(
+        argstr="--keepgeom", desc="Force output geometry to be the same as input"
     )
 
     version_1 = traits.Bool(

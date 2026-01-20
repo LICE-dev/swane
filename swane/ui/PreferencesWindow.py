@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QFrame,
 )
 from swane import strings, EXIT_CODE_REBOOT
+from swane.config.ConfigManager import ConfigManager
 from swane.ui.PreferenceUIEntry import PreferenceUIEntry
 from swane.config.preference_list import WF_PREFERENCES, GLOBAL_PREFERENCES
 from PySide6_VerticalQTabWidget import VerticalQTabWidget
@@ -30,10 +31,19 @@ class PreferencesWindow(QDialog):
 
     """
 
-    def __init__(self, my_config, dependency_manager, is_workflow: bool, parent=None):
+    def __init__(
+        self,
+        global_config: ConfigManager,
+        dependency_manager,
+        is_workflow: bool,
+        subj_config: ConfigManager = None,
+        parent=None,
+    ):
         super(PreferencesWindow, self).__init__(parent)
 
+        my_config = subj_config if subj_config is not None else global_config
         self.my_config = my_config
+        self.global_config = global_config
         self.dependency_manager = dependency_manager
         self.restart = False
 
@@ -124,7 +134,9 @@ class PreferencesWindow(QDialog):
                 if self.preferences[category][key].pref_requirement is not None:
                     # Search all inputs that are preference for this one and apply them a function on change
                     for pref_cat in self.preferences[category][key].pref_requirement:
-                        if str(pref_cat) not in my_config:
+                        if pref_cat not in self.preferences:
+                            # Cross preference
+                            # Since preference is "external" it cannot change here, so just check value after loop
                             continue
                         for pref_req in self.preferences[category][
                             key
@@ -137,8 +149,58 @@ class PreferencesWindow(QDialog):
                                     checked, my_cat, my_key
                                 )
                             )
-                    # After the loop check if pref should be enabled
+                    # After the loop, check value if pref should be enabled
                     self.requirement_changed(False, category, key)
+
+                # Combo option preference requirement
+                if self.preferences[category][key].option_pref_requirement:
+                    for option in self.preferences[category][
+                        key
+                    ].option_pref_requirement:
+                        pref_req_dict = self.preferences[category][
+                            key
+                        ].option_pref_requirement[option]
+                        fail_tooltip = None
+                        try:
+                            fail_tooltip = self.preferences[category][
+                                key
+                            ].option_pref_requirement_fail_tooltip[option]
+                        except:
+                            pass
+                        for pref_cat in self.preferences[category][
+                            key
+                        ].option_pref_requirement[option]:
+                            if pref_cat not in self.preferences:
+                                # Cross preference
+                                # Since preference is "external" it cannot change here, so just check value after loop
+                                pass
+                            else:
+                                for pref_req in self.preferences[category][
+                                    key
+                                ].option_pref_requirement[option][pref_cat]:
+                                    if str(pref_req[0]) not in my_config[pref_cat]:
+                                        continue
+                                    target_x = self.input_keys[pref_cat][pref_req[0]]
+                                    self.inputs[target_x].connect_change(
+                                        lambda checked, my_cat=category, my_key=key, my_fail_tooltip=fail_tooltip, my_option=option, my_pref_req_dict=pref_req_dict: self.requirement_changed(
+                                            checked,
+                                            my_cat,
+                                            my_key,
+                                            fail_tooltip=my_fail_tooltip,
+                                            option=my_option,
+                                            pref_requirement=my_pref_req_dict,
+                                        )
+                                    )
+                                continue
+                        # After the loop, check value if pref should be enabled
+                        self.requirement_changed(
+                            False,
+                            category,
+                            key,
+                            pref_req_dict,
+                            fail_tooltip,
+                            option=option,
+                        )
 
                 # Handle validation on change
                 if self.preferences[category][key].validate_on_change:
@@ -285,6 +347,7 @@ class PreferencesWindow(QDialog):
                 None,
             )
             if dep_check is None or not callable(dep_check) or not dep_check():
+
                 self.inputs[x].disable(
                     self.preferences[category][key].dependency_fail_tooltip
                 )
@@ -304,13 +367,36 @@ class PreferencesWindow(QDialog):
                     self.preferences[category][key].resource_fail_tooltip
                 )
                 return False
+
+        # no need return false because combo should neve be completely disabled for subsection dep
+        if self.preferences[category][key].input_type == InputTypes.ENUM:
+            for enum_key in self.preferences[category][key].option_dependency:
+                dep_check = getattr(
+                    self.dependency_manager,
+                    self.preferences[category][key].option_dependency[enum_key][0],
+                    None,
+                )
+                if dep_check is not None and callable(dep_check) and not dep_check():
+                    tooltip = self.preferences[category][key].option_dependency[
+                        enum_key
+                    ][1]
+                    self.inputs[x].disable_combo_option(enum_key, False, tooltip)
+
         return True
 
     def validation_field_changed(self, checked, my_cat: str, my_key: str):
         validation_holder = my_key + self.my_config.VALIDATION_SUFFIX
         self.my_config[my_cat][validation_holder] = "true"
 
-    def requirement_changed(self, checked, my_cat: str, my_key: str):
+    def requirement_changed(
+        self,
+        checked,
+        my_cat: str,
+        my_key: str,
+        pref_requirement: dict = None,
+        fail_tooltip: str = None,
+        option: Enum = None,
+    ):
         """
         Called if the user change a preference that is a requirement for another preference.
         Parameters
@@ -326,40 +412,102 @@ class PreferencesWindow(QDialog):
         my_x = self.input_keys[my_cat][my_key]
         if not self.check_dependency(my_cat, my_key, my_x):
             return
-        pref_requirement = self.preferences[my_cat][my_key].pref_requirement
+        if pref_requirement is None:
+            pref_requirement = self.preferences[my_cat][my_key].pref_requirement
+
+        if fail_tooltip is None:
+            fail_tooltip = self.preferences[my_cat][
+                my_key
+            ].pref_requirement_fail_tooltip
         for req_cat in pref_requirement:
             if req_cat not in self.input_keys:
-                continue
-            for req_key in pref_requirement[req_cat]:
-                if req_key[0] not in self.input_keys[req_cat]:
-                    continue
-                req_x = self.input_keys[req_cat][req_key[0]]
+                # cross requirement
+                if req_cat not in self.global_config:
+                    # cat does not exist
+                    pass
+                for req_key in pref_requirement[req_cat]:
+                    if req_key[0] not in self.global_config[req_cat]:
+                        # key does not exist
+                        continue
+                    try:
+                        req = GLOBAL_PREFERENCES[req_cat][req_key[0]]
+                    except:
+                        req = WF_PREFERENCES[req_cat][req_key[0]]
 
-                if self.inputs[req_x].input_type == InputTypes.BOOLEAN:
-                    check = req_key[1] == self.inputs[req_x].input_field.isChecked()
-                elif self.inputs[req_x].input_type == InputTypes.ENUM:
-                    check = (
-                        req_key[1].name
-                        == self.inputs[req_x]
-                        .input_field.itemData(
+                    if req.input_type == InputTypes.BOOLEAN:
+                        check = req_key[1] == self.global_config.getboolean_safe(
+                            req_cat, req_key[0]
+                        )
+                    elif req.input_type == InputTypes.ENUM:
+                        selected_enum = self.global_config.getenum_safe(
+                            req_cat, req_key[0]
+                        )
+                        enum_list = (
+                            req_key[1]
+                            if isinstance(req_key[1], (list, tuple))
+                            else [req_key[1]]
+                        )
+                        check = any(selected_enum.name == e.name for e in enum_list)
+                    elif req.input_type in (
+                        InputTypes.FLOAT,
+                        InputTypes.INT,
+                    ):
+                        check = (
+                            self.global_config.getfloat_safe(req_cat, req_key[0])
+                            >= req_key[1]
+                        )
+                    else:
+                        check = req_key[1] = self.global_config[req_cat][req_key[0]]
+
+                    if not check:
+                        if option is None:
+                            # disable all input
+                            self.inputs[my_x].disable(fail_tooltip)
+                        else:
+                            self.inputs[my_x].disable_combo_option(
+                                option, False, fail_tooltip
+                            )
+                        return
+
+            else:
+                for req_key in pref_requirement[req_cat]:
+                    if req_key[0] not in self.input_keys[req_cat]:
+                        continue
+
+                    req_x = self.input_keys[req_cat][req_key[0]]
+
+                    if self.inputs[req_x].input_type == InputTypes.BOOLEAN:
+                        check = req_key[1] == self.inputs[req_x].input_field.isChecked()
+                    elif self.inputs[req_x].input_type == InputTypes.ENUM:
+                        selected_enum = self.inputs[req_x].input_field.itemData(
                             self.inputs[req_x].input_field.currentIndex()
                         )
-                        .name
-                    )
-                elif self.inputs[req_x].input_type in (
-                    InputTypes.FLOAT,
-                    InputTypes.INT,
-                ):
-                    check = float(self.inputs[req_x].get_value()) >= req_key[1]
-                else:
-                    check = req_key[1] = self.inputs[req_x].get_value()
+                        enum_list = (
+                            req_key[1]
+                            if isinstance(req_key[1], (list, tuple))
+                            else [req_key[1]]
+                        )
+                        check = any(selected_enum.name == e.name for e in enum_list)
+                    elif self.inputs[req_x].input_type in (
+                        InputTypes.FLOAT,
+                        InputTypes.INT,
+                    ):
+                        check = float(self.inputs[req_x].get_value()) >= req_key[1]
+                    else:
+                        check = req_key[1] = self.inputs[req_x].get_value()
 
-                if not check:
-                    self.inputs[my_x].disable(
-                        self.preferences[my_cat][my_key].pref_requirement_fail_tooltip
-                    )
-                    return
-        self.inputs[my_x].enable()
+                    if not check:
+                        if option is None:
+                            self.inputs[my_x].disable(fail_tooltip)
+                        else:
+                            self.inputs[my_x].disable_combo_option(
+                                option, False, fail_tooltip
+                            )
+                        return
+        if not option:
+            self.inputs[my_x].enable()
+        else:
+            self.inputs[my_x].disable_combo_option(option, True, "")
 
     def save_preferences(self):
         """

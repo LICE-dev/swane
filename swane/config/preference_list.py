@@ -5,18 +5,7 @@ from swane.utils.ResourceManager import ResourceManager
 
 from swane import strings
 from swane.config.PreferenceEntry import PreferenceEntry
-from swane.config.config_enums import (
-    InputTypes,
-    WORKFLOW_TYPES,
-    SLICER_EXTENSIONS,
-    CORE_LIMIT,
-    VEIN_DETECTION_MODE,
-    BLOCK_DESIGN,
-    SLICE_TIMING,
-    GlobalPrefCategoryList,
-    BETWEEN_MOD_FLIRT_COST,
-)
-from swane.utils.platform_and_tools_utils import get_os_type
+from swane.config.config_enums import *
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
@@ -112,24 +101,52 @@ WF_PREFERENCES[category]["flat1"] = PreferenceEntry(
     input_requirement_fail_tooltip="Requires both 3D T1w and 3D Flair",
     section=True,
 )
-WF_PREFERENCES[category]["freesurfer"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="FreeSurfer analysis",
-    default="true",
+WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="FreeSurfer analysis step",
+    value_enum=FREESURFER_STEP,
+    default=FREESURFER_STEP.DISABLED,
     dependency="is_freesurfer",
-    dependency_fail_tooltip="Freesurfer not detected",
-    section=True,
+    dependency_fail_tooltip="Requires Freesurfer analysis",
+    option_dependency={
+        FREESURFER_STEP.SYNTHSEG: [
+            "is_freesurfer_synth",
+            "Synth tools recon-all requires FreeSurfer 8.1.0",
+        ]
+    },
+    option_pref_requirement={
+        FREESURFER_STEP.SYNTHSEG: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.synth_seg_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        FREESURFER_STEP.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM"
+        % ResourceManager.synth_seg_ram_requirements(),
+    },
 )
+
 WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="FreeSurfer hippocampal and amygdala subfields",
     default="false",
     dependency="is_freesurfer_matlab",
     dependency_fail_tooltip="Matlab Runtime not detected",
-    pref_requirement={DataInputList.T13D: [("freesurfer", True)]},
-    pref_requirement_fail_tooltip="Requires Freesurfer analysis",
+    pref_requirement={
+        DataInputList.T13D: [
+            (
+                "freesurfer_step",
+                [
+                    FREESURFER_STEP.AUTORECON2,
+                    FREESURFER_STEP.RECONALL,
+                    FREESURFER_STEP.AUTORECON_PIAL,
+                ],
+            )
+        ]
+    },
+    pref_requirement_fail_tooltip="Requires Freesurfer Preprocessing",
 )
-
 
 category = DataInputList.FLAIR3D
 WF_PREFERENCES[category] = {}

@@ -368,13 +368,13 @@ class ConfigManager(configparser.ConfigParser):
         """
         return self.getboolean_safe(DataInputList.T13D, "hippo_amyg_labels")
 
-    def get_workflow_freesurfer_pref(self) -> bool:
+    def get_workflow_freesurfer_pref(self) -> FREESURFER_STEP:
         """
         Returns
         -------
         True if freesurfer analysis is enabled
         """
-        return self.getboolean_safe(DataInputList.T13D, "freesurfer")
+        return self.getenum_safe(DataInputList.T13D, "freesurfer_step")
 
     def get_mail_manager(self) -> MailManager:
         """
@@ -428,22 +428,45 @@ class ConfigManager(configparser.ConfigParser):
 
         """
         changed = False
-        for category in WF_PREFERENCES:
-            for key in WF_PREFERENCES[category]:
-                if WF_PREFERENCES[category][key].dependency is not None:
+        for section in WF_PREFERENCES:
+            for option in WF_PREFERENCES[section]:
+                if WF_PREFERENCES[section][option].dependency is not None:
                     dep_check = getattr(
                         dependency_manager,
-                        WF_PREFERENCES[category][key].dependency,
+                        WF_PREFERENCES[section][option].dependency,
                         None,
                     )
                     if dep_check is None or not callable(dep_check) or not dep_check():
-                        self[category][key] = "false"
+                        self[section][option] = "false"
                         changed = True
                         continue
-                if WF_PREFERENCES[category][key].resource is not None:
+
+                if WF_PREFERENCES[section][option].input_type == InputTypes.ENUM:
+                    enum_cls = WF_PREFERENCES[section][option].value_enum
+                    value_enum = enum_cls[self[section][option]]
+                    if value_enum in WF_PREFERENCES[section][option].option_dependency:
+                        dep_check = getattr(
+                            dependency_manager,
+                            WF_PREFERENCES[section][option].option_dependency[
+                                value_enum
+                            ][0],
+                            None,
+                        )
+                        if (
+                            dep_check is not None
+                            and callable(dep_check)
+                            and not dep_check()
+                        ):
+                            self[section][option] = str(
+                                self._section_defaults[str(section)][
+                                    str(option)
+                                ].default
+                            )
+
+                if WF_PREFERENCES[section][option].resource is not None:
                     resource_check = getattr(
                         ResourceManager,
-                        WF_PREFERENCES[category][key].resource,
+                        WF_PREFERENCES[section][option].resource,
                         None,
                     )
                     if (
@@ -451,7 +474,7 @@ class ConfigManager(configparser.ConfigParser):
                         or not callable(resource_check)
                         or not resource_check(config=self)
                     ):
-                        self[category][key] = "false"
+                        self[section][option] = "false"
                         changed = True
         if changed:
             self.save()

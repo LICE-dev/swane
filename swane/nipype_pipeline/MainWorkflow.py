@@ -13,6 +13,7 @@ from swane.config.config_enums import (
     CORE_LIMIT,
     BLOCK_DESIGN,
     GlobalPrefCategoryList,
+    FREESURFER_STEP,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -53,7 +54,7 @@ class MainWorkflow(CustomWorkflow):
     max_gpu: int = -1
     multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP
     memory_gb: float = -1
-    is_freesurfer: bool = False
+    freesurfer_step: FREESURFER_STEP = FREESURFER_STEP.DISABLED
     is_hippo_amyg_labels: bool = False
     is_flat1: bool = False
     is_tractography: bool = False
@@ -184,14 +185,12 @@ class MainWorkflow(CustomWorkflow):
 
     def set_analyses_request(self):
         # Check for FreeSurfer requirement and request
-        self.is_freesurfer = (
-            self.dependency_manager.is_freesurfer()
-            and self.subject_config.get_workflow_freesurfer_pref()
-        )
-        self.is_hippo_amyg_labels = (
-            self.dependency_manager.is_freesurfer_matlab()
-            and self.subject_config.get_workflow_hippo_pref()
-        )
+        if self.dependency_manager.is_freesurfer():
+            self.freesurfer_step = self.subject_config.get_workflow_freesurfer_pref()
+            self.is_hippo_amyg_labels = (
+                self.dependency_manager.is_freesurfer_matlab()
+                and self.subject_config.get_workflow_hippo_pref()
+            )
 
         # Check for FLAT1 requirement and request
         self.is_flat1 = (
@@ -256,12 +255,13 @@ class MainWorkflow(CustomWorkflow):
         )
 
     def launch_freesurfer_analysis(self):
-        if not self.is_freesurfer:
+        if self.freesurfer_step == FREESURFER_STEP.DISABLED:
             return
 
         # FreeSurfer analysis
         self.freesurfer = freesurfer_workflow(
             name="freesurfer",
+            step=self.freesurfer_step,
             is_hippo_amyg_labels=self.is_hippo_amyg_labels,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
@@ -275,24 +275,26 @@ class MainWorkflow(CustomWorkflow):
             self.t1, "outputnode.reference", self.freesurfer, "inputnode.reference"
         )
 
-        self.freesurfer.sink_result(
-            save_path=self.base_dir,
-            result_node="outputnode",
-            result_name="pial",
-            sub_folder=self.Result_DIR,
-        )
-        self.freesurfer.sink_result(
-            save_path=self.base_dir,
-            result_node="outputnode",
-            result_name="white",
-            sub_folder=self.Result_DIR,
-        )
-        self.freesurfer.sink_result(
-            save_path=self.base_dir,
-            result_node="outputnode",
-            result_name="vol_label_file",
-            sub_folder=self.Result_DIR,
-        )
+        if self.freesurfer_step.has_surface():
+            self.freesurfer.sink_result(
+                save_path=self.base_dir,
+                result_node="outputnode",
+                result_name="pial",
+                sub_folder=self.Result_DIR,
+            )
+            self.freesurfer.sink_result(
+                save_path=self.base_dir,
+                result_node="outputnode",
+                result_name="white",
+                sub_folder=self.Result_DIR,
+            )
+        if self.freesurfer_step.has_parcellation():
+            self.freesurfer.sink_result(
+                save_path=self.base_dir,
+                result_node="outputnode",
+                result_name="vol_label_file",
+                sub_folder=self.Result_DIR,
+            )
         if self.is_hippo_amyg_labels:
             regex_subs = [("-T1.*.mgz", ".mgz")]
             self.freesurfer.sink_result(
@@ -561,7 +563,7 @@ class MainWorkflow(CustomWorkflow):
         self.asl = func_map_workflow(
             name=DIL.ASL.value.workflow_name,
             dicom_dir=asl_dir,
-            is_freesurfer=self.is_freesurfer,
+            freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.ASL],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
@@ -577,7 +579,7 @@ class MainWorkflow(CustomWorkflow):
             sub_folder=self.Result_DIR,
         )
 
-        if self.is_freesurfer:
+        if self.freesurfer_step.has_surface():
             self.connect(
                 self.freesurfer,
                 "outputnode.subjects_dir",
@@ -590,10 +592,6 @@ class MainWorkflow(CustomWorkflow):
                 self.asl,
                 "inputnode.freesurfer_subject_id",
             )
-            self.connect(
-                self.freesurfer, "outputnode.bgROI", self.asl, "inputnode.bgROI"
-            )
-
             self.asl.sink_result(
                 save_path=self.base_dir,
                 result_node="outputnode",
@@ -606,24 +604,31 @@ class MainWorkflow(CustomWorkflow):
                 result_name="surf_rh",
                 sub_folder=self.Result_DIR,
             )
+        if self.freesurfer_step.has_parcellation():
+            self.connect(
+                self.freesurfer, "outputnode.bgROI", self.asl, "inputnode.bgROI"
+            )
+
             self.asl.sink_result(
                 save_path=self.base_dir,
                 result_node="outputnode",
                 result_name="zscore",
                 sub_folder=self.Result_DIR,
             )
-            self.asl.sink_result(
-                save_path=self.base_dir,
-                result_node="outputnode",
-                result_name="zscore_surf_lh",
-                sub_folder=self.Result_DIR,
-            )
-            self.asl.sink_result(
-                save_path=self.base_dir,
-                result_node="outputnode",
-                result_name="zscore_surf_rh",
-                sub_folder=self.Result_DIR,
-            )
+
+            if self.freesurfer_step.has_surface():
+                self.asl.sink_result(
+                    save_path=self.base_dir,
+                    result_node="outputnode",
+                    result_name="zscore_surf_lh",
+                    sub_folder=self.Result_DIR,
+                )
+                self.asl.sink_result(
+                    save_path=self.base_dir,
+                    result_node="outputnode",
+                    result_name="zscore_surf_rh",
+                    sub_folder=self.Result_DIR,
+                )
 
         if self.subject_config.getboolean_safe(DIL.ASL, "ai"):
             self.connect(
@@ -646,7 +651,7 @@ class MainWorkflow(CustomWorkflow):
                 sub_folder=self.Result_DIR,
             )
 
-            if self.is_freesurfer:
+            if self.freesurfer_step.has_surface():
                 self.asl.sink_result(
                     save_path=self.base_dir,
                     result_node="outputnode",
@@ -671,7 +676,7 @@ class MainWorkflow(CustomWorkflow):
         self.pet = func_map_workflow(
             name=DIL.PET.value.workflow_name,
             dicom_dir=pet_dir,
-            is_freesurfer=self.is_freesurfer,
+            freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.PET],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
         )
@@ -687,7 +692,7 @@ class MainWorkflow(CustomWorkflow):
             sub_folder=self.Result_DIR,
         )
 
-        if self.is_freesurfer:
+        if self.freesurfer_step.has_surface():
             self.connect(
                 self.freesurfer,
                 "outputnode.subjects_dir",
@@ -700,10 +705,6 @@ class MainWorkflow(CustomWorkflow):
                 self.pet,
                 "inputnode.freesurfer_subject_id",
             )
-            self.connect(
-                self.freesurfer, "outputnode.bgROI", self.pet, "inputnode.bgROI"
-            )
-
             self.pet.sink_result(
                 save_path=self.base_dir,
                 result_node="outputnode",
@@ -716,24 +717,31 @@ class MainWorkflow(CustomWorkflow):
                 result_name="surf_rh",
                 sub_folder=self.Result_DIR,
             )
+
+        if self.freesurfer_step.has_parcellation():
+            self.connect(
+                self.freesurfer, "outputnode.bgROI", self.pet, "inputnode.bgROI"
+            )
             self.pet.sink_result(
                 save_path=self.base_dir,
                 result_node="outputnode",
                 result_name="zscore",
                 sub_folder=self.Result_DIR,
             )
-            self.pet.sink_result(
-                save_path=self.base_dir,
-                result_node="outputnode",
-                result_name="zscore_surf_lh",
-                sub_folder=self.Result_DIR,
-            )
-            self.pet.sink_result(
-                save_path=self.base_dir,
-                result_node="outputnode",
-                result_name="zscore_surf_rh",
-                sub_folder=self.Result_DIR,
-            )
+
+            if self.freesurfer_step.has_surface():
+                self.pet.sink_result(
+                    save_path=self.base_dir,
+                    result_node="outputnode",
+                    result_name="zscore_surf_lh",
+                    sub_folder=self.Result_DIR,
+                )
+                self.pet.sink_result(
+                    save_path=self.base_dir,
+                    result_node="outputnode",
+                    result_name="zscore_surf_rh",
+                    sub_folder=self.Result_DIR,
+                )
 
             # TODO work in progress for segmentation based asymmetry study
             # from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
@@ -762,7 +770,7 @@ class MainWorkflow(CustomWorkflow):
                 sub_folder=self.Result_DIR,
             )
 
-            if self.is_freesurfer:
+            if self.freesurfer_step.has_surface():
                 self.pet.sink_result(
                     save_path=self.base_dir,
                     result_node="outputnode",
