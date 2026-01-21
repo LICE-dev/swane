@@ -57,6 +57,11 @@ class SynthMorphRegInputSpec(FSTraitedSpec):
         hash_files=False,
         desc="the inversion warp filename",
     )
+    num_threads = traits.Int(
+        argstr="-j %d",
+        hash_file=False,
+        desc="number of threads to be used by the CPU version",
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
