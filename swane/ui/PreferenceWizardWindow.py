@@ -15,15 +15,20 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QButtonGroup,
     QFrame,
-    QCheckBox
+    QCheckBox,
 )
 
 from swane import strings
 from swane.config.ConfigManager import ConfigManager
-from swane.config.config_enums import FreesurferStep, GlobalPrefCategoryList, PerformanceProfile
+from swane.config.config_enums import (
+    FreesurferStep,
+    GlobalPrefCategoryList,
+    PerformanceProfile,
+)
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.DependencyManager import DependencyManager
+
 
 @dataclass
 class UserPreferences:
@@ -46,20 +51,22 @@ class UserPreferences:
         - None: GPU acceleration is not available on this system
     use_advanced_models : bool
         Whether advanced models should be used when supported.
-        
+
     """
-    
+
     # Wizard selections
     performance_profile: PerformanceProfile = PerformanceProfile.BALANCED
 
     # Hardware Acceleration (only meaningful if gpu_capable=True)
     gpu_capable: bool = False
-    use_gpu_acceleration: Optional[bool] = None  # True/False if capable, None if not available
+    use_gpu_acceleration: Optional[bool] = (
+        None  # True/False if capable, None if not available
+    )
 
     # Advanced models selection
     advanced_models_capable: bool = False
     use_advanced_models: bool = False
-    
+
     # Freesurfer outputs selection (only meaningful if freesurfer_capable=True)
     freesurfer_capable: bool = False
     matlab_capable: bool = False
@@ -100,10 +107,15 @@ class PreferenceWizardWindow(QDialog):
         Stored dependency manager passed to the constructor.
     user_prefs : UserPreferences
         The in-memory container of user choices collected by the wizard.
-        
+
     """
 
-    def __init__(self, global_config: ConfigManager, dependency_manager: DependencyManager, parent=None):
+    def __init__(
+        self,
+        global_config: ConfigManager,
+        dependency_manager: DependencyManager,
+        parent=None,
+    ):
         """
         Initializes the configuration wizard dialog and builds the page flow.
 
@@ -124,9 +136,9 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
-    
+
         super(PreferenceWizardWindow, self).__init__(parent)
 
         self.global_config = global_config
@@ -169,12 +181,13 @@ class PreferenceWizardWindow(QDialog):
             self.user_prefs.use_gpu_acceleration = True  # default choice if available
         else:
             self.user_prefs.use_gpu_acceleration = None
-            
+
         available_ram = ResourceManager.get_maximum_ram()
         self.user_prefs.advanced_models_capable = (
-            self.dependency_manager.is_freesurfer_synth() and available_ram >= ResourceManager.get_min_synth_ram_requirement()
+            self.dependency_manager.is_freesurfer_synth()
+            and available_ram >= ResourceManager.get_min_synth_ram_requirement()
         )
-            
+
         self.user_prefs.freesurfer_capable = self.dependency_manager.is_freesurfer()
         self.user_prefs.matlab_capable = self.dependency_manager.is_freesurfer_matlab()
 
@@ -201,9 +214,9 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
-    
+
         self._add_page(self._page_welcome())
         self._add_page(self._page_performance_profile())
 
@@ -212,10 +225,10 @@ class PreferenceWizardWindow(QDialog):
 
         if self.user_prefs.advanced_models_capable:
             self._add_page(self._page_advanced_models())
-        
+
         if self.user_prefs.freesurfer_capable:
             self._add_page(self._page_freesurfer_outputs())
-        
+
         self._add_page(self._page_review())
         self._add_page(self._page_applied())
 
@@ -233,9 +246,9 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
-    
+
         self._pages.append(page)
         self._stack.addWidget(page)
 
@@ -259,9 +272,9 @@ class PreferenceWizardWindow(QDialog):
         -------
         QWidget
             A widget containing the formatted page header.
-            
+
         """
-    
+
         w = QWidget()
         lay = QVBoxLayout()
         t = QLabel(title)
@@ -302,12 +315,14 @@ class PreferenceWizardWindow(QDialog):
         -------
         QWidget
             The constructed Welcome page widget.
-            
+
         """
-    
+
         page = QWidget()
         lay = QVBoxLayout()
-        lay.addWidget(self._make_title(strings.wizard_welcome_title, strings.wizard_welcome_text))
+        lay.addWidget(
+            self._make_title(strings.wizard_welcome_title, strings.wizard_welcome_text)
+        )
 
         lay.addStretch(1)
         page.setLayout(lay)
@@ -337,18 +352,34 @@ class PreferenceWizardWindow(QDialog):
         -------
         QWidget
             The constructed Performance Profile page widget.
-            
+
         """
-    
+
         page = QWidget()
         lay = QVBoxLayout()
-        lay.addWidget(self._make_title(strings.wizard_performance_title, strings.wizard_performance_text))
+        lay.addWidget(
+            self._make_title(
+                strings.wizard_performance_title, strings.wizard_performance_text
+            )
+        )
 
         self._perf_group = QButtonGroup(self)
 
-        rb_max = QRadioButton(strings.performance_profile_max + "\n" + strings.performance_profile_max_tooltip)
-        rb_bal = QRadioButton(strings.performance_profile_balanced + "\n" + strings.performance_profile_balanced_tooltip)
-        rb_low = QRadioButton(strings.performance_profile_min + "\n" + strings.performance_profile_min_tooltip)
+        rb_max = QRadioButton(
+            strings.performance_profile_max
+            + "\n"
+            + strings.performance_profile_max_tooltip
+        )
+        rb_bal = QRadioButton(
+            strings.performance_profile_balanced
+            + "\n"
+            + strings.performance_profile_balanced_tooltip
+        )
+        rb_low = QRadioButton(
+            strings.performance_profile_min
+            + "\n"
+            + strings.performance_profile_min_tooltip
+        )
 
         self._perf_group.addButton(rb_max, 0)
         self._perf_group.addButton(rb_bal, 1)
@@ -384,17 +415,30 @@ class PreferenceWizardWindow(QDialog):
         -------
         QWidget
             The constructed Hardware Acceleration page widget.
-            
+
         """
-    
+
         page = QWidget()
         lay = QVBoxLayout()
-        lay.addWidget(self._make_title(strings.wizard_hardware_accelleration_title, strings.wizard_hardware_accelleration_text))
+        lay.addWidget(
+            self._make_title(
+                strings.wizard_hardware_accelleration_title,
+                strings.wizard_hardware_accelleration_text,
+            )
+        )
 
         self._gpu_group = QButtonGroup(self)
 
-        rb_gpu = QRadioButton(strings.gpu_acceleration_enabled + "\n" + strings.gpu_acceleration_enabled_tooltip)
-        rb_cpu = QRadioButton(strings.gpu_acceleration_disabled + "\n" + strings.gpu_acceleration_disabled_tooltip)
+        rb_gpu = QRadioButton(
+            strings.gpu_acceleration_enabled
+            + "\n"
+            + strings.gpu_acceleration_enabled_tooltip
+        )
+        rb_cpu = QRadioButton(
+            strings.gpu_acceleration_disabled
+            + "\n"
+            + strings.gpu_acceleration_disabled_tooltip
+        )
 
         self._gpu_group.addButton(rb_gpu, 1)
         self._gpu_group.addButton(rb_cpu, 0)
@@ -428,17 +472,30 @@ class PreferenceWizardWindow(QDialog):
         -------
         QWidget
             The constructed Advanced Models page widget.
-            
+
         """
-    
+
         page = QWidget()
         lay = QVBoxLayout()
-        lay.addWidget(self._make_title(strings.wizard_advanced_models_title, strings.wizard_advanced_models_text))
+        lay.addWidget(
+            self._make_title(
+                strings.wizard_advanced_models_title,
+                strings.wizard_advanced_models_text,
+            )
+        )
 
         self._adv_group = QButtonGroup(self)
 
-        rb_adv = QRadioButton(strings.advanced_models_enabled + "\n" + strings.advanced_models_enabled_tooltip)
-        rb_std = QRadioButton(strings.advanced_models_disabled + "\n" + strings.advanced_models_disabled_tooltip)
+        rb_adv = QRadioButton(
+            strings.advanced_models_enabled
+            + "\n"
+            + strings.advanced_models_enabled_tooltip
+        )
+        rb_std = QRadioButton(
+            strings.advanced_models_disabled
+            + "\n"
+            + strings.advanced_models_disabled_tooltip
+        )
 
         self._adv_group.addButton(rb_adv, 1)
         self._adv_group.addButton(rb_std, 0)
@@ -450,7 +507,7 @@ class PreferenceWizardWindow(QDialog):
 
         rb_adv.setChecked(True)
         return page
-    
+
     # --------------------------
     # Page 5: FreeSurfer Outputs
     # --------------------------
@@ -490,10 +547,12 @@ class PreferenceWizardWindow(QDialog):
             f"{strings.freesurfer_outputs_cortical_parcellation_tooltip}"
         )
         self._cb_freesurfer_cortical_parcellation.toggled.connect(
-            lambda checked: setattr(self.user_prefs, "cortilcal_parcellation_enabled", bool(checked))
+            lambda checked: setattr(
+                self.user_prefs, "cortilcal_parcellation_enabled", bool(checked)
+            )
         )
         lay.addWidget(self._cb_freesurfer_cortical_parcellation)
-        
+
         self._cb_freesurfer_surfaces = QCheckBox(
             f"{strings.freesurfer_outputs_surfaces}\n"
             f"{strings.freesurfer_outputs_surfaces_tooltip}"
@@ -502,23 +561,27 @@ class PreferenceWizardWindow(QDialog):
             lambda checked: setattr(self.user_prefs, "surfaces_enabled", bool(checked))
         )
         lay.addWidget(self._cb_freesurfer_surfaces)
-        
+
         if self.user_prefs.matlab_capable:
             self._cb_freesurfer_hippocampal_segmentation = QCheckBox(
                 f"{strings.freesurfer_outputs_hippocampal_segmentation}\n"
                 f"{strings.freesurfer_outputs_hippocampal_segmentation_tooltip}"
             )
             self._cb_freesurfer_hippocampal_segmentation.toggled.connect(
-                lambda checked: setattr(self.user_prefs, "hippocampal_segmentation_enabled", bool(checked))
+                lambda checked: setattr(
+                    self.user_prefs, "hippocampal_segmentation_enabled", bool(checked)
+                )
             )
             lay.addWidget(self._cb_freesurfer_hippocampal_segmentation)
-            
+
         self._cb_freesurfer_full_reconall = QCheckBox(
             f"{strings.freesurfer_full_reconall}\n"
             f"{strings.freesurfer_full_reconall_tooltip}"
         )
         self._cb_freesurfer_full_reconall.toggled.connect(
-            lambda checked: setattr(self.user_prefs, "full_reconall_enabled", bool(checked))
+            lambda checked: setattr(
+                self.user_prefs, "full_reconall_enabled", bool(checked)
+            )
         )
         lay.addWidget(self._cb_freesurfer_full_reconall)
 
@@ -546,12 +609,14 @@ class PreferenceWizardWindow(QDialog):
         -------
         QWidget
             The constructed Review page widget.
-            
+
         """
-    
+
         page = QWidget()
         lay = QVBoxLayout()
-        lay.addWidget(self._make_title(strings.wizard_review_title, strings.wizard_review_text))
+        lay.addWidget(
+            self._make_title(strings.wizard_review_title, strings.wizard_review_text)
+        )
 
         self._review_label = QLabel("")
         self._review_label.setWordWrap(True)
@@ -565,7 +630,7 @@ class PreferenceWizardWindow(QDialog):
         lay.addStretch(1)
         lay.addWidget(footer)
         page.setLayout(lay)
-        
+
         return page
 
     # --------------------------
@@ -587,15 +652,17 @@ class PreferenceWizardWindow(QDialog):
         -------
         QWidget
             The constructed Applied page widget.
-            
+
         """
-    
+
         page = QWidget()
         lay = QVBoxLayout()
-        lay.addWidget(self._make_title(strings.wizard_applied_title, strings.wizard_applied_text))
+        lay.addWidget(
+            self._make_title(strings.wizard_applied_title, strings.wizard_applied_text)
+        )
         lay.addStretch(1)
         page.setLayout(lay)
-        
+
         return page
 
     # --------------------------
@@ -618,18 +685,24 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
-        
+
         w = self._stack.currentWidget()
 
         # Performance page
-        if hasattr(self, "_perf_group") and w is self._pages[self._index_of_page_widget(w)]:
+        if (
+            hasattr(self, "_perf_group")
+            and w is self._pages[self._index_of_page_widget(w)]
+        ):
             # Not robust by identity of widgets; we instead check existence of group & whether it has a checkedButton
             pass
 
         # Save by checking which groups exist + checked
-        if hasattr(self, "_perf_group") and self._perf_group.checkedButton() is not None:
+        if (
+            hasattr(self, "_perf_group")
+            and self._perf_group.checkedButton() is not None
+        ):
             bid = self._perf_group.checkedId()
             if bid == 0:
                 self.user_prefs.performance_profile = PerformanceProfile.MAX_PERF
@@ -638,7 +711,11 @@ class PreferenceWizardWindow(QDialog):
             elif bid == 2:
                 self.user_prefs.performance_profile = PerformanceProfile.LOW_RESOURCE
 
-        if self.user_prefs.gpu_capable and hasattr(self, "_gpu_group") and self._gpu_group.checkedButton() is not None:
+        if (
+            self.user_prefs.gpu_capable
+            and hasattr(self, "_gpu_group")
+            and self._gpu_group.checkedButton() is not None
+        ):
             self.user_prefs.use_gpu_acceleration = bool(self._gpu_group.checkedId())
 
         if hasattr(self, "_adv_group") and self._adv_group.checkedButton() is not None:
@@ -657,9 +734,9 @@ class PreferenceWizardWindow(QDialog):
         -------
         int
             Index of the widget in the wizard page list, or -1 if not found.
-            
+
         """
-    
+
         for i, p in enumerate(self._pages):
             if p is w:
                 return i
@@ -682,9 +759,9 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
-    
+
         self._review_label.setTextFormat(Qt.TextFormat.RichText)
 
         parts: list[str] = []
@@ -695,44 +772,67 @@ class PreferenceWizardWindow(QDialog):
 
         # GPU
         if not self.user_prefs.gpu_capable:
-            parts.append(strings.wizard_gpu_accelleration.format(gpu_status="Not Available"))
+            parts.append(
+                strings.wizard_gpu_accelleration.format(gpu_status="Not Available")
+            )
         else:
-            parts.append(strings.wizard_gpu_accelleration.format(gpu_status="Enabled") if self.user_prefs.use_gpu_acceleration else strings.wizard_gpu_accelleration.format(gpu_status="Disabled"))
+            parts.append(
+                strings.wizard_gpu_accelleration.format(gpu_status="Enabled")
+                if self.user_prefs.use_gpu_acceleration
+                else strings.wizard_gpu_accelleration.format(gpu_status="Disabled")
+            )
 
         # Advanced models
         if not getattr(self.user_prefs, "advanced_models_capable", True):
             parts.append(
-                strings.wizard_advanced_models.format(adv_status=f"Not Available (requires FreeSurfer >= {self.dependency_manager.SYNTH_FREESURFER_VERSION} and at least "
-                f"{ResourceManager.get_min_synth_ram_requirement()} GB)")
+                strings.wizard_advanced_models.format(
+                    adv_status=f"Not Available (requires FreeSurfer >= {self.dependency_manager.SYNTH_FREESURFER_VERSION} and at least "
+                    f"{ResourceManager.get_min_synth_ram_requirement()} GB)"
+                )
             )
         else:
             parts.append(
-                strings.wizard_advanced_models.format(adv_status="Enabled (based on system resources") if self.user_prefs.use_advanced_models else strings.wizard_advanced_models.format(adv_status="Disabled")
+                strings.wizard_advanced_models.format(
+                    adv_status="Enabled (based on system resources"
+                )
+                if self.user_prefs.use_advanced_models
+                else strings.wizard_advanced_models.format(adv_status="Disabled")
             )
 
         # FreeSurfer outputs
         if not self.user_prefs.freesurfer_capable:
-            freesurfer_info_text = strings.wizard_freesurfer_outputs.format(fs_outputs="Not Detected")
+            freesurfer_info_text = strings.wizard_freesurfer_outputs.format(
+                fs_outputs="Not Detected"
+            )
         else:
             freesurfer_outputs_enabled: list[str] = []
             if self.user_prefs.cortilcal_parcellation_enabled:
-                freesurfer_outputs_enabled.append(strings.freesurfer_outputs_cortical_parcellation)
+                freesurfer_outputs_enabled.append(
+                    strings.freesurfer_outputs_cortical_parcellation
+                )
             if self.user_prefs.surfaces_enabled:
                 freesurfer_outputs_enabled.append(strings.freesurfer_outputs_surfaces)
             if self.user_prefs.hippocampal_segmentation_enabled:
-                freesurfer_outputs_enabled.append(strings.freesurfer_outputs_hippocampal_segmentation)
+                freesurfer_outputs_enabled.append(
+                    strings.freesurfer_outputs_hippocampal_segmentation
+                )
             if self.user_prefs.full_reconall_enabled:
                 freesurfer_outputs_enabled.append(strings.freesurfer_full_reconall)
 
-            fs_out = "Disabled" if not freesurfer_outputs_enabled else ", ".join(freesurfer_outputs_enabled)
-            freesurfer_info_text = strings.wizard_freesurfer_outputs.format(fs_outputs=fs_out)
+            fs_out = (
+                "Disabled"
+                if not freesurfer_outputs_enabled
+                else ", ".join(freesurfer_outputs_enabled)
+            )
+            freesurfer_info_text = strings.wizard_freesurfer_outputs.format(
+                fs_outputs=fs_out
+            )
 
         parts.append(freesurfer_info_text)
 
         # join with HTML line breaks
         self._review_label.setText("<br /><br />".join(parts))
-    
-    
+
     # --------------------------
     # Navigation
     # --------------------------
@@ -748,9 +848,9 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
-    
+
         idx = self._stack.currentIndex()
         if idx > 0:
             self._stack.setCurrentIndex(idx - 1)
@@ -770,9 +870,9 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
-    
+
         self._apply_current_page()
 
         idx = self._stack.currentIndex()
@@ -803,16 +903,16 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
-    
+
         # If we are on review page -> apply and move to applied page
         if self._is_review_page():
             self._apply_current_page()
             self._update_review_page()
-            
+
             self._apply_settings_config()
-            
+
             self._stack.setCurrentIndex(self._stack.count() - 1)
             self._sync_ui()
             return
@@ -837,11 +937,13 @@ class PreferenceWizardWindow(QDialog):
         -------
         bool
             True if the current page is the Review page, False otherwise.
-            
+
         """
-    
+
         w = self._stack.currentWidget()
-        return hasattr(self, "_review_label") and (w is self._pages[-2])  # review is penultimate
+        return hasattr(self, "_review_label") and (
+            w is self._pages[-2]
+        )  # review is penultimate
 
     def _is_applied_page(self) -> bool:
         """
@@ -855,9 +957,9 @@ class PreferenceWizardWindow(QDialog):
         -------
         bool
             True if the current page is the Applied page, False otherwise.
-            
+
         """
-    
+
         w = self._stack.currentWidget()
         return w is self._pages[-1]
 
@@ -878,9 +980,9 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
-    
+
         idx = self._stack.currentIndex()
         last = self._stack.count() - 1
 
@@ -910,7 +1012,7 @@ class PreferenceWizardWindow(QDialog):
         self._next_btn.setEnabled(idx < last)
         self._finish_btn.setEnabled(False)
         self._finish_btn.setText(strings.wizard_finish_button)
-        
+
     def _apply_settings_config(self) -> None:
         """
         Applies the wizard selections to the SWANe configuration object.
@@ -926,33 +1028,60 @@ class PreferenceWizardWindow(QDialog):
         Returns
         -------
         None.
-        
+
         """
         self.global_config.apply_resource_profile(self.user_prefs.performance_profile)
-        self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"] = str(self.user_prefs.use_gpu_acceleration)
-        
-        if self.user_prefs.use_advanced_models:
-            available_ram = self.global_config.getfloat_safe(GlobalPrefCategoryList.PERFORMANCE, "ram_gb")
-            self.global_config[GlobalPrefCategoryList.SYNTH]["strip"] = str(available_ram >= ResourceManager.synth_strip_ram_requirements())
-            self.global_config[GlobalPrefCategoryList.SYNTH]["morph"] = str(available_ram >= ResourceManager.synth_morph_ram_requirements())
-            self.global_config[GlobalPrefCategoryList.SYNTH]["reconall"] = str(available_ram >= ResourceManager.synth_reconall_ram_requirements())
+        self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"] = str(
+            self.user_prefs.use_gpu_acceleration
+        )
 
-        self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.DISABLED.name
-        if (self.user_prefs.cortilcal_parcellation_enabled
+        if self.user_prefs.use_advanced_models:
+            available_ram = self.global_config.getfloat_safe(
+                GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
+            )
+            self.global_config[GlobalPrefCategoryList.SYNTH]["strip"] = str(
+                available_ram >= ResourceManager.synth_strip_ram_requirements()
+            )
+            self.global_config[GlobalPrefCategoryList.SYNTH]["morph"] = str(
+                available_ram >= ResourceManager.synth_morph_ram_requirements()
+            )
+            self.global_config[GlobalPrefCategoryList.SYNTH]["reconall"] = str(
+                available_ram >= ResourceManager.synth_reconall_ram_requirements()
+            )
+
+        self.global_config[DataInputList.T13D][
+            "freesurfer_step"
+        ] = FreesurferStep.DISABLED.name
+        if (
+            self.user_prefs.cortilcal_parcellation_enabled
             and not self.user_prefs.hippocampal_segmentation_enabled
             and not self.user_prefs.surfaces_enabled
             and not self.user_prefs.full_reconall_enabled
-            and self.dependency_manager.is_freesurfer_synth()):
-            self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.SYNTHSEG.name
-        elif (self.user_prefs.full_reconall_enabled):
-            self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.RECONALL.name
-        elif (self.user_prefs.cortilcal_parcellation_enabled
-              or self.user_prefs.surfaces_enabled):
-            self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.AUTORECON_PIAL.name
-            
+            and self.dependency_manager.is_freesurfer_synth()
+        ):
+            self.global_config[DataInputList.T13D][
+                "freesurfer_step"
+            ] = FreesurferStep.SYNTHSEG.name
+        elif self.user_prefs.full_reconall_enabled:
+            self.global_config[DataInputList.T13D][
+                "freesurfer_step"
+            ] = FreesurferStep.RECONALL.name
+        elif (
+            self.user_prefs.cortilcal_parcellation_enabled
+            or self.user_prefs.surfaces_enabled
+        ):
+            self.global_config[DataInputList.T13D][
+                "freesurfer_step"
+            ] = FreesurferStep.AUTORECON_PIAL.name
+
         if self.user_prefs.hippocampal_segmentation_enabled:
-            if self.global_config.getenum_safe(DataInputList.T13D, "freesurfer_step") is FreesurferStep.DISABLED:
-                self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.AUTORECON2.name
+            if (
+                self.global_config.getenum_safe(DataInputList.T13D, "freesurfer_step")
+                is FreesurferStep.DISABLED
+            ):
+                self.global_config[DataInputList.T13D][
+                    "freesurfer_step"
+                ] = FreesurferStep.AUTORECON2.name
             self.global_config[DataInputList.T13D]["hippo_amyg_labels"] = str(True)
-            
+
         self.global_config.save()

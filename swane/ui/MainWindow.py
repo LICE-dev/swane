@@ -82,7 +82,6 @@ class MainWindow(QMainWindow):
         if need_setting_wizard:
             self.start_preference_wizard()
 
-
         # Check for update
         update_thread = UpdateCheckWorker()
         update_thread.signal.last_available.connect(
@@ -430,7 +429,7 @@ class MainWindow(QMainWindow):
             GlobalPrefCategoryList.MAIN, "shutdown"
         )
         self.global_config[GlobalPrefCategoryList.MAIN]["shutdown"] = str(not shutdown)
-        
+
     def start_preference_wizard(self):
         """
         Open the Preference Wizard Window.
@@ -594,9 +593,11 @@ class MainWindow(QMainWindow):
         )
         button_action5.triggered.connect(self.edit_wf_config)
 
-        button_action6 = QAction(QIcon.fromTheme("tools-wizard"), strings.menu_start_preference_wizard, self)
+        button_action6 = QAction(
+            QIcon.fromTheme("tools-wizard"), strings.menu_start_preference_wizard, self
+        )
         button_action6.triggered.connect(self.start_preference_wizard)
-        
+
         button_action7 = QAction(strings.menu_shutdown_pref, self)
         button_action7.setCheckable(True)
         button_action7.triggered.connect(self.toggle_shutdown_after_workflow)
@@ -606,9 +607,7 @@ class MainWindow(QMainWindow):
 
         button_action9 = QAction(strings.menu_wiki, self)
         button_action9.triggered.connect(
-            lambda: QDesktopServices.openUrl(
-                QUrl(strings.WIKI_URL)
-            )
+            lambda: QDesktopServices.openUrl(QUrl(strings.WIKI_URL))
         )
 
         # Menu definition and population
@@ -670,9 +669,7 @@ class MainWindow(QMainWindow):
         """)
 
         chatgpt_button.clicked.connect(
-            lambda: QDesktopServices.openUrl(
-                QUrl(strings.chatgpt_url)
-            )
+            lambda: QDesktopServices.openUrl(QUrl(strings.chatgpt_url))
         )
 
         # Add to status bar (use addPermanentWidget per preferenza)

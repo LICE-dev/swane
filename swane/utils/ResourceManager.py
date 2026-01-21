@@ -6,8 +6,8 @@ from swane.utils.platform_and_tools_utils import get_os_type
 
 class ResourceManager:
 
-    MINIMUM_CPU_MULTIPLIER = (1/3)
-    DEFAULT_CPU_MULTIPLIER = (1/2)
+    MINIMUM_CPU_MULTIPLIER = 1 / 3
+    DEFAULT_CPU_MULTIPLIER = 1 / 2
     MINIMUM_RAM = 5
     MINIMUM_RAM_PERC = 50
     MAXIMUM_RAM_PERC = 95
@@ -78,10 +78,12 @@ class ResourceManager:
 
     @staticmethod
     def get_min_synth_ram_requirement():
-        return min(ResourceManager.synth_morph_ram_requirements(), 
-                   ResourceManager.synth_reconall_ram_requirements(),
-                   ResourceManager.synth_strip_ram_requirements())
-    
+        return min(
+            ResourceManager.synth_morph_ram_requirements(),
+            ResourceManager.synth_reconall_ram_requirements(),
+            ResourceManager.synth_strip_ram_requirements(),
+        )
+
     @staticmethod
     def is_cuda():
         return gpu_count() > 0
@@ -89,11 +91,10 @@ class ResourceManager:
     @staticmethod
     def get_min_cpu():
         return max(1, floor(cpu_count() * ResourceManager.MINIMUM_CPU_MULTIPLIER))
-    
+
     @staticmethod
     def get_default_cpu():
         return max(1, floor(cpu_count() * ResourceManager.DEFAULT_CPU_MULTIPLIER))
-
 
     @staticmethod
     def get_max_cpu():

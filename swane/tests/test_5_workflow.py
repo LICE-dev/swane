@@ -2,7 +2,11 @@ import os
 import shutil
 import pytest
 from swane.config.ConfigManager import ConfigManager
-from swane.config.config_enums import BlockDesign, VeinDetectionMode, GlobalPrefCategoryList
+from swane.config.config_enums import (
+    BlockDesign,
+    VeinDetectionMode,
+    GlobalPrefCategoryList,
+)
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.Subject import Subject, SubjectRet
 from swane.tests import TEST_DIR
@@ -376,10 +380,18 @@ class TestWorkflow:
         # check wk dependency
         assert test_patient.dependency_manager.is_fsl() is True, "missing fsl"
         assert test_patient.dependency_manager.is_dcm2niix() is True, "missing dcm2niix"
-        assert test_patient.global_config.getboolean_safe(GlobalPrefCategoryList.SYNTH,
-                                                          "strip") is False, "SynthStrip should be disabled"
-        assert test_patient.global_config.getboolean_safe(GlobalPrefCategoryList.SYNTH,
-                                                          "morph") is False, "SynthMorph should be disabled"
+        assert (
+            test_patient.global_config.getboolean_safe(
+                GlobalPrefCategoryList.SYNTH, "strip"
+            )
+            is False
+        ), "SynthStrip should be disabled"
+        assert (
+            test_patient.global_config.getboolean_safe(
+                GlobalPrefCategoryList.SYNTH, "morph"
+            )
+            is False
+        ), "SynthMorph should be disabled"
 
         last_test = None
 
