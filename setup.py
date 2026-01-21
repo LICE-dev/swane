@@ -34,6 +34,7 @@ setup(
         "pydicom==3.0.1",
         "configparser<=7.1.0",
         "psutil==7.0.0",
+        # TODO: passare a swane_supplement 0.2
         "swane_supplement>=0.1.2",
         "matplotlib==3.10.1",
         # todo: METTIAMO NIBABEL 5.2 come minima per essere più inclusivi?
