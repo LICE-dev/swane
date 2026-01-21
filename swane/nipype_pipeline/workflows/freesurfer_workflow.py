@@ -11,7 +11,7 @@ from swane.nipype_pipeline.nodes.utils import getn
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SegmentHA import SegmentHA
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
-from swane.config.config_enums import CORE_LIMIT, FREESURFER_STEP
+from swane.config.config_enums import CoreLimit, FreesurferStep
 from nipype.interfaces.utility import IdentityInterface
 from swane.utils.ResourceManager import ResourceManager
 
@@ -20,12 +20,12 @@ FS_DIR = "FS"
 
 def freesurfer_workflow(
     name: str,
-    step: FREESURFER_STEP,
+    step: FreesurferStep,
     is_hippo_amyg_labels: bool,
     synth_config: SectionProxy,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
 ) -> CustomWorkflow:
     """
     Freesurfer cortical reconstruction, white matter ROI, basal ganglia and thalami ROI.
@@ -35,7 +35,7 @@ def freesurfer_workflow(
     ----------
     name : str
         The workflow name.
-    step : FREESURFER_STEP
+    step : FreesurferStep
         Step to be executed.
     is_hippo_amyg_labels : bool
         Enable segmentation of the hippocampal substructures and the nuclei of the amygdala.
@@ -83,7 +83,7 @@ def freesurfer_workflow(
 
     """
 
-    if step == FREESURFER_STEP.DISABLED:
+    if step == FreesurferStep.DISABLED:
         # This should not be possible
         return None
 
@@ -117,7 +117,7 @@ def freesurfer_workflow(
         IdentityInterface(fields=["seg_nii"]), name="segmentation_holder"
     )
 
-    if step == FREESURFER_STEP.SYNTHSEG:
+    if step == FreesurferStep.SYNTHSEG:
         synth_seg = Node(SynthSeg(), name="synth_seg")
         synth_seg.inputs.parcellation = True
         synth_seg.inputs.robust = True
@@ -161,10 +161,10 @@ def freesurfer_workflow(
             if max_cpu > 1:
                 reconall_parallel = True
             # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
-            if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
+            if multicore_node_limit == CoreLimit.NO_LIMIT:
                 # no limit
                 reconall_openmp = cpu_count()
-            elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
+            elif multicore_node_limit == CoreLimit.SOFT_CAP:
                 # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
                 reconall_openmp = max_cpu
                 reconall_nprocs = reconall_openmp
@@ -205,7 +205,7 @@ def freesurfer_workflow(
         )
         workflow.connect(recon_all_recon1, "subject_id", recon_all_recon2, "subject_id")
 
-        if step in [FREESURFER_STEP.AUTORECON_PIAL, FREESURFER_STEP.RECONALL]:
+        if step in [FreesurferStep.AUTORECON_PIAL, FreesurferStep.RECONALL]:
             # NODE 2: Freesurfer autorecon2
             recon_all_recon_pial = Node(ReconAll(), name="recon_all_recon_pial")
             recon_all_recon_pial.long_name = "%s: Surfaces + Cortical Parcellationn"
@@ -271,7 +271,7 @@ def freesurfer_workflow(
         else:
             segmentation_holder = None
 
-        if step == FREESURFER_STEP.RECONALL:
+        if step == FreesurferStep.RECONALL:
             recon_all_recon3 = Node(ReconAll(), name="reconAll")
             recon_all_recon3.long_name = "%s: Complete"
             recon_all_recon3._mem_gb = reconall_mem_gb
@@ -292,9 +292,9 @@ def freesurfer_workflow(
             # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
             segment_ha = Node(SegmentHA(), name="segment_ha")
             segment_ha._mem_gb = 5
-            if multicore_node_limit == CORE_LIMIT.NO_LIMIT:
+            if multicore_node_limit == CoreLimit.NO_LIMIT:
                 segment_ha.inputs.num_cpu = cpu_count()
-            elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
+            elif multicore_node_limit == CoreLimit.SOFT_CAP:
                 segment_ha.inputs.num_cpu = max_cpu
             else:
                 segment_ha.inputs.num_cpu = max_cpu

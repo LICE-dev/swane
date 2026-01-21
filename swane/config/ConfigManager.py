@@ -7,7 +7,7 @@ from swane.config.preference_list import *
 from swane.utils.CryptographyManager import CryptographyManager
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
-from swane.config.config_enums import WORKFLOW_TYPES, GlobalPrefCategoryList
+from swane.config.config_enums import WorkflowTypes, GlobalPrefCategoryList
 from swane.utils.MailManager import MailManager
 
 
@@ -56,25 +56,21 @@ class ConfigManager(configparser.ConfigParser):
             GlobalPrefCategoryList.MAIN, "force_pref_reset"
         )
 
-        reset_pref = False
-
         # if version need pref reset, load old config file in a temp variable to get just last_swane_version
-        try:
-            if force_pref_reset:
-                if self.global_config:
-                    last_swane_version = self[GlobalPrefCategoryList.MAIN][
-                        "last_swane_version"
-                    ]
-                else:
-                    temp_config = configparser.ConfigParser()
-                    temp_config.read(self.config_file)
-                    last_swane_version = temp_config[GlobalPrefCategoryList.MAIN][
-                        "last_swane_version"
-                    ]
+        reset_pref = False
+        if force_pref_reset:
+            try:
+                # main.last_swane_version should exist in both global and  subject config file
+                temp_config = configparser.ConfigParser()
+                temp_config.read(self.config_file)
+                last_swane_version = temp_config[str(GlobalPrefCategoryList.MAIN)][
+                    "last_swane_version"
+                ]
                 if __version__ != last_swane_version:
                     reset_pref = True
-        except:
-            pass
+            except:
+                # otherwise assume outdated version
+                reset_pref = True
 
         if not reset_pref and os.path.exists(self.config_file):
             self.read(self.config_file)
@@ -170,18 +166,18 @@ class ConfigManager(configparser.ConfigParser):
         if save:
             self.save()
 
-    def set_workflow_option(self, workflow_type: WORKFLOW_TYPES):
+    def set_workflow_option(self, workflow_type: WorkflowTypes):
         """
         Apply a workflow_type preset
 
         Parameters
         ----------
-        workflow_type: WORKFLOW_TYPES
+        workflow_type: WorkflowTypes
             The preset to apply
         """
         if self.global_config:
             return
-        if type(workflow_type) is not WORKFLOW_TYPES:
+        if type(workflow_type) is not WorkflowTypes:
             return
         self[DataInputList.T13D]["wf_type"] = workflow_type.name
         for category in DEFAULT_WF[workflow_type]:
@@ -368,7 +364,7 @@ class ConfigManager(configparser.ConfigParser):
         """
         return self.getboolean_safe(DataInputList.T13D, "hippo_amyg_labels")
 
-    def get_workflow_freesurfer_pref(self) -> FREESURFER_STEP:
+    def get_workflow_freesurfer_pref(self) -> FreesurferStep:
         """
         Returns
         -------
@@ -734,3 +730,26 @@ class ConfigManager(configparser.ConfigParser):
         if value is not None:
             value = str(self.validate_type(section, option, value))
         super().set(section, option, value)
+        
+    def apply_resource_profile(self, profile: PerformanceProfile):
+
+        if not self.global_config:
+            return
+        
+        if profile == PerformanceProfile.LOW_RESOURCE:
+            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ResourceManager.get_minimum_ram())
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(ResourceManager.get_min_cpu())
+            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CoreLimit.HARD_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "1"
+
+        elif profile == PerformanceProfile.BALANCED:
+            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ResourceManager.get_default_ram())
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(ResourceManager.get_default_cpu())
+            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CoreLimit.HARD_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "2"
+
+        elif profile == PerformanceProfile.MAX_PERF:
+            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ResourceManager.get_maximum_ram())
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(ResourceManager.get_max_cpu())
+            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CoreLimit.SOFT_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "3"

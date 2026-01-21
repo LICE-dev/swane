@@ -15,14 +15,14 @@ from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
 from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
-from swane.config.config_enums import SLICE_TIMING
+from swane.config.config_enums import SliceTiming
 
 
 def fMRI_preproc_workflow(
     name: str,
     dicom_dir: str,
     TR: float,
-    slice_timing: SLICE_TIMING,
+    slice_timing: SliceTiming,
     n_vols: int,
     del_start_vols: int,
     del_end_vols: int,
@@ -40,7 +40,7 @@ def fMRI_preproc_workflow(
         The directory path of the DICOM files.
     TR: float
         The repetition time of the sequenze
-    slice_timing: SLICE_TIMING
+    slice_timing: SliceTiming
         The slice timing kind of acquisition for slice timing correction
     n_vols: int
         The number of functonal volumes

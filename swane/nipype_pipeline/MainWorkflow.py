@@ -9,11 +9,11 @@ from swane.config.ConfigManager import ConfigManager
 from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
 from swane.config.config_enums import (
-    PLANES,
-    CORE_LIMIT,
-    BLOCK_DESIGN,
+    Planes,
+    CoreLimit,
+    BlockDesign,
     GlobalPrefCategoryList,
-    FREESURFER_STEP,
+    FreesurferStep,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -52,9 +52,9 @@ class MainWorkflow(CustomWorkflow):
     is_resource_monitor: bool = False
     max_cpu: int = -1
     max_gpu: int = -1
-    multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP
     memory_gb: float = -1
-    freesurfer_step: FREESURFER_STEP = FREESURFER_STEP.DISABLED
+    freesurfer_step: FreesurferStep = FreesurferStep.DISABLED
     is_hippo_amyg_labels: bool = False
     is_flat1: bool = False
     is_tractography: bool = False
@@ -255,7 +255,7 @@ class MainWorkflow(CustomWorkflow):
         )
 
     def launch_freesurfer_analysis(self):
-        if self.freesurfer_step == FREESURFER_STEP.DISABLED:
+        if self.freesurfer_step == FreesurferStep.DISABLED:
             return
 
         # FreeSurfer analysis
@@ -433,7 +433,7 @@ class MainWorkflow(CustomWorkflow):
         )
 
     def launch_2dflair_analysis(self):
-        for plane in PLANES:
+        for plane in Planes:
             if (
                 DIL["FLAIR2D_%s" % plane.name] in self.subject_input_state_list
                 and self.subject_input_state_list[DIL["FLAIR2D_%s" % plane.name]].loaded
@@ -1051,7 +1051,7 @@ class MainWorkflow(CustomWorkflow):
                 )
                 if (
                     self.subject_config.getenum_safe(DIL["FMRI_%d" % y], "block_design")
-                    == BLOCK_DESIGN.RARB
+                    == BlockDesign.RARB
                 ):
                     self.fMRI.sink_result(
                         save_path=self.base_dir,

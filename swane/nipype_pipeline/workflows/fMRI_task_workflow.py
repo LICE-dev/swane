@@ -13,7 +13,7 @@ from nipype.interfaces.fsl import (
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.FMRIGenSpec import FMRIGenSpec
-from swane.config.config_enums import BLOCK_DESIGN
+from swane.config.config_enums import BlockDesign
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 
 
@@ -64,7 +64,7 @@ def fMRI_task_workflow(
     del_end_vols = config.getint_safe("del_end_vols")
     block_design = config.getenum_safe("block_design")
     hpcutoff = task_duration + rest_duration
-    if block_design == BLOCK_DESIGN.RARB:
+    if block_design == BlockDesign.RARB:
         hpcutoff = hpcutoff * 2
 
     workflow = fMRI_preproc_workflow(
@@ -176,7 +176,7 @@ def fMRI_task_workflow(
     workflow.connect(dilatemask, "out_file", smoothness, "mask_file")
 
     n_contrasts = 1
-    if block_design == BLOCK_DESIGN.RARB:
+    if block_design == BlockDesign.RARB:
         n_contrasts += 1
     cont = 0
     while cont < n_contrasts:
