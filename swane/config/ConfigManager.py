@@ -56,25 +56,21 @@ class ConfigManager(configparser.ConfigParser):
             GlobalPrefCategoryList.MAIN, "force_pref_reset"
         )
 
-        reset_pref = False
-
         # if version need pref reset, load old config file in a temp variable to get just last_swane_version
-        try:
-            if force_pref_reset:
-                if self.global_config:
-                    last_swane_version = self[GlobalPrefCategoryList.MAIN][
-                        "last_swane_version"
-                    ]
-                else:
-                    temp_config = configparser.ConfigParser()
-                    temp_config.read(self.config_file)
-                    last_swane_version = temp_config[GlobalPrefCategoryList.MAIN][
-                        "last_swane_version"
-                    ]
+        reset_pref = False
+        if force_pref_reset:
+            try:
+                # main.last_swane_version should exist in both global and  subject config file
+                temp_config = configparser.ConfigParser()
+                temp_config.read(self.config_file)
+                last_swane_version = temp_config[str(GlobalPrefCategoryList.MAIN)][
+                    "last_swane_version"
+                ]
                 if __version__ != last_swane_version:
                     reset_pref = True
-        except:
-            pass
+            except:
+                # otherwise assume outdated version
+                reset_pref = True
 
         if not reset_pref and os.path.exists(self.config_file):
             self.read(self.config_file)
