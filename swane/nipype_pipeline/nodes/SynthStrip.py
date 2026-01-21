@@ -44,6 +44,11 @@ class SynthStripInputSpec(FSTraitedSpec):
         argstr="--model %s",
         desc="alternative model weights",
     )
+    num_threads = traits.Int(
+        argstr="--threads %d",
+        hash_file=False,
+        desc="number of threads to be used by the CPU version",
+    )
     border = traits.Float(
         desc="mask border threshold in mm, defaults to 1", argstr="-f %.2f"
     )

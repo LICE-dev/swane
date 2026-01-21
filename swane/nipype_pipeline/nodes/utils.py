@@ -64,6 +64,7 @@ def get_deskull_node(
             deskull_node.inputs.robust = True
 
     deskull_node.long_name = name_prefix + " %s"
+    deskull_node.inputs.num_threads = 1
     if out_file:
         deskull_node.inputs.out_file = out_file
 
@@ -127,6 +128,7 @@ def get_registration_node(
         )
         synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
+        synth_morph_reg.inputs.num_threads = 1
         if out_file:
             if type(out_file) == str:
                 synth_morph_reg.inputs.out_file = out_file

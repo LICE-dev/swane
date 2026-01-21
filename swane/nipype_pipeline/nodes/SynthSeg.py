@@ -75,7 +75,7 @@ class SynthSegInputSpec(FSTraitedSpec):
     num_threads = traits.Int(
         argstr="--threads %d",
         hash_file=False,
-        desc="number of threads to be used by Tensorflow when using the CPU version",
+        desc="number of threads to be used by the CPU version",
     )
 
 
