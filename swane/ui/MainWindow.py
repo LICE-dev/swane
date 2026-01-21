@@ -586,7 +586,7 @@ class MainWindow(QMainWindow):
         )
         button_action5.triggered.connect(self.edit_wf_config)
 
-        button_action6 = QAction(strings.menu_start_preference_wizard, self)
+        button_action6 = QAction(QIcon.fromTheme("tools-wizard"), strings.menu_start_preference_wizard, self)
         button_action6.triggered.connect(self.start_preference_wizard)
         
         button_action7 = QAction(strings.menu_shutdown_pref, self)

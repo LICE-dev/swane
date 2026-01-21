@@ -1,6 +1,6 @@
 from enum import Enum
 from swane.config.PrefCategory import PrefCategory
-from swane.config.config_enums import ImageModality, PLANES
+from swane.config.config_enums import ImageModality, Planes
 
 FMRI_NUM = 3
 
@@ -119,7 +119,7 @@ class DataInputList(Enum):
     _ignore_ = "DataInputList i"
     DataInputList = vars()
 
-    for i in PLANES:
+    for i in Planes:
         DataInputList["FLAIR2D_%s" % i.name] = DataInput(
             name="flair2d_%s" % i.name.lower(),
             label="2D Flair %s" % i.value,

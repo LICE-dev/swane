@@ -7,7 +7,7 @@ from swane.config.preference_list import *
 from swane.utils.CryptographyManager import CryptographyManager
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
-from swane.config.config_enums import WORKFLOW_TYPES, GlobalPrefCategoryList
+from swane.config.config_enums import WorkflowTypes, GlobalPrefCategoryList
 from swane.utils.MailManager import MailManager
 
 
@@ -170,18 +170,18 @@ class ConfigManager(configparser.ConfigParser):
         if save:
             self.save()
 
-    def set_workflow_option(self, workflow_type: WORKFLOW_TYPES):
+    def set_workflow_option(self, workflow_type: WorkflowTypes):
         """
         Apply a workflow_type preset
 
         Parameters
         ----------
-        workflow_type: WORKFLOW_TYPES
+        workflow_type: WorkflowTypes
             The preset to apply
         """
         if self.global_config:
             return
-        if type(workflow_type) is not WORKFLOW_TYPES:
+        if type(workflow_type) is not WorkflowTypes:
             return
         self[DataInputList.T13D]["wf_type"] = workflow_type.name
         for category in DEFAULT_WF[workflow_type]:
@@ -368,7 +368,7 @@ class ConfigManager(configparser.ConfigParser):
         """
         return self.getboolean_safe(DataInputList.T13D, "hippo_amyg_labels")
 
-    def get_workflow_freesurfer_pref(self) -> FREESURFER_STEP:
+    def get_workflow_freesurfer_pref(self) -> FreesurferStep:
         """
         Returns
         -------
@@ -743,14 +743,17 @@ class ConfigManager(configparser.ConfigParser):
         if profile == PerformanceProfile.LOW_RESOURCE:
             self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ResourceManager.get_minimum_ram())
             self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(ResourceManager.get_min_cpu())
-            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CORE_LIMIT.HARD_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CoreLimit.HARD_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "1"
 
         elif profile == PerformanceProfile.BALANCED:
             self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ResourceManager.get_default_ram())
             self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(ResourceManager.get_default_cpu())
-            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CORE_LIMIT.SOFT_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CoreLimit.HARD_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "2"
 
         elif profile == PerformanceProfile.MAX_PERF:
             self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ResourceManager.get_maximum_ram())
             self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(ResourceManager.get_max_cpu())
-            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CORE_LIMIT.NO_LIMIT.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["multicore_node_limit"] = CoreLimit.SOFT_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "3"

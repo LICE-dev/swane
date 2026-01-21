@@ -77,8 +77,8 @@ WF_PREFERENCES[category]["wf_type"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     hidden=True,
     label="Default workflow",
-    value_enum=WORKFLOW_TYPES,
-    default=WORKFLOW_TYPES.STRUCTURAL,
+    value_enum=WorkflowTypes,
+    default=WorkflowTypes.STRUCTURAL,
 )
 WF_PREFERENCES[category]["bet_bias_correction"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -104,26 +104,26 @@ WF_PREFERENCES[category]["flat1"] = PreferenceEntry(
 WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="FreeSurfer analysis step",
-    value_enum=FREESURFER_STEP,
-    default=FREESURFER_STEP.DISABLED,
+    value_enum=FreesurferStep,
+    default=FreesurferStep.DISABLED,
     dependency="is_freesurfer",
     dependency_fail_tooltip="Requires Freesurfer analysis",
     option_dependency={
-        FREESURFER_STEP.SYNTHSEG: [
+        FreesurferStep.SYNTHSEG: [
             "is_freesurfer_synth",
             "Synth tools recon-all requires FreeSurfer 8.1.0",
         ]
     },
     option_pref_requirement={
-        FREESURFER_STEP.SYNTHSEG: {
+        FreesurferStep.SYNTHSEG: {
             GlobalPrefCategoryList.PERFORMANCE: [
                 ("ram_gb", ResourceManager.synth_seg_ram_requirements())
             ]
         },
     },
     option_pref_requirement_fail_tooltip={
-        FREESURFER_STEP.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM"
-        % ResourceManager.synth_seg_ram_requirements(),
+        FreesurferStep.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM"
+                                 % ResourceManager.synth_seg_ram_requirements(),
     },
 )
 
@@ -138,9 +138,9 @@ WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
             (
                 "freesurfer_step",
                 [
-                    FREESURFER_STEP.AUTORECON2,
-                    FREESURFER_STEP.RECONALL,
-                    FREESURFER_STEP.AUTORECON_PIAL,
+                    FreesurferStep.AUTORECON2,
+                    FreesurferStep.RECONALL,
+                    FreesurferStep.AUTORECON_PIAL,
                 ],
             )
         ]
@@ -186,8 +186,8 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
 WF_PREFERENCES[category]["vein_detection_mode"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Venous volume detection mode",
-    value_enum=VEIN_DETECTION_MODE,
-    default=VEIN_DETECTION_MODE.SD,
+    value_enum=VeinDetectionMode,
+    default=VeinDetectionMode.SD,
 )
 WF_PREFERENCES[category]["vein_segment_threshold"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
@@ -203,8 +203,8 @@ WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["cost_func"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="FLIRT between modalities cost function",
-    value_enum=BETWEEN_MOD_FLIRT_COST,
-    default=BETWEEN_MOD_FLIRT_COST.NORMALIZED_MUTUAL_INFORMATION,
+    value_enum=BetweenModFlirtCost,
+    default=BetweenModFlirtCost.NORMALIZED_MUTUAL_INFORMATION,
 )
 WF_PREFERENCES[category]["ai"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -227,8 +227,8 @@ WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["cost_func"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="FLIRT between modalities cost function",
-    value_enum=BETWEEN_MOD_FLIRT_COST,
-    default=BETWEEN_MOD_FLIRT_COST.MULTUAL_INFORMATION,
+    value_enum=BetweenModFlirtCost,
+    default=BetweenModFlirtCost.MULTUAL_INFORMATION,
 )
 WF_PREFERENCES[category]["ai"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -354,15 +354,15 @@ for x in range(FMRI_NUM):
     WF_PREFERENCES[category]["block_design"] = PreferenceEntry(
         input_type=InputTypes.ENUM,
         label="Block design",
-        value_enum=BLOCK_DESIGN,
-        default=BLOCK_DESIGN.RARA,
+        value_enum=BlockDesign,
+        default=BlockDesign.RARA,
     )
     WF_PREFERENCES[category]["task_b_name"] = PreferenceEntry(
         input_type=InputTypes.TEXT,
         label="Task B name",
         default="Task_B",
         pref_requirement={
-            DataInputList["FMRI" + "_%s" % x]: [("block_design", BLOCK_DESIGN.RARB)]
+            DataInputList["FMRI" + "_%s" % x]: [("block_design", BlockDesign.RARB)]
         },
         pref_requirement_fail_tooltip="Requires rArBrArB... block design",
     )
@@ -400,8 +400,8 @@ for x in range(FMRI_NUM):
     WF_PREFERENCES[category]["slice_timing"] = PreferenceEntry(
         input_type=InputTypes.ENUM,
         label="Slice timing",
-        value_enum=SLICE_TIMING,
-        default=SLICE_TIMING.UNKNOWN,
+        value_enum=SliceTiming,
+        default=SliceTiming.UNKNOWN,
     )
     WF_PREFERENCES[category]["del_start_vols"] = PreferenceEntry(
         input_type=InputTypes.INT,
@@ -515,8 +515,8 @@ GLOBAL_PREFERENCES[category]["force_pref_reset"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["slicer_scene_ext"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     hidden=True,
-    value_enum=SLICER_EXTENSIONS,
-    default=SLICER_EXTENSIONS.MRB,
+    value_enum=SlicerExtensions,
+    default=SlicerExtensions.MRB,
 )
 GLOBAL_PREFERENCES[category]["default_dicom_folder"] = PreferenceEntry(
     input_type=InputTypes.TEXT,
@@ -526,8 +526,8 @@ GLOBAL_PREFERENCES[category]["default_dicom_folder"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["default_wf_type"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Default workflow",
-    value_enum=WORKFLOW_TYPES,
-    default=WORKFLOW_TYPES.STRUCTURAL,
+    value_enum=WorkflowTypes,
+    default=WorkflowTypes.STRUCTURAL,
 )
 GLOBAL_PREFERENCES[category]["shutdown"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -561,12 +561,12 @@ GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["multicore_node_limit"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="CPU management for multi-core steps",
-    value_enum=CORE_LIMIT,
-    default=CORE_LIMIT.SOFT_CAP,
+    value_enum=CoreLimit,
+    default=CoreLimit.SOFT_CAP,
     informative_text={
-        CORE_LIMIT.NO_LIMIT: "Multi-core steps ignore the subject CPU core limit, using all available resources",
-        CORE_LIMIT.SOFT_CAP: "Multi-core steps use up to twice the subject CPU core limit",
-        CORE_LIMIT.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
+        CoreLimit.NO_LIMIT: "Multi-core steps ignore the subject CPU core limit, using all available resources",
+        CoreLimit.SOFT_CAP: "Multi-core steps use up to twice the subject CPU core limit",
+        CoreLimit.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
     },
 )
 
@@ -703,7 +703,7 @@ GLOBAL_PREFERENCES[category]["use_tls"] = PreferenceEntry(
 )
 
 DEFAULT_WF = {}
-DEFAULT_WF[WORKFLOW_TYPES.STRUCTURAL] = {
+DEFAULT_WF[WorkflowTypes.STRUCTURAL] = {
     DataInputList.T13D: {
         "hippo_amyg_labels": "false",
         "flat1": "false",
@@ -714,7 +714,7 @@ DEFAULT_WF[WORKFLOW_TYPES.STRUCTURAL] = {
     DataInputList.ASL: {"ai": "false"},
     DataInputList.PET: {"ai": "false"},
 }
-DEFAULT_WF[WORKFLOW_TYPES.FUNCTIONAL] = {
+DEFAULT_WF[WorkflowTypes.FUNCTIONAL] = {
     DataInputList.T13D: {
         "hippo_amyg_labels": "true",
         "flat1": "true",

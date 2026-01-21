@@ -7,7 +7,7 @@ from nipype.interfaces.fsl import (
 )
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from nipype.pipeline.engine import Node
-from swane.config.config_enums import CORE_LIMIT
+from swane.config.config_enums import CoreLimit
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -32,7 +32,7 @@ def dti_preproc_workflow(
     synth_config: SectionProxy,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CORE_LIMIT = CORE_LIMIT.SOFT_CAP,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
 ) -> CustomWorkflow:
     """
     DTI preprocessing workflow with eddy current and motion artifact correction.
@@ -168,10 +168,10 @@ def dti_preproc_workflow(
         eddy.inputs.use_cuda = is_cuda
         eddy._mem_gb = 1
         if not is_cuda:
-            if multicore_node_limit == CORE_LIMIT.HARD_CAP:
+            if multicore_node_limit == CoreLimit.HARD_CAP:
                 eddy_cpu = max_cpu
                 eddy.inputs.num_threads = max_cpu
-            elif multicore_node_limit == CORE_LIMIT.SOFT_CAP:
+            elif multicore_node_limit == CoreLimit.SOFT_CAP:
                 eddy_cpu = max_cpu
             else:
                 eddy_cpu = cpu_count()
@@ -290,9 +290,9 @@ def dti_preproc_workflow(
         bedpostx.inputs.use_gpu = is_cuda
         if not is_cuda:
             # if cuda is enabled only 1 process is launched
-            if multicore_node_limit == CORE_LIMIT.SOFT_CAP:
+            if multicore_node_limit == CoreLimit.SOFT_CAP:
                 bedpostx.inputs.environ = {"FSLSUB_PARALLEL": str(max_cpu)}
-            elif multicore_node_limit == CORE_LIMIT.HARD_CAP:
+            elif multicore_node_limit == CoreLimit.HARD_CAP:
                 bedpostx.inputs.environ = {"FSLSUB_PARALLEL": str(max_cpu)}
                 bedpostx.n_procs = max_cpu
 
