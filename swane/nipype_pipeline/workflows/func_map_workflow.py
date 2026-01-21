@@ -153,8 +153,8 @@ def func_map_workflow(
     if config.getenum_safe("cost_func") is BetweenModFlirtCost.MULTUAL_INFORMATION:
         cost = "mutualinfo"
     elif (
-            config.getenum_safe("cost_func")
-            is BetweenModFlirtCost.NORMALIZED_MUTUAL_INFORMATION
+        config.getenum_safe("cost_func")
+        is BetweenModFlirtCost.NORMALIZED_MUTUAL_INFORMATION
     ):
         cost = "normmi"
     else:

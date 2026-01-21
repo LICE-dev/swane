@@ -123,7 +123,7 @@ WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
     },
     option_pref_requirement_fail_tooltip={
         FreesurferStep.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM"
-                                 % ResourceManager.synth_seg_ram_requirements(),
+        % ResourceManager.synth_seg_ram_requirements(),
     },
 )
 
