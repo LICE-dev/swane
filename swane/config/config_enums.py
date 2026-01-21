@@ -115,9 +115,9 @@ class PerformanceProfile(str, Enum):
     Notes
     -----
     The enum values are localized strings from `swane.strings`.
-    
+
     """
-    
+
     MAX_PERF = strings.performance_profile_max
     BALANCED = strings.performance_profile_balanced
     LOW_RESOURCE = strings.performance_profile_min

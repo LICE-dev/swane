@@ -8,7 +8,7 @@ GENBUTTONTEXT = "Generate " + APPNAME + " Workflow"
 SUBJCONFIGBUTTONTEXT = "Workflow preferences"
 INFOCHAR = "\u24d8"
 WF_DIR_SUFFIX = "_nipype"
-WIKI_URL= "https://github.com/LICE-dev/swane/wiki"
+WIKI_URL = "https://github.com/LICE-dev/swane/wiki"
 
 # Main
 main_multiple_instances_error = (
@@ -85,9 +85,7 @@ aboutwindow_wiki_changelog = "Link to versions <a href='https://github.com/LICE-
 
 mainwindow_chatgpt_title = "SWANe Assistant"
 mainwindow_chatgpt_tooltip = "Open ChatGPT SWANe Assistant in your browser"
-chatgpt_url = (
-            "https://chatgpt.com/g/g-68e14421a54c8191a2110a831824f1e9-swaneassistant/"
-        )
+chatgpt_url = "https://chatgpt.com/g/g-68e14421a54c8191a2110a831824f1e9-swaneassistant/"
 chatgpt_button_text = f"🤖 {mainwindow_chatgpt_title}"
 
 # Menu
@@ -261,20 +259,34 @@ wizard_welcome_text = (
 )
 
 wizard_performance_title = "Choose your performance profile"
-wizard_performance_text = "This helps " + APPNAME + " optimize processing based on your system capabilities and research needs."
+wizard_performance_text = (
+    "This helps "
+    + APPNAME
+    + " optimize processing based on your system capabilities and research needs."
+)
 performance_profile_max = "Maximum Performance"
-performance_profile_max_tooltip = "Use more system resources to complete tasks as quickly as possible."
+performance_profile_max_tooltip = (
+    "Use more system resources to complete tasks as quickly as possible."
+)
 performance_profile_balanced = "Balanced"
-performance_profile_balanced_tooltip = "A compromise between speed and resource usage for most analyses."
+performance_profile_balanced_tooltip = (
+    "A compromise between speed and resource usage for most analyses."
+)
 performance_profile_min = "Minimum Resource Usage"
 performance_profile_min_tooltip = "Minimize CPU and memory usage to keep the system responsive, even on limited hardware."
 
 wizard_hardware_accelleration_title = "Hardware Accelleration"
-wizard_hardware_accelleration_text = "Speed up computations by using supported hardware features."
+wizard_hardware_accelleration_text = (
+    "Speed up computations by using supported hardware features."
+)
 gpu_acceleration_enabled = "Use GPU acceleration when available"
-gpu_acceleration_enabled_tooltip = "This can accelerate advanced computations if the GPU is supported by your system."
+gpu_acceleration_enabled_tooltip = (
+    "This can accelerate advanced computations if the GPU is supported by your system."
+)
 gpu_acceleration_disabled = "CPU only"
-gpu_acceleration_disabled_tooltip = "All processing will run on the CPU, even if GPU acceleration is available."
+gpu_acceleration_disabled_tooltip = (
+    "All processing will run on the CPU, even if GPU acceleration is available."
+)
 
 wizard_advanced_models_title = "Advanced Models"
 wizard_advanced_models_text = (
@@ -283,9 +295,13 @@ wizard_advanced_models_text = (
     "They may require additional memory and processing power."
 )
 advanced_models_enabled = "Use advanced models when supported"
-advanced_models_enabled_tooltip = "Enable advanced models when the system can handle them reliably."
+advanced_models_enabled_tooltip = (
+    "Enable advanced models when the system can handle them reliably."
+)
 advanced_models_disabled = "Use standard models only"
-advanced_models_disabled_tooltip = "Prefer lighter, more stable processing techniques with minimal resource usage."
+advanced_models_disabled_tooltip = (
+    "Prefer lighter, more stable processing techniques with minimal resource usage."
+)
 
 wizard_freesurfer_outputs_title = "FreeSurfer Outputs Selection"
 wizard_freesurfer_outputs_tooltip = (
@@ -298,13 +314,11 @@ freesurfer_outputs_cortical_parcellation_tooltip = (
     "Generates cortical parcellation maps using FreeSurfer's standard methods."
 )
 freesurfer_outputs_surfaces = "Surfaces"
-freesurfer_outputs_surfaces_tooltip = (
-    "Produces white matter and pial 3D models surface models for surface-based analyses."
+freesurfer_outputs_surfaces_tooltip = "Produces white matter and pial 3D models surface models for surface-based analyses."
+freesurfer_outputs_hippocampal_segmentation = (
+    "Hippocampal/Amigdala Subfield Segmentation"
 )
-freesurfer_outputs_hippocampal_segmentation = "Hippocampal/Amigdala Subfield Segmentation"
-freesurfer_outputs_hippocampal_segmentation_tooltip = (
-    "Produces detailed hippocampal and amigdala subfields segmentation for advanced analyses."
-)
+freesurfer_outputs_hippocampal_segmentation_tooltip = "Produces detailed hippocampal and amigdala subfields segmentation for advanced analyses."
 freesurfer_full_reconall = "Full Recon-All Processing"
 freesurfer_full_reconall_tooltip = (
     "Enables the complete Recon-All pipeline for comprehensive brain analysis."
@@ -312,14 +326,18 @@ freesurfer_full_reconall_tooltip = (
 
 wizard_review_title = "Review Your Configuration"
 wizard_review_text = "Please review your selections before applying them."
-wizard_review_tooltip = "Some options may be automatically adjusted to ensure stability and compatibility."
+wizard_review_tooltip = (
+    "Some options may be automatically adjusted to ensure stability and compatibility."
+)
 
 wizard_applied_title = "Configuration applied successfully"
 wizard_applied_text = (
     "Your settings have been applied.<br><br>"
     "These settings may influence analysis performance and memory usage.<br>"
     "You can always adjust them in more detail via Application Settings.<br><br>"
-    "For additional guidance, documentation, and troubleshooting, visit the <a href='" + WIKI_URL + "'>SWANe Wiki</a>.<br>"
+    "For additional guidance, documentation, and troubleshooting, visit the <a href='"
+    + WIKI_URL
+    + "'>SWANe Wiki</a>.<br>"
     "You can also rerun this wizard at any time from Menu → Configuration Wizard."
 )
 
