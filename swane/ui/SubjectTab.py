@@ -39,7 +39,7 @@ from swane.config.ConfigManager import ConfigManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.DataInputList import DataInputList
 from swane.utils.DependencyManager import DependencyManager
-from swane.config.preference_list import WORKFLOW_TYPES
+from swane.config.preference_list import WorkflowTypes
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.utils.Subject import Subject, SubjectRet
 from swane.workers.open_results_directory import open_results_directory
@@ -511,7 +511,7 @@ class SubjectTab(QTabWidget):
         # First Column: NODE LIST
         self.workflow_type_combo = QComboBox(self)
 
-        for row in WORKFLOW_TYPES:
+        for row in WorkflowTypes:
             self.workflow_type_combo.addItem(row.value, userData=row.name)
 
         layout.addWidget(self.workflow_type_combo, 0, 0)
@@ -609,7 +609,7 @@ class SubjectTab(QTabWidget):
         """
 
         new_workflow_type = self.workflow_type_combo.itemData(index)
-        self.subject.config.set_workflow_option(WORKFLOW_TYPES[new_workflow_type])
+        self.subject.config.set_workflow_option(WorkflowTypes[new_workflow_type])
         self.subject.config.save()
         self.reset_workflow()
 
