@@ -10,7 +10,7 @@ from nipype.interfaces.fsl import (
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
-from swane.config.config_enums import SLICE_TIMING
+from swane.config.config_enums import SliceTiming
 from ica_aroma_py.services.ICA_AROMA_nodes import (
     FeatureTimeSeries,
     FeatureFrequency,
@@ -69,7 +69,7 @@ def fMRI_resting_state_workflow(
         name=name,
         dicom_dir=dicom_dir,
         TR=TR,
-        slice_timing=SLICE_TIMING.UNKNOWN,
+        slice_timing=SliceTiming.UNKNOWN,
         n_vols=n_vols,
         hpcutoff=100,
         del_start_vols=del_start_vols,

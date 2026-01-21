@@ -15,41 +15,41 @@ class InputTypes(Enum):
     FLOAT = auto()
 
 
-class WORKFLOW_TYPES(Enum):
+class WorkflowTypes(Enum):
     STRUCTURAL = "Structural Workflow"
     FUNCTIONAL = "Morpho-Functional Workflow"
 
 
-class SLICER_EXTENSIONS(Enum):
+class SlicerExtensions(Enum):
     MRB = "mrb"
     MRML = "mrml"
 
 
-class CORE_LIMIT(Enum):
+class CoreLimit(Enum):
     NO_LIMIT = "No limit"
     SOFT_CAP = "Soft cap"
     HARD_CAP = "Hard Cap"
 
 
-class BETWEEN_MOD_FLIRT_COST(Enum):
+class BetweenModFlirtCost(Enum):
     MULTUAL_INFORMATION = "Mutual information"
     NORMALIZED_MUTUAL_INFORMATION = "Normalized mutual information"
     CORRELATION_RATIO = "Correlation ratio"
 
 
-class VEIN_DETECTION_MODE(Enum):
+class VeinDetectionMode(Enum):
     SD = "Automatic (standard deviation)"
     MEAN = "Automatic (mean value)"
     FIRST = "Always first volume"
     SECOND = "Always second volume"
 
 
-class BLOCK_DESIGN(Enum):
+class BlockDesign(Enum):
     RARA = "rArA..."
     RARB = "rArBrArB..."
 
 
-class FREESURFER_STEP(Enum):
+class FreesurferStep(Enum):
     DISABLED = "Disabled"
     SYNTHSEG = "SynthSeg Cortical Parcellation only (if available)"
     AUTORECON2 = "Preprocessing only"
@@ -57,17 +57,17 @@ class FREESURFER_STEP(Enum):
     RECONALL = "Complete Recon-all"
 
     def has_surface(self):
-        return self in {FREESURFER_STEP.AUTORECON_PIAL, FREESURFER_STEP.RECONALL}
+        return self in {FreesurferStep.AUTORECON_PIAL, FreesurferStep.RECONALL}
 
     def has_parcellation(self):
         return self in {
-            FREESURFER_STEP.SYNTHSEG,
-            FREESURFER_STEP.AUTORECON_PIAL,
-            FREESURFER_STEP.RECONALL,
+            FreesurferStep.SYNTHSEG,
+            FreesurferStep.AUTORECON_PIAL,
+            FreesurferStep.RECONALL,
         }
 
 
-class SLICE_TIMING(Enum):
+class SliceTiming(Enum):
     UNKNOWN = "Unknown"
     UP = "Regular up"
     DOWN = "Regular down"
@@ -88,7 +88,7 @@ class ImageModality(Enum):
         return None
 
 
-class PLANES(Enum):
+class Planes(Enum):
     TRA = "transverse"
     COR = "coronal"
     SAG = "sagittal"

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from swane import strings
 from swane.config.ConfigManager import ConfigManager
-from swane.config.config_enums import FREESURFER_STEP, GlobalPrefCategoryList, PerformanceProfile
+from swane.config.config_enums import FreesurferStep, GlobalPrefCategoryList, PerformanceProfile
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.DependencyManager import DependencyManager
@@ -936,22 +936,22 @@ class PreferenceWizardWindow(QDialog):
             self.global_config[GlobalPrefCategoryList.SYNTH]["morph"] = str(available_ram >= ResourceManager.synth_morph_ram_requirements())
             self.global_config[GlobalPrefCategoryList.SYNTH]["reconall"] = str(available_ram >= ResourceManager.synth_reconall_ram_requirements())
 
-        self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.DISABLED.name
+        self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.DISABLED.name
         if (self.user_prefs.cortilcal_parcellation_enabled
             and not self.user_prefs.hippocampal_segmentation_enabled
             and not self.user_prefs.surfaces_enabled
             and not self.user_prefs.full_reconall_enabled
             and self.dependency_manager.is_freesurfer_synth()):
-            self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.SYNTHSEG.name
+            self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.SYNTHSEG.name
         elif (self.user_prefs.full_reconall_enabled):
-            self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.RECONALL.name
+            self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.RECONALL.name
         elif (self.user_prefs.cortilcal_parcellation_enabled
               or self.user_prefs.surfaces_enabled):
-            self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.AUTORECON_PIAL.name
+            self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.AUTORECON_PIAL.name
             
         if self.user_prefs.hippocampal_segmentation_enabled:
-            if self.global_config.getenum_safe(DataInputList.T13D, "freesurfer_step") is FREESURFER_STEP.DISABLED:
-                self.global_config[DataInputList.T13D]["freesurfer_step"] = FREESURFER_STEP.AUTORECON2.name
+            if self.global_config.getenum_safe(DataInputList.T13D, "freesurfer_step") is FreesurferStep.DISABLED:
+                self.global_config[DataInputList.T13D]["freesurfer_step"] = FreesurferStep.AUTORECON2.name
             self.global_config[DataInputList.T13D]["hippo_amyg_labels"] = str(True)
             
         self.global_config.save()

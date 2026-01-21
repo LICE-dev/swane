@@ -15,7 +15,7 @@ from swane.nipype_pipeline.nodes.Zscore import Zscore
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
 import swane_supplement
-from swane.config.config_enums import BETWEEN_MOD_FLIRT_COST, FREESURFER_STEP
+from swane.config.config_enums import BetweenModFlirtCost, FreesurferStep
 from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     get_registration_node,
@@ -25,7 +25,7 @@ from swane.nipype_pipeline.nodes.utils import (
 def func_map_workflow(
     name: str,
     dicom_dir: str,
-    freesurfer_step: FREESURFER_STEP,
+    freesurfer_step: FreesurferStep,
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
@@ -42,7 +42,7 @@ def func_map_workflow(
         The workflow name.
     dicom_dir : path
         The file path of the DICOM files.
-    freesurfer_step : FREESURFER_STEP
+    freesurfer_step : FreesurferStep
         reconall step available.
     config: SectionProxy
         workflow settings.
@@ -150,11 +150,11 @@ def func_map_workflow(
     smooth.inputs.sigma = 2
     workflow.connect(reorient, "out_file", smooth, "in_file")
 
-    if config.getenum_safe("cost_func") is BETWEEN_MOD_FLIRT_COST.MULTUAL_INFORMATION:
+    if config.getenum_safe("cost_func") is BetweenModFlirtCost.MULTUAL_INFORMATION:
         cost = "mutualinfo"
     elif (
-        config.getenum_safe("cost_func")
-        is BETWEEN_MOD_FLIRT_COST.NORMALIZED_MUTUAL_INFORMATION
+            config.getenum_safe("cost_func")
+            is BetweenModFlirtCost.NORMALIZED_MUTUAL_INFORMATION
     ):
         cost = "normmi"
     else:

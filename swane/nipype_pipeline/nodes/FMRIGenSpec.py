@@ -9,7 +9,7 @@ from nipype.interfaces.base import (
     Bunch,
     isdefined,
 )
-from swane.config.config_enums import BLOCK_DESIGN
+from swane.config.config_enums import BlockDesign
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -18,7 +18,7 @@ class FMRIGenSpecInputSpec(BaseInterfaceInputSpec):
     nvols = traits.Int(mandatory=True, desc="Number of EPI runs")
     task_duration = traits.Int(mandatory=True, desc="Task duration")
     rest_duration = traits.Int(mandatory=True, desc="Rest duration")
-    block_design = traits.Enum(BLOCK_DESIGN, usedefault=True)
+    block_design = traits.Enum(BlockDesign, usedefault=True)
     task_a_name = traits.String(mandatory=False, desc="Task A name")
     task_b_name = traits.String(mandatory=False, desc="Task A name")
 
@@ -48,7 +48,7 @@ class FMRIGenSpec(BaseInterface):
         if not isdefined(self.inputs.task_b_name):
             self.inputs.task_b_name = "TaskB"
 
-        if self.inputs.block_design == BLOCK_DESIGN.RARA:
+        if self.inputs.block_design == BlockDesign.RARA:
             self.contrasts = [
                 [
                     "%s_versus_Rest" % self.inputs.task_a_name,
