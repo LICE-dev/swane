@@ -387,7 +387,10 @@ class DependencyManager:
             )
 
         # RAM requirement to fully use freesurrfer
-        if ResourceManager.total_memory_gb() < ResourceManager.synth_reconall_ram_requirements():
+        if (
+            ResourceManager.total_memory_gb()
+            < ResourceManager.synth_reconall_ram_requirements()
+        ):
             return Dependence(
                 DependenceStatus.WARNING,
                 strings.check_dep_fs_low_ram
