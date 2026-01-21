@@ -1,5 +1,3 @@
-from PyQt6.QtCore import QUrl
-from PyQt6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
@@ -18,8 +16,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QStyleOptionButton,
 )
-from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
-from PySide6.QtCore import QCoreApplication, Qt, QThreadPool
+from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent, QDesktopServices
+from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
