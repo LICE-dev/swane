@@ -269,7 +269,8 @@ class PreferenceWizardWindow(QDialog):
         t.setStyleSheet("font-size: 18px; font-weight: 600;")
         b = QLabel(body)
         b.setWordWrap(True)
-        b.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        b.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextBrowserInteraction)
+        b.setOpenExternalLinks(True)
 
         lay.addWidget(t)
         lay.addWidget(b)

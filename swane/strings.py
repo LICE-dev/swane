@@ -8,6 +8,7 @@ GENBUTTONTEXT = "Generate " + APPNAME + " Workflow"
 SUBJCONFIGBUTTONTEXT = "Workflow preferences"
 INFOCHAR = "\u24d8"
 WF_DIR_SUFFIX = "_nipype"
+WIKI_URL= "https://github.com/LICE-dev/swane/wiki"
 
 # Main
 main_multiple_instances_error = (
@@ -84,6 +85,10 @@ aboutwindow_wiki_changelog = "Link to versions <a href='https://github.com/LICE-
 
 mainwindow_chatgpt_title = "SWANe Assistant"
 mainwindow_chatgpt_tooltip = "Open ChatGPT SWANe Assistant in your browser"
+chatgpt_url = (
+            "https://chatgpt.com/g/g-68e14421a54c8191a2110a831824f1e9-swaneassistant/"
+        )
+chatgpt_button_text = f"🤖 {mainwindow_chatgpt_title}"
 
 # Menu
 menu_load_subj = "&Load subject..."
@@ -97,6 +102,7 @@ menu_start_preference_wizard = "Configuration &Wizard..."
 menu_wf_pref = "Default Workflow &Preferences..."
 menu_shutdown_pref = "Shutdown at Workflow end"
 menu_about = "&About " + APPNAME + "..."
+menu_wiki = "Visit " + APPNAME + " &Wiki..."
 menu_file_name = "File"
 menu_tools_name = "Tools"
 menu_help_name = "Help"
@@ -243,11 +249,12 @@ wizard_welcome_text = (
     "This wizard will guide you through selecting the optimal computational settings "
     "for your research workflows.\n\n"
     "It helps balance performance, resource usage, and advanced features so that SWANe can "
-    "process your data efficiently and reliably.\n\n"
+    "analyze your data efficiently and reliably.\n\n"
     "You’ll be able to:\n"
     "• Select a performance profile that matches your priorities.\n"
-    "• Enable hardware acceleration if supported.\n"
+    "• Enable hardware acceleration, if supported.\n"
     "• Choose whether to use advanced models for improved results.\n"
+    "• Select Freesurfer output of your interest, if supported.\n"
     "• Review a summary of your configuration before applying it.\n\n"
     "These settings can always be adjusted later in Application Settings, or you can rerun "
     "this wizard at any time from Menu → Configuration Wizard."
@@ -309,10 +316,10 @@ wizard_review_tooltip = "Some options may be automatically adjusted to ensure st
 
 wizard_applied_title = "Configuration applied successfully"
 wizard_applied_text = (
-    "Your settings have been applied.\n\n"
-    "These settings may influence analysis performance and memory usage.\n"
-    "You can always adjust them in more detail via Application Settings.\n\n"
-    "For additional guidance, documentation, and troubleshooting, visit the SWANe Wiki.\n"
+    "Your settings have been applied.<br><br>"
+    "These settings may influence analysis performance and memory usage.<br>"
+    "You can always adjust them in more detail via Application Settings.<br><br>"
+    "For additional guidance, documentation, and troubleshooting, visit the <a href='" + WIKI_URL + "'>SWANe Wiki</a>.<br>"
     "You can also rerun this wizard at any time from Menu → Configuration Wizard."
 )
 

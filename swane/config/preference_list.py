@@ -510,7 +510,7 @@ GLOBAL_PREFERENCES[category]["last_swane_version"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["force_pref_reset"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     hidden=True,
-    default="false",
+    default="true",
 )
 GLOBAL_PREFERENCES[category]["slicer_scene_ext"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
@@ -547,7 +547,7 @@ GLOBAL_PREFERENCES[category]["max_subj"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Patient tab limit",
     default=1,
-    range=[0, 5],
+    range=[1, 5],
 )
 GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
     input_type=InputTypes.INT,
