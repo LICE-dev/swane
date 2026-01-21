@@ -9,6 +9,8 @@ from PySide6.QtCore import QThreadPool
 from enum import Enum, auto
 import platform
 
+from swane.utils.ResourceManager import ResourceManager
+
 
 class DependenceStatus(Enum):
     DETECTED = auto()
@@ -385,16 +387,13 @@ class DependencyManager:
             )
 
         # RAM requirement to fully use freesurrfer
-        if (
-            virtual_memory().total / (1024**3)
-            < DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT
-        ):
+        if ResourceManager.total_memory_gb() < ResourceManager.synth_reconall_ram_requirements():
             return Dependence(
                 DependenceStatus.WARNING,
                 strings.check_dep_fs_low_ram
                 % (
                     freesurfer_version,
-                    DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT,
+                    ResourceManager.synth_reconall_ram_requirements(),
                 ),
                 DependenceStatus.MISSING,
             )
