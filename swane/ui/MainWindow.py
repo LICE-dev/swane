@@ -448,12 +448,8 @@ class MainWindow(QMainWindow):
         wf_preference_window = PreferenceWizardWindow(
             self.global_config, self.dependency_manager
         )
-        ret = wf_preference_window.exec()
+        wf_preference_window.exec()
 
-        if ret == -1:
-            # TODO - Perché questa guardia?
-            self.start_preference_wizard()
-            
     def start_tool_reference(self):
         """
         Open the Tool Reference Window.
@@ -463,15 +459,21 @@ class MainWindow(QMainWindow):
         None.
 
         """
+        if hasattr(self, "_tool_reference_window") and self._tool_reference_window:
+            win = self._tool_reference_window
+            win.show()
+            win.raise_()
+            win.activateWindow()
+            return
 
-        tool_reference_window = ToolReferenceWindow(
-            self.global_config, self.dependency_manager
+        self._tool_reference_window = ToolReferenceWindow(parent=self)
+
+        # quando viene chiusa, libera il riferimento
+        self._tool_reference_window.finished.connect(
+            lambda _: setattr(self, "_tool_reference_window", None)
         )
-        ret = tool_reference_window.exec()
 
-        if ret == -1:
-            # TODO - Perché questa guardia?
-            self.start_tool_reference()
+        self._tool_reference_window.show()
 
     def check_running_workflows(self, ignore_subj: Subject = None) -> bool:
         """
@@ -621,7 +623,7 @@ class MainWindow(QMainWindow):
         button_action7.triggered.connect(self.toggle_shutdown_after_workflow)
         
         button_action8 = QAction(strings.menu_tool_reference, self)
-        button_action8.triggered.connect(self.start_preference_wizard)
+        button_action8.triggered.connect(self.start_tool_reference)
         
         button_action9 = QAction(strings.menu_about, self)
         button_action9.triggered.connect(self.about)

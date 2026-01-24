@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
 from typing import Dict, List, Tuple
 
 from PySide6.QtCore import Qt
@@ -20,253 +18,264 @@ from PySide6.QtWidgets import (
 
 from PySide6_VerticalQTabWidget import VerticalQTabWidget
 
-from swane.utils.ToolReference import Package
+from swane import strings
+from swane.utils.ToolReference import Package, tool_reference_list
 from swane.utils.ToolReference import ToolReference
 
 
 class ToolReferenceWindow(QDialog):
     """
     Custom implementation of PySide QDialog to show SWANe tool encyclopedia.
-
-    The dialog displays tools grouped by package (FSL, FreeSurfer, Other) using
-    lateral tabs. Each tab includes a search bar to filter tools by key/command/url.
-
-    Parameters
-    ----------
-    nipype_database : Dict[str, ToolReference]
-        Dictionary that maps a tool key (e.g., "BET") to its ToolReference metadata.
-    parent : QWidget, optional
-        Parent widget.
-
-    Returns
-    -------
-    None.
     """
 
-    def __init__(self, nipype_database: Dict[str, ToolReference], parent=None):
-        super(ToolReferenceWindow, self).__init__(parent)
+    def __init__(self, default_tab=None, search_string=None, parent=None):
+        super().__init__(parent)
 
-        self._db = nipype_database
+        self._db = tool_reference_list
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowMinimizeButtonHint
+            | Qt.WindowMaximizeButtonHint
+            | Qt.WindowCloseButtonHint
+        )
+        self.setWindowModality(Qt.NonModal)
+        self.setModal(False)
 
-        # Cache per package: (search_lineedit, list_container, list_layout, cards[(key, card_widget, search_blob)])
-        self._package_ui: Dict[Package, Tuple[QLineEdit, QWidget, QVBoxLayout, List[Tuple[str, QWidget, str]]]] = {}
+        # Cache per package:
+        # (search_lineedit, list_container, list_layout, cards[(key, widget, search_blob)])
+        self._package_ui: Dict[
+            Package,
+            Tuple[
+                QWidget,
+                QVBoxLayout,
+                List[Tuple[str, QWidget, str]],
+                QLabel,  # no_results placeholder
+            ],
+        ] = {}
 
-        self.setWindowTitle("Tool Encyclopedia")
+        self.setWindowTitle(strings.toolreference_title)
 
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(self)
+
+        # --- Global search bar (above tabs)
+        search_row = QHBoxLayout()
+        search_label = QLabel(strings.toolreference_search_label)
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText(strings.toolreference_search_hint)
+        clear_btn = QPushButton(strings.toolreference_clear_btn)
+        clear_btn.setFixedWidth(80)
+
+        search_row.addWidget(search_label)
+        search_row.addWidget(self.search_edit, 1)
+        search_row.addWidget(clear_btn)
+        layout.addLayout(search_row)
 
         tab_widget = VerticalQTabWidget(force_top_valign=True)
         tab_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # Create one tab per package in fixed order (nice UX)
-        for pkg in (Package.FSL, Package.FREESURFER, Package.OTHER):
+        for idx, pkg in enumerate((Package.FSL, Package.FREESURFER, Package.OTHER)):
             tab = self._build_package_tab(pkg)
-            tab_widget.addTab(tab, pkg.value.upper() if pkg != Package.OTHER else "OTHER")
+            tab_widget.addTab(tab, pkg.value.upper() if pkg != Package.OTHER else Package.OTHER.name)
+            if pkg == default_tab:
+                tab_widget.setCurrentIndex(idx)
 
         layout.addWidget(tab_widget)
 
-        close_button = QPushButton("Close")
+        close_button = QPushButton(strings.toolreference_close_btn)
         close_button.clicked.connect(self.close)
         layout.addWidget(close_button)
 
-        self.setLayout(layout)
-
-        # Initial filter = show all
+        # Initial filter
         for pkg in self._package_ui:
             self._apply_filter(pkg, "")
 
+        self.search_edit.textChanged.connect(self._apply_global_filter)
+        clear_btn.clicked.connect(lambda: self.search_edit.setText(""))
+        if search_string:
+            self.search_edit.setText(search_string)
+
+    # ------------------------------------------------------------------
+
+    def _apply_global_filter(self, text: str) -> None:
+        for pkg in self._package_ui:
+            self._apply_filter(pkg, text)
+
     def _build_package_tab(self, package: Package) -> QWidget:
-        """
-        Build a single tab for a given package.
-
-        Parameters
-        ----------
-        package : Package
-            The package enum value (FSL, FREESURFER, OTHER).
-
-        Returns
-        -------
-        QWidget
-            The constructed tab widget for the selected package.
-        """
         tab = QWidget()
-        tab_lay = QVBoxLayout()
-        tab.setLayout(tab_lay)
+        tab_lay = QVBoxLayout(tab)
+        tab_lay.setContentsMargins(1, 1, 1, 1)
+        tab_lay.setSpacing(0)
 
-        # --- Search row
-        search_row = QHBoxLayout()
-        search_label = QLabel("Search:")
-        search_edit = QLineEdit()
-        search_edit.setPlaceholderText("Type to filter (key, command, url, references)...")
-        clear_btn = QPushButton("Clear")
-        clear_btn.setFixedWidth(80)
-
-        search_row.addWidget(search_label)
-        search_row.addWidget(search_edit, 1)
-        search_row.addWidget(clear_btn)
-        tab_lay.addLayout(search_row)
-
-        # --- Scroll area with cards
+        # --- Scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
 
         scroll_content = QWidget()
-        scroll_lay = QVBoxLayout()
+        scroll_lay = QVBoxLayout(scroll_content)
         scroll_lay.setAlignment(Qt.AlignTop)
-        scroll_content.setLayout(scroll_lay)
+        scroll_lay.setContentsMargins(8, 8, 8, 8)  # solo padding interno
+        scroll_lay.setSpacing(8)
+
         scroll.setWidget(scroll_content)
 
         tab_lay.addWidget(scroll)
 
-        # Build cards for package
+        # Build entries
         cards: List[Tuple[str, QWidget, str]] = []
         tools = self._get_tools_by_package(package)
 
         for key, ref in tools:
-            card = self._make_tool_card(key, ref)
-            scroll_lay.addWidget(card)
+            widget = self._make_tool_entry(key, ref)
+            scroll_lay.addWidget(widget)
 
-            # precomputed searchable string (lower) for fast filtering
             blob = self._make_search_blob(key, ref)
-            cards.append((key, card, blob))
+            cards.append((key, widget, blob))
 
-        # Spacer to keep cards on top
+        # --- No results placeholder
+        no_results = QLabel(strings.toolreference_no_results)
+        no_results.setAlignment(Qt.AlignCenter)
+        no_results.setStyleSheet(
+            """
+            QLabel {
+                font-size: 13px;
+                color: #777;
+                margin-top: 20px;
+            }
+            """
+        )
+        no_results.setVisible(False)
+        scroll_lay.addWidget(no_results)
+
+        # Spacer
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         scroll_lay.addWidget(spacer)
 
-        # Save UI references
-        self._package_ui[package] = (search_edit, scroll_content, scroll_lay, cards)
+        # IMPORTANT: niente search_edit qui
+        self._package_ui[package] = (scroll_content, scroll_lay, cards, no_results)
 
-        # Connect search events
-        search_edit.textChanged.connect(lambda text, pkg=package: self._apply_filter(pkg, text))
-        clear_btn.clicked.connect(lambda _=False, se=search_edit: se.setText(""))
 
         return tab
 
-    def _get_tools_by_package(self, package: Package) -> List[Tuple[str, ToolReference]]:
-        """
-        Extract and sort tools belonging to a specific package.
+    # ------------------------------------------------------------------
 
-        Parameters
-        ----------
-        package : Package
-            Package to filter tools by.
-
-        Returns
-        -------
-        List[Tuple[str, ToolReference]]
-            Sorted list of (tool_key, ToolReference) for the selected package.
-        """
+    def _get_tools_by_package(
+        self, package: Package
+    ) -> List[Tuple[str, ToolReference]]:
         items = [(k, v) for k, v in self._db.items() if v.package == package]
         items.sort(key=lambda kv: kv[0].lower())
         return items
 
+    # ------------------------------------------------------------------
+
     def _make_search_blob(self, key: str, ref: ToolReference) -> str:
-        """
-        Create a lowercase string used for searching/filtering a tool card.
-
-        Parameters
-        ----------
-        key : str
-            Dictionary key of the tool (e.g., "BET").
-        ref : ToolReference
-            Tool reference info.
-
-        Returns
-        -------
-        str
-            Lowercase concatenated searchable content.
-        """
         parts = [key, ref.command, ref.url]
         parts.extend(ref.references or [])
         return " ".join(parts).lower()
 
+    # ------------------------------------------------------------------
+
     def _apply_filter(self, package: Package, text: str) -> None:
-        """
-        Filter visible tool cards for a given package tab.
-
-        Parameters
-        ----------
-        package : Package
-            Package tab to apply filter to.
-        text : str
-            Filter text.
-
-        Returns
-        -------
-        None.
-        """
         text = (text or "").strip().lower()
-        _, _, _, cards = self._package_ui[package]
+        _, _, cards, no_results = self._package_ui[package]
 
-        for _, card, blob in cards:
-            card.setVisible(text == "" or text in blob)
+        visible_count = 0
 
-    def _make_tool_card(self, key: str, ref: ToolReference) -> QWidget:
+        for _, widget, blob in cards:
+            visible = text == "" or text in blob
+            widget.setVisible(visible)
+            if visible:
+                visible_count += 1
+
+        no_results.setVisible(visible_count == 0)
+
+    # ------------------------------------------------------------------
+
+    def _make_tool_entry(self, key: str, ref: ToolReference) -> QWidget:
         """
-        Build a "card-like" widget describing a tool.
-
-        Parameters
-        ----------
-        key : str
-            Tool key in the dictionary.
-        ref : ToolReference
-            Tool reference info.
-
-        Returns
-        -------
-        QWidget
-            Card widget containing tool metadata.
+        Flat, document-like tool entry (no cards, no sub-frames).
         """
-        outer = QFrame()
-        outer.setFrameShape(QFrame.StyledPanel)
-        outer.setFrameShadow(QFrame.Raised)
-        outer.setStyleSheet(
+
+        card = QFrame()
+        card.setObjectName("toolCard")
+        card.setStyleSheet(
             """
-            QFrame {
-                border: 1px solid #d0d0d0;
+            QFrame#toolCard {
+                background: #f9f9f9;
+                border: 1px solid #dddddd;
                 border-radius: 8px;
-                padding: 8px;
-                background: white;
+            }
+            QLabel {
+                background: transparent;
+                border: none;
             }
             """
         )
 
-        lay = QVBoxLayout()
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(12, 10, 12, 12)
         lay.setSpacing(6)
-        outer.setLayout(lay)
 
-        # Title row: KEY + command
-        title = QLabel(f"<b>{key}</b>  <span style='color:#555;'>({ref.command})</span>")
-        title.setTextFormat(Qt.RichText)
-        lay.addWidget(title)
+        # --- Command header (top level)
+        cmd_label = QLabel(ref.command)
+        cmd_label.setStyleSheet(
+            """
+            QLabel {
+                font-size: 16px;
+                font-weight: 600;
+                color: #111;
+            }
+            """
+        )
+        lay.addWidget(cmd_label)
 
-        # URL row
+        # --- URL (secondary metadata)
         url_label = QLabel(
             f"<a href='{ref.url}' style='text-decoration:none;'>{ref.url}</a>"
         )
         url_label.setTextFormat(Qt.RichText)
         url_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        url_label.setOpenExternalLinks(True)  # simplest (Qt handles it)
+        url_label.setOpenExternalLinks(True)
+        url_label.setStyleSheet(
+            """
+            QLabel {
+                font-size: 14px;
+                font-weight: 600;
+                margin-top: 6px;
+                color: #555;
+            }
+            """
+        )
         lay.addWidget(url_label)
 
-        # References
+        # --- References section
         if ref.references:
-            ref_title = QLabel("<b>References</b>")
-            ref_title.setTextFormat(Qt.RichText)
+            ref_title = QLabel(strings.toolreference_reference_label)
+            ref_title.setStyleSheet(
+                """
+                QLabel {
+                    font-size: 14px;
+                    font-weight: 600;
+                    margin-top: 6px;
+                    color: #222;
+                }
+                """
+            )
             lay.addWidget(ref_title)
 
             for i, r in enumerate(ref.references, start=1):
-                # light formatting, keep it readable
                 r_lab = QLabel(f"{i}. {r}")
                 r_lab.setWordWrap(True)
-                r_lab.setStyleSheet("color: #333;")
+                r_lab.setStyleSheet(
+                    """
+                    QLabel {
+                        font-size: 12px;
+                        margin-left: 12px;
+                        color: #333;
+                    }
+                    """
+                )
                 lay.addWidget(r_lab)
-        else:
-            no_ref = QLabel("<i>No references available.</i>")
-            no_ref.setTextFormat(Qt.RichText)
-            no_ref.setStyleSheet("color: #666;")
-            lay.addWidget(no_ref)
 
-        return outer
+        return card

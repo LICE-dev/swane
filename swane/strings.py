@@ -100,7 +100,7 @@ menu_start_preference_wizard = "Configuration &Wizard..."
 menu_wf_pref = "Default Workflow &Preferences..."
 menu_shutdown_pref = "Shutdown at Workflow end"
 menu_about = "&About " + APPNAME + "..."
-menu_tool_reference = "Tool Reference"
+menu_tool_reference = "Tool Reference..."
 menu_wiki = "Visit " + APPNAME + " &Wiki..."
 menu_file_name = "File"
 menu_tools_name = "Tools"
@@ -427,6 +427,14 @@ fsl_python_error_fix = "Fix error and Restart"
 fsl_python_error_restart = "Restart with system Python"
 fsl_python_error_exit = "Copy fix line and Exit"
 generic_shell_file = "your shell configuration"
+
+toolreference_title = "Tool Refences"
+toolreference_search_label = "Search:"
+toolreference_search_hint = "Type to filter (command, url, references)..."
+toolreference_clear_btn = "Clear"
+toolreference_close_btn = "Close"
+toolreference_no_results = "No results found"
+toolreference_reference_label = "References"
 
 # Nodes
 node_names = {}
