@@ -17,11 +17,11 @@ class ToolReference:
 
 def get_command_info(key: str) -> ToolReference:
     try:
-        return nipype_database[key]
+        return tool_reference_list[key]
     except KeyError:
         raise ValueError(f"Comando '{key}' non trovato nel database")
 
-nipype_database= {
+tool_reference_list= {
     # Structural
     "BET": ToolReference(
         command="bet",
@@ -134,7 +134,7 @@ nipype_database= {
 # Utility FSL senza reference → stesso URL
 utilities_url = "https://fsl.fmrib.ox.ac.uk/fsl/docs/utilities/fslutils.html"
 
-nipype_database.update({
+tool_reference_list.update({
     "MERGE": ToolReference(
         command="fslmerge",
         package=Package.FSL,
@@ -187,7 +187,7 @@ nipype_database.update({
 
 
 # TODO AGGIORNARE NOME
-nipype_database["SEGMENTE"] = ToolReference(
+tool_reference_list["SEGMENTE"] = ToolReference(
     command="segmente",
     package=Package.FREESURFER,
     url="https://surfer.nmr.mgh.harvard.edu/fswiki/HippocampalSubfieldsAndNucleiOfAmygdala",
@@ -197,7 +197,7 @@ nipype_database["SEGMENTE"] = ToolReference(
     ]
 )
 
-nipype_database["MRI_SYNTHSEG"] = ToolReference(
+tool_reference_list["MRI_SYNTHSEG"] = ToolReference(
     command="mri_synthseg",
     package=Package.FREESURFER,
     url="https://surfer.nmr.mgh.harvard.edu/fswiki/SynthSeg",
@@ -208,7 +208,7 @@ nipype_database["MRI_SYNTHSEG"] = ToolReference(
 )
 
 
-nipype_database["MRI_SYNTHMORPH"] = ToolReference(
+tool_reference_list["MRI_SYNTHMORPH"] = ToolReference(
     command="mri_synthmorph",
     package=Package.FREESURFER,
     url="https://martinos.org/malte/synthmorph/",
@@ -218,7 +218,7 @@ nipype_database["MRI_SYNTHMORPH"] = ToolReference(
     ]
 )
 
-nipype_database["MRI_SYNTHSTRIP"] = ToolReference(
+tool_reference_list["MRI_SYNTHSTRIP"] = ToolReference(
     command="mri_synthstrip",
     package=Package.FREESURFER,
     url="https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/",
@@ -228,7 +228,7 @@ nipype_database["MRI_SYNTHSTRIP"] = ToolReference(
 )
 
 
-nipype_database["DCM2NIIX"] = ToolReference(
+tool_reference_list["DCM2NIIX"] = ToolReference(
     command="dcm2niix",
     package=Package.OTHER,
     url="https://www.nitrc.org/plugins/mwiki/index.php/dcm2nii:MainPage",
