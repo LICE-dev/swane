@@ -47,6 +47,7 @@ def get_deskull_node(
                 mask_name = fname_presuffix(out_file, suffix="_brain", use_ext=True)
             deskull_node.inputs.mask_file = mask_name
         deskull_node.inputs.exclude_csf = synth_exclude_csf
+        deskull_node.inputs.num_threads = 1
         if bet_surfaces:
             deskull_node.inskull_out_name = "mask_file"
     else:
@@ -64,7 +65,6 @@ def get_deskull_node(
             deskull_node.inputs.robust = True
 
     deskull_node.long_name = name_prefix + " %s"
-    deskull_node.inputs.num_threads = 1
     if out_file:
         deskull_node.inputs.out_file = out_file
 
