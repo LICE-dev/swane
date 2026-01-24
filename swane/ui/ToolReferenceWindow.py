@@ -3,7 +3,7 @@ from enum import Enum
 class Package(Enum):
     FSL = "fsl"
     FREESURFER = "freesurfer"
-    DCM2NIIX = "dcm2niix"
+    OTHER = "Other"
 
 from dataclasses import dataclass
 from typing import List
@@ -230,7 +230,7 @@ nipype_database["MRI_SYNTHSTRIP"] = ToolReference(
 
 nipype_database["DCM2NIIX"] = ToolReference(
     command="dcm2niix",
-    package=Package.DCM2NIIX,
+    package=Package.OTHER,
     url="https://www.nitrc.org/plugins/mwiki/index.php/dcm2nii:MainPage",
     references=[
         "Li X, Morgan PS, Ashburner J, Smith J, Rorden C. The first step for neuroimaging data analysis: DICOM to NIfTI conversion. J Neurosci Methods. 2016 May 1;264:47-56. doi: 10.1016/j.jneumeth.2016.03.001. Epub 2016 Mar 2. PMID: 26945974."
