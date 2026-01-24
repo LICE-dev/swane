@@ -21,6 +21,7 @@ from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
+from swane.ui.ToolReferenceWindow import ToolReferenceWindow
 from swane.utils.DependencyManager import (
     DependencyManager,
     Dependence,
@@ -452,6 +453,25 @@ class MainWindow(QMainWindow):
         if ret == -1:
             # TODO - Perché questa guardia?
             self.start_preference_wizard()
+            
+    def start_tool_reference(self):
+        """
+        Open the Tool Reference Window.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        tool_reference_window = ToolReferenceWindow(
+            self.global_config, self.dependency_manager
+        )
+        ret = tool_reference_window.exec()
+
+        if ret == -1:
+            # TODO - Perché questa guardia?
+            self.start_tool_reference()
 
     def check_running_workflows(self, ignore_subj: Subject = None) -> bool:
         """
@@ -599,12 +619,15 @@ class MainWindow(QMainWindow):
         button_action7 = QAction(strings.menu_shutdown_pref, self)
         button_action7.setCheckable(True)
         button_action7.triggered.connect(self.toggle_shutdown_after_workflow)
+        
+        button_action8 = QAction(strings.menu_tool_reference, self)
+        button_action8.triggered.connect(self.start_preference_wizard)
+        
+        button_action9 = QAction(strings.menu_about, self)
+        button_action9.triggered.connect(self.about)
 
-        button_action8 = QAction(strings.menu_about, self)
-        button_action8.triggered.connect(self.about)
-
-        button_action9 = QAction(strings.menu_wiki, self)
-        button_action9.triggered.connect(
+        button_action10 = QAction(strings.menu_wiki, self)
+        button_action10.triggered.connect(
             lambda: QDesktopServices.openUrl(QUrl(strings.WIKI_URL))
         )
 
@@ -623,6 +646,7 @@ class MainWindow(QMainWindow):
         help_menu = menu.addMenu(strings.menu_help_name)
         help_menu.addAction(button_action8)
         help_menu.addAction(button_action9)
+        help_menu.addAction(button_action10)
 
         # Tab definition
         self.main_tab = QTabWidget(parent=self)
