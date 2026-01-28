@@ -70,16 +70,16 @@ class ToolReferenceWindow(QDialog):
         search_row.addWidget(clear_btn)
         layout.addLayout(search_row)
 
-        tab_widget = VerticalQTabWidget(force_top_valign=True)
-        tab_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._tab_widget = VerticalQTabWidget(force_top_valign=True)
+        self._tab_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         for idx, pkg in enumerate((Package.FSL, Package.FREESURFER, Package.OTHER)):
             tab = self._build_package_tab(pkg)
-            tab_widget.addTab(tab, pkg.value.upper() if pkg != Package.OTHER else Package.OTHER.name)
+            self._tab_widget.addTab(tab, pkg.value.upper())
             if pkg == default_tab:
-                tab_widget.setCurrentIndex(idx)
+                self._tab_widget.setCurrentIndex(idx)
 
-        layout.addWidget(tab_widget)
+        layout.addWidget(self._tab_widget)
 
         close_button = QPushButton(strings.toolreference_close_btn)
         close_button.clicked.connect(self.close)
@@ -95,6 +95,12 @@ class ToolReferenceWindow(QDialog):
             self.search_edit.setText(search_string)
 
     # ------------------------------------------------------------------
+
+    def search(self, tab: Package, string):
+        for i in range(self._tab_widget.count()):
+            if self._tab_widget.tabText(i) == tab.value.upper():
+                self._tab_widget.setCurrentIndex(i)
+        self.search_edit.setText(string)
 
     def _apply_global_filter(self, text: str) -> None:
         for pkg in self._package_ui:
@@ -152,9 +158,7 @@ class ToolReferenceWindow(QDialog):
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         scroll_lay.addWidget(spacer)
 
-        # IMPORTANT: niente search_edit qui
         self._package_ui[package] = (scroll_content, scroll_lay, cards, no_results)
-
 
         return tab
 
@@ -164,15 +168,17 @@ class ToolReferenceWindow(QDialog):
         self, package: Package
     ) -> List[Tuple[str, ToolReference]]:
         items = [(k, v) for k, v in self._db.items() if v.package == package]
-        items.sort(key=lambda kv: kv[0].lower())
+        items.sort(key=lambda kv: kv[1].command.lower())
         return items
 
     # ------------------------------------------------------------------
 
     def _make_search_blob(self, key: str, ref: ToolReference) -> str:
-        parts = [key, ref.command, ref.url]
-        parts.extend(ref.references or [])
-        return " ".join(parts).lower()
+        # we only want filter by command name
+        return ref.command
+        # parts = [key, ref.command, ref.url]
+        # parts.extend(ref.references or [])
+        # return " ".join(parts).lower()
 
     # ------------------------------------------------------------------
 

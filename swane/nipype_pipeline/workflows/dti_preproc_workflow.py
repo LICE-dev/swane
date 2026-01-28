@@ -1,5 +1,4 @@
 from nipype.interfaces.fsl import (
-    ConvertXFM,
     ExtractROI,
     EddyCorrect,
     DTIFit,

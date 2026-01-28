@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QFontMetrics
+
 from swane import strings
 from nipype.utils.filemanip import loadpkl
 from datetime import datetime
@@ -22,6 +23,8 @@ import math
 import os
 import subprocess
 from numpy import ndarray
+
+from swane.utils.ToolReference import get_command_info, ToolReference
 
 
 class NipypeNodeRuntimeWidget(QScrollArea):
@@ -36,8 +39,10 @@ class NipypeNodeRuntimeWidget(QScrollArea):
     NODE_FILE_NAME = "_node.pklz"
     IMAGE_EXTENSIONS = (".nii", ".nii.gz", ".mgz", ".mgh")
 
-    def __init__(self, slicer_path=None, parent=None):
+    def __init__(self, slicer_path:str=None, main_window=None, parent=None):
         super().__init__(parent)
+
+        self._main_window = main_window
 
         # Create the grid layout
         self.setWidgetResizable(True)
@@ -115,6 +120,7 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         result_file = os.path.join(
             node_dir, NipypeNodeRuntimeWidget.RESULT_FILE_NAME % node_name
         )
+
         if status is WorkflowSignals.NODE_STARTED:
             if os.path.exists(node_pickle_file):
                 start_ts = os.path.getctime(
@@ -140,6 +146,16 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         self._add_label(strings.sub_tab_node_status_label, self._row, 0)
         self._add_value(status_text, self._row, 1, colspan=6)
         self._row += 1
+
+        # ---------------- Tool Info ----------------
+        interface_name = self._get_interface_name(node_pickle_file)
+        tool_reference = get_command_info(interface_name)
+        if tool_reference is not None:
+            self._add_label(strings.sub_tab_node_tool_label, self._row, 0)
+            self._add_tool_button(tool_reference, self._row, 1)
+            self._row += 1
+
+
 
         # ---------------- Directory ----------------
         self._add_label(strings.sub_tab_node_dir_label, self._row, 0)
@@ -299,6 +315,19 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         else:
             self._add_value(str(value), row, col + 1, colspan=5)
 
+    def _add_tool_button(self, tool_reference: ToolReference, row, col):
+        """Add a tool button to the grid."""
+
+        btn = QPushButton(tool_reference.command)
+        btn.setFlat(True)
+        btn.setStyleSheet("text-align:left; color:#1a73e8;")
+        btn.setMinimumHeight(self.MIN_ROW_HEIGHT)
+        btn.clicked.connect(
+            lambda _, my_tab=tool_reference.package, my_cmd=tool_reference.command:
+            self._main_window.start_tool_reference(default_tab=my_tab, search_str=my_cmd)
+        )
+        self.grid.addWidget(btn, row, col, 1, 5)
+
     def _add_path_button(self, path, row, col):
         is_image = (
             os.path.isfile(path)
@@ -415,3 +444,14 @@ class NipypeNodeRuntimeWidget(QScrollArea):
 
     def _fmt_output_name(self, name):
         return f"<i><u>{name}</u></i>"
+
+    def _get_interface_name(self, node_pickle_file):
+        try:
+            node = loadpkl(node_pickle_file)
+            interface = node.interface
+            interface_name = interface.__class__.__name__
+            return interface_name
+        except Exception:
+            return None
+
+

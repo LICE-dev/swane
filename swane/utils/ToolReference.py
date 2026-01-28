@@ -3,6 +3,7 @@ from enum import Enum
 class Package(Enum):
     FSL = "fsl"
     FREESURFER = "freesurfer"
+    SLICER = "slicer"
     OTHER = "Other"
 
 from dataclasses import dataclass
@@ -17,26 +18,32 @@ class ToolReference:
 
 def get_command_info(key: str) -> ToolReference:
     try:
+        if key in equivalent_command_list:
+            key = equivalent_command_list[key]
         return tool_reference_list[key]
     except KeyError:
-        raise ValueError(f"Comando '{key}' non trovato nel database")
+        return None
 
-tool_reference_list= {
+
+utilities_url = "https://fsl.fmrib.ox.ac.uk/fsl/docs/utilities/fslutils.html#"
+
+tool_reference_list = {
     # Structural
     "BET": ToolReference(
         command="bet",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/structural/bet.html",
         references=[
-            "S.M. Smith. Fast robust automated brain extraction. Human Brain Mapping, 17(3):143-155, November 2002"
+            "Smith SM, et al. Fast robust automated brain extraction. Hum Brain Mapp. 2002."
         ]
     ),
+
     "FAST": ToolReference(
         command="fast",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/structural/fast.html",
         references=[
-            "Zhang, Y., Brady, M., Smith, S. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Trans Med Imag, 20(1):45-57, 2001"
+            "Zhang Y, Brady M, Smith S, et al. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Trans Med Imaging. 2001."
         ]
     ),
 
@@ -46,51 +53,88 @@ tool_reference_list= {
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/task_fmri/feat/index.html",
         references=[
-            "Woolrich, M. W., Ripley, B. D., Brady, M., & Smith, S. M. (2001). Temporal Autocorrelation in Univariate Linear Modeling of FMRI Data. NeuroImage, 14(6), 1370–1386. http://doi.org/10.1006/nimg.2001.0931"
+            "Woolrich MW, Ripley BD, Brady M, et al. Temporal autocorrelation in univariate linear modeling of fMRI data. NeuroImage. 2001."
         ]
     ),
+
     "MELODIC": ToolReference(
         command="melodic",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/resting_state/melodic.html",
         references=[
-            "Beckmann CF, Smith SM. Probabilistic independent component analysis for functional magnetic resonance imaging. IEEE Trans Med Imaging. 2004 Feb;23(2):137-52. doi: 10.1109/TMI.2003.822821. PMID: 14964560."
+            "Beckmann CF, Smith SM, et al. Probabilistic independent component analysis for functional magnetic resonance imaging. IEEE Trans Med Imaging. 2004."
+        ]
+    ),
+
+    "FilterRegressor": ToolReference(
+        command="fsl_regfilt",
+        package=Package.FSL,
+        url="https://fsl.fmrib.ox.ac.uk/fsl/docs/resting_state/melodic.html",
+        references=[
+            "Beckmann CF, Smith SM, et al. Probabilistic independent component analysis for functional magnetic resonance imaging. IEEE Trans Med Imaging. 2004."
+        ]
+    ),
+
+    "AromaClassification": ToolReference(
+        command="aroma",
+        package=Package.OTHER,
+        url="https://github.com/maartenmennes/ICA-AROMA",
+        references=[
+            "Pruim RHR, Mennes M, van Rooij D, et al. ICA-AROMA: A robust ICA-based strategy for removing motion artifacts from fMRI data. NeuroImage. 2015.",
+            "Pruim RHR, Mennes M, Buitelaar JK, et al. Evaluation of ICA-AROMA and alternative strategies for motion artifact removal in resting-state fMRI. NeuroImage. 2015."
         ]
     ),
 
     # Diffusion / Tractography
-    "EDDY": ToolReference(
+    "CustomEddy": ToolReference(
         command="eddy",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/eddy/eddy.html",
         references=[
-            "Andersson JLR, Sotiropoulos SN. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. Neuroimage. 2016 Jan 15;125:1063-1078. doi: 10.1016/j.neuroimage.2015.10.019. Epub 2015 Oct 20. PMID: 26481672; PMCID: PMC4692656."
+            "Andersson JLR, Sotiropoulos SN, et al. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. NeuroImage. 2016."
         ]
     ),
-    "BEDPOSTX": ToolReference(
+
+    "DTIFit": ToolReference(
+        command="dtifit",
+        package=Package.FSL,
+        url="https://fsl.fmrib.ox.ac.uk/fsl/docs/diffusion/dtifit.html",
+        references=[
+            "Andersson JLR, Sotiropoulos SN, et al. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. NeuroImage. 2016."
+        ]
+    ),
+
+    "BEDPOSTX5": ToolReference(
         command="bedpostx",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/diffusion/bedpostx.html",
         references=[
-            "Behrens TE, Berg HJ, Jbabdi S, Rushworth MF, Woolrich MW. Probabilistic diffusion tractography with multiple fibre orientations: What can we gain? NeuroImage. 2007 Jan 1;34(1):144-55. doi: 10.1016/j.neuroimage.2006.09.018. Epub 2006 Oct 27. PMID: 17070705; PMCID: PMC7116582."
+            "Behrens TEJ, Woolrich MW, Jenkinson M, et al. Characterization and propagation of uncertainty in diffusion-weighted MR imaging. Magn Reson Med. 2003.",
+            "Behrens TEJ, Johansen-Berg H, Jbabdi S, et al. Probabilistic diffusion tractography with multiple fibre orientations. NeuroImage. 2007.",
+            "Sotiropoulos SN, Hernandez-Fernandez M, Vu AT, et al. Fusion in diffusion MRI for improved fibre orientation estimation. NeuroImage. 2016.",
+            "Hernandez M, Guerrero GD, Cecilia JM, et al. Accelerating fibre orientation estimation from diffusion MRI using GPUs. PLoS One. 2013."
         ]
     ),
-    "PROBTRACKX": ToolReference(
+
+    "CustomProbTrackX2": ToolReference(
         command="probtrackx",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/diffusion/probtrackx.html",
         references=[
-            "Behrens TE, Berg HJ, Jbabdi S, Rushworth MF, Woolrich MW. Probabilistic diffusion tractography with multiple fibre orientations: What can we gain? NeuroImage. 2007 Jan 1;34(1):144-55. doi: 10.1016/j.neuroimage.2006.09.018. Epub 2006 Oct 27. PMID: 17070705; PMCID: PMC7116582."
+            "Behrens TEJ, Woolrich MW, Jenkinson M, et al. Characterization and propagation of uncertainty in diffusion-weighted MR imaging. Magn Reson Med. 2003.",
+            "Behrens TEJ, Johansen-Berg H, Jbabdi S, et al. Probabilistic diffusion tractography with multiple fibre orientations. NeuroImage. 2007.",
+            "Hernandez-Fernandez M, Reguly I, Jbabdi S, et al. Using GPUs to accelerate computational diffusion MRI. NeuroImage. 2019."
         ]
     ),
+
     "XTRACT": ToolReference(
         command="xtract",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/diffusion/xtract.html",
         references=[
-            "Warrington S., Bryant K., Khrapitchev A., Sallet J., Charquero-Ballester M., Douaud G., Jbabdi S.*, Mars R.*, Sotiropoulos S.N.* (2020) XTRACT - Standardised protocols for automated tractography and connectivity blueprints in the human and macaque brain. NeuroImage, 217(116923). DOI: 10.1016/j.neuroimage.2020.116923",
-            "Warrington S.*, Thompson E.*, Bastiani M., Dubois J., Baxter L., Slater R., Jbabdi S., Mars R.B., Sotiropoulos S.N. (2022) Concurrent mapping of brain ontogeny and phylogeny within a common space: Standardized tractography and applications. Science Advances, 8(42). DOI: 10.1126/sciadv.abq2022",
-            "de Groot M., Vernooij M.W., Klein S., Ikram M.A., Vos F.M., Smith S.M., Niessen W.J., Andersson J.L.R. (2013) Improving alignment in Tract-based spatial statistics: Evaluation and optimization of image registration. NeuroImage, 76(1), 400-411. DOI: 10.1016/j.neuroimage.2013.03.015"
+            "Warrington S, Bryant K, Khrapitchev A, et al. XTRACT: Standardised protocols for automated tractography. NeuroImage. 2020.",
+            "Warrington S, Thompson E, Bastiani M, et al. Concurrent mapping of brain ontogeny and phylogeny. Sci Adv. 2022.",
+            "de Groot M, Vernooij MW, Klein S, et al. Improving alignment in tract-based spatial statistics. NeuroImage. 2013."
         ]
     ),
 
@@ -100,141 +144,177 @@ tool_reference_list= {
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/registration/flirt/index.html",
         references=[
-            "Jenkinson, M., Bannister, P., Brady, J. M. and Smith, S. M. Improved Optimisation for the Robust and Accurate Linear Registration and Motion Correction of Brain Images. NeuroImage, 17(2), 825-841, 2002.",
-            "Jenkinson, M. and Smith, S. M. A Global Optimisation Method for Robust Affine Registration of Brain Images. Medical Image Analysis, 5(2), 143-156, 2001.",
-            "Greve, D.N. and Fischl, B. Accurate and robust brain image alignment using boundary-based registration. NeuroImage, 48(1):63-72, 2009."
+            "Jenkinson M, Bannister P, Brady JM, et al. Improved optimisation for robust linear registration. NeuroImage. 2002.",
+            "Jenkinson M, Smith SM, et al. A global optimisation method for affine registration. Med Image Anal. 2001.",
+            "Greve DN, Fischl B, et al. Accurate and robust brain image alignment using boundary-based registration. NeuroImage. 2009."
         ]
     ),
+
     "FNIRT": ToolReference(
         command="fnirt",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/registration/fnirt/index.html",
         references=[
-            "Andersson JLR, Jenkinson M, Smith S (2010) Non-linear registration, aka spatial normalisation. FMRIB technical report TR07JA2"
+            "Andersson JLR, Jenkinson M, Smith SM, et al. Non-linear registration, aka spatial normalisation. FMRIB Tech Rep. 2010."
         ]
     ),
+
+    "ApplyWarp": ToolReference(
+        command="applywarp",
+        package=Package.FSL,
+        url="https://fsl.fmrib.ox.ac.uk/fsl/docs/registration/fnirt/user_guide.html",
+        references=[
+            "Andersson JLR, Jenkinson M, Smith SM, et al. Non-linear registration, aka spatial normalisation. FMRIB Tech Rep. 2010."
+        ]
+    ),
+
     "MCFLIRT": ToolReference(
         command="mcflirt",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/registration/mcflirt.html",
         references=[
-            "Jenkinson, M., Bannister, P., Brady, J. M. and Smith, S. M. Improved Optimisation for the Robust and Accurate Linear Registration and Motion Correction of Brain Images. NeuroImage, 17(2), 825-841, 2002."
+            "Jenkinson M, Bannister P, Brady JM, et al. Improved optimisation for motion correction. NeuroImage. 2002."
         ]
     ),
+
     "SUSAN": ToolReference(
         command="susan",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/registration/susan.html",
         references=[
-            "S.M. Smith and J.M. Brady. SUSAN - a new approach to low level image processing. International Journal of Computer Vision, 23(1):45–78, May 1997."
+            "Smith SM, Brady JM, et al. SUSAN: A new approach to low level image processing. Int J Comput Vis. 1997."
         ]
-    )
+    ),
+
+    "RobustFOV": ToolReference(
+        command="robustfov",
+        package=Package.FSL,
+        url="https://fsl.fmrib.ox.ac.uk/fsl/docs/structural/fsl_anat.html",
+        references=[]
+    ),
+
+    # FSL Utilities
+    "MERGE": ToolReference(command="fslmerge", package=Package.FSL, url=utilities_url, references=[]),
+    "ForceOrient": ToolReference(command="fslorient", package=Package.FSL, url=utilities_url, references=[]),
+    "MathsCommand": ToolReference(command="fslmaths", package=Package.FSL, url=utilities_url, references=[]),
+    "FslNVols": ToolReference(command="fslnvols", package=Package.FSL, url=utilities_url, references=[]),
+    "Split": ToolReference(command="fslsplit", package=Package.FSL, url=utilities_url, references=[]),
+    "GetNiftiTR": ToolReference(command="fslval", package=Package.FSL, url=utilities_url, references=[]),
+    "ExtractROI": ToolReference(command="fslroi", package=Package.FSL, url=utilities_url, references=[]),
+    "ImageStats": ToolReference(command="fslstats", package=Package.FSL, url=utilities_url, references=[]),
+
+    # FreeSurfer
+    "SynthSeg": ToolReference(
+        command="mri_synthseg",
+        package=Package.FREESURFER,
+        url="https://surfer.nmr.mgh.harvard.edu/fswiki/SynthSeg",
+        references=[
+            "Billot B, Greve DN, Puonti O, et al. SynthSeg: Segmentation of brain MRI scans of any contrast and resolution without retraining. Med Image Anal. 2023.",
+            "Billot B, Magdamo C, Arnold SE, et al. Robust machine learning segmentation for heterogeneous clinical MRI datasets. Proc Natl Acad Sci USA. 2023."
+        ]
+    ),
+
+    "SynthMorphReg": ToolReference(
+        command="mri_synthmorph",
+        package=Package.FREESURFER,
+        url="https://martinos.org/malte/synthmorph/",
+        references=[
+            "Hoffmann M, Hoopes A, Greve DN, et al. Anatomy-aware and acquisition-agnostic joint registration with SynthMorph. Imaging Neurosci. 2024.",
+            "Hoffmann M, Hoopes A, Fischl B, et al. Anatomy-specific acquisition-agnostic affine registration. Proc SPIE Med Imaging. 2023."
+        ]
+    ),
+
+    "SynthStrip": ToolReference(
+        command="mri_synthstrip",
+        package=Package.FREESURFER,
+        url="https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/",
+        references=[
+            "Hoopes A, Mora JS, Dalca AV, et al. SynthStrip: Skull-stripping for brain MRI. NeuroImage. 2022."
+        ]
+    ),
+
+    "SegmentHA": ToolReference(
+        command="segmentHA_T1",
+        package=Package.FREESURFER,
+        url="https://surfer.nmr.mgh.harvard.edu/fswiki/HippocampalSubfieldsAndNucleiOfAmygdala",
+        references=[
+            "Iglesias JE, Augustinack JC, Nguyen K, et al. A computational atlas of the hippocampal formation. NeuroImage. 2015.",
+            "Saygin ZM, Kliemann D, Iglesias JE, et al. High-resolution MRI reveals nuclei of the human amygdala. NeuroImage. 2017."
+        ]
+    ),
+
+    "LTAConvert": ToolReference(
+        command="lta_convert",
+        package=Package.FREESURFER,
+        url="https://ftp.nmr.mgh.harvard.edu/pub/docs/html/lta_convert.help.xml.html",
+        references=[]
+    ),
+
+    "ApplyVolTransform": ToolReference(
+        command="mri_vol2vol",
+        package=Package.FREESURFER,
+        url="https://surfer.nmr.mgh.harvard.edu/fswiki/mri_vol2vol",
+        references=[]
+    ),
+
+    "ReconAll": ToolReference(
+        command="recon-all",
+        package=Package.FREESURFER,
+        url="https://surfer.nmr.mgh.harvard.edu/fswiki/recon-all",
+        references=[
+            "Dale AM, Fischl B, Sereno MI, et al. Cortical surface-based analysis I: Segmentation and surface reconstruction. NeuroImage. 1999.",
+            "Fischl B, Sereno MI, Dale AM, et al. Cortical surface-based analysis II: Inflation and surface-based coordinate system. NeuroImage. 1999.",
+            "Fischl B, Salat DH, Busa E, et al. Whole brain segmentation: Automated labeling of neuroanatomical structures. Neuron. 2002.",
+            "Fischl B, van der Kouwe A, Destrieux C, et al. Automatically parcellating the human cerebral cortex. Cereb Cortex. 2004."
+        ]
+    ),
+
+    # Other
+    "CustomDcm2niix": ToolReference(
+        command="dcm2niix",
+        package=Package.OTHER,
+        url="https://www.nitrc.org/plugins/mwiki/index.php/dcm2nii:MainPage",
+        references=[
+            "Li X, Morgan PS, Ashburner J, et al. The first step for neuroimaging data analysis: DICOM to NIfTI conversion. J Neurosci Methods. 2016."
+        ]
+    ),
+
+    "SegmentEndocranium": ToolReference(
+        command="SegmentEndocranium [SlicerMorph]",
+        package=Package.OTHER,
+        url="https://slicermorph.github.io/Endocast_creation.html#automatic-method",
+        references=[
+            "Rolfe S, Pieper S, Porto A, et al. SlicerMorph: An open and extensible platform to retrieve, visualize and analyze 3D morphology. Methods Ecol Evol. 2021."
+        ]
+    ),
 }
 
-# Utility FSL senza reference → stesso URL
-utilities_url = "https://fsl.fmrib.ox.ac.uk/fsl/docs/utilities/fslutils.html"
+# Update url finishing with #
+for tool_reference in tool_reference_list.values():
+    if tool_reference.url.endswith("#"):
+        tool_reference.url += tool_reference.command
 
-tool_reference_list.update({
-    "MERGE": ToolReference(
-        command="fslmerge",
-        package=Package.FSL,
-        url=utilities_url,
-        references=[]
-    ),
-    "EXTRACTROI": ToolReference(
-        command="fslroi",
-        package=Package.FSL,
-        url=utilities_url,
-        references=[]
-    ),
-    "MATHSCMD": ToolReference(
-        command="fslmaths",
-        package=Package.FSL,
-        url=utilities_url,
-        references=[]
-    ),
-    "STATISTICS": ToolReference(
-        command="fslstats",
-        package=Package.FSL,
-        url=utilities_url,
-        references=[]
-    ),
-    "FSLORIENT": ToolReference(
-        command="fslorient",
-        package=Package.FSL,
-        url=utilities_url,
-        references=[]
-    ),
-    "SWAPDIM": ToolReference(
-        command="fslswapdim",
-        package=Package.FSL,
-        url=utilities_url,
-        references=[]
-    ),
-    "NVOLS": ToolReference(
-        command="fslnvols",
-        package=Package.FSL,
-        url=utilities_url,
-        references=[]
-    ),
-    "FSLHD": ToolReference(
-        command="fslhd",
-        package=Package.FSL,
-        url=utilities_url,
-        references=[]
-    )
-})
-
-
-# TODO AGGIORNARE NOME
-tool_reference_list["SEGMENTE"] = ToolReference(
-    command="segmente",
-    package=Package.FREESURFER,
-    url="https://surfer.nmr.mgh.harvard.edu/fswiki/HippocampalSubfieldsAndNucleiOfAmygdala",
-    references=[
-        "Iglesias, J.E., Augustinack, J.C., Nguyen, K., Player, C.M., Player, A., Wright, M., Roy, N., Frosch, M.P., Mc Kee, A.C., Wald, L.L., Fischl, B., and Van Leemput, K. A computational atlas of the hippocampal formation using ex vivo, ultra-high resolution MRI: Application to adaptive segmentation of in vivo MRI. Neuroimage, 115, July 2015, 117-137.",
-        "Saygin ZM & Kliemann D (joint 1st authors), Iglesias JE, van der Kouwe AJW, Boyd E, Reuter M, Stevens A, Van Leemput K, Mc Kee A, Frosch MP, Fischl B, Augustinack JC. High-resolution magnetic resonance imaging reveals nuclei of the human amygdala: manual segmentation to automatic atlas. Neuroimage, 155, July 2017, 370-382."
-    ]
-)
-
-tool_reference_list["MRI_SYNTHSEG"] = ToolReference(
-    command="mri_synthseg",
-    package=Package.FREESURFER,
-    url="https://surfer.nmr.mgh.harvard.edu/fswiki/SynthSeg",
-    references=[
-        "Billot, B., Greve, D.N., Puonti, O., Thielscher, A., Van Leemput, K., Fischl, B., Dalca, A.V., Iglesias, J.E. SynthSeg: Segmentation of brain MRI scans of any contrast and resolution without retraining. Medical Image Analysis, 83, 102789 (2023).",
-        "Billot, B., Magdamo, C., Arnold, S.E., Das, S., Iglesias, J.E. Robust machine learning segmentation for large-scale analysis of heterogeneous clinical brain MRI datasets. PNAS, 120(9), e2216399120 (2023)."
-    ]
-)
-
-
-tool_reference_list["MRI_SYNTHMORPH"] = ToolReference(
-    command="mri_synthmorph",
-    package=Package.FREESURFER,
-    url="https://martinos.org/malte/synthmorph/",
-    references=[
-        "Hoffmann M, Hoopes A, Greve DN, Fischl B, Dalca AV. Anatomy-aware and acquisition-agnostic joint registration with SynthMorph. Imaging Neuroscience, 2, pp 1-33, 2024.",
-        "Hoffmann M, Hoopes A, Fischl B, Dalca AV. Anatomy-specific acquisition-agnostic affine registration learned from fictitious images. SPIE Medical Imaging: Image Processing, 12464, p 1246402, 2023."
-    ]
-)
-
-tool_reference_list["MRI_SYNTHSTRIP"] = ToolReference(
-    command="mri_synthstrip",
-    package=Package.FREESURFER,
-    url="https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/",
-    references=[
-        "Andrew Hoopes, Jocelyn S. Mora, Adrian V. Dalca, Bruce Fischl*, Malte Hoffmann* (*equal contribution). NeuroImage 260, 2022, 119474. https://doi.org/10.1016/j.neuroimage.2022.119474"
-    ]
-)
-
-
-tool_reference_list["DCM2NIIX"] = ToolReference(
-    command="dcm2niix",
-    package=Package.OTHER,
-    url="https://www.nitrc.org/plugins/mwiki/index.php/dcm2nii:MainPage",
-    references=[
-        "Li X, Morgan PS, Ashburner J, Smith J, Rorden C. The first step for neuroimaging data analysis: DICOM to NIfTI conversion. J Neurosci Methods. 2016 May 1;264:47-56. doi: 10.1016/j.jneumeth.2016.03.001. Epub 2016 Mar 2. PMID: 26945974."
-    ]
-)
-
-
+# Equivalent command list
+equivalent_command_list = {
+    "IsotropicSmooth": "MathsCommand",
+    "DilateImage": "MathsCommand",
+    "ErodeImage": "MathsCommand",
+    "MeanImage": "MathsCommand",
+    "Threshold": "MathsCommand",
+    "ThrROI": "MathsCommand",
+    "ApplyMask": "MathsCommand",
+    "DeleteVolumes": "MathsCommand",
+    "ImageMaths": "MathsCommand",
+    "BinaryMaths": "MathsCommand",
+    "UnaryMaths": "MathsCommand",
+    "SumMultiVols": "MathsCommand",
+    "SumMultiTracks": "MathsCommand",
+    "ApplyXFM": "FLIRT",
+    "CustomSliceTimer": "FEAT",
+    "FeatureSpatialPrep": "AromaClassification",
+    "FeatureTimeSeries": "AromaClassification",
+    "FeatureFrequency": "AromaClassification",
+    "FeatureSpatial": "AromaClassification",
+    "SynthMorphApply": "SynthMorphReg",
+    "EddyCorrect": "Eddy"
+}
