@@ -28,6 +28,7 @@ from swane.config.config_enums import (
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.DependencyManager import DependencyManager
+from swane.utils.platform_and_tools_utils import get_os_type, is_mac
 
 
 @dataclass
@@ -476,11 +477,16 @@ class PreferenceWizardWindow(QDialog):
         """
 
         page = QWidget()
+
+        advanced_models_text = strings.wizard_advanced_models_text
+        if is_mac():
+            advanced_models_text += "<br>" + strings.wizard_advanced_models_macos_warn
+
         lay = QVBoxLayout()
         lay.addWidget(
             self._make_title(
                 strings.wizard_advanced_models_title,
-                strings.wizard_advanced_models_text,
+                advanced_models_text,
             )
         )
 
@@ -505,7 +511,11 @@ class PreferenceWizardWindow(QDialog):
         lay.addStretch(1)
         page.setLayout(lay)
 
-        rb_adv.setChecked(True)
+        if is_mac():
+            rb_std.setChecked(True)
+        else:
+            rb_adv.setChecked(True)
+
         return page
 
     # --------------------------
