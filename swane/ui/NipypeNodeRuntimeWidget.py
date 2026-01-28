@@ -39,7 +39,7 @@ class NipypeNodeRuntimeWidget(QScrollArea):
     NODE_FILE_NAME = "_node.pklz"
     IMAGE_EXTENSIONS = (".nii", ".nii.gz", ".mgz", ".mgh")
 
-    def __init__(self, slicer_path:str=None, main_window=None, parent=None):
+    def __init__(self, slicer_path: str = None, main_window=None, parent=None):
         super().__init__(parent)
 
         self._main_window = main_window
@@ -154,8 +154,6 @@ class NipypeNodeRuntimeWidget(QScrollArea):
             self._add_label(strings.sub_tab_node_tool_label, self._row, 0)
             self._add_tool_button(tool_reference, self._row, 1)
             self._row += 1
-
-
 
         # ---------------- Directory ----------------
         self._add_label(strings.sub_tab_node_dir_label, self._row, 0)
@@ -323,8 +321,9 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         btn.setStyleSheet("text-align:left; color:#1a73e8;")
         btn.setMinimumHeight(self.MIN_ROW_HEIGHT)
         btn.clicked.connect(
-            lambda _, my_tab=tool_reference.package, my_cmd=tool_reference.command:
-            self._main_window.start_tool_reference(default_tab=my_tab, search_str=my_cmd)
+            lambda _, my_tab=tool_reference.package, my_cmd=tool_reference.command: self._main_window.start_tool_reference(
+                default_tab=my_tab, search_str=my_cmd
+            )
         )
         self.grid.addWidget(btn, row, col, 1, 5)
 
@@ -453,5 +452,3 @@ class NipypeNodeRuntimeWidget(QScrollArea):
             return interface_name
         except Exception:
             return None
-
-

@@ -469,9 +469,7 @@ class MainWindow(QMainWindow):
             return
 
         self._tool_reference_window = ToolReferenceWindow(
-            parent=self,
-            default_tab=default_tab,
-            search_string=search_str
+            parent=self, default_tab=default_tab, search_string=search_str
         )
 
         # quando viene chiusa, libera il riferimento
@@ -627,7 +625,7 @@ class MainWindow(QMainWindow):
         button_action7 = QAction(strings.menu_shutdown_pref, self)
         button_action7.setCheckable(True)
         button_action7.triggered.connect(self.toggle_shutdown_after_workflow)
-        
+
         button_action8 = QAction(strings.menu_tool_reference, self)
         button_action8.triggered.connect(self.start_tool_reference)
 
