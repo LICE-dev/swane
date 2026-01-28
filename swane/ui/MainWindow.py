@@ -450,7 +450,7 @@ class MainWindow(QMainWindow):
         )
         wf_preference_window.exec()
 
-    def start_tool_reference(self):
+    def start_tool_reference(self, default_tab=None, search_str=None):
         """
         Open the Tool Reference Window.
 
@@ -464,9 +464,15 @@ class MainWindow(QMainWindow):
             win.show()
             win.raise_()
             win.activateWindow()
+            if default_tab is not None and search_str is not None:
+                win.search(default_tab, search_str)
             return
 
-        self._tool_reference_window = ToolReferenceWindow(parent=self)
+        self._tool_reference_window = ToolReferenceWindow(
+            parent=self,
+            default_tab=default_tab,
+            search_string=search_str
+        )
 
         # quando viene chiusa, libera il riferimento
         self._tool_reference_window.finished.connect(
@@ -624,14 +630,14 @@ class MainWindow(QMainWindow):
         
         button_action8 = QAction(strings.menu_tool_reference, self)
         button_action8.triggered.connect(self.start_tool_reference)
-        
-        button_action9 = QAction(strings.menu_about, self)
-        button_action9.triggered.connect(self.about)
 
-        button_action10 = QAction(strings.menu_wiki, self)
-        button_action10.triggered.connect(
+        button_action9 = QAction(strings.menu_wiki, self)
+        button_action9.triggered.connect(
             lambda: QDesktopServices.openUrl(QUrl(strings.WIKI_URL))
         )
+
+        button_action10 = QAction(strings.menu_about, self)
+        button_action10.triggered.connect(self.about)
 
         # Menu definition and population
         menu = self.menuBar()

@@ -47,7 +47,7 @@ def get_deskull_node(
                 mask_name = fname_presuffix(out_file, suffix="_brain", use_ext=True)
             deskull_node.inputs.mask_file = mask_name
         deskull_node.inputs.exclude_csf = synth_exclude_csf
-        deskull_node.inputs.num_threads = 1
+        # deskull_node.inputs.num_threads = 1
         if bet_surfaces:
             deskull_node.inskull_out_name = "mask_file"
     else:
@@ -128,7 +128,7 @@ def get_registration_node(
         )
         synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
-        synth_morph_reg.inputs.num_threads = 1
+        # synth_morph_reg.inputs.num_threads = 1
         if out_file:
             if type(out_file) == str:
                 synth_morph_reg.inputs.out_file = out_file
