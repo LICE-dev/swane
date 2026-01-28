@@ -49,10 +49,10 @@ class PreferencesWindow(QDialog):
 
         if self.my_config.global_config:
             if is_workflow:
-                title = strings.menu_wf_pref
+                title = strings.menu_wf_pref_title
                 self.preferences = WF_PREFERENCES
             else:
-                title = strings.menu_pref
+                title = strings.menu_pref_title
                 self.preferences = GLOBAL_PREFERENCES
         else:
             self.preferences = WF_PREFERENCES

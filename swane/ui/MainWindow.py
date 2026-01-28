@@ -21,6 +21,7 @@ from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
+from swane.ui.ToolReferenceWindow import ToolReferenceWindow
 from swane.utils.DependencyManager import (
     DependencyManager,
     Dependence,
@@ -447,11 +448,38 @@ class MainWindow(QMainWindow):
         wf_preference_window = PreferenceWizardWindow(
             self.global_config, self.dependency_manager
         )
-        ret = wf_preference_window.exec()
+        wf_preference_window.exec()
 
-        if ret == -1:
-            # TODO - Perché questa guardia?
-            self.start_preference_wizard()
+    def start_tool_reference(self, default_tab=None, search_str=None):
+        """
+        Open the Tool Reference Window.
+
+        Returns
+        -------
+        None.
+
+        """
+        if hasattr(self, "_tool_reference_window") and self._tool_reference_window:
+            win = self._tool_reference_window
+            win.show()
+            win.raise_()
+            win.activateWindow()
+            if default_tab is not None and search_str is not None:
+                win.search(default_tab, search_str)
+            return
+
+        self._tool_reference_window = ToolReferenceWindow(
+            parent=self,
+            default_tab=default_tab,
+            search_string=search_str
+        )
+
+        # quando viene chiusa, libera il riferimento
+        self._tool_reference_window.finished.connect(
+            lambda _: setattr(self, "_tool_reference_window", None)
+        )
+
+        self._tool_reference_window.show()
 
     def check_running_workflows(self, ignore_subj: Subject = None) -> bool:
         """
@@ -599,14 +627,17 @@ class MainWindow(QMainWindow):
         button_action7 = QAction(strings.menu_shutdown_pref, self)
         button_action7.setCheckable(True)
         button_action7.triggered.connect(self.toggle_shutdown_after_workflow)
-
-        button_action8 = QAction(strings.menu_about, self)
-        button_action8.triggered.connect(self.about)
+        
+        button_action8 = QAction(strings.menu_tool_reference, self)
+        button_action8.triggered.connect(self.start_tool_reference)
 
         button_action9 = QAction(strings.menu_wiki, self)
         button_action9.triggered.connect(
             lambda: QDesktopServices.openUrl(QUrl(strings.WIKI_URL))
         )
+
+        button_action10 = QAction(strings.menu_about, self)
+        button_action10.triggered.connect(self.about)
 
         # Menu definition and population
         menu = self.menuBar()
@@ -623,6 +654,7 @@ class MainWindow(QMainWindow):
         help_menu = menu.addMenu(strings.menu_help_name)
         help_menu.addAction(button_action8)
         help_menu.addAction(button_action9)
+        help_menu.addAction(button_action10)
 
         # Tab definition
         self.main_tab = QTabWidget(parent=self)
