@@ -14,8 +14,8 @@ class ResourceManager:
     DEFAULT_RAM_PERC = 70
 
     SYNTH_STRIP_RAM_REQUIREMENT = {"mac": 30, "linux": 5, "other": 5}
-    SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 14, "linux": 14, "other": 14}
-    SYNTH_SEG_RAM_REQUIREMENT = {"mac": 14, "linux": 14, "other": 14}
+    SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 20, "linux": 14, "other": 14}
+    SYNTH_SEG_RAM_REQUIREMENT = {"mac": 30, "linux": 14, "other": 14}
     SYNTH_RECONALL_RAM_REQUIREMENT = {"mac": 20, "linux": 20, "other": 20}
 
     @staticmethod
