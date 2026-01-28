@@ -200,7 +200,7 @@ class SubjectTab(QTabWidget):
             # Add a minimum delay to wait fornipype file after node start signal
             QTimer.singleShot(
                 400,
-                lambda: self.tree_item_clicked(
+                lambda: self.tree_item_changed(
                     self.node_list[wf_report.workflow_name]
                     .node_list[wf_report.node_name]
                     .node_holder,
@@ -540,7 +540,8 @@ class SubjectTab(QTabWidget):
         self.node_list_treeWidget.horizontalScrollBar().setEnabled(True)
 
         layout.addWidget(self.node_list_treeWidget, 2, 0)
-        self.node_list_treeWidget.itemClicked.connect(self.tree_item_clicked)
+        # self.node_list_treeWidget.itemClicked.connect(self.tree_item_clicked)
+        self.node_list_treeWidget.currentItemChanged.connect(self.tree_item_changed)
 
         # Second Column: Graphviz Graph Layout
         self.subject_config_button = QPushButton(strings.SUBJCONFIGBUTTONTEXT)
@@ -563,7 +564,8 @@ class SubjectTab(QTabWidget):
         self.exec_graph = QSvgWidget()
         layout.addWidget(self.exec_graph, 2, 1)
         self.node_runtime_widget = NipypeNodeRuntimeWidget(
-            slicer_path=self.global_config.get_slicer_path()
+            slicer_path=self.global_config.get_slicer_path(),
+            main_window=self.main_window
         )
         layout.addWidget(self.node_runtime_widget, 2, 1)
 
@@ -667,7 +669,7 @@ class SubjectTab(QTabWidget):
         self.exec_graph.hide()
         self.generate_workflow_button.setEnabled(False)
 
-    def tree_item_clicked(self, item, col: int):
+    def tree_item_changed(self, item, previous):
         """
         Listener for the QTreeWidget Items.
         Shows the clicked analysis graphviz graph.
@@ -676,8 +678,8 @@ class SubjectTab(QTabWidget):
         ----------
         item : QTreeWidget Item
             The QTreeWidget item clicked.
-        col : int
-            The QTreeWidget column.
+        previous
+            Previous selection.
 
         Returns
         -------
