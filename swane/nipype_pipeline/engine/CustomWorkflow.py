@@ -76,7 +76,7 @@ class CustomWorkflow(Workflow):
         node_list = []
         for node in topological_sort(self._graph):
             if hasattr(node, "interface") and isinstance(
-                    node.interface, IdentityInterface
+                node.interface, IdentityInterface
             ):
                 continue
 
@@ -88,8 +88,8 @@ class CustomWorkflow(Workflow):
 
     def get_interface_array(self):
         """
-       Returns a sorted list of interface class names used in the workflow (excluding IdentityInterface)
-       """
+        Returns a sorted list of interface class names used in the workflow (excluding IdentityInterface)
+        """
         interface_names = {
             node.interface.__class__.__name__
             for node in self._get_basic_node_array()

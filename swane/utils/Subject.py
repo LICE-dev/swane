@@ -19,6 +19,7 @@ from swane.workers.WorkflowProcess import WorkflowProcess
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.utils.ToolReference import tool_reference_list
 
+
 class SubjectRet(Enum):
     FolderNotFound = auto()
     PathBlankSpaces = auto()
