@@ -65,6 +65,38 @@ class CustomWorkflow(Workflow):
                 outlist[node.name].node_list = node.get_node_array()
         return outlist
 
+    def _get_basic_node_array(self):
+        """
+        Returns a list of nodes in the workflow, recursively including nodes in nested CustomWorkflows.
+        Nodes with IdentityInterface are skipped.
+        """
+
+        from networkx import topological_sort
+
+        node_list = []
+        for node in topological_sort(self._graph):
+            if hasattr(node, "interface") and isinstance(
+                    node.interface, IdentityInterface
+            ):
+                continue
+
+            if isinstance(node, CustomWorkflow):
+                node_list.extend(node._get_basic_node_array())
+            else:
+                node_list.append(node)
+        return node_list
+
+    def get_interface_array(self):
+        """
+       Returns a sorted list of interface class names used in the workflow (excluding IdentityInterface)
+       """
+        interface_names = {
+            node.interface.__class__.__name__
+            for node in self._get_basic_node_array()
+            if hasattr(node, "interface")
+        }
+        return sorted(interface_names)
+
     def sink_result(
         self,
         save_path: str,
