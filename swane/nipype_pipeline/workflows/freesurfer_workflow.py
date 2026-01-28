@@ -123,7 +123,7 @@ def freesurfer_workflow(
         synth_seg.inputs.robust = True
         synth_seg.inputs.use_cpu = True
         synth_seg.inputs.keep_geometry = True
-        synth_seg.inputs.num_threads = 1
+        # synth_seg.inputs.num_threads = 1
         synth_seg.inputs.out_file = "r-aparc_aseg.mgz"
         workflow.connect(inputnode, "reference", synth_seg, "in_file")
         workflow.connect(synth_seg, "out_file", outputnode, "vol_label_file")
