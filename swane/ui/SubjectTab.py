@@ -669,14 +669,14 @@ class SubjectTab(QTabWidget):
         self.exec_graph.hide()
         self.generate_workflow_button.setEnabled(False)
 
-    def tree_item_changed(self, item, previous):
+    def tree_item_changed(self, current, previous):
         """
         Listener for the QTreeWidget Items.
         Shows the clicked analysis graphviz graph.
 
         Parameters
         ----------
-        item : QTreeWidget Item
+        current : QTreeWidget Item
             The QTreeWidget item clicked.
         previous
             Previous selection.
@@ -687,8 +687,11 @@ class SubjectTab(QTabWidget):
 
         """
 
-        if item.parent() is None:
-            graph_file = self.subject.graph_file(item.get_text())
+        if current is None:
+            return
+
+        if current.parent() is None:
+            graph_file = self.subject.graph_file(current.get_text())
             if os.path.exists(graph_file):
                 self.exec_graph.load(graph_file)
                 self.exec_graph.renderer().setAspectRatioMode(
@@ -699,7 +702,7 @@ class SubjectTab(QTabWidget):
         else:
             self.exec_graph.hide()
             self.node_runtime_widget.show()
-            self.node_runtime_widget.load_node_result(self.subject.workflow_dir(), item)
+            self.node_runtime_widget.load_node_result(self.subject.workflow_dir(), current)
 
     @staticmethod
     def no_close_event(event):
