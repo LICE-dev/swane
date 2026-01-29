@@ -1,8 +1,8 @@
 import os
 from functools import partial
 from datetime import datetime
-from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher, QTimer, QUrl
+from PySide6.QtGui import QFont, QDesktopServices
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
     QTabWidget,
@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QFileSystemModel,
     QTreeView,
     QComboBox,
-    QScrollArea,
 )
 from swane import strings
 from swane.config.config_enums import GlobalPrefCategoryList
@@ -42,7 +41,6 @@ from swane.utils.DependencyManager import DependencyManager
 from swane.config.preference_list import WorkflowTypes
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.utils.Subject import Subject, SubjectRet
-from swane.workers.open_results_directory import open_results_directory
 
 
 class SubjectTab(QTabWidget):
@@ -540,7 +538,6 @@ class SubjectTab(QTabWidget):
         self.node_list_treeWidget.horizontalScrollBar().setEnabled(True)
 
         layout.addWidget(self.node_list_treeWidget, 2, 0)
-        # self.node_list_treeWidget.itemClicked.connect(self.tree_item_clicked)
         self.node_list_treeWidget.currentItemChanged.connect(self.tree_item_changed)
 
         # Second Column: Graphviz Graph Layout
@@ -669,16 +666,16 @@ class SubjectTab(QTabWidget):
         self.exec_graph.hide()
         self.generate_workflow_button.setEnabled(False)
 
-    def tree_item_changed(self, current, previous):
+    def tree_item_changed(self, current: CustomTreeWidgetItem, previous: CustomTreeWidgetItem):
         """
         Listener for the QTreeWidget Items.
         Shows the clicked analysis graphviz graph.
 
         Parameters
         ----------
-        current : QTreeWidget Item
+        current : CustomTreeWidgetItem
             The QTreeWidget item clicked.
-        previous
+        previous : CustomTreeWidgetItem
             Previous selection.
 
         Returns
@@ -909,10 +906,9 @@ class SubjectTab(QTabWidget):
             strings.subj_tab_open_results_directory
         )
         self.open_results_directory_button.clicked.connect(
-            lambda pushed=False, results_dir=self.subject.result_dir(): open_results_directory(
-                pushed, results_dir
-            )
+            lambda _, results_dir=self.subject.result_dir(): QDesktopServices.openUrl(QUrl.fromLocalFile(results_dir))
         )
+
         self.open_results_directory_button.setSizePolicy(
             QSizePolicy.Fixed, QSizePolicy.Fixed
         )

@@ -483,8 +483,7 @@ class Subject:
 
             # Reset the workflows related to the deleted DICOM images
             src_path = os.path.join(
-                self.folder,
-                self.name + strings.WF_DIR_SUFFIX,
+                self.workflow_dir(),
                 data_input.value.workflow_name,
             )
             shutil.rmtree(src_path, ignore_errors=True)
@@ -770,7 +769,7 @@ class Subject:
         Delete any previous workflow execution
         """
         shutil.rmtree(self.workflow_dir(), ignore_errors=True)
-        self.result_dir()
+        self.delete_result_dir()
 
     def delete_result_dir(self):
         """
@@ -799,6 +798,12 @@ class Subject:
         Delete any previous freesurfer run
         """
         shutil.rmtree(self.freesurfer_dir(), ignore_errors=True)
+
+        freesurfer_workflow_dir = os.path.join(
+            self.workflow_dir(),
+            "freesurfer",
+        )
+        shutil.rmtree(freesurfer_workflow_dir, ignore_errors=True)
 
     def start_workflow(
         self,

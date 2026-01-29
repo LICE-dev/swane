@@ -5,6 +5,8 @@ from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
+
+from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     get_registration_node,
@@ -152,7 +154,14 @@ def linear_reg_workflow(
             bet_bias_correction=bet_bias_correction,
         )
         workflow.connect(robustfov, "out_roi", deskull, "in_file")
-        moving_brain = [deskull, "out_file"]
+
+        if is_volumetric:
+            bias_correction = Node(N4BiasFieldCorrection(), name="bias_correction")
+            bias_correction.inputs.skull_stripped = True
+            workflow.connect(deskull, "out_file", bias_correction, "in_file")
+            moving_brain = [bias_correction, "out_file"]
+        else:
+            moving_brain = [deskull, "out_file"]
 
     reg_wrap = get_registration_node(
         name=name,
@@ -190,7 +199,7 @@ def linear_reg_workflow(
             use_synth=synth_config.getboolean_safe("morph"),
             workflow=workflow,
             warp=[reg_wrap.out_registered_node, reg_wrap.warp],
-            moving=[deskull, "out_file"],
+            moving=[bias_correction, "out_file"] if is_volumetric else [deskull, "out_file"],
             reference=[inputnode, "reference"],
             out_file=[betted_name, "out_file"],
             non_linear=False,
