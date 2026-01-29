@@ -99,7 +99,7 @@ def ref_workflow(
 
     ref_bias_correction = Node(N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2)
     ref_bias_correction.inputs.skull_stripped = True
-    ref_bias_correction.inputs.out_file = "ref_deskull.nii.gz"
+    ref_bias_correction.inputs.out_file = "ref_brain.nii.gz"
     workflow.connect(ref_deskull, "out_file", ref_bias_correction, "in_file")
 
     workflow.connect(ref_reScale, "out_file", outputnode, "reference")
