@@ -156,7 +156,7 @@ def linear_reg_workflow(
         workflow.connect(robustfov, "out_roi", deskull, "in_file")
 
         if is_volumetric:
-            bias_correction = Node(N4BiasFieldCorrection(), name="bias_correction")
+            bias_correction = Node(N4BiasFieldCorrection(), name="bias_correction", mem_gb=2)
             bias_correction.inputs.skull_stripped = True
             workflow.connect(deskull, "out_file", bias_correction, "in_file")
             moving_brain = [bias_correction, "out_file"]
