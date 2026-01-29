@@ -52,12 +52,14 @@ class BlockDesign(Enum):
 class FreesurferStep(Enum):
     DISABLED = "Disabled"
     SYNTHSEG = "SynthSeg Cortical Parcellation only (if available)"
-    AUTORECON2 = "Preprocessing only"
     AUTORECON_PIAL = "Surfaces + Cortical Parcellation"
     RECONALL = "Complete Recon-all"
 
     def has_surface(self):
-        return self in {FreesurferStep.AUTORECON_PIAL, FreesurferStep.RECONALL}
+        return self in {
+            FreesurferStep.AUTORECON_PIAL,
+            FreesurferStep.RECONALL
+        }
 
     def has_parcellation(self):
         return self in {

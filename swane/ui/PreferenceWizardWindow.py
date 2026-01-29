@@ -71,7 +71,7 @@ class UserPreferences:
     # Freesurfer outputs selection (only meaningful if freesurfer_capable=True)
     freesurfer_capable: bool = False
     matlab_capable: bool = False
-    cortilcal_parcellation_enabled: bool = False
+    cortical_parcellation_enabled: bool = False
     surfaces_enabled: bool = False
     hippocampal_segmentation_enabled: bool = False
     full_reconall_enabled: bool = False
@@ -142,8 +142,8 @@ class PreferenceWizardWindow(QDialog):
 
         super(PreferenceWizardWindow, self).__init__(parent)
 
-        self.global_config = global_config
-        self.dependency_manager = dependency_manager
+        self.global_config : ConfigManager = global_config
+        self.dependency_manager : DependencyManager = dependency_manager
         self.user_prefs = UserPreferences()
 
         self.setWindowTitle(strings.preference_wizard_title)
@@ -816,7 +816,7 @@ class PreferenceWizardWindow(QDialog):
             )
         else:
             freesurfer_outputs_enabled: list[str] = []
-            if self.user_prefs.cortilcal_parcellation_enabled:
+            if self.user_prefs.cortical_parcellation_enabled:
                 freesurfer_outputs_enabled.append(
                     strings.freesurfer_outputs_cortical_parcellation
                 )
@@ -1063,7 +1063,7 @@ class PreferenceWizardWindow(QDialog):
             "freesurfer_step"
         ] = FreesurferStep.DISABLED.name
         if (
-            self.user_prefs.cortilcal_parcellation_enabled
+            self.user_prefs.cortical_parcellation_enabled
             and not self.user_prefs.hippocampal_segmentation_enabled
             and not self.user_prefs.surfaces_enabled
             and not self.user_prefs.full_reconall_enabled
@@ -1077,7 +1077,7 @@ class PreferenceWizardWindow(QDialog):
                 "freesurfer_step"
             ] = FreesurferStep.RECONALL.name
         elif (
-            self.user_prefs.cortilcal_parcellation_enabled
+            self.user_prefs.cortical_parcellation_enabled
             or self.user_prefs.surfaces_enabled
         ):
             self.global_config[DataInputList.T13D][
@@ -1087,11 +1087,11 @@ class PreferenceWizardWindow(QDialog):
         if self.user_prefs.hippocampal_segmentation_enabled:
             if (
                 self.global_config.getenum_safe(DataInputList.T13D, "freesurfer_step")
-                is FreesurferStep.DISABLED
+                is not FreesurferStep.RECONALL
             ):
                 self.global_config[DataInputList.T13D][
                     "freesurfer_step"
-                ] = FreesurferStep.AUTORECON2.name
+                ] = FreesurferStep.AUTORECON_PIAL.name
             self.global_config[DataInputList.T13D]["hippo_amyg_labels"] = str(True)
 
         self.global_config.save()

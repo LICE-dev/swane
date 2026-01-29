@@ -304,14 +304,14 @@ class MainWorkflow(CustomWorkflow):
                 save_path=self.base_dir,
                 result_node="outputnode",
                 result_name="lh_hippoAmygLabels",
-                sub_folder="scene.segmentHA",
+                sub_folder=os.path.join(self.Result_DIR, "segmentHA"),
                 regexp_substitutions=regex_subs,
             )
             self.freesurfer.sink_result(
                 save_path=self.base_dir,
                 result_node="outputnode",
                 result_name="rh_hippoAmygLabels",
-                sub_folder="scene.segmentHA",
+                sub_folder=os.path.join(self.Result_DIR, "segmentHA"),
                 regexp_substitutions=regex_subs,
             )
 

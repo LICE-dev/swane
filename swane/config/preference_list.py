@@ -138,14 +138,13 @@ WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
             (
                 "freesurfer_step",
                 [
-                    FreesurferStep.AUTORECON2,
                     FreesurferStep.RECONALL,
                     FreesurferStep.AUTORECON_PIAL,
                 ],
             )
         ]
     },
-    pref_requirement_fail_tooltip="Requires Freesurfer Preprocessing",
+    pref_requirement_fail_tooltip="Requires Freesurfer Surfaces",
 )
 
 category = DataInputList.FLAIR3D
