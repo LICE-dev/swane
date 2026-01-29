@@ -2,6 +2,7 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
+from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
 from swane.nipype_pipeline.nodes.utils import get_deskull_node
 from configparser import SectionProxy
 from nipype.interfaces.fsl import RobustFOV
@@ -86,7 +87,7 @@ def ref_workflow(
 
     # NODE 5: Scalp removal
     ref_deskull = get_deskull_node(
-        name="ref_deskull",
+        name="ref_deskull_biased",
         use_synth=synth_config.getboolean_safe("strip"),
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
@@ -96,8 +97,13 @@ def ref_workflow(
     )
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
+    ref_bias_correction = Node(N4BiasFieldCorrection(), name="ref_bias_correction")
+    ref_bias_correction.inputs.skull_stripped = True
+    ref_bias_correction.inputs.out_file = "ref_deskull.nii.gz"
+    workflow.connect(ref_deskull, "out_file", ref_bias_correction, "in_file")
+
     workflow.connect(ref_reScale, "out_file", outputnode, "reference")
-    workflow.connect(ref_deskull, "out_file", outputnode, "reference_brain")
+    workflow.connect(ref_bias_correction, "out_file", outputnode, "reference_brain")
     workflow.connect(ref_deskull, "mask_file", outputnode, "ref_mask")
 
     return workflow
