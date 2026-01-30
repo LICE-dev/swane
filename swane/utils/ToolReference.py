@@ -311,6 +311,7 @@ equivalent_command_list = {
     "UnaryMaths": "MathsCommand",
     "SumMultiVols": "MathsCommand",
     "SumMultiTracks": "MathsCommand",
+    "SpatialFilter": "MathsCommand",
     "ApplyXFM": "FLIRT",
     "CustomSliceTimer": "FEAT",
     "FeatureSpatialPrep": "AromaClassification",

@@ -45,6 +45,7 @@ setup(
         "cryptography",
         "dicom-sequence-classifier==1.0.4",
         "ica_aroma_py==0.1.2",
+        "SimpleITK>=2.5.0",
     ],
     python_requires=">=3.10",
     entry_points={"gui_scripts": ["swane = swane.__main__:main"]},
