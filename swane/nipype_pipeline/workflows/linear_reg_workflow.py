@@ -7,6 +7,7 @@ from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
 
 from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
+from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     get_registration_node,
@@ -214,20 +215,24 @@ def linear_reg_workflow(
         if bias_field_correction:
             bias_correction = Node(N4BiasFieldCorrection(), name="bias_correction", mem_gb=2)
             workflow.connect(deskull_2_ref, "out_file", bias_correction, "mask_file")
-            workflow.connect(unbetted_name, "out_file", bias_correction, "out_file")
             workflow.connect(reg_wrap.out_registered_node,
                              reg_wrap.out_registered_image,
                              bias_correction,
                              "in_file"
             )
 
-            bias_correction_deskull = Node(ApplyMask(), name="bias_correction_deskull")
-            workflow.connect(deskull_2_ref, "out_file", bias_correction_deskull, "mask_file")
-            workflow.connect(betted_name, "out_file", bias_correction_deskull, "out_file")
-            workflow.connect(bias_correction, "out_file", bias_correction_deskull, "in_file")
+            normalization = Node(ZIntNorm(), name="normalization")
+            workflow.connect(unbetted_name, "out_file", normalization, "out_file")
+            workflow.connect(bias_correction, "out_file", normalization, "in_file")
+            workflow.connect(deskull_2_ref, "out_file", normalization, "mask_file")
 
-            workflow.connect(bias_correction, "out_file", outputnode, "registered_file")
-            workflow.connect(bias_correction_deskull, "out_file", outputnode, "registered_file_brain")
+            corrected_deskull = Node(ApplyMask(), name="corrected_deskull")
+            workflow.connect(deskull_2_ref, "out_file", corrected_deskull, "mask_file")
+            workflow.connect(betted_name, "out_file", corrected_deskull, "out_file")
+            workflow.connect(normalization, "out_file", corrected_deskull, "in_file")
+
+            workflow.connect(normalization, "out_file", outputnode, "registered_file")
+            workflow.connect(corrected_deskull, "out_file", outputnode, "registered_file_brain")
             workflow.connect(deskull_2_ref, "out_file", outputnode, "uncorrected_registered_file_brain")
             workflow.connect(
                 reg_wrap.out_registered_node,
