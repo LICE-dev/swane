@@ -5,7 +5,7 @@ from swane.nipype_pipeline.nodes.CropFov import CropFov
 from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
 from swane.nipype_pipeline.nodes.utils import get_deskull_node
 from configparser import SectionProxy
-from nipype.interfaces.fsl import RobustFOV
+from nipype.interfaces.fsl import RobustFOV, ApplyMask
 from nipype.interfaces.utility import IdentityInterface
 from nipype import Node
 
@@ -44,12 +44,16 @@ def ref_workflow(
 
     Output Node Fields
     ----------
-    ref : path
+    reference : path
         T13D.
     reference_brain : path
         Betted T13D.
     reference_mask : path
         Brain mask from T13D bet command.
+    unbiased_reference : path
+        Unbiased T13D.
+    unbiased_reference_brain : path
+        Unbiased betted T13D.
 
     """
 
@@ -57,7 +61,7 @@ def ref_workflow(
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=["reference", "reference_brain", "ref_mask"]),
+        IdentityInterface(fields=["reference", "reference_brain", "ref_mask", "unbiased_reference", "unbiased_reference_brain"]),
         name="outputnode",
     )
 
@@ -82,7 +86,7 @@ def ref_workflow(
     ref_reScale = Node(CropFov(), name="%s_reScale" % name)
     ref_reScale.long_name = "Crop large FOV"
     ref_reScale.inputs.max_dim = 256
-    ref_reScale.inputs.out_file = "ref.nii.gz"
+    ref_reScale.inputs.out_file = "ref_unbiased.nii.gz"
     workflow.connect(ref_robustfov, "out_roi", ref_reScale, "in_file")
 
     # NODE 5: Scalp removal
@@ -98,12 +102,19 @@ def ref_workflow(
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
     ref_bias_correction = Node(N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2)
-    ref_bias_correction.inputs.skull_stripped = True
-    ref_bias_correction.inputs.out_file = "ref_brain.nii.gz"
-    workflow.connect(ref_deskull, "out_file", ref_bias_correction, "in_file")
+    ref_bias_correction.inputs.out_file = "ref.nii.gz"
+    workflow.connect(ref_reScale, "out_file", ref_bias_correction, "in_file")
+    workflow.connect(ref_deskull, "mask_file", ref_bias_correction, "mask_file")
 
-    workflow.connect(ref_reScale, "out_file", outputnode, "reference")
-    workflow.connect(ref_bias_correction, "out_file", outputnode, "reference_brain")
+    ref_bias_deskull = Node(ApplyMask(), name="ref_bias_deskull")
+    ref_bias_deskull.inputs.out_file = "ref_brain.nii.gz"
+    workflow.connect(ref_bias_correction, "out_file", ref_bias_deskull, "in_file")
+    workflow.connect(ref_deskull, "mask_file", ref_bias_deskull, "mask_file")
+
+    workflow.connect(ref_bias_correction, "out_file", outputnode, "reference")
+    workflow.connect(ref_bias_deskull, "out_file", outputnode, "reference_brain")
     workflow.connect(ref_deskull, "mask_file", outputnode, "ref_mask")
+    workflow.connect(ref_reScale, "out_file", outputnode, "unbiased_reference")
+    workflow.connect(ref_deskull, "out_file", outputnode, "unbiased_reference_brain")
 
     return workflow
