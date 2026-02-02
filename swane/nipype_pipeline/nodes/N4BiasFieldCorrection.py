@@ -2,8 +2,6 @@
 import SimpleITK as sitk
 from os.path import abspath
 import os
-
-from bokeh.core.property.primitive import Bool
 from nipype.interfaces.base import (
     traits,
     BaseInterface,
@@ -41,7 +39,7 @@ class N4BiasFieldCorrectionOutputSpec(TraitedSpec):
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class N4BiasFieldCorrection(BaseInterface):
     """
-    If FOV exceeds 250mm, crop the borders.
+    Apply N4 bias field correction algorithm
 
     """
 
@@ -58,6 +56,7 @@ class N4BiasFieldCorrection(BaseInterface):
         if isdefined(self.inputs.mask_file):
             # If a mask is provided, use it
             mask = sitk.ReadImage(self.inputs.mask_file, sitk.sitkUInt8)
+            mask = sitk.Cast(mask > 0, sitk.sitkUInt8)
         elif self.inputs.skull_stripped:
             # Otherwise, if the input sequence is skull stripped, assume brain for every non 0 voxel
             mask = sitk.Cast(img > 0, sitk.sitkUInt8)
