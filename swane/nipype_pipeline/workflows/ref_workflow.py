@@ -3,6 +3,7 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
 from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
+from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
 from swane.nipype_pipeline.nodes.utils import get_deskull_node
 from configparser import SectionProxy
 from nipype.interfaces.fsl import RobustFOV, ApplyMask
@@ -102,17 +103,21 @@ def ref_workflow(
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
     ref_bias_correction = Node(N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2)
-    ref_bias_correction.inputs.out_file = "ref.nii.gz"
     workflow.connect(ref_reScale, "out_file", ref_bias_correction, "in_file")
     workflow.connect(ref_deskull, "mask_file", ref_bias_correction, "mask_file")
 
-    ref_bias_deskull = Node(ApplyMask(), name="ref_bias_deskull")
-    ref_bias_deskull.inputs.out_file = "ref_brain.nii.gz"
-    workflow.connect(ref_bias_correction, "out_file", ref_bias_deskull, "in_file")
-    workflow.connect(ref_deskull, "mask_file", ref_bias_deskull, "mask_file")
+    ref_normalization = Node(ZIntNorm(), name="ref_normalization")
+    ref_normalization.inputs.out_file = "ref.nii.gz"
+    workflow.connect(ref_bias_correction, "out_file", ref_normalization, "in_file")
+    workflow.connect(ref_deskull, "mask_file", ref_normalization, "mask_file")
 
-    workflow.connect(ref_bias_correction, "out_file", outputnode, "reference")
-    workflow.connect(ref_bias_deskull, "out_file", outputnode, "reference_brain")
+    ref_corrected_deskull = Node(ApplyMask(), name="ref_corrected_deskull")
+    ref_corrected_deskull.inputs.out_file = "ref_brain.nii.gz"
+    workflow.connect(ref_normalization, "out_file", ref_corrected_deskull, "in_file")
+    workflow.connect(ref_deskull, "mask_file", ref_corrected_deskull, "mask_file")
+
+    workflow.connect(ref_normalization, "out_file", outputnode, "reference")
+    workflow.connect(ref_corrected_deskull, "out_file", outputnode, "reference_brain")
     workflow.connect(ref_deskull, "mask_file", outputnode, "ref_mask")
     workflow.connect(ref_reScale, "out_file", outputnode, "uncorrected_reference")
     workflow.connect(ref_deskull, "out_file", outputnode, "uncorrected_reference_brain")
