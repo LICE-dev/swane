@@ -103,20 +103,16 @@ def ref_workflow(
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
     ref_bias_correction = Node(N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2)
+    ref_bias_correction.inputs.out_file = "ref.nii.gz"
     workflow.connect(ref_reScale, "out_file", ref_bias_correction, "in_file")
     workflow.connect(ref_deskull, "mask_file", ref_bias_correction, "mask_file")
 
-    ref_normalization = Node(ZIntNorm(), name="ref_normalization")
-    ref_normalization.inputs.out_file = "ref.nii.gz"
-    workflow.connect(ref_bias_correction, "out_file", ref_normalization, "in_file")
-    workflow.connect(ref_deskull, "mask_file", ref_normalization, "mask_file")
-
     ref_corrected_deskull = Node(ApplyMask(), name="ref_corrected_deskull")
     ref_corrected_deskull.inputs.out_file = "ref_brain.nii.gz"
-    workflow.connect(ref_normalization, "out_file", ref_corrected_deskull, "in_file")
+    workflow.connect(ref_bias_correction, "out_file", ref_corrected_deskull, "in_file")
     workflow.connect(ref_deskull, "mask_file", ref_corrected_deskull, "mask_file")
 
-    workflow.connect(ref_normalization, "out_file", outputnode, "reference")
+    workflow.connect(ref_bias_correction, "out_file", outputnode, "reference")
     workflow.connect(ref_corrected_deskull, "out_file", outputnode, "reference_brain")
     workflow.connect(ref_deskull, "mask_file", outputnode, "ref_mask")
     workflow.connect(ref_reScale, "out_file", outputnode, "uncorrected_reference")
