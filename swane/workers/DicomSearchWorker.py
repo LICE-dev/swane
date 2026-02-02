@@ -32,9 +32,6 @@ class DicomSearchWorker(QRunnable):
         self.tree = DicomTree(dicom_dir)
         self.error_message = []
         self.classify = classify
-        # self.dicom_tree = {}
-        # self.series_positions = {}
-        # self.multi_frame_series = {}
 
     @staticmethod
     def clean_text(string: str) -> str:
@@ -157,8 +154,12 @@ class DicomSearchWorker(QRunnable):
                 if "NumberOfFrames" in ds and int(ds.NumberOfFrames) > 1:
                     multi_frame_series = True
 
+                sop_uid = None
+                if "SOPInstanceUID" in ds:
+                    sop_uid = ds.SOPInstanceUID
+
                 dicom_series.add_dicom_loc(
-                    dicom_loc, multi_frame_series, ds.get("SliceLocation"), ds
+                    dicom_loc, multi_frame_series, ds.get("SliceLocation"), sop_uid, ds
                 )
                 dicom_series.modality = ds.Modality
                 if dicom_series.description == "Not named":
