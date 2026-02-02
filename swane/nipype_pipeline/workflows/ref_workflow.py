@@ -50,10 +50,10 @@ def ref_workflow(
         Betted T13D.
     reference_mask : path
         Brain mask from T13D bet command.
-    unbiased_reference : path
-        Unbiased T13D.
-    unbiased_reference_brain : path
-        Unbiased betted T13D.
+    uncorrected_reference : path
+        Uncorrected T13D.
+    uncorrected_reference_brain : path
+        Uncorrected betted T13D.
 
     """
 
@@ -61,7 +61,7 @@ def ref_workflow(
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=["reference", "reference_brain", "ref_mask", "unbiased_reference", "unbiased_reference_brain"]),
+        IdentityInterface(fields=["reference", "reference_brain", "ref_mask", "uncorrected_reference", "uncorrected_reference_brain"]),
         name="outputnode",
     )
 
@@ -86,7 +86,7 @@ def ref_workflow(
     ref_reScale = Node(CropFov(), name="%s_reScale" % name)
     ref_reScale.long_name = "Crop large FOV"
     ref_reScale.inputs.max_dim = 256
-    ref_reScale.inputs.out_file = "ref_unbiased.nii.gz"
+    ref_reScale.inputs.out_file = "ref_uncorrected.nii.gz"
     workflow.connect(ref_robustfov, "out_roi", ref_reScale, "in_file")
 
     # NODE 5: Scalp removal
@@ -114,7 +114,7 @@ def ref_workflow(
     workflow.connect(ref_bias_correction, "out_file", outputnode, "reference")
     workflow.connect(ref_bias_deskull, "out_file", outputnode, "reference_brain")
     workflow.connect(ref_deskull, "mask_file", outputnode, "ref_mask")
-    workflow.connect(ref_reScale, "out_file", outputnode, "unbiased_reference")
-    workflow.connect(ref_deskull, "out_file", outputnode, "unbiased_reference_brain")
+    workflow.connect(ref_reScale, "out_file", outputnode, "uncorrected_reference")
+    workflow.connect(ref_deskull, "out_file", outputnode, "uncorrected_reference_brain")
 
     return workflow

@@ -70,10 +70,10 @@ def linear_reg_workflow(
         Output betted file in T13D reference space.
     out_matrix_file : path
         Linear registration matrix to T13D reference space.
-    unbiased_registered_file : string
-        Unbiased output file in T13D reference space.
-    unbiased_registered_file_brain : string
-        Unbiased output betted file in T13D reference space.
+    uncorrected_registered_file : string
+        Uncorrected output file in T13D reference space.
+    uncorrected_registered_file_brain : string
+        Uncorrected output betted file in T13D reference space.
 
     """
 
@@ -90,7 +90,7 @@ def linear_reg_workflow(
     # Output Node
     outputnode = Node(
         IdentityInterface(
-            fields=["registered_file", "registered_file_brain", "out_matrix_file", "unbiased_registered_file", "unbiased_registered_file_brain"]
+            fields=["registered_file", "registered_file_brain", "out_matrix_file", "uncorrected_registered_file", "uncorrected_registered_file_brain"]
         ),
         name="outputnode",
     )
@@ -228,12 +228,12 @@ def linear_reg_workflow(
 
             workflow.connect(bias_correction, "out_file", outputnode, "registered_file")
             workflow.connect(bias_correction_deskull, "out_file", outputnode, "registered_file_brain")
-            workflow.connect(deskull_2_ref, "out_file", outputnode, "unbiased_registered_file_brain")
+            workflow.connect(deskull_2_ref, "out_file", outputnode, "uncorrected_registered_file_brain")
             workflow.connect(
                 reg_wrap.out_registered_node,
                 reg_wrap.out_registered_image,
                 outputnode,
-                "unbiased_registered_file",
+                "uncorrected_registered_file",
             )
         else:
             # Skip bias field correction

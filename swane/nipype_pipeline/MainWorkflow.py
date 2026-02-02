@@ -275,7 +275,7 @@ class MainWorkflow(CustomWorkflow):
         freesurfer_inputnode = self.freesurfer.get_node("inputnode")
         freesurfer_inputnode.inputs.subjects_dir = self.base_dir
         self.connect(
-            self.t1, "outputnode.unbiased_reference", self.freesurfer, "inputnode.reference"
+            self.t1, "outputnode.uncorrected_reference", self.freesurfer, "inputnode.reference"
         )
 
         if self.freesurfer_step.has_surface():
@@ -394,13 +394,13 @@ class MainWorkflow(CustomWorkflow):
 
         self.connect(
             self.t1,
-            "outputnode.unbiased_reference_brain",
+            "outputnode.uncorrected_reference_brain",
             self.flat1,
             "inputnode.reference_brain",
         )
         self.connect(
             self.flair,
-            "outputnode.unbiased_registered_file_brain",
+            "outputnode.uncorrected_registered_file_brain",
             self.flat1,
             "inputnode.flair_brain",
         )
