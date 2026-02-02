@@ -101,6 +101,7 @@ class SubjectTab(QTabWidget):
         self.result_tree = None
         self.generate_scene_button = None
         self.workflow_had_error = False
+        self.progress: PersistentProgressDialog = None
 
         self.data_tab_ui()
         self.exec_tab_ui()
@@ -384,7 +385,7 @@ class SubjectTab(QTabWidget):
         vols = origin[3]
         found_mod = origin[2].upper()
 
-        progress = PersistentProgressDialog(
+        self.progress = PersistentProgressDialog(
             strings.subj_tab_dicom_copy, 0, len(copy_list) + 1, self
         )
         self.set_loading(data_input)
@@ -396,7 +397,7 @@ class SubjectTab(QTabWidget):
             vols=vols,
             mod=found_mod,
             force_modality=force_mod,
-            progress_callback=progress.increase_value,
+            progress_callback=self.progress.increase_value,
         )
         if import_ret != SubjectRet.DataImportCompleted:
             if import_ret == SubjectRet.DataImportErrorVolumesMax:
@@ -436,20 +437,20 @@ class SubjectTab(QTabWidget):
                 ret = msg_box.exec()
 
                 # We need to hide "old" progress to prevent a loading bar to appear during user choice
-                progress.deleteLater()
+                self.progress.deleteLater()
                 if ret == QMessageBox.StandardButton.Yes:
                     self.dicom_import_to_folder(data_input, force_mod=True)
             self.set_error(data_input, "")
-            progress.deleteLater()
+            self.progress.deleteLater()
             return
 
-        progress.setRange(0, 0)
-        progress.setLabelText(strings.subj_tab_dicom_check)
+        self.progress.setRange(0, 0)
+        self.progress.setLabelText(strings.subj_tab_dicom_check)
 
         self.subject.check_input_folder(
             data_input,
             status_callback=self.input_check_update,
-            progress_callback=progress.increase_value,
+            progress_callback=self.progress.increase_value,
         )
         self.reset_workflow()
 
@@ -1037,6 +1038,9 @@ class SubjectTab(QTabWidget):
             self.enable_exec_tab()
 
         self.check_input_parent()
+
+        if self.progress is not None:
+            self.progress.deleteLater()
 
     def load_subject(self, check_dicom_folders: bool = True):
         """
