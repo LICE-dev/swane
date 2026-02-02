@@ -70,7 +70,7 @@ class ZIntNorm(BaseInterface):
             raise RuntimeError("Standard deviation is zero")
 
         img_norm = np.zeros_like(img, dtype=np.float32)
-        img_norm[mask] = (img - mean) / std
+        img_norm = (img - mean) / std
 
         # --- SAVE ---
         hdr = img_nii.header.copy()
