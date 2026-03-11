@@ -1,9 +1,8 @@
 import pydicom
 import os
 from PySide6.QtCore import Signal, QObject, QRunnable
-from swane.nipype_pipeline.MainWorkflow import DEBUG
 from swane.utils.DicomTree import DicomTree
-from dicom_sequence_classifier import extract_metadata, load_dicom_file, classify_dicom
+from dicom_sequence_classifier import extract_metadata, classify_dicom
 
 
 class DicomSearchSignal(QObject):
