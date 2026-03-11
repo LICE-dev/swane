@@ -62,7 +62,15 @@ def ref_workflow(
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=["reference", "reference_brain", "ref_mask", "uncorrected_reference", "uncorrected_reference_brain"]),
+        IdentityInterface(
+            fields=[
+                "reference",
+                "reference_brain",
+                "ref_mask",
+                "uncorrected_reference",
+                "uncorrected_reference_brain",
+            ]
+        ),
         name="outputnode",
     )
 
@@ -102,7 +110,9 @@ def ref_workflow(
     )
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
-    ref_bias_correction = Node(N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2)
+    ref_bias_correction = Node(
+        N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2
+    )
     ref_bias_correction.inputs.out_file = "ref.nii.gz"
     workflow.connect(ref_reScale, "out_file", ref_bias_correction, "in_file")
     workflow.connect(ref_deskull, "mask_file", ref_bias_correction, "mask_file")

@@ -56,10 +56,7 @@ class FreesurferStep(Enum):
     RECONALL = "Complete Recon-all"
 
     def has_surface(self):
-        return self in {
-            FreesurferStep.AUTORECON_PIAL,
-            FreesurferStep.RECONALL
-        }
+        return self in {FreesurferStep.AUTORECON_PIAL, FreesurferStep.RECONALL}
 
     def has_parcellation(self):
         return self in {

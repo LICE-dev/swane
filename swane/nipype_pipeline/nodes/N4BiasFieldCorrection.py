@@ -14,21 +14,14 @@ from nipype.interfaces.base import (
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class N4BiasFieldCorrectionInputSpec(BaseInterfaceInputSpec):
-    in_file = File(
-        exists=True,
-        mandatory=True,
-        desc="the input image"
-    )
+    in_file = File(exists=True, mandatory=True, desc="the input image")
     out_file = File(desc="the output unbiased image")
     skull_stripped = traits.Bool(
         False,
         usedefault=True,
-        desc="Set to True if the input image is already skull stripped"
+        desc="Set to True if the input image is already skull stripped",
     )
-    mask_file = File(
-        exists=True,
-        desc="the mask image"
-    )
+    mask_file = File(exists=True, desc="the mask image")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
