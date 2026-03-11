@@ -196,7 +196,7 @@ logic.splitCavitiesDiameter = splitCavitiesDiameter
 
 logic.outputType = "segment"
 logic.remeshOversampling = oversampling
-logic.smoothingFactor = 0.1
+logic.smoothingFactor = 0.2
 logic.shrinkwrapIterations = shrinkwrapIterations
 
 logic.carveHolesInOuterSurface = False
