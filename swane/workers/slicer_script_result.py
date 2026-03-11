@@ -492,8 +492,8 @@ def load_freesurfer(scene_dir: str, ref_node):
     # Load segmentations
     seg_files = [
         "r-aparc_aseg.mgz",
-        "segmentHA/lh.hippoAmygLabels.mgz",
-        "segmentHA/rh.hippoAmygLabels.mgz",
+        "segmentHA/r-lh_hippoAmygLabels.mgz",
+        "segmentHA/r-rh_hippoAmygLabels.mgz",
     ]
     for seg_file in seg_files:
         seg_path = os.path.join(scene_dir, seg_file)

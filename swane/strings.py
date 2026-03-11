@@ -380,13 +380,18 @@ check_dep_fs_error3 = (
     "FreeSurfer detected (%s). OPTIONAL: install Matlab Runtime (<a "
     "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>instructions</a>)"
 )
+check_dep_fs_error_matlab_no_command = (
+    "<br>OPTIONAL: install Matlab Runtime (<a "
+    "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>instructions</a>)"
+)
+check_dep_fs_error_matlab_command = "<br>OPTIONAL: install Matlab Runtime with command <i>%s</i>"
 check_dep_fs_error4 = (
     "FreeSurfer detected (%s). License key missing (<a "
     "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instructions</a>)"
 )
 check_dep_fs_outdated_version = (
     "FreeSurfer version outdated (found %s, required %s). Please "
-    "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a>"
+    "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a>."
 )
 check_dep_fs_synth_version = (
     "FreeSurfer detected (found %s, recommended %s). Please "
@@ -491,4 +496,5 @@ node_names["FeatureFrequency"] = "Aroma - Frequency feature"
 node_names["AromaClassification"] = "Aroma - Noise classification"
 node_names["FilterRegressor"] = "Denoising"
 node_names["FeatureFrequency"] = "Aroma - Frequency feature"
-node_names["FeatureFrequency"] = "Aroma - Frequency feature"
+node_names["N4BiasFieldCorrection"] = "Bias Field Correction"
+node_names["ZIntNorm"] = "Intensity Normalization"

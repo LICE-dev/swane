@@ -175,7 +175,7 @@ def freesurfer_workflow(
 
         # NODE 1: Freesurfer autorecon1
         recon_all_recon1 = Node(ReconAll(), name="recon_all_recon1")
-        recon_all_recon1.long_name = "%s: Preprocessing"
+        recon_all_recon1.long_name = "%s: Preprocessing 1"
         recon_all_recon1.inputs.subject_id = FS_DIR
         recon_all_recon1._mem_gb = reconall_mem_gb
         recon_all_recon1.inputs.environ = reconall_environ
@@ -192,7 +192,7 @@ def freesurfer_workflow(
 
         # NODE 2: Freesurfer autorecon2
         recon_all_recon2 = Node(ReconAll(), name="recon_all_recon2")
-        recon_all_recon2.long_name = "%s: Subcortical Segmentation"
+        recon_all_recon2.long_name = "%s: Preprocessing 2"
         recon_all_recon2._mem_gb = reconall_mem_gb
         recon_all_recon2.inputs.environ = reconall_environ
         recon_all_recon2.inputs.parallel = reconall_parallel
@@ -205,75 +205,71 @@ def freesurfer_workflow(
         )
         workflow.connect(recon_all_recon1, "subject_id", recon_all_recon2, "subject_id")
 
-        if step in [FreesurferStep.AUTORECON_PIAL, FreesurferStep.RECONALL]:
-            # NODE 2: Freesurfer autorecon2
-            recon_all_recon_pial = Node(ReconAll(), name="recon_all_recon_pial")
-            recon_all_recon_pial.long_name = "%s: Surfaces + Cortical Parcellationn"
-            recon_all_recon_pial._mem_gb = reconall_mem_gb
-            recon_all_recon_pial.inputs.environ = reconall_environ
-            recon_all_recon_pial.inputs.parallel = reconall_parallel
-            recon_all_recon_pial.inputs.openmp = reconall_openmp
-            recon_all_recon_pial.n_procs = reconall_nprocs
-            recon_all_recon_pial.inputs.directive = "autorecon-pial"
-            recon_all_recon_pial.inputs.args = "-no-isrunning"
-            workflow.connect(
-                recon_all_recon2, "subjects_dir", recon_all_recon_pial, "subjects_dir"
-            )
-            workflow.connect(
-                recon_all_recon2, "subject_id", recon_all_recon_pial, "subject_id"
-            )
+        # NODE 2: Freesurfer autorecon-pial
+        recon_all_recon_pial = Node(ReconAll(), name="recon_all_recon_pial")
+        recon_all_recon_pial.long_name = "%s: Surfaces + Cortical Parcellation"
+        recon_all_recon_pial._mem_gb = reconall_mem_gb
+        recon_all_recon_pial.inputs.environ = reconall_environ
+        recon_all_recon_pial.inputs.parallel = reconall_parallel
+        recon_all_recon_pial.inputs.openmp = reconall_openmp
+        recon_all_recon_pial.n_procs = reconall_nprocs
+        recon_all_recon_pial.inputs.directive = "autorecon-pial"
+        recon_all_recon_pial.inputs.args = "-no-isrunning"
+        workflow.connect(
+            recon_all_recon2, "subjects_dir", recon_all_recon_pial, "subjects_dir"
+        )
+        workflow.connect(
+            recon_all_recon2, "subject_id", recon_all_recon_pial, "subject_id"
+        )
 
-            workflow.connect(recon_all_recon_pial, "pial", outputnode, "pial")
-            workflow.connect(recon_all_recon_pial, "white", outputnode, "white")
+        workflow.connect(recon_all_recon_pial, "pial", outputnode, "pial")
+        workflow.connect(recon_all_recon_pial, "white", outputnode, "white")
 
-            # NODE 2: Aparcaseg linear transformation in reference space
-            aparc_aseg2ref = Node(ApplyVolTransform(), name="aparc_aseg2ref")
-            aparc_aseg2ref.long_name = "Parcellation Nifti conversion"
-            aparc_aseg2ref.inputs.transformed_file = "r-aparc_aseg.mgz"
-            aparc_aseg2ref.inputs.reg_header = True
-            aparc_aseg2ref.inputs.interp = "nearest"
-            workflow.connect(
-                [
-                    (
-                        recon_all_recon_pial,
-                        aparc_aseg2ref,
-                        [(("aparc_aseg", getn, 0), "source_file")],
-                    )
-                ]
-            )
-            workflow.connect(inputnode, "reference", aparc_aseg2ref, "target_file")
-            workflow.connect(
-                aparc_aseg2ref, "transformed_file", outputnode, "vol_label_file"
-            )
+        # NODE 2: Aparcaseg linear transformation in reference space
+        aparc_aseg2ref = Node(ApplyVolTransform(), name="aparc_aseg2ref")
+        aparc_aseg2ref.long_name = "Parcellation in reference space"
+        aparc_aseg2ref.inputs.transformed_file = "r-aparc_aseg.mgz"
+        aparc_aseg2ref.inputs.reg_header = True
+        aparc_aseg2ref.inputs.interp = "nearest"
+        workflow.connect(
+            [
+                (
+                    recon_all_recon_pial,
+                    aparc_aseg2ref,
+                    [(("aparc_aseg", getn, 0), "source_file")],
+                )
+            ]
+        )
+        workflow.connect(inputnode, "reference", aparc_aseg2ref, "target_file")
+        workflow.connect(
+            aparc_aseg2ref, "transformed_file", outputnode, "vol_label_file"
+        )
 
-            aparc_aseg2nii = Node(ApplyVolTransform(), name="aparc_aseg2nii")
-            aparc_aseg2nii.long_name = "Parcellation Nifti conversion"
-            aparc_aseg2nii.inputs.transformed_file = "r-aparc_aseg.nii.gz"
-            aparc_aseg2nii.inputs.reg_header = True
-            aparc_aseg2nii.inputs.interp = "nearest"
-            workflow.connect(
-                [
-                    (
-                        recon_all_recon_pial,
-                        aparc_aseg2nii,
-                        [(("aparc_aseg", getn, 0), "source_file")],
-                    )
-                ]
-            )
-            workflow.connect(inputnode, "reference", aparc_aseg2nii, "target_file")
-            workflow.connect(
-                aparc_aseg2nii, "transformed_file", outputnode, "vol_label_file_nii"
-            )
-            workflow.connect(
-                aparc_aseg2nii, "transformed_file", segmentation_holder, "seg_nii"
-            )
-
-        else:
-            segmentation_holder = None
+        aparc_aseg2nii = Node(ApplyVolTransform(), name="aparc_aseg2nii")
+        aparc_aseg2nii.long_name = "Parcellation Nifti conversion"
+        aparc_aseg2nii.inputs.transformed_file = "r-aparc_aseg.nii.gz"
+        aparc_aseg2nii.inputs.reg_header = True
+        aparc_aseg2nii.inputs.interp = "nearest"
+        workflow.connect(
+            [
+                (
+                    recon_all_recon_pial,
+                    aparc_aseg2nii,
+                    [(("aparc_aseg", getn, 0), "source_file")],
+                )
+            ]
+        )
+        workflow.connect(inputnode, "reference", aparc_aseg2nii, "target_file")
+        workflow.connect(
+            aparc_aseg2nii, "transformed_file", outputnode, "vol_label_file_nii"
+        )
+        workflow.connect(
+            aparc_aseg2nii, "transformed_file", segmentation_holder, "seg_nii"
+        )
 
         if step == FreesurferStep.RECONALL:
             recon_all_recon3 = Node(ReconAll(), name="reconAll")
-            recon_all_recon3.long_name = "%s: Complete"
+            recon_all_recon3.long_name = "%s: Finalization"
             recon_all_recon3._mem_gb = reconall_mem_gb
             recon_all_recon3.inputs.environ = reconall_environ
             recon_all_recon3.inputs.parallel = reconall_parallel
@@ -300,15 +296,28 @@ def freesurfer_workflow(
                 segment_ha.inputs.num_cpu = max_cpu
                 segment_ha.n_procs = segment_ha.inputs.num_cpu
             workflow.connect(
-                recon_all_recon2, "subjects_dir", segment_ha, "subjects_dir"
+                recon_all_recon_pial, "subjects_dir", segment_ha, "subjects_dir"
             )
-            workflow.connect(recon_all_recon2, "subject_id", segment_ha, "subject_id")
-            workflow.connect(
-                segment_ha, "lh_hippoAmygLabels", outputnode, "lh_hippoAmygLabels"
-            )
-            workflow.connect(
-                segment_ha, "rh_hippoAmygLabels", outputnode, "rh_hippoAmygLabels"
-            )
+            workflow.connect(recon_all_recon_pial, "subject_id", segment_ha, "subject_id")
+
+            rh_ha2ref = Node(ApplyVolTransform(), name="rh_ha2ref")
+            rh_ha2ref.long_name = "Rh hippocampal subfield in reference space"
+            rh_ha2ref.inputs.transformed_file = "r-rh_hippoAmygLabels.mgz"
+            rh_ha2ref.inputs.reg_header = True
+            rh_ha2ref.inputs.interp = "nearest"
+            workflow.connect(segment_ha, "rh_hippoAmygLabels", rh_ha2ref, "source_file")
+            workflow.connect(inputnode, "reference", rh_ha2ref, "target_file")
+
+            lh_ha2ref = Node(ApplyVolTransform(), name="lh_ha2ref")
+            lh_ha2ref.long_name = "Lh hippocampal subfield in reference space"
+            lh_ha2ref.inputs.transformed_file = "r-lh_hippoAmygLabels.mgz"
+            lh_ha2ref.inputs.reg_header = True
+            lh_ha2ref.inputs.interp = "nearest"
+            workflow.connect(segment_ha, "lh_hippoAmygLabels", lh_ha2ref, "source_file")
+            workflow.connect(inputnode, "reference", lh_ha2ref, "target_file")
+
+            workflow.connect(rh_ha2ref, "transformed_file", outputnode, "lh_hippoAmygLabels")
+            workflow.connect(lh_ha2ref, "transformed_file", outputnode, "rh_hippoAmygLabels")
 
     if segmentation_holder is not None:
         # NODE 7: Left basal ganglia and thalamus binary ROI

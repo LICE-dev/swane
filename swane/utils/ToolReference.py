@@ -281,6 +281,14 @@ tool_reference_list = {
             "Rolfe S, Pieper S, Porto A, et al. SlicerMorph: An open and extensible platform to retrieve, visualize and analyze 3D morphology. Methods Ecol Evol. 2021."
         ],
     ),
+    "N4BiasFieldCorrection": ToolReference(
+        command="N4BiasFieldCorrection [SimpleITK]",
+        package=Package.OTHER,
+        url="https://simpleitk.readthedocs.io/en/master/link_N4BiasFieldCorrection_docs.html",
+        references=[
+            "Lowekamp BC, Chen DT, Ibáñez L, Blezek D. The Design of SimpleITK. Front Neuroinform. 2013."
+        ],
+    ),
 }
 
 # Update url finishing with #
@@ -303,6 +311,7 @@ equivalent_command_list = {
     "UnaryMaths": "MathsCommand",
     "SumMultiVols": "MathsCommand",
     "SumMultiTracks": "MathsCommand",
+    "SpatialFilter": "MathsCommand",
     "ApplyXFM": "FLIRT",
     "CustomSliceTimer": "FEAT",
     "FeatureSpatialPrep": "AromaClassification",
