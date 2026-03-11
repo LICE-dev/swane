@@ -173,10 +173,7 @@ class ToolReferenceWindow(QDialog):
 
     def _make_search_blob(self, key: str, ref: ToolReference) -> str:
         # we only want filter by command name
-        return ref.command
-        # parts = [key, ref.command, ref.url]
-        # parts.extend(ref.references or [])
-        # return " ".join(parts).lower()
+        return ref.command.lower()
 
     # ------------------------------------------------------------------
 

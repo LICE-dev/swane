@@ -176,7 +176,7 @@ def flat1_workflow(
     # Remove the upper 1% of values to trim values from incorrect registration
     outliers_removal = Node(Threshold(), name="%s_outliers_mask" % name)
     outliers_removal.long_name = "Outliers removal"
-    outliers_removal.inputs.thresh = 98
+    outliers_removal.inputs.thresh = 97
     outliers_removal.inputs.use_robust_range = True
     outliers_removal.inputs.use_nonzero_voxels = True
     outliers_removal.inputs.direction = "above"

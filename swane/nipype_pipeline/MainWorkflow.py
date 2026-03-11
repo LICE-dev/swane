@@ -275,7 +275,7 @@ class MainWorkflow(CustomWorkflow):
         freesurfer_inputnode = self.freesurfer.get_node("inputnode")
         freesurfer_inputnode.inputs.subjects_dir = self.base_dir
         self.connect(
-            self.t1, "outputnode.reference", self.freesurfer, "inputnode.reference"
+            self.t1, "outputnode.uncorrected_reference", self.freesurfer, "inputnode.reference"
         )
 
         if self.freesurfer_step.has_surface():
@@ -304,14 +304,14 @@ class MainWorkflow(CustomWorkflow):
                 save_path=self.base_dir,
                 result_node="outputnode",
                 result_name="lh_hippoAmygLabels",
-                sub_folder="scene.segmentHA",
+                sub_folder=os.path.join(self.Result_DIR, "segmentHA"),
                 regexp_substitutions=regex_subs,
             )
             self.freesurfer.sink_result(
                 save_path=self.base_dir,
                 result_node="outputnode",
                 result_name="rh_hippoAmygLabels",
-                sub_folder="scene.segmentHA",
+                sub_folder=os.path.join(self.Result_DIR, "segmentHA"),
                 regexp_substitutions=regex_subs,
             )
 
@@ -326,6 +326,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=flair_dir,
             config=self.subject_config[DIL.FLAIR3D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            bias_field_correction=True,
         )
         self.flair.long_name = "3D Flair analysis"
         self.add_nodes([self.flair])
@@ -393,13 +394,13 @@ class MainWorkflow(CustomWorkflow):
 
         self.connect(
             self.t1,
-            "outputnode.reference_brain",
+            "outputnode.uncorrected_reference_brain",
             self.flat1,
             "inputnode.reference_brain",
         )
         self.connect(
             self.flair,
-            "outputnode.registered_file",
+            "outputnode.uncorrected_registered_file_brain",
             self.flat1,
             "inputnode.flair_brain",
         )
@@ -532,6 +533,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=mdc_dir,
             config=self.subject_config[DIL.MDC],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            bias_field_correction=True,
         )
         self.mdc.long_name = "Post-contrast 3D T1w analysis"
         self.add_nodes([self.mdc])
