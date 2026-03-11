@@ -667,7 +667,9 @@ class SubjectTab(QTabWidget):
         self.exec_graph.hide()
         self.generate_workflow_button.setEnabled(False)
 
-    def tree_item_changed(self, current: CustomTreeWidgetItem, previous: CustomTreeWidgetItem):
+    def tree_item_changed(
+        self, current: CustomTreeWidgetItem, previous: CustomTreeWidgetItem
+    ):
         """
         Listener for the QTreeWidget Items.
         Shows the clicked analysis graphviz graph.
@@ -700,7 +702,9 @@ class SubjectTab(QTabWidget):
         else:
             self.exec_graph.hide()
             self.node_runtime_widget.show()
-            self.node_runtime_widget.load_node_result(self.subject.workflow_dir(), current)
+            self.node_runtime_widget.load_node_result(
+                self.subject.workflow_dir(), current
+            )
 
     @staticmethod
     def no_close_event(event):
@@ -907,7 +911,9 @@ class SubjectTab(QTabWidget):
             strings.subj_tab_open_results_directory
         )
         self.open_results_directory_button.clicked.connect(
-            lambda _, results_dir=self.subject.result_dir(): QDesktopServices.openUrl(QUrl.fromLocalFile(results_dir))
+            lambda _, results_dir=self.subject.result_dir(): QDesktopServices.openUrl(
+                QUrl.fromLocalFile(results_dir)
+            )
         )
 
         self.open_results_directory_button.setSizePolicy(

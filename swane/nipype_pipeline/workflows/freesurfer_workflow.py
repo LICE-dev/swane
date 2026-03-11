@@ -298,7 +298,9 @@ def freesurfer_workflow(
             workflow.connect(
                 recon_all_recon_pial, "subjects_dir", segment_ha, "subjects_dir"
             )
-            workflow.connect(recon_all_recon_pial, "subject_id", segment_ha, "subject_id")
+            workflow.connect(
+                recon_all_recon_pial, "subject_id", segment_ha, "subject_id"
+            )
 
             rh_ha2ref = Node(ApplyVolTransform(), name="rh_ha2ref")
             rh_ha2ref.long_name = "Rh hippocampal subfield in reference space"
@@ -316,8 +318,12 @@ def freesurfer_workflow(
             workflow.connect(segment_ha, "lh_hippoAmygLabels", lh_ha2ref, "source_file")
             workflow.connect(inputnode, "reference", lh_ha2ref, "target_file")
 
-            workflow.connect(rh_ha2ref, "transformed_file", outputnode, "lh_hippoAmygLabels")
-            workflow.connect(lh_ha2ref, "transformed_file", outputnode, "rh_hippoAmygLabels")
+            workflow.connect(
+                rh_ha2ref, "transformed_file", outputnode, "lh_hippoAmygLabels"
+            )
+            workflow.connect(
+                lh_ha2ref, "transformed_file", outputnode, "rh_hippoAmygLabels"
+            )
 
     if segmentation_holder is not None:
         # NODE 7: Left basal ganglia and thalamus binary ROI
