@@ -83,7 +83,7 @@ class DependencyManager:
     SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
-    FREESURFER_MATLAB_REGEXP = r'(fs_install_mcr\s+R[0-9A-Za-z]+)'
+    FREESURFER_MATLAB_REGEXP = r"(fs_install_mcr\s+R[0-9A-Za-z]+)"
     FSL_TCSH_COMMAND = "tcsh"
     FLS_LOCALE_COMMAND = "locale -a | grep en_US.utf8 >/dev/null || false "
     SLICER_MODULES = ["SlicerFreeSurfer", "SurfaceWrapSolidify"]
@@ -373,15 +373,19 @@ class DependencyManager:
             DependencyManager.FREESURFER_MATLAB_COMMAND,
             shell=True,
             capture_output=True,
-            text=True
+            text=True,
         )
         matlab_found = result.returncode == 0
         fs_dep = DependenceStatus.DETECTED
-        matlab_dep = DependenceStatus.DETECTED if matlab_found else DependenceStatus.MISSING
+        matlab_dep = (
+            DependenceStatus.DETECTED if matlab_found else DependenceStatus.MISSING
+        )
 
         if found_version < version.parse(DependencyManager.SYNTH_FREESURFER_VERSION):
-            error_string = (strings.check_dep_fs_synth_version
-                            % (freesurfer_version, DependencyManager.SYNTH_FREESURFER_VERSION))
+            error_string = strings.check_dep_fs_synth_version % (
+                freesurfer_version,
+                DependencyManager.SYNTH_FREESURFER_VERSION,
+            )
             fs_dep = DependenceStatus.WARNING
         elif (
             ResourceManager.total_memory_gb()
@@ -389,7 +393,7 @@ class DependencyManager:
         ):
             error_string = strings.check_dep_fs_low_ram % (
                 freesurfer_version,
-                ResourceManager.synth_reconall_ram_requirements()
+                ResourceManager.synth_reconall_ram_requirements(),
             )
             fs_dep = DependenceStatus.WARNING
         else:
@@ -402,7 +406,7 @@ class DependencyManager:
             match = re.search(DependencyManager.FREESURFER_MATLAB_REGEXP, output)
             if match:
                 install_cmd = match.group(1)
-                error_string += (strings.check_dep_fs_error_matlab_command % install_cmd)
+                error_string += strings.check_dep_fs_error_matlab_command % install_cmd
             else:
                 error_string += strings.check_dep_fs_error_matlab_no_command
 

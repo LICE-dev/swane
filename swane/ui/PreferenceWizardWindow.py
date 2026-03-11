@@ -142,8 +142,8 @@ class PreferenceWizardWindow(QDialog):
 
         super(PreferenceWizardWindow, self).__init__(parent)
 
-        self.global_config : ConfigManager = global_config
-        self.dependency_manager : DependencyManager = dependency_manager
+        self.global_config: ConfigManager = global_config
+        self.dependency_manager: DependencyManager = dependency_manager
         self.user_prefs = UserPreferences()
 
         self.setWindowTitle(strings.preference_wizard_title)

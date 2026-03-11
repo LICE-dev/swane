@@ -376,7 +376,7 @@ class NipypeNodeRuntimeWidget(QScrollArea):
                     for v in value:
                         if self._is_valid_output_value(v):
                             self._add_output_row(name, v, self._row, col)
-                            name=""
+                            name = ""
                             self._row += 1
                 else:
                     self._add_output_row(name, value, self._row, col)
