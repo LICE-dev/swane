@@ -275,7 +275,10 @@ class MainWorkflow(CustomWorkflow):
         freesurfer_inputnode = self.freesurfer.get_node("inputnode")
         freesurfer_inputnode.inputs.subjects_dir = self.base_dir
         self.connect(
-            self.t1, "outputnode.uncorrected_reference", self.freesurfer, "inputnode.reference"
+            self.t1,
+            "outputnode.uncorrected_reference",
+            self.freesurfer,
+            "inputnode.reference",
         )
 
         if self.freesurfer_step.has_surface():

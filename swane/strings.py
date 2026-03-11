@@ -384,7 +384,9 @@ check_dep_fs_error_matlab_no_command = (
     "<br>OPTIONAL: install Matlab Runtime (<a "
     "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>instructions</a>)"
 )
-check_dep_fs_error_matlab_command = "<br>OPTIONAL: install Matlab Runtime with command <i>%s</i>"
+check_dep_fs_error_matlab_command = (
+    "<br>OPTIONAL: install Matlab Runtime with command <i>%s</i>"
+)
 check_dep_fs_error4 = (
     "FreeSurfer detected (%s). License key missing (<a "
     "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instructions</a>)"

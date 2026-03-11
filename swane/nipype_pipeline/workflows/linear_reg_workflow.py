@@ -23,7 +23,7 @@ def linear_reg_workflow(
     base_dir: str = "/",
     is_volumetric: bool = True,
     is_partial_coverage: bool = False,
-    bias_field_correction: bool = False
+    bias_field_correction: bool = False,
 ) -> CustomWorkflow:
     """
     Transforms input images in a reference space through a linear registration.
@@ -91,7 +91,13 @@ def linear_reg_workflow(
     # Output Node
     outputnode = Node(
         IdentityInterface(
-            fields=["registered_file", "registered_file_brain", "out_matrix_file", "uncorrected_registered_file", "uncorrected_registered_file_brain"]
+            fields=[
+                "registered_file",
+                "registered_file_brain",
+                "out_matrix_file",
+                "uncorrected_registered_file",
+                "uncorrected_registered_file_brain",
+            ]
         ),
         name="outputnode",
     )
@@ -213,13 +219,16 @@ def linear_reg_workflow(
         )
 
         if bias_field_correction:
-            bias_correction = Node(N4BiasFieldCorrection(), name="bias_correction", mem_gb=2)
+            bias_correction = Node(
+                N4BiasFieldCorrection(), name="bias_correction", mem_gb=2
+            )
             workflow.connect(unbetted_name, "out_file", bias_correction, "out_file")
             workflow.connect(deskull_2_ref, "out_file", bias_correction, "mask_file")
-            workflow.connect(reg_wrap.out_registered_node,
-                             reg_wrap.out_registered_image,
-                             bias_correction,
-                             "in_file"
+            workflow.connect(
+                reg_wrap.out_registered_node,
+                reg_wrap.out_registered_image,
+                bias_correction,
+                "in_file",
             )
 
             corrected_deskull = Node(ApplyMask(), name="corrected_deskull")
@@ -228,8 +237,15 @@ def linear_reg_workflow(
             workflow.connect(bias_correction, "out_file", corrected_deskull, "in_file")
 
             workflow.connect(bias_correction, "out_file", outputnode, "registered_file")
-            workflow.connect(corrected_deskull, "out_file", outputnode, "registered_file_brain")
-            workflow.connect(deskull_2_ref, "out_file", outputnode, "uncorrected_registered_file_brain")
+            workflow.connect(
+                corrected_deskull, "out_file", outputnode, "registered_file_brain"
+            )
+            workflow.connect(
+                deskull_2_ref,
+                "out_file",
+                outputnode,
+                "uncorrected_registered_file_brain",
+            )
             workflow.connect(
                 reg_wrap.out_registered_node,
                 reg_wrap.out_registered_image,
@@ -238,7 +254,9 @@ def linear_reg_workflow(
             )
         else:
             # Skip bias field correction
-            workflow.connect(deskull_2_ref, "out_file", outputnode, "registered_file_brain")
+            workflow.connect(
+                deskull_2_ref, "out_file", outputnode, "registered_file_brain"
+            )
             workflow.connect(
                 reg_wrap.out_registered_node,
                 reg_wrap.out_registered_image,

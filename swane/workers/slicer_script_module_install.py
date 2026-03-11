@@ -11,10 +11,9 @@ errors = []
 
 for extensionName in extension_list:
     if not hasattr(slicer.moduleNames, extensionName):
-        if (
-                not hasattr(em, "installExtensionFromServer")
-                or not em.installExtensionFromServer(extensionName, restart)
-        ):
+        if not hasattr(
+            em, "installExtensionFromServer"
+        ) or not em.installExtensionFromServer(extensionName, restart):
             errors.append(extensionName)
 
 if len(errors) == 0:
