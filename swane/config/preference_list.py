@@ -272,25 +272,25 @@ WF_PREFERENCES[category]["skull_threshold"] = PreferenceEntry(
     default=-1,
     special_value_text="Auto",
 )
-WF_PREFERENCES[category]["segment_endocranium_iteration"] = PreferenceEntry(
-    input_type=InputTypes.INT,
-    label="Iteration for brain extraction",
-    default=3,
-    tooltip="Number of shrink-wrap iterations (higher = more accurate, slower)",
-    range=[1, 15],
-)
 WF_PREFERENCES[category]["segment_endocranium_kernel"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
-    label="Smoothing kernel size for brain extraction",
+    label="Kernel size for skull smoothing",
     default=3.0,
     suffix="mm",
     tooltip="Size of the morphological smoothing kernel (larger = smoother, slower)",
     range=[1, 10],
 )
+WF_PREFERENCES[category]["segment_endocranium_iteration"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Iteration for brain extraction",
+    default=6,
+    tooltip="Number of shrink-wrap iterations (higher = more accurate, slower)",
+    range=[1, 15],
+)
 WF_PREFERENCES[category]["segment_endocranium_oversampling"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Mesh oversampling factor for brain extraction",
-    default=1.0,
+    default=1.5,
     tooltip="Surface remeshing resolution (higher = more detail, slower)",
     range=[1, 5],
 )
