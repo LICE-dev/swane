@@ -19,6 +19,14 @@ class SubjectInputStateList(dict[DataInputList, SubjectInputState]):
                 and not global_config.is_optional_series_enabled(data_input)
             ):
                 continue
+            if (
+                data_input.value.parent_input is not None
+                and DataInputList[data_input.value.parent_input].value.optional
+                and not global_config.is_optional_series_enabled(
+                    DataInputList[data_input.value.parent_input]
+                )
+            ):
+                continue
             self[data_input] = SubjectInputState()
 
     def is_ref_loaded(self):

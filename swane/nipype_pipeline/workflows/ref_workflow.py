@@ -2,16 +2,21 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
+from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
+from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
+from swane.nipype_pipeline.nodes.utils import get_deskull_node
 from configparser import SectionProxy
-from swane.utils.DataInputList import DataInputList
-from nipype.interfaces.fsl import BET, RobustFOV
+from nipype.interfaces.fsl import RobustFOV, ApplyMask
 from nipype.interfaces.utility import IdentityInterface
-
 from nipype import Node
 
 
 def ref_workflow(
-    name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/"
+    name: str,
+    dicom_dir: str,
+    config: SectionProxy,
+    synth_config: SectionProxy,
+    base_dir: str = "/",
 ) -> CustomWorkflow:
     """
     T13D workflow to use as reference.
@@ -24,6 +29,8 @@ def ref_workflow(
         The file path of the DICOM files.
     config: SectionProxy
         workflow settings.
+    synth_config: SectionProxy
+        Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
@@ -38,12 +45,16 @@ def ref_workflow(
 
     Output Node Fields
     ----------
-    ref : path
+    reference : path
         T13D.
-    ref_brain : path
+    reference_brain : path
         Betted T13D.
-    ref_mask : path
+    reference_mask : path
         Brain mask from T13D bet command.
+    uncorrected_reference : path
+        Uncorrected T13D.
+    uncorrected_reference_brain : path
+        Uncorrected betted T13D.
 
     """
 
@@ -51,7 +62,16 @@ def ref_workflow(
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=["ref", "ref_brain", "ref_mask"]), name="outputnode"
+        IdentityInterface(
+            fields=[
+                "reference",
+                "reference_brain",
+                "ref_mask",
+                "uncorrected_reference",
+                "uncorrected_reference_brain",
+            ]
+        ),
+        name="outputnode",
     )
 
     # NODE 1: Conversion dicom -> nifti
@@ -75,22 +95,37 @@ def ref_workflow(
     ref_reScale = Node(CropFov(), name="%s_reScale" % name)
     ref_reScale.long_name = "Crop large FOV"
     ref_reScale.inputs.max_dim = 256
-    ref_reScale.inputs.out_file = "ref.nii.gz"
+    ref_reScale.inputs.out_file = "ref_uncorrected.nii.gz"
     workflow.connect(ref_robustfov, "out_roi", ref_reScale, "in_file")
 
     # NODE 5: Scalp removal
-    ref_BET = Node(BET(), name="%s_BET" % name)
-    ref_BET.inputs.mask = True
-    ref_BET.inputs.frac = config.getfloat_safe("bet_thr")
-    if config.getboolean_safe("bet_bias_correction"):
-        ref_BET.inputs.reduce_bias = True
-    else:
-        ref_BET.inputs.robust = True
+    ref_deskull = get_deskull_node(
+        name="ref_deskull_biased",
+        use_synth=synth_config.getboolean_safe("strip"),
+        mask=True,
+        bet_thr=config.getfloat_safe("bet_thr"),
+        bet_robust=True,
+        bet_bias_correction=config.getboolean_safe("bet_bias_correction"),
+        synth_exclude_csf=True,
+    )
+    workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
-    workflow.connect(ref_reScale, "out_file", ref_BET, "in_file")
+    ref_bias_correction = Node(
+        N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2
+    )
+    ref_bias_correction.inputs.out_file = "ref.nii.gz"
+    workflow.connect(ref_reScale, "out_file", ref_bias_correction, "in_file")
+    workflow.connect(ref_deskull, "mask_file", ref_bias_correction, "mask_file")
 
-    workflow.connect(ref_reScale, "out_file", outputnode, "ref")
-    workflow.connect(ref_BET, "out_file", outputnode, "ref_brain")
-    workflow.connect(ref_BET, "mask_file", outputnode, "ref_mask")
+    ref_corrected_deskull = Node(ApplyMask(), name="ref_corrected_deskull")
+    ref_corrected_deskull.inputs.out_file = "ref_brain.nii.gz"
+    workflow.connect(ref_bias_correction, "out_file", ref_corrected_deskull, "in_file")
+    workflow.connect(ref_deskull, "mask_file", ref_corrected_deskull, "mask_file")
+
+    workflow.connect(ref_bias_correction, "out_file", outputnode, "reference")
+    workflow.connect(ref_corrected_deskull, "out_file", outputnode, "reference_brain")
+    workflow.connect(ref_deskull, "mask_file", outputnode, "ref_mask")
+    workflow.connect(ref_reScale, "out_file", outputnode, "uncorrected_reference")
+    workflow.connect(ref_deskull, "out_file", outputnode, "uncorrected_reference_brain")
 
     return workflow

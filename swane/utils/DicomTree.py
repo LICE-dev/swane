@@ -13,10 +13,14 @@ class DicomSeries:
         self.modality = None
         self.classification = "Not classified"
         self.ds = None
+        self.sop_uids = []
 
-    def add_dicom_loc(self, dicom_loc, is_multi_frame, slice_loc, ds=None):
-        if dicom_loc not in self.dicom_locs:
+    def add_dicom_loc(self, dicom_loc, is_multi_frame, slice_loc, sop_uid, ds=None):
+        if dicom_loc not in self.dicom_locs and (
+            sop_uid is None or sop_uid not in self.sop_uids
+        ):
             self.dicom_locs.append(dicom_loc)
+            self.sop_uids.append(sop_uid)
             if is_multi_frame:
                 self.is_multi_frame = is_multi_frame
                 self.multi_frame_loc = dicom_loc

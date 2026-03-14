@@ -15,6 +15,8 @@ class PreferenceEntry:
     decimals = None
     dependency = None
     dependency_fail_tooltip = None
+    resource = None
+    resource_fail_tooltip = None
     pref_requirement = None
     pref_requirement_fail_tooltip = None
     input_requirement = None
@@ -26,6 +28,12 @@ class PreferenceEntry:
     hidden = False
     value_enum = None
     default_at_startup = False
+    special_value_text = ""
+    suffix = ""
+    section = False
+    option_dependency = {}
+    option_pref_requirement = {}
+    option_pref_requirement_fail_tooltip = {}
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -42,6 +50,8 @@ class PreferenceEntry:
             "decimals": int,
             "dependency": str,
             "dependency_fail_tooltip": str,
+            "resource": str,
+            "resource_fail_tooltip": str,
             "pref_requirement": dict,
             "pref_requirement_fail_tooltip": str,
             "input_requirement": list,
@@ -51,7 +61,12 @@ class PreferenceEntry:
             "informative_text": dict,
             "box_text": str,
             "hidden": bool,
-            # "value_enum": Enum
+            "special_value_text": str,
+            "suffix": str,
+            "section": bool,
+            "option_dependency": dict,
+            "option_pref_requirement": dict,
+            "option_pref_requirement_fail_tooltip": dict,
         }
         if key in types:
             if types[key] == Enum:

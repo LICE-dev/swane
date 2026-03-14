@@ -1,9 +1,8 @@
 import pydicom
 import os
 from PySide6.QtCore import Signal, QObject, QRunnable
-from swane.nipype_pipeline.MainWorkflow import DEBUG
 from swane.utils.DicomTree import DicomTree
-from dicom_sequence_classifier import extract_metadata, load_dicom_file, classify_dicom
+from dicom_sequence_classifier import extract_metadata, classify_dicom
 
 
 class DicomSearchSignal(QObject):
@@ -32,9 +31,6 @@ class DicomSearchWorker(QRunnable):
         self.tree = DicomTree(dicom_dir)
         self.error_message = []
         self.classify = classify
-        # self.dicom_tree = {}
-        # self.series_positions = {}
-        # self.multi_frame_series = {}
 
     @staticmethod
     def clean_text(string: str) -> str:
@@ -123,6 +119,7 @@ class DicomSearchWorker(QRunnable):
                 # in GE la maggior parte delle ricostruzioni sono DERIVED\SECONDARY
                 if (
                     hasattr(ds, "ImageType")
+                    and ds.Modality != "XA"  # xperct images are derived
                     and "DERIVED" in ds.ImageType
                     and "SECONDARY" in ds.ImageType
                     and "ASL" not in ds.ImageType
@@ -156,8 +153,12 @@ class DicomSearchWorker(QRunnable):
                 if "NumberOfFrames" in ds and int(ds.NumberOfFrames) > 1:
                     multi_frame_series = True
 
+                sop_uid = None
+                if "SOPInstanceUID" in ds:
+                    sop_uid = ds.SOPInstanceUID
+
                 dicom_series.add_dicom_loc(
-                    dicom_loc, multi_frame_series, ds.get("SliceLocation"), ds
+                    dicom_loc, multi_frame_series, ds.get("SliceLocation"), sop_uid, ds
                 )
                 dicom_series.modality = ds.Modality
                 if dicom_series.description == "Not named":

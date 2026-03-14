@@ -1,23 +1,11 @@
 import os
 from swane.utils.DataInputList import DataInputList, FMRI_NUM
 from swane import __version__
-from multiprocessing import cpu_count
-from nipype.utils.profiler import get_system_total_memory_gb
-from math import ceil
+from swane.utils.ResourceManager import ResourceManager
 
 from swane import strings
 from swane.config.PreferenceEntry import PreferenceEntry
-from swane.config.config_enums import (
-    InputTypes,
-    WORKFLOW_TYPES,
-    SLICER_EXTENSIONS,
-    CORE_LIMIT,
-    VEIN_DETECTION_MODE,
-    BLOCK_DESIGN,
-    SLICE_TIMING,
-    GlobalPrefCategoryList,
-    BETWEEN_MOD_FLIRT_COST,
-)
+from swane.config.config_enums import *
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
@@ -74,6 +62,9 @@ for k in list(TRACTS.keys()):
     if TRACTS[k][2] == 0:
         del TRACTS[k]
 
+from psutil import virtual_memory
+import math
+
 # WORKFLOW_TYPES = ["Structural Workflow", "Morpho-Functional Workflow"]
 # SLICER_EXTENSIONS = ["mrb", "mrml"]
 
@@ -86,8 +77,8 @@ WF_PREFERENCES[category]["wf_type"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     hidden=True,
     label="Default workflow",
-    value_enum=WORKFLOW_TYPES,
-    default=WORKFLOW_TYPES.STRUCTURAL,
+    value_enum=WorkflowTypes,
+    default=WorkflowTypes.STRUCTURAL,
 )
 WF_PREFERENCES[category]["bet_bias_correction"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -102,28 +93,58 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
 )
-WF_PREFERENCES[category]["freesurfer"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="FreeSurfer analysis",
-    default="true",
-    dependency="is_freesurfer",
-    dependency_fail_tooltip="Freesurfer not detected",
-)
-WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="FreeSurfer hippocampal and amygdala subfields",
-    default="false",
-    dependency="is_freesurfer_matlab",
-    dependency_fail_tooltip="Matlab Runtime not detected",
-    pref_requirement={DataInputList.T13D: [("freesurfer", True)]},
-    pref_requirement_fail_tooltip="Requires Freesurfer analysis",
-)
 WF_PREFERENCES[category]["flat1"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="FLAT1 analysis",
     default="true",
     input_requirement=[DataInputList.FLAIR3D],
     input_requirement_fail_tooltip="Requires both 3D T1w and 3D Flair",
+    section=True,
+)
+WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="FreeSurfer analysis step",
+    value_enum=FreesurferStep,
+    default=FreesurferStep.DISABLED,
+    dependency="is_freesurfer",
+    dependency_fail_tooltip="Requires Freesurfer analysis",
+    option_dependency={
+        FreesurferStep.SYNTHSEG: [
+            "is_freesurfer_synth",
+            "Synth tools recon-all requires FreeSurfer 8.1.0",
+        ]
+    },
+    option_pref_requirement={
+        FreesurferStep.SYNTHSEG: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.synth_seg_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        FreesurferStep.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM"
+        % ResourceManager.synth_seg_ram_requirements(),
+    },
+)
+
+WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="FreeSurfer hippocampal and amygdala subfields",
+    default="false",
+    dependency="is_freesurfer_matlab",
+    dependency_fail_tooltip="Matlab Runtime not detected",
+    pref_requirement={
+        DataInputList.T13D: [
+            (
+                "freesurfer_step",
+                [
+                    FreesurferStep.RECONALL,
+                    FreesurferStep.AUTORECON_PIAL,
+                ],
+            )
+        ]
+    },
+    pref_requirement_fail_tooltip="Requires Freesurfer Surfaces",
 )
 
 category = DataInputList.FLAIR3D
@@ -152,7 +173,7 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     range=[0, 1],
 )
 
-category = DataInputList.VENOUS
+category = DataInputList.VENOUS_MR
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
@@ -164,8 +185,8 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
 WF_PREFERENCES[category]["vein_detection_mode"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Venous volume detection mode",
-    value_enum=VEIN_DETECTION_MODE,
-    default=VEIN_DETECTION_MODE.SD,
+    value_enum=VeinDetectionMode,
+    default=VeinDetectionMode.SD,
 )
 WF_PREFERENCES[category]["vein_segment_threshold"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
@@ -173,6 +194,7 @@ WF_PREFERENCES[category]["vein_segment_threshold"] = PreferenceEntry(
     default=97.5,
     range=[0.1, 100],
     decimals=1,
+    suffix="%",
 )
 
 category = DataInputList.ASL
@@ -180,8 +202,8 @@ WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["cost_func"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="FLIRT between modalities cost function",
-    value_enum=BETWEEN_MOD_FLIRT_COST,
-    default=BETWEEN_MOD_FLIRT_COST.NORMALIZED_MUTUAL_INFORMATION,
+    value_enum=BetweenModFlirtCost,
+    default=BetweenModFlirtCost.NORMALIZED_MUTUAL_INFORMATION,
 )
 WF_PREFERENCES[category]["ai"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -194,6 +216,7 @@ WF_PREFERENCES[category]["ai_threshold"] = PreferenceEntry(
     tooltip="100 for no thresholding, suggested 80-90",
     default=85,
     range=[0, 100],
+    suffix="%",
     pref_requirement={DataInputList.ASL: [("ai", True)]},
     pref_requirement_fail_tooltip="Requires ASL Asymmetry Index",
 )
@@ -203,8 +226,8 @@ WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["cost_func"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="FLIRT between modalities cost function",
-    value_enum=BETWEEN_MOD_FLIRT_COST,
-    default=BETWEEN_MOD_FLIRT_COST.MULTUAL_INFORMATION,
+    value_enum=BetweenModFlirtCost,
+    default=BetweenModFlirtCost.MULTUAL_INFORMATION,
 )
 WF_PREFERENCES[category]["ai"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -217,8 +240,67 @@ WF_PREFERENCES[category]["ai_threshold"] = PreferenceEntry(
     tooltip="100 for no thresholding, suggested 80-90",
     default=85,
     range=[0, 100],
+    suffix="%",
     pref_requirement={DataInputList.PET: [("ai", True)]},
     pref_requirement_fail_tooltip="Requires PET Asymmetry Index",
+)
+category = DataInputList.SEEG_CT
+WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]["electrode_threshold"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Threshold for electrode identification",
+    range=[0, 4000],
+    suffix="HU",
+    default=2000,
+)
+WF_PREFERENCES[category]["erode_kernel_size"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Kernel dimension for brain mask erosion",
+    tooltip="Increase this value if final electrode mask includes skull",
+    default=5,
+    suffix="mm",
+    range=[1, 20],
+)
+category = DataInputList.VENOUS_CT
+WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]["skull_threshold"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Threshold for skull identification",
+    tooltip="To use 3D Slicer automatic threshold use -1",
+    range=[-1, 4000],
+    suffix="HU",
+    default=-1,
+    special_value_text="Auto",
+)
+WF_PREFERENCES[category]["segment_endocranium_kernel"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Kernel size for skull smoothing",
+    default=3.0,
+    suffix="mm",
+    tooltip="Size of the morphological smoothing kernel (larger = smoother, slower)",
+    range=[1, 10],
+)
+WF_PREFERENCES[category]["segment_endocranium_iteration"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Iteration for brain extraction",
+    default=6,
+    tooltip="Number of shrink-wrap iterations (higher = more accurate, slower)",
+    range=[1, 15],
+)
+WF_PREFERENCES[category]["segment_endocranium_oversampling"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Mesh oversampling factor for brain extraction",
+    default=1.5,
+    tooltip="Surface remeshing resolution (higher = more detail, slower)",
+    range=[1, 5],
+)
+WF_PREFERENCES[category]["vein_segment_threshold"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Threshold (%) for 3DSlicer Vein Segment",
+    default=97.5,
+    range=[0.1, 100],
+    decimals=1,
+    suffix="%",
 )
 category = DataInputList.DTI
 WF_PREFERENCES[category] = {}
@@ -239,6 +321,8 @@ WF_PREFERENCES[category]["tractography_threshold"] = PreferenceEntry(
     default=0.0035,
     range=[0.0001, 1],
     decimals=4,
+    pref_requirement={DataInputList.DTI: [("tractography", True)]},
+    pref_requirement_fail_tooltip="Tractography disabled",
 )
 WF_PREFERENCES[category]["track_procs"] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -269,15 +353,15 @@ for x in range(FMRI_NUM):
     WF_PREFERENCES[category]["block_design"] = PreferenceEntry(
         input_type=InputTypes.ENUM,
         label="Block design",
-        value_enum=BLOCK_DESIGN,
-        default=BLOCK_DESIGN.RARA,
+        value_enum=BlockDesign,
+        default=BlockDesign.RARA,
     )
     WF_PREFERENCES[category]["task_b_name"] = PreferenceEntry(
         input_type=InputTypes.TEXT,
         label="Task B name",
         default="Task_B",
         pref_requirement={
-            DataInputList["FMRI" + "_%s" % x]: [("block_design", BLOCK_DESIGN.RARB)]
+            DataInputList["FMRI" + "_%s" % x]: [("block_design", BlockDesign.RARB)]
         },
         pref_requirement_fail_tooltip="Requires rArBrArB... block design",
     )
@@ -285,12 +369,14 @@ for x in range(FMRI_NUM):
         input_type=InputTypes.INT,
         label="Tasks duration (sec)",
         default=30,
+        suffix="s",
         range=[1, 500],
     )
     WF_PREFERENCES[category]["rest_duration"] = PreferenceEntry(
         input_type=InputTypes.INT,
         label="Rest duration (sec)",
         default=30,
+        suffix="s",
         range=[0, 500],
     )
     WF_PREFERENCES[category]["tr"] = PreferenceEntry(
@@ -298,7 +384,9 @@ for x in range(FMRI_NUM):
         label="Repetition Time (TR)",
         tooltip="Set -1 for automatic detection",
         default="-1.0",
+        suffix="s",
         range=[-1, 1000],
+        special_value_text="Auto",
     )
     WF_PREFERENCES[category]["n_vols"] = PreferenceEntry(
         input_type=InputTypes.INT,
@@ -306,12 +394,13 @@ for x in range(FMRI_NUM):
         tooltip="Set -1 for automatic detection",
         default="-1",
         range=[-1, 1000],
+        special_value_text="Auto",
     )
     WF_PREFERENCES[category]["slice_timing"] = PreferenceEntry(
         input_type=InputTypes.ENUM,
         label="Slice timing",
-        value_enum=SLICE_TIMING,
-        default=SLICE_TIMING.UNKNOWN,
+        value_enum=SliceTiming,
+        default=SliceTiming.UNKNOWN,
     )
     WF_PREFERENCES[category]["del_start_vols"] = PreferenceEntry(
         input_type=InputTypes.INT,
@@ -325,6 +414,58 @@ for x in range(FMRI_NUM):
         default=0,
         range=[0, 500],
     )
+
+category = DataInputList.FMRI_RS
+WF_PREFERENCES[category] = {}
+WF_PREFERENCES[category]["tr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Repetition Time (TR)",
+    tooltip="Set -1 for automatic detection",
+    default="-1.0",
+    suffix="s",
+    range=[-1, 1000],
+    special_value_text="Auto",
+)
+WF_PREFERENCES[category]["n_vols"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Number of volumes",
+    tooltip="Set -1 for automatic detection",
+    default="-1",
+    range=[-1, 1000],
+    special_value_text="Auto",
+)
+WF_PREFERENCES[category]["del_start_vols"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Delete start volumes",
+    default=0,
+    range=[0, 500],
+)
+WF_PREFERENCES[category]["del_end_vols"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Delete end volumes",
+    default=0,
+    range=[0, 500],
+)
+WF_PREFERENCES[category]["melodic_dim"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Independent Components to estimate",
+    tooltip="Set 0 for automatic detection",
+    default=0,
+    range=[0, 200],
+)
+WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Threshold for mixture model estimation",
+    tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives",
+    default=0.50,
+    decimal=2,
+    range=[0, 1],
+)
+WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="ICA-AROMA denoising",
+    default="true",
+)
 
 GLOBAL_PREFERENCES = {}
 
@@ -368,13 +509,13 @@ GLOBAL_PREFERENCES[category]["last_swane_version"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["force_pref_reset"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     hidden=True,
-    default="false",
+    default="true",
 )
 GLOBAL_PREFERENCES[category]["slicer_scene_ext"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     hidden=True,
-    value_enum=SLICER_EXTENSIONS,
-    default=SLICER_EXTENSIONS.MRB,
+    value_enum=SlicerExtensions,
+    default=SlicerExtensions.MRB,
 )
 GLOBAL_PREFERENCES[category]["default_dicom_folder"] = PreferenceEntry(
     input_type=InputTypes.TEXT,
@@ -384,8 +525,8 @@ GLOBAL_PREFERENCES[category]["default_dicom_folder"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["default_wf_type"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Default workflow",
-    value_enum=WORKFLOW_TYPES,
-    default=WORKFLOW_TYPES.STRUCTURAL,
+    value_enum=WorkflowTypes,
+    default=WorkflowTypes.STRUCTURAL,
 )
 GLOBAL_PREFERENCES[category]["shutdown"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -405,44 +546,47 @@ GLOBAL_PREFERENCES[category]["max_subj"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Patient tab limit",
     default=1,
-    range=[0, 5],
+    range=[1, 5],
 )
-try:
-    suggested_max_cpu = max(
-        ceil(min(cpu_count() / 2, get_system_total_memory_gb() / 3)), 1
-    )
-except:
-    suggested_max_cpu = 1
-GLOBAL_PREFERENCES[category]["max_subj_cu"] = PreferenceEntry(
+GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="CPU core limit per subject",
     tooltip="To use all CPU cores set value equal to -1",
-    default=str(suggested_max_cpu),
-    range=[-1, 30],
-)
-GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Enable resource monitor",
-    default="false",
+    default=ResourceManager.get_default_cpu(),
+    range=[-1, ResourceManager.get_max_cpu()],
+    special_value_text="No limit",
+    section=True,
 )
 GLOBAL_PREFERENCES[category]["multicore_node_limit"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="CPU management for multi-core steps",
-    value_enum=CORE_LIMIT,
-    default=CORE_LIMIT.SOFT_CAP,
+    value_enum=CoreLimit,
+    default=CoreLimit.SOFT_CAP,
     informative_text={
-        CORE_LIMIT.NO_LIMIT: "Multi-core steps ignore the subject CPU core limit, using all available resources",
-        CORE_LIMIT.SOFT_CAP: "Multi-core steps use up to twice the subject CPU core limit",
-        CORE_LIMIT.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
+        CoreLimit.NO_LIMIT: "Multi-core steps ignore the subject CPU core limit, using all available resources",
+        CoreLimit.SOFT_CAP: "Multi-core steps use up to twice the subject CPU core limit",
+        CoreLimit.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
     },
+)
+
+GLOBAL_PREFERENCES[category]["ram_gb"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Estimated RAM allocation per subject",
+    tooltip="Minimum RAM allocation: %.2fGB" % ResourceManager.MINIMUM_RAM,
+    default=ResourceManager.get_default_ram(),
+    range=[ResourceManager.get_minimum_ram(), ResourceManager.get_maximum_ram()],
+    suffix="GB",
+    decimal=2,
+    section=True,
 )
 GLOBAL_PREFERENCES[category]["cuda"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Enable CUDA for GPUable commands",
     tooltip="NVIDIA GPU-based computation",
     default="false",
-    dependency="is_cuda",
-    dependency_fail_tooltip="GPU does not support CUDA",
+    resource="is_cuda",
+    resource_fail_tooltip="GPU does not support CUDA",
+    section=True,
 )
 GLOBAL_PREFERENCES[category]["max_subj_gpu"] = PreferenceEntry(
     input_type=InputTypes.INT,
@@ -452,6 +596,56 @@ GLOBAL_PREFERENCES[category]["max_subj_gpu"] = PreferenceEntry(
     range=[1, 5],
     pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [("cuda", True)]},
     pref_requirement_fail_tooltip="Requires CUDA",
+)
+GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Enable resource monitor",
+    default="false",
+    section=True,
+)
+category = GlobalPrefCategoryList.SYNTH
+GLOBAL_PREFERENCES[category] = {}
+GLOBAL_PREFERENCES[category]["strip"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SynthStrip for brain extraction",
+    default=False,
+    dependency="is_freesurfer_synth",
+    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
+    pref_requirement={
+        GlobalPrefCategoryList.PERFORMANCE: [
+            ("ram_gb", ResourceManager.synth_strip_ram_requirements())
+        ]
+    },
+    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
+    % ResourceManager.synth_strip_ram_requirements(),
+)
+GLOBAL_PREFERENCES[category]["morph"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SynthMorph registration",
+    default=False,
+    dependency="is_freesurfer_synth",
+    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
+    pref_requirement={
+        GlobalPrefCategoryList.PERFORMANCE: [
+            ("ram_gb", ResourceManager.synth_morph_ram_requirements())
+        ]
+    },
+    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
+    % ResourceManager.synth_morph_ram_requirements(),
+)
+GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use Synth tools during recon-all",
+    default=False,
+    dependency="is_freesurfer_synth",
+    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
+    pref_requirement={
+        GlobalPrefCategoryList.PERFORMANCE: [
+            ("ram_gb", ResourceManager.synth_reconall_ram_requirements())
+        ]
+    },
+    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
+    % ResourceManager.synth_reconall_ram_requirements(),
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}
@@ -508,7 +702,7 @@ GLOBAL_PREFERENCES[category]["use_tls"] = PreferenceEntry(
 )
 
 DEFAULT_WF = {}
-DEFAULT_WF[WORKFLOW_TYPES.STRUCTURAL] = {
+DEFAULT_WF[WorkflowTypes.STRUCTURAL] = {
     DataInputList.T13D: {
         "hippo_amyg_labels": "false",
         "flat1": "false",
@@ -519,7 +713,7 @@ DEFAULT_WF[WORKFLOW_TYPES.STRUCTURAL] = {
     DataInputList.ASL: {"ai": "false"},
     DataInputList.PET: {"ai": "false"},
 }
-DEFAULT_WF[WORKFLOW_TYPES.FUNCTIONAL] = {
+DEFAULT_WF[WorkflowTypes.FUNCTIONAL] = {
     DataInputList.T13D: {
         "hippo_amyg_labels": "true",
         "flat1": "true",

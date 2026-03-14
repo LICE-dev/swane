@@ -2,7 +2,11 @@ import os
 import shutil
 import pytest
 from swane.config.ConfigManager import ConfigManager
-from swane.config.config_enums import BLOCK_DESIGN, VEIN_DETECTION_MODE
+from swane.config.config_enums import (
+    BlockDesign,
+    VeinDetectionMode,
+    GlobalPrefCategoryList,
+)
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.Subject import Subject, SubjectRet
 from swane.tests import TEST_DIR
@@ -27,6 +31,8 @@ def change_test_dir(request):
 def test_patient():
     global_config = ConfigManager(global_base_folder=os.getcwd())
     global_config.set_main_working_directory(TestWorkflow.TEST_MAIN_WORKING_DIRECTORY)
+    global_config[GlobalPrefCategoryList.SYNTH]["strip"] = "false"
+    global_config[GlobalPrefCategoryList.SYNTH]["morph"] = "false"
     test_patient = Subject(global_config, DependencyManager())
     test_patient.create_new_subject_dir(TestWorkflow.TEST_PATIENT_NAME)
     return test_patient
@@ -46,17 +52,15 @@ def import_from_path(
     patient.reset_workflow()
     worker = DicomSearchWorker(dicom_path)
     worker.run()
-    patient_list = worker.get_subject_list()
-    exam_list = worker.get_exam_list(patient_list[0])
-    series_list = worker.get_series_list(patient_list[0], exam_list[0])
-    image_list, patient_name, mod, series_description, vols = worker.get_series_info(
-        patient_list[0], exam_list[0], series_list[0]
-    )
+    patient_list = worker.tree.get_subject_list()
+    exam_list = worker.tree.get_studies_list(patient_list[0])
+    series_list = worker.tree.get_series_list(patient_list[0], exam_list[0])
+    series = worker.tree.get_series(patient_list[0], exam_list[0], series_list[0])
     import_ret = patient.dicom_import_to_folder(
         data_input=data_input,
-        copy_list=image_list,
-        vols=vols,
-        mod=mod,
+        copy_list=series.dicom_locs,
+        vols=series.volumes,
+        mod=series.modality,
         force_modality=True,
     )
     assert import_ret == SubjectRet.DataImportCompleted
@@ -65,10 +69,14 @@ def import_from_path(
     call_back.assert_called_with(ANY, SubjectRet.DataInputValid, ANY)
 
 
+# To use this test create subj_1 and load all "base" sequences from swane, first
+
+
 class TestWorkflow:
     TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "workflow", "subjects")
     TEST_PATIENT_NAME = "pt_01"
     DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "dicom")
+    DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT = 100000  # Prevent new nodes
 
     TESTS = {
         # 'test_name': {
@@ -93,9 +101,9 @@ class TestWorkflow:
             },
             "check_nodes": {
                 DataInputList.T13D.value.workflow_name: [
-                    ["t13d_BET", "robust", True],
+                    ["ref_deskull_bet", "robust", True],
                     [
-                        "t13d_BET",
+                        "ref_deskull_bet",
                         "frac",
                         WF_PREFERENCES[DataInputList.T13D]["bet_thr"].default,
                     ],
@@ -115,8 +123,8 @@ class TestWorkflow:
             },
             "check_nodes": {
                 DataInputList.T13D.value.workflow_name: [
-                    ["t13d_BET", "reduce_bias", True],
-                    ["t13d_BET", "frac", 0],
+                    ["ref_deskull_bet", "reduce_bias", True],
+                    ["ref_deskull_bet", "frac", 0],
                 ],
             },
         },
@@ -129,7 +137,7 @@ class TestWorkflow:
             "check_nodes": {
                 DataInputList.T13D.value.workflow_name: [
                     [
-                        "t13d_BET",
+                        "ref_deskull_bet",
                         "frac",
                         WF_PREFERENCES[DataInputList.T13D]["bet_thr"].default,
                     ]
@@ -167,7 +175,7 @@ class TestWorkflow:
             },
             "check_nodes": {
                 DataInputList.FLAIR3D.value.workflow_name: [
-                    ["flair3d_BET", "robust", True],
+                    ["flair3d_deskull_bet", "robust", True],
                 ],
                 "FLAT1": [],
             },
@@ -185,8 +193,8 @@ class TestWorkflow:
             },
             "check_nodes": {
                 DataInputList.FLAIR3D.value.workflow_name: [
-                    ["flair3d_BET", "reduce_bias", True],
-                    ["flair3d_BET", "frac", 0],
+                    ["flair3d_deskull_bet", "reduce_bias", True],
+                    ["flair3d_deskull_bet", "frac", 0],
                 ],
                 "-FLAT1": [],
             },
@@ -216,51 +224,53 @@ class TestWorkflow:
             },
         },
         "venous_phase1+2": {
-            "data": {DataInputList.VENOUS: "twovol"},
+            "data": {DataInputList.VENOUS_MR: "twovol"},
             "preferences": {},
             "check_nodes": {
-                DataInputList.VENOUS.value.workflow_name: [
+                DataInputList.VENOUS_MR.value.workflow_name: [
                     [
                         "veins_bet",
                         "frac",
-                        WF_PREFERENCES[DataInputList.VENOUS]["bet_thr"].default,
+                        WF_PREFERENCES[DataInputList.VENOUS_MR]["bet_thr"].default,
                     ],
                     ["veins_split"],
                 ],
             },
         },
         "venous_phase1only": {
-            "data": {DataInputList.VENOUS: "singlevol"},
+            "data": {DataInputList.VENOUS_MR: "singlevol"},
             "preferences": {},
             "check_nodes": {
-                "-%s" % DataInputList.VENOUS.value.workflow_name: [],
+                "-%s" % DataInputList.VENOUS_MR.value.workflow_name: [],
             },
         },
         "venous_invalid_phase_detection": {
-            "data": {DataInputList.VENOUS: "twovol"},
-            "preferences": {DataInputList.VENOUS: [["vein_detection_mode", "invalid"]]},
+            "data": {DataInputList.VENOUS_MR: "twovol"},
+            "preferences": {
+                DataInputList.VENOUS_MR: [["vein_detection_mode", "invalid"]]
+            },
             "check_nodes": {
-                DataInputList.VENOUS.value.workflow_name: [
-                    ["veins_check", "detection_mode", VEIN_DETECTION_MODE.SD]
+                DataInputList.VENOUS_MR.value.workflow_name: [
+                    ["veins_check", "detection_mode", VeinDetectionMode.SD]
                 ],
             },
         },
         "venous_phase1+phase2": {
             "data": {
-                DataInputList.VENOUS: "singlevol",
-                DataInputList.VENOUS2: "singlevol",
+                DataInputList.VENOUS_MR: "singlevol",
+                DataInputList.VENOUS_MR2: "singlevol",
             },
             "preferences": {
-                DataInputList.VENOUS: [
+                DataInputList.VENOUS_MR: [
                     ["bet_thr", "0"],
-                    ["vein_detection_mode", VEIN_DETECTION_MODE.FIRST.name],
+                    ["vein_detection_mode", VeinDetectionMode.FIRST.name],
                 ]
             },
             "check_nodes": {
-                DataInputList.VENOUS.value.workflow_name: [
+                DataInputList.VENOUS_MR.value.workflow_name: [
                     ["veins_bet", "frac", 0],
                     ["veins2_conv"],
-                    ["veins_check", "detection_mode", VEIN_DETECTION_MODE.FIRST],
+                    ["veins_check", "detection_mode", VeinDetectionMode.FIRST],
                 ],
             },
         },
@@ -306,7 +316,7 @@ class TestWorkflow:
             },
             "preferences": {
                 DataInputList["FMRI_0"]: [
-                    ["block_design", BLOCK_DESIGN.RARA.name],
+                    ["block_design", BlockDesign.RARA.name],
                 ]
             },
             "check_nodes": {
@@ -321,7 +331,7 @@ class TestWorkflow:
             },
             "preferences": {
                 DataInputList["FMRI_0"]: [
-                    ["block_design", BLOCK_DESIGN.RARB.name],
+                    ["block_design", BlockDesign.RARB.name],
                     ["task_duration", "invalid"],
                     ["rest_duration", "invalid"],
                     ["tr", "invalid"],
@@ -370,6 +380,18 @@ class TestWorkflow:
         # check wk dependency
         assert test_patient.dependency_manager.is_fsl() is True, "missing fsl"
         assert test_patient.dependency_manager.is_dcm2niix() is True, "missing dcm2niix"
+        assert (
+            test_patient.global_config.getboolean_safe(
+                GlobalPrefCategoryList.SYNTH, "strip"
+            )
+            is False
+        ), "SynthStrip should be disabled"
+        assert (
+            test_patient.global_config.getboolean_safe(
+                GlobalPrefCategoryList.SYNTH, "morph"
+            )
+            is False
+        ), "SynthMorph should be disabled"
 
         last_test = None
 

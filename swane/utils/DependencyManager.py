@@ -1,4 +1,6 @@
 import os
+import subprocess
+import re
 from shutil import which
 from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane import strings
@@ -6,8 +8,8 @@ from packaging import version
 from swane.config.ConfigManager import ConfigManager
 from PySide6.QtCore import QThreadPool
 from enum import Enum, auto
-from nipype.utils.gpu_count import gpu_count
-import platform
+from swane.utils.ResourceManager import ResourceManager
+from swane.utils.platform_and_tools_utils import is_linux
 
 
 class DependenceStatus(Enum):
@@ -78,10 +80,13 @@ class DependencyManager:
 
     MIN_FSL_VERSION = "6.0.6"
     MIN_FREESURFER_VERSION = "7.3.2"
+    SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"
     FREESURFER_MATLAB_COMMAND = "checkMCR.sh"
+    FREESURFER_MATLAB_REGEXP = r"(fs_install_mcr\s+R[0-9A-Za-z]+)"
     FSL_TCSH_COMMAND = "tcsh"
     FLS_LOCALE_COMMAND = "locale -a | grep en_US.utf8 >/dev/null || false "
+    SLICER_MODULES = ["SlicerFreeSurfer", "SurfaceWrapSolidify"]
 
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
@@ -135,6 +140,24 @@ class DependencyManager:
         return self.freesurfer.state2 != DependenceStatus.MISSING
 
     @staticmethod
+    def is_freesurfer_synth() -> bool:
+        """
+        Returns
+        -------
+        True if freesurfer version contains synth commands.
+
+        """
+        freesurfer_version = str(freesurfer.base.Info.looseversion())
+        try:
+            found_version = version.parse(freesurfer_version)
+        except:
+            return False
+
+        return found_version >= version.parse(
+            DependencyManager.SYNTH_FREESURFER_VERSION
+        )
+
+    @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
         """
         Parameters
@@ -180,6 +203,9 @@ class DependencyManager:
         if not DependencyManager.check_slicer_version(config.get_slicer_version()):
             check_slicer = True
 
+        if config.get_slicer_validator():
+            check_slicer = True
+
         return check_slicer
 
     @staticmethod
@@ -218,9 +244,6 @@ class DependencyManager:
         """
         from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 
-        # if user set manually a Slicer path it is saved with a * as first character to force check that folder
-        if current_slicer_path != "" and current_slicer_path[0] == "*":
-            current_slicer_path = current_slicer_path[1:]
         if not os.path.exists(current_slicer_path):
             current_slicer_path = ""
 
@@ -261,7 +284,7 @@ class DependencyManager:
             found_version = version.parse("0")
 
         # check if locale en_US.utf8 is available
-        if platform.system() == "Linux":
+        if is_linux():
             locale_en = os.system(DependencyManager.FLS_LOCALE_COMMAND)
             if locale_en != 0:
                 return Dependence(
@@ -315,7 +338,9 @@ class DependencyManager:
                 strings.check_dep_fs_error2 % freesurfer_version,
                 DependenceStatus.MISSING,
             )
-        license_file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
+        license_file = os.getenv("FS_LICENSE")
+        if license_file is None or not os.path.exists(license_file):
+            license_file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
         if not os.path.exists(license_file):
             return Dependence(
                 DependenceStatus.MISSING,
@@ -331,7 +356,7 @@ class DependencyManager:
         if found_version < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
             return Dependence(
                 DependenceStatus.WARNING,
-                strings.check_dep_fs_wrong_version
+                strings.check_dep_fs_outdated_version
                 % (freesurfer_version, DependencyManager.MIN_FREESURFER_VERSION),
             )
 
@@ -344,20 +369,49 @@ class DependencyManager:
             )
 
         # FS matlab runtime
-        mrc = os.system(DependencyManager.FREESURFER_MATLAB_COMMAND)
-        if mrc != 0:
-            # TODO: facciamo un parse dell'output del comando per dare all'utente il comando di installazione? o forse è meglio non basarsi sul formato attuale dell'output e linkare direttamente la pagina ufficiale?
-            return Dependence(
-                DependenceStatus.WARNING,
-                strings.check_dep_fs_error3 % freesurfer_version,
-                DependenceStatus.MISSING,
-            )
-        return Dependence(
-            DependenceStatus.DETECTED,
-            strings.check_dep_fs_found % freesurfer_version,
-            DependenceStatus.DETECTED,
+        result = subprocess.run(
+            DependencyManager.FREESURFER_MATLAB_COMMAND,
+            shell=True,
+            capture_output=True,
+            text=True,
+        )
+        matlab_found = result.returncode == 0
+        fs_dep = DependenceStatus.DETECTED
+        matlab_dep = (
+            DependenceStatus.DETECTED if matlab_found else DependenceStatus.MISSING
         )
 
-    @staticmethod
-    def is_cuda():
-        return gpu_count() > 0
+        if found_version < version.parse(DependencyManager.SYNTH_FREESURFER_VERSION):
+            error_string = strings.check_dep_fs_synth_version % (
+                freesurfer_version,
+                DependencyManager.SYNTH_FREESURFER_VERSION,
+            )
+            fs_dep = DependenceStatus.WARNING
+        elif (
+            ResourceManager.total_memory_gb()
+            < ResourceManager.synth_reconall_ram_requirements()
+        ):
+            error_string = strings.check_dep_fs_low_ram % (
+                freesurfer_version,
+                ResourceManager.synth_reconall_ram_requirements(),
+            )
+            fs_dep = DependenceStatus.WARNING
+        else:
+            error_string = strings.check_dep_fs_found % freesurfer_version
+
+        if not matlab_found:
+            fs_dep = DependenceStatus.WARNING
+
+            output = result.stdout + result.stderr
+            match = re.search(DependencyManager.FREESURFER_MATLAB_REGEXP, output)
+            if match:
+                install_cmd = match.group(1)
+                error_string += strings.check_dep_fs_error_matlab_command % install_cmd
+            else:
+                error_string += strings.check_dep_fs_error_matlab_no_command
+
+        return Dependence(
+            fs_dep,
+            error_string,
+            matlab_dep,
+        )

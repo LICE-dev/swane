@@ -17,6 +17,7 @@ from multiprocessing import Queue
 from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
 from swane.workers.WorkflowProcess import WorkflowProcess
 from swane.workers.SlicerExportWorker import SlicerExportWorker
+from swane.utils.ToolReference import tool_reference_list
 
 
 class SubjectRet(Enum):
@@ -482,8 +483,7 @@ class Subject:
 
             # Reset the workflows related to the deleted DICOM images
             src_path = os.path.join(
-                self.folder,
-                self.name + strings.WF_DIR_SUFFIX,
+                self.workflow_dir(),
                 data_input.value.workflow_name,
             )
             shutil.rmtree(src_path, ignore_errors=True)
@@ -696,9 +696,22 @@ class Subject:
         shutil.rmtree(graph_dir, ignore_errors=True)
         os.mkdir(graph_dir)
 
-        node_list = self.workflow.get_node_array()
+        interfaces = self.workflow.get_interface_array()
+        reference_file = os.path.join(self.folder, "references.txt")
+        with open(reference_file, "w", encoding="utf-8") as f:
+            for key in interfaces:
+                if key in tool_reference_list:
+                    tool = tool_reference_list[key]
+                    f.write(f"Command: {tool.command}\n")
+                    f.write(f"URL: {tool.url}\n")
+                    if tool.references:
+                        f.write("References:\n")
+                        for ref in tool.references:
+                            f.write(f" - {ref}\n")
+                    f.write("\n" + "=" * 50 + "\n\n")  # separatore tra tools
 
         # Graphviz analysis graphs drawing
+        node_list = self.workflow.get_node_array()
         if generate_graphs:
             for node in node_list.keys():
                 if len(node_list[node].node_list.keys()) > 0:
@@ -756,7 +769,7 @@ class Subject:
         Delete any previous workflow execution
         """
         shutil.rmtree(self.workflow_dir(), ignore_errors=True)
-        self.result_dir()
+        self.delete_result_dir()
 
     def delete_result_dir(self):
         """
@@ -785,6 +798,12 @@ class Subject:
         Delete any previous freesurfer run
         """
         shutil.rmtree(self.freesurfer_dir(), ignore_errors=True)
+
+        freesurfer_workflow_dir = os.path.join(
+            self.workflow_dir(),
+            "freesurfer",
+        )
+        shutil.rmtree(freesurfer_workflow_dir, ignore_errors=True)
 
     def start_workflow(
         self,

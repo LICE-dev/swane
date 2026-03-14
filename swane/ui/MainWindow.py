@@ -16,10 +16,12 @@ from PySide6.QtWidgets import (
     QPushButton,
     QStyleOptionButton,
 )
-from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent
-from PySide6.QtCore import QCoreApplication, Qt, QThreadPool
+from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent, QDesktopServices
+from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
+from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
+from swane.ui.ToolReferenceWindow import ToolReferenceWindow
 from swane.utils.DependencyManager import (
     DependencyManager,
     Dependence,
@@ -63,7 +65,9 @@ class MainWindow(QMainWindow):
         self.NON_UNICODE_BUTTON_HEIGHT = MainWindow.get_non_unicode_height()
 
         # subject folder configuration checking
+        need_setting_wizard = False
         while self.global_config.get_main_working_directory() == "":
+            need_setting_wizard = True
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_choose_working_dir)
             msg_box.exec()
@@ -73,6 +77,9 @@ class MainWindow(QMainWindow):
         os.chdir(self.global_config.get_main_working_directory())
 
         self.initialize_ui()
+
+        if need_setting_wizard:
+            self.start_preference_wizard()
 
         # Check for update
         update_thread = UpdateCheckWorker()
@@ -422,6 +429,56 @@ class MainWindow(QMainWindow):
         )
         self.global_config[GlobalPrefCategoryList.MAIN]["shutdown"] = str(not shutdown)
 
+    def start_preference_wizard(self):
+        """
+        Open the Preference Wizard Window.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        if self.check_running_workflows():
+            msg_box = QMessageBox()
+            msg_box.setText(strings.mainwindow_pref_disabled_error)
+            msg_box.exec()
+            return
+
+        wf_preference_window = PreferenceWizardWindow(
+            self.global_config, self.dependency_manager
+        )
+        wf_preference_window.exec()
+
+    def start_tool_reference(self, default_tab=None, search_str=None):
+        """
+        Open the Tool Reference Window.
+
+        Returns
+        -------
+        None.
+
+        """
+        if hasattr(self, "_tool_reference_window") and self._tool_reference_window:
+            win = self._tool_reference_window
+            win.show()
+            win.raise_()
+            win.activateWindow()
+            if default_tab is not None and search_str is not None:
+                win.search(default_tab, search_str)
+            return
+
+        self._tool_reference_window = ToolReferenceWindow(
+            parent=self, default_tab=default_tab, search_string=search_str
+        )
+
+        # quando viene chiusa, libera il riferimento
+        self._tool_reference_window.finished.connect(
+            lambda _: setattr(self, "_tool_reference_window", None)
+        )
+
+        self._tool_reference_window.show()
+
     def check_running_workflows(self, ignore_subj: Subject = None) -> bool:
         """
         Check if SWANe is executing a workflow in any open subject tab.
@@ -560,12 +617,25 @@ class MainWindow(QMainWindow):
         )
         button_action5.triggered.connect(self.edit_wf_config)
 
-        button_action6 = QAction(strings.menu_shutdown_pref, self)
-        button_action6.setCheckable(True)
-        button_action6.triggered.connect(self.toggle_shutdown_after_workflow)
+        button_action6 = QAction(
+            QIcon.fromTheme("tools-wizard"), strings.menu_start_preference_wizard, self
+        )
+        button_action6.triggered.connect(self.start_preference_wizard)
 
-        button_action7 = QAction(strings.menu_about, self)
-        button_action7.triggered.connect(self.about)
+        button_action7 = QAction(strings.menu_shutdown_pref, self)
+        button_action7.setCheckable(True)
+        button_action7.triggered.connect(self.toggle_shutdown_after_workflow)
+
+        button_action8 = QAction(strings.menu_tool_reference, self)
+        button_action8.triggered.connect(self.start_tool_reference)
+
+        button_action9 = QAction(strings.menu_wiki, self)
+        button_action9.triggered.connect(
+            lambda: QDesktopServices.openUrl(QUrl(strings.WIKI_URL))
+        )
+
+        button_action10 = QAction(strings.menu_about, self)
+        button_action10.triggered.connect(self.about)
 
         # Menu definition and population
         menu = self.menuBar()
@@ -578,8 +648,11 @@ class MainWindow(QMainWindow):
         tool_menu.addAction(button_action4)
         tool_menu.addAction(button_action5)
         tool_menu.addAction(button_action6)
+        tool_menu.addAction(button_action7)
         help_menu = menu.addMenu(strings.menu_help_name)
-        help_menu.addAction(button_action7)
+        help_menu.addAction(button_action8)
+        help_menu.addAction(button_action9)
+        help_menu.addAction(button_action10)
 
         # Tab definition
         self.main_tab = QTabWidget(parent=self)
@@ -599,18 +672,13 @@ class MainWindow(QMainWindow):
         self.subject_tab_array = []
 
         # Link to ChatGPT SWANe Assistant - as a clear clickable QPushButton
-        chatgpt_url = (
-            "https://chatgpt.com/g/g-68e14421a54c8191a2110a831824f1e9-swaneassistant/"
-        )
-        chatgpt_text = f"🤖 {strings.mainwindow_chatgpt_title}"
 
-        self.chatgpt_button = QPushButton(chatgpt_text, parent=self)
-        self.chatgpt_button.setCursor(Qt.PointingHandCursor)
-        self.chatgpt_button.setToolTip(strings.mainwindow_chatgpt_tooltip)
-        self.chatgpt_button.setMinimumHeight(28)
-        self.chatgpt_button.setContentsMargins(4, 0, 4, 0)
-        self.chatgpt_button.setStyleSheet(
-            """
+        chatgpt_button = QPushButton(strings.chatgpt_button_text, parent=self)
+        chatgpt_button.setCursor(Qt.PointingHandCursor)
+        chatgpt_button.setToolTip(strings.mainwindow_chatgpt_tooltip)
+        chatgpt_button.setMinimumHeight(28)
+        chatgpt_button.setContentsMargins(4, 0, 4, 0)
+        chatgpt_button.setStyleSheet("""
             QPushButton {
                 color: #ffffff;
                 background-color: rgba(0, 102, 204, 0.12);
@@ -626,18 +694,14 @@ class MainWindow(QMainWindow):
             QPushButton:pressed {
                 background-color: rgba(0, 102, 204, 0.24);
             }
-        """
+        """)
+
+        chatgpt_button.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(strings.chatgpt_url))
         )
 
-        def _open_chatgpt():
-            import webbrowser
-
-            webbrowser.open(chatgpt_url)
-
-        self.chatgpt_button.clicked.connect(_open_chatgpt)
-
         # Add to status bar (use addPermanentWidget per preferenza)
-        self.statusBar().addPermanentWidget(self.chatgpt_button)
+        self.statusBar().addPermanentWidget(chatgpt_button)
 
         self.show()
 
@@ -884,9 +948,13 @@ class MainWindow(QMainWindow):
 
         self.add_home_entry(Dependence(state, msg), self.slicer_x)
 
-        if state is DependenceStatus.DETECTED:
+        if state is not DependenceStatus.MISSING:
             self.global_config.set_slicer_path(slicer_path)
             self.global_config.set_slicer_version(slicer_version)
+            self.global_config.save()
+
+        if state is DependenceStatus.DETECTED:
+            self.global_config.set_slicer_validator(False)
             self.global_config.save()
 
         for tab in self.subject_tab_array:

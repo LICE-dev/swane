@@ -8,6 +8,7 @@ GENBUTTONTEXT = "Generate " + APPNAME + " Workflow"
 SUBJCONFIGBUTTONTEXT = "Workflow preferences"
 INFOCHAR = "\u24d8"
 WF_DIR_SUFFIX = "_nipype"
+WIKI_URL = "https://github.com/LICE-dev/swane/wiki"
 
 # Main
 main_multiple_instances_error = (
@@ -84,6 +85,8 @@ aboutwindow_wiki_changelog = "Link to versions <a href='https://github.com/LICE-
 
 mainwindow_chatgpt_title = "SWANe Assistant"
 mainwindow_chatgpt_tooltip = "Open ChatGPT SWANe Assistant in your browser"
+chatgpt_url = "https://chatgpt.com/g/g-68e14421a54c8191a2110a831824f1e9-swaneassistant/"
+chatgpt_button_text = f"🤖 {mainwindow_chatgpt_title}"
 
 # Menu
 menu_load_subj = "&Load subject..."
@@ -92,10 +95,15 @@ menu_new_subj = "&New subject..."
 menu_new_subj_tip = "Add a new subject in the main working directory"
 menu_exit = "E&xit " + APPNAME
 menu_pref = "Application &Settings..."
+menu_pref_title = "Application Settings"
 menu_pref_tip = "Edit " + APPNAME + " settings"
+menu_start_preference_wizard = "Configuration &Wizard..."
 menu_wf_pref = "Default Workflow &Preferences..."
+menu_wf_pref_title = "Default Workflow Preferences"
 menu_shutdown_pref = "Shutdown at Workflow end"
 menu_about = "&About " + APPNAME + "..."
+menu_tool_reference = "&Tool References..."
+menu_wiki = "Visit " + APPNAME + " &Wiki..."
 menu_file_name = "File"
 menu_tools_name = "Tools"
 menu_help_name = "Help"
@@ -184,6 +192,23 @@ subj_tab_unsupported_files = (
     + " works on primary non derived DICOM images.\nFolder contains ImageType combinations that are not accepted: {}"
 )
 
+sub_tab_node_name_label = "Node"
+sub_tab_node_status_label = "Status"
+sub_tab_node_status_not_started = "Not started"
+sub_tab_node_status_running = "Execution started at"
+sub_tab_node_status_completed = "Completed at"
+sub_tab_node_status_failed = "Failed"
+sub_tab_node_dir_label = "Directory"
+sub_tab_node_tool_label = "Tool:"
+sub_tab_node_crash_label = "Crash file"
+sub_tab_node_command_label = "Command"
+sub_tab_node_duration_label = "Duration"
+sub_tab_node_cpu_label = "CPU %"
+sub_tab_node_ram_label = "Mem (GB)"
+sub_tab_node_output_label = "Output"
+sub_tab_node_slicer_button_tooltip = "Open in 3D Slicer"
+sub_tab_node_file_button_tooltip = "Show in File Manager"
+
 # Wf Preference Window
 wf_pref_window_title_user = " - Workflow preferences"
 
@@ -212,6 +237,120 @@ pref_window_mail_test_fail = (
 )
 pref_window_mail_test_success = "Mail sent succesfully, check in your inbox"
 
+# Preference Wizard Window
+preference_wizard_title = APPNAME + " Configuration Wizard"
+wizard_apply_button = "&Apply"
+wizard_back_button = "&Back"
+wizard_next_button = "&Next"
+wizard_finish_button = "&Finish"
+wizard_cancel_button = "&Cancel"
+wizard_start_button = "&Get Started"
+
+wizard_welcome_title = "Welcome to the " + APPNAME + " Configuration Wizard"
+wizard_welcome_text = (
+    "This wizard will guide you through selecting the optimal computational settings "
+    "for your research workflows.\n\n"
+    "It helps balance performance, resource usage, and advanced features so that SWANe can "
+    "analyze your data efficiently and reliably.\n\n"
+    "You’ll be able to:\n"
+    "• Select a performance profile that matches your priorities.\n"
+    "• Enable hardware acceleration, if supported.\n"
+    "• Choose whether to use advanced models for improved results.\n"
+    "• Select Freesurfer output of your interest, if supported.\n"
+    "• Review a summary of your configuration before applying it.\n\n"
+    "These settings can always be adjusted later in Application Settings, or you can rerun "
+    "this wizard at any time from Menu → Configuration Wizard."
+)
+
+wizard_performance_title = "Choose your performance profile"
+wizard_performance_text = (
+    "This helps "
+    + APPNAME
+    + " optimize processing based on your system capabilities and research needs."
+)
+performance_profile_max = "Maximum Performance"
+performance_profile_max_tooltip = (
+    "Use more system resources to complete tasks as quickly as possible."
+)
+performance_profile_balanced = "Balanced"
+performance_profile_balanced_tooltip = (
+    "A compromise between speed and resource usage for most analyses."
+)
+performance_profile_min = "Minimum Resource Usage"
+performance_profile_min_tooltip = "Minimize CPU and memory usage to keep the system responsive, even on limited hardware."
+
+wizard_hardware_accelleration_title = "Hardware Accelleration"
+wizard_hardware_accelleration_text = (
+    "Speed up computations by using supported hardware features."
+)
+gpu_acceleration_enabled = "Use GPU acceleration when available"
+gpu_acceleration_enabled_tooltip = (
+    "This can accelerate advanced computations if the GPU is supported by your system."
+)
+gpu_acceleration_disabled = "CPU only"
+gpu_acceleration_disabled_tooltip = (
+    "All processing will run on the CPU, even if GPU acceleration is available."
+)
+
+wizard_advanced_models_title = "Advanced Models"
+wizard_advanced_models_text = (
+    "Advanced models implement state-of-the-art FreeSurferdeep learning algorithms (Synth Tools) that can improve results "
+    "and, in some cases, reduce analysis time.<br>"
+    "They may require additional memory and processing power."
+)
+wizard_advanced_models_macos_warn = "<b>Please note</b>: The synth tools consume a significant amount of RAM on macOS. For this reason, we do <b>not recommend</b> using them on this platform."
+advanced_models_enabled = "Use advanced models when supported"
+advanced_models_enabled_tooltip = (
+    "Enable advanced models when the system can handle them reliably."
+)
+advanced_models_disabled = "Use standard models only"
+advanced_models_disabled_tooltip = (
+    "Prefer lighter, more stable processing techniques with minimal resource usage."
+)
+
+wizard_freesurfer_outputs_title = "FreeSurfer Outputs Selection"
+wizard_freesurfer_outputs_tooltip = (
+    "Select which FreeSurfer outputs you want to generate for your analyses.\n"
+    "You can choose multiple options or none.\n"
+    "More selections will increase processing time."
+)
+freesurfer_outputs_cortical_parcellation = "Cortical Parcellation"
+freesurfer_outputs_cortical_parcellation_tooltip = (
+    "Generates cortical parcellation maps using FreeSurfer's standard methods."
+)
+freesurfer_outputs_surfaces = "Surfaces"
+freesurfer_outputs_surfaces_tooltip = "Produces white matter and pial 3D models surface models for surface-based analyses."
+freesurfer_outputs_hippocampal_segmentation = (
+    "Hippocampal/Amigdala Subfield Segmentation"
+)
+freesurfer_outputs_hippocampal_segmentation_tooltip = "Produces detailed hippocampal and amigdala subfields segmentation for advanced analyses."
+freesurfer_full_reconall = "Full Recon-All Processing"
+freesurfer_full_reconall_tooltip = (
+    "Enables the complete Recon-All pipeline for comprehensive brain analysis."
+)
+
+wizard_review_title = "Review Your Configuration"
+wizard_review_text = "Please review your selections before applying them."
+wizard_review_tooltip = (
+    "Some options may be automatically adjusted to ensure stability and compatibility."
+)
+
+wizard_applied_title = "Configuration applied successfully"
+wizard_applied_text = (
+    "Your settings have been applied.<br><br>"
+    "These settings may influence analysis performance and memory usage.<br>"
+    "You can always adjust them in more detail via Application Settings.<br><br>"
+    "For additional guidance, documentation, and troubleshooting, visit the <a href='"
+    + WIKI_URL
+    + "'>SWANe Wiki</a>.<br>"
+    "You can also rerun this wizard at any time from Menu → Configuration Wizard."
+)
+
+wizard_selected_profile = "<b>Selected profile</b>: {profile}"
+wizard_gpu_accelleration = "<b>GPU acceleration</b>: {gpu_status}"
+wizard_advanced_models = "<b>Advanced models</b>: {adv_status}"
+wizard_freesurfer_outputs = "<b>FreeSurfer outputs</b>: {fs_outputs}"
+
 # Workflow
 check_dep_generic_error = "Dependency check error"
 check_dep_dcm2niix_error = (
@@ -238,18 +377,32 @@ check_dep_fs_error1 = (
 )
 check_dep_fs_error2 = "FreeSurfer detected (%s), but without environment configuration"
 check_dep_fs_error3 = (
-    "FreeSurfer detected (%s). Matlab Runtime is not installed (<a "
-    "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>installation instruction</a>)"
+    "FreeSurfer detected (%s). OPTIONAL: install Matlab Runtime (<a "
+    "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>instructions</a>)"
+)
+check_dep_fs_error_matlab_no_command = (
+    "<br>OPTIONAL: install Matlab Runtime (<a "
+    "href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>instructions</a>)"
+)
+check_dep_fs_error_matlab_command = (
+    "<br>OPTIONAL: install Matlab Runtime with command <i>%s</i>"
 )
 check_dep_fs_error4 = (
     "FreeSurfer detected (%s). License key missing (<a "
-    "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instruction</a>)"
+    "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instructions</a>)"
 )
-check_dep_fs_wrong_version = (
+check_dep_fs_outdated_version = (
     "FreeSurfer version outdated (found %s, required %s). Please "
-    "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a>"
+    "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a>."
 )
-check_dep_fs_no_tcsh = "FreeSurfer detected (%s) but tcsh is not installed."
+check_dep_fs_synth_version = (
+    "FreeSurfer detected (found %s, recommended %s). Please "
+    "<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall'>update</a> to speed up processing greatly."
+)
+check_dep_fs_no_tcsh = "FreeSurfer detected (%s), but tcsh is not installed."
+check_dep_fs_low_ram = (
+    "FreeSurfer detected (%s). With less than %dGB of RAM, processing will be slower."
+)
 check_dep_graph_error = "Graphviz not detected (<a href='https://graphviz.org/download/'>Installation info</a>)"
 check_dep_graph_found = "Graphviz detected"
 check_dep_slicer_error1 = (
@@ -257,9 +410,9 @@ check_dep_slicer_error1 = (
     "/getting_started.html#installing-3d-slicer/'>Installation info</a>)"
 )
 check_dep_slicer_error2 = (
-    "Slicer detected but without SlicerFreeSurfer extension (<a "
+    "Required Slicer modules (%s) are missing (<a "
     "href='https://slicer.readthedocs.io/en/latest/user_guide/extensions_manager.html?highlight"
-    "=extension%20manager'>Extensions Manager info</a>)"
+    "=extension%%20manager'>Extensions Manager info</a>)"
 )
 check_dep_slicer_wrong_version = (
     "Slicer version outdated (found %s, required %s). Please "
@@ -286,14 +439,27 @@ fsl_python_error_restart = "Restart with system Python"
 fsl_python_error_exit = "Copy fix line and Exit"
 generic_shell_file = "your shell configuration"
 
+toolreference_title = "Tool References"
+toolreference_search_label = "Search:"
+toolreference_search_hint = "Type to filter (command, url, references)..."
+toolreference_clear_btn = "Clear"
+toolreference_close_btn = "Close"
+toolreference_no_results = "No results found"
+toolreference_reference_label = "References"
+
 # Nodes
 node_names = {}
 node_names["CustomDcm2niix"] = "nifti conversion"
 node_names["RobustFOV"] = "neck removal"
 node_names["ForceOrient"] = "standard orientation"
 node_names["BET"] = "scalp removal"
+node_names["SegmentEndocranium"] = "scalp removal"
+node_names["SynthStrip"] = "scalp removal"
+node_names["SynthMorphReg"] = "registration"
+node_names["SynthSeg"] = "SynthSeg cortical parcellation"
 node_names["FLIRT"] = "linear registration"
 node_names["ApplyXFM"] = "linear transformation"
+node_names["SynthMorphApply"] = "linear transformation"
 node_names["FNIRT"] = "nonlinear registration"
 node_names["ApplyWarp"] = "nonlinear transformation"
 node_names["InvWarp"] = "inverse transformation"
@@ -302,11 +468,11 @@ node_names["ApplyMask"] = "masking"
 node_names["EddyCorrect"] = "eddy current correction (old)"
 node_names["CustomEddy"] = "eddy current correction"
 node_names["GenEddyFiles"] = "eddy current correction preparation"
-node_names["CustomBEDPOSTX5"] = "diffusion bayesian estimation"
+node_names["BEDPOSTX5"] = "diffusion bayesian estimation"
 node_names["RandomSeedGenerator"] = "random seeds generation"
 node_names["CustomProbTrackX2"] = "probabilistic tractography"
 node_names["SumMultiTracks"] = "Parallel tractography merging"
-node_names["ReconAll"] = "Freesurfer recon-all"
+node_names["ReconAll"] = "Recon-all"
 node_names["CustomLabel2Vol"] = "linear transformation"
 node_names["SegmentHA"] = "hippocampal segmentation"
 node_names["MCFLIRT"] = "motion correction"
@@ -323,3 +489,14 @@ node_names["Cluster"] = "cluster extraction"
 node_names["SampleToSurface"] = "surface projection"
 node_names["FAST"] = "Tissue segmentation"
 node_names["FLAT1OutliersMask"] = "outliers mask generation"
+node_names["MELODIC"] = "Melodic - IC Analysis"
+node_names["SelectFiles"] = "Melodic - Output selection"
+node_names["FeatureSpatialPrep"] = "Aroma - Preprocessing"
+node_names["FeatureSpatial"] = "Aroma - Spatial feature"
+node_names["FeatureTimeSeries"] = "Aroma - Time feature"
+node_names["FeatureFrequency"] = "Aroma - Frequency feature"
+node_names["AromaClassification"] = "Aroma - Noise classification"
+node_names["FilterRegressor"] = "Denoising"
+node_names["FeatureFrequency"] = "Aroma - Frequency feature"
+node_names["N4BiasFieldCorrection"] = "Bias Field Correction"
+node_names["ZIntNorm"] = "Intensity Normalization"

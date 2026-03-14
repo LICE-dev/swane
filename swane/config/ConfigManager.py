@@ -1,17 +1,24 @@
 import configparser
+from configparser import SectionProxy
+from typing import Literal, cast
+
 from swane import strings, __version__
 from swane.config.preference_list import *
 from swane.utils.CryptographyManager import CryptographyManager
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
-from swane.config.config_enums import WORKFLOW_TYPES, GlobalPrefCategoryList
+from swane.config.config_enums import WorkflowTypes, GlobalPrefCategoryList
 from swane.utils.MailManager import MailManager
 
 
 class ConfigManager(configparser.ConfigParser):
 
+    VALIDATION_SUFFIX = "_validation"
+
     # Overrides to accept non-str stringable object as section keys
-    def __getitem__(self, key):
+    def __getitem__(
+        self, key: str | DataInputList | GlobalPrefCategoryList
+    ) -> SectionProxy:
         return super().__getitem__(str(key))
 
     def __setitem__(self, key, value):
@@ -49,25 +56,21 @@ class ConfigManager(configparser.ConfigParser):
             GlobalPrefCategoryList.MAIN, "force_pref_reset"
         )
 
-        reset_pref = False
-
         # if version need pref reset, load old config file in a temp variable to get just last_swane_version
-        try:
-            if force_pref_reset:
-                if self.global_config:
-                    last_swane_version = self[GlobalPrefCategoryList.MAIN][
-                        "last_swane_version"
-                    ]
-                else:
-                    temp_config = configparser.ConfigParser()
-                    temp_config.read(self.config_file)
-                    last_swane_version = temp_config[GlobalPrefCategoryList.MAIN][
-                        "last_swane_version"
-                    ]
+        reset_pref = False
+        if force_pref_reset:
+            try:
+                # main.last_swane_version should exist in both global and  subject config file
+                temp_config = configparser.ConfigParser()
+                temp_config.read(self.config_file)
+                last_swane_version = temp_config[str(GlobalPrefCategoryList.MAIN)][
+                    "last_swane_version"
+                ]
                 if __version__ != last_swane_version:
                     reset_pref = True
-        except:
-            pass
+            except:
+                # otherwise assume outdated version
+                reset_pref = True
 
         if not reset_pref and os.path.exists(self.config_file):
             self.read(self.config_file)
@@ -125,6 +128,10 @@ class ConfigManager(configparser.ConfigParser):
                             self[category][pref] = str(
                                 GLOBAL_PREFERENCES[category][pref].default
                             )
+                        if GLOBAL_PREFERENCES[category][pref].validate_on_change:
+                            self[category][
+                                pref + ConfigManager.VALIDATION_SUFFIX
+                            ] = "true"
 
             for data_input in DataInputList:
                 if data_input in WF_PREFERENCES:
@@ -159,18 +166,18 @@ class ConfigManager(configparser.ConfigParser):
         if save:
             self.save()
 
-    def set_workflow_option(self, workflow_type: WORKFLOW_TYPES):
+    def set_workflow_option(self, workflow_type: WorkflowTypes):
         """
         Apply a workflow_type preset
 
         Parameters
         ----------
-        workflow_type: WORKFLOW_TYPES
+        workflow_type: WorkflowTypes
             The preset to apply
         """
         if self.global_config:
             return
-        if type(workflow_type) is not WORKFLOW_TYPES:
+        if type(workflow_type) is not WorkflowTypes:
             return
         self[DataInputList.T13D]["wf_type"] = workflow_type.name
         for category in DEFAULT_WF[workflow_type]:
@@ -253,6 +260,30 @@ class ConfigManager(configparser.ConfigParser):
             return self[GlobalPrefCategoryList.MAIN]["slicer_path"]
         return ""
 
+    def get_slicer_validator(self) -> bool:
+        """
+        Returns
+        -------
+        A bool, true if slicer executable validation needs to be checked
+        """
+        if self.global_config:
+            return self.getboolean_safe(
+                GlobalPrefCategoryList.MAIN, "slicer_path" + self.VALIDATION_SUFFIX
+            )
+        return False
+
+    def set_slicer_validator(self, value: bool):
+        """
+        Returns
+        -------
+        A bool, true if slicer executable validation needs to be checked
+        """
+        if self.global_config:
+            self[GlobalPrefCategoryList.MAIN][
+                "slicer_path" + self.VALIDATION_SUFFIX
+            ] = str(value)
+        return False
+
     def set_slicer_path(self, slicer_path: str):
         """
         Set the slicer executable path
@@ -333,13 +364,13 @@ class ConfigManager(configparser.ConfigParser):
         """
         return self.getboolean_safe(DataInputList.T13D, "hippo_amyg_labels")
 
-    def get_workflow_freesurfer_pref(self) -> bool:
+    def get_workflow_freesurfer_pref(self) -> FreesurferStep:
         """
         Returns
         -------
         True if freesurfer analysis is enabled
         """
-        return self.getboolean_safe(DataInputList.T13D, "freesurfer")
+        return self.getenum_safe(DataInputList.T13D, "freesurfer_step")
 
     def get_mail_manager(self) -> MailManager:
         """
@@ -393,16 +424,53 @@ class ConfigManager(configparser.ConfigParser):
 
         """
         changed = False
-        for category in WF_PREFERENCES:
-            for key in WF_PREFERENCES[category]:
-                if WF_PREFERENCES[category][key].dependency is not None:
+        for section in WF_PREFERENCES:
+            for option in WF_PREFERENCES[section]:
+                if WF_PREFERENCES[section][option].dependency is not None:
                     dep_check = getattr(
                         dependency_manager,
-                        WF_PREFERENCES[category][key].dependency,
+                        WF_PREFERENCES[section][option].dependency,
                         None,
                     )
                     if dep_check is None or not callable(dep_check) or not dep_check():
-                        self[category][key] = "false"
+                        self[section][option] = "false"
+                        changed = True
+                        continue
+
+                if WF_PREFERENCES[section][option].input_type == InputTypes.ENUM:
+                    enum_cls = WF_PREFERENCES[section][option].value_enum
+                    value_enum = enum_cls[self[section][option]]
+                    if value_enum in WF_PREFERENCES[section][option].option_dependency:
+                        dep_check = getattr(
+                            dependency_manager,
+                            WF_PREFERENCES[section][option].option_dependency[
+                                value_enum
+                            ][0],
+                            None,
+                        )
+                        if (
+                            dep_check is not None
+                            and callable(dep_check)
+                            and not dep_check()
+                        ):
+                            self[section][option] = str(
+                                self._section_defaults[str(section)][
+                                    str(option)
+                                ].default
+                            )
+
+                if WF_PREFERENCES[section][option].resource is not None:
+                    resource_check = getattr(
+                        ResourceManager,
+                        WF_PREFERENCES[section][option].resource,
+                        None,
+                    )
+                    if (
+                        resource_check is None
+                        or not callable(resource_check)
+                        or not resource_check(config=self)
+                    ):
+                        self[section][option] = "false"
                         changed = True
         if changed:
             self.save()
@@ -416,7 +484,13 @@ class ConfigManager(configparser.ConfigParser):
         return self.getint_safe(GlobalPrefCategoryList.MAIN, "last_pid")
 
     def getboolean_safe(
-        self, section: str, option: str, *, raw=False, vars=None, **kwargs
+        self,
+        section: str | GlobalPrefCategoryList | DataInputList,
+        option: str,
+        *,
+        raw=False,
+        vars=None,
+        **kwargs
     ) -> bool:
         """
         Get an option value as bool or, if invalid, its default value
@@ -453,7 +527,13 @@ class ConfigManager(configparser.ConfigParser):
         raise Exception()
 
     def getint_safe(
-        self, section: str, option: str, *, raw=False, vars=None, **kwargs
+        self,
+        section: str | GlobalPrefCategoryList | DataInputList,
+        option: str,
+        *,
+        raw=False,
+        vars=None,
+        **kwargs
     ) -> int:
         """
         Get an option value as int or, if invalid, its default value
@@ -488,7 +568,13 @@ class ConfigManager(configparser.ConfigParser):
         raise Exception("Error for %s - %s" % (str(section), str(option)))
 
     def getfloat_safe(
-        self, section: str, option: str, *, raw=False, vars=None, **kwargs
+        self,
+        section: str | GlobalPrefCategoryList | DataInputList,
+        option: str,
+        *,
+        raw=False,
+        vars=None,
+        **kwargs
     ) -> float:
         """
         Get an option value as float or, if invalid, its default value
@@ -523,7 +609,13 @@ class ConfigManager(configparser.ConfigParser):
         raise Exception("Error for %s - %s" % (str(section), str(option)))
 
     def getenum_safe(
-        self, section: str, option: str, *, raw: bool = False, vars=None, **kwargs
+        self,
+        section: str | GlobalPrefCategoryList | DataInputList,
+        option: str,
+        *,
+        raw: bool = False,
+        vars=None,
+        **kwargs
     ) -> Enum:
         """
         Get an option value as Enum or, if invalid, its default value
@@ -638,3 +730,44 @@ class ConfigManager(configparser.ConfigParser):
         if value is not None:
             value = str(self.validate_type(section, option, value))
         super().set(section, option, value)
+
+    def apply_resource_profile(self, profile: PerformanceProfile):
+
+        if not self.global_config:
+            return
+
+        if profile == PerformanceProfile.LOW_RESOURCE:
+            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(
+                ResourceManager.get_minimum_ram()
+            )
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(
+                ResourceManager.get_min_cpu()
+            )
+            self[GlobalPrefCategoryList.PERFORMANCE][
+                "multicore_node_limit"
+            ] = CoreLimit.HARD_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "1"
+
+        elif profile == PerformanceProfile.BALANCED:
+            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(
+                ResourceManager.get_default_ram()
+            )
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(
+                ResourceManager.get_default_cpu()
+            )
+            self[GlobalPrefCategoryList.PERFORMANCE][
+                "multicore_node_limit"
+            ] = CoreLimit.HARD_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "2"
+
+        elif profile == PerformanceProfile.MAX_PERF:
+            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(
+                ResourceManager.get_maximum_ram()
+            )
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(
+                ResourceManager.get_max_cpu()
+            )
+            self[GlobalPrefCategoryList.PERFORMANCE][
+                "multicore_node_limit"
+            ] = CoreLimit.SOFT_CAP.name
+            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "3"
