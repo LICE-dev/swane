@@ -127,7 +127,7 @@ This project includes subsection derived from other software, which licenses can
 
 ## Changelog
 
-### [0.2] - 2026-01-XX
+### [0.2] - 2026-03-14
 
 #### Added
 
