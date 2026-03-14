@@ -2,6 +2,7 @@
 
 from nipype import logging as nipype_log, config
 import os
+from psutil import virtual_memory
 import traceback
 from multiprocessing import Process, Event
 from threading import Thread
@@ -13,7 +14,6 @@ from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
 import logging as orig_log
 from swane.nipype_pipeline.MainWorkflow import MainWorkflow
 from multiprocessing import Queue
-
 
 LOG_DIR_NAME = "log"
 
@@ -79,6 +79,9 @@ class WorkflowProcess(Process):
             plugin_args["n_procs"] = self.workflow.max_cpu
         if self.workflow.max_gpu > 0:
             plugin_args["n_gpu_proc"] = self.workflow.max_gpu
+
+        # Assign to niype specified RAM
+        plugin_args["memory_gb"] = self.workflow.memory_gb
 
         try:
             # this is useful to generate resource monitor files in subject directory

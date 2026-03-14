@@ -10,7 +10,6 @@ from nipype.interfaces import fsl, dcm2nii, freesurfer
 from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 import distutils.dir_util
 
-
 # INSTALL REQUIRED LIB: pip3 install pytest pytest-qt pytest-xdist
 # START TEST: pytest swane/ --color=yes --verbose -n 3
 
@@ -164,24 +163,18 @@ class TestDependencyManager:
         ) as blocker:
             QThreadPool.globalInstance().start(slicer_check_worker)
         assert (
-            blocker.args[3] == DependenceStatus.MISSING
-            and blocker.args[2] == strings.check_dep_slicer_error2
-        ), "Missing SlicerFreeSurfer error"
-        install_script = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "workers",
-            "slicer_script_freesurfer_module_install.py",
-        )
-        os.system(cmd + " --no-main-window --python-script " + install_script)
+            blocker.args[3] == DependenceStatus.DETECTED
+        ), "Cannot reinstall SlicerFreeSurfer error"
+        # try to install non-existing module
+        monkeypatch.setattr(DependencyManager, "SLICER_MODULES", ["blabla"])
         slicer_check_worker = SlicerCheckWorker(cmd)
         with qtbot.waitSignal(
             slicer_check_worker.signal.slicer, timeout=2000000
         ) as blocker:
             QThreadPool.globalInstance().start(slicer_check_worker)
         assert (
-            blocker.args[3] == DependenceStatus.DETECTED
-        ), "Reinstall SlicerFreeSurfer error"
+            blocker.args[3] == DependenceStatus.WARNING
+        ), "Missing module not raising error"
 
         # test for outdated slicer version
         monkeypatch.setattr(DependencyManager, "MIN_SLICER_VERSION", "1000")
