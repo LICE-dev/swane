@@ -1,7 +1,6 @@
 import os
 import shutil
 import pytest
-import fnmatch
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.Subject import Subject, SubjectRet

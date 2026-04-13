@@ -1,3 +1,5 @@
+import psutil
+
 from swane.utils.fsl_conflict_handler import fsl_conflict_check
 
 
@@ -34,21 +36,29 @@ def main():
         global_config = ConfigManager()
 
         # Guard to prevent multiple SWANe instances launch
-        last_pid = global_config.get_last_pid()
+        last_pid, last_pid_create_time = global_config.get_last_pid()
 
-        if last_pid_is_running(last_pid):
+        if last_pid_is_running(last_pid, last_pid_create_time):
             msg_box = QMessageBox()
             msg_box.setText(strings.main_multiple_instances_error)
             msg_box.exec()
             sys.exit(-1)
-        else:
-            global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = str(os.getpid())
-            global_config.save()
+            
+        current_process = psutil.Process(os.getpid())
+        global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = str(current_process.pid)
+        global_config[GlobalPrefCategoryList.MAIN]["last_pid_create_time"] = str(current_process.create_time())
+        global_config.save()
 
         # MainWindow in a varariable to prenvent garbage collector deletion (might cause crash)
-        widget = MainWindow(global_config)
-        widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
-        current_exit_code = app.exec()
+        try:
+            widget = MainWindow(global_config)
+            widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
+            current_exit_code = app.exec()
+        finally:
+            # Clearing last PID and create time to allow new SWANe instance launch
+            global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = ""
+            global_config[GlobalPrefCategoryList.MAIN]["last_pid_create_time"] = ""
+            global_config.save()
 
     sys.exit(current_exit_code)
 
