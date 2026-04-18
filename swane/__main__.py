@@ -55,10 +55,14 @@ def main():
             widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
             current_exit_code = app.exec()
         finally:
+            # At SWANe exit
             # Clearing last PID and create time to allow new SWANe instance launch
-            global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = ""
-            global_config[GlobalPrefCategoryList.MAIN]["last_pid_create_time"] = ""
-            global_config.save()
+            try:
+                global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = ""
+                global_config[GlobalPrefCategoryList.MAIN]["last_pid_create_time"] = ""
+                global_config.save()
+            except Exception:
+                pass
 
     sys.exit(current_exit_code)
 
