@@ -2,6 +2,7 @@
 import SimpleITK as sitk
 from os.path import abspath
 import os
+import numpy as np
 from nipype.interfaces.base import (
     traits,
     BaseInterface,
@@ -56,6 +57,22 @@ class N4BiasFieldCorrection(BaseInterface):
         else:
             # In other cases use automatic thresholding
             mask = sitk.OtsuThreshold(img, 0, 1, 200)
+
+        # --- Check geometrical coherence between mask and img ---
+        max_tolerance = 0.1
+        origin_img = np.array(img.GetOrigin())
+        origin_mask = np.array(mask.GetOrigin())
+        distance = np.linalg.norm(origin_img - origin_mask)
+        if distance > 0:
+            if distance <= max_tolerance:
+                # If mask and img have minimal difference, force mask in img geometrical space
+                mask.CopyInformation(img)
+            else:
+                # If difference is bigger, stop
+                raise RuntimeError(
+                    f"Immagine e Maschera non coincidono! Distanza origini: {distance:.4f} mm. "
+                    f"La soglia massima consentita è {max_tolerance} mm."
+                )
 
         # --- N4 ---
         corrector = sitk.N4BiasFieldCorrectionImageFilter()
