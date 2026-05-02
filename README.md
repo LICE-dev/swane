@@ -127,6 +127,12 @@ This project includes subsection derived from other software, which licenses can
 
 ## Changelog
 
+### [0.2.1] - Pending
+
+#### Fixed
+
+- False multiple-instance detection by validating process creation time in addition to PID
+
 ### [0.2] - 2026-03-14
 
 #### Added
