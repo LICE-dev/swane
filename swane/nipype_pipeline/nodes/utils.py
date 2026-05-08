@@ -157,7 +157,7 @@ def get_registration_node(
             flirt = Node(FLIRT(), name=name + "_flirt")
             flirt.long_name = name_prefix + " %s " + name_suffix
             flirt.ram_estimator = FlirtRamEstimator()
-            flirt.inputs.searchr_x = [flirt_search, flirt_search]
+            flirt.inputs.searchr_x = [-flirt_search, flirt_search]
             flirt.inputs.searchr_y = [-flirt_search, flirt_search]
             flirt.inputs.searchr_z = [-flirt_search, flirt_search]
             flirt.inputs.dof = 12
