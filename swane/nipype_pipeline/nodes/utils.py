@@ -76,14 +76,12 @@ class RegistrationNodeWrapper:
         self,
         input_node: Node,
         out_registered_node: Node,
-        out_registered_image: str,
         warp: str,
         inv_warp_node: Node,
         inv_warp: str,
     ):
         self.input_node = input_node
         self.out_registered_node = out_registered_node
-        self.out_registered_image = out_registered_image
         self.warp = warp
         self.inv_warp_node = inv_warp_node
         self.inv_warp = inv_warp
@@ -99,7 +97,6 @@ def get_registration_node(
     reference_brain: str | list[Node | str] = None,
     non_linear: bool = False,
     inverse: bool = False,
-    out_file: str | list[Node | str] = None,
     is_volumetric: bool = True,
     flirt_cost: str = "mutualinfo",
     flirt_search: int = 90,
@@ -129,11 +126,11 @@ def get_registration_node(
         synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
         # synth_morph_reg.inputs.num_threads = 1
-        if out_file:
-            if type(out_file) == str:
-                synth_morph_reg.inputs.out_file = out_file
-            else:
-                workflow.connect(out_file[0], out_file[1], synth_morph_reg, "out_file")
+        #if out_file:
+        #    if type(out_file) == str:
+        #        synth_morph_reg.inputs.out_file = out_file
+        #    else:
+        #        workflow.connect(out_file[0], out_file[1], synth_morph_reg, "out_file")
         if type(moving) == str:
             synth_morph_reg.inputs.in_file = moving
         else:
@@ -146,7 +143,7 @@ def get_registration_node(
         return RegistrationNodeWrapper(
             input_node=synth_morph_reg,
             out_registered_node=synth_morph_reg,
-            out_registered_image="out_file",
+            #out_registered_image="out_file",
             warp="warp_file",
             inv_warp_node=synth_morph_reg,
             inv_warp="inv_warp_file",
@@ -179,11 +176,11 @@ def get_registration_node(
             fnirt.ram_estimator = FnirtRamEstimator()
             fnirt.inputs.fieldcoeff_file = True
             workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
-            if out_file:
-                if type(out_file) == str:
-                    fnirt.inputs.warped_file = out_file
-                else:
-                    workflow.connect(out_file[0], out_file[1], fnirt, "warped_file")
+            #if out_file:
+            #    if type(out_file) == str:
+            #        fnirt.inputs.warped_file = out_file
+            #    else:
+            #        workflow.connect(out_file[0], out_file[1], fnirt, "warped_file")
             if type(moving) == str:
                 fnirt.inputs.in_file = moving
             else:
@@ -206,7 +203,7 @@ def get_registration_node(
             return RegistrationNodeWrapper(
                 input_node=flirt,
                 out_registered_node=fnirt,
-                out_registered_image="warped_file",
+                #out_registered_image="warped_file",
                 warp="fieldcoeff_file",
                 inv_warp_node=inv_warp,
                 inv_warp="inverse_warp",
@@ -222,11 +219,11 @@ def get_registration_node(
                 flirt.inputs.searchr_z = [-flirt_search, flirt_search]
                 flirt.inputs.dof = 6
                 flirt.inputs.interp = "trilinear"
-            if out_file:
-                if type(out_file) == str:
-                    flirt.inputs.out_file = out_file
-                else:
-                    workflow.connect(out_file[0], out_file[1], flirt, "out_file")
+            #if out_file:
+            #    if type(out_file) == str:
+            #        flirt.inputs.out_file = out_file
+            #    else:
+            #        workflow.connect(out_file[0], out_file[1], flirt, "out_file")
             if type(moving_brain) == str:
                 flirt.inputs.in_file = moving_brain
             else:
@@ -247,7 +244,7 @@ def get_registration_node(
             return RegistrationNodeWrapper(
                 input_node=flirt,
                 out_registered_node=flirt,
-                out_registered_image="out_file",
+                #out_registered_image="out_file",
                 warp="out_matrix_file",
                 inv_warp_node=inv_xfm,
                 inv_warp="out_file",

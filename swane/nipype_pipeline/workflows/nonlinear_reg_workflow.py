@@ -1,7 +1,7 @@
 from nipype import Node, IdentityInterface
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from configparser import SectionProxy
-from swane.nipype_pipeline.nodes.utils import get_registration_node
+from swane.nipype_pipeline.nodes.utils import get_registration_node, apply_registration_node
 
 
 # TODO check base_dir = "./"
@@ -71,17 +71,20 @@ def nonlinear_reg_workflow(
         non_linear=True,
     )
 
-    workflow.connect(
-        reg_wrap.out_registered_node,
-        reg_wrap.out_registered_image,
-        outputnode,
-        "warped_file",
+    unbetted_2_atlas = apply_registration_node(
+        name=name,
+        name_prefix="Unbetted image",
+        name_suffix="to atlas",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        moving=[inputnode, "in_file"],
+        reference=[inputnode, "atlas"],
+        non_linear=False,
     )
-    workflow.connect(
-        reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "fieldcoeff_file"
-    )
-    workflow.connect(
-        reg_wrap.inv_warp_node, reg_wrap.inv_warp, outputnode, "inverse_warp"
-    )
+
+    workflow.connect(unbetted_2_atlas, "out_file", outputnode, "warped_file")
+    workflow.connect(reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "fieldcoeff_file")
+    workflow.connect(reg_wrap.inv_warp_node, reg_wrap.inv_warp, outputnode, "inverse_warp")
 
     return workflow
