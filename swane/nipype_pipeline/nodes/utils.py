@@ -126,7 +126,7 @@ def get_registration_node(
         synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
         # synth_morph_reg.inputs.num_threads = 1
-        #if out_file:
+        # if out_file:
         #    if type(out_file) == str:
         #        synth_morph_reg.inputs.out_file = out_file
         #    else:
@@ -143,7 +143,7 @@ def get_registration_node(
         return RegistrationNodeWrapper(
             input_node=synth_morph_reg,
             out_registered_node=synth_morph_reg,
-            #out_registered_image="out_file",
+            # out_registered_image="out_file",
             warp="warp_file",
             inv_warp_node=synth_morph_reg,
             inv_warp="inv_warp_file",
@@ -176,7 +176,7 @@ def get_registration_node(
             fnirt.ram_estimator = FnirtRamEstimator()
             fnirt.inputs.fieldcoeff_file = True
             workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
-            #if out_file:
+            # if out_file:
             #    if type(out_file) == str:
             #        fnirt.inputs.warped_file = out_file
             #    else:
@@ -203,7 +203,7 @@ def get_registration_node(
             return RegistrationNodeWrapper(
                 input_node=flirt,
                 out_registered_node=fnirt,
-                #out_registered_image="warped_file",
+                # out_registered_image="warped_file",
                 warp="fieldcoeff_file",
                 inv_warp_node=inv_warp,
                 inv_warp="inverse_warp",
@@ -219,7 +219,7 @@ def get_registration_node(
                 flirt.inputs.searchr_z = [-flirt_search, flirt_search]
                 flirt.inputs.dof = 6
                 flirt.inputs.interp = "trilinear"
-            #if out_file:
+            # if out_file:
             #    if type(out_file) == str:
             #        flirt.inputs.out_file = out_file
             #    else:
@@ -244,7 +244,7 @@ def get_registration_node(
             return RegistrationNodeWrapper(
                 input_node=flirt,
                 out_registered_node=flirt,
-                #out_registered_image="out_file",
+                # out_registered_image="out_file",
                 warp="out_matrix_file",
                 inv_warp_node=inv_xfm,
                 inv_warp="out_file",
