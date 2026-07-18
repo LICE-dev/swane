@@ -43,7 +43,7 @@ setup(
         "PySide6_VerticalQTabWidget==0.0.3",
         "numpy==2.2.4",
         "cryptography",
-        "dicom-sequence-classifier==1.0.4",
+        "dicom-sequence-classifier==1.0.5",
         "ica_aroma_py==0.1.2",
         "SimpleITK>=2.5.0",
     ],
