@@ -127,6 +127,21 @@ This project includes subsection derived from other software, which licenses can
 
 ## Changelog
 
+### [0.2.1] - 2026-07-20
+
+#### Changed
+
+- Improved linear and nonlinear registration output handling by explicitly applying the computed transforms to unstripped images
+- DTI preprocessing registration now uses the brain-extracted reference image
+- Improved the readability of DICOM series labels and automatic series-association prompts
+- Updated `dicom-sequence-classifier` from `1.0.4` to `1.0.5`
+
+#### Fixed
+
+- False multiple-instance detection by validating process creation time in addition to PID
+- FLIRT registration now searches both negative and positive x-axis ranges
+- N4 bias correction now handles minimal geometric differences between input-image and mask origins while rejecting larger mismatches
+
 ### [0.2] - 2026-03-14
 
 #### Added

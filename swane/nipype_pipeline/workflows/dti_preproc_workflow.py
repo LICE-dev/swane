@@ -206,6 +206,7 @@ def dti_preproc_workflow(
         moving=[nodif, "roi_file"],
         moving_brain=[b0_deskull, "out_file"],
         reference=[inputnode, "reference"],
+        reference_brain=[inputnode, "reference_brain"],
         flirt_cost="corratio",
         non_linear=False,
         inverse=True,
