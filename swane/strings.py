@@ -129,7 +129,7 @@ subj_tab_wrong_min_vols_check_msg = (
 )
 subj_tab_import_copy_error_msg = "Error copying selected series files."
 subj_tab_import_folder_not_empy = "Images are already loaded for this series."
-subj_tab_found_series_type = "{series_description} could be associated with input {data_label}.\nDou you want to import it?"
+subj_tab_found_series_type = "{series_description} could be associated with input <b>{data_label}</b>.<br>Dou you want to import it?"
 subj_tab_dicom_copy = "Copying DICOM files in subject folder..."
 subj_tab_dicom_check = "Verifying subject folder..."
 subj_tab_dicom_scan = "Scanning folder for primary non derived DICOM images..."

@@ -1313,11 +1313,11 @@ class SubjectTab(QTabWidget):
             # TODO: show correct image number for multiframe dicom
             label = (
                 subject_name
-                + "-"
+                + " - "
                 + mod
-                + "-"
+                + " - <b>"
                 + series_description
-                + ": "
+                + "</b> :"
                 + str(frames)
                 + " images, "
                 + str(vols)

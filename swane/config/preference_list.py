@@ -509,7 +509,7 @@ GLOBAL_PREFERENCES[category]["last_swane_version"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["force_pref_reset"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     hidden=True,
-    default="true",
+    default="false",
 )
 GLOBAL_PREFERENCES[category]["slicer_scene_ext"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
