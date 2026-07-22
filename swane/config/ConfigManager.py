@@ -482,7 +482,9 @@ class ConfigManager(configparser.ConfigParser):
         The last application process ID as an int and its creation time as a string
         """
         last_pid = self.getint_safe(GlobalPrefCategoryList.MAIN, "last_pid")
-        last_pid_create_time = self[GlobalPrefCategoryList.MAIN].get("last_pid_create_time")
+        last_pid_create_time = self[GlobalPrefCategoryList.MAIN].get(
+            "last_pid_create_time"
+        )
         return last_pid, last_pid_create_time
 
     def getboolean_safe(
