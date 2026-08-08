@@ -30,6 +30,8 @@ setup(
     install_requires=[
         "networkx==3.4.2",
         "nipype==1.10.0",
+        # Forcing filelock version to avoid a bug in nipype 1.10.0
+        "filelock<3.19",
         "PySide6",
         "pydicom==3.0.1",
         "configparser<=7.1.0",
