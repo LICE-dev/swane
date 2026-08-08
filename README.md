@@ -131,11 +131,11 @@ This project includes subsection derived from other software, which licenses can
 
 #### Hotfix
 
-- filelock version constraint to avoid a bug in multiprocessing handling with nipype 1.10.0
+* Added a `filelock` version constraint to avoid a multiprocessing issue with Nipype 1.10.0.
 
 #### Changed
 
-- Minor layout improvement in ToolReferenceWindow
+* Minor layout improvements in `ToolReferenceWindow`.
 
 ### [0.2.1] - 2026-07-20
 
