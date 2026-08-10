@@ -99,6 +99,7 @@ class SynthMorphReg(FSCommand):
                     self.inputs.in_file,
                     suffix=f"_{name}{ext}",
                     use_ext=False,
+                    newpath=os.getcwd(),
                 )
                 outputs[name] = os.path.abspath(out_file)
 
