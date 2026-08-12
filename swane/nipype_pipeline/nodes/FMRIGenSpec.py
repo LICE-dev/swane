@@ -5,7 +5,6 @@ from nipype.interfaces.base import (
     BaseInterface,
     BaseInterfaceInputSpec,
     TraitedSpec,
-    File,
     Bunch,
     isdefined,
 )
@@ -20,7 +19,7 @@ class FMRIGenSpecInputSpec(BaseInterfaceInputSpec):
     rest_duration = traits.Int(mandatory=True, desc="Rest duration")
     block_design = traits.Enum(BlockDesign, usedefault=True)
     task_a_name = traits.String(mandatory=False, desc="Task A name")
-    task_b_name = traits.String(mandatory=False, desc="Task A name")
+    task_b_name = traits.String(mandatory=False, desc="Task B name")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -43,23 +42,27 @@ class FMRIGenSpec(BaseInterface):
 
     def _run_interface(self, runtime):
 
-        if not isdefined(self.inputs.task_a_name):
-            self.inputs.task_a_name = "TaskA"
-        if not isdefined(self.inputs.task_b_name):
-            self.inputs.task_b_name = "TaskB"
+        if isdefined(self.inputs.task_a_name):
+            self.task_a_name = self.inputs.task_a_name
+        else:
+            self.task_a_name = "TaskA"
+        if isdefined(self.inputs.task_b_name):
+            self.task_b_name = self.inputs.task_b_name
+        else:
+            self.task_b_name = "TaskB"
 
         if self.inputs.block_design == BlockDesign.RARA:
             self.contrasts = [
                 [
-                    "%s_versus_Rest" % self.inputs.task_a_name,
+                    "%s_versus_Rest" % self.task_a_name,
                     "T",
-                    [self.inputs.task_a_name],
+                    [self.task_a_name],
                     [1],
                 ]
             ]
 
             self.evs_run = Bunch(
-                conditions=[self.inputs.task_a_name],
+                conditions=[self.task_a_name],
                 onsets=[
                     list(
                         range(
@@ -73,21 +76,21 @@ class FMRIGenSpec(BaseInterface):
             )
         else:
             cont1 = [
-                "%s_versus_%s" % (self.inputs.task_a_name, self.inputs.task_b_name),
+                "%s_versus_%s" % (self.task_a_name, self.task_b_name),
                 "T",
-                [self.inputs.task_a_name, self.inputs.task_b_name],
+                [self.task_a_name, self.task_b_name],
                 [1, -1],
             ]
             cont2 = [
-                "%s_versus_%s" % (self.inputs.task_b_name, self.inputs.task_a_name),
+                "%s_versus_%s" % (self.task_b_name, self.task_a_name),
                 "T",
-                [self.inputs.task_a_name, self.inputs.task_b_name],
+                [self.task_a_name, self.task_b_name],
                 [-1, 1],
             ]
             self.contrasts = [cont1, cont2]
 
             self.evs_run = Bunch(
-                conditions=[self.inputs.task_a_name, self.inputs.task_b_name],
+                conditions=[self.task_a_name, self.task_b_name],
                 onsets=[
                     list(
                         range(
@@ -119,6 +122,6 @@ class FMRIGenSpec(BaseInterface):
         outputs = self.output_spec().get()
         outputs["evs_run"] = self.evs_run
         outputs["contrasts"] = self.contrasts
-        outputs["task_a_name"] = self.inputs.task_a_name
-        outputs["task_b_name"] = self.inputs.task_b_name
+        outputs["task_a_name"] = self.task_a_name
+        outputs["task_b_name"] = self.task_b_name
         return outputs

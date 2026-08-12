@@ -4,10 +4,7 @@ from nipype.interfaces.base import (
     TraitedSpec,
     File,
     traits,
-    isdefined,
 )
-import os
-from nipype.utils.filemanip import fname_presuffix
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.freesurfer.base.FSTraitedSpec)  -*-

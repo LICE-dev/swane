@@ -41,7 +41,7 @@ class ZIntNorm(BaseInterface):
     output_spec = ZIntNormOutputSpec
 
     def _run_interface(self, runtime):
-        self.inputs.out_file = self._gen_outfilename()
+        out_file = self._gen_outfilename()
 
         # --- LOAD IMAGE ---
         img_nii = nib.load(self.inputs.in_file)
@@ -62,14 +62,13 @@ class ZIntNorm(BaseInterface):
         if std == 0:
             raise RuntimeError("Standard deviation is zero")
 
-        img_norm = np.zeros_like(img, dtype=np.float32)
         img_norm = (img - mean) / std
 
         # --- SAVE ---
         hdr = img_nii.header.copy()
         hdr.set_data_dtype(np.float32)
         out_nii = nib.Nifti1Image(img_norm, img_nii.affine, hdr)
-        nib.save(out_nii, self.inputs.out_file)
+        nib.save(out_nii, out_file)
 
         return runtime
 

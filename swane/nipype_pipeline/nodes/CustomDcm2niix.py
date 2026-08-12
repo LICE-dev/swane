@@ -1,7 +1,6 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 from nipype.interfaces.dcm2nii import Dcm2niix, Dcm2niixInputSpec
-import os
 from nipype.pipeline.engine.nodes import NodeExecutionError
 from nipype.interfaces.base import traits
 
@@ -14,7 +13,7 @@ class CustomDcm2niixInputSpec(Dcm2niixInputSpec):
         0,
         argstr="-w %d",
         usedefault=True,
-        descr="write behavior for name conflicts - [0=skip duplicates, 1=overwrite, 2=add suffix]",
+        desc="write behavior for name conflicts - [0=skip duplicates, 1=overwrite, 2=add suffix]",
     )
     expected_files = traits.Int(default_value=1, usedefault=True)
     request_dti = traits.Bool(default_value=False, usedefault=True)
