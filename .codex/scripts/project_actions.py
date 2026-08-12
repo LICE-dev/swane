@@ -6,12 +6,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def run(*arguments):
-    subprocess.run([str(argument) for argument in arguments], cwd=PROJECT_ROOT, check=True)
+    subprocess.run(
+        [str(argument) for argument in arguments], cwd=PROJECT_ROOT, check=True
+    )
 
 
 def run_python(*arguments):
@@ -69,7 +70,9 @@ def main():
     assert_supported_python()
 
     if action == "setup":
-        print("Virtual environment ready. Run 'Bootstrap Python' to install dependencies.")
+        print(
+            "Virtual environment ready. Run 'Bootstrap Python' to install dependencies."
+        )
     elif action == "bootstrap":
         bootstrap()
     elif action == "run":
