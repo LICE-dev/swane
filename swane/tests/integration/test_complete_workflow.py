@@ -10,6 +10,16 @@ from swane.ui.MainWindow import MainWindow
 from swane.ui.SubjectTab import SubjectTab
 from PySide6 import QtCore
 
+# Full end-to-end run: needs the real neuroimaging toolchain and a prepared
+# subject. Skipped unless --run-heavy and every tool is available.
+pytestmark = [
+    pytest.mark.heavy,
+    pytest.mark.requires_fsl,
+    pytest.mark.requires_freesurfer,
+    pytest.mark.requires_dcm2niix,
+    pytest.mark.requires_slicer,
+]
+
 
 @pytest.fixture(autouse=True)
 def change_test_dir(request):
