@@ -194,7 +194,7 @@ def update_node_mem_gb(node):
 
     # Ensure the estimator is an instance of NipypeRamEstimator
     if not isinstance(estimator, NipypeRamEstimator):
-        if logger:
+        if estimator is not None and logger:
             logger.error(
                 f"Node {node.name}: ram_estimator must be a NipypeRamEstimator instance "
                 f"(got {type(estimator)!r}), skipping RAM estimation"
