@@ -1,7 +1,5 @@
 from enum import Enum
 
-from nibabel import spatialimages
-
 
 class Package(Enum):
     FSL = "fsl"
