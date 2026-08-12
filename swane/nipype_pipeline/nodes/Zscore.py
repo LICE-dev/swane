@@ -1,6 +1,7 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
-from nipype.interfaces.fsl import BinaryMaths, ImageStats, ApplyMask
+import nibabel as nib
+import numpy as np
 from os.path import abspath
 import os
 from nipype.interfaces.base import (
@@ -16,7 +17,7 @@ from nipype.interfaces.base import (
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class ZscoreInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc="the input image")
-    ROI_file = File(exists=True, mandatory=True, desc="the input image")
+    ROI_file = File(exists=True, mandatory=True, desc="the ROI mask image")
     out_file = File(desc="the output image")
 
 
@@ -36,36 +37,28 @@ class Zscore(BaseInterface):
     output_spec = ZscoreOutputSpec
 
     def _run_interface(self, runtime):
-        self.inputs.out_file = self._gen_outfilename()
+        out_file = self._gen_outfilename()
 
-        mask = ApplyMask()
-        mask.inputs.in_file = self.inputs.in_file
-        mask.inputs.mask_file = self.inputs.ROI_file
-        mask.inputs.out_file = abspath("mask_" + os.path.basename(self.inputs.in_file))
-        res_mask = mask.run()
+        in_nii = nib.load(self.inputs.in_file)
+        in_data = in_nii.get_fdata(dtype=np.float32)
+        roi = nib.load(self.inputs.ROI_file).get_fdata() > 0
 
-        mean = ImageStats()
-        mean.inputs.in_file = res_mask.outputs.out_file
-        mean.inputs.op_string = "-M"
-        mean_res = mean.run()
+        # use only the non-zero voxels inside the ROI; the standard deviation
+        # is the sample one (ddof=1)
+        roi_vals = in_data[roi & (in_data != 0)]
+        mean = roi_vals.mean()
+        std = roi_vals.std(ddof=1)
 
-        sd = ImageStats()
-        sd.inputs.in_file = res_mask.outputs.out_file
-        sd.inputs.op_string = "-S"
-        sd_res = sd.run()
+        if std == 0:
+            raise RuntimeError("Standard deviation inside the ROI is zero")
 
-        sub = BinaryMaths()
-        sub.inputs.in_file = self.inputs.in_file
-        sub.inputs.operation = "sub"
-        sub.inputs.operand_value = mean_res.outputs.out_stat
-        sub_res = sub.run()
+        zscore = ((in_data - mean) / std).astype(np.float32)
 
-        div = BinaryMaths()
-        div.inputs.in_file = sub_res.outputs.out_file
-        div.inputs.operation = "div"
-        div.inputs.operand_value = sd_res.outputs.out_stat
-        div.inputs.out_file = self.inputs.out_file
-        div.run()
+        # preserve exactly the input image space; set_data_dtype clears any
+        # residual scaling so values are not re-scaled on write
+        hdr = in_nii.header.copy()
+        hdr.set_data_dtype(np.float32)
+        nib.save(nib.Nifti1Image(zscore, in_nii.affine, hdr), out_file)
 
         return runtime
 

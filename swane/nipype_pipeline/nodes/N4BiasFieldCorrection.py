@@ -41,7 +41,7 @@ class N4BiasFieldCorrection(BaseInterface):
     output_spec = N4BiasFieldCorrectionOutputSpec
 
     def _run_interface(self, runtime):
-        self.inputs.out_file = self._gen_outfilename()
+        out_file = self._gen_outfilename()
 
         # load image as float, as requested by N4
         img = sitk.ReadImage(self.inputs.in_file, sitk.sitkFloat32)
@@ -79,7 +79,7 @@ class N4BiasFieldCorrection(BaseInterface):
         corrected = corrector.Execute(img, mask)
 
         # save output
-        sitk.WriteImage(corrected, self.inputs.out_file)
+        sitk.WriteImage(corrected, out_file)
 
         return runtime
 

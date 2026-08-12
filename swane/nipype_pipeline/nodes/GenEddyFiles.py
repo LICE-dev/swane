@@ -42,6 +42,8 @@ class GenEddyFiles(BaseInterface):
         with open(self.acqp_file, "w") as file:
             file.write("0 1 0 0.05")
 
+        return runtime
+
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs["index"] = self.index_file

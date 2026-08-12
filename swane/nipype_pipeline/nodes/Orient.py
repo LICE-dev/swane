@@ -1,24 +1,24 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 from nipype.interfaces.fsl.base import FSLCommand, FSLCommandInputSpec
-from nipype.interfaces.base import traits, TraitedSpec, File, isdefined
+from nipype.interfaces.base import traits, TraitedSpec, File
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommandInputSpec)  -*-
 class OrientInputSpec(FSLCommandInputSpec):
     in_file = File(
-        exists=True, mandatory=True, argstr="%s", position="2", desc="input image"
+        exists=True, mandatory=True, argstr="%s", position=2, desc="input image"
     )
     _options_xor = ["get_orient", "swap_orient"]
     get_orient = traits.Bool(
         argstr="-getorient",
-        position="1",
+        position=1,
         xor=_options_xor,
         desc="gets FSL left-right orientation",
     )
     swap_orient = traits.Bool(
         argstr="-swaporient",
-        position="1",
+        position=1,
         xor=_options_xor,
         desc="swaps FSL radiological and FSL neurological",
     )
@@ -47,11 +47,11 @@ class Orient(FSLCommand):
         info = runtime.stdout
 
         # Modified file
-        if isdefined(self.inputs.swap_orient):
+        if self.inputs.swap_orient:
             outputs.out_file = self.inputs.in_file
 
         # Get information
-        if isdefined(self.inputs.get_orient):
+        if self.inputs.get_orient:
             outputs.orient = info
 
         return outputs

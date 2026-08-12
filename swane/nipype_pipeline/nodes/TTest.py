@@ -41,7 +41,7 @@ class TTest(BaseInterface):
                 std2=self.inputs.stats_rh[1],
                 nobs2=self.inputs.stats_rh[2],
             )
-        except:
+        except (IndexError, ValueError, TypeError):
             self.t = 0
             self.p = 0
 

@@ -7,7 +7,7 @@ from nipype.interfaces.base import traits, TraitedSpec, File, isdefined
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommandInputSpec)  -*-
 class FslNVolsInputSpec(FSLCommandInputSpec):
     in_file = File(
-        exists=True, mandatory=True, argstr="%s", position="1", desc="the input image"
+        exists=True, mandatory=True, argstr="%s", position=1, desc="the input image"
     )
     force_value = traits.Int(mandatory=False, desc="value forced by user")
 

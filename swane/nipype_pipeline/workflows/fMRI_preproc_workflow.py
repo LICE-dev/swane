@@ -107,7 +107,7 @@ def fMRI_preproc_workflow(
 
     # NODE 5: Orienting in radiological convention
     reorient = Node(ForceOrient(), name="%s_reorient" % name)
-    workflow.connect(del_vols, "out_file", reorient, "in_file")
+    workflow.connect(del_vols, "roi_file", reorient, "in_file")
 
     # NODE 5: Convert functional images to float representation.
     img2float = Node(ImageMaths(), name="%s_img2float" % name)

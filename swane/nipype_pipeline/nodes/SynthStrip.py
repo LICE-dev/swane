@@ -4,15 +4,7 @@ from nipype.interfaces.base import (
     TraitedSpec,
     File,
     traits,
-    Tuple,
-    Directory,
-    InputMultiPath,
-    OutputMultiPath,
-    CommandLine,
-    CommandLineInputSpec,
     isdefined,
-    InputMultiObject,
-    Undefined,
 )
 import os
 
@@ -46,7 +38,7 @@ class SynthStripInputSpec(FSTraitedSpec):
     )
     num_threads = traits.Int(
         argstr="--threads %d",
-        hash_file=False,
+        nohash=True,
         desc="number of threads to be used by the CPU version",
     )
     border = traits.Float(

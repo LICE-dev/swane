@@ -10,7 +10,7 @@ class GetNiftiTRInputSpec(FSLCommandInputSpec):
         exists=True,
         mandatory=True,
         argstr="%s pixdim4",
-        position="1",
+        position=1,
         desc="the input image",
     )
     force_value = traits.Float(mandatory=False, desc="value forced by user")
@@ -43,7 +43,7 @@ class GetNiftiTR(FSLCommand):
         info = runtime.stdout
         try:
             outputs.TR = float(info)
-        except:
+        except ValueError:
             outputs.TR = 0.0
 
         return outputs
