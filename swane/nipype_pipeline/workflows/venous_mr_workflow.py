@@ -1,10 +1,9 @@
 from nipype.interfaces.fsl import (
-    Split,
     ApplyMask,
-    ImageStats,
     ImageMaths,
 )
-from nipype.interfaces.utility import Merge
+from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
+from nipype.interfaces.utility import Merge, Function
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
@@ -95,9 +94,27 @@ def venous_mr_workflow(
     # If the phases are in the same sequence
     if venous2_mr_dir is None:
         # NODE 3a: Divide the two phases from the phase contrast
-        veins_split = Node(Split(), name="veins_split")
+        def split_volumes(in_file):
+            import os
+            import nibabel as nib
+
+            img = nib.load(in_file)
+            out_files = []
+            for index in range(img.shape[-1]):
+                out_file = os.path.abspath("vol%04d.nii.gz" % index)
+                nib.save(img.slicer[..., index], out_file)
+                out_files.append(out_file)
+            return out_files
+
+        veins_split = Node(
+            Function(
+                input_names=["in_file"],
+                output_names=["out_files"],
+                function=split_volumes,
+            ),
+            name="veins_split",
+        )
         veins_split.long_name = "volumes splitting"
-        veins_split.inputs.dimension = "t"
         workflow.connect(veins_reOrient, "out_file", veins_split, "in_file")
 
         workflow.connect(veins_split, "out_files", veins_check, "in_files")
@@ -168,9 +185,8 @@ def venous_mr_workflow(
     )
 
     # NODE 9: Get the max value of venous phase
-    veins_range = Node(ImageStats(), name="veins_range")
+    veins_range = Node(ImageStatistics(), name="veins_range")
     veins_range.long_name = "intensity range detection"
-    veins_range.inputs.op_string = "-R"
     workflow.connect(veins_2_ref, "out_file", veins_range, "in_file")
 
     # NODE 10: Venous phase rescaling in 0-100
@@ -179,12 +195,12 @@ def venous_mr_workflow(
     veins_rescale.inputs.out_file = "r-veins_mra_inskull.nii.gz"
 
     # Function to define the operation string
-    def rescale_string(intensity_range):
-        op_string = "-mul 100 -div %f" % intensity_range[1]
+    def rescale_string(max_value):
+        op_string = "-mul 100 -div %f" % max_value
         return op_string
 
     workflow.connect(
-        veins_range, ("out_stat", rescale_string), veins_rescale, "op_string"
+        veins_range, ("max_value", rescale_string), veins_rescale, "op_string"
     )
     workflow.connect(veins_2_ref, "out_file", veins_rescale, "in_file")
 

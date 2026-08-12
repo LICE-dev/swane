@@ -358,13 +358,6 @@ class MainWorkflow(CustomWorkflow):
             sub_folder=self.Result_DIR,
         )
 
-        # TODO: explore possibility of freesurfer based asymmetry index
-        # if is_freesurfer:
-        #     from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
-        #     flair_ai = freesurfer_asymmetry_index_workflow(name="flair_ai")
-        #     self.connect(flair, "outputnode.registered_file", flair_ai, "inputnode.in_file")
-        #     self.connect(freesurfer, "outputnode.vol_label_file_nii", flair_ai, "inputnode.seg_file")
-
     def launch_flat1_analysis(self):
         if not self.is_flat1:
             return
@@ -750,12 +743,6 @@ class MainWorkflow(CustomWorkflow):
                     result_name="zscore_surf_rh",
                     sub_folder=self.Result_DIR,
                 )
-
-            # TODO work in progress for segmentation based asymmetry study
-            # from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
-            # pet_ai = freesurfer_asymmetry_index_workflow(name="pet_ai")
-            # self.connect(pet, "outputnode.registered_file", pet_ai, "inputnode.in_file")
-            # self.connect(freesurfer, "outputnode.vol_label_file_nii", pet_ai, "inputnode.seg_file")
 
         if self.subject_config.getboolean_safe(DIL.PET, "ai"):
             self.connect(
