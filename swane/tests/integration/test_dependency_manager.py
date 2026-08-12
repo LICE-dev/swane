@@ -12,6 +12,16 @@ from nipype.interfaces import fsl, dcm2nii, freesurfer
 from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 import distutils.dir_util
 
+# These tests probe the real external tools. Skipped unless --run-heavy and the
+# tools are installed (see conftest marker auto-skip).
+pytestmark = [
+    pytest.mark.heavy,
+    pytest.mark.requires_fsl,
+    pytest.mark.requires_freesurfer,
+    pytest.mark.requires_dcm2niix,
+    pytest.mark.requires_slicer,
+]
+
 # INSTALL REQUIRED LIB: pip3 install pytest pytest-qt pytest-xdist
 # START TEST: pytest swane/ --color=yes --verbose -n 3
 
