@@ -1,3 +1,4 @@
+import configparser
 import os
 import shutil
 from swane.config.ConfigManager import ConfigManager
@@ -58,6 +59,14 @@ class TestConfigManager:
             "default",
             "0",
         )
+        config_parser = configparser.ConfigParser()
+        config_parser.read(global_config.config_file)
+        if config_parser.has_section(str(GlobalPrefCategoryList.MAIN)):
+            config_parser.remove_option(str(GlobalPrefCategoryList.MAIN), "force_pref_reset")
+            config_parser.set(str(GlobalPrefCategoryList.MAIN), "last_swane_version", "0")
+        with open(global_config.config_file, "w", encoding="utf-8") as f:
+            config_parser.write(f)
+
         global_config = ConfigManager(global_base_folder=os.getcwd())
         assert (
             global_config[GlobalPrefCategoryList.MAIN]["default_dicom_folder"]

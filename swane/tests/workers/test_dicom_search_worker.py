@@ -1,8 +1,17 @@
 import os
 import tempfile
+import sys
+import types
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.tests.helpers.dicom_factory import write_minimal_dicom
 import swane.workers.DicomSearchWorker as dsmod
+
+
+def _monkeypatch_dicom_sequence_classifier(monkeypatch, classify_value):
+    fake_module = types.ModuleType("dicom_sequence_classifier")
+    fake_module.extract_metadata = lambda ds: {"dummy": True}
+    fake_module.classify_dicom = lambda meta: classify_value
+    monkeypatch.setitem(sys.modules, "dicom_sequence_classifier", fake_module)
 
 
 def test_clean_text():
@@ -25,14 +34,13 @@ def test_find_series_description(tmp_path):
 
 
 def test_find_series_classification(monkeypatch):
-    # monkeypatch the imported classifier functions in module namespace
-    monkeypatch.setattr(dsmod, 'extract_metadata', lambda ds: {'dummy': True})
-    monkeypatch.setattr(dsmod, 'classify_dicom', lambda meta: 'MYCLASS')
+    _monkeypatch_dicom_sequence_classifier(monkeypatch, 'MYCLASS')
+
     class FakeDS:
         pass
 
     assert DicomSearchWorker.find_series_classification(FakeDS()) == 'MYCLASS'
 
     # simulate NOT MR
-    monkeypatch.setattr(dsmod, 'classify_dicom', lambda meta: 'NOT MR')
+    _monkeypatch_dicom_sequence_classifier(monkeypatch, 'NOT MR')
     assert DicomSearchWorker.find_series_classification(FakeDS()) == 'Unknown'
