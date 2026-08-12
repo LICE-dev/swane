@@ -7,7 +7,7 @@ from swane.config.ConfigManager import ConfigManager
 from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DependencyManager import DependencyManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
-from PySide6.QtCore import QThreadPool
+from swane.utils.qt_compat import QThreadPool
 from swane import strings
 from swane.nipype_pipeline.MainWorkflow import MainWorkflow
 import traceback

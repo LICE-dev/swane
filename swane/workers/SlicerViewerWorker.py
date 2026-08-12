@@ -1,4 +1,4 @@
-from PySide6.QtCore import QRunnable
+from swane.utils.qt_compat import QRunnable
 import os
 import subprocess
 
