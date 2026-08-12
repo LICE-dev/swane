@@ -2,7 +2,6 @@ from nipype.interfaces.freesurfer import SampleToSurface
 from nipype.interfaces.fsl import (
     IsotropicSmooth,
     ApplyMask,
-    SwapDimensions,
     ImageMaths,
 )
 from nipype.pipeline.engine import Node
@@ -12,7 +11,7 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.AsymmetryIndex import AsymmetryIndex
 from swane.nipype_pipeline.nodes.Zscore import Zscore
-from nipype.interfaces.utility import IdentityInterface
+from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
 import swane_supplement
 from swane.config.config_enums import BetweenModFlirtCost, FreesurferStep
@@ -272,10 +271,31 @@ def func_map_workflow(
         )
 
         # NODE 12: RL swap of image in symmetric atlas
-        sym_swap = Node(SwapDimensions(), name="%s_sym_swap" % name)
+        def swap_rl(in_file):
+            import os
+            import numpy as np
+            import nibabel as nib
+
+            img = nib.load(in_file)
+            # flip along the x (right-left) axis keeping the affine unchanged,
+            # i.e. the anatomy is mirrored in the same voxel space.
+            # set_data_dtype avoids any residual rescaling on write
+            flipped = np.flip(img.get_fdata(dtype=np.float32), axis=0)
+            hdr = img.header.copy()
+            hdr.set_data_dtype(np.float32)
+            out_file = os.path.abspath("sym_swapped.nii.gz")
+            nib.save(nib.Nifti1Image(flipped, img.affine, hdr), out_file)
+            return out_file
+
+        sym_swap = Node(
+            Function(
+                input_names=["in_file"],
+                output_names=["out_file"],
+                function=swap_rl,
+            ),
+            name="%s_sym_swap" % name,
+        )
         sym_swap.long_name = "right-left flip"
-        sym_swap.inputs.out_file = "%s_sym_swapped.nii.gz" % name
-        sym_swap.inputs.new_dims = ("-x", "y", "z")
         workflow.connect(func_2_sym_warp, "out_file", sym_swap, "in_file")
 
         # NODE 13: Asymmetry index calculation

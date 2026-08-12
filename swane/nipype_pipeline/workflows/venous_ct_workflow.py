@@ -1,12 +1,12 @@
 from nipype.interfaces.fsl import (
     FLIRT,
     ApplyMask,
-    ImageStats,
     BinaryMaths,
     ImageMaths,
     ApplyXFM,
     RobustFOV,
 )
+from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
 from nipype import Node, IdentityInterface, MapNode
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
@@ -199,9 +199,8 @@ def venous_ct_workflow(
     workflow.connect(veins_mask_reOrient, "out_file", veins_inskull_mask, "mask_file")
 
     # NODE 12: Get the max value of venous phase
-    veins_range = Node(ImageStats(), name="veins_ct_range")
+    veins_range = Node(ImageStatistics(), name="veins_ct_range")
     veins_range.long_name = "intensity range detection"
-    veins_range.inputs.op_string = "-R"
     workflow.connect(veins_inskull_mask, "out_file", veins_range, "in_file")
 
     # NODE 13: Venous phase rescaling in 0-100
@@ -209,12 +208,12 @@ def venous_ct_workflow(
     veins_rescale.long_name = "intensity normalization"
 
     # Function to define the operation string
-    def rescale_string(intensity_range):
-        op_string = "-mul 100 -div %f" % intensity_range[1]
+    def rescale_string(max_value):
+        op_string = "-mul 100 -div %f" % max_value
         return op_string
 
     workflow.connect(
-        veins_range, ("out_stat", rescale_string), veins_rescale, "op_string"
+        veins_range, ("max_value", rescale_string), veins_rescale, "op_string"
     )
     workflow.connect(veins_inskull_mask, "out_file", veins_rescale, "in_file")
 

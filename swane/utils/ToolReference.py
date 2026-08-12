@@ -1,10 +1,13 @@
 from enum import Enum
 
+from nibabel import spatialimages
+
 
 class Package(Enum):
     FSL = "fsl"
     FREESURFER = "freesurfer"
     SLICER = "slicer"
+    NIPY = "nipy"
     OTHER = "Other"
 
 
@@ -30,6 +33,8 @@ def get_command_info(key: str) -> ToolReference:
 
 
 utilities_url = "https://fsl.fmrib.ox.ac.uk/fsl/docs/utilities/fslutils.html#"
+spatialimages_url = "https://nipy.org/nibabel/reference/nibabel.spatialimages.html#spatialimage"
+nibabel_reference = "https://doi.org/10.5281/zenodo.591597"
 
 tool_reference_list = {
     # Structural
@@ -185,25 +190,38 @@ tool_reference_list = {
         command="fslmerge", package=Package.FSL, url=utilities_url, references=[]
     ),
     "ForceOrient": ToolReference(
-        command="fslorient", package=Package.FSL, url=utilities_url, references=[]
+        command="orientations [NiBabel]", package=Package.NIPY, url="https://nipy.org/nibabel/reference/nibabel.orientations.html", references=[nibabel_reference]
     ),
     "MathsCommand": ToolReference(
         command="fslmaths", package=Package.FSL, url=utilities_url, references=[]
     ),
-    "FslNVols": ToolReference(
-        command="fslnvols", package=Package.FSL, url=utilities_url, references=[]
-    ),
-    "Split": ToolReference(
-        command="fslsplit", package=Package.FSL, url=utilities_url, references=[]
+    "NVols": ToolReference(
+        command="spatialimages [NiBabel]", package=Package.NIPY, url=spatialimages_url, references=[nibabel_reference]
     ),
     "GetNiftiTR": ToolReference(
-        command="fslval", package=Package.FSL, url=utilities_url, references=[]
+        command="spatialimages [NiBabel]", package=Package.NIPY, url=spatialimages_url, references=[nibabel_reference]
     ),
-    "ExtractROI": ToolReference(
-        command="fslroi", package=Package.FSL, url=utilities_url, references=[]
+    "ExtractVolumes": ToolReference(
+        command="spatialimages [NiBabel]", package=Package.NIPY, url=spatialimages_url, references=[nibabel_reference]
     ),
-    "ImageStats": ToolReference(
-        command="fslstats", package=Package.FSL, url=utilities_url, references=[]
+    "DeleteVolumes": ToolReference(
+        command="spatialimages [NiBabel]", package=Package.NIPY, url=spatialimages_url, references=[nibabel_reference]
+    ),
+    "ImageStatistics": ToolReference(
+        command="statistics [NumPy]",
+        package=Package.OTHER,
+        url="https://numpy.org/doc/stable/reference/routines.statistics.html",
+        references=[
+            "Harris CR, Millman KJ, van der Walt SJ, et al. Array programming with NumPy. Nature. 2020."
+        ],
+    ),
+    "AsymmetryIndex": ToolReference(
+        command="arithmetic [NumPy]",
+        package=Package.OTHER,
+        url="https://numpy.org/doc/stable/reference/routines.math.html",
+        references=[
+            "Harris CR, Millman KJ, van der Walt SJ, et al. Array programming with NumPy. Nature. 2020."
+        ],
     ),
     # FreeSurfer
     "SynthSeg": ToolReference(

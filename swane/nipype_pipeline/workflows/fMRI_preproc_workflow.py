@@ -1,16 +1,16 @@
 from nipype import Node, IdentityInterface, Merge
 from nipype.interfaces.fsl import (
     ImageMaths,
-    ExtractROI,
     MCFLIRT,
     BET,
-    ImageStats,
     SUSAN,
     FLIRT,
 )
+from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
+from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.FslNVols import FslNVols
+from swane.nipype_pipeline.nodes.NVols import NVols
 from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
 from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -86,7 +86,7 @@ def fMRI_preproc_workflow(
     conversion.inputs.merge_imgs = 2
 
     # NODE 2: Get EPI volume numbers
-    nvols = Node(FslNVols(), name="%s_nvols" % name)
+    nvols = Node(NVols(), name="%s_nvols" % name)
     nvols.long_name = "EPI volumes count"
     nvols.inputs.force_value = n_vols
     workflow.connect(conversion, "converted_files", nvols, "in_file")
@@ -107,7 +107,7 @@ def fMRI_preproc_workflow(
 
     # NODE 5: Orienting in radiological convention
     reorient = Node(ForceOrient(), name="%s_reorient" % name)
-    workflow.connect(del_vols, "roi_file", reorient, "in_file")
+    workflow.connect(del_vols, "out_file", reorient, "in_file")
 
     # NODE 5: Convert functional images to float representation.
     img2float = Node(ImageMaths(), name="%s_img2float" % name)
@@ -118,9 +118,9 @@ def fMRI_preproc_workflow(
     workflow.connect(reorient, "out_file", img2float, "in_file")
 
     # NODE 6: Extract the middle volume of the first run as the reference
-    extract_ref = Node(ExtractROI(), name="%s_extract_ref" % name)
+    extract_ref = Node(ExtractVolumes(), name="%s_extract_ref" % name)
     extract_ref.long_name = "Reference volume selection"
-    extract_ref.inputs.t_size = 1
+    extract_ref.inputs.num_volumes = 1
 
     # Function to extract the middle volume number
     def get_middle_volume(func):
@@ -134,7 +134,7 @@ def fMRI_preproc_workflow(
         return middle
 
     workflow.connect(img2float, "out_file", extract_ref, "in_file")
-    workflow.connect(reorient, ("out_file", get_middle_volume), extract_ref, "t_min")
+    workflow.connect(reorient, ("out_file", get_middle_volume), extract_ref, "start_volume")
 
     # NODE 7: Realign the functional runs to the middle volume of the first run
     motion_correct = Node(MCFLIRT(), name="%s_motion_correct" % name)
@@ -143,7 +143,7 @@ def fMRI_preproc_workflow(
     motion_correct.inputs.save_rms = True
     motion_correct.inputs.interpolation = "spline"
     workflow.connect(img2float, "out_file", motion_correct, "in_file")
-    workflow.connect(extract_ref, "roi_file", motion_correct, "ref_file")
+    workflow.connect(extract_ref, "out_file", motion_correct, "ref_file")
 
     # NODE 8: Perform slice timing correction if needed
     # TODO: per resting state NON usare lo slice timing correction
@@ -181,9 +181,9 @@ def fMRI_preproc_workflow(
     workflow.connect(meanfuncmask, "mask_file", maskfunc, "in_file2")
 
     # NODE 12: Determine the 2nd and 98th percentile intensities of each functional run
-    getthresh = Node(ImageStats(), name="%s_getthresh" % name)
+    getthresh = Node(ImageStatistics(), name="%s_getthresh" % name)
     getthresh.long_name = "2-98% threshold calculation"
-    getthresh.inputs.op_string = "-p 2 -p 98"
+    getthresh.inputs.percentiles = [98]
     workflow.connect(maskfunc, "out_file", getthresh, "in_file")
 
     # NODE 13: Threshold the first run of the functional data at 10% of the 98th percentile
@@ -194,16 +194,19 @@ def fMRI_preproc_workflow(
 
     # NODE 14: Define a function to get 10% of the intensity
     def get_thresh_op(thresh):
-        return "-thr %.10f -Tmin -bin" % (0.1 * thresh[1])
+        return "-thr %.10f -Tmin -bin" % (0.1 * thresh[0])
+
+    def get_first_percentile(percentile_values):
+        return percentile_values[0]
 
     # NODE 15: Determine the median value of the functional runs using the mask
     workflow.connect(maskfunc, "out_file", threshold, "in_file")
-    workflow.connect(getthresh, ("out_stat", get_thresh_op), threshold, "op_string")
+    workflow.connect(getthresh, ("percentile_values", get_thresh_op), threshold, "op_string")
 
     # NODE 16: Determine the median value of the functional runs using the mask
-    medianval = Node(ImageStats(), name="%s_medianval" % name)
+    medianval = Node(ImageStatistics(), name="%s_medianval" % name)
     medianval.long_name = "median value calculation"
-    medianval.inputs.op_string = "-k %s -p 50"
+    medianval.inputs.percentiles = [50]
     workflow.connect(
         slice_timing_correction, "slice_time_corrected_file", medianval, "in_file"
     )
@@ -237,7 +240,7 @@ def fMRI_preproc_workflow(
     mergenode = Node(Merge(2), name="%s_mergenode" % name)
     mergenode.long_name = "Mean and median coupling"
     workflow.connect(meanfunc2, "out_file", mergenode, "in1")
-    workflow.connect(medianval, "out_stat", mergenode, "in2")
+    workflow.connect(medianval, ("percentile_values", get_first_percentile), mergenode, "in2")
 
     # NODE 21: Smooth each run using SUSAN with the brightness threshold set to 75% of the
     # median value for each run and a mask constituting the mean functional
@@ -249,8 +252,8 @@ def fMRI_preproc_workflow(
     smooth.inputs.fwhm = fwhm_thr
 
     # Function to calculate the 75% of the median value
-    def get_bt_thresh(medianvals):
-        return 0.75 * medianvals
+    def get_bt_thresh(percentile_values):
+        return 0.75 * percentile_values[0]
 
     # Function to define the couple of values
     def get_usans(x):
@@ -258,7 +261,7 @@ def fMRI_preproc_workflow(
 
     workflow.connect(maskfunc2, "out_file", smooth, "in_file")
     workflow.connect(
-        medianval, ("out_stat", get_bt_thresh), smooth, "brightness_threshold"
+        medianval, ("percentile_values", get_bt_thresh), smooth, "brightness_threshold"
     )
     workflow.connect(mergenode, ("out", get_usans), smooth, "usans")
 
@@ -276,11 +279,11 @@ def fMRI_preproc_workflow(
     intnorm.inputs.suffix = "_intnorm"
 
     # Function to get the scaling factor operation string for intensity normalization
-    def get_inorm_scale(medianvals):
-        return "-mul %.10f" % (10000.0 / medianvals)
+    def get_inorm_scale(percentile_values):
+        return "-mul %.10f" % (10000.0 / percentile_values[0])
 
     workflow.connect(maskfunc3, "out_file", intnorm, "in_file")
-    workflow.connect(medianval, ("out_stat", get_inorm_scale), intnorm, "op_string")
+    workflow.connect(medianval, ("percentile_values", get_inorm_scale), intnorm, "op_string")
 
     # NODE 24: Generate a mean functional image from the first run
     meanfunc3 = Node(ImageMaths(), name="%s_meanfunc3" % name)
