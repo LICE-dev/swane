@@ -1,6 +1,6 @@
 import pydicom
 import os
-from PySide6.QtCore import Signal, QObject, QRunnable
+from swane.utils.qt_compat import Signal, QObject, QRunnable
 from swane.utils.DicomTree import DicomTree
 from dicom_sequence_classifier import extract_metadata, classify_dicom
 
