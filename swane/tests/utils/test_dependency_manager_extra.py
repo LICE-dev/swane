@@ -1,20 +1,25 @@
+import os
 import swane.utils.DependencyManager as dm
+from swane.config.ConfigManager import ConfigManager
 
 
 def test_check_graphviz(monkeypatch):
     # simulate graphviz not present
-    monkeypatch.setattr(dm, 'is_command_available', lambda cmd: False)
-    d = dm.DependencyManager()
-    assert d.check_graphviz() is False
+    monkeypatch.setattr(dm, 'which', lambda cmd: None)
+    depend = dm.DependencyManager.check_graphviz()
+    assert depend.state == dm.DependenceStatus.WARNING
 
     # simulate graphviz present
-    monkeypatch.setattr(dm, 'is_command_available', lambda cmd: True)
-    d2 = dm.DependencyManager()
-    assert d2.check_graphviz() is True
+    monkeypatch.setattr(dm, 'which', lambda cmd: '/usr/bin/dot')
+    depend2 = dm.DependencyManager.check_graphviz()
+    assert depend2.state == dm.DependenceStatus.DETECTED
 
 
-def test_need_slicer_check(monkeypatch):
-    monkeypatch.setattr(dm, 'is_command_available', lambda cmd: True)
-    d = dm.DependencyManager()
-    # when slicer is available, need_slicer_check should be False
-    assert d.need_slicer_check() is False
+def test_need_slicer_check(monkeypatch, tmp_path):
+    config = ConfigManager(global_base_folder=str(tmp_path))
+    config.set_slicer_path('fake_slicer')
+    monkeypatch.setattr(os.path, 'exists', lambda path: True)
+    monkeypatch.setattr(dm.DependencyManager, 'check_slicer_version', staticmethod(lambda version: True))
+    monkeypatch.setattr(config, 'get_slicer_validator', lambda: False)
+
+    assert dm.DependencyManager.need_slicer_check(config) is False

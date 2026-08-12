@@ -1,6 +1,7 @@
 import os
 import shutil
 import pytest
+from pydicom.uid import generate_uid
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.tests import TEST_DIR
 
@@ -16,6 +17,14 @@ def change_test_dir(request):
 from swane.tests.helpers.dicom_factory import write_minimal_dicom
 
 class TestDicomSearchWorker:
+    DICOM_DIRS = {
+        'SINGLE_VOL': [
+            os.path.join(os.path.expanduser('~'), 'test_swane', 'dicom', 'singlevol')
+        ],
+        'MULTI_VOL': [
+            os.path.join(os.path.expanduser('~'), 'test_swane', 'dicom', 'multivol')
+        ],
+    }
 
     def test_dicom_search(self):
         # base test dir under the user's TEST_DIR (fixture sets cwd to TEST_DIR/dicom)
@@ -37,24 +46,45 @@ class TestDicomSearchWorker:
         # SINGLE_VOL: 11 files, 1 patient, 1 study, 1 series
         single_dir = os.path.join(base_dir, 'singlevol')
         os.makedirs(single_dir, exist_ok=True)
+        single_study_uid = generate_uid()
         for i in range(11):
-            write_minimal_dicom(os.path.join(single_dir, f"file_{i:03d}.dcm"), patient_id='P_SINGLE', series_desc='SINGLE', slice_location=i)
+            write_minimal_dicom(
+                os.path.join(single_dir, f"file_{i:03d}.dcm"),
+                patient_id='P_SINGLE',
+                series_desc='SINGLE',
+                study_uid=single_study_uid,
+                slice_location=i,
+            )
         scenarios['SINGLE_VOL'] = [single_dir, 11, 1, 1, 1, 1, 11]
 
         # TWO_VOL: 10 files, single patient, single series (files belong to same series)
         two_dir = os.path.join(base_dir, 'twovol')
         os.makedirs(two_dir, exist_ok=True)
+        two_study_uid = generate_uid()
         # create alternating slice locations to emulate two volumes
         for i in range(10):
             sl = i % 2
-            write_minimal_dicom(os.path.join(two_dir, f"file_{i:03d}.dcm"), patient_id='P_TWO', series_desc='TWO', slice_location=sl)
+            write_minimal_dicom(
+                os.path.join(two_dir, f"file_{i:03d}.dcm"),
+                patient_id='P_TWO',
+                series_desc='TWO',
+                study_uid=two_study_uid,
+                slice_location=sl,
+            )
         scenarios['TWO_VOL'] = [two_dir, 10, 1, 1, 1, 2, 10]
 
         # MULTI_VOL: 12 files
         multi_dir = os.path.join(base_dir, 'multivol')
         os.makedirs(multi_dir, exist_ok=True)
+        multi_study_uid = generate_uid()
         for i in range(12):
-            write_minimal_dicom(os.path.join(multi_dir, f"file_{i:03d}.dcm"), patient_id='P_MULTI', series_desc='MULTI', slice_location=(i % 4))
+            write_minimal_dicom(
+                os.path.join(multi_dir, f"file_{i:03d}.dcm"),
+                patient_id='P_MULTI',
+                series_desc='MULTI',
+                study_uid=multi_study_uid,
+                slice_location=(i % 4),
+            )
         scenarios['MULTI_VOL'] = [multi_dir, 12, 1, 1, 1, 4, 12]
 
         # NONDICOM: two non-dicom files
@@ -77,8 +107,8 @@ class TestDicomSearchWorker:
         # MULTI_EXAM: same patient, two different studies
         multiexam_dir = os.path.join(base_dir, 'multiexam')
         os.makedirs(multiexam_dir, exist_ok=True)
-        write_minimal_dicom(os.path.join(multiexam_dir, '1.dcm'), patient_id='PE', study_uid='STUDY1')
-        write_minimal_dicom(os.path.join(multiexam_dir, '2.dcm'), patient_id='PE', study_uid='STUDY2')
+        write_minimal_dicom(os.path.join(multiexam_dir, '1.dcm'), patient_id='PE', study_uid=generate_uid())
+        write_minimal_dicom(os.path.join(multiexam_dir, '2.dcm'), patient_id='PE', study_uid=generate_uid())
         scenarios['MULTI_EXAM'] = [multiexam_dir, 2, 1, 2, -1, -1, 1]
 
         # run tests on each scenario

@@ -2,18 +2,16 @@
 
 from nipype import logging as nipype_log, config
 import os
-from psutil import virtual_memory
 import traceback
-from multiprocessing import Process, Event
+from multiprocessing import Process, Event, Queue
 from threading import Thread
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from nipype.external.cloghandler import ConcurrentRotatingFileHandler
-from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
-    MonitoredMultiProcPlugin,
-)
 import logging as orig_log
-from swane.nipype_pipeline.MainWorkflow import MainWorkflow
-from multiprocessing import Queue
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from swane.nipype_pipeline.MainWorkflow import MainWorkflow
 
 LOG_DIR_NAME = "log"
 
@@ -26,7 +24,7 @@ class WorkflowProcess(Process):
         "nipype.interface",
     ]
 
-    def __init__(self, subject_name: str, workflow: MainWorkflow, queue: Queue):
+    def __init__(self, subject_name: str, workflow: "MainWorkflow", queue: Queue):
         """
             A Process that execute a subject workflow in a thread, manage executor settings and signaling with gui.
             A process is needed to iterate and kill its subprocess if user wants to stop a workflow, a thread would not
@@ -36,7 +34,7 @@ class WorkflowProcess(Process):
         ----------
         subject_name: str
             The subject name
-        workflow: MainWorkflow
+        workflow: "MainWorkflow"
             The workflow already generated and populated
         queue: Queue
             The subprocess queue for signal handling
@@ -44,7 +42,7 @@ class WorkflowProcess(Process):
         """
         super(WorkflowProcess, self).__init__()
         self.stop_event: Event = Event()
-        self.workflow: MainWorkflow = workflow
+        self.workflow: "MainWorkflow" = workflow
         self.queue: Queue = queue
         self.subject_name: str = subject_name
 
@@ -86,6 +84,10 @@ class WorkflowProcess(Process):
         try:
             # this is useful to generate resource monitor files in subject directory
             os.chdir(self.workflow.base_dir)
+
+            from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
+                MonitoredMultiProcPlugin,
+            )
 
             self.workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args))
 

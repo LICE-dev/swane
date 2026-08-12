@@ -4,6 +4,8 @@ from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import generate_uid, ExplicitVRLittleEndian, SecondaryCaptureImageStorage
 import tempfile
 import datetime
+import sys
+import types
 import pytest
 
 from swane.workers.DicomSearchWorker import DicomSearchWorker
@@ -41,8 +43,7 @@ class TestDicomSearchExtra:
         assert desc2 == "Unnamed series"
 
     def test_find_series_classification_monkeypatched(self, monkeypatch):
-        # monkeypatch extract_metadata and classify_dicom imported in module
-        import swane.workers.DicomSearchWorker as dsw
+        fake_module = types.ModuleType("dicom_sequence_classifier")
 
         def fake_extract(ds):
             return {"fake": "meta"}
@@ -50,8 +51,9 @@ class TestDicomSearchExtra:
         def fake_classify(meta):
             return "T1"
 
-        monkeypatch.setattr(dsw, "extract_metadata", fake_extract)
-        monkeypatch.setattr(dsw, "classify_dicom", fake_classify)
+        fake_module.extract_metadata = fake_extract
+        fake_module.classify_dicom = fake_classify
+        monkeypatch.setitem(sys.modules, "dicom_sequence_classifier", fake_module)
 
         # create a dummy dataset object to pass (can be None since extract is patched)
         class Dummy:
@@ -61,7 +63,7 @@ class TestDicomSearchExtra:
         assert result == "T1"
 
         # if classify_dicom returns 'NOT MR', should return 'Unknown'
-        monkeypatch.setattr(dsw, "classify_dicom", lambda meta: "NOT MR")
+        fake_module.classify_dicom = lambda meta: "NOT MR"
         result2 = DicomSearchWorker.find_series_classification(Dummy())
         assert result2 == "Unknown"
 

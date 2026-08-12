@@ -9,15 +9,18 @@ from swane.utils.DependencyManager import DependencyManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.qt_compat import QThreadPool
 from swane import strings
-from swane.nipype_pipeline.MainWorkflow import MainWorkflow
 import traceback
 from threading import Thread
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from multiprocessing import Queue
-from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
-from swane.workers.WorkflowProcess import WorkflowProcess
-from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.utils.ToolReference import tool_reference_list
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+    from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
+    from swane.workers.WorkflowProcess import WorkflowProcess
+    from swane.workers.SlicerExportWorker import SlicerExportWorker
 
 
 class SubjectRet(Enum):
@@ -64,9 +67,9 @@ class Subject:
         self.input_state_list: SubjectInputStateList = None
         self.config: ConfigManager = None
         self.dependency_manager: DependencyManager = dependency_manager
-        self.workflow: MainWorkflow = None
-        self.workflow_process: WorkflowProcess = None
-        self.workflow_monitor_work: WorkflowMonitorWorker = None
+        self.workflow: "MainWorkflow" = None
+        self.workflow_process: "WorkflowProcess" = None
+        self.workflow_monitor_work: "WorkflowMonitorWorker" = None
 
     def load(self, subject_folder: str) -> SubjectRet:
         """
@@ -643,6 +646,8 @@ class Subject:
         -------
         The subject results directory path
         """
+        from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+
         return os.path.join(self.folder, MainWorkflow.Result_DIR)
 
     def scene_path(self) -> str:
@@ -679,6 +684,8 @@ class Subject:
 
             # Node List population
             try:
+                from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+
                 self.workflow = MainWorkflow(
                     name=self.name + strings.WF_DIR_SUFFIX,
                     base_dir=self.folder,
@@ -849,12 +856,16 @@ class Subject:
         queue = Queue(maxsize=500)
 
         # Generates a Monitor Worker to receive workflows notifications
+        from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
+
         self.workflow_monitor_work = WorkflowMonitorWorker(queue)
         if update_node_callback is not None:
             self.workflow_monitor_work.signal.log_msg.connect(update_node_callback)
         QThreadPool.globalInstance().start(self.workflow_monitor_work)
 
         # Starts the workflow on a new process
+        from swane.workers.WorkflowProcess import WorkflowProcess
+
         self.workflow_process = WorkflowProcess(self.name, self.workflow, queue)
         self.workflow_process.start()
         return SubjectRet.ExecWfStarted
@@ -907,6 +918,8 @@ class Subject:
         None.
 
         """
+
+        from swane.workers.SlicerExportWorker import SlicerExportWorker
 
         slicer_thread = SlicerExportWorker(
             self.global_config.get_slicer_path(),

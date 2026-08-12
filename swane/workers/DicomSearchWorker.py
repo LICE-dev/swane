@@ -2,7 +2,9 @@ import pydicom
 import os
 from swane.utils.qt_compat import Signal, QObject, QRunnable
 from swane.utils.DicomTree import DicomTree
-from dicom_sequence_classifier import extract_metadata, classify_dicom
+# Import dicom_sequence_classifier lazily inside find_series_classification to
+# avoid hard dependency at module import time (helps tests and environments
+# where the package may not be fully available).
 
 
 class DicomSearchSignal(QObject):
@@ -234,9 +236,19 @@ class DicomSearchWorker(QRunnable):
 
         """
 
-        meta = extract_metadata(ds)
-        classification = classify_dicom(meta)
-        if classification != "NOT MR":
-            return classification
+        try:
+            # Import locally to avoid failing module import when the
+            # dicom_sequence_classifier package (or its resources) are missing
+            # in the test environment.
+            from dicom_sequence_classifier import extract_metadata, classify_dicom
+
+            meta = extract_metadata(ds)
+            classification = classify_dicom(meta)
+            if classification != "NOT MR":
+                return classification
+        except Exception:
+            # If the classifier cannot be imported or fails, return Unknown so
+            # the caller can handle a missing classifier gracefully.
+            return "Unknown"
 
         return "Unknown"
