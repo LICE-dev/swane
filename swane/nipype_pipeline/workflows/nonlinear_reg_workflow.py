@@ -80,7 +80,7 @@ def nonlinear_reg_workflow(
         warp=[reg_wrap.out_registered_node, reg_wrap.warp],
         moving=[inputnode, "in_file"],
         reference=[inputnode, "atlas"],
-        non_linear=False,
+        non_linear=True,
     )
 
     workflow.connect(unbetted_2_atlas, "out_file", outputnode, "warped_file")
