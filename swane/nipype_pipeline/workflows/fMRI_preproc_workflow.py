@@ -134,7 +134,9 @@ def fMRI_preproc_workflow(
         return middle
 
     workflow.connect(img2float, "out_file", extract_ref, "in_file")
-    workflow.connect(reorient, ("out_file", get_middle_volume), extract_ref, "start_volume")
+    workflow.connect(
+        reorient, ("out_file", get_middle_volume), extract_ref, "start_volume"
+    )
 
     # NODE 7: Realign the functional runs to the middle volume of the first run
     motion_correct = Node(MCFLIRT(), name="%s_motion_correct" % name)
@@ -201,7 +203,9 @@ def fMRI_preproc_workflow(
 
     # NODE 15: Determine the median value of the functional runs using the mask
     workflow.connect(maskfunc, "out_file", threshold, "in_file")
-    workflow.connect(getthresh, ("percentile_values", get_thresh_op), threshold, "op_string")
+    workflow.connect(
+        getthresh, ("percentile_values", get_thresh_op), threshold, "op_string"
+    )
 
     # NODE 16: Determine the median value of the functional runs using the mask
     medianval = Node(ImageStatistics(), name="%s_medianval" % name)
@@ -240,7 +244,9 @@ def fMRI_preproc_workflow(
     mergenode = Node(Merge(2), name="%s_mergenode" % name)
     mergenode.long_name = "Mean and median coupling"
     workflow.connect(meanfunc2, "out_file", mergenode, "in1")
-    workflow.connect(medianval, ("percentile_values", get_first_percentile), mergenode, "in2")
+    workflow.connect(
+        medianval, ("percentile_values", get_first_percentile), mergenode, "in2"
+    )
 
     # NODE 21: Smooth each run using SUSAN with the brightness threshold set to 75% of the
     # median value for each run and a mask constituting the mean functional
@@ -283,7 +289,9 @@ def fMRI_preproc_workflow(
         return "-mul %.10f" % (10000.0 / percentile_values[0])
 
     workflow.connect(maskfunc3, "out_file", intnorm, "in_file")
-    workflow.connect(medianval, ("percentile_values", get_inorm_scale), intnorm, "op_string")
+    workflow.connect(
+        medianval, ("percentile_values", get_inorm_scale), intnorm, "op_string"
+    )
 
     # NODE 24: Generate a mean functional image from the first run
     meanfunc3 = Node(ImageMaths(), name="%s_meanfunc3" % name)

@@ -38,9 +38,7 @@ class ExtractVolumesInputSpec(BaseInterfaceInputSpec):
     start_volume = traits.Int(
         0, usedefault=True, desc="index of the first volume to extract"
     )
-    num_volumes = traits.Int(
-        1, usedefault=True, desc="number of volumes to extract"
-    )
+    num_volumes = traits.Int(1, usedefault=True, desc="number of volumes to extract")
     out_file = File(desc="the output image")
 
 
@@ -64,9 +62,7 @@ class ExtractVolumes(BaseInterface):
 
         in_nii = nib.load(self.inputs.in_file)
         nib.save(
-            extract_volumes(
-                in_nii, self.inputs.start_volume, self.inputs.num_volumes
-            ),
+            extract_volumes(in_nii, self.inputs.start_volume, self.inputs.num_volumes),
             out_file,
         )
 
