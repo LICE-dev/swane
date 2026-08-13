@@ -29,16 +29,22 @@ def test_add_and_remove_handlers(monkeypatch):
 def test_swane_log_nodes_cb_creates_dict(monkeypatch):
     class Node:
         def __init__(self):
-            self.name = 'n'
-            self._id = 'id'
+            self.name = "n"
+            self._id = "id"
+
             class R:
-                startTime=None
-                endTime=None
-                duration=None
-            self.result = types.SimpleNamespace(runtime=types.SimpleNamespace(startTime=None,endTime=None,duration=None))
+                startTime = None
+                endTime = None
+                duration = None
+
+            self.result = types.SimpleNamespace(
+                runtime=types.SimpleNamespace(
+                    startTime=None, endTime=None, duration=None
+                )
+            )
             self.mem_gb = 1
             self.n_procs = 1
 
     # call the callback with status not 'end' and 'end'
-    swane_log_nodes_cb(Node(), 'start')
-    swane_log_nodes_cb(Node(), 'end')
+    swane_log_nodes_cb(Node(), "start")
+    swane_log_nodes_cb(Node(), "end")

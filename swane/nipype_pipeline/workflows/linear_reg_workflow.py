@@ -186,17 +186,17 @@ def linear_reg_workflow(
     )
 
     unbetted_2_ref = apply_registration_node(
-            name=name,
-            name_prefix="Unbetted image",
-            name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
-            workflow=workflow,
-            warp=[reg_wrap.out_registered_node, reg_wrap.warp],
-            moving=[robustfov, "out_roi"],
-            reference=[inputnode, "reference"],
-            out_file=[unbetted_name, "out_file"],
-            non_linear=False,
-        )
+        name=name,
+        name_prefix="Unbetted image",
+        name_suffix="to reference",
+        use_synth=synth_config.getboolean_safe("morph"),
+        workflow=workflow,
+        warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        moving=[robustfov, "out_roi"],
+        reference=[inputnode, "reference"],
+        out_file=[unbetted_name, "out_file"],
+        non_linear=False,
+    )
 
     if is_partial_coverage:
         brain_masking = Node(ApplyMask(), name="%s_brain_mask" % name)
@@ -209,7 +209,7 @@ def linear_reg_workflow(
         workflow.connect(unbetted_2_ref, "out_file", outputnode, "registered_file")
     else:
         deskull_2_ref = apply_registration_node(
-            name="deskulled_"+name,
+            name="deskulled_" + name,
             name_prefix="Skull stripped image",
             name_suffix="to reference",
             use_synth=synth_config.getboolean_safe("morph"),
@@ -235,12 +235,23 @@ def linear_reg_workflow(
             workflow.connect(bias_correction, "out_file", corrected_deskull, "in_file")
 
             workflow.connect(bias_correction, "out_file", outputnode, "registered_file")
-            workflow.connect(corrected_deskull, "out_file", outputnode, "registered_file_brain")
-            workflow.connect(deskull_2_ref, "out_file", outputnode, "uncorrected_registered_file_brain")
-            workflow.connect(unbetted_2_ref, "out_file", outputnode, "uncorrected_registered_file")
+            workflow.connect(
+                corrected_deskull, "out_file", outputnode, "registered_file_brain"
+            )
+            workflow.connect(
+                deskull_2_ref,
+                "out_file",
+                outputnode,
+                "uncorrected_registered_file_brain",
+            )
+            workflow.connect(
+                unbetted_2_ref, "out_file", outputnode, "uncorrected_registered_file"
+            )
         else:
             # Skip bias field correction
-            workflow.connect(deskull_2_ref, "out_file", outputnode, "registered_file_brain")
+            workflow.connect(
+                deskull_2_ref, "out_file", outputnode, "registered_file_brain"
+            )
             workflow.connect(unbetted_2_ref, "out_file", outputnode, "registered_file")
     workflow.connect(
         reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "out_matrix_file"
