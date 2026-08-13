@@ -76,19 +76,32 @@ def main(argv=None):
     )
 
     parser.add_argument("--input", required=True, help="Input CT volume (NIfTI)")
-    parser.add_argument("--output", required=True, help="Output endocranium mask (NIfTI)")
+    parser.add_argument(
+        "--output", required=True, help="Output endocranium mask (NIfTI)"
+    )
     parser.add_argument(
         "--kernel-mm", type=float, default=3.0, help="Smoothing kernel size in mm"
     )
     parser.add_argument(
-        "--oversampling", type=float, default=1.0, help="Wrap Solidify remesh oversampling"
+        "--oversampling",
+        type=float,
+        default=1.0,
+        help="Wrap Solidify remesh oversampling",
     )
-    parser.add_argument("--iterations", type=int, default=2, help="Shrinkwrap iterations")
     parser.add_argument(
-        "--split-diameter", type=float, default=30.0, help="Split cavities diameter (mm)"
+        "--iterations", type=int, default=2, help="Shrinkwrap iterations"
     )
     parser.add_argument(
-        "--skull_threshold", type=int, default=-1, help="Threshold for skull segmentation"
+        "--split-diameter",
+        type=float,
+        default=30.0,
+        help="Split cavities diameter (mm)",
+    )
+    parser.add_argument(
+        "--skull_threshold",
+        type=int,
+        default=-1,
+        help="Threshold for skull segmentation",
     )
 
     args = parser.parse_args(argv)
@@ -193,7 +206,9 @@ def main(argv=None):
     logic.applyWrapSolidify()
 
     # Export output
-    export_segment_as_nifti(segmentationNode, boneSmoothID, inputVolume, out_endocranium)
+    export_segment_as_nifti(
+        segmentationNode, boneSmoothID, inputVolume, out_endocranium
+    )
 
     print("[OK] Endocranium mask exported:", out_endocranium)
 

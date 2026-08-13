@@ -10,7 +10,9 @@ import os
 import psutil
 
 
-def last_pid_is_running(last_pid: int, last_pid_create_time: float | None = None) -> bool:
+def last_pid_is_running(
+    last_pid: int, last_pid_create_time: float | None = None
+) -> bool:
     """
     Determines whether the previously stored SWANe process is still running.
 
@@ -86,5 +88,10 @@ def last_pid_is_running(last_pid: int, last_pid_create_time: float | None = None
         # If creation times match (within tolerance), it's the same process
         return abs(current_create_time - saved_create_time) < 1.0
 
-    except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied, ValueError):
+    except (
+        psutil.NoSuchProcess,
+        psutil.ZombieProcess,
+        psutil.AccessDenied,
+        ValueError,
+    ):
         return False

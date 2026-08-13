@@ -23,7 +23,6 @@ from swane.config.ConfigManager import ConfigManager
 from swane.utils.DependencyManager import DependencyManager
 from swane.tests.helpers.dicom_scenarios import build_dicom_tree
 
-
 # --------------------------------------------------------------------------- #
 # Markers
 # --------------------------------------------------------------------------- #

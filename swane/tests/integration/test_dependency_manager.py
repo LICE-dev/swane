@@ -1,6 +1,7 @@
 import os
 import types
 from swane import strings
+
 # Use the test-friendly qt_compat layer instead of importing PySide6 directly.
 from swane.utils.qt_compat import QThreadPool
 from swane.config.ConfigManager import ConfigManager
@@ -39,67 +40,82 @@ class TestDependencyManager:
 
     def test_dep(self, monkeypatch, tmp_path):
         # check dcm2niix presence and absence via monkeypatched version detection
-        monkeypatch.setattr(dcm2nii.Info, 'version', staticmethod(lambda: '1.0'))
+        monkeypatch.setattr(dcm2nii.Info, "version", staticmethod(lambda: "1.0"))
         assert (
             DependencyManager.check_dcm2niix().state == DependenceStatus.DETECTED
-        ), 'dcm2niix present error'
-        monkeypatch.setattr(dcm2nii.Info, 'version', staticmethod(lambda: None))
+        ), "dcm2niix present error"
+        monkeypatch.setattr(dcm2nii.Info, "version", staticmethod(lambda: None))
         assert (
             DependencyManager.check_dcm2niix().state == DependenceStatus.MISSING
-        ), 'dcm2niix absent error'
+        ), "dcm2niix absent error"
 
         # check FSL presence and absence via monkeypatched version and environment
-        monkeypatch.setattr(fsl.base.Info, 'version', staticmethod(lambda: '6.1.0'))
-        monkeypatch.setenv('FSLDIR', str(tmp_path / 'fsl'))
-        (tmp_path / 'fsl').mkdir()
-        monkeypatch.setattr(DependencyManager, 'MIN_FSL_VERSION', '1000')
+        monkeypatch.setattr(fsl.base.Info, "version", staticmethod(lambda: "6.1.0"))
+        monkeypatch.setenv("FSLDIR", str(tmp_path / "fsl"))
+        (tmp_path / "fsl").mkdir()
+        monkeypatch.setattr(DependencyManager, "MIN_FSL_VERSION", "1000")
         assert (
             DependencyManager.check_fsl().state == DependenceStatus.WARNING
-        ), 'fsl outdated error'
-        monkeypatch.setattr(DependencyManager, 'MIN_FSL_VERSION', '6.0.6')
+        ), "fsl outdated error"
+        monkeypatch.setattr(DependencyManager, "MIN_FSL_VERSION", "6.0.6")
         assert (
             DependencyManager.check_fsl().state == DependenceStatus.DETECTED
-        ), 'fsl present error'
-        monkeypatch.setattr(fsl.base.Info, 'version', staticmethod(lambda: None))
+        ), "fsl present error"
+        monkeypatch.setattr(fsl.base.Info, "version", staticmethod(lambda: None))
         assert (
             DependencyManager.check_fsl().state == DependenceStatus.MISSING
-        ), 'fsl absent error'
+        ), "fsl absent error"
 
         # check freesurfer presence and absence via monkeypatched version and runtime
-        monkeypatch.setattr(freesurfer.base.Info, 'version', staticmethod(lambda: '8.1.0'))
-        monkeypatch.setattr(freesurfer.base.Info, 'looseversion', staticmethod(lambda: '8.1.0'))
-        fake_fs = tmp_path / 'freesurfer'
+        monkeypatch.setattr(
+            freesurfer.base.Info, "version", staticmethod(lambda: "8.1.0")
+        )
+        monkeypatch.setattr(
+            freesurfer.base.Info, "looseversion", staticmethod(lambda: "8.1.0")
+        )
+        fake_fs = tmp_path / "freesurfer"
         fake_fs.mkdir()
-        monkeypatch.setenv('FREESURFER_HOME', str(fake_fs))
-        license_file = fake_fs / 'license.txt'
-        license_file.write_text('license')
-        monkeypatch.setattr(DependencyManager, 'FREESURFER_MATLAB_COMMAND', 'echo ok')
-        monkeypatch.setattr(DependencyManager, 'MIN_FREESURFER_VERSION', '7.3.2')
-        monkeypatch.setattr('swane.utils.DependencyManager.which', lambda cmd: '/usr/bin/tcsh' if cmd == 'tcsh' else None)
-        monkeypatch.setattr('swane.utils.DependencyManager.ResourceManager', types.SimpleNamespace(
-            total_memory_gb=staticmethod(lambda: 9999),
-            synth_reconall_ram_requirements=staticmethod(lambda: 1),
-            synth_seg_ram_requirements=staticmethod(lambda: 1),
-        ))
-        fake_result = types.SimpleNamespace(returncode=0, stdout='', stderr='')
-        monkeypatch.setattr('swane.utils.DependencyManager.subprocess.run', lambda *args, **kwargs: fake_result)
+        monkeypatch.setenv("FREESURFER_HOME", str(fake_fs))
+        license_file = fake_fs / "license.txt"
+        license_file.write_text("license")
+        monkeypatch.setattr(DependencyManager, "FREESURFER_MATLAB_COMMAND", "echo ok")
+        monkeypatch.setattr(DependencyManager, "MIN_FREESURFER_VERSION", "7.3.2")
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.which",
+            lambda cmd: "/usr/bin/tcsh" if cmd == "tcsh" else None,
+        )
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.ResourceManager",
+            types.SimpleNamespace(
+                total_memory_gb=staticmethod(lambda: 9999),
+                synth_reconall_ram_requirements=staticmethod(lambda: 1),
+                synth_seg_ram_requirements=staticmethod(lambda: 1),
+            ),
+        )
+        fake_result = types.SimpleNamespace(returncode=0, stdout="", stderr="")
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.subprocess.run",
+            lambda *args, **kwargs: fake_result,
+        )
         assert (
             DependencyManager.check_freesurfer().state == DependenceStatus.DETECTED
-        ), 'freesurfer present error'
-        monkeypatch.setenv('FREESURFER_HOME', '')
+        ), "freesurfer present error"
+        monkeypatch.setenv("FREESURFER_HOME", "")
         assert (
             DependencyManager.check_freesurfer().state == DependenceStatus.MISSING
-        ), 'freesurfer absent error'
+        ), "freesurfer absent error"
 
         # check graphviz presence via monkeypatched which
-        monkeypatch.setattr('swane.utils.DependencyManager.which', lambda cmd: '/usr/bin/dot')
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.which", lambda cmd: "/usr/bin/dot"
+        )
         assert (
             DependencyManager.check_graphviz().state == DependenceStatus.DETECTED
-        ), 'graphviz presence error'
-        monkeypatch.setattr('swane.utils.DependencyManager.which', lambda cmd: None)
+        ), "graphviz presence error"
+        monkeypatch.setattr("swane.utils.DependencyManager.which", lambda cmd: None)
         assert (
             DependencyManager.check_graphviz().state == DependenceStatus.WARNING
-        ), 'graphviz warning error'
+        ), "graphviz warning error"
 
     def test_slicer_dep(self, monkeypatch, qtbot):
         global_config = ConfigManager(global_base_folder=os.path.join(TEST_DIR, "dep"))
