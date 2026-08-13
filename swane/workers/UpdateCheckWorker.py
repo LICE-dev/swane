@@ -1,4 +1,4 @@
-from PySide6.QtCore import QRunnable, Signal, QObject
+from swane.utils.qt_compat import QRunnable, Signal, QObject
 from packaging import version
 import subprocess
 import sys
