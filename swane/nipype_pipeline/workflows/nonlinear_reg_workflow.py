@@ -1,7 +1,10 @@
 from nipype import Node, IdentityInterface
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from configparser import SectionProxy
-from swane.nipype_pipeline.nodes.utils import get_registration_node, apply_registration_node
+from swane.nipype_pipeline.nodes.utils import (
+    get_registration_node,
+    apply_registration_node,
+)
 
 
 # TODO check base_dir = "./"
@@ -84,7 +87,11 @@ def nonlinear_reg_workflow(
     )
 
     workflow.connect(unbetted_2_atlas, "out_file", outputnode, "warped_file")
-    workflow.connect(reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "fieldcoeff_file")
-    workflow.connect(reg_wrap.inv_warp_node, reg_wrap.inv_warp, outputnode, "inverse_warp")
+    workflow.connect(
+        reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "fieldcoeff_file"
+    )
+    workflow.connect(
+        reg_wrap.inv_warp_node, reg_wrap.inv_warp, outputnode, "inverse_warp"
+    )
 
     return workflow

@@ -2,6 +2,7 @@ import pydicom
 import os
 from swane.utils.qt_compat import Signal, QObject, QRunnable
 from swane.utils.DicomTree import DicomTree
+
 # Import dicom_sequence_classifier lazily inside find_series_classification to
 # avoid hard dependency at module import time (helps tests and environments
 # where the package may not be fully available).

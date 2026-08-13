@@ -43,10 +43,14 @@ def main():
             msg_box.setText(strings.main_multiple_instances_error)
             msg_box.exec()
             sys.exit(-1)
-            
+
         current_process = psutil.Process(os.getpid())
-        global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = str(current_process.pid)
-        global_config[GlobalPrefCategoryList.MAIN]["last_pid_create_time"] = str(current_process.create_time())
+        global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = str(
+            current_process.pid
+        )
+        global_config[GlobalPrefCategoryList.MAIN]["last_pid_create_time"] = str(
+            current_process.create_time()
+        )
         global_config.save()
 
         # MainWindow in a varariable to prenvent garbage collector deletion (might cause crash)
