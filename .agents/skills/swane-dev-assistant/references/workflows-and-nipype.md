@@ -100,6 +100,6 @@ Do not equate successful graph construction with scientific correctness. Require
 - Compile/import changed modules before graph tests.
 - Test Traits defaults, validation, generated commands, declared outputs, and failure paths for custom interfaces.
 - Construct affected graphs and assert boundary fields, node identities, connections, resource metadata, and deterministic output names.
-- Update `test_5_workflow.py` expectations for graph-level changes; run it only where its FSL/dcm2niix/Graphviz prerequisites are satisfied.
+- Update `swane/tests/integration/test_workflow.py` expectations for graph-level changes; it is marked `heavy`, so run it with `--run-heavy` and only where its FSL/dcm2niix/Graphviz prerequisites are satisfied.
 - Use mocked or synthetic inputs for focused tests. Run real-tool smoke tests only in a suitable neuroimaging environment.
 - Compare representative de-identified outputs for scientific changes, including geometry and downstream visualization, and state what was not clinically validated.

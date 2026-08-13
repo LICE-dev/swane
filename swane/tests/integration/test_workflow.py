@@ -16,6 +16,15 @@ from unittest.mock import ANY
 from swane.config.preference_list import WF_PREFERENCES
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 
+# Workflow generation/execution: needs FSL + dcm2niix (+ FreeSurfer).
+# Skipped unless --run-heavy and the tools are available.
+pytestmark = [
+    pytest.mark.heavy,
+    pytest.mark.requires_fsl,
+    pytest.mark.requires_dcm2niix,
+    pytest.mark.requires_freesurfer,
+]
+
 
 @pytest.fixture(autouse=True)
 def change_test_dir(request):
@@ -75,7 +84,8 @@ def import_from_path(
 class TestWorkflow:
     TEST_MAIN_WORKING_DIRECTORY = os.path.join(TEST_DIR, "workflow", "subjects")
     TEST_PATIENT_NAME = "pt_01"
-    DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "dicom")
+    # tests/data lives one level up now that this test sits in tests/integration/
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "dicom")
     DependencyManager.SYNTH_FREESURFER_RAM_REQUIREMENT = 100000  # Prevent new nodes
 
     TESTS = {
