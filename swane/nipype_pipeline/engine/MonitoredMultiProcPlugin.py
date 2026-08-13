@@ -18,11 +18,14 @@ except Exception:
     def indent(text, prefix=" "):
         return text
 
+
 try:
     from nipype import MapNode
 except Exception:
+
     class MapNode:
         pass
+
 
 from traceback import format_exception
 import sys

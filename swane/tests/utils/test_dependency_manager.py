@@ -37,7 +37,7 @@ class TestStatusFlags:
 
     def test_is_flags_reflect_states(self):
         manager = _manager_with(
-            fsl=DependenceStatus.WARNING,       # detected even if outdated
+            fsl=DependenceStatus.WARNING,  # detected even if outdated
             dcm2niix=DependenceStatus.DETECTED,
             graphviz=DependenceStatus.MISSING,
         )

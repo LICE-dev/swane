@@ -32,7 +32,10 @@ class TestGlobalConfig:
         config.save()
 
         reloaded = ConfigManager(global_base_folder=str(tmp_path))
-        assert reloaded[GlobalPrefCategoryList.MAIN]["default_dicom_folder"] == "custom_dcm"
+        assert (
+            reloaded[GlobalPrefCategoryList.MAIN]["default_dicom_folder"]
+            == "custom_dcm"
+        )
 
     def test_force_pref_reset_restores_defaults(self, tmp_path, monkeypatch):
         # A reset is triggered only when the file was written by a different
@@ -44,12 +47,15 @@ class TestGlobalConfig:
 
         monkeypatch.setattr(
             GLOBAL_PREFERENCES[GlobalPrefCategoryList.MAIN]["force_pref_reset"],
-            "default", "true",
+            "default",
+            "true",
         )
         reset = ConfigManager(global_base_folder=str(tmp_path))
         assert (
             reset[GlobalPrefCategoryList.MAIN]["default_dicom_folder"]
-            == GLOBAL_PREFERENCES[GlobalPrefCategoryList.MAIN]["default_dicom_folder"].default
+            == GLOBAL_PREFERENCES[GlobalPrefCategoryList.MAIN][
+                "default_dicom_folder"
+            ].default
         )
 
     def test_main_working_directory(self, tmp_path):

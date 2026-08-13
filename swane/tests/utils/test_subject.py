@@ -27,12 +27,19 @@ class TestSubjectFolders:
 
     def test_create_new_subject_dir_validation(self, global_config, dependency_manager):
         subject = Subject(global_config, dependency_manager)
-        assert subject.create_new_subject_dir("Invalid with space") == SubjectRet.PathBlankSpaces
-        assert subject.create_new_subject_dir("Invalid*char") == SubjectRet.PathBlankSpaces
+        assert (
+            subject.create_new_subject_dir("Invalid with space")
+            == SubjectRet.PathBlankSpaces
+        )
+        assert (
+            subject.create_new_subject_dir("Invalid*char") == SubjectRet.PathBlankSpaces
+        )
         assert subject.create_new_subject_dir(None) == SubjectRet.FolderNotFound
         assert subject.create_new_subject_dir("") == SubjectRet.FolderNotFound
         assert subject.create_new_subject_dir("subj_01") == SubjectRet.ValidFolder
-        assert subject.create_new_subject_dir("subj_01") == SubjectRet.FolderAlreadyExists
+        assert (
+            subject.create_new_subject_dir("subj_01") == SubjectRet.FolderAlreadyExists
+        )
 
     def test_check_and_fix_subject_folder(self, global_config, dependency_manager):
         main = global_config.get_main_working_directory()
@@ -43,13 +50,19 @@ class TestSubjectFolders:
         valid_folder = subject.folder
 
         checker = Subject(global_config, dependency_manager)
-        assert checker.check_subject_folder(os.path.join(main, "missing")) == SubjectRet.FolderNotFound
+        assert (
+            checker.check_subject_folder(os.path.join(main, "missing"))
+            == SubjectRet.FolderNotFound
+        )
 
         space_folder = os.path.join(main, "sub space")
         os.makedirs(space_folder)
         assert checker.check_subject_folder(space_folder) == SubjectRet.PathBlankSpaces
 
-        assert checker.check_subject_folder(os.path.expanduser("~")) == SubjectRet.FolderOutsideMain
+        assert (
+            checker.check_subject_folder(os.path.expanduser("~"))
+            == SubjectRet.FolderOutsideMain
+        )
 
         no_subtree = os.path.join(main, "no_subtree")
         os.makedirs(no_subtree)
@@ -77,63 +90,81 @@ class TestSubjectDicomImport:
         single = _scan_first_series(phantom_dicom_tree["SINGLE_VOL"].path)
 
         # valid import
-        assert subject.dicom_import_to_folder(
-            data_input=DataInputList.T13D,
-            copy_list=single.dicom_locs,
-            vols=single.volumes,
-            mod=single.modality,
-            force_modality=False,
-        ) == SubjectRet.DataImportCompleted
+        assert (
+            subject.dicom_import_to_folder(
+                data_input=DataInputList.T13D,
+                copy_list=single.dicom_locs,
+                vols=single.volumes,
+                mod=single.modality,
+                force_modality=False,
+            )
+            == SubjectRet.DataImportCompleted
+        )
 
         # importing again into a loaded slot is refused
         subject.input_state_list[DataInputList.T13D].loaded = True
-        assert subject.dicom_import_to_folder(
-            data_input=DataInputList.T13D,
-            copy_list=single.dicom_locs,
-            vols=single.volumes,
-            mod=single.modality,
-            force_modality=False,
-        ) == SubjectRet.DataInputNonEmpty
+        assert (
+            subject.dicom_import_to_folder(
+                data_input=DataInputList.T13D,
+                copy_list=single.dicom_locs,
+                vols=single.volumes,
+                mod=single.modality,
+                force_modality=False,
+            )
+            == SubjectRet.DataInputNonEmpty
+        )
 
         assert subject.dicom_folder_count(DataInputList.T13D) == len(single.dicom_locs)
 
         # min-volumes check (fMRI needs >= 4 volumes, single has 1)
-        assert subject.dicom_import_to_folder(
-            data_input=DataInputList["FMRI_0"],
-            copy_list=single.dicom_locs,
-            vols=single.volumes,
-            mod=single.modality,
-            force_modality=False,
-        ) == SubjectRet.DataImportErrorVolumesMin
+        assert (
+            subject.dicom_import_to_folder(
+                data_input=DataInputList["FMRI_0"],
+                copy_list=single.dicom_locs,
+                vols=single.volumes,
+                mod=single.modality,
+                force_modality=False,
+            )
+            == SubjectRet.DataImportErrorVolumesMin
+        )
 
         # wrong modality without force
-        assert subject.dicom_import_to_folder(
-            data_input=DataInputList.FLAIR3D,
-            copy_list=single.dicom_locs,
-            vols=single.volumes,
-            mod="pt",
-            force_modality=False,
-        ) == SubjectRet.DataImportErrorModality
+        assert (
+            subject.dicom_import_to_folder(
+                data_input=DataInputList.FLAIR3D,
+                copy_list=single.dicom_locs,
+                vols=single.volumes,
+                mod="pt",
+                force_modality=False,
+            )
+            == SubjectRet.DataImportErrorModality
+        )
 
         # wrong modality forced through
-        assert subject.dicom_import_to_folder(
-            data_input=DataInputList.FLAIR3D,
-            copy_list=single.dicom_locs,
-            vols=single.volumes,
-            mod="pt",
-            force_modality=True,
-        ) == SubjectRet.DataImportCompleted
+        assert (
+            subject.dicom_import_to_folder(
+                data_input=DataInputList.FLAIR3D,
+                copy_list=single.dicom_locs,
+                vols=single.volumes,
+                mod="pt",
+                force_modality=True,
+            )
+            == SubjectRet.DataImportCompleted
+        )
 
         # max-volumes check (FLAIR3D allows 1 volume, multivol has 4)
         multi = _scan_first_series(phantom_dicom_tree["MULTI_VOL"].path)
         subject.clear_import_folder(DataInputList.FLAIR3D)
-        assert subject.dicom_import_to_folder(
-            data_input=DataInputList.FLAIR3D,
-            copy_list=multi.dicom_locs,
-            vols=multi.volumes,
-            mod=multi.modality,
-            force_modality=False,
-        ) == SubjectRet.DataImportErrorVolumesMax
+        assert (
+            subject.dicom_import_to_folder(
+                data_input=DataInputList.FLAIR3D,
+                copy_list=multi.dicom_locs,
+                vols=multi.volumes,
+                mod=multi.modality,
+                force_modality=False,
+            )
+            == SubjectRet.DataImportErrorVolumesMax
+        )
 
         # clear removes the imported files
         assert subject.clear_import_folder(DataInputList.T13D) is True
