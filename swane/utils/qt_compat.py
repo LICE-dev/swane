@@ -8,12 +8,6 @@ these symbols instead of importing PySide6 directly.
 try:
     from PySide6.QtCore import Signal, QObject, QRunnable, QThreadPool
 
-    # Provide a simple alias for globalInstance() behaviour
-    class _QThreadPoolWrapper:
-        @staticmethod
-        def globalInstance():
-            return QThreadPool.globalInstance()
-
 except Exception:
     # Lightweight falling-back implementations
     class Signal:

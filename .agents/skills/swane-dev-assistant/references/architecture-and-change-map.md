@@ -57,9 +57,9 @@ Names and identities cross several layers. Treat input identities, preference ke
 | Utility/config logic | Import/compile plus targeted pytest | Config, subject, or DICOM test module |
 | Preference/input identity | Persistence/default test plus graph construction | Preference UI and workflow enablement tests |
 | Nipype interface | Trait/output test and mocked failure edges | Real external-tool smoke test |
-| Workflow connections/names | Construct graph and assert nodes/connections/outputs | `test_5_workflow.py` with required tools |
+| Workflow connections/names | Construct graph and assert nodes/connections/outputs | `integration/test_workflow.py` with required tools |
 | GUI/worker | Signal/state test with `pytest-qt` | Complete GUI workflow with a display |
 | Scientific algorithm/flags | Synthetic fixture comparison | Representative workflow comparison and domain review |
 | Packaging/release | Version/import/build-content check | Clean-environment installation smoke test |
 
-The fixtures use `TEST_DIR = ~/test_swane` and delete/recreate task-specific subdirectories. Resolve that path before execution. `test_6_complete_workflow.py` also reads the configured working directory to find `subj_test`; never substitute real clinical data for this fixture.
+The light suite (`config/`, `utils/`, `workers/`, `ui/`) uses disposable `tmp_path` fixtures and needs no external tools. The `integration/` fixtures use `TEST_DIR = ~/test_swane` (defined in `swane/tests/__init__.py`) and delete/recreate task-specific subdirectories. Resolve that path before execution. `integration/test_complete_workflow.py` also reads the configured working directory to find `subj_test`; never substitute real clinical data for this fixture.

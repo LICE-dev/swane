@@ -24,8 +24,18 @@ class _DummyUpdateWorker(QRunnable):
 
 @pytest.fixture
 def offline_update(monkeypatch):
-    """Stop MainWindow from spawning the real (network) update checker."""
+    """Stop MainWindow from spawning the real update checker and Slicer check.
+
+    Both run on the global ``QThreadPool``: ``UpdateCheckWorker`` hits the
+    network, and ``check_slicer`` launches the real Slicer executable when one
+    is installed, leaving a thread blocked on the subprocess so the interpreter
+    never exits. Neutralise both so head-less UI tests terminate cleanly.
+    """
     monkeypatch.setattr(main_window_mod, "UpdateCheckWorker", _DummyUpdateWorker)
+    monkeypatch.setattr(
+        "swane.utils.DependencyManager.DependencyManager.check_slicer",
+        staticmethod(lambda *args, **kwargs: None),
+    )
 
 
 @pytest.fixture

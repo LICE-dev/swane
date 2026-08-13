@@ -236,19 +236,19 @@ class DicomSearchWorker(QRunnable):
 
         """
 
+        # Import locally so a missing dicom_sequence_classifier package (e.g. in
+        # a bare test environment) degrades gracefully to "Unknown" instead of
+        # breaking module import. Only the import is guarded: any error raised by
+        # the classifier itself is left to propagate, preserving the original
+        # behaviour.
         try:
-            # Import locally to avoid failing module import when the
-            # dicom_sequence_classifier package (or its resources) are missing
-            # in the test environment.
             from dicom_sequence_classifier import extract_metadata, classify_dicom
-
-            meta = extract_metadata(ds)
-            classification = classify_dicom(meta)
-            if classification != "NOT MR":
-                return classification
-        except Exception:
-            # If the classifier cannot be imported or fails, return Unknown so
-            # the caller can handle a missing classifier gracefully.
+        except ImportError:
             return "Unknown"
+
+        meta = extract_metadata(ds)
+        classification = classify_dicom(meta)
+        if classification != "NOT MR":
+            return classification
 
         return "Unknown"

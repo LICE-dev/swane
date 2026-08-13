@@ -62,13 +62,13 @@ Develop SWANe while preserving its workflow contracts, scientific behavior, pers
 
 ## Validate in risk order
 
-Use the configured project interpreter (`python3`, `python`, or an explicit environment path). Before running tests, inspect `swane/tests/__init__.py` and the relevant fixtures: the suite deletes and recreates subdirectories below `~/test_swane`, and the complete workflow test reads a configured `subj_test`. Verify those exact paths and never point test configuration at a clinical or user working directory.
+Use the configured project interpreter (`python3`, `python`, or an explicit environment path). The light suite (`swane/tests/{config,utils,workers,ui}`, run with `-m "not heavy"`) is headless — Qt is forced offscreen by `swane/tests/conftest.py` — uses disposable `tmp_path` fixtures, and auto-skips any test whose external tool (FSL, FreeSurfer, dcm2niix, Slicer) is absent. The heavy tests live in `swane/tests/integration/`: inspect `swane/tests/__init__.py`, which sets `TEST_DIR = ~/test_swane` and whose fixtures delete and recreate subdirectories below it, and `integration/test_complete_workflow.py`, which reads a configured `subj_test`. Verify those exact paths and never point test configuration at a clinical or user working directory.
 
 ```bash
 python3 -m compileall swane
 python3 -m pytest <targeted-test-file-or-node>
 python3 -m black --check <changed-python-files>
-python3 -m pytest swane --color=yes --verbose
+python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
 ```
 
 - Start with syntax/import checks and the closest targeted test.
