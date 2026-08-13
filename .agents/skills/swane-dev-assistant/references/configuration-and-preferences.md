@@ -100,7 +100,7 @@ Use `PreferenceEntry` metadata rather than ad hoc UI/runtime checks:
 
 - Isolate global configuration with `global_base_folder`; never run preference tests against the user's real `~/.SWANe`.
 - Use a disposable subject folder for `.config` tests and verify its resolved path before cleanup.
-- Extend `test_2_config_global.py` for global default, persistence, invalid-value, reset, and version behavior.
+- Cover global default, persistence, invalid-value, reset, and version behavior in `swane/tests/config/` (e.g. `test_config_manager.py`, `test_preferences.py`).
 - Add subject-level tests for workflow defaults, preset application, dependency sanitation, and optional-series behavior.
 - Use `pytest-qt` for widget type, enum label/name mapping, range, enable/disable, validation-flag, restart, save, reset, and secret-display behavior.
 - Verify at least one real runtime consumer so a catalog-only change cannot pass while the analysis ignores the preference.
