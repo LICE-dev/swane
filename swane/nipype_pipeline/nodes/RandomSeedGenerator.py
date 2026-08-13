@@ -29,11 +29,13 @@ class RandomSeedGenerator(BaseInterface):
 
     input_spec = RandomSeedGeneratorInputSpec
     output_spec = RandomSeedGeneratorOutputSpec
-    seed_list = []
 
     def _run_interface(self, runtime):
         from random import randrange
 
+        # Per-instance state: reset here so each run yields exactly seeds_n
+        # seeds instead of accumulating on a shared class attribute.
+        self.seed_list = []
         for x in range(self.inputs.seeds_n):
             self.seed_list.append(randrange(1000))
 
