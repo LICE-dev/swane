@@ -7,6 +7,8 @@ copies the file when nothing has to be trimmed.
 
 import os
 
+import nibabel as nib
+
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
 
 
@@ -37,16 +39,16 @@ class TestDeleteVolumesOutputs:
         assert os.path.isabs(outputs["out_file"])
 
 
-class TestDeleteVolumesNoTrim:
-    """The pass-through branch that avoids the FSL ``ExtractROI`` call."""
+class TestDeleteVolumesRun:
+    """The nibabel-based volume extraction in ``_run_interface``."""
 
-    def test_zero_trim_copies_the_file(self, workspace, make_file):
-        """When nothing is trimmed the input is copied verbatim, no FSL needed.
+    def test_zero_trim_keeps_all_volumes(self, workspace, make_nifti):
+        """When nothing is trimmed every input volume is kept, no FSL needed.
 
         The input lives in a sub-folder so the working-dir output path differs
         from the source (as it does when the node runs in its own directory).
         """
-        in_file = make_file("input/bold.nii.gz", "payload")
+        in_file = make_nifti("input/bold.nii.gz", shape=(4, 4, 4, 8))
         node = DeleteVolumes()
         node.inputs.in_file = in_file
         node.inputs.nvols = 8
@@ -56,6 +58,19 @@ class TestDeleteVolumesNoTrim:
         result = node.run()
 
         assert os.path.exists(result.outputs.out_file)
-        with open(result.outputs.out_file) as handle:
-            assert handle.read() == "payload"
         assert result.outputs.nvols == 8
+        assert nib.load(result.outputs.out_file).shape == (4, 4, 4, 8)
+
+    def test_trims_head_and_tail(self, workspace, make_nifti):
+        """Volumes are removed from both ends via nibabel (no FSL ExtractROI)."""
+        in_file = make_nifti("input/bold.nii.gz", shape=(4, 4, 4, 8))
+        node = DeleteVolumes()
+        node.inputs.in_file = in_file
+        node.inputs.nvols = 8
+        node.inputs.del_start_vols = 2
+        node.inputs.del_end_vols = 1
+
+        result = node.run()
+
+        assert result.outputs.nvols == 5
+        assert nib.load(result.outputs.out_file).shape == (4, 4, 4, 5)
