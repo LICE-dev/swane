@@ -1,10 +1,15 @@
 """Unit tests for :class:`swane.nipype_pipeline.nodes.AsymmetryIndex.AsymmetryIndex`.
 
-The heavy lifting uses FSL ``BinaryMaths``; only the FSL-free output-name
-helpers are exercised here.
+The node computes the asymmetry index ``(in - swapped) / (in + swapped)`` with
+``nibabel``/``numpy`` only (no FSL), so both the output-name helper and the
+actual arithmetic are exercised here on tiny synthetic volumes.
 """
 
 import os
+
+import numpy as np
+import nibabel as nib
+import pytest
 
 from swane.nipype_pipeline.nodes.AsymmetryIndex import AsymmetryIndex
 
@@ -30,3 +35,23 @@ class TestAsymmetryIndexOutputName:
         node = AsymmetryIndex()
         node.inputs.in_file = make_file("t1.nii.gz", "x")
         assert node._list_outputs()["out_file"] == node._gen_outfilename()
+
+
+class TestAsymmetryIndexComputation:
+    """The ``(in - swapped) / (in + swapped)`` map, with 0 on division by zero."""
+
+    def test_asymmetry_index_values(self, workspace, make_nifti):
+        in_data = np.array([3, 1, 0, 2, 0, 0, 0, 0], dtype=np.float32).reshape(2, 2, 2)
+        swapped = np.array([1, 1, 0, 6, 0, 0, 0, 0], dtype=np.float32).reshape(2, 2, 2)
+        node = AsymmetryIndex()
+        node.inputs.in_file = make_nifti("t1.nii.gz", data=in_data)
+        node.inputs.swapped_file = make_nifti("t1_swap.nii.gz", data=swapped)
+
+        result = node.run()
+        out = nib.load(result.outputs.out_file).get_fdata().ravel()
+
+        # (3-1)/(3+1)=0.5 ; (1-1)/2=0 ; 0/0 -> 0 ; (2-6)/8=-0.5
+        assert out[0] == pytest.approx(0.5)
+        assert out[1] == pytest.approx(0.0)
+        assert out[2] == pytest.approx(0.0)
+        assert out[3] == pytest.approx(-0.5)

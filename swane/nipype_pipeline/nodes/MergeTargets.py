@@ -35,11 +35,11 @@ class MergeTargets(BaseInterface):
     output_spec = MergeTargetsOutputSpec
 
     def _run_interface(self, runtime):
-        self.inputs.out_file = self._gen_outfilename()
+        out_file = self._gen_outfilename()
 
         lines = "\n".join(self.inputs.target_files)
 
-        with open(self.inputs.out_file, "w") as file:
+        with open(out_file, "w") as file:
             file.write(lines)
 
         return runtime

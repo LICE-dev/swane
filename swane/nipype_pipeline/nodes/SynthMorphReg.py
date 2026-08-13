@@ -59,7 +59,7 @@ class SynthMorphRegInputSpec(FSTraitedSpec):
     )
     num_threads = traits.Int(
         argstr="-j %d",
-        hash_file=False,
+        nohash=True,
         desc="number of threads to be used by the CPU version",
     )
 

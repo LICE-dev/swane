@@ -6,10 +6,10 @@ from nipype.interfaces.fsl import (
     ApplyMask,
     BinaryMaths,
     FAST,
-    ImageStats,
     SpatialFilter,
     Threshold,
 )
+from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
@@ -201,23 +201,21 @@ def flat1_workflow(
     workflow.connect(wm_2_mni1, "out_file", wm_mask, "mask_file")
 
     # NODE 11: Mean calculation for gray matter
-    gm_mean = Node(ImageStats(), name="%s_gm_mean" % name)
+    gm_mean = Node(ImageStatistics(), name="%s_gm_mean" % name)
     gm_mean.long_name = "Grey matter mean value calculation"
-    gm_mean.inputs.op_string = "-M"
     workflow.connect(gm_mask, "out_file", gm_mean, "in_file")
 
     # NODE 12: Mean calculation for white matter
-    wm_mean = Node(ImageStats(), name="%s_wm_mean" % name)
+    wm_mean = Node(ImageStatistics(), name="%s_wm_mean" % name)
     wm_mean.long_name = "White matter mean value calculation"
-    wm_mean.inputs.op_string = "-M"
     workflow.connect(wm_mask, "out_file", wm_mean, "in_file")
 
     # TODO parametri per ora inutilizzati. Valutare in futuro la loro implementazione
-    # FLAT1_gm_std = Node(ImageStats(), name="%s_gm_std")
+    # FLAT1_gm_std = Node(ImageStatistics(), name="%s_gm_std")
     # FLAT1_gm_std.inputs.op_string="-S"
     # workflow.connect(FLAT1_gmMask,"out_file",FLAT1_gm_std,"in_file")
 
-    # FLAT1_wm_std = Node(ImageStats(), name="%s_wm_std")
+    # FLAT1_wm_std = Node(ImageStatistics(), name="%s_wm_std")
     # FLAT1_wm_std.inputs.op_string="-S"
     # workflow.connect(FLAT1_wmMask,"out_file",FLAT1_wm_std,"in_file")
 
@@ -226,8 +224,8 @@ def flat1_workflow(
     binary_flair.long_name = "Mean based masking"
     binary_flair.inputs.out_file = "binary_flair.nii.gz"
     workflow.connect(cortex_mask, "out_file", binary_flair, "in_file")
-    workflow.connect(gm_mean, "out_stat", binary_flair, "seg_val_max")
-    workflow.connect(wm_mean, "out_stat", binary_flair, "seg_val_min")
+    workflow.connect(gm_mean, "mean", binary_flair, "seg_val_max")
+    workflow.connect(wm_mean, "mean", binary_flair, "seg_val_min")
 
     # NODE 14: Junction map generation
     convolution_flair = Node(SpatialFilter(), name="%s_convolution_flair" % name)
@@ -261,9 +259,8 @@ def flat1_workflow(
     workflow.connect(restore_2_mni1, "out_file", masked_cerebellum, "in_file")
 
     # NODE 16: Cerebellum mean value calculation
-    cerebellum_mean = Node(ImageStats(), name="%s_cerebellum_mean" % name)
+    cerebellum_mean = Node(ImageStatistics(), name="%s_cerebellum_mean" % name)
     cerebellum_mean.long_name = "cerebellum mean value calculation"
-    cerebellum_mean.inputs.op_string = "-M"
     workflow.connect(masked_cerebellum, "out_file", cerebellum_mean, "in_file")
 
     # NODE 17: Grey matter mask on restore_t1
@@ -279,7 +276,7 @@ def flat1_workflow(
     normalised_gm_mask.inputs.operation = "div"
     normalised_gm_mask.inputs.out_file = "normalised_GM_mask.nii.gz"
     workflow.connect(restore_gm_mask, "out_file", normalised_gm_mask, "in_file")
-    workflow.connect(cerebellum_mean, "out_stat", normalised_gm_mask, "operand_value")
+    workflow.connect(cerebellum_mean, "mean", normalised_gm_mask, "operand_value")
 
     # NODE 19: Extension map generation
     smoothed_image_extension = Node(

@@ -3,7 +3,8 @@
 from os.path import abspath
 import os
 
-from nipype.interfaces.fsl import BinaryMaths
+import nibabel as nib
+import numpy as np
 from nipype.interfaces.base import (
     BaseInterface,
     BaseInterfaceInputSpec,
@@ -42,35 +43,26 @@ class SumMultiTracks(BaseInterface):
     output_spec = SumMultiTracksOutputSpec
 
     def _run_interface(self, runtime):
-        self.inputs.out_file = self._gen_outfilename()
+        out_file = self._gen_outfilename()
         waytotal_sum_file = self._gen_waytotal_outfilename()
 
-        steps = len(self.inputs.path_files)
-        sum_loop = [None] * steps
-        sum_res = [None] * steps
+        # sum the tractography path maps (p0 + p1 + ... + pn, no doubling)
+        first_nii = nib.load(self.inputs.path_files[0])
+        acc = first_nii.get_fdata(dtype=np.float32)
+        for f in self.inputs.path_files[1:]:
+            acc = acc + nib.load(f).get_fdata(dtype=np.float32)
+
+        # preserve exactly the input image space; set_data_dtype clears any
+        # residual scaling so values are not re-scaled on write
+        hdr = first_nii.header.copy()
+        hdr.set_data_dtype(np.float32)
+        nib.save(nib.Nifti1Image(acc, first_nii.affine, hdr), out_file)
+
+        # sum the waytotal counts
         waytotal_sum = 0
-
-        for x in range(steps):
-
-            # SUM FTP_PATHS
-            sum_loop[x] = BinaryMaths()
-            sum_loop[x].inputs.operation = "add"
-
-            if x == 0:
-                sum_loop[x].inputs.in_file = self.inputs.path_files[x]
-            else:
-                sum_loop[x].inputs.in_file = sum_res[(x - 1)].outputs.out_file
-
-            sum_loop[x].inputs.operand_file = self.inputs.path_files[x]
-
-            if x == (steps - 1):
-                sum_loop[x].inputs.out_file = self.inputs.out_file
-
-            sum_res[x] = sum_loop[x].run()
-
-            # SUM WAYTOTAL
-            if os.path.exists(self.inputs.waytotal_files[x]):
-                with open(self.inputs.waytotal_files[x], "r") as file:
+        for wf in self.inputs.waytotal_files:
+            if os.path.exists(wf):
+                with open(wf, "r") as file:
                     for line in file.readlines():
                         waytotal_sum += int(line)
 
@@ -86,12 +78,8 @@ class SumMultiTracks(BaseInterface):
         return abspath(out_file)
 
     def _gen_waytotal_outfilename(self):
-        out_file = os.path.basename(self.inputs.out_file)
-        if not isdefined(out_file):
-            out_file = "waytotal"
-        else:
-            out_file = out_file.replace(".nii.gz", "") + "_waytotal"
-        return abspath(out_file)
+        out_file = os.path.basename(self._gen_outfilename())
+        return abspath(out_file.replace(".nii.gz", "") + "_waytotal")
 
     def _list_outputs(self):
         outputs = self.output_spec().get()

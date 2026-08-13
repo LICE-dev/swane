@@ -11,7 +11,6 @@ import pytest
 from swane.tests import TEST_DIR
 from nipype.interfaces import fsl, dcm2nii, freesurfer
 from swane.workers.SlicerCheckWorker import SlicerCheckWorker
-import distutils.dir_util
 
 # These tests probe the real external tools. Skipped unless --run-heavy and the
 # tools are installed (see conftest marker auto-skip).

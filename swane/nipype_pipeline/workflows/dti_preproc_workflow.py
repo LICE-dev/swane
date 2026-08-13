@@ -1,9 +1,9 @@
 from nipype.interfaces.fsl import (
-    ExtractROI,
     EddyCorrect,
     DTIFit,
     BEDPOSTX5,
 )
+from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from nipype.pipeline.engine import Node
 from swane.config.config_enums import CoreLimit
@@ -128,11 +128,11 @@ def dti_preproc_workflow(
     workflow.connect(conversion, "converted_files", reorient, "in_file")
 
     # NODE 2: b0 image extraction
-    nodif = Node(ExtractROI(), name="dti_nodif")
+    nodif = Node(ExtractVolumes(), name="dti_nodif")
     nodif.long_name = "b0 extraction"
-    nodif.inputs.t_min = 0
-    nodif.inputs.t_size = 1
-    nodif.inputs.roi_file = "nodif.nii.gz"
+    nodif.inputs.start_volume = 0
+    nodif.inputs.num_volumes = 1
+    nodif.inputs.out_file = "nodif.nii.gz"
     workflow.connect(reorient, "out_file", nodif, "in_file")
 
     # NODE 3: Scalp removal from b0 image
@@ -146,7 +146,7 @@ def dti_preproc_workflow(
         bet_threshold=True,
         out_file="nodif_brain.nii.gz",
     )
-    workflow.connect(nodif, "roi_file", b0_deskull, "in_file")
+    workflow.connect(nodif, "out_file", b0_deskull, "in_file")
 
     old_eddy_correct = config.getboolean_safe("old_eddy_correct")
     if old_eddy_correct:
@@ -203,7 +203,7 @@ def dti_preproc_workflow(
         name_suffix="to reference",
         use_synth=synth_config.getboolean_safe("morph"),
         workflow=workflow,
-        moving=[nodif, "roi_file"],
+        moving=[nodif, "out_file"],
         moving_brain=[b0_deskull, "out_file"],
         reference=[inputnode, "reference"],
         reference_brain=[inputnode, "reference_brain"],
