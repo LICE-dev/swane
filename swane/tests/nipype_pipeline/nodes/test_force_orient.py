@@ -1,10 +1,14 @@
 """Unit tests for :class:`swane.nipype_pipeline.nodes.ForceOrient.ForceOrient`.
 
-Reorientation runs on FSL ``SwapDimensions``; only the FSL-free output-name
-helper is tested.
+Reorientation is done with ``nibabel`` (``as_reoriented`` to the LAS layout, the
+radiological RL/PA/IS convention), so both the output-name helper and the actual
+reorientation are exercised here without FSL.
 """
 
 import os
+
+import numpy as np
+import nibabel as nib
 
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 
@@ -30,3 +34,24 @@ class TestForceOrientOutputName:
         node = ForceOrient()
         node.inputs.in_file = make_file("t1.nii.gz", "x")
         assert node._list_outputs()["out_file"] == node._gen_outfilename()
+
+
+class TestForceOrientReorientation:
+    """The actual reorientation to the LAS (radiological) layout."""
+
+    def test_reorients_to_las(self, workspace, make_nifti):
+        """A RAS input is reoriented to LAS; shape and voxel count are kept."""
+        data = np.arange(64, dtype=np.float32).reshape(4, 4, 4)
+        # the identity affine is a plain RAS orientation
+        node = ForceOrient()
+        node.inputs.in_file = make_nifti("t1.nii.gz", data=data, affine=np.eye(4))
+
+        result = node.run()
+        out = nib.load(result.outputs.out_file)
+
+        assert nib.aff2axcodes(out.affine) == ("L", "A", "S")
+        assert out.shape == (4, 4, 4)
+        # data is only permuted/flipped, so the voxel values are preserved
+        assert np.array_equal(
+            np.sort(out.get_fdata(), axis=None), np.sort(data, axis=None)
+        )

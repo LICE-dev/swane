@@ -1,4 +1,5 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
+import os
 from nipype.interfaces.freesurfer.base import FSTraitedSpec, FSCommand
 from nipype.interfaces.base import (
     TraitedSpec,
@@ -74,7 +75,7 @@ class SynthSegInputSpec(FSTraitedSpec):
     )
     num_threads = traits.Int(
         argstr="--threads %d",
-        hash_file=False,
+        nohash=True,
         desc="number of threads to be used by the CPU version",
     )
 
@@ -128,5 +129,5 @@ class SynthSeg(FSCommand):
         outputs = super()._list_outputs()
         for name in ["volume_file", "qc_file", "post_file", "resampled_file"]:
             if isdefined(getattr(self.inputs, name)):
-                outputs[name] = getattr(self.inputs, name)
+                outputs[name] = os.path.abspath(getattr(self.inputs, name))
         return outputs

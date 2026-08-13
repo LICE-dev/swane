@@ -1,9 +1,9 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
-import shutil
-from nipype.interfaces.fsl import SwapDimensions
-from os.path import abspath
 import os
+from os.path import abspath
+import nibabel as nib
+from nibabel.orientations import io_orientation, axcodes2ornt, ornt_transform
 from nipype.interfaces.base import (
     BaseInterface,
     BaseInterfaceInputSpec,
@@ -11,7 +11,6 @@ from nipype.interfaces.base import (
     File,
     isdefined,
 )
-from swane.nipype_pipeline.nodes.Orient import Orient
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -36,25 +35,16 @@ class ForceOrient(BaseInterface):
     output_spec = ForceOrientOutputSpec
 
     def _run_interface(self, runtime):
-        self.inputs.out_file = self._gen_outfilename()
-        shutil.copy(self.inputs.in_file, self.inputs.out_file)
-        get_orient = Orient(in_file=self.inputs.out_file)
-        get_orient.inputs.get_orient = True
-        res = get_orient.run()
-        if res.outputs.orient == "NEUROLOGICAL":
-            swap_nr = SwapDimensions()
-            swap_nr.inputs.in_file = self.inputs.out_file
-            swap_nr.inputs.out_file = self.inputs.out_file
-            swap_nr.inputs.new_dims = ("-x", "y", "z")
-            swap_nr.run()
-            swap_orient = Orient(in_file=self.inputs.out_file)
-            swap_orient.inputs.swap_orient = True
-            swap_orient.run()
-        swap_dim = SwapDimensions()
-        swap_dim.inputs.in_file = self.inputs.out_file
-        swap_dim.inputs.out_file = self.inputs.out_file
-        swap_dim.inputs.new_dims = ("RL", "PA", "IS")
-        swap_dim.run()
+        out_file = self._gen_outfilename()
+
+        in_nii = nib.load(self.inputs.in_file)
+        # radiological convention with RL PA IS axes is the LAS orientation.
+        # Voxel data is only permuted/flipped, so dtype and scaling are
+        # preserved as they are and the anatomy keeps its world coordinates
+        transform = ornt_transform(
+            io_orientation(in_nii.affine), axcodes2ornt(("L", "A", "S"))
+        )
+        nib.save(in_nii.as_reoriented(transform), out_file)
 
         return runtime
 

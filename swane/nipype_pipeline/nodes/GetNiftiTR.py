@@ -1,18 +1,19 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
-from nipype.interfaces.fsl.base import FSLCommand, FSLCommandInputSpec
-from nipype.interfaces.base import traits, TraitedSpec, File, isdefined
+import nibabel as nib
+from nipype.interfaces.base import (
+    traits,
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    TraitedSpec,
+    File,
+    isdefined,
+)
 
 
-# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommandInputSpec)  -*-
-class GetNiftiTRInputSpec(FSLCommandInputSpec):
-    in_file = File(
-        exists=True,
-        mandatory=True,
-        argstr="%s pixdim4",
-        position="1",
-        desc="the input image",
-    )
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
+class GetNiftiTRInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc="the input image")
     force_value = traits.Float(mandatory=False, desc="value forced by user")
 
 
@@ -21,29 +22,27 @@ class GetNiftiTROutputSpec(TraitedSpec):
     TR = traits.Float(desc="Repetition Time")
 
 
-# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.base.FSLCommand)  -*-
-class GetNiftiTR(FSLCommand):
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
+class GetNiftiTR(BaseInterface):
     """
     Reads the time of repetition from a NIFTI file.
 
     """
 
-    _cmd = "fslval"
     input_spec = GetNiftiTRInputSpec
     output_spec = GetNiftiTROutputSpec
 
-    def aggregate_outputs(self, runtime=None, needed_outputs=None):
-        outputs = self._outputs()
-
-        # se l'utente ha inserito un valore forzo quello invece del risultato della lettura automatica
+    def _run_interface(self, runtime):
+        # se l'utente ha inserito un valore forzo quello invece della lettura automatica
         if isdefined(self.inputs.force_value) and self.inputs.force_value != -1:
-            outputs.TR = self.inputs.force_value
-            return outputs
+            self.TR = self.inputs.force_value
+        else:
+            # pixdim[4] is the repetition time
+            self.TR = float(nib.load(self.inputs.in_file).header["pixdim"][4])
 
-        info = runtime.stdout
-        try:
-            outputs.TR = float(info)
-        except:
-            outputs.TR = 0.0
+        return runtime
 
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs["TR"] = self.TR
         return outputs

@@ -265,7 +265,8 @@ def apply_registration_node(
     else:
         apply_node = Node(ApplyXFM(), name=name + "_apply_xfm")
         apply_node.long_name = name_prefix + " %s " + name_suffix
-        apply_node.inputs.interp = "nearestneighbour"
+        if labelmap:
+            apply_node.inputs.interp = "nearestneighbour"
         workflow.connect(warp[0], warp[1], apply_node, "in_matrix_file")
         if type(reference) == str:
             apply_node.inputs.reference = reference

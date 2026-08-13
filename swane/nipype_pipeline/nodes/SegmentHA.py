@@ -83,7 +83,7 @@ class SegmentHA(CommandLine):
         """
 
         if isdefined(self.inputs.num_cpu):
-            skip = ["num_cpu"]
+            skip = (skip or []) + ["num_cpu"]
             # self.n_procs = self.inputs.num_threads
             self.inputs.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = (
                 "%d" % self.inputs.num_cpu

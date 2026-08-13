@@ -1,10 +1,14 @@
 """Unit tests for :class:`swane.nipype_pipeline.nodes.SumMultiTracks.SumMultiTracks`.
 
-The volume summation runs on FSL ``BinaryMaths``; only the FSL-free output-name
-helpers are tested here.
+The node sums several tractography path maps with ``nibabel``/``numpy`` and adds
+up the companion ``waytotal`` counts (no FSL). Both the output-name helpers and
+the actual summation are exercised here.
 """
 
 import os
+
+import numpy as np
+import nibabel as nib
 
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
 
@@ -31,3 +35,25 @@ class TestSumMultiTracksOutputNames:
         outputs = node._list_outputs()
         assert os.path.basename(outputs["out_file"]) == "tracks.nii.gz"
         assert os.path.basename(outputs["waytotal_sum"]) == "tracks_waytotal"
+
+
+class TestSumMultiTracksComputation:
+    """Voxel-wise summation of the path maps and of the waytotal counts."""
+
+    def test_sums_path_maps_and_waytotals(self, workspace, make_nifti, make_file):
+        p0 = make_nifti("p0.nii.gz", data=np.ones((2, 2, 2), dtype=np.float32))
+        p1 = make_nifti("p1.nii.gz", data=np.full((2, 2, 2), 2.0, dtype=np.float32))
+        w0 = make_file("w0.txt", "10")
+        w1 = make_file("w1.txt", "20")
+
+        node = SumMultiTracks()
+        node.inputs.path_files = [p0, p1]
+        node.inputs.waytotal_files = [w0, w1]
+
+        result = node.run()
+
+        # voxel-wise 1 + 2 = 3 everywhere
+        assert np.all(nib.load(result.outputs.out_file).get_fdata() == 3)
+        # 10 + 20 = 30
+        with open(result.outputs.waytotal_sum) as handle:
+            assert handle.read().strip() == "30"

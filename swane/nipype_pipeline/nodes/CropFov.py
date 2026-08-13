@@ -40,7 +40,7 @@ class CropFov(BaseInterface):
     output_spec = CropFovOutputSpec
 
     def _run_interface(self, runtime):
-        self.inputs.out_file = self._gen_outfilename()
+        out_file = self._gen_outfilename()
 
         # Calculate current fov in mm
         img = load(self.inputs.in_file)
@@ -50,7 +50,7 @@ class CropFov(BaseInterface):
         current_max_dim = max(fov)
 
         if current_max_dim <= self.inputs.max_dim:
-            shutil.copyfile(self.inputs.in_file, self.inputs.out_file)
+            shutil.copyfile(self.inputs.in_file, out_file)
         else:
 
             rescale_factor = (self.inputs.max_dim - 1) / current_max_dim
@@ -67,7 +67,7 @@ class CropFov(BaseInterface):
 
             scaled_img = conform(img, (t_dim1, t_dim2, t_dim3), img.header.get_zooms())
 
-            save(scaled_img, self.inputs.out_file)
+            save(scaled_img, out_file)
 
         return runtime
 

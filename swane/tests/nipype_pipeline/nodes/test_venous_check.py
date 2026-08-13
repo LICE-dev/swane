@@ -43,7 +43,7 @@ class TestVenousCheckDeterministicModes:
             assert handle.read() == "ANAT"
 
     def test_output_filenames(self, workspace, make_file):
-        """Outputs land on the fixed ``veins``/``veins_anat`` names."""
+        """Outputs are pass-throughs: they keep the selected inputs' basenames."""
         node = VenousCheck()
         node.inputs.in_files = [
             make_file("v0.nii.gz", "a"),
@@ -52,8 +52,9 @@ class TestVenousCheckDeterministicModes:
         node.inputs.detection_mode = VeinDetectionMode.FIRST
         result = node.run()
 
-        assert os.path.basename(result.outputs.out_file_veins) == "veins.nii.gz"
-        assert os.path.basename(result.outputs.out_file_anat) == "veins_anat.nii.gz"
+        # FIRST -> veins is in_files[0], anat is in_files[1]; no copy/rename.
+        assert os.path.basename(result.outputs.out_file_veins) == "v0.nii.gz"
+        assert os.path.basename(result.outputs.out_file_anat) == "v1.nii.gz"
 
     def test_default_detection_mode_is_standard_deviation(self):
         """The ``detection_mode`` enum trait defaults to the first member, ``SD``."""
