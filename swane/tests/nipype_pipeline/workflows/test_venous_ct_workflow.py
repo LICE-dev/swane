@@ -16,9 +16,7 @@ def _names(workflow):
 
 
 class TestVenousCtWorkflow:
-    def test_core_nodes_present(
-        self, subject_config, make_input_dir, make_file
-    ):
+    def test_core_nodes_present(self, subject_config, make_input_dir, make_file):
         """The non-contrast, contrast, registration and rescale stages are wired."""
         wf = venous_ct_workflow(
             "venous_ct",

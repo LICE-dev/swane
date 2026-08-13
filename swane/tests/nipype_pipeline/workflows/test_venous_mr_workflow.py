@@ -64,10 +64,7 @@ class TestSingleSeries:
     ):
         """The ``veins_check`` node receives the configured detection mode."""
         wf = _build(subject_config, global_config, make_input_dir())
-        assert (
-            wf.get_node("veins_check").inputs.detection_mode
-            == VeinDetectionMode.SD
-        )
+        assert wf.get_node("veins_check").inputs.detection_mode == VeinDetectionMode.SD
 
     def test_detection_mode_follows_configuration(
         self, subject_config, global_config, make_input_dir
@@ -78,8 +75,7 @@ class TestSingleSeries:
         ] = VeinDetectionMode.FIRST.name
         wf = _build(subject_config, global_config, make_input_dir())
         assert (
-            wf.get_node("veins_check").inputs.detection_mode
-            == VeinDetectionMode.FIRST
+            wf.get_node("veins_check").inputs.detection_mode == VeinDetectionMode.FIRST
         )
 
 
