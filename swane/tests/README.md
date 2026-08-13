@@ -28,7 +28,8 @@ and workflow **construction** tests that assemble a builder's node graph and
 assert its structure. None of these run FSL/FreeSurfer/Slicer or read DICOM —
 workflow tests pass an empty directory as the "DICOM" input, since the path is
 only stored on a conversion node. Node/workflow *execution* that needs real
-tools and data stays in `integration/`.
+tools and data stays in `integration/`. See `nipype_pipeline/TODO_dicom.md` for
+what still needs modality-specific DICOM, FSL data files, or a code fix.
 
 ## Naming standard
 
