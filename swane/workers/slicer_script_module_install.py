@@ -2,6 +2,7 @@
 # Warning: slicer library is not required beacuse the script is executed in Slicer environment
 import sys
 
+
 def install_extensions_from_args(argv):
     """Install extensions given an argv-like list (argv[0] is script name).
 
@@ -18,7 +19,9 @@ def install_extensions_from_args(argv):
 
     for extensionName in extension_list:
         if not hasattr(slicer.moduleNames, extensionName):
-            if not hasattr(em, "installExtensionFromServer") or not em.installExtensionFromServer(extensionName, restart):
+            if not hasattr(
+                em, "installExtensionFromServer"
+            ) or not em.installExtensionFromServer(extensionName, restart):
                 errors.append(extensionName)
 
     if len(errors) == 0:
