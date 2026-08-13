@@ -83,7 +83,7 @@ class ThrROI(BaseInterface):
                 "ROI_"
                 + str(self.inputs.seg_val_min)
                 + "_"
-                + str(self.inputs.seg_val_min)
+                + str(self.inputs.seg_val_max)
                 + "_"
                 + os.path.basename(self.inputs.in_file)
             )
