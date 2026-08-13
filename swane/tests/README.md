@@ -15,14 +15,20 @@ swane/tests/
 ├── utils/                 # swane/utils   (Subject, DicomTree, managers, ...)
 ├── workers/               # swane/workers (DICOM search, Slicer, workflow, ...)
 ├── ui/                    # swane/ui      (head-less widget tests)
-├── nipype_pipeline/       # swane/nipype_pipeline (engine + node unit tests)
+├── nipype_pipeline/       # swane/nipype_pipeline
+│   ├── engine/            #   engine helpers (report, ram estimator, workflow)
+│   ├── nodes/             #   node interfaces (FSL-free logic)
+│   └── workflows/         #   workflow *construction* (graph structure only)
 └── integration/           # slow end-to-end tests (real FSL/FreeSurfer/Slicer)
 ```
 
 `swane/nipype_pipeline/` is covered by the light unit tests under
-`nipype_pipeline/` (engine helpers and pure-Python nodes that need no external
-tool). Node/workflow behaviour that requires FSL/FreeSurfer/Slicer stays in
-`integration/`.
+`nipype_pipeline/`: engine helpers, pure-Python (and pure-helper) node logic,
+and workflow **construction** tests that assemble a builder's node graph and
+assert its structure. None of these run FSL/FreeSurfer/Slicer or read DICOM —
+workflow tests pass an empty directory as the "DICOM" input, since the path is
+only stored on a conversion node. Node/workflow *execution* that needs real
+tools and data stays in `integration/`.
 
 ## Naming standard
 
