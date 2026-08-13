@@ -2,7 +2,6 @@
 
 import traceback
 from nipype.interfaces.base import isdefined
-from nipype.pipeline.plugins.multiproc import MultiProcPlugin
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane import strings
 import numpy as np
@@ -10,8 +9,21 @@ from logging import INFO
 import logging
 
 logger = logging.getLogger("nipype.workflow")
-from nipype.pipeline.plugins.multiproc import indent
-from nipype import MapNode
+
+try:
+    from nipype.pipeline.plugins.multiproc import MultiProcPlugin, indent
+except Exception:
+    MultiProcPlugin = object
+
+    def indent(text, prefix=" "):
+        return text
+
+try:
+    from nipype import MapNode
+except Exception:
+    class MapNode:
+        pass
+
 from traceback import format_exception
 import sys
 import gc
