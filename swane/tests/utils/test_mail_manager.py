@@ -63,8 +63,9 @@ def test_send_mail_uses_ssl_and_builds_message(monkeypatch):
 def test_connect_plain_uses_tls_handshake(monkeypatch):
     monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
 
-    mgr = MailManager("smtp.example.com", 587, "me@example.com", "pw",
-                      use_ssl=False, use_tls=True)
+    mgr = MailManager(
+        "smtp.example.com", 587, "me@example.com", "pw", use_ssl=False, use_tls=True
+    )
     mgr.connect()
 
     server = FakeSMTP.instances[0]

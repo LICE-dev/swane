@@ -24,48 +24,66 @@ class TestDicomSearchScenarios:
             worker.run()
 
             if scenario.files != -1:
-                assert worker.get_files_len() == scenario.files, (
-                    "file count for %s: expected %d got %d"
-                    % (scenario.name, scenario.files, worker.get_files_len())
+                assert (
+                    worker.get_files_len() == scenario.files
+                ), "file count for %s: expected %d got %d" % (
+                    scenario.name,
+                    scenario.files,
+                    worker.get_files_len(),
                 )
 
             subjects = worker.tree.get_subject_list()
             if scenario.subjects != -1:
-                assert len(subjects) == scenario.subjects, (
-                    "subject count for %s: expected %d got %d"
-                    % (scenario.name, scenario.subjects, len(subjects))
+                assert (
+                    len(subjects) == scenario.subjects
+                ), "subject count for %s: expected %d got %d" % (
+                    scenario.name,
+                    scenario.subjects,
+                    len(subjects),
                 )
             if not subjects:
                 continue
 
             studies = worker.tree.get_studies_list(subjects[0])
             if scenario.studies != -1:
-                assert len(studies) == scenario.studies, (
-                    "study count for %s: expected %d got %d"
-                    % (scenario.name, scenario.studies, len(studies))
+                assert (
+                    len(studies) == scenario.studies
+                ), "study count for %s: expected %d got %d" % (
+                    scenario.name,
+                    scenario.studies,
+                    len(studies),
                 )
             if not studies:
                 continue
 
             series = worker.tree.get_series_list(subjects[0], studies[0])
             if scenario.series != -1:
-                assert len(series) == scenario.series, (
-                    "series count for %s: expected %d got %d"
-                    % (scenario.name, scenario.series, len(series))
+                assert (
+                    len(series) == scenario.series
+                ), "series count for %s: expected %d got %d" % (
+                    scenario.name,
+                    scenario.series,
+                    len(series),
                 )
             if not series:
                 continue
 
             first = worker.tree.get_series(subjects[0], studies[0], series[0])
             if scenario.volumes != -1:
-                assert first.volumes == scenario.volumes, (
-                    "volume count for %s: expected %d got %d"
-                    % (scenario.name, scenario.volumes, first.volumes)
+                assert (
+                    first.volumes == scenario.volumes
+                ), "volume count for %s: expected %d got %d" % (
+                    scenario.name,
+                    scenario.volumes,
+                    first.volumes,
                 )
             if scenario.series_files != -1:
-                assert len(first.dicom_locs) == scenario.series_files, (
-                    "series file count for %s: expected %d got %d"
-                    % (scenario.name, scenario.series_files, len(first.dicom_locs))
+                assert (
+                    len(first.dicom_locs) == scenario.series_files
+                ), "series file count for %s: expected %d got %d" % (
+                    scenario.name,
+                    scenario.series_files,
+                    len(first.dicom_locs),
                 )
 
     def test_multiframe_volumes(self, phantom_dicom_tree):
@@ -129,8 +147,9 @@ class TestDicomSearchFiltering:
         worker = DicomSearchWorker(str(tmp_path))
         worker.run()
         assert worker.tree.get_subject_list() == []
-        assert any("DERIVED" in str(m) and "SECONDARY" in str(m)
-                   for m in worker.error_message)
+        assert any(
+            "DERIVED" in str(m) and "SECONDARY" in str(m) for m in worker.error_message
+        )
 
     def test_asl_and_projection_skipped(self, tmp_path):
         write_minimal_dicom(

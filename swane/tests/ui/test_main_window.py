@@ -24,7 +24,9 @@ class TestPreferencesWindow:
         assert isinstance(dialog, QDialog)
         assert dialog.windowTitle() != ""
 
-    def test_workflow_preferences_dialog(self, qtbot, global_config, dependency_manager):
+    def test_workflow_preferences_dialog(
+        self, qtbot, global_config, dependency_manager
+    ):
         dialog = PreferencesWindow(global_config, dependency_manager, is_workflow=True)
         qtbot.addWidget(dialog)
         assert isinstance(dialog, QDialog)

@@ -44,5 +44,6 @@ except Exception:
         def globalInstance():
             return _QThreadPoolGlobal()
 
+
 # Export names
 __all__ = ["Signal", "QObject", "QRunnable", "QThreadPool"]
