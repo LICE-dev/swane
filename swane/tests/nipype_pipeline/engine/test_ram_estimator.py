@@ -30,7 +30,7 @@ from swane.nipype_pipeline.nodes.ram_estimators import (
 # One GB expressed in voxels so that "multiplier == GB_IN_VOXELS" makes a
 # file's contribution equal exactly its spatial voxel count (in GB), cancelling
 # the /1024**3 division inside the estimator and keeping assertions exact.
-GB_IN_VOXELS = 1024 ** 3
+GB_IN_VOXELS = 1024**3
 
 
 class _DummyInputSpec(BaseInterfaceInputSpec):
@@ -246,12 +246,8 @@ class TestCalibratedEstimators:
         (FastRamEstimator, {"in_files": 110}, 0.3, 1, 8),
     ]
 
-    @pytest.mark.parametrize(
-        "cls, multipliers, overhead, min_gb, max_gb", CASES
-    )
-    def test_calibration_constants(
-        self, cls, multipliers, overhead, min_gb, max_gb
-    ):
+    @pytest.mark.parametrize("cls, multipliers, overhead, min_gb, max_gb", CASES)
+    def test_calibration_constants(self, cls, multipliers, overhead, min_gb, max_gb):
         """Each subclass keeps its empirically calibrated constants.
 
         These numbers were tuned from real ``mem_peak_gb`` measurements, so

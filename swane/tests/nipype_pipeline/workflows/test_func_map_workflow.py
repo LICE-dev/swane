@@ -39,8 +39,11 @@ class TestBasePipeline:
     ):
         """Conversion, smoothing, registration and masking always exist."""
         wf = _build(
-            subject_config, global_config, make_input_dir(),
-            FreesurferStep.DISABLED, ai=False,
+            subject_config,
+            global_config,
+            make_input_dir(),
+            FreesurferStep.DISABLED,
+            ai=False,
         )
         names = _node_names(wf)
         for expected in (
@@ -60,8 +63,11 @@ class TestBasePipeline:
     ):
         """With FreeSurfer disabled and AI off, no surface/z-score/AI nodes appear."""
         wf = _build(
-            subject_config, global_config, make_input_dir(),
-            FreesurferStep.DISABLED, ai=False,
+            subject_config,
+            global_config,
+            make_input_dir(),
+            FreesurferStep.DISABLED,
+            ai=False,
         )
         names = _node_names(wf)
         for absent in (
@@ -79,8 +85,11 @@ class TestFreesurferGating:
     ):
         """SYNTHSEG has parcellation but no surface: z-score yes, projections no."""
         wf = _build(
-            subject_config, global_config, make_input_dir(),
-            FreesurferStep.SYNTHSEG, ai=False,
+            subject_config,
+            global_config,
+            make_input_dir(),
+            FreesurferStep.SYNTHSEG,
+            ai=False,
         )
         names = _node_names(wf)
         assert "asl_zscore" in names
@@ -92,8 +101,11 @@ class TestFreesurferGating:
     ):
         """RECONALL provides surfaces: map and z-score are projected per hemisphere."""
         wf = _build(
-            subject_config, global_config, make_input_dir(),
-            FreesurferStep.RECONALL, ai=False,
+            subject_config,
+            global_config,
+            make_input_dir(),
+            FreesurferStep.RECONALL,
+            ai=False,
         )
         names = _node_names(wf)
         for expected in (
@@ -112,8 +124,11 @@ class TestAsymmetryIndex:
     ):
         """Enabling AI adds the symmetric-atlas warp, swap and AI map nodes."""
         wf = _build(
-            subject_config, global_config, make_input_dir(),
-            FreesurferStep.DISABLED, ai=True,
+            subject_config,
+            global_config,
+            make_input_dir(),
+            FreesurferStep.DISABLED,
+            ai=True,
         )
         names = _node_names(wf)
         for expected in (
@@ -131,14 +146,20 @@ class TestAsymmetryIndex:
     ):
         """AI surface projection appears only when FreeSurfer provides surfaces."""
         without_surface = _build(
-            subject_config, global_config, make_input_dir("d1"),
-            FreesurferStep.DISABLED, ai=True,
+            subject_config,
+            global_config,
+            make_input_dir("d1"),
+            FreesurferStep.DISABLED,
+            ai=True,
         )
         assert "asl_ai_surf_lh" not in _node_names(without_surface)
 
         with_surface = _build(
-            subject_config, global_config, make_input_dir("d2"),
-            FreesurferStep.RECONALL, ai=True,
+            subject_config,
+            global_config,
+            make_input_dir("d2"),
+            FreesurferStep.RECONALL,
+            ai=True,
         )
         assert "asl_ai_surf_lh" in _node_names(with_surface)
 
@@ -147,7 +168,10 @@ class TestAsymmetryIndex:
     ):
         """With AI off the asymmetry-index nodes are not created."""
         wf = _build(
-            subject_config, global_config, make_input_dir(),
-            FreesurferStep.RECONALL, ai=False,
+            subject_config,
+            global_config,
+            make_input_dir(),
+            FreesurferStep.RECONALL,
+            ai=False,
         )
         assert "asl_ai" not in _node_names(wf)

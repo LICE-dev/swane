@@ -22,8 +22,12 @@ class TestTTest:
         result = node.run()
 
         exp_t, exp_p = ttest_ind_from_stats(
-            mean1=lh[0], std1=lh[1], nobs1=lh[2],
-            mean2=rh[0], std2=rh[1], nobs2=rh[2],
+            mean1=lh[0],
+            std1=lh[1],
+            nobs1=lh[2],
+            mean2=rh[0],
+            std2=rh[1],
+            nobs2=rh[2],
         )
         assert result.outputs.stat_t == exp_t
         assert result.outputs.stat_p == exp_p

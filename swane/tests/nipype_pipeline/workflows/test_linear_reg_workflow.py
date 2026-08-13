@@ -25,9 +25,7 @@ def _build(subject_config, global_config, dicom_dir, **kwargs):
 
 
 class TestLinearRegWorkflow:
-    def test_default_full_coverage(
-        self, subject_config, global_config, make_input_dir
-    ):
+    def test_default_full_coverage(self, subject_config, global_config, make_input_dir):
         """Full coverage deskulls the moving image and warps both versions."""
         wf = _build(subject_config, global_config, make_input_dir())
         names = _names(wf)
@@ -47,7 +45,9 @@ class TestLinearRegWorkflow:
     ):
         """Partial coverage skips local deskulling and masks with the input mask."""
         wf = _build(
-            subject_config, global_config, make_input_dir(),
+            subject_config,
+            global_config,
+            make_input_dir(),
             is_partial_coverage=True,
         )
         names = _names(wf)
@@ -60,7 +60,9 @@ class TestLinearRegWorkflow:
     ):
         """Enabling bias correction inserts the N4 + re-deskull nodes."""
         wf = _build(
-            subject_config, global_config, make_input_dir(),
+            subject_config,
+            global_config,
+            make_input_dir(),
             bias_field_correction=True,
         )
         names = _names(wf)
