@@ -1,8 +1,10 @@
 import pydicom
 import os
-from PySide6.QtCore import Signal, QObject, QRunnable
+from swane.utils.qt_compat import Signal, QObject, QRunnable
 from swane.utils.DicomTree import DicomTree
-from dicom_sequence_classifier import extract_metadata, classify_dicom
+# Import dicom_sequence_classifier lazily inside find_series_classification to
+# avoid hard dependency at module import time (helps tests and environments
+# where the package may not be fully available).
 
 
 class DicomSearchSignal(QObject):
@@ -233,6 +235,16 @@ class DicomSearchWorker(QRunnable):
             The dicom series classification
 
         """
+
+        # Import locally so a missing dicom_sequence_classifier package (e.g. in
+        # a bare test environment) degrades gracefully to "Unknown" instead of
+        # breaking module import. Only the import is guarded: any error raised by
+        # the classifier itself is left to propagate, preserving the original
+        # behaviour.
+        try:
+            from dicom_sequence_classifier import extract_metadata, classify_dicom
+        except ImportError:
+            return "Unknown"
 
         meta = extract_metadata(ds)
         classification = classify_dicom(meta)

@@ -1,6 +1,6 @@
 import os
 import subprocess
-from PySide6.QtCore import QRunnable, Signal, QObject
+from swane.utils.qt_compat import QRunnable, Signal, QObject
 from swane import strings
 from swane.utils.DependencyManager import DependencyManager, DependenceStatus
 import platform

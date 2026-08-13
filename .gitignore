@@ -55,6 +55,7 @@ release
 build
 venv
 .venv/
+.venv-test/
 /.vscode
 /swane/.vscode
 /swane_supplement
