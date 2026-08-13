@@ -15,10 +15,14 @@ swane/tests/
 ├── utils/                 # swane/utils   (Subject, DicomTree, managers, ...)
 ├── workers/               # swane/workers (DICOM search, Slicer, workflow, ...)
 ├── ui/                    # swane/ui      (head-less widget tests)
+├── nipype_pipeline/       # swane/nipype_pipeline (engine + node unit tests)
 └── integration/           # slow end-to-end tests (real FSL/FreeSurfer/Slicer)
 ```
 
-`swane/nipype_pipeline/` is intentionally **not** covered here yet.
+`swane/nipype_pipeline/` is covered by the light unit tests under
+`nipype_pipeline/` (engine helpers and pure-Python nodes that need no external
+tool). Node/workflow behaviour that requires FSL/FreeSurfer/Slicer stays in
+`integration/`.
 
 ## Naming standard
 
