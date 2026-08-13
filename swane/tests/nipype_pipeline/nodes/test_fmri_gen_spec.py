@@ -39,9 +39,7 @@ class TestRARADesign:
     def test_single_contrast_against_rest(self):
         """RARA yields one 'task-vs-rest' T contrast for task A."""
         outputs = _run(BlockDesign.RARA)
-        assert outputs.contrasts == [
-            ["TaskA_versus_Rest", "T", ["TaskA"], [1]]
-        ]
+        assert outputs.contrasts == [["TaskA_versus_Rest", "T", ["TaskA"], [1]]]
 
     def test_onsets_start_after_rest_and_step_by_task_plus_rest(self):
         """Onsets are ``range(rest, TR*nvols, task+rest)``.
@@ -81,9 +79,7 @@ class TestRARBDesign:
 class TestCustomTaskNames:
     def test_custom_task_names_flow_into_contrasts_and_outputs(self):
         """Explicit task names replace the defaults in contrasts and outputs."""
-        outputs = _run(
-            BlockDesign.RARB, task_a_name="Fingers", task_b_name="Toes"
-        )
+        outputs = _run(BlockDesign.RARB, task_a_name="Fingers", task_b_name="Toes")
         assert outputs.task_a_name == "Fingers"
         assert outputs.task_b_name == "Toes"
         assert outputs.contrasts[0][0] == "Fingers_versus_Toes"
