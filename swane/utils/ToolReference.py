@@ -31,7 +31,9 @@ def get_command_info(key: str) -> ToolReference:
 
 
 utilities_url = "https://fsl.fmrib.ox.ac.uk/fsl/docs/utilities/fslutils.html#"
-spatialimages_url = "https://nipy.org/nibabel/reference/nibabel.spatialimages.html#spatialimage"
+spatialimages_url = (
+    "https://nipy.org/nibabel/reference/nibabel.spatialimages.html#spatialimage"
+)
 nibabel_reference = "https://doi.org/10.5281/zenodo.591597"
 
 tool_reference_list = {
@@ -188,22 +190,37 @@ tool_reference_list = {
         command="fslmerge", package=Package.FSL, url=utilities_url, references=[]
     ),
     "ForceOrient": ToolReference(
-        command="orientations [NiBabel]", package=Package.NIPY, url="https://nipy.org/nibabel/reference/nibabel.orientations.html", references=[nibabel_reference]
+        command="orientations [NiBabel]",
+        package=Package.NIPY,
+        url="https://nipy.org/nibabel/reference/nibabel.orientations.html",
+        references=[nibabel_reference],
     ),
     "MathsCommand": ToolReference(
         command="fslmaths", package=Package.FSL, url=utilities_url, references=[]
     ),
     "NVols": ToolReference(
-        command="spatialimages [NiBabel]", package=Package.NIPY, url=spatialimages_url, references=[nibabel_reference]
+        command="spatialimages [NiBabel]",
+        package=Package.NIPY,
+        url=spatialimages_url,
+        references=[nibabel_reference],
     ),
     "GetNiftiTR": ToolReference(
-        command="spatialimages [NiBabel]", package=Package.NIPY, url=spatialimages_url, references=[nibabel_reference]
+        command="spatialimages [NiBabel]",
+        package=Package.NIPY,
+        url=spatialimages_url,
+        references=[nibabel_reference],
     ),
     "ExtractVolumes": ToolReference(
-        command="spatialimages [NiBabel]", package=Package.NIPY, url=spatialimages_url, references=[nibabel_reference]
+        command="spatialimages [NiBabel]",
+        package=Package.NIPY,
+        url=spatialimages_url,
+        references=[nibabel_reference],
     ),
     "DeleteVolumes": ToolReference(
-        command="spatialimages [NiBabel]", package=Package.NIPY, url=spatialimages_url, references=[nibabel_reference]
+        command="spatialimages [NiBabel]",
+        package=Package.NIPY,
+        url=spatialimages_url,
+        references=[nibabel_reference],
     ),
     "ImageStatistics": ToolReference(
         command="statistics [NumPy]",

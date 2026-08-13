@@ -7,7 +7,6 @@ from nipype.interfaces.dcm2nii import Dcm2niix, Dcm2niixInputSpec
 from nipype.pipeline.engine.nodes import NodeExecutionError
 from nipype.interfaces.base import traits
 
-
 # absolute path to the dcm2niix binary shipped by the pip package, so no
 # system dcm2niix installation is required. The package exposes the path
 # without the Windows suffix, so we add it ourselves when needed

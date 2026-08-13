@@ -51,9 +51,7 @@ class DeleteVolumes(BaseInterface):
         return runtime
 
     def _new_nvols(self):
-        return (
-            self.inputs.nvols - self.inputs.del_start_vols - self.inputs.del_end_vols
-        )
+        return self.inputs.nvols - self.inputs.del_start_vols - self.inputs.del_end_vols
 
     def _gen_outfilename(self):
         out_file = self.inputs.out_file
