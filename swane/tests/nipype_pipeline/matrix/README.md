@@ -73,6 +73,28 @@ assertion instead of a snapshot.
 
 ## Running
 
+### Prerequisites — no DICOM, no neuroimaging tools
+
+These tests need **no DICOM data** and **no FSL / FreeSurfer / Slicer / dcm2niix
+executable**. You do **not** place any DICOM anywhere: each test creates its own
+empty temporary "DICOM" folder. The only requirement is the Python test
+environment:
+
+```bash
+pip install -e . pytest pytest-qt pytest-xdist
+```
+
+`pip install -e .` pulls in the `dcm2niix` **Python package** (a bundled binary),
+which the workflow modules import at load time. Without it the `workflows/` and
+`matrix/` tests do not even *collect* — this is the one and only gotcha.
+
+> The real `paziente 0` DICOM under the repo-root `dicom/` folder is **only** for
+> the future execution/integration tests (real conversion + FSL/FreeSurfer/Slicer,
+> marked `heavy`/`requires_*`). It is git-ignored and irrelevant to this suite —
+> see `../TODO_dicom.md`.
+
+### Commands
+
 ```bash
 # compare against the committed golden snapshots (regression guard)
 pytest swane/tests/nipype_pipeline/matrix
@@ -83,9 +105,6 @@ SWANE_SNAPSHOT_UPDATE=1 pytest swane/tests/nipype_pipeline/matrix
 # regenerate the reports (MATRIX.md + local HTML) after refreshing snapshots
 python swane/tests/nipype_pipeline/matrix/generate_report.py
 ```
-
-> Requires the `dcm2niix` Python package (bundled binary) so the workflow modules
-> import — it is declared in `setup.py`, installed by `pip install -e .`.
 
 ## Adding a workflow / scenario
 
