@@ -302,9 +302,15 @@ def load_fmri_resting_state(scene_dir: str):
         return
 
     pattern = "r-*[0-9].nii.gz"
-    zstat_files = glob.glob(pattern, root_dir=fmri_dir)
+    pattern = os.path.join(fmri_dir, "r-*[0-9].nii.gz")
+    zstat_files = glob.glob(pattern)
+
     for zstat_file in sorted(zstat_files):
-        load_anat(fmri_dir, zstat_file, "vtkMRMLColorTableNodeFileColdToHotRainbow.txt")
+        load_anat(
+            fmri_dir,
+            os.path.basename(zstat_file),
+            "vtkMRMLColorTableNodeFileColdToHotRainbow.txt",
+        )
 
 
 def create_grayscale_model(
@@ -826,9 +832,9 @@ def main_export():
         "r-mdc_brain",
         "r-mdc",
         "r-FA",
-        "r-flair2d_tra_brain",
-        "r-flair2d_cor_brain",
-        "r-flair2d_sag_brain",
+        "r-flair2d_transverse_brain",
+        "r-flair2d_coronal_brain",
+        "r-flair2d_sagittal_brain",
         "r-t2_cor_brain",
         "r-t2_cor",
         "r-binary_flair",
