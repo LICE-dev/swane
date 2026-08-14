@@ -88,6 +88,46 @@ lasciarli all'integrazione con FSL reale.
   poter aggiungere un test di costruzione per il task fMRI. Finché non è
   risolto, `fMRI_task_workflow` non è testabile nemmeno a livello di grafo.
 
+## 4. Validazione scientifica degli output (oltre "gira")
+
+I §1–§3 riguardano l'infrastruttura per arrivare a **eseguire** i workflow. Ma
+"il grafo si costruisce" ≠ "il workflow gira" ≠ "il risultato è **corretto**".
+I test matrix di `matrix/` coprono solo il primo livello; il §1 porta al secondo
+("gira: nessun crash, output generati"). Questa sezione traccia il terzo livello,
+che **non è ancora coperto da nessun test**: verificare che gli output siano
+scientificamente plausibili, non solo presenti.
+
+Serve un ambiente neuroimaging reale (Linux/macOS + FSL/FreeSurfer/Slicer) e dei
+**riferimenti de-identificati "buoni"** (output di una run verificata a mano) da
+tenere **fuori dal repo** — mai committare risultati clinici o dati paziente
+(vedi `AGENTS.md`).
+
+Cosa confrontare, per ogni output rilevante:
+
+- **Geometria/header**: affine, orientamento, voxel size e dimensioni preservati
+  dove il nodo non deve trasformarli; nessun flip/rotazione spuria.
+- **Direzione delle registrazioni**: reference vs moving corretti (soprattutto
+  reference/atlas e le catene di warp/inverse-warp); l'output finisce nello
+  spazio atteso (T13D ref, MNI, spazio diffusione, ecc.).
+- **Interpolazione**: `trilinear`/spline per immagini scalari, `nearestneighbour`
+  per maschere/label/segmentazioni; nessuna label "sporcata" da interpolazione.
+- **Skull strip / maschere**: cervello plausibile (né tagliato né con cranio
+  residuo) al variare di `bet_thr`/bias/SynthStrip.
+- **Valori e range**: soglie, unità, TR/`pixdim4`, numero e ordine dei volumi,
+  z-score/AI nei range attesi; seed e conteggi coerenti.
+- **Equivalenza CPU vs GPU/CUDA**: i percorsi `use_cuda`/`use_gpu` (eddy,
+  bedpostx, probtrackx) devono dare output equivalenti a livello di contratto,
+  non solo "terminare".
+- **Consumatori a valle**: DataSink (nomi/cartelle risultato), export, Slicer e
+  visualizzazione ricevono i file col contratto atteso.
+
+Approccio suggerito: a valle del §1, per un sottoinsieme di modalità/scenari,
+confrontare gli output contro i riferimenti con tolleranze esplicite (es.
+`nibabel`/`numpy.allclose` su affine e dati, controllo header, diff di maschere)
+— separando sempre la **regressione software** (l'output non è cambiato tra due
+versioni di SWANe) dalla **validazione clinica** (l'output è giusto per il
+paziente), che resta responsabilità umana.
+
 ## Riepilogo copertura workflow (costruzione)
 
 | Workflow | Costruzione testata | Matrice+snapshot | Note |
