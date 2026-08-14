@@ -1,0 +1,76 @@
+# workflow snapshot: venous_mr / single_series_sd
+#
+#   synth_morph = false
+#   synth_strip = false
+#   two_series = False
+#   vein_detection_mode = SD
+#
+# nodes=12 edges=15
+
+- anat_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'mutualinfo'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    interp = 'trilinear'
+    output_type = 'NIFTI'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- vein_mr_deskull_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    frac = 0.4
+    mask = True
+    output_type = 'NIFTI'
+    surfaces = True
+    threshold = False
+- veins_2_ref_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    output_type = 'NIFTI'
+- veins_check [VenousCheck] mem_gb=0.2 n_procs=1
+    detection_mode = <VeinDetectionMode.SD: 'Automatic (standard deviation)'>
+- veins_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'veins'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/phase1'
+    verbose = False
+- veins_inskull_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    output_type = 'NIFTI'
+- veins_range [ImageStatistics] mem_gb=0.2 n_procs=1
+    percentiles = []
+- veins_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
+- veins_rescale [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    out_file = 'r-veins_mra_inskull.nii.gz'
+    output_type = 'NIFTI'
+- veins_split [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def split_volumes(in_file):\n    import os\n    import nibabel as nib\n\n    img = nib.load(in_file)\n    out_files = []\n    for index in range(img.shape[-1]):\n        out_file = os.path.abspath("vol%04d.nii.gz" % index)\n        nib.save(img.slicer[..., index], out_file)\n        out_files.append(out_file)\n    return out_files\n'
+# connections
+anat_2_ref_flirt.out_matrix_file -> veins_2_ref_apply_xfm.in_matrix_file
+inputnode.reference -> veins_2_ref_apply_xfm.reference
+inputnode.reference_brain -> anat_2_ref_flirt.reference
+vein_mr_deskull_bet.inskull_mask_file -> veins_inskull_mask.mask_file
+veins_2_ref_apply_xfm.out_file -> veins_range.in_file
+veins_2_ref_apply_xfm.out_file -> veins_rescale.in_file
+veins_check.out_file_anat -> anat_2_ref_flirt.in_file
+veins_check.out_file_anat -> vein_mr_deskull_bet.in_file
+veins_check.out_file_veins -> veins_inskull_mask.in_file
+veins_conv.converted_files -> veins_reOrient.in_file
+veins_inskull_mask.out_file -> veins_2_ref_apply_xfm.in_file
+veins_range.('max_value', 'def rescale_string(max_value):\n    op_string = "-mul 100 -div %f" % max_value\n    return op_string\n', ()) -> veins_rescale.op_string
+veins_reOrient.out_file -> veins_split.in_file
+veins_rescale.out_file -> outputnode.veins
+veins_split.out_files -> veins_check.in_files

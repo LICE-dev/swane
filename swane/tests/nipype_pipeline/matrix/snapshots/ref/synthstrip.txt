@@ -1,0 +1,57 @@
+# workflow snapshot: ref / synthstrip
+#
+#   bet_bias_correction = false
+#   bet_thr = 0.3
+#   synth_strip = true
+#
+# nodes=8 edges=12
+
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- ref_bias_correction [N4BiasFieldCorrection] mem_gb=2 n_procs=1
+    out_file = 'ref.nii.gz'
+    skull_stripped = False
+- ref_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'converted'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- ref_corrected_deskull [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    out_file = 'ref_brain.nii.gz'
+    output_type = 'NIFTI'
+- ref_deskull_biased_synthstrip [SynthStrip] cmd=mri_synthstrip mem_gb=5 n_procs=1
+    environ = {}
+    exclude_csf = True
+    mask_file = 'brain_mask.nii.gz'
+- ref_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
+- ref_reScale [CropFov] mem_gb=0.2 n_procs=1
+    max_dim = 256
+    out_file = 'ref_uncorrected.nii.gz'
+- ref_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    out_roi = 'ref_robustfov.nii.gz'
+    output_type = 'NIFTI'
+# connections
+ref_bias_correction.out_file -> outputnode.reference
+ref_bias_correction.out_file -> ref_corrected_deskull.in_file
+ref_conv.converted_files -> ref_reOrient.in_file
+ref_corrected_deskull.out_file -> outputnode.reference_brain
+ref_deskull_biased_synthstrip.mask_file -> outputnode.ref_mask
+ref_deskull_biased_synthstrip.mask_file -> ref_bias_correction.mask_file
+ref_deskull_biased_synthstrip.mask_file -> ref_corrected_deskull.mask_file
+ref_deskull_biased_synthstrip.out_file -> outputnode.uncorrected_reference_brain
+ref_reOrient.out_file -> ref_robustfov.in_file
+ref_reScale.out_file -> outputnode.uncorrected_reference
+ref_reScale.out_file -> ref_bias_correction.in_file
+ref_reScale.out_file -> ref_deskull_biased_synthstrip.in_file
+ref_robustfov.out_roi -> ref_reScale.in_file

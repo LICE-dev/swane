@@ -47,6 +47,12 @@ Thumbs.db
 *.mov
 *.wmv
 
+# Real / patient DICOM must never be committed (see AGENTS.md, tests/README.md)
+dicom/
+
+# Generated workflow-matrix report (rebuild with matrix/generate_report.py)
+matrix_report.html
+
 .spyproject
 SWANe.egg-info
 swane.egg-info
