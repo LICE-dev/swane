@@ -18,7 +18,8 @@ swane/tests/
 ├── nipype_pipeline/       # swane/nipype_pipeline
 │   ├── engine/            #   engine helpers (report, ram estimator, workflow)
 │   ├── nodes/             #   node interfaces (FSL-free logic)
-│   └── workflows/         #   workflow *construction* (graph structure only)
+│   ├── workflows/         #   workflow *construction* (graph structure only)
+│   └── matrix/            #   settings matrix + golden snapshots (incl. CUDA on/off)
 └── integration/           # slow end-to-end tests (real FSL/FreeSurfer/Slicer)
 ```
 
@@ -30,6 +31,15 @@ workflow tests pass an empty directory as the "DICOM" input, since the path is
 only stored on a conversion node. Node/workflow *execution* that needs real
 tools and data stays in `integration/`. See `nipype_pipeline/TODO_dicom.md` for
 what still needs modality-specific DICOM, FSL data files, or a code fix.
+
+`nipype_pipeline/matrix/` builds each workflow factory across a matrix of
+settings (including **CUDA on/off**) and records a deterministic golden
+*snapshot* of every resulting graph under `matrix/snapshots/`, so both a
+reviewer and the regression suite can check what SWANe assembles for each
+configuration. Browse the generated overview in
+[`nipype_pipeline/matrix/MATRIX.md`](nipype_pipeline/matrix/MATRIX.md); see
+[`nipype_pipeline/matrix/README.md`](nipype_pipeline/matrix/README.md) for how it
+works.
 
 ## Naming standard
 

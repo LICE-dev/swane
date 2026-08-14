@@ -1,0 +1,112 @@
+# workflow snapshot: freesurfer / reconall_hippo
+#
+#   hippo_amyg_labels = True
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
+#   step = RECONALL
+#   synth_reconall = false
+#
+# nodes=15 edges=25
+
+- aparc_aseg2nii [ApplyVolTransform] cmd=mri_vol2vol mem_gb=0.2 n_procs=1
+    environ = {}
+    interp = 'nearest'
+    reg_header = True
+    transformed_file = 'r-aparc_aseg.nii.gz'
+- aparc_aseg2ref [ApplyVolTransform] cmd=mri_vol2vol mem_gb=0.2 n_procs=1
+    environ = {}
+    interp = 'nearest'
+    reg_header = True
+    transformed_file = 'r-aparc_aseg.mgz'
+- bgROI [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    operation = 'add'
+    out_file = 'bgROI.nii.gz'
+    output_type = 'NIFTI'
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- lh_ha2ref [ApplyVolTransform] cmd=mri_vol2vol mem_gb=0.2 n_procs=1
+    environ = {}
+    interp = 'nearest'
+    reg_header = True
+    transformed_file = 'r-lh_hippoAmygLabels.mgz'
+- lhbgROI [ThrROI] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    out_file = 'lhbgROI.nii.gz'
+    output_type = 'NIFTI'
+    seg_val_max = 13.0
+    seg_val_min = 11.0
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- reconAll [ReconAll] cmd=recon-all mem_gb=5 n_procs=4
+    args = '-no-isrunning'
+    directive = 'autorecon3'
+    environ = {FS_V8_XOPTS='0'}
+    openmp = 4
+    parallel = True
+- recon_all_recon1 [ReconAll] cmd=recon-all mem_gb=5 n_procs=4
+    args = '-no-isrunning'
+    directive = 'autorecon1'
+    environ = {FS_V8_XOPTS='0'}
+    openmp = 4
+    parallel = True
+    subject_id = 'FS'
+- recon_all_recon2 [ReconAll] cmd=recon-all mem_gb=5 n_procs=4
+    args = '-no-isrunning'
+    directive = 'autorecon2'
+    environ = {FS_V8_XOPTS='0'}
+    openmp = 4
+    parallel = True
+- recon_all_recon_pial [ReconAll] cmd=recon-all mem_gb=5 n_procs=4
+    args = '-no-isrunning'
+    directive = 'autorecon-pial'
+    environ = {FS_V8_XOPTS='0'}
+    openmp = 4
+    parallel = True
+- rh_ha2ref [ApplyVolTransform] cmd=mri_vol2vol mem_gb=0.2 n_procs=1
+    environ = {}
+    interp = 'nearest'
+    reg_header = True
+    transformed_file = 'r-rh_hippoAmygLabels.mgz'
+- rhbgROI [ThrROI] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI'}
+    out_file = 'rhbgROI.nii.gz'
+    output_type = 'NIFTI'
+    seg_val_max = 52.0
+    seg_val_min = 50.0
+- segment_ha [SegmentHA] cmd=segmentHA_T1.sh mem_gb=5 n_procs=1
+    environ = {}
+    num_cpu = 4
+    subject_id = 'recon_all'
+- segmentation_holder [IdentityInterface] mem_gb=0.2 n_procs=1
+# connections
+aparc_aseg2nii.transformed_file -> outputnode.vol_label_file_nii
+aparc_aseg2nii.transformed_file -> segmentation_holder.seg_nii
+aparc_aseg2ref.transformed_file -> outputnode.vol_label_file
+bgROI.out_file -> outputnode.bgROI
+inputnode.reference -> aparc_aseg2nii.target_file
+inputnode.reference -> aparc_aseg2ref.target_file
+inputnode.reference -> lh_ha2ref.target_file
+inputnode.reference -> recon_all_recon1.T1_files
+inputnode.reference -> rh_ha2ref.target_file
+inputnode.subjects_dir -> recon_all_recon1.subjects_dir
+lh_ha2ref.transformed_file -> outputnode.rh_hippoAmygLabels
+lhbgROI.out_file -> bgROI.in_file
+recon_all_recon1.subject_id -> outputnode.subject_id
+recon_all_recon1.subject_id -> recon_all_recon2.subject_id
+recon_all_recon1.subjects_dir -> outputnode.subjects_dir
+recon_all_recon1.subjects_dir -> recon_all_recon2.subjects_dir
+recon_all_recon2.subject_id -> recon_all_recon_pial.subject_id
+recon_all_recon2.subjects_dir -> recon_all_recon_pial.subjects_dir
+recon_all_recon_pial.('aparc_aseg', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n\n    return result_list[index]\n', (0,)) -> aparc_aseg2nii.source_file
+recon_all_recon_pial.('aparc_aseg', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n\n    return result_list[index]\n', (0,)) -> aparc_aseg2ref.source_file
+recon_all_recon_pial.pial -> outputnode.pial
+recon_all_recon_pial.subject_id -> reconAll.subject_id
+recon_all_recon_pial.subject_id -> segment_ha.subject_id
+recon_all_recon_pial.subjects_dir -> reconAll.subjects_dir
+recon_all_recon_pial.subjects_dir -> segment_ha.subjects_dir
+recon_all_recon_pial.white -> outputnode.white
+rh_ha2ref.transformed_file -> outputnode.lh_hippoAmygLabels
+rhbgROI.out_file -> bgROI.operand_file
+segment_ha.lh_hippoAmygLabels -> lh_ha2ref.source_file
+segment_ha.rh_hippoAmygLabels -> rh_ha2ref.source_file
+segmentation_holder.seg_nii -> lhbgROI.in_file
+segmentation_holder.seg_nii -> rhbgROI.in_file

@@ -12,6 +12,16 @@ dati sintetici o come fornirli.
   FSL vs Synth, ramificazioni da preferenze). I builder ricevono le directory
   DICOM solo come stringhe (memorizzate su un nodo di conversione), quindi si
   costruiscono con cartelle vuote. **Nessuna esecuzione**, nessun DICOM.
+- **matrix/**: *matrice di setting* + **snapshot golden** deterministici. Per
+  ogni workflow factory costruisce il grafo su tutte le combinazioni di
+  preferenze rilevanti (incluso **CUDA on/off** per DTI) e salva uno snapshot
+  testuale leggibile in `matrix/snapshots/<workflow>/<scenario>.txt`, usato sia
+  come guardia di regressione sia come output da controllare a mano. Vedi
+  `matrix/README.md`. Rigenerabile con `SWANE_SNAPSHOT_UPDATE=1`; report HTML
+  navigabile con `python matrix/generate_report.py`.
+  > NB: i workflow importano il pacchetto Python `dcm2niix` (binario incluso,
+  > dichiarato in `setup.py`). Se manca nell'ambiente, i test `workflows/` e
+  > `matrix/` non si *raccolgono* nemmeno: `pip install -e .` lo installa.
 
 ## 1. Esecuzione end-to-end → serve DICOM specifico per modalità
 
@@ -80,15 +90,15 @@ lasciarli all'integrazione con FSL reale.
 
 ## Riepilogo copertura workflow (costruzione)
 
-| Workflow | Costruzione testata | Note |
-|----------|--------------------|------|
-| ref, linear_reg, nonlinear_reg | ✅ | backend FSL/Synth |
-| freesurfer, freesurfer_asymmetry_index | ✅ | step + hippo |
-| func_map (ASL/PET), venous_mr | ✅ | FreeSurfer/AI/detection |
-| venous_ct, seeg_ct | ✅ | |
-| flat1 | ✅ | backend FSL/Synth |
-| dti_preproc | ✅ (no tractography) | ramo tractography → §2 |
-| fMRI_preproc | ✅ | |
-| fMRI_resting_state | ✅ (aroma off) | ramo aroma → §2 |
-| tractography | ✅ (solo guardia → None) | tratto reale → §2 |
-| **fMRI_task** | ❌ | §3 bug FILMGLS |
+| Workflow | Costruzione testata | Matrice+snapshot | Note |
+|----------|--------------------|------------------|------|
+| ref, linear_reg, nonlinear_reg | ✅ | ✅ | backend FSL/Synth, bias/thr, coverage |
+| freesurfer, freesurfer_asymmetry_index | ✅ | ✅ | step + hippo + synth recon-all |
+| func_map (ASL/PET), venous_mr | ✅ | ✅ | FreeSurfer/AI/detection/serie |
+| venous_ct, seeg_ct | ✅ | ✅ | contrasto/soglie |
+| flat1 | ✅ | ✅ | backend FSL/Synth |
+| dti_preproc | ✅ (no tractography) | ✅ (**CUDA on/off**, eddy, core-limit) | ramo tractography → §2 |
+| fMRI_preproc | ✅ | ✅ | slice timing, trim volumi |
+| fMRI_resting_state | ✅ (aroma off) | ✅ (aroma off) | ramo aroma → §2 |
+| tractography | ✅ (solo guardia → None) | ✅ (guardia → None) | tratto reale + `use_gpu` → §2 |
+| **fMRI_task** | ❌ | ❌ (strict xfail) | §3 bug FILMGLS |

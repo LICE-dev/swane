@@ -1,0 +1,9 @@
+# workflow snapshot: freesurfer / disabled_returns_none
+#
+#   hippo_amyg_labels = False
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
+#   step = DISABLED
+#   synth_reconall = false
+#
+(builder returned None — no graph constructed)

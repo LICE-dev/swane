@@ -1,0 +1,6 @@
+# workflow snapshot: tractography / known_tract_without_xtract
+#
+#   tract = cst
+#   xtract_data = absent
+#
+(builder returned None — no graph constructed)
