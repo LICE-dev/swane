@@ -20,9 +20,9 @@ given data file (or FSL entirely) those scenarios **skip** — never fail — vi
 plain Windows/CI box. The golden snapshots for the data-gated scenarios are
 generated on an equipped box and committed (FSL paths rewritten to `<FSLDIR>`).
 
-For the complementary *execution* work (real dcm2niix conversion of the
-`paziente 0` series, FSL/FreeSurfer/Slicer runs, GPU `use_cuda`/`use_gpu`
-equivalence), see `../TODO_dicom.md`.
+For the complementary *execution* work (real dcm2niix conversion, FSL/FreeSurfer/
+Slicer runs, GPU `use_cuda`/`use_gpu` equivalence) against out-of-tree real
+DICOM data, see `../TODO_dicom.md` and `../../integration/test_real_execution.py`.
 
 ## Layout
 
@@ -102,10 +102,10 @@ To exercise (not just skip) the data-gated scenarios, run on a box with a real
 FSL install whose `$FSLDIR/data` includes the MNI standard templates and the
 XTRACT protocol data.
 
-> The real `paziente 0` DICOM under the repo-root `dicom/` folder is **only** for
-> the future execution/integration tests (real conversion + FSL/FreeSurfer/Slicer,
-> marked `heavy`/`requires_*`). It is git-ignored and irrelevant to this suite —
-> see `../TODO_dicom.md`.
+> Real DICOM data (supplied out-of-tree via `SWANE_TEST_DICOM_DIR`, never
+> committed) is only for the execution/integration tests (real conversion +
+> FSL/FreeSurfer/Slicer, marked `heavy`/`requires_*`) and is irrelevant to this
+> suite — see `../TODO_dicom.md` and `../../integration/test_real_execution.py`.
 
 ### Commands
 
