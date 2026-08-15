@@ -290,15 +290,17 @@ class ConfigManager(configparser.ConfigParser):
 
     def set_slicer_validator(self, value: bool):
         """
-        Returns
-        -------
-        A bool, true if slicer executable validation needs to be checked
+        Set whether the slicer executable validation needs to be checked
+
+        Parameters
+        ----------
+        value: bool
+            True if slicer executable validation needs to be checked
         """
         if self.global_config:
             self[GlobalPrefCategoryList.MAIN][
                 "slicer_path" + self.VALIDATION_SUFFIX
             ] = str(value)
-        return False
 
     def set_slicer_path(self, slicer_path: str):
         """
@@ -410,12 +412,7 @@ class ConfigManager(configparser.ConfigParser):
         use_ssl = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, "use_ssl")
         use_tls = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, "use_tls")
 
-        if (
-            server_address == ""
-            or server_port == ""
-            or username == ""
-            or password == ""
-        ):
+        if server_address == "" or server_port <= 0 or username == "" or password == "":
             return None
 
         mail_manager = MailManager(
@@ -453,7 +450,11 @@ class ConfigManager(configparser.ConfigParser):
                         changed = True
                         continue
 
-                if WF_PREFERENCES[section][option].input_type == InputTypes.ENUM:
+                if (
+                    WF_PREFERENCES[section][option].input_type == InputTypes.ENUM
+                    and self[section][option]
+                    in WF_PREFERENCES[section][option].value_enum.__members__
+                ):
                     enum_cls = WF_PREFERENCES[section][option].value_enum
                     value_enum = enum_cls[self[section][option]]
                     if value_enum in WF_PREFERENCES[section][option].option_dependency:
@@ -538,10 +539,10 @@ class ConfigManager(configparser.ConfigParser):
                 section in self._section_defaults
                 and option in self._section_defaults[section]
             ):
-                if type(self._section_defaults[section]) is list:
-                    ret = self._section_defaults[section].default[0]
+                if type(self._section_defaults[section][option].default) is list:
+                    ret = str(self._section_defaults[section][option].default[0])
                 else:
-                    ret = self._section_defaults[section].default
+                    ret = str(self._section_defaults[section][option].default)
                 if ret.lower() in configparser.ConfigParser.BOOLEAN_STATES:
                     return configparser.ConfigParser.BOOLEAN_STATES[ret.lower()]
         raise Exception()
@@ -582,7 +583,7 @@ class ConfigManager(configparser.ConfigParser):
                 and option in self._section_defaults[section]
             ):
                 if type(self._section_defaults[section][option].default) is list:
-                    return 0
+                    return int(self._section_defaults[section][option].default[0])
                 else:
                     return int(self._section_defaults[section][option].default)
         raise Exception("Error for %s - %s" % (str(section), str(option)))
@@ -656,6 +657,11 @@ class ConfigManager(configparser.ConfigParser):
         The option values as Enum
         """
         section = str(section)
+        if (
+            section not in self._section_defaults
+            or option not in self._section_defaults[section]
+        ):
+            raise Exception("Error for %s - %s" % (str(section), str(option)))
         if self._section_defaults[section][option].value_enum is None:
             raise Exception("No value_enum for %s - %s" % (str(section), str(option)))
 
