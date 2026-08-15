@@ -48,6 +48,9 @@ mainwindow_update_available = (
 )
 mainwindow_new_subj_name = "Write the name of the new subject:"
 mainwindow_new_subj_title = "New subject"
+mainwindow_new_subj_config_error = (
+    "Unable to create the subject workflow configuration."
+)
 mainwindow_new_subj_created = "New subject created: "
 mainwindow_new_subj_name_error = "Invalid name: "
 mainwindow_subj_exists_error = "This subject already exists: "
