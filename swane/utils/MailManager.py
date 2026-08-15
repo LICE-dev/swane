@@ -77,8 +77,16 @@ class MailManager:
 
         """
 
-        if self.server:
-            self.server.quit()
+        if self.server is not None:
+            try:
+                self.server.quit()
+            except Exception:
+                # Cleanup must not raise: a failing quit() (e.g. on an already
+                # broken socket after a failed login) would otherwise mask the
+                # original error raised by connect()/send_mail().
+                pass
+            finally:
+                self.server = None
 
     def send_mail(self, from_addr, to_addr, subject, body):
         """
@@ -86,18 +94,17 @@ class MailManager:
 
         """
 
-        try:
-            message = MIMEMultipart()
-            message["From"] = from_addr
-            message["To"] = to_addr
-            message["Subject"] = subject
-            message.attach(MIMEText(body, "html"))
+        message = MIMEMultipart()
+        message["From"] = from_addr
+        message["To"] = to_addr
+        message["Subject"] = subject
+        message.attach(MIMEText(body, "html"))
 
+        try:
             self.connect()
             self.server.send_message(message)
+        finally:
             self.disconnect()
-        except Exception as e:
-            raise
 
     def send_report(self, body):
         """
