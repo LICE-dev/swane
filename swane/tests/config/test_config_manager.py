@@ -138,9 +138,9 @@ class TestSubjectConfig:
         global_config_dir = tmp_path / "global"
         global_config_dir.mkdir()
         global_config = ConfigManager(global_base_folder=str(global_config_dir))
-        global_config[GlobalPrefCategoryList.MAIN]["default_wf_type"] = (
-            WorkflowTypes.FUNCTIONAL.name
-        )
+        global_config[GlobalPrefCategoryList.MAIN][
+            "default_wf_type"
+        ] = WorkflowTypes.FUNCTIONAL.name
 
         config = ConfigManager(str(subject_folder), global_config=global_config)
 
