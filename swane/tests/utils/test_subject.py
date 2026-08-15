@@ -5,7 +5,10 @@ now fed by phantom DICOMs) and the lightweight folder-validation checks.
 """
 
 import os
+from types import SimpleNamespace
 
+import swane.utils.Subject as subject_module
+from swane.utils.DicomTree import DicomTree
 from swane.utils.Subject import Subject, SubjectRet
 from swane.utils.DataInputList import DataInputList
 
@@ -73,6 +76,90 @@ class TestSubjectFolders:
         # fix_subject_folder_subtree turns an invalid folder into a valid one
         checker.fix_subject_folder_subtree(no_subtree)
         assert checker.check_subject_folder(no_subtree) == SubjectRet.ValidFolder
+
+    def test_subject_config_error_is_not_reported_as_missing_folder(
+        self, global_config, dependency_manager, monkeypatch
+    ):
+        class FailingConfigManager:
+            def __init__(self, *args, **kwargs):
+                raise OSError("configuration unavailable")
+
+        monkeypatch.setattr(subject_module, "ConfigManager", FailingConfigManager)
+        subject = Subject(global_config, dependency_manager)
+
+        assert (
+            subject.create_new_subject_dir("subj_config_error")
+            == SubjectRet.ConfigError
+        )
+
+
+class TestSubjectWorkflowControl:
+    def test_stop_workflow_returns_stopped_and_sets_event(
+        self, global_config, dependency_manager
+    ):
+        subject = Subject(global_config, dependency_manager)
+        stop_event = SimpleNamespace(set_called=False)
+        stop_event.set = lambda: setattr(stop_event, "set_called", True)
+        subject.workflow_process = SimpleNamespace(stop_event=stop_event)
+        subject.is_workflow_process_alive = lambda: True
+
+        assert subject.stop_workflow() == SubjectRet.ExecWfStopped
+        assert stop_event.set_called is True
+
+    def test_stop_workflow_reports_when_process_is_not_running(
+        self, global_config, dependency_manager
+    ):
+        subject = Subject(global_config, dependency_manager)
+        subject.is_workflow_process_alive = lambda: False
+
+        assert subject.stop_workflow() == SubjectRet.ExecWfStatusError
+
+
+class TestSubjectDicomChecks:
+    def test_check_input_folder_step3_accepts_no_status_callback(
+        self, global_config, dependency_manager
+    ):
+        subject = Subject(global_config, dependency_manager)
+        assert (
+            subject.create_new_subject_dir("subj_no_callback") == SubjectRet.ValidFolder
+        )
+        worker = SimpleNamespace(
+            tree=DicomTree(subject.dicom_folder(DataInputList.T13D))
+        )
+
+        subject.check_input_folder_step3(DataInputList.T13D, worker)
+
+    def test_check_input_folder_step3_reports_when_series_vanishes(
+        self, global_config, dependency_manager
+    ):
+        # Simulates a tree that agrees there is exactly one subject/study/series
+        # but whose get_series lookup no longer finds it (e.g. a race with a
+        # concurrent tree mutation). Must not hang the UI in the loading state.
+        subject = Subject(global_config, dependency_manager)
+        assert (
+            subject.create_new_subject_dir("subj_vanishing_series")
+            == SubjectRet.ValidFolder
+        )
+
+        fake_tree = SimpleNamespace(
+            get_subject_list=lambda: ["S1"],
+            get_studies_list=lambda subj: ["study1"],
+            get_series_list=lambda subj, study: [1],
+            get_series=lambda subj, study, series: None,
+        )
+        worker = SimpleNamespace(tree=fake_tree, dicom_dir="/some/dir")
+
+        calls = []
+        subject.check_input_folder_step3(
+            DataInputList.T13D,
+            worker,
+            status_callback=lambda *args: calls.append(args),
+        )
+
+        assert calls == [
+            (DataInputList.T13D, SubjectRet.DataInputWarningNoDicom, worker)
+        ]
+        assert subject.input_state_list[DataInputList.T13D].loaded is False
 
 
 class TestSubjectDicomImport:
@@ -168,4 +255,30 @@ class TestSubjectDicomImport:
 
         # clear removes the imported files
         assert subject.clear_import_folder(DataInputList.T13D) is True
+        assert subject.dicom_folder_count(DataInputList.T13D) == 0
+
+    def test_import_reports_error_when_no_file_actually_copied(
+        self, global_config, dependency_manager, phantom_dicom_tree
+    ):
+        # copy_list pointing at files that no longer exist on disk (e.g. a
+        # stale scan) must not be reported as a completed import.
+        subject = Subject(global_config, dependency_manager)
+        assert (
+            subject.create_new_subject_dir("subj_missing_files")
+            == SubjectRet.ValidFolder
+        )
+
+        single = _scan_first_series(phantom_dicom_tree["SINGLE_VOL"].path)
+        missing_locs = [loc + ".does_not_exist" for loc in single.dicom_locs]
+
+        assert (
+            subject.dicom_import_to_folder(
+                data_input=DataInputList.T13D,
+                copy_list=missing_locs,
+                vols=single.volumes,
+                mod=single.modality,
+                force_modality=False,
+            )
+            == SubjectRet.DataImportErrorCopy
+        )
         assert subject.dicom_folder_count(DataInputList.T13D) == 0

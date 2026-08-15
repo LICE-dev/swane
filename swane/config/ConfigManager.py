@@ -24,7 +24,12 @@ class ConfigManager(configparser.ConfigParser):
     def __setitem__(self, key, value):
         super().__setitem__(str(key), value)
 
-    def __init__(self, subject_folder: str = None, global_base_folder: str = None):
+    def __init__(
+        self,
+        subject_folder: str = None,
+        global_base_folder: str = None,
+        global_config: "ConfigManager | None" = None,
+    ):
         """
         Parameters
         ----------
@@ -32,9 +37,13 @@ class ConfigManager(configparser.ConfigParser):
             The subject folder path. None in global all configuration
         global_base_folder: path, optional
             An alternative folder for global configuration file. Default is None
+        global_config: ConfigManager, optional
+            The already loaded global configuration used to initialize a subject
+            configuration. It is not persisted in the subject configuration.
         """
         super(ConfigManager, self).__init__()
         self._section_defaults = {}
+        self._source_global_config = global_config
 
         # First set some internal values differentiating global from subject pref objects
         if subject_folder is not None:
@@ -50,6 +59,9 @@ class ConfigManager(configparser.ConfigParser):
 
         # Load default pref from pref list
         self._load_defaults(save=False)
+        # The global configuration is only a source for subject defaults during
+        # initialization; subject changes must remain independent afterwards.
+        self._source_global_config = None
 
         # check if this version need pref reset
         force_pref_reset = self.getboolean_safe(
@@ -147,7 +159,11 @@ class ConfigManager(configparser.ConfigParser):
                                 WF_PREFERENCES[data_input][pref].default
                             )
         else:
-            tmp_config = ConfigManager()
+            tmp_config = self._source_global_config
+            if tmp_config is None:
+                tmp_config = ConfigManager()
+            elif not tmp_config.global_config:
+                raise ValueError("Subject configuration requires a global config")
             for data_input in DataInputList:
                 if data_input in WF_PREFERENCES:
                     self._section_defaults[str(data_input)] = WF_PREFERENCES[data_input]

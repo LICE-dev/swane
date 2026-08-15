@@ -528,7 +528,7 @@ class PreferenceWizardWindow(QDialog):
 
         The page allows choosing which FreeSurfer outputs SWANe should enable.
         Options are independent and mapped to self.user_prefs:
-        - cortilcal_parcellation_enabled
+        - cortical_parcellation_enabled
         - surfaces_enabled
         - hippocampal_segmentation_enabled
         - full_reconall_enabled
@@ -558,7 +558,7 @@ class PreferenceWizardWindow(QDialog):
         )
         self._cb_freesurfer_cortical_parcellation.toggled.connect(
             lambda checked: setattr(
-                self.user_prefs, "cortilcal_parcellation_enabled", bool(checked)
+                self.user_prefs, "cortical_parcellation_enabled", bool(checked)
             )
         )
         lay.addWidget(self._cb_freesurfer_cortical_parcellation)
@@ -1062,12 +1062,17 @@ class PreferenceWizardWindow(QDialog):
         self.global_config[DataInputList.T13D][
             "freesurfer_step"
         ] = FreesurferStep.DISABLED.name
+        available_ram = self.global_config.getfloat_safe(
+            GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
+        )
         if (
             self.user_prefs.cortical_parcellation_enabled
             and not self.user_prefs.hippocampal_segmentation_enabled
             and not self.user_prefs.surfaces_enabled
             and not self.user_prefs.full_reconall_enabled
+            and self.user_prefs.use_advanced_models
             and self.dependency_manager.is_freesurfer_synth()
+            and available_ram >= ResourceManager.synth_seg_ram_requirements()
         ):
             self.global_config[DataInputList.T13D][
                 "freesurfer_step"

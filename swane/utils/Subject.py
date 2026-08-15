@@ -29,6 +29,7 @@ class SubjectRet(Enum):
     FolderOutsideMain = auto()
     FolderAlreadyExists = auto()
     InvalidFolderTree = auto()
+    ConfigError = auto()
     ValidFolder = auto()
     DataInputNonEmpty = auto()
     DataInputLoading = auto()
@@ -274,23 +275,26 @@ class Subject:
         subjects_list = dicom_src_work.tree.get_subject_list()
 
         if len(subjects_list) == 0:
-            status_callback(
-                data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work
-            )
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work
+                )
             return
 
         if len(subjects_list) > 1:
-            status_callback(
-                data_input, SubjectRet.DataInputWarningMultiSubj, dicom_src_work
-            )
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningMultiSubj, dicom_src_work
+                )
             return
 
         studies_list = dicom_src_work.tree.get_studies_list(subjects_list[0])
 
         if len(studies_list) != 1:
-            status_callback(
-                data_input, SubjectRet.DataInputWarningMultiStudy, dicom_src_work
-            )
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningMultiStudy, dicom_src_work
+                )
             return
 
         series_list = dicom_src_work.tree.get_series_list(
@@ -298,18 +302,27 @@ class Subject:
         )
 
         if len(series_list) != 1:
-            status_callback(
-                data_input, SubjectRet.DataInputWarningMultiSeries, dicom_src_work
-            )
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningMultiSeries, dicom_src_work
+                )
             return
 
         series = dicom_src_work.tree.get_series(
             subjects_list[0], studies_list[0], series_list[0]
         )
 
+        if series is None:
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work
+                )
+            return
+
         self.input_state_list[data_input].loaded = True
         self.input_state_list[data_input].volumes = series.volumes
-        status_callback(data_input, SubjectRet.DataInputValid, dicom_src_work)
+        if status_callback is not None:
+            status_callback(data_input, SubjectRet.DataInputValid, dicom_src_work)
 
     def dicom_import_to_folder(
         self,
@@ -352,15 +365,20 @@ class Subject:
         dest_path = os.path.join(self.dicom_folder(), str(data_input))
 
         try:
+            copied = False
             for thisFile in copy_list:
                 if not os.path.isfile(thisFile):
                     continue
 
                 shutil.copy(thisFile, dest_path)
+                copied = True
                 if progress_callback is not None:
                     progress_callback(1)
 
-            return SubjectRet.DataImportCompleted
+            if copied:
+                return SubjectRet.DataImportCompleted
+            else:
+                return SubjectRet.DataImportErrorCopy
         except:
             return SubjectRet.DataImportErrorCopy
 
@@ -378,7 +396,7 @@ class Subject:
         None.
 
         """
-        self.config = ConfigManager(self.folder)
+        self.config = ConfigManager(self.folder, global_config=self.global_config)
         self.config.check_dependencies(dependency_manager)
 
     def dicom_folder(self, data_input: DataInputList = None) -> str:
@@ -585,22 +603,26 @@ class Subject:
         ):
             return SubjectRet.FolderAlreadyExists
         else:
+            base_folder = os.path.abspath(
+                os.path.join(
+                    self.global_config.get_main_working_directory(), subject_name
+                )
+            )
+            dicom_folder = os.path.join(
+                base_folder, self.global_config.get_default_dicom_folder()
+            )
             try:
-                base_folder = os.path.abspath(
-                    os.path.join(
-                        self.global_config.get_main_working_directory(), subject_name
-                    )
-                )
-                dicom_folder = os.path.join(
-                    base_folder, self.global_config.get_default_dicom_folder()
-                )
                 for data_input in DataInputList:
                     os.makedirs(
                         os.path.join(dicom_folder, str(data_input)), exist_ok=True
                     )
-                return self.load(base_folder)
-            except:
+            except OSError:
                 return SubjectRet.FolderNotFound
+
+            try:
+                return self.load(base_folder)
+            except Exception:
+                return SubjectRet.ConfigError
 
     def can_generate_workflow(self) -> bool:
         """
@@ -883,6 +905,7 @@ class Subject:
             return SubjectRet.ExecWfStatusError
         # Workflow killing
         self.workflow_process.stop_event.set()
+        return SubjectRet.ExecWfStopped
 
     def reset_workflow(self, force: bool = False) -> bool:
         """
