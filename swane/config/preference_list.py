@@ -227,7 +227,7 @@ WF_PREFERENCES[category]["cost_func"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="FLIRT between modalities cost function",
     value_enum=BetweenModFlirtCost,
-    default=BetweenModFlirtCost.MULTUAL_INFORMATION,
+    default=BetweenModFlirtCost.MUTUAL_INFORMATION,
 )
 WF_PREFERENCES[category]["ai"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -458,7 +458,7 @@ WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
     label="Threshold for mixture model estimation",
     tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives",
     default=0.50,
-    decimal=2,
+    decimals=2,
     range=[0, 1],
 )
 WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
@@ -533,7 +533,7 @@ GLOBAL_PREFERENCES[category]["shutdown"] = PreferenceEntry(
     hidden=True,
     label=strings.menu_shutdown_pref,
     default="false",
-    default_at_startup="true",
+    default_at_startup=True,
 )
 GLOBAL_PREFERENCES[category]["auto_import"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -576,7 +576,7 @@ GLOBAL_PREFERENCES[category]["ram_gb"] = PreferenceEntry(
     default=ResourceManager.get_default_ram(),
     range=[ResourceManager.get_minimum_ram(), ResourceManager.get_maximum_ram()],
     suffix="GB",
-    decimal=2,
+    decimals=2,
     section=True,
 )
 GLOBAL_PREFERENCES[category]["cuda"] = PreferenceEntry(

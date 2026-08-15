@@ -32,7 +32,7 @@ class CoreLimit(Enum):
 
 
 class BetweenModFlirtCost(Enum):
-    MULTUAL_INFORMATION = "Mutual information"
+    MUTUAL_INFORMATION = "Mutual information"
     NORMALIZED_MUTUAL_INFORMATION = "Normalized mutual information"
     CORRELATION_RATIO = "Correlation ratio"
 
