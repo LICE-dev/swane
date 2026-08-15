@@ -185,6 +185,12 @@ tool_reference_list = {
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/structural/fsl_anat.html",
         references=[],
     ),
+    "Cluster": ToolReference(
+        command="fsl-cluster",
+        package=Package.FSL,
+        url="https://fsl.fmrib.ox.ac.uk/fsl/docs/statistics/cluster.html",
+        references=[],
+    ),
     # FSL Utilities
     "MERGE": ToolReference(
         command="fslmerge", package=Package.FSL, url=utilities_url, references=[]
@@ -237,6 +243,12 @@ tool_reference_list = {
         references=[
             "Harris CR, Millman KJ, van der Walt SJ, et al. Array programming with NumPy. Nature. 2020."
         ],
+    ),
+    "ArtifactDetect": ToolReference(
+        command="rapidart [Nipype]",
+        package=Package.OTHER,
+        url="https://nipype.readthedocs.io/en/latest/api/generated/nipype.algorithms.rapidart.html",
+        references=[],
     ),
     # FreeSurfer
     "SynthSeg": ToolReference(
@@ -338,15 +350,17 @@ equivalent_command_list = {
     "Threshold": "MathsCommand",
     "ThrROI": "MathsCommand",
     "ApplyMask": "MathsCommand",
-    "DeleteVolumes": "MathsCommand",
     "ImageMaths": "MathsCommand",
     "BinaryMaths": "MathsCommand",
     "UnaryMaths": "MathsCommand",
     "SumMultiVols": "MathsCommand",
-    "SumMultiTracks": "MathsCommand",
+    "SumMultiTracks": "AsymmetryIndex",
     "SpatialFilter": "MathsCommand",
     "ApplyXFM": "FLIRT",
     "CustomSliceTimer": "FEAT",
+    "FEATModel": "FEAT",
+    "FILMGLS": "FEAT",
+    "SmoothEstimate": "Cluster",
     "FeatureSpatialPrep": "AromaClassification",
     "FeatureTimeSeries": "AromaClassification",
     "FeatureFrequency": "AromaClassification",
