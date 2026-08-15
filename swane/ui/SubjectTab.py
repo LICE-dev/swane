@@ -148,7 +148,7 @@ class SubjectTab(QTabWidget):
             # Invalid signal sent from WF to UI, code error intercept
             try:
                 self.workflow_process.stop_event.set()
-            except:
+            except Exception:
                 pass
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_wf_invalid_signal)
@@ -158,7 +158,7 @@ class SubjectTab(QTabWidget):
         elif wf_report.signal_type == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES:
             try:
                 self.workflow_process.stop_event.set()
-            except:
+            except Exception:
                 pass
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_wf_insufficient_resources)
@@ -180,7 +180,7 @@ class SubjectTab(QTabWidget):
                     mail_manager.send_report(
                         f"{self.subject.name} - {wf_report.workflow_name} - {wf_report.node_name} FAILED at {datetime.now()}"
                     )
-                except:
+                except Exception:
                     pass
             if wf_report.crash_file is not None:
                 self.node_list[wf_report.workflow_name].node_list[
@@ -238,7 +238,7 @@ class SubjectTab(QTabWidget):
                         mail_manager.send_report(
                             f"{self.subject.name} - {wf_report.workflow_name} COMPLETED at {datetime.now()}"
                         )
-                    except:
+                    except Exception:
                         pass
 
     def remove_running_icon(self):
@@ -840,7 +840,7 @@ class SubjectTab(QTabWidget):
                 self.generate_scene_button.setToolTip(
                     strings.subj_tab_generate_scene_button_tooltip
                 )
-        except:
+        except Exception:
             pass
 
     def load_scene_button_update_state(self):
@@ -868,7 +868,7 @@ class SubjectTab(QTabWidget):
                 self.load_scene_button.setText(
                     strings.subj_tab_load_scene_button + " " + strings.INFOCHAR
                 )
-        except:
+        except Exception:
             pass
 
     def result_tab_ui(self):
@@ -1328,7 +1328,7 @@ class SubjectTab(QTabWidget):
             else:
                 label += "volume"
             return label
-        except:
+        except Exception:
             return ""
 
     def show_scan_result(self, dicom_src_work: DicomSearchWorker):
@@ -1442,7 +1442,7 @@ class SubjectTab(QTabWidget):
         Clear the content of the scan result list
         """
         self.importable_series_list.clear()
-        self.dicom_scan_series_list = None
+        self.dicom_scan_series_list = []
         if len(self.scan_directory_watcher.directories()) > 0:
             self.scan_directory_watcher.removePaths(
                 self.scan_directory_watcher.directories()
