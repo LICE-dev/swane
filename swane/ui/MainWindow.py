@@ -329,6 +329,12 @@ class MainWindow(QMainWindow):
             msg_box.setText(strings.mainwindow_subj_exists_error + subject_name)
             msg_box.exec()
             return
+        elif create_subject_ret == SubjectRet.ConfigError:
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setText(strings.mainwindow_new_subj_config_error)
+            msg_box.exec()
+            return
         elif create_subject_ret == SubjectRet.ValidFolder:
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_new_subj_created + subject_name)

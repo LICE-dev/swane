@@ -1377,6 +1377,8 @@ class SubjectTab(QTabWidget):
                 dicom_series = dicom_src_work.tree.get_series(
                     subject_list[0], study, series
                 )
+                if dicom_series is None:
+                    continue
                 frames = dicom_series.frames
                 if frames == 0:
                     continue
