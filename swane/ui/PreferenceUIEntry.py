@@ -129,7 +129,7 @@ class PreferenceUIEntry:
         if self.informative_text is not None:
             informative_text_label = QLabel()
             font = informative_text_label.font()
-            font.setPointSize(max(font.pointSize() - 0.5, 1))
+            font.setPointSize(max(font.pointSize() - 1, 1))
             font.setItalic(True)
             informative_text_label.setFont(font)
             informative_text_label.setIndent(20)
@@ -445,6 +445,8 @@ class PreferenceUIEntry:
             value = self.input_field.itemData(self.input_field.currentIndex())
         elif self.input_type == InputTypes.BOOLEAN:
             return self.input_field.checkState() == Qt.Checked
+        elif self.input_type in (InputTypes.INT, InputTypes.FLOAT):
+            value = self.input_field.value()
         else:
             value = self.input_field.text()
 

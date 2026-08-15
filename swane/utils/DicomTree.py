@@ -80,11 +80,11 @@ class DicomSubject:
 
     def get_series(
         self, study_instance_uid: pydicom.uid.UID, series_number
-    ) -> DicomSeries:
+    ) -> DicomSeries | None:
         if study_instance_uid not in self.studies:
-            return []
+            return None
         elif series_number not in self.studies[study_instance_uid]:
-            return []
+            return None
         else:
             return self.studies[study_instance_uid][series_number]
 
@@ -153,7 +153,7 @@ class DicomTree:
 
     def get_series(
         self, subject: str, study_instance_uid: pydicom.uid.UID, series_number
-    ) -> DicomSeries:
+    ) -> DicomSeries | None:
         if subject not in self.dicom_subjects:
             return None
         return self.dicom_subjects[subject].get_series(

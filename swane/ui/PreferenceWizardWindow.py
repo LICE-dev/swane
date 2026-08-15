@@ -528,7 +528,7 @@ class PreferenceWizardWindow(QDialog):
 
         The page allows choosing which FreeSurfer outputs SWANe should enable.
         Options are independent and mapped to self.user_prefs:
-        - cortilcal_parcellation_enabled
+        - cortical_parcellation_enabled
         - surfaces_enabled
         - hippocampal_segmentation_enabled
         - full_reconall_enabled
@@ -558,7 +558,7 @@ class PreferenceWizardWindow(QDialog):
         )
         self._cb_freesurfer_cortical_parcellation.toggled.connect(
             lambda checked: setattr(
-                self.user_prefs, "cortilcal_parcellation_enabled", bool(checked)
+                self.user_prefs, "cortical_parcellation_enabled", bool(checked)
             )
         )
         lay.addWidget(self._cb_freesurfer_cortical_parcellation)
@@ -698,16 +698,6 @@ class PreferenceWizardWindow(QDialog):
 
         """
 
-        w = self._stack.currentWidget()
-
-        # Performance page
-        if (
-            hasattr(self, "_perf_group")
-            and w is self._pages[self._index_of_page_widget(w)]
-        ):
-            # Not robust by identity of widgets; we instead check existence of group & whether it has a checkedButton
-            pass
-
         # Save by checking which groups exist + checked
         if (
             hasattr(self, "_perf_group")
@@ -730,27 +720,6 @@ class PreferenceWizardWindow(QDialog):
 
         if hasattr(self, "_adv_group") and self._adv_group.checkedButton() is not None:
             self.user_prefs.use_advanced_models = bool(self._adv_group.checkedId())
-
-    def _index_of_page_widget(self, w: QWidget) -> int:
-        """
-        Returns the index of a page widget in the internal page list.
-
-        Parameters
-        ----------
-        w : QWidget
-            Page widget to locate.
-
-        Returns
-        -------
-        int
-            Index of the widget in the wizard page list, or -1 if not found.
-
-        """
-
-        for i, p in enumerate(self._pages):
-            if p is w:
-                return i
-        return -1
 
     def _update_review_page(self) -> None:
         """
@@ -803,7 +772,7 @@ class PreferenceWizardWindow(QDialog):
         else:
             parts.append(
                 strings.wizard_advanced_models.format(
-                    adv_status="Enabled (based on system resources"
+                    adv_status="Enabled (based on system resources)"
                 )
                 if self.user_prefs.use_advanced_models
                 else strings.wizard_advanced_models.format(adv_status="Disabled")
@@ -1042,7 +1011,7 @@ class PreferenceWizardWindow(QDialog):
         """
         self.global_config.apply_resource_profile(self.user_prefs.performance_profile)
         self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"] = str(
-            self.user_prefs.use_gpu_acceleration
+            bool(self.user_prefs.use_gpu_acceleration)
         )
 
         if self.user_prefs.use_advanced_models:
@@ -1062,12 +1031,17 @@ class PreferenceWizardWindow(QDialog):
         self.global_config[DataInputList.T13D][
             "freesurfer_step"
         ] = FreesurferStep.DISABLED.name
+        available_ram = self.global_config.getfloat_safe(
+            GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
+        )
         if (
             self.user_prefs.cortical_parcellation_enabled
             and not self.user_prefs.hippocampal_segmentation_enabled
             and not self.user_prefs.surfaces_enabled
             and not self.user_prefs.full_reconall_enabled
+            and self.user_prefs.use_advanced_models
             and self.dependency_manager.is_freesurfer_synth()
+            and available_ram >= ResourceManager.synth_seg_ram_requirements()
         ):
             self.global_config[DataInputList.T13D][
                 "freesurfer_step"

@@ -84,6 +84,35 @@ def test_connect_failure_is_wrapped(monkeypatch):
         mgr.connect()
 
 
+def test_send_mail_failure_reports_config_error_even_if_quit_fails(monkeypatch):
+    # A login failure must surface as the meaningful configuration error, even
+    # when the cleanup quit() on the broken connection also fails.
+    class BoomSMTP(FakeSMTP):
+        def login(self, username, password):
+            raise OSError("connection refused")
+
+        def quit(self):
+            raise OSError("socket already closed")
+
+    monkeypatch.setattr(smtplib, "SMTP_SSL", BoomSMTP)
+    mgr = MailManager("smtp.example.com", 465, "me@example.com", "pw")
+    with pytest.raises(Exception, match="Check your Mail Configuration"):
+        mgr.send_mail("me@example.com", "you@example.com", "Subj", "<b>hi</b>")
+    # disconnect() must still clear the stale server reference.
+    assert mgr.server is None
+
+
+def test_disconnect_is_idempotent(monkeypatch):
+    monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP)
+    mgr = MailManager("smtp.example.com", 465, "me@example.com", "pw")
+    mgr.connect()
+    mgr.disconnect()
+    assert mgr.server is None
+    # A second disconnect on an already-closed manager is a no-op.
+    mgr.disconnect()
+    assert mgr.server is None
+
+
 def test_send_report_subject_and_addresses(monkeypatch):
     monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP)
 

@@ -452,7 +452,7 @@ class MainWorkflow(CustomWorkflow):
                 self.add_nodes([self.flair2d])
 
                 flair2d_inputnode = self.flair2d.get_node("inputnode")
-                flair2d_inputnode.inputs.output_name = "flair2d_%s" % plane
+                flair2d_inputnode.inputs.output_name = "flair2d_%s" % plane.value
                 self.connect(
                     self.t1, "outputnode.reference", self.flair2d, "inputnode.reference"
                 )

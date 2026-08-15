@@ -86,13 +86,15 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         Shows only info that exists if the node is running.
         Read command from command.txt if result.pklz is not yet available.
         """
+        self.clear()
+
         node_parts = item.node_name.split(".")
+        if len(node_parts) < 2:
+            return
         node_wf = node_parts[0]
         node_name = node_parts[1]
 
         node_dir = os.path.join(wf_base_dir, node_wf, node_name)
-
-        self.clear()
 
         # ---------------- Node ----------------
         self._add_label(strings.sub_tab_node_name_label, self._row, 0)
@@ -148,8 +150,10 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         self._row += 1
 
         # ---------------- Tool Info ----------------
-        interface_name = self._get_interface_name(node_pickle_file)
-        tool_reference = get_command_info(interface_name)
+        tool_reference = None
+        if os.path.exists(node_pickle_file):
+            interface_name = self._get_interface_name(node_pickle_file)
+            tool_reference = get_command_info(interface_name)
         if tool_reference is not None:
             self._add_label(strings.sub_tab_node_tool_label, self._row, 0)
             self._add_tool_button(tool_reference, self._row, 1)
@@ -188,8 +192,8 @@ class NipypeNodeRuntimeWidget(QScrollArea):
             text_len = len(command)
             lines_needed = math.ceil(text_len / 75)
             fm = QFontMetrics(font)
-            line_height = fm.lineSpacing() * lines_needed
-            lines = max(1, command.count("\n") + 1)
+            line_height = fm.lineSpacing()
+            lines = max(lines_needed, command.count("\n") + 1)
             max_lines = 3
             visible_lines = min(lines, max_lines)
 
@@ -254,7 +258,7 @@ class NipypeNodeRuntimeWidget(QScrollArea):
                     self._add_label(strings.sub_tab_node_ram_label, self._row, 4)
                     self._add_value(f"{rt.mem_peak_gb:.3f}", self._row, 5)
                     self._row += 1
-                except:
+                except Exception:
                     pass
 
             # -------- Outputs --------
