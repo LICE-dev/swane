@@ -124,9 +124,7 @@ class TestSafeGetters:
         configparser.ConfigParser.set(
             config, str(GlobalPrefCategoryList.SYNTH), "strip", "garbage"
         )
-        assert (
-            config.getboolean_safe(GlobalPrefCategoryList.SYNTH, "strip") is False
-        )
+        assert config.getboolean_safe(GlobalPrefCategoryList.SYNTH, "strip") is False
 
 
 class TestMailManagerFactory:
