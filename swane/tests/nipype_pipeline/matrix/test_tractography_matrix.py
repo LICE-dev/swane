@@ -1,43 +1,56 @@
 """Settings matrix for
 :func:`swane.nipype_pipeline.workflows.tractography_workflow.tractography_workflow`.
 
-A real tract graph needs the FSL XTRACT protocol data directory
-(``$FSLDIR/data/xtract_data``); without it the builder guards out and returns
-``None`` for every tract, so only that guard is testable tool-free. The
-CUDA/``use_gpu`` probtrackx branch and the populated tract graph belong to the
-FSL-backed matrix (see ``TODO_dicom.md`` §2). Snapshot under
-``snapshots/tractography/``.
+The baseline is a fully-equipped FSL install: with the XTRACT protocol data
+present (``$FSLDIR/data/xtract_data/.../<tract>_l|_r``) the builder assembles
+the real per-hemisphere probtrackx graph, which is what we snapshot. On a box
+without that data the *known-tract* scenario degrades to a skip (never a
+failure). The *unknown-tract* scenario is genuinely tool-independent — a name
+that is not in ``TRACTS`` always returns ``None`` regardless of what is
+installed — so it is asserted directly. Snapshots under ``snapshots/tractography/``.
 """
+
+import os
 
 import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList
+from swane.config.preference_list import XTRACT_DATA_DIR
 from swane.utils.DataInputList import DataInputList
 from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import require_fsl_data
 
 SUBDIR = "tractography"
 
-# Both an unknown name and a real tract name resolve to None without XTRACT data.
-SCENARIOS = {
-    "unknown_tract_guard": "definitely_not_a_tract",
-    "known_tract_without_xtract": "cst",
-}
 
-
-@pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
-def test_tractography_matrix(scenario, subject_config, global_config, graph_snapshot):
-    tract_name = SCENARIOS[scenario]
+def test_unknown_tract_returns_none(subject_config, global_config):
+    """A tract name not in ``TRACTS`` is rejected before any FSL data is read."""
     wf = tractography_workflow(
-        tract_name,
+        "definitely_not_a_tract",
         config=subject_config[DataInputList.DTI],
         synth_config=global_config[GlobalPrefCategoryList.SYNTH],
     )
-    assert wf is None, "expected the guard to return None without XTRACT data"
+    assert wf is None, "an unknown tract name must return None on any box"
+
+
+def test_known_tract_real_graph(subject_config, global_config, graph_snapshot):
+    """With XTRACT data present (the norm), the real cst graph is built and snapshotted."""
+    require_fsl_data(os.path.join(XTRACT_DATA_DIR, "cst_l"))
+
+    section = subject_config[DataInputList.DTI]
+    section["cuda"] = "false"
+
+    wf = tractography_workflow(
+        "cst",
+        config=section,
+        synth_config=global_config[GlobalPrefCategoryList.SYNTH],
+    )
+    assert wf is not None, "cst graph should build when XTRACT data is present"
 
     graph_snapshot(
         wf,
         subdir=SUBDIR,
-        name=scenario,
-        config={"tract": tract_name, "xtract_data": "absent"},
-        title="tractography / %s" % scenario,
+        name="cst_real_graph",
+        config={"tract": "cst", "cuda": "false", "xtract_data": "present"},
+        title="tractography / cst_real_graph",
     )

@@ -60,33 +60,53 @@ Per ogni modalità serve un fantoccio DICOM con queste caratteristiche:
   (richiede rifattorizzare i builder per accettare un NIfTI già convertito, o
   iniettare l'output del nodo di conversione).
 
-## 2. Serve installazione/**dati** FSL (non DICOM)
+## 2. Rami che leggono **dati** FSL alla costruzione (non DICOM)
 
-Questi rami **non** si costruiscono senza file dati di FSL sul disco (path con
+Questi rami leggono file dati di FSL sul disco alla costruzione (path con
 `File(exists=True)` o lettura di `os.environ["FSLDIR"]`):
 
 - **`dti_preproc_workflow` con `tractography=True`**: legge
   `$FSLDIR/data/standard/MNI152_T1_1mm(.nii.gz|_brain.nii.gz)` e li passa come
-  `in_file`/`reference` a FLIRT/FNIRT (esistenza validata alla costruzione).
+  `in_file`/`reference` a FLIRT/FNIRT (esistenza validata alla costruzione);
+  aggiunge BEDPOSTX + registrazione MNI→reference.
 - **`tractography_workflow`** (tratto reale): richiede la cartella protocolli
   XTRACT (`XTRACT_DATA_DIR/<tratto>_l|_r` con `seed.nii.gz`, `target*`, ecc.).
-  Senza, il builder ritorna `None` (già testato).
 - **`fMRI_resting_state_workflow` con `aroma=True`**: legge
   `$FSLDIR/data/standard/MNI152_T1_2mm_brain.nii.gz` e lo passa a FLIRT.
 
-Opzione: fornire dei **NIfTI segnaposto** agli stessi path (monkeypatch di
-`FSLDIR` verso una cartella temporanea con file MNI fittizi ma esistenti) per
-testare almeno la *costruzione* di questi rami. Da valutare se ha senso o se
-lasciarli all'integrazione con FSL reale.
+**Costruzione: ora coperta** dalla matrice, nell'ottica "il box di riferimento
+ha tutti i tool installati". Ognuno di questi rami ha uno scenario snapshot
+(`dti_preproc/new_eddy_tractography`, `tractography/cst_real_graph`,
+`fmri_resting_state/aroma_on`) che si costruisce e si confronta col golden
+**quando i dati FSL sono presenti**, e degrada a *skip* (mai fallimento) su un
+box che ne è privo (helper `matrix/conftest.require_fsl_data`). I path FSL negli
+snapshot sono riscritti a `<FSLDIR>` per restare deterministici.
 
-## 3. Bug che blocca la costruzione (nessun DICOM necessario, serve fix)
+**Cosa resta per §2 → l'esecuzione**, non la costruzione: far girare davvero
+questi rami (bedpostx, probtrackx, ICA-AROMA) e — punto specifico — verificare
+l'**equivalenza CPU vs GPU** dei percorsi `use_gpu`/`use_cuda` (eddy, bedpostx,
+probtrackx), che richiede hardware GPU + FSL reale (vedi §4).
 
-- **`fMRI_task_workflow`**: la costruzione **fallisce** con la nipype installata
-  (1.10): `Module <name>_modelestimate has no input called tcon_file`
-  (`FILMGLS`). Il nome dell'input FILMGLS è cambiato/non esiste in questa
-  versione. Va sistemato il builder (o allineata la versione di nipype) prima di
-  poter aggiungere un test di costruzione per il task fMRI. Finché non è
-  risolto, `fMRI_task_workflow` non è testabile nemmeno a livello di grafo.
+## 3. Bug che blocca la costruzione (RISOLTO — era l'ambiente, non nipype)
+
+- ~~**`fMRI_task_workflow`**: la costruzione fallisce (...) `Module
+  <name>_modelestimate has no input called tcon_file` (`FILMGLS`)~~. Non era
+  un problema di nipype 1.10 né del builder: `FILMGLS` sceglie la sua
+  `input_spec` **all'import** in base a `nipype.interfaces.fsl.base.
+  Info.version()`; su una macchina senza FSL installato (es. la macchina
+  Windows su cui questo bug era stato osservato) quella versione risulta
+  `None` e nipype ripiega silenziosamente su una `input_spec` più vecchia,
+  priva di `tcon_file`/`fcon_file`. Con FSL >= 5.0.7 reale installato il
+  costrutto funziona senza modifiche al builder. Fix in
+  `swane/tests/conftest.py`: quando la rilevazione reale di FSL non c'è, si
+  forza `Info.version()` (solo per le classi `nipype.interfaces.fsl.*`) a
+  riportare una versione FSL moderna, così i test di costruzione si
+  comportano allo stesso modo con o senza FSL reale installato; stessa
+  sistemazione per `FSLOUTPUTTYPE` (forzato a `NIFTI_GZ`, il default reale di
+  FSL, se non già impostato — prima ripiegava silenziosamente su `NIFTI`).
+  Matrice+snapshot aggiunta in `matrix/test_fmri_task_matrix.py`
+  (`snapshots/fmri_task/`), sweep su `block_design` (RARA vs RARB, che
+  aggiunge un secondo contrasto/ramo di clustering).
 
 ## 4. Validazione scientifica degli output (oltre "gira")
 
@@ -137,8 +157,8 @@ paziente), che resta responsabilità umana.
 | func_map (ASL/PET), venous_mr | ✅ | ✅ | FreeSurfer/AI/detection/serie |
 | venous_ct, seeg_ct | ✅ | ✅ | contrasto/soglie |
 | flat1 | ✅ | ✅ | backend FSL/Synth |
-| dti_preproc | ✅ (no tractography) | ✅ (**CUDA on/off**, eddy, core-limit) | ramo tractography → §2 |
+| dti_preproc | ✅ | ✅ (**CUDA on/off**, eddy, core-limit, tractography) | ramo tractography coperto se dati FSL presenti; esecuzione GPU → §2 |
 | fMRI_preproc | ✅ | ✅ | slice timing, trim volumi |
-| fMRI_resting_state | ✅ (aroma off) | ✅ (aroma off) | ramo aroma → §2 |
-| tractography | ✅ (solo guardia → None) | ✅ (guardia → None) | tratto reale + `use_gpu` → §2 |
-| **fMRI_task** | ❌ | ❌ (strict xfail) | §3 bug FILMGLS |
+| fMRI_resting_state | ✅ | ✅ (melodic + aroma) | ramo aroma coperto se dati FSL presenti |
+| tractography | ✅ | ✅ (grafo cst reale + guardia nome) | tratto reale coperto se XTRACT presente; esecuzione GPU → §2 |
+| fMRI_task | ✅ | ✅ | §3 risolto — sweep `block_design` |
