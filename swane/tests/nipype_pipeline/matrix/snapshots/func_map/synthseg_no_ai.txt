@@ -9,9 +9,9 @@
 - asl_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'normmi'
     dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     searchr_x = [-90, 90]
     searchr_y = [-90, 90]
     searchr_z = [-90, 90]
@@ -31,18 +31,18 @@
     source_dir = '<TMP>/dicom'
     verbose = False
 - asl_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-asl.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - asl_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - asl_smooth [IsotropicSmooth] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     sigma = 2.0
 - asl_smooth_2_ref_flirt_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
     apply_xfm = True
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - asl_zscore [Zscore] mem_gb=0.2 n_procs=1
     out_file = 'r-asl_zscore.nii.gz'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1

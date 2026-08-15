@@ -10,25 +10,25 @@
 - anat_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'mutualinfo'
     dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     searchr_x = [-90, 90]
     searchr_y = [-90, 90]
     searchr_z = [-90, 90]
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - vein_mr_deskull_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     frac = 0.4
     mask = True
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     surfaces = True
     threshold = False
 - veins_2_ref_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
     apply_xfm = True
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - veins_check [VenousCheck] mem_gb=0.2 n_procs=1
     detection_mode = <VeinDetectionMode.SD: 'Automatic (standard deviation)'>
 - veins_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
@@ -47,15 +47,15 @@
     source_dir = '<TMP>/phase1'
     verbose = False
 - veins_inskull_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - veins_range [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = []
 - veins_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - veins_rescale [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-veins_mra_inskull.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - veins_split [Function] mem_gb=0.2 n_procs=1
     function_str = 'def split_volumes(in_file):\n    import os\n    import nibabel as nib\n\n    img = nib.load(in_file)\n    out_files = []\n    for index in range(img.shape[-1]):\n        out_file = os.path.abspath("vol%04d.nii.gz" % index)\n        nib.save(img.slicer[..., index], out_file)\n        out_files.append(out_file)\n    return out_files\n'
 # connections
