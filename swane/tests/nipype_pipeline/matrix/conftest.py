@@ -24,6 +24,29 @@ SNAPSHOTS_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 _UPDATE = os.environ.get("SWANE_SNAPSHOT_UPDATE") == "1"
 
 
+def fsl_data_path(*relparts):
+    """Return an ``$FSLDIR``-relative data path, or ``None`` if FSL is absent."""
+    fsldir = os.environ.get("FSLDIR")
+    return os.path.join(fsldir, *relparts) if fsldir else None
+
+
+def require_fsl_data(*paths):
+    """Skip unless every ``path`` exists.
+
+    The baseline these snapshots describe is a **fully-equipped** neuroimaging
+    box (FSL + its data: MNI templates, XTRACT protocols); those branches are
+    the norm and must be exercised where the data is present. A box that simply
+    lacks a given data file (or FSL entirely) degrades to a *skip*, never a
+    failure — the tool-gated scenarios are opt-out on a bare box, not opt-in on
+    an equipped one.
+    """
+    if any(p is None for p in paths):
+        pytest.skip("needs a real FSL install ($FSLDIR unset)")
+    missing = [str(p) for p in paths if not os.path.exists(p)]
+    if missing:
+        pytest.skip("needs FSL data, missing: %s" % ", ".join(missing))
+
+
 @pytest.fixture
 def graph_snapshot(tmp_path):
     """Return ``check(workflow, subdir, name, config, title=None)``.

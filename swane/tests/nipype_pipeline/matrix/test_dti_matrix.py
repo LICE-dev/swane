@@ -9,26 +9,31 @@ CPU thread counts are made deterministic by passing an explicit ``max_cpu`` and
 only using the ``SOFT_CAP`` / ``HARD_CAP`` core-limit modes; ``NO_LIMIT`` would
 fall back to the host ``cpu_count()`` and is left to a behavioural assertion.
 
-The ``tractography=True`` branch reads ``$FSLDIR`` MNI templates and therefore
-lives in the FSL-backed matrix (see ``TODO_dicom.md`` §2); here tractography is
-kept off so the graph builds tool-free.
+The ``tractography=True`` branch reads ``$FSLDIR`` MNI templates at construction
+(and adds BEDPOSTX + MNI-to-reference registration): on a fully-equipped box
+that is the norm and is snapshotted; on a box without those templates the
+scenario degrades to a skip (see ``conftest.require_fsl_data``).
 """
+
+import os
 
 import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
 from swane.utils.DataInputList import DataInputList
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import fsl_data_path, require_fsl_data
 
 SUBDIR = "dti_preproc"
 MAX_CPU = 4
 
-# name -> (cuda, old_eddy, multicore_node_limit)
+# name -> (cuda, old_eddy, multicore_node_limit, tractography)
 SCENARIOS = {
-    "new_eddy_cpu_softcap": (False, False, CoreLimit.SOFT_CAP),
-    "new_eddy_cpu_hardcap": (False, False, CoreLimit.HARD_CAP),
-    "new_eddy_cuda": (True, False, CoreLimit.SOFT_CAP),
-    "old_eddy_correct": (False, True, CoreLimit.SOFT_CAP),
+    "new_eddy_cpu_softcap": (False, False, CoreLimit.SOFT_CAP, False),
+    "new_eddy_cpu_hardcap": (False, False, CoreLimit.HARD_CAP, False),
+    "new_eddy_cuda": (True, False, CoreLimit.SOFT_CAP, False),
+    "old_eddy_correct": (False, True, CoreLimit.SOFT_CAP, False),
+    "new_eddy_tractography": (False, False, CoreLimit.SOFT_CAP, True),
 }
 
 
@@ -40,11 +45,17 @@ def _bool(value):
 def test_dti_matrix(
     scenario, subject_config, global_config, make_input_dir, graph_snapshot
 ):
-    cuda, old_eddy, multicore = SCENARIOS[scenario]
+    cuda, old_eddy, multicore, tractography = SCENARIOS[scenario]
+    if tractography:
+        # tractography=True reads the MNI templates at construction time.
+        require_fsl_data(
+            fsl_data_path("data", "standard", "MNI152_T1_1mm.nii.gz"),
+            fsl_data_path("data", "standard", "MNI152_T1_1mm_brain.nii.gz"),
+        )
     section = subject_config[DataInputList.DTI]
     section["cuda"] = _bool(cuda)
     section["old_eddy_correct"] = _bool(old_eddy)
-    section["tractography"] = "false"
+    section["tractography"] = _bool(tractography)
     synth = global_config[GlobalPrefCategoryList.SYNTH]
 
     wf = dti_preproc_workflow(
@@ -59,7 +70,7 @@ def test_dti_matrix(
     config_echo = {
         "cuda": section["cuda"],
         "old_eddy_correct": section["old_eddy_correct"],
-        "tractography": "false",
+        "tractography": section["tractography"],
         "multicore_node_limit": multicore.name,
         "max_cpu": MAX_CPU,
         "synth_strip": synth["strip"],

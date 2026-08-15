@@ -1,6 +1,0 @@
-# workflow snapshot: tractography / unknown_tract_guard
-#
-#   tract = definitely_not_a_tract
-#   xtract_data = absent
-#
-(builder returned None — no graph constructed)

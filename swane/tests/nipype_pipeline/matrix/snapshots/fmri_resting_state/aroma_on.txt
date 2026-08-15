@@ -1,11 +1,19 @@
-# workflow snapshot: fmri_resting_state / melodic_auto_dim
+# workflow snapshot: fmri_resting_state / aroma_on
 #
-#   aroma = false
+#   aroma = true
 #   melodic_dim = 0
 #   melodic_thr = 0.5
 #
-# nodes=32 edges=50
+# nodes=44 edges=75
 
+- aroma_classification [AromaClassification] mem_gb=0.2 n_procs=1
+- feature_frequency [FeatureFrequency] mem_gb=0.2 n_procs=1
+- feature_spatial [FeatureSpatial] mem_gb=0.2 n_procs=1
+    mask_csf = '<SITE>/ica_aroma_py/resources/mask_csf.nii.gz'
+    mask_edge = '<SITE>/ica_aroma_py/resources/mask_edge.nii.gz'
+    mask_out = '<SITE>/ica_aroma_py/resources/mask_out.nii.gz'
+- feature_spatial_prep [FeatureSpatialPrep] mem_gb=0.2 n_procs=1
+- feature_time_series [FeatureTimeSeries] mem_gb=0.2 n_procs=1
 - fmri_rs_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
     compress = 'y'
@@ -131,6 +139,14 @@
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     slice_timing = <SliceTiming.UNKNOWN: 'Unknown'>
+- func2mni [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    ref_file = '<FSLDIR>/data/standard/MNI152_T1_2mm_brain.nii.gz'
+- input_list_denoised [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - melodic [MELODIC] cmd=melodic mem_gb=0.2 n_procs=1
     dim = 0
@@ -149,12 +165,51 @@
     axis = 'vstack'
     no_flatten = False
     ravel_inputs = False
+- nonaggr_denoising [FilterRegressor] cmd=fsl_regfilt mem_gb=5 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'denoised_func_data_nonaggr.nii.gz'
+    output_type = 'NIFTI_GZ'
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- preproc_melodic [MELODIC] cmd=melodic mem_gb=0.2 n_procs=1
+    dim = 0
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    mm_thresh = 0.5
+    no_bet = True
+    out_stats = True
+    output_type = 'NIFTI_GZ'
+    report = True
+- preproc_melodic_output [SelectFiles] mem_gb=0.2 n_procs=1
+    force_lists = False
+    raise_on_empty = True
+    sort_filelist = True
+    sorted = True
+- ref_2_mni_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'corratio'
+    dof = 12
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_matrix_file = 'ref_2_mni.mat'
+    output_type = 'NIFTI_GZ'
+    reference = '<FSLDIR>/data/standard/MNI152_T1_2mm_brain.nii.gz'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
+- ref_2_mni_fnirt [FNIRT] cmd=fnirt mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    fieldcoeff_file = True
+    output_type = 'NIFTI_GZ'
+    ref_file = '<FSLDIR>/data/standard/MNI152_T1_2mm_brain.nii.gz'
 - zstats_2_ref [ApplyXFM] cmd=flirt mapnode(iterfield=in_file,out_file) mem_gb=0.2 n_procs=1
     apply_xfm = True
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
 # connections
+aroma_classification.classification_overview -> outputnode.aroma_classification
+aroma_classification.motion_ics -> nonaggr_denoising.filter_columns
+feature_frequency.HFC -> aroma_classification.HFC
+feature_spatial.csf_fract -> aroma_classification.csf_fract
+feature_spatial.edge_fract -> aroma_classification.edge_fract
+feature_spatial_prep.out_file -> func2mni.in_file
+feature_time_series.max_rp_corr -> aroma_classification.max_rp_corr
 fmri_rs_conv.converted_files -> fmri_rs_del_vols.in_file
 fmri_rs_conv.converted_files -> fmri_rs_getTR.in_file
 fmri_rs_conv.converted_files -> fmri_rs_nvols.in_file
@@ -163,12 +218,16 @@ fmri_rs_dilatemask.out_file -> fmri_rs_maskfunc2.in_file2
 fmri_rs_dilatemask.out_file -> fmri_rs_maskfunc3.in_file2
 fmri_rs_dilatemask.out_file -> melodic.mask
 fmri_rs_extract_ref.out_file -> fmri_rs_motion_correct.ref_file
+fmri_rs_flirt_2_ref.out_matrix_file -> func2mni.premat
 fmri_rs_flirt_2_ref.out_matrix_file -> zstats_2_ref.in_matrix_file
+fmri_rs_getTR.TR -> feature_frequency.TR
 fmri_rs_getTR.TR -> fmri_rs_merge_tr_meanfunc3.in1
 fmri_rs_getTR.TR -> fmri_rs_timing_correction.time_repetition
 fmri_rs_getTR.TR -> melodic.tr_sec
+fmri_rs_getTR.TR -> preproc_melodic.tr_sec
 fmri_rs_getthresh.('percentile_values', 'def get_thresh_op(thresh):\n    return "-thr %.10f -Tmin -bin" % (0.1 * thresh[0])\n', ()) -> fmri_rs_threshold.op_string
 fmri_rs_highpass.out_file -> merge_node.in1
+fmri_rs_highpass.out_file -> nonaggr_denoising.in_file
 fmri_rs_img2float.out_file -> fmri_rs_extract_ref.in_file
 fmri_rs_img2float.out_file -> fmri_rs_motion_correct.in_file
 fmri_rs_intnorm.out_file -> fmri_rs_highpass.in_file
@@ -182,13 +241,16 @@ fmri_rs_meanfunc.out_file -> fmri_rs_meanfuncmask.in_file
 fmri_rs_meanfunc2.out_file -> fmri_rs_flirt_2_ref.in_file
 fmri_rs_meanfunc2.out_file -> fmri_rs_mergenode.in1
 fmri_rs_meanfunc3.out_file -> fmri_rs_merge_tr_meanfunc3.in2
+fmri_rs_meanfuncmask.mask_file -> feature_spatial_prep.mask_file
 fmri_rs_meanfuncmask.mask_file -> fmri_rs_maskfunc.in_file2
+fmri_rs_meanfuncmask.mask_file -> preproc_melodic.mask
 fmri_rs_medianval.('percentile_values', 'def get_bt_thresh(percentile_values):\n    return 0.75 * percentile_values[0]\n', ()) -> fmri_rs_smooth.brightness_threshold
 fmri_rs_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]\n', ()) -> fmri_rs_mergenode.in2
 fmri_rs_medianval.('percentile_values', 'def get_inorm_scale(percentile_values):\n    return "-mul %.10f" % (10000.0 / percentile_values[0])\n', ()) -> fmri_rs_intnorm.op_string
 fmri_rs_merge_tr_meanfunc3.('out', 'def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return "-bptf %f -1 -add %s" % (hp_sigma_vol, merged[1])\n', (100,)) -> fmri_rs_highpass.op_string
 fmri_rs_mergenode.('out', 'def get_usans(x):\n    return [tuple([x[0], 0.75 * x[1]])]\n', ()) -> fmri_rs_smooth.usans
 fmri_rs_motion_correct.out_file -> fmri_rs_timing_correction.in_file
+fmri_rs_motion_correct.par_file -> feature_time_series.mc
 fmri_rs_nvols.nvols -> fmri_rs_del_vols.nvols
 fmri_rs_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle\n', ()) -> fmri_rs_extract_ref.start_volume
 fmri_rs_reorient.out_file -> fmri_rs_img2float.in_file
@@ -199,11 +261,24 @@ fmri_rs_timing_correction.slice_time_corrected_file -> fmri_rs_maskfunc.in_file
 fmri_rs_timing_correction.slice_time_corrected_file -> fmri_rs_maskfunc2.in_file
 fmri_rs_timing_correction.slice_time_corrected_file -> fmri_rs_meanfunc.in_file
 fmri_rs_timing_correction.slice_time_corrected_file -> fmri_rs_medianval.in_file
+func2mni.out_file -> feature_spatial.in_file
+input_list_denoised.out -> melodic.in_files
 inputnode.reference_brain -> fmri_rs_flirt_2_ref.reference
+inputnode.reference_brain -> ref_2_mni_flirt.in_file
+inputnode.reference_brain -> ref_2_mni_fnirt.in_file
 inputnode.reference_brain -> zstats_2_ref.reference
 melodic.out_dir -> melodic_output.base_directory
 melodic.out_dir -> melodic_output.melodic_dir
 melodic_output.('thresh_zstat_files', 'def registered_file_name(in_file_names):\n    """\n    Adds prefix \'r-\' and use 2 digid number at end.\n    Example: \'zstat1.nii.gz\' -> \'r-zstat01.nii.gz\'\n    """\n    from os.path import basename\n    import re\n\n    out_files = []\n    for f in in_file_names:\n        base_name = basename(f)\n        # Cerca un numero prima dell\'estensione .nii o .nii.gz\n        m = re.search(r"(\\d+)(\\.nii(?:\\.gz)?)$", base_name)\n        if m:\n            num = int(m.group(1))\n            ext = m.group(2)\n            new_name = re.sub(r"\\d+(\\.nii(?:\\.gz)?)$", f"{num:02d}{ext}", base_name)\n        else:\n            new_name = base_name\n        out_files.append("r-" + new_name)\n    return out_files\n', ()) -> zstats_2_ref.out_file
 melodic_output.thresh_zstat_files -> zstats_2_ref.in_file
-merge_node.out -> melodic.in_files
+merge_node.out -> preproc_melodic.in_files
+nonaggr_denoising.out_file -> input_list_denoised.in1
+preproc_melodic.out_dir -> preproc_melodic_output.base_directory
+preproc_melodic.out_dir -> preproc_melodic_output.melodic_dir
+preproc_melodic_output.mel_ft_mix -> feature_frequency.mel_ft_mix
+preproc_melodic_output.mel_mix -> feature_time_series.mel_mix
+preproc_melodic_output.mel_mix -> nonaggr_denoising.design_file
+preproc_melodic_output.thresh_zstat_files -> feature_spatial_prep.in_files
+ref_2_mni_flirt.out_matrix_file -> ref_2_mni_fnirt.affine_file
+ref_2_mni_fnirt.fieldcoeff_file -> func2mni.field_file
 zstats_2_ref.out_file -> outputnode.thresh_zstat_files

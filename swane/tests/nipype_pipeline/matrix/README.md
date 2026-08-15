@@ -6,14 +6,23 @@ settings** and records each resulting graph as a deterministic, human-readable
 for this combination of preferences?" — including the **CUDA on/off** axis — and
 gives a reviewer plain-text artifacts to check by hand.
 
-Nothing here runs FSL / FreeSurfer / Slicer / dcm2niix and no DICOM is read: the
-builders only assemble a nipype graph, and the "DICOM" input is an empty folder
-whose path is merely stored on the conversion node. The suite therefore runs
-green on a plain Windows/CI box.
+Nothing here *executes* FSL / FreeSurfer / Slicer / dcm2niix and no DICOM is
+read: the builders only assemble a nipype graph, and the "DICOM" input is an
+empty folder whose path is merely stored on the conversion node.
+
+**Reference box = fully equipped.** The intended baseline is a machine with all
+neuroimaging tools *and their data* installed (FSL + MNI templates + XTRACT
+protocols): a handful of scenarios read those data files at construction
+(`dti_preproc/new_eddy_tractography`, `tractography/cst_real_graph`,
+`fmri_resting_state/aroma_on`) and are exercised there. On a box that lacks a
+given data file (or FSL entirely) those scenarios **skip** — never fail — via
+`conftest.require_fsl_data`, so the tool-free majority still runs green on a
+plain Windows/CI box. The golden snapshots for the data-gated scenarios are
+generated on an equipped box and committed (FSL paths rewritten to `<FSLDIR>`).
 
 For the complementary *execution* work (real dcm2niix conversion of the
-`paziente 0` series, FSL/FreeSurfer/Slicer runs, the `$FSLDIR`-gated branches),
-see `../TODO_dicom.md`.
+`paziente 0` series, FSL/FreeSurfer/Slicer runs, GPU `use_cuda`/`use_gpu`
+equivalence), see `../TODO_dicom.md`.
 
 ## Layout
 
@@ -50,11 +59,11 @@ structural `../workflows/` tests.
 | `test_venous_ct_matrix` | `venous_ct_workflow` | contrast series count, skull threshold |
 | `test_seeg_ct_matrix` | `seeg_ct_workflow` | electrode threshold, erosion kernel |
 | `test_flat1_matrix` | `flat1_workflow` | FSL vs SynthMorph backend |
-| `test_dti_matrix` | `dti_preproc_workflow` | **CUDA on/off**, eddy backend, CPU core-limit |
+| `test_dti_matrix` | `dti_preproc_workflow` | **CUDA on/off**, eddy backend, CPU core-limit, tractography (needs FSL data) |
 | `test_fmri_preproc_matrix` | `fMRI_preproc_workflow` | slice timing, volume trimming |
-| `test_fmri_resting_state_matrix` | `fMRI_resting_state_workflow` | MELODIC dim/threshold (AROMA off) |
-| `test_tractography_matrix` | `tractography_workflow` | XTRACT-absent guard (returns None) |
-| `test_fmri_task_matrix` | `fMRI_task_workflow` | known FILMGLS build bug (strict xfail) |
+| `test_fmri_resting_state_matrix` | `fMRI_resting_state_workflow` | MELODIC dim/threshold; AROMA on (needs FSL data) |
+| `test_tractography_matrix` | `tractography_workflow` | real cst graph (needs XTRACT data) + unknown-name guard |
+| `test_fmri_task_matrix` | `fMRI_task_workflow` | block design (RARA vs RARB) |
 
 ## Determinism
 
@@ -73,12 +82,13 @@ assertion instead of a snapshot.
 
 ## Running
 
-### Prerequisites — no DICOM, no neuroimaging tools
+### Prerequisites — no DICOM; neuroimaging tools optional
 
-These tests need **no DICOM data** and **no FSL / FreeSurfer / Slicer / dcm2niix
-executable**. You do **not** place any DICOM anywhere: each test creates its own
-empty temporary "DICOM" folder. The only requirement is the Python test
-environment:
+These tests need **no DICOM data**: each test creates its own empty temporary
+"DICOM" folder. They also run without any **FSL / FreeSurfer / Slicer / dcm2niix
+executable** — the few data-gated scenarios simply *skip* when the FSL data they
+read is absent (see above); everything else runs. The only requirement is the
+Python test environment:
 
 ```bash
 pip install -e . pytest pytest-qt pytest-xdist
@@ -87,6 +97,10 @@ pip install -e . pytest pytest-qt pytest-xdist
 `pip install -e .` pulls in the `dcm2niix` **Python package** (a bundled binary),
 which the workflow modules import at load time. Without it the `workflows/` and
 `matrix/` tests do not even *collect* — this is the one and only gotcha.
+
+To exercise (not just skip) the data-gated scenarios, run on a box with a real
+FSL install whose `$FSLDIR/data` includes the MNI standard templates and the
+XTRACT protocol data.
 
 > The real `paziente 0` DICOM under the repo-root `dicom/` folder is **only** for
 > the future execution/integration tests (real conversion + FSL/FreeSurfer/Slicer,

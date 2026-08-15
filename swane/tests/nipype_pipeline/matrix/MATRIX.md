@@ -1,10 +1,10 @@
 # SWANe workflow settings matrix
 
-Overview of 45 construction scenarios across 13 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
+Overview of 48 construction scenarios across 14 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
 > Generated from the golden snapshots by `python swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
-[dti_preproc](#dti-preproc) · [flat1](#flat1) · [fmri_preproc](#fmri-preproc) · [fmri_resting_state](#fmri-resting-state) · [freesurfer](#freesurfer) · [func_map](#func-map) · [linear_reg](#linear-reg) · [nonlinear_reg](#nonlinear-reg) · [ref](#ref) · [seeg_ct](#seeg-ct) · [tractography](#tractography) · [venous_ct](#venous-ct) · [venous_mr](#venous-mr)
+[dti_preproc](#dti-preproc) · [flat1](#flat1) · [fmri_preproc](#fmri-preproc) · [fmri_resting_state](#fmri-resting-state) · [fmri_task](#fmri-task) · [freesurfer](#freesurfer) · [func_map](#func-map) · [linear_reg](#linear-reg) · [nonlinear_reg](#nonlinear-reg) · [ref](#ref) · [seeg_ct](#seeg-ct) · [tractography](#tractography) · [venous_ct](#venous-ct) · [venous_mr](#venous-mr)
 
 ## dti_preproc
 
@@ -13,6 +13,7 @@ Overview of 45 construction scenarios across 13 workflow families. Each row is o
 | [new_eddy_cpu_hardcap](snapshots/dti_preproc/new_eddy_cpu_hardcap.txt) | cuda=false; max_cpu=4; multicore_node_limit=HARD_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 20 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
 | [new_eddy_cpu_softcap](snapshots/dti_preproc/new_eddy_cpu_softcap.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 20 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
 | [new_eddy_cuda](snapshots/dti_preproc/new_eddy_cuda.txt) | cuda=true; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 20 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy`, `flirt` | `use_cuda=True` |
+| [new_eddy_tractography](snapshots/dti_preproc/new_eddy_tractography.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=true | 15 / 29 | `bedpostx`, `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt`, `fnirt` | `use_cuda=False`, `use_gpu=False` |
 | [old_eddy_correct](snapshots/dti_preproc/old_eddy_correct.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=true; synth_morph=False; synth_strip=False; tractography=false | 11 / 16 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_correct`, `flirt` | — |
 
 ## flat1
@@ -35,8 +36,16 @@ Overview of 45 construction scenarios across 13 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
+| [aroma_on](snapshots/fmri_resting_state/aroma_on.txt) | aroma=true; melodic_dim=0; melodic_thr=0.5 | 44 / 75 | `applywarp`, `bet`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `fslmaths`, `mcflirt`, `melodic`, `slicetimer`, `susan` | — |
 | [melodic_auto_dim](snapshots/fmri_resting_state/melodic_auto_dim.txt) | aroma=false; melodic_dim=0; melodic_thr=0.5 | 32 / 50 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `melodic`, `slicetimer`, `susan` | — |
 | [melodic_fixed_dim](snapshots/fmri_resting_state/melodic_fixed_dim.txt) | aroma=false; melodic_dim=30; melodic_thr=0.9 | 32 / 50 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `melodic`, `slicetimer`, `susan` | — |
+
+## fmri_task
+
+| scenario | settings | nodes/edges | commands | GPU |
+|----------|----------|-------------|----------|-----|
+| [single_contrast_rara](snapshots/fmri_task/single_contrast_rara.txt) | block_design=RARA; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 43 / 88 | `bet`, `cluster`, `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fslmaths`, `mcflirt`, `slicetimer`, `smoothest`, `susan` | — |
+| [two_contrasts_rarb](snapshots/fmri_task/two_contrasts_rarb.txt) | block_design=RARB; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 51 / 118 | `bet`, `cluster`, `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fslmaths`, `mcflirt`, `slicetimer`, `smoothest`, `susan` | — |
 
 ## freesurfer
 
@@ -96,8 +105,7 @@ Overview of 45 construction scenarios across 13 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [known_tract_without_xtract](snapshots/tractography/known_tract_without_xtract.txt) | tract=cst; xtract_data=absent | None | — | — |
-| [unknown_tract_guard](snapshots/tractography/unknown_tract_guard.txt) | tract=definitely_not_a_tract; xtract_data=absent | None | — | — |
+| [cst_real_graph](snapshots/tractography/cst_real_graph.txt) | cuda=false; tract=cst; xtract_data=present | 13 / 21 | `applywarp`, `probtrackx2` | `use_gpu=False` |
 
 ## venous_ct
 
