@@ -1,5 +1,6 @@
 """Unit tests for :class:`swane.config.ConfigManager.ConfigManager`."""
 
+import configparser
 import os
 import shutil
 
@@ -102,6 +103,30 @@ class TestSafeGetters:
         config = ConfigManager(global_base_folder=str(tmp_path))
         value = config.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, "enabled")
         assert isinstance(value, bool)
+
+    def test_getboolean_safe_falls_back_to_string_default(self, tmp_path):
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        # Simulate a hand-edited/corrupted config file storing a non-boolean
+        # value, bypassing the validating set() override.
+        configparser.ConfigParser.set(
+            config, str(GlobalPrefCategoryList.MAIL_SETTINGS), "enabled", "garbage"
+        )
+        # "enabled" default is the string "false": fallback must return the bool.
+        assert (
+            config.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, "enabled")
+            is False
+        )
+
+    def test_getboolean_safe_falls_back_to_bool_default(self, tmp_path):
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        # "strip" default is a Python bool (False), not the string "false":
+        # the fallback must handle it without raising.
+        configparser.ConfigParser.set(
+            config, str(GlobalPrefCategoryList.SYNTH), "strip", "garbage"
+        )
+        assert (
+            config.getboolean_safe(GlobalPrefCategoryList.SYNTH, "strip") is False
+        )
 
 
 class TestMailManagerFactory:
