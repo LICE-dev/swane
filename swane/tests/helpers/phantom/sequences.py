@@ -318,7 +318,17 @@ def render_dwi(
         cst_native, tissue.affine, spec.voxel_sizes(), psf, tissue.zooms, pose
     )
     cst_mask = cst > 0.3
-    princ = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+
+    # Per-voxel principal diffusion axis, following the bundle's curvature.  A
+    # single global axis makes the tract effectively straight, and tractography
+    # then leaves it where the real tract bends (internal capsule, peduncle) -
+    # which is why the reconstructed bundle came out threadlike.
+    princ = _resample_direction_field(tissue, spec, psf, pose, cst_mask.shape)
+    if pose is not None:
+        # the pose rotates the anatomy, so the fibre directions rotate with it
+        princ = np.einsum("ij,jxyz->ixyz", np.linalg.inv(pose)[:3, :3], princ)
+        norm = np.sqrt((princ**2).sum(axis=0)) + 1e-6
+        princ = princ / norm
 
     d_par, d_perp, d_iso = 1.7e-3, 0.3e-3, 0.9e-3  # mm^2/s
     bvals = np.asarray(bvals, dtype=np.float32)
@@ -336,9 +346,10 @@ def render_dwi(
         else:
             # isotropic background
             atten = np.full(s0.shape, np.exp(-b * d_iso), dtype=np.float32)
-            # anisotropic in the CST: gT D g with D = diag(d_perp,d_perp,d_par)
-            gdot = float(princ @ g)  # cos angle to principal axis
-            g_perp2 = max(0.0, 1.0 - gdot**2)
+            # anisotropic in the CST: gT D g, with the principal axis varying
+            # voxel by voxel along the tract
+            gdot = princ[0] * g[0] + princ[1] * g[1] + princ[2] * g[2]
+            g_perp2 = np.clip(1.0 - gdot**2, 0.0, 1.0)
             gDg = d_par * gdot**2 + d_perp * g_perp2
             atten = np.where(cst_mask, np.exp(-b * gDg), atten)
         vol = _rician(s0 * atten * bias, spec.noise_sigma, rng)
@@ -346,6 +357,40 @@ def render_dwi(
         data[..., i] = np.rint(vol)
 
     return data, affine, bvals, bvecs
+
+
+def _resample_direction_field(tissue, spec, psf, pose, target_shape):
+    """Resample the CST fibre directions onto the output grid, re-normalised.
+
+    Falls back to a superior-pointing axis where the tract has no direction
+    (older tissue models, or voxels the interpolation left at zero).
+    """
+    field = getattr(tissue, "cst_dir", None)
+    if field is None:
+        out = np.zeros((3,) + target_shape, dtype=np.float32)
+        out[2] = 1.0
+        return out
+
+    comps = []
+    for axis in range(3):
+        resampled, _ = _resample(
+            np.ascontiguousarray(field[..., axis]),
+            tissue.affine,
+            spec.voxel_sizes(),
+            psf,
+            tissue.zooms,
+            pose,
+        )
+        comps.append(resampled)
+    princ = np.stack(comps, axis=0)
+
+    norm = np.sqrt((princ**2).sum(axis=0))
+    empty = norm < 1e-3
+    princ[2] = np.where(empty, 1.0, princ[2])
+    princ[0] = np.where(empty, 0.0, princ[0])
+    princ[1] = np.where(empty, 0.0, princ[1])
+    norm = np.sqrt((princ**2).sum(axis=0)) + 1e-6
+    return (princ / norm).astype(np.float32)
 
 
 def render_bold(

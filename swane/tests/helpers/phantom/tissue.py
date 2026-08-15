@@ -80,6 +80,9 @@ class TissueModel:
     #: reference feature masks in the same grid, handy for later stages/tests
     precentral: np.ndarray  # bool, motor cortex
     cst: np.ndarray  # bool, cortico-spinal corridor
+    #: (X, Y, Z, 3) unit fibre direction in RAS inside the CST, zero elsewhere;
+    #: follows the bundle's curvature so tractography can track through it
+    cst_dir: np.ndarray = None
 
 
 def _fsaverage_dir(freesurfer_home: str | None = None) -> str:
@@ -175,7 +178,7 @@ def build_tissue_model(
 
     # --- feature overlays ------------------------------------------------
     precentral = _in(aparc, _PRECENTRAL) & _in(aseg, _FS["cortex"])
-    cst = _build_cst(brain, precentral, aseg, zooms, affine)
+    cst, cst_dir = _build_cst(brain, precentral, aseg, zooms, affine)
 
     out = labels.copy()
     out[precentral] = TissueClass.PRECENTRAL_GM
@@ -184,6 +187,7 @@ def build_tissue_model(
         labels, [TissueClass.WM, TissueClass.BRAINSTEM, TissueClass.CEREBELLUM_WM]
     )
     out[cst_stampable] = TissueClass.CST
+    cst_dir[~cst_stampable] = 0.0
 
     venous = _build_venous_sinuses(brain, aseg, zooms, affine)
     out[venous & (out == TissueClass.CSF_EXTRA)] = TissueClass.VENOUS_SINUS
@@ -194,6 +198,7 @@ def build_tissue_model(
         out, affine, (sl, precentral_out, cst_out) = _crop_to_head(
             out, affine, zooms, crop_margin_mm, [precentral, cst_stampable]
         )
+        cst_dir = cst_dir[sl]
 
     return TissueModel(
         labels=out,
@@ -201,6 +206,7 @@ def build_tissue_model(
         zooms=zooms,
         precentral=precentral_out,
         cst=cst_out,
+        cst_dir=cst_dir,
     )
 
 
@@ -255,6 +261,11 @@ def _build_cst(brain, precentral, aseg, zooms, affine):
     from scipy import ndimage as ndi
 
     corridor = np.zeros(brain.shape, dtype=bool)
+    # Unit fibre direction (RAS) per voxel.  A single global axis would make the
+    # bundle straight, and tractography then leaves it wherever the real tract
+    # bends (internal capsule, cerebral peduncle); following the local tangent
+    # keeps the fibres inside the curving bundle.
+    direction = np.zeros(brain.shape + (3,), dtype=np.float32)
     for mirror in (1.0, -1.0):
         pts = np.array(
             [[w[0][0] * mirror, w[0][1], w[0][2]] for w in _CST_WAYPOINTS_L],
@@ -262,11 +273,23 @@ def _build_cst(brain, precentral, aseg, zooms, affine):
         )
         radii = np.array([w[1] for w in _CST_WAYPOINTS_L], dtype=np.float64)
         curve, curve_r = _resample_polyline(pts, radii, step_mm=0.5)
-        corridor |= _tube_ras(brain.shape, affine, curve, curve_r)
+        tangents = _curve_tangents(curve)
+        corridor |= _tube_ras(
+            brain.shape, affine, curve, curve_r, tangents=tangents, dir_out=direction
+        )
 
     corridor &= brain
     corridor = ndi.binary_closing(corridor, iterations=1)
-    return corridor
+    direction[~corridor] = 0.0
+    return corridor, direction
+
+
+def _curve_tangents(curve):
+    """Unit tangent at every point of a densely sampled polyline."""
+    tangents = np.gradient(curve, axis=0)
+    norms = np.linalg.norm(tangents, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return (tangents / norms).astype(np.float32)
 
 
 def _resample_polyline(points, radii, step_mm=0.5):
@@ -298,11 +321,15 @@ def _resample_polyline(points, radii, step_mm=0.5):
     return np.vstack(out_pts), np.concatenate(out_rad)
 
 
-def _tube_ras(shape, affine, curve_ras, curve_radii):
+def _tube_ras(shape, affine, curve_ras, curve_radii, tangents=None, dir_out=None):
     """Voxels whose RAS centre lies within the (variable) tube radius.
 
     Only the curve's bounding box (plus the largest radius) is searched, which
     keeps the KD-tree query small.
+
+    When ``tangents`` and ``dir_out`` are given, every voxel inside the tube also
+    receives the unit tangent of its nearest curve point, so the bundle carries a
+    direction that follows its curvature instead of a single global axis.
     """
     from scipy.spatial import cKDTree
 
@@ -337,6 +364,10 @@ def _tube_ras(shape, affine, curve_ras, curve_radii):
 
     sel = idx[inside]
     out[sel[:, 0], sel[:, 1], sel[:, 2]] = True
+
+    if tangents is not None and dir_out is not None and len(sel):
+        vecs = tangents[nearest[inside]]
+        dir_out[sel[:, 0], sel[:, 1], sel[:, 2], :] = vecs
     return out
 
 
