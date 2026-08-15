@@ -128,10 +128,33 @@ class TestMailManagerFactory:
 
 class TestSubjectConfig:
 
+    def test_subject_config_uses_provided_global_config(self, tmp_path, monkeypatch):
+        subject_folder = tmp_path / "subj"
+        subject_folder.mkdir()
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        global_config_dir = tmp_path / "global"
+        global_config_dir.mkdir()
+        global_config = ConfigManager(global_base_folder=str(global_config_dir))
+        global_config[GlobalPrefCategoryList.MAIN]["default_wf_type"] = (
+            WorkflowTypes.FUNCTIONAL.name
+        )
+
+        config = ConfigManager(str(subject_folder), global_config=global_config)
+
+        assert config.get_subject_workflow_type() == WorkflowTypes.FUNCTIONAL
+        assert not (fake_home / ".SWANe").exists()
+
+        config[DataInputList.T13D]["bet_thr"] = "0.7"
+        assert global_config[DataInputList.T13D]["bet_thr"] != "0.7"
+
     def test_subject_config_structure(self, tmp_path):
         subject_folder = tmp_path / "subj"
         subject_folder.mkdir()
-        config = ConfigManager(str(subject_folder))
+        global_config = ConfigManager(global_base_folder=str(tmp_path))
+        config = ConfigManager(str(subject_folder), global_config=global_config)
         assert config.global_config is False
         assert config.config_file == os.path.join(str(subject_folder), ".config")
         assert config.has_section(str(DataInputList.T13D))
@@ -140,7 +163,8 @@ class TestSubjectConfig:
     def test_set_workflow_option(self, tmp_path):
         subject_folder = tmp_path / "subj"
         subject_folder.mkdir()
-        config = ConfigManager(str(subject_folder))
+        global_config = ConfigManager(global_base_folder=str(tmp_path))
+        config = ConfigManager(str(subject_folder), global_config=global_config)
         config.set_workflow_option(WorkflowTypes.STRUCTURAL)
         assert config[DataInputList.T13D]["wf_type"] == WorkflowTypes.STRUCTURAL.name
         assert config.get_subject_workflow_type() == WorkflowTypes.STRUCTURAL
