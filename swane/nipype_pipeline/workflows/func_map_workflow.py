@@ -149,7 +149,7 @@ def func_map_workflow(
     smooth.inputs.sigma = 2
     workflow.connect(reorient, "out_file", smooth, "in_file")
 
-    if config.getenum_safe("cost_func") is BetweenModFlirtCost.MULTUAL_INFORMATION:
+    if config.getenum_safe("cost_func") is BetweenModFlirtCost.MUTUAL_INFORMATION:
         cost = "mutualinfo"
     elif (
         config.getenum_safe("cost_func")

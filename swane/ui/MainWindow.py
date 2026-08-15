@@ -35,6 +35,7 @@ from swane.workers.UpdateCheckWorker import UpdateCheckWorker
 from swane.utils.Subject import Subject, SubjectRet
 from swane.config.ConfigManager import ConfigManager
 from swane.config.config_enums import GlobalPrefCategoryList
+from swane.utils.platform_and_tools_utils import is_mac
 
 
 class MainWindow(QMainWindow):
@@ -549,11 +550,9 @@ class MainWindow(QMainWindow):
         about_dialog = QDialog(parent=self)
         layout = QGridLayout()
 
-        bold_font = QFont()
-        bold_font.setBold(True)
         title_font = QFont()
         title_font.setBold(True)
-        title_font.setPointSize(title_font.pointSize() * 1.5)
+        title_font.setPointSize(int(title_font.pointSize() * 1.5))
 
         label_about1 = QLabel(strings.APPNAME)
         label_about1.setFont(title_font)
@@ -784,10 +783,11 @@ class MainWindow(QMainWindow):
             not self.check_running_workflows(ignore_subj=subject)
             and not self.check_workflow_error()
         ):
-            os.system("systemctl poweroff")
-            os.system("osascript -e 'tell app \"System Events\" to shut down'")
+            if is_mac():
+                os.system("osascript -e 'tell app \"System Events\" to shut down'")
+            else:
+                os.system("systemctl poweroff")
             exit()
-            pass
 
     def home_tab_ui(self):
         """
@@ -805,7 +805,7 @@ class MainWindow(QMainWindow):
         bold_font.setBold(True)
         title_font = QFont()
         title_font.setBold(True)
-        title_font.setPointSize(title_font.pointSize() * 1.5)
+        title_font.setPointSize(int(title_font.pointSize() * 1.5))
         x = 0
 
         label_welcome1 = QLabel(strings.mainwindow_home_label1)
