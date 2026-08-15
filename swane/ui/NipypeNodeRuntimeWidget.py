@@ -148,8 +148,10 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         self._row += 1
 
         # ---------------- Tool Info ----------------
-        interface_name = self._get_interface_name(node_pickle_file)
-        tool_reference = get_command_info(interface_name)
+        tool_reference = None
+        if os.path.exists(node_pickle_file):
+            interface_name = self._get_interface_name(node_pickle_file)
+            tool_reference = get_command_info(interface_name)
         if tool_reference is not None:
             self._add_label(strings.sub_tab_node_tool_label, self._row, 0)
             self._add_tool_button(tool_reference, self._row, 1)
