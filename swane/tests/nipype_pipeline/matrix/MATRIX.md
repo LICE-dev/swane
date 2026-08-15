@@ -1,6 +1,6 @@
 # SWANe workflow settings matrix
 
-Overview of 48 construction scenarios across 14 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
+Overview of 50 construction scenarios across 14 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
 > Generated from the golden snapshots by `python swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
@@ -62,11 +62,12 @@ Overview of 48 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [no_freesurfer_ai](snapshots/func_map/no_freesurfer_ai.txt) | ai=true; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=DISABLED | 14 / 22 | `applywarp`, `dcm2niix`, `flirt`, `fslmaths` | — |
-| [no_freesurfer_no_ai](snapshots/func_map/no_freesurfer_no_ai.txt) | ai=false; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=DISABLED | 8 / 11 | `dcm2niix`, `flirt`, `fslmaths` | — |
-| [reconall_ai](snapshots/func_map/reconall_ai.txt) | ai=true; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=RECONALL | 21 / 43 | `applywarp`, `dcm2niix`, `flirt`, `fslmaths`, `mri_vol2surf` | — |
-| [reconall_no_ai](snapshots/func_map/reconall_no_ai.txt) | ai=false; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=RECONALL | 13 / 26 | `dcm2niix`, `flirt`, `fslmaths`, `mri_vol2surf` | — |
-| [synthseg_no_ai](snapshots/func_map/synthseg_no_ai.txt) | ai=false; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=SYNTHSEG | 9 / 14 | `dcm2niix`, `flirt`, `fslmaths` | — |
+| [no_freesurfer_ai](snapshots/func_map/no_freesurfer_ai.txt) | ai=true; config=ASL; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=DISABLED | 14 / 22 | `applywarp`, `dcm2niix`, `flirt`, `fslmaths` | — |
+| [no_freesurfer_no_ai](snapshots/func_map/no_freesurfer_no_ai.txt) | ai=false; config=ASL; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=DISABLED | 8 / 11 | `dcm2niix`, `flirt`, `fslmaths` | — |
+| [pet_reconall_ai](snapshots/func_map/pet_reconall_ai.txt) | ai=true; config=PET; cost_func=MUTUAL_INFORMATION; freesurfer_step=RECONALL | 21 / 43 | `applywarp`, `dcm2niix`, `flirt`, `fslmaths`, `mri_vol2surf` | — |
+| [reconall_ai](snapshots/func_map/reconall_ai.txt) | ai=true; config=ASL; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=RECONALL | 21 / 43 | `applywarp`, `dcm2niix`, `flirt`, `fslmaths`, `mri_vol2surf` | — |
+| [reconall_no_ai](snapshots/func_map/reconall_no_ai.txt) | ai=false; config=ASL; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=RECONALL | 13 / 26 | `dcm2niix`, `flirt`, `fslmaths`, `mri_vol2surf` | — |
+| [synthseg_no_ai](snapshots/func_map/synthseg_no_ai.txt) | ai=false; config=ASL; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=SYNTHSEG | 9 / 14 | `dcm2niix`, `flirt`, `fslmaths` | — |
 
 ## linear_reg
 
@@ -76,6 +77,7 @@ Overview of 48 construction scenarios across 14 workflow families. Each row is o
 | [flair3d_bias](snapshots/linear_reg/flair3d_bias.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; synth_morph=false; synth_strip=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
 | [flair3d_no_bias](snapshots/linear_reg/flair3d_no_bias.txt) | bias_field_correction=False; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; synth_morph=false; synth_strip=false | 11 / 18 | `bet`, `dcm2niix`, `flirt`, `robustfov` | — |
 | [flair3d_synth_backend](snapshots/linear_reg/flair3d_synth_backend.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; synth_morph=true; synth_strip=true | 13 / 24 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip`, `robustfov` | — |
+| [mdc_bias](snapshots/linear_reg/mdc_bias.txt) | bias_field_correction=True; config=MDC; is_partial_coverage=False; is_volumetric=True; synth_morph=false; synth_strip=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
 | [t2cor_partial_coverage](snapshots/linear_reg/t2cor_partial_coverage.txt) | bias_field_correction=False; config=None; is_partial_coverage=True; is_volumetric=True; synth_morph=false; synth_strip=false | 10 / 16 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
 
 ## nonlinear_reg
