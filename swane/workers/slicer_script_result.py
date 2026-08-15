@@ -33,7 +33,11 @@ os.environ["QT_LOGGING_RULES"] = "*.warning=false"
 
 
 def _make_colormap_transparent_at_zero(
-    display_node, color_node_id: str, window_min: float, window_max: float, volume_name: str
+    display_node,
+    color_node_id: str,
+    window_min: float,
+    window_max: float,
+    volume_name: str,
 ):
     """
     Clone the color table assigned to a volume and make the entries around
