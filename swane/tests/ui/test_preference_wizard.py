@@ -41,10 +41,10 @@ class TestPreferenceWizard:
     ):
         wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
-        monkeypatch.setattr(global_config, "apply_resource_profile", lambda profile: None)
         monkeypatch.setattr(
-            dependency_manager, "is_freesurfer_synth", lambda: True
+            global_config, "apply_resource_profile", lambda profile: None
         )
+        monkeypatch.setattr(dependency_manager, "is_freesurfer_synth", lambda: True)
         monkeypatch.setattr(
             ResourceManager, "synth_seg_ram_requirements", staticmethod(lambda: 10)
         )
