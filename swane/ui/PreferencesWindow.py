@@ -165,7 +165,7 @@ class PreferencesWindow(QDialog):
                             fail_tooltip = self.preferences[category][
                                 key
                             ].option_pref_requirement_fail_tooltip[option]
-                        except:
+                        except Exception:
                             pass
                         for pref_cat in self.preferences[category][
                             key
@@ -431,7 +431,7 @@ class PreferencesWindow(QDialog):
                         continue
                     try:
                         req = GLOBAL_PREFERENCES[req_cat][req_key[0]]
-                    except:
+                    except Exception:
                         req = WF_PREFERENCES[req_cat][req_key[0]]
 
                     if req.input_type == InputTypes.BOOLEAN:
@@ -457,7 +457,7 @@ class PreferencesWindow(QDialog):
                             >= req_key[1]
                         )
                     else:
-                        check = req_key[1] = self.global_config[req_cat][req_key[0]]
+                        check = req_key[1] == self.global_config[req_cat][req_key[0]]
 
                     if not check:
                         if option is None:
@@ -494,7 +494,7 @@ class PreferencesWindow(QDialog):
                     ):
                         check = float(self.inputs[req_x].get_value()) >= req_key[1]
                     else:
-                        check = req_key[1] = self.inputs[req_x].get_value()
+                        check = req_key[1] == self.inputs[req_x].get_value()
 
                     if not check:
                         if option is None:
