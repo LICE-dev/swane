@@ -53,6 +53,14 @@ dicom/
 # Generated workflow-matrix report (rebuild with matrix/generate_report.py)
 matrix_report.html
 
+# Anything the phantom generator or the pre-release sweep produces. Both write
+# outside the repo by default (~/test_swane), but --work-dir / $SWANE_PHANTOM_DIR
+# can point here: those outputs are derived from the user's FreeSurfer install
+# and must never be committed.
+test_swane/
+prerelease_report.*
+prerelease_state.json
+
 .spyproject
 SWANe.egg-info
 swane.egg-info
