@@ -412,12 +412,7 @@ class ConfigManager(configparser.ConfigParser):
         use_ssl = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, "use_ssl")
         use_tls = self.getboolean_safe(GlobalPrefCategoryList.MAIL_SETTINGS, "use_tls")
 
-        if (
-            server_address == ""
-            or server_port <= 0
-            or username == ""
-            or password == ""
-        ):
+        if server_address == "" or server_port <= 0 or username == "" or password == "":
             return None
 
         mail_manager = MailManager(
@@ -457,7 +452,8 @@ class ConfigManager(configparser.ConfigParser):
 
                 if (
                     WF_PREFERENCES[section][option].input_type == InputTypes.ENUM
-                    and self[section][option] in WF_PREFERENCES[section][option].value_enum.__members__
+                    and self[section][option]
+                    in WF_PREFERENCES[section][option].value_enum.__members__
                 ):
                     enum_cls = WF_PREFERENCES[section][option].value_enum
                     value_enum = enum_cls[self[section][option]]
