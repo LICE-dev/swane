@@ -47,53 +47,53 @@
 - veins_ct_flirt_2_contrast [FLIRT] cmd=flirt mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
     cost = 'mutualinfo'
     dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
     out_matrix_file = 'veins2ref.mat'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     searchr_x = [-90, 90]
     searchr_y = [-90, 90]
     searchr_z = [-90, 90]
 - veins_ct_flirt_2_ref [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'mutualinfo'
     dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
     out_matrix_file = 'veins2ref.mat'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     searchr_x = [-90, 90]
     searchr_y = [-90, 90]
     searchr_z = [-90, 90]
 - veins_ct_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - veins_ct_range [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = []
 - veins_ct_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - veins_ct_rescale [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - veins_ct_subtraction [BinaryMaths] cmd=fslmaths mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operation = 'sub'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - veins_ct_sum [SumMultiVols] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'vein_contrast_sum.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - veins_flirt [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
     apply_xfm = True
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
     out_file = 'r-veins_ct_inskull.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - veins_mask_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - venous_ct2_robustfov [RobustFOV] cmd=robustfov mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - venous_ct_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 # connections
 inputnode.reference -> veins_ct_flirt_2_ref.reference
 inputnode.reference_brain -> veins_flirt.reference

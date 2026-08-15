@@ -19,6 +19,45 @@ import pytest
 # Qt must be head-less *before* any QApplication is created by pytest-qt.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# FSL's own default output type, used only as a fallback below and by every
+# FSLCommand's __init__ (nipype.interfaces.fsl.base.FSLCommand) each time a
+# node is instantiated: without a real FSL install nipype leaves
+# FSLOUTPUTTYPE unset and silently falls back to the legacy "NIFTI" (not
+# "NIFTI_GZ", FSL's actual default since 5.x) — see nipype's
+# fsl.base.Info.output_type(). Pin it explicitly so construction-only tests
+# match what a real FSL install produces, but never override a value the
+# environment (e.g. a real FSL's fsl.sh) already set.
+os.environ.setdefault("FSLOUTPUTTYPE", "NIFTI_GZ")
+
+# Some nipype FSL interfaces pick their *input spec class* once, at import
+# time, based on nipype.interfaces.fsl.base.Info.version() (e.g. FILMGLS:
+# FSL <=5.0.6 lacks the tcon_file/fcon_file inputs swane wires — see
+# fMRI_task_workflow). On a box without a real FSL install (e.g. the
+# Windows dev machine these tests must also run on) that version is None
+# and nipype silently falls back to the old/reduced interface, breaking
+# workflow construction for reasons that have nothing to do with swane's
+# code. Patch nipype's common PackageInfo.version() so *only* FSL interface
+# classes (nipype.interfaces.fsl.*), and only when the real detection comes
+# up empty, report a modern FSL version (>= 6.0, matching FSLOUTPUTTYPE
+# above) instead of None. Where a real FSL install is present (e.g. the
+# heavy/integration tests), real detection wins and this fallback never
+# triggers. Must run before anything below imports nipype.interfaces.fsl
+# (swane.utils.DependencyManager does, transitively).
+_FALLBACK_FSL_VERSION = "6.0.7.22"
+from nipype.interfaces.base import core as _nipype_core
+
+_real_package_version = _nipype_core.PackageInfo.version.__func__
+
+
+def _package_version_with_fsl_fallback(klass):
+    version = _real_package_version(klass)
+    if version is None and klass.__module__.startswith("nipype.interfaces.fsl"):
+        return _FALLBACK_FSL_VERSION
+    return version
+
+
+_nipype_core.PackageInfo.version = classmethod(_package_version_with_fsl_fallback)
+
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DependencyManager import DependencyManager
 from swane.tests.helpers.dicom_scenarios import build_dicom_tree

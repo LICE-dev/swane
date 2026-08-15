@@ -13,11 +13,11 @@
     function_str = 'def get_betted_name(basename):\n    return "r-%s_brain.nii.gz" % basename\n'
 - flair_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
     apply_xfm = True
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - flair_brain_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - flair_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
     compress = 'y'
@@ -36,16 +36,16 @@
 - flair_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'mutualinfo'
     dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     searchr_x = [-40, 40]
     searchr_y = [-40, 40]
     searchr_z = [-40, 40]
 - flair_reorient [ForceOrient] mem_gb=0.2 n_procs=1
 - flair_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - unbetted_name [Function] mem_gb=0.2 n_procs=1

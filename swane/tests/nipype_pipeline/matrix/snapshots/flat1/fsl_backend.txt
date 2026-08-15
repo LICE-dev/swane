@@ -5,132 +5,132 @@
 # nodes=30 edges=44
 
 - binary_flair_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-binary_flair.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - extension_z_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-extension_z.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - fast_segment_split [Function] mem_gb=0.2 n_procs=1
     function_str = 'def pick_first_two(file_list):\n    return file_list[1], file_list[2]\n'
 - flair_2_mni1_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     ref_file = '<TMP>/mni1.nii.gz'
 - flat1_binaryFLAIR [ThrROI] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'binary_flair.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_cerebellum_mean [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = []
 - flat1_convolution_flair [SpatialFilter] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     kernel_shape = 'boxv'
     kernel_size = 5.0
     operation = 'mean'
     out_file = 'convolution_flair.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_cortexMask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     mask_file = '<SUPPLEMENT>/resources/doMAP_template/brain_cortex_mas_OK.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_fast [FAST] cmd=fast mem_gb=4 n_procs=1
     bias_iters = 4
     bias_lowpass = 40
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     hyper = 0.1
     img_type = 1
     number_classes = 3
     output_biascorrected = True
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_flairDIVref [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operation = 'div'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_gmMask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - flat1_gm_mean [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = []
 - flat1_image_extension [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operand_file = '<SUPPLEMENT>/resources/doMAP_template/mean_extension.nii.gz'
     operation = 'sub'
     out_file = 'extension_image.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_image_extensionz [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operand_file = '<SUPPLEMENT>/resources/doMAP_template/std_final_extension.nii.gz'
     operation = 'div'
     out_file = 'extension_z.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_junction_mean [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operand_file = '<SUPPLEMENT>/resources/doMAP_template/mean_flair.nii.gz'
     operation = 'sub'
     out_file = 'junction_flair.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_junctionz [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operand_file = '<SUPPLEMENT>/resources/doMAP_template/std_final_flair.nii.gz'
     operation = 'div'
     out_file = 'junctionZ_flair.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_masked_cerebellum [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     mask_file = '<SUPPLEMENT>/resources/doMAP_template/binary_cerebellum.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_no_cereb_extension_z [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     mask_file = '<SUPPLEMENT>/resources/doMAP_template/brain_cortex_mas_OK.nii.gz'
     out_file = 'no_cereb_extension_z.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_normalised_GM_mask [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operation = 'div'
     out_file = 'normalised_GM_mask.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_outliers_mask [Threshold] cmd=fslmaths mem_gb=0.2 n_procs=1
     direction = 'above'
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     thresh = 97.0
     use_nonzero_voxels = True
     use_robust_range = True
 - flat1_restore_gmMask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'masked_image_GM.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_smoothed_image_extension [SpatialFilter] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     kernel_shape = 'boxv'
     kernel_size = 5.0
     operation = 'mean'
     out_file = 'smoothed_image_extension.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - flat1_wmMask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - flat1_wm_mean [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = []
 - gm_2_mni1_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     ref_file = '<TMP>/mni1.nii.gz'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - junction_z_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-junction_z.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - restore_2_mni1_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     ref_file = '<TMP>/mni1.nii.gz'
 - wm_2_mni1_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     ref_file = '<TMP>/mni1.nii.gz'
 # connections
 binary_flair_2_ref_apply_warp.out_file -> outputnode.binary_flair

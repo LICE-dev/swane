@@ -13,16 +13,16 @@
 - dif2ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'corratio'
     dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     searchr_x = [-90, 90]
     searchr_y = [-90, 90]
     searchr_z = [-90, 90]
 - dif2ref_invwarp [ConvertXFM] cmd=convert_xfm mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     invert_xfm = True
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - dti_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
     compress = 'y'
@@ -39,19 +39,19 @@
     source_dir = '<TMP>/dicom'
     verbose = False
 - dti_deskull_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     frac = 0.3
     mask = True
     out_file = 'nodif_brain.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     robust = True
     threshold = True
 - dti_dtifit [DTIFit] cmd=dtifit mem_gb=0.2 n_procs=1
     base_name = 'dtifit_'
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - dti_eddy [CustomEddy] cmd=eddy mem_gb=1 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI', OMP_NUM_THREADS='1'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ', OMP_NUM_THREADS='1'}
     flm = 'quadratic'
     fudge_factor = 10.0
     interp = 'spline'
@@ -60,7 +60,7 @@
     num_threads = 1
     nvoxhp = 1000
     out_base = 'eddy_corrected'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     slm = 'none'
     use_cuda = True
 - dti_eddy_files [GenEddyFiles] mem_gb=0.2 n_procs=1
@@ -71,9 +71,9 @@
 - dti_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - fa_2_ref_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
     apply_xfm = True
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-FA.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 # connections

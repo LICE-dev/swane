@@ -9,25 +9,25 @@
 - asl_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'normmi'
     dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     searchr_x = [-90, 90]
     searchr_y = [-90, 90]
     searchr_z = [-90, 90]
 - asl_2_sym_warp_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     ref_file = '<SUPPLEMENT>/resources/mni_icbm152_t1_tal_nlin_sym_09c_brain.nii.gz'
 - asl_ai [AsymmetryIndex] mem_gb=0.2 n_procs=1
     out_file = 'r-asl_ai.nii.gz'
 - asl_ai_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - asl_ai_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-asl_ai.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - asl_ai_surf_lh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
     cortex_mask = True
     environ = {}
@@ -47,9 +47,9 @@
     sampling_range = 0.5
     sampling_units = 'frac'
 - asl_ai_threshold [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-thr -0.850000 -uthr 0.850000'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - asl_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
     compress = 'y'
@@ -66,18 +66,18 @@
     source_dir = '<TMP>/dicom'
     verbose = False
 - asl_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-asl.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - asl_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - asl_smooth [IsotropicSmooth] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     sigma = 2.0
 - asl_smooth_2_ref_flirt_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
     apply_xfm = True
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - asl_surf_lh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
     cortex_mask = True
     environ = {}

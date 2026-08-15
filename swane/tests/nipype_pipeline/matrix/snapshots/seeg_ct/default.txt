@@ -6,34 +6,34 @@
 # nodes=13 edges=16
 
 - electrodes_weight_bin [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-thr 2000.0000000000 -bin -mul -1 -add 1'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - ref_brain_dilate [DilateImage] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operation = 'mean'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - ref_brain_erode [ErodeImage] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     kernel_shape = 'box'
     kernel_size = 5.0
     minimum_filter = False
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - seeg_ct_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'mutualinfo'
     dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
     out_matrix_file = 'seegct2ref.mat'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
     searchr_x = [-90, 90]
     searchr_y = [-90, 90]
     searchr_z = [-90, 90]
 - seeg_ct_brain [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - seeg_ct_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
     compress = 'y'
@@ -50,23 +50,23 @@
     source_dir = '<TMP>/dicom'
     verbose = False
 - seeg_ct_electrode_skull [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
 - seeg_ct_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - seeg_electodes [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI'}
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operation = 'add'
     out_file = 'r-seeg_electrodes.nii.gz'
-    output_type = 'NIFTI'
+    output_type = 'NIFTI_GZ'
 - seeg_electrodes_thr_ref [Threshold] cmd=fslmaths mem_gb=0.2 n_procs=1
     direction = 'below'
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     thresh = 2000.0
 - seeg_no_electrodes_thr_ref [Threshold] cmd=fslmaths mem_gb=0.2 n_procs=1
     direction = 'above'
-    environ = {FSLOUTPUTTYPE='NIFTI'}
-    output_type = 'NIFTI'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
     thresh = 2000.0
 # connections
 electrodes_weight_bin.out_file -> seeg_ct_2_ref_flirt.in_weight
