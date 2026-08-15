@@ -698,16 +698,6 @@ class PreferenceWizardWindow(QDialog):
 
         """
 
-        w = self._stack.currentWidget()
-
-        # Performance page
-        if (
-            hasattr(self, "_perf_group")
-            and w is self._pages[self._index_of_page_widget(w)]
-        ):
-            # Not robust by identity of widgets; we instead check existence of group & whether it has a checkedButton
-            pass
-
         # Save by checking which groups exist + checked
         if (
             hasattr(self, "_perf_group")
@@ -730,27 +720,6 @@ class PreferenceWizardWindow(QDialog):
 
         if hasattr(self, "_adv_group") and self._adv_group.checkedButton() is not None:
             self.user_prefs.use_advanced_models = bool(self._adv_group.checkedId())
-
-    def _index_of_page_widget(self, w: QWidget) -> int:
-        """
-        Returns the index of a page widget in the internal page list.
-
-        Parameters
-        ----------
-        w : QWidget
-            Page widget to locate.
-
-        Returns
-        -------
-        int
-            Index of the widget in the wizard page list, or -1 if not found.
-
-        """
-
-        for i, p in enumerate(self._pages):
-            if p is w:
-                return i
-        return -1
 
     def _update_review_page(self) -> None:
         """
@@ -803,7 +772,7 @@ class PreferenceWizardWindow(QDialog):
         else:
             parts.append(
                 strings.wizard_advanced_models.format(
-                    adv_status="Enabled (based on system resources"
+                    adv_status="Enabled (based on system resources)"
                 )
                 if self.user_prefs.use_advanced_models
                 else strings.wizard_advanced_models.format(adv_status="Disabled")
@@ -1042,7 +1011,7 @@ class PreferenceWizardWindow(QDialog):
         """
         self.global_config.apply_resource_profile(self.user_prefs.performance_profile)
         self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"] = str(
-            self.user_prefs.use_gpu_acceleration
+            bool(self.user_prefs.use_gpu_acceleration)
         )
 
         if self.user_prefs.use_advanced_models:
