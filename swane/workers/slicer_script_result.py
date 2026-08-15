@@ -32,11 +32,75 @@ os.environ["QT_LOGGING_RULES"] = "*.warning=false"
 # -----------------------------
 
 
+def _make_colormap_transparent_at_zero(
+    display_node, color_node_id: str, window_min: float, window_max: float, volume_name: str
+):
+    """
+    Clone the color table assigned to a volume and make the entries around
+    value 0 fully transparent, so no-signal voxels let the layer below show
+    through instead of being painted with the LUT's zero color.
+
+    Works for both one-sided (e.g. Cold-to-Hot) and diverging (signed,
+    e.g. Blue-Red) LUTs, since it locates the table entry that corresponds
+    to the value 0 given the volume's own window bounds, rather than
+    assuming 0 sits at either end of the range.
+
+    Parameters
+    ----------
+    display_node : vtkMRMLScalarVolumeDisplayNode
+        Display node of the volume; its color node is replaced with the
+        edited clone.
+    color_node_id : str
+        ID of the original (shared) Slicer color node.
+    window_min, window_max : float
+        Display window bounds actually applied to the volume (must match
+        what was set via SetWindowLevelMinMax so the 0 entry is located
+        correctly).
+    volume_name : str
+        Used only to name the cloned color node.
+
+    Returns
+    -------
+    None
+    """
+    original_color_node = slicer.mrmlScene.GetNodeByID(color_node_id)
+    if original_color_node is None:
+        original_color_node = slicer.mrmlScene.GetFirstNodeByName(color_node_id)
+    if original_color_node is None or window_max <= window_min:
+        return
+    if not original_color_node.IsA("vtkMRMLColorTableNode"):
+        # Procedural color nodes (e.g. "PET-Rainbow2") don't expose an
+        # editable, indexed RGBA table, so this technique doesn't apply.
+        print(
+            f"SLICERLOADER: Cannot hide zero for '{volume_name}': "
+            f"color node '{color_node_id}' is not an editable color table"
+        )
+        return
+
+    n_colors = original_color_node.GetNumberOfColors()
+    if n_colors <= 0:
+        return
+
+    clone = slicer.mrmlScene.AddNewNodeByClass(
+        "vtkMRMLColorTableNode", f"{volume_name}_hide0"
+    )
+    clone.Copy(original_color_node)
+
+    zero_fraction = min(max((0.0 - window_min) / (window_max - window_min), 0.0), 1.0)
+    zero_index = int(round(zero_fraction * (n_colors - 1)))
+    margin = max(1, round(n_colors * 0.01))
+    for i in range(max(0, zero_index - margin), min(n_colors, zero_index + margin + 1)):
+        clone.SetOpacity(i, 0.0)
+
+    display_node.SetAndObserveColorNodeID(clone.GetID())
+
+
 def load_anat(
     scene_dir: str,
     volume_name: str,
     color_node_id: str = None,
     hide_zero: bool = False,
+    symmetric_window: bool = False,
 ):
     """
     Load an anatomical volume (NIfTI) into Slicer.
@@ -51,6 +115,9 @@ def load_anat(
         Slicer color node ID to assign to the loaded volume.
     hide_zero : bool, optional
         If True, hide voxels with value == 0 (display only).
+    symmetric_window : bool, optional
+        If True, force the display window to be centered on 0 (min = -max),
+        so a diverging LUT's neutral color always sits at value 0.
 
     Returns
     -------
@@ -91,9 +158,30 @@ def load_anat(
         if color_node_id:
             dn.SetAndObserveColorNodeID(color_node_id)
 
-        # --- Hide zero (display-only) ---
-        if hide_zero:
-            node.SetAttribute("HideZero", "True")
+        # --- Display window: shared by symmetric_window and hide_zero, so
+        #     the "value 0" they each reason about is the same one. ---
+        window_min = window_max = None
+        if symmetric_window or hide_zero:
+            image_data = node.GetImageData()
+            if image_data:
+                min_val, max_val = image_data.GetScalarRange()
+                if symmetric_window:
+                    abs_max = max(abs(min_val), abs(max_val))
+                    window_min, window_max = -abs_max, abs_max
+                else:
+                    window_min, window_max = min_val, max_val
+
+        if window_min is not None and window_max is not None:
+            dn.SetAutoWindowLevel(0)
+            dn.SetWindowLevelMinMax(window_min, window_max)
+
+        # --- Hide zero (display-only): make no-signal voxels transparent
+        #     via the color table instead of a threshold, so it also works
+        #     for signed/diverging maps (threshold would hide one whole side). ---
+        if hide_zero and color_node_id and window_min is not None:
+            _make_colormap_transparent_at_zero(
+                dn, color_node_id, window_min, window_max, volume_name
+            )
 
         return node
 
@@ -280,7 +368,8 @@ def load_fmri_task(scene_dir: str):
             load_anat(
                 fmri_path,
                 file.replace(".nii.gz", ""),
-                "vtkMRMLPETProceduralColorNodePET-Rainbow2",
+                "vtkMRMLColorTableNodeFileColdToHotRainbow.txt",
+                hide_zero=True,
             )
 
 
@@ -310,6 +399,7 @@ def load_fmri_resting_state(scene_dir: str):
             fmri_dir,
             os.path.basename(zstat_file),
             "vtkMRMLColorTableNodeFileColdToHotRainbow.txt",
+            hide_zero=True,
         )
 
 
@@ -847,16 +937,20 @@ def main_export():
 
     # Load colored volumes
     color_volumes = [
-        ("r-asl_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False),
-        ("r-pet_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False),
-        ("r-pet", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True),
-        ("r-pet_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False),
-        ("r-asl", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True),
-        ("r-asl_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False),
+        ("r-asl_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False, True),
+        ("r-pet_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False, True),
+        ("r-pet", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True, False),
+        ("r-pet_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False, False),
+        ("r-asl", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True, False),
+        ("r-asl_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False, False),
     ]
-    for vol_name, color_node, hide_zero in color_volumes:
+    for vol_name, color_node, hide_zero, symmetric_window in color_volumes:
         load_anat(
-            results_folder, vol_name, color_node_id=color_node, hide_zero=hide_zero
+            results_folder,
+            vol_name,
+            color_node_id=color_node,
+            hide_zero=hide_zero,
+            symmetric_window=symmetric_window,
         )
 
     # Example: load lesions, fMRI, veins, FreeSurfer
