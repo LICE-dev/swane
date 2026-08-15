@@ -1,6 +1,7 @@
 # workflow snapshot: func_map / no_freesurfer_no_ai
 #
 #   ai = false
+#   config = ASL
 #   cost_func = NORMALIZED_MUTUAL_INFORMATION
 #   freesurfer_step = DISABLED
 #

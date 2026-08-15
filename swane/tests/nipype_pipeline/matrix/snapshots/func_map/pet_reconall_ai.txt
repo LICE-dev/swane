@@ -1,0 +1,174 @@
+# workflow snapshot: func_map / pet_reconall_ai
+#
+#   ai = true
+#   config = PET
+#   cost_func = MUTUAL_INFORMATION
+#   freesurfer_step = RECONALL
+#
+# nodes=21 edges=43
+
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- pet_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'mutualinfo'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interp = 'trilinear'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
+- pet_2_sym_warp_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    ref_file = '<SUPPLEMENT>/resources/mni_icbm152_t1_tal_nlin_sym_09c_brain.nii.gz'
+- pet_ai [AsymmetryIndex] mem_gb=0.2 n_procs=1
+    out_file = 'r-pet_ai.nii.gz'
+- pet_ai_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- pet_ai_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'r-pet_ai.nii.gz'
+    output_type = 'NIFTI_GZ'
+- pet_ai_surf_lh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
+    cortex_mask = True
+    environ = {}
+    hemi = 'lh'
+    out_file = 'pet_ai_surf_lh.mgz'
+    reg_header = True
+    sampling_method = 'point'
+    sampling_range = 0.5
+    sampling_units = 'frac'
+- pet_ai_surf_rh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
+    cortex_mask = True
+    environ = {}
+    hemi = 'rh'
+    out_file = 'pet_ai_surf_rh.mgz'
+    reg_header = True
+    sampling_method = 'point'
+    sampling_range = 0.5
+    sampling_units = 'frac'
+- pet_ai_threshold [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-thr -0.850000 -uthr 0.850000'
+    output_type = 'NIFTI_GZ'
+- pet_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'pet'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- pet_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'r-pet.nii.gz'
+    output_type = 'NIFTI_GZ'
+- pet_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
+- pet_smooth [IsotropicSmooth] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    sigma = 2.0
+- pet_smooth_2_ref_flirt_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- pet_surf_lh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
+    cortex_mask = True
+    environ = {}
+    hemi = 'lh'
+    out_file = 'pet_surf_lh.mgz'
+    reg_header = True
+    sampling_method = 'point'
+    sampling_range = 0.5
+    sampling_units = 'frac'
+- pet_surf_rh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
+    cortex_mask = True
+    environ = {}
+    hemi = 'rh'
+    out_file = 'pet_surf_rh.mgz'
+    reg_header = True
+    sampling_method = 'point'
+    sampling_range = 0.5
+    sampling_units = 'frac'
+- pet_sym_swap [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def swap_rl(in_file):\n    import os\n    import numpy as np\n    import nibabel as nib\n\n    img = nib.load(in_file)\n    # flip along the x (right-left) axis keeping the affine unchanged,\n    # i.e. the anatomy is mirrored in the same voxel space.\n    # set_data_dtype avoids any residual rescaling on write\n    flipped = np.flip(img.get_fdata(dtype=np.float32), axis=0)\n    hdr = img.header.copy()\n    hdr.set_data_dtype(np.float32)\n    out_file = os.path.abspath("sym_swapped.nii.gz")\n    nib.save(nib.Nifti1Image(flipped, img.affine, hdr), out_file)\n    return out_file\n'
+- pet_zscore [Zscore] mem_gb=0.2 n_procs=1
+    out_file = 'r-pet_zscore.nii.gz'
+- pet_zscore_surf_lh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
+    cortex_mask = True
+    environ = {}
+    hemi = 'lh'
+    out_file = 'pet_zscore_surf_lh.mgz'
+    reg_header = True
+    sampling_method = 'point'
+    sampling_range = 0.5
+    sampling_units = 'frac'
+- pet_zscore_surf_rh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
+    cortex_mask = True
+    environ = {}
+    hemi = 'rh'
+    out_file = 'pet_zscore_surf_rh.mgz'
+    reg_header = True
+    sampling_method = 'point'
+    sampling_range = 0.5
+    sampling_units = 'frac'
+# connections
+inputnode.bgROI -> pet_zscore.ROI_file
+inputnode.brain_mask -> pet_ai_mask.mask_file
+inputnode.brain_mask -> pet_mask.mask_file
+inputnode.freesurfer_subject_id -> pet_ai_surf_lh.subject_id
+inputnode.freesurfer_subject_id -> pet_ai_surf_rh.subject_id
+inputnode.freesurfer_subject_id -> pet_surf_lh.subject_id
+inputnode.freesurfer_subject_id -> pet_surf_rh.subject_id
+inputnode.freesurfer_subject_id -> pet_zscore_surf_lh.subject_id
+inputnode.freesurfer_subject_id -> pet_zscore_surf_rh.subject_id
+inputnode.freesurfer_subjects_dir -> pet_ai_surf_lh.subjects_dir
+inputnode.freesurfer_subjects_dir -> pet_ai_surf_rh.subjects_dir
+inputnode.freesurfer_subjects_dir -> pet_surf_lh.subjects_dir
+inputnode.freesurfer_subjects_dir -> pet_surf_rh.subjects_dir
+inputnode.freesurfer_subjects_dir -> pet_zscore_surf_lh.subjects_dir
+inputnode.freesurfer_subjects_dir -> pet_zscore_surf_rh.subjects_dir
+inputnode.ref_2_sym_invwarp -> pet_ai_2_ref_apply_warp.field_file
+inputnode.ref_2_sym_warp -> pet_2_sym_warp_apply_warp.field_file
+inputnode.reference -> pet_2_ref_flirt.reference
+inputnode.reference -> pet_ai_2_ref_apply_warp.ref_file
+inputnode.reference -> pet_smooth_2_ref_flirt_apply_xfm.reference
+pet_2_ref_flirt.out_matrix_file -> pet_smooth_2_ref_flirt_apply_xfm.in_matrix_file
+pet_2_sym_warp_apply_warp.out_file -> pet_ai.in_file
+pet_2_sym_warp_apply_warp.out_file -> pet_sym_swap.in_file
+pet_ai.out_file -> pet_ai_threshold.in_file
+pet_ai_2_ref_apply_warp.out_file -> pet_ai_mask.in_file
+pet_ai_mask.out_file -> outputnode.ai
+pet_ai_mask.out_file -> pet_ai_surf_lh.source_file
+pet_ai_mask.out_file -> pet_ai_surf_rh.source_file
+pet_ai_surf_lh.out_file -> outputnode.ai_surf_lh
+pet_ai_surf_rh.out_file -> outputnode.ai_surf_rh
+pet_ai_threshold.out_file -> pet_ai_2_ref_apply_warp.in_file
+pet_conv.converted_files -> pet_reOrient.in_file
+pet_mask.out_file -> outputnode.registered_file
+pet_mask.out_file -> pet_surf_lh.source_file
+pet_mask.out_file -> pet_surf_rh.source_file
+pet_mask.out_file -> pet_zscore.in_file
+pet_reOrient.out_file -> pet_2_ref_flirt.in_file
+pet_reOrient.out_file -> pet_smooth.in_file
+pet_smooth.out_file -> pet_smooth_2_ref_flirt_apply_xfm.in_file
+pet_smooth_2_ref_flirt_apply_xfm.out_file -> outputnode.registered_file_brain
+pet_smooth_2_ref_flirt_apply_xfm.out_file -> pet_2_sym_warp_apply_warp.in_file
+pet_smooth_2_ref_flirt_apply_xfm.out_file -> pet_mask.in_file
+pet_surf_lh.out_file -> outputnode.surf_lh
+pet_surf_rh.out_file -> outputnode.surf_rh
+pet_sym_swap.out_file -> pet_ai.swapped_file
+pet_zscore.out_file -> outputnode.zscore
+pet_zscore.out_file -> pet_zscore_surf_lh.source_file
+pet_zscore.out_file -> pet_zscore_surf_rh.source_file
+pet_zscore_surf_lh.out_file -> outputnode.zscore_surf_lh
+pet_zscore_surf_rh.out_file -> outputnode.zscore_surf_rh

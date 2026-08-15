@@ -1,6 +1,7 @@
 # workflow snapshot: func_map / reconall_ai
 #
 #   ai = true
+#   config = ASL
 #   cost_func = NORMALIZED_MUTUAL_INFORMATION
 #   freesurfer_step = RECONALL
 #
