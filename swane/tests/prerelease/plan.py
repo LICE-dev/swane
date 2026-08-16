@@ -439,13 +439,22 @@ PASSES = (
     ),
     PassSpec(
         name="structural_synthmorph",
-        description="Registration through SynthMorph (and SynthStrip) instead of FLIRT/FNIRT.",
+        description=(
+            "Registration through SynthMorph (and SynthStrip) instead of "
+            "FLIRT/FNIRT. With FLAT1 on, this one pass drives SynthStrip in the "
+            "reference deskull and SynthMorph in the linear (FLAIR->ref), FLAT1 "
+            "and subject->MNI (mni1) nonlinear registrations."
+        ),
         inputs=(DIL.T13D, DIL.FLAIR3D),
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
             "synth_morph": "true",
             "cuda": "false",
+            # flat1 pulls in the nonlinear subject->MNI (mni1) path, so
+            # SynthMorph is exercised on a nonlinear registration too, not only
+            # the rigid FLAIR->reference one.
+            "flat1": "true",
         },
     ),
     PassSpec(
@@ -504,6 +513,23 @@ PASSES = (
             "pet_ai": "false",
         },
     ),
+    # SynthMorph coverage for the functional-map registrations: func_map_workflow
+    # feeds ASL/PET through get_registration_node(use_synth=morph), a path no
+    # other pass exercises with synth on (func_map_synthseg keeps synth_morph
+    # off). Requires the SynthMorph RAM floor, so it is skipped on smaller hosts.
+    PassSpec(
+        name="func_map_synthmorph",
+        description="ASL and PET registered through SynthMorph instead of FLIRT/FNIRT.",
+        inputs=(DIL.T13D, DIL.ASL, DIL.PET),
+        values={
+            "freesurfer_step": "DISABLED",
+            "synth_strip": "true",
+            "synth_morph": "true",
+            "cuda": "false",
+            "asl_ai": "false",
+            "pet_ai": "false",
+        },
+    ),
     PassSpec(
         name="dti_classic",
         description=(
@@ -519,16 +545,61 @@ PASSES = (
             "multicore_node_limit": "NO_LIMIT",
         },
     ),
+    # The CPU tractography baseline: modern eddy + BEDPOSTX + corticospinal
+    # ProbTrackX, all on the CPU. It runs on every host that has the XTRACT
+    # protocols, so the CPU path of that chain is always exercised. The GPU
+    # variant below is the opt-in extra, gated by an actual GPU.
     PassSpec(
         name="dti_tractography",
         description=(
             "Diffusion with the modern eddy, BEDPOSTX and corticospinal "
-            "tractography; CUDA where the host has a GPU."
+            "tractography on the CPU."
+        ),
+        inputs=(DIL.T13D, DIL.DTI),
+        values={
+            "freesurfer_step": "DISABLED",
+            "cuda": "false",
+            "old_eddy_correct": "false",
+            "tractography": "true",
+            "multicore_node_limit": "SOFT_CAP",
+        },
+    ),
+    # The GPU counterpart: same chain with cuda=true. It requires a usable GPU
+    # (see _PASS_REQUIREMENTS), so on a GPU-less host it is skipped and the CPU
+    # baseline above is the only tractography pass; on a CUDA host both run and
+    # the GPU and CPU paths of eddy/BEDPOSTX/ProbTrackX are both exercised.
+    PassSpec(
+        name="dti_tractography_gpu",
+        description=(
+            "The GPU path of the modern eddy / BEDPOSTX / corticospinal "
+            "tractography chain, exercised only where the host has a usable GPU."
         ),
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
             "cuda": "true",
+            "old_eddy_correct": "false",
+            "tractography": "true",
+            "multicore_node_limit": "SOFT_CAP",
+        },
+    ),
+    # SynthMorph/SynthStrip coverage for diffusion: dti_preproc_workflow uses
+    # SynthStrip (b0 deskull) and SynthMorph (dif2ref / fa_2_ref), and
+    # tractography_workflow uses SynthMorph for the tract registrations. No
+    # other pass drives synth on the diffusion chain. Needs the SynthMorph RAM
+    # floor, so it is skipped on smaller hosts. CPU only (cuda=false).
+    PassSpec(
+        name="dti_synthmorph",
+        description=(
+            "Diffusion (modern eddy, BEDPOSTX, corticospinal tractography) with "
+            "SynthStrip/SynthMorph registration instead of FLIRT/FNIRT."
+        ),
+        inputs=(DIL.T13D, DIL.DTI),
+        values={
+            "freesurfer_step": "DISABLED",
+            "synth_strip": "true",
+            "synth_morph": "true",
+            "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
             "multicore_node_limit": "SOFT_CAP",
@@ -597,6 +668,23 @@ PASSES = (
             "vein_detection_mode": "SECOND",
         },
     ),
+    # SynthMorph/SynthStrip coverage for the venous MR chain: venous_mr_workflow
+    # uses SynthStrip (deskull) and SynthMorph (vein registration to reference).
+    # (Venous CT and SEEG CT deliberately stay on FLIRT, so they need no synth
+    # pass.) Needs the SynthMorph RAM floor, so it is skipped on smaller hosts.
+    PassSpec(
+        name="venous_mr_synth",
+        description="Venous MR through SynthStrip/SynthMorph instead of BET/FLIRT.",
+        inputs=(DIL.T13D, DIL.VENOUS_MR),
+        values={
+            "freesurfer_step": "DISABLED",
+            "synth_strip": "true",
+            "synth_morph": "true",
+            "cuda": "false",
+            "venous_mr_shape": "single_series",
+            "vein_detection_mode": "SD",
+        },
+    ),
     # ---- opt-in, slow --------------------------------------------------------
     PassSpec(
         name="freesurfer_autorecon_pial",
@@ -609,16 +697,42 @@ PASSES = (
         },
         heavy_freesurfer=True,
     ),
+    # The complete recon-all comes in two RAM/path modes, split into two passes
+    # so a big host exercises BOTH rather than only the synth one:
+    #   * freesurfer_reconall       -> classic recon-all (synth_reconall=false,
+    #     ~5 GB, FS_V8_XOPTS=0). Runs on any FreeSurfer host (opt-in).
+    #   * freesurfer_reconall_synth -> the FS v8 Synth-accelerated recon-all
+    #     (synth_reconall=true, ~20 GB). Requires the synth_reconall RAM floor,
+    #     so it is skipped on smaller hosts (see _PASS_REQUIREMENTS).
+    # Splitting them (instead of letting one pass downgrade true->false) is the
+    # same reasoning as the CPU/GPU tractography split: otherwise a 20 GB box
+    # only ever tests the synth path and a smaller box only the classic one.
     PassSpec(
         name="freesurfer_reconall",
         description=(
-            "The complete recon-all, with hippocampal/amygdala subfields and "
-            "the Synth-accelerated variant where the host allows them."
+            "The complete classic recon-all (lower RAM), with hippocampal/"
+            "amygdala subfields and the asymmetry index."
         ),
         inputs=(DIL.T13D, DIL.ASL, DIL.PET),
         values={
             "freesurfer_step": "RECONALL",
             "hippo_amyg_labels": "true",
+            "synth_reconall": "false",
+            "cuda": "false",
+            "asl_ai": "true",
+            "pet_ai": "true",
+        },
+        heavy_freesurfer=True,
+    ),
+    PassSpec(
+        name="freesurfer_reconall_synth",
+        description=(
+            "The complete recon-all on the FS v8 Synth-accelerated path "
+            "(higher RAM), exercised only where the host has the ~20 GB it needs."
+        ),
+        inputs=(DIL.T13D, DIL.ASL, DIL.PET),
+        values={
+            "freesurfer_step": "RECONALL",
             "synth_reconall": "true",
             "cuda": "false",
             "asl_ai": "true",
@@ -714,12 +828,21 @@ def build_plan(caps, with_reconall: bool = False, only=None) -> list:
 _PASS_REQUIREMENTS = {
     "structural_synthstrip": ("synth_strip",),
     "structural_synthmorph": ("synth_morph",),
+    "func_map_synthmorph": ("synth_morph",),
+    "venous_mr_synth": ("synth_morph",),
+    "dti_synthmorph": ("synth_morph", "xtract"),
     "venous_ct_slicer": ("slicer",),
     "venous_ct_fixed_threshold": ("slicer",),
     "func_map_synthseg": ("freesurfer",),
     "dti_tractography": ("xtract",),
+    # The GPU pass needs both the protocols and an actual GPU; without one it
+    # would only duplicate the CPU baseline, so it is skipped there.
+    "dti_tractography_gpu": ("xtract", "cuda"),
     "freesurfer_autorecon_pial": ("freesurfer",),
     "freesurfer_reconall": ("freesurfer",),
+    # The synth recon-all needs its ~20 GB RAM floor; without it the classic
+    # freesurfer_reconall pass already covers recon-all, so skip this one.
+    "freesurfer_reconall_synth": ("synth_reconall",),
 }
 
 
