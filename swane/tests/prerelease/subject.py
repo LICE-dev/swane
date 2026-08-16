@@ -45,10 +45,19 @@ class PhantomExam:
 
     root: str
     series: dict  # phantom folder name -> manifest entry
+    profile: dict = None  # the PhantomProfile the exam was generated with
 
     @property
     def dicom_root(self) -> str:
         return os.path.join(self.root, DICOM_DIR_NAME)
+
+    def fmri_task_seconds(self) -> int:
+        """Task block length the phantom was generated with, in whole seconds."""
+        return int(round((self.profile or {}).get("bold_task_s", 0)))
+
+    def fmri_rest_seconds(self) -> int:
+        """Rest block length the phantom was generated with, in whole seconds."""
+        return int(round((self.profile or {}).get("bold_rest_s", 0)))
 
     def folder(self, name: str) -> str:
         return os.path.join(self.dicom_root, name)
@@ -75,7 +84,9 @@ def load_phantom(force: bool = False, cache_root: str = None) -> PhantomExam:
     with open(os.path.join(root, "manifest.json")) as handle:
         manifest = json.load(handle)
     return PhantomExam(
-        root=root, series={s["input"]: s for s in manifest.get("series", [])}
+        root=root,
+        series={s["input"]: s for s in manifest.get("series", [])},
+        profile=manifest.get("profile", {}),
     )
 
 
@@ -162,15 +173,7 @@ def _apply_axis_values(pass_item, global_config, subject_config, exam, wiring) -
         elif axis.scope != SHAPE:
             raise ValueError("unknown axis scope %r" % axis.scope)
 
-    # The dummy-volume axis is expressed against the phantom's own padding, so
-    # trimming removes volumes that are genuinely identifiable in the data.
-    if pass_item.values.get("fmri0_del_vols") == "trim":
-        for data_input in (DIL.FMRI_0, DIL.FMRI_1):
-            if data_input not in wiring:
-                continue
-            start, end = exam.dummy_volumes(str(data_input))
-            subject_config[str(data_input)]["del_start_vols"] = str(start)
-            subject_config[str(data_input)]["del_end_vols"] = str(end)
+    _configure_fmri(pass_item, subject_config, exam, wiring)
 
     # Keep tractography to the single tract the sweep is about.
     if pass_item.values.get("tractography") == "true":
@@ -179,6 +182,39 @@ def _apply_axis_values(pass_item, global_config, subject_config, exam, wiring) -
                 subject_config[str(DIL.DTI)][tract] = (
                     "true" if tract == SWEEP_TRACT else "false"
                 )
+
+
+def _configure_fmri(pass_item, subject_config, exam, wiring) -> None:
+    """Make each task-fMRI input's settings follow the phantom's own design.
+
+    The GLM only lines up with the phantom's signal if the workflow is told the
+    same block timing the data was generated with: task and rest durations, and
+    the dummy volumes padded onto each end. Getting these wrong shifts every
+    regressor and the activation collapses (which is exactly what a mismatch
+    produced: the second contrast came out empty).
+
+    TR and the total volume count are left on **automatic** detection on
+    purpose -- reading them back correctly from the DICOM is itself part of what
+    the workflow must get right, so pinning them would hide a real regression.
+
+    The ``fmri0_del_vols`` axis can still force *no* trimming ("none") to
+    exercise that path deliberately; otherwise the phantom's real padding is
+    removed.
+    """
+    trim = pass_item.values.get("fmri0_del_vols") != "none"
+    task_s = exam.fmri_task_seconds()
+    rest_s = exam.fmri_rest_seconds()
+    for data_input in (DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_2):
+        if data_input not in wiring:
+            continue
+        section = subject_config[str(data_input)]
+        if task_s:
+            section["task_duration"] = str(task_s)
+        if rest_s:
+            section["rest_duration"] = str(rest_s)
+        start, end = exam.dummy_volumes(str(data_input)) if trim else (0, 0)
+        section["del_start_vols"] = str(start)
+        section["del_end_vols"] = str(end)
 
 
 def prepare_subject(

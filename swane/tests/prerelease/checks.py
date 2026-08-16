@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from swane.utils.DataInputList import DataInputList as DIL
+from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
 
 #: Severity levels. Only ``error`` makes a pass fail.
 ERROR = "error"
@@ -168,6 +168,12 @@ _REGISTERED_SERIES_NAME = {
 _PARTIAL_COVERAGE = {
     DIL.T2_COR,
 }
+
+#: Inputs whose results are statistical maps (fMRI activation clusters, ICA
+#: z-stats), not a resampled anatomical series, so the series-alignment checks
+#: (centre-of-mass, brain overlap) do not apply: the centre of mass of a sparse
+#: cluster map is meaningless. Their success is judged by _check_fmri_activation.
+_ACTIVATION_ONLY = {DIL["FMRI_%d" % i] for i in range(FMRI_NUM)} | {DIL.FMRI_RS}
 
 
 def check_pass(result, ground_truth: GroundTruth = None) -> list:
@@ -443,6 +449,58 @@ def _check_expected_outputs(result, files: list) -> list:
     return checks
 
 
+def _is_activation_map(name: str) -> bool:
+    """True for fMRI cluster maps and ICA z-stat maps (thresholded outputs)."""
+    lowered = name.lower()
+    return "cluster" in lowered or "zstat" in lowered
+
+
+def _check_fmri_activation(result, files: list) -> list:
+    """Confirm the fMRI workflows actually produced activation.
+
+    Thresholding legitimately empties some maps (a high z, or a contrast with no
+    real effect), so the integrity layer does not fail on an empty cluster map.
+    This positive check makes sure at least *one* map is non-empty per fMRI
+    input, i.e. the pipeline found signal rather than silently producing nothing.
+    """
+    checks = []
+    names_lower = {os.path.basename(f).lower(): f for f in files}
+    for input_name in result.inputs:
+        try:
+            data_input = DIL[input_name.upper()]
+        except KeyError:
+            continue
+        if data_input not in _ACTIVATION_ONLY:
+            continue
+        if data_input is DIL.FMRI_RS:
+            token, label = "zstat", "ICA z-stat"
+        else:
+            token, label = "%s_cluster" % input_name.lower(), "activation cluster"
+        maps = [p for n, p in names_lower.items() if token in n]
+        if not maps:
+            continue
+        nonempty = []
+        for path in maps:
+            try:
+                _, data = _load(path)
+            except Exception:
+                continue
+            if int((data != 0).sum()) > 0:
+                nonempty.append(os.path.basename(path))
+        checks.append(
+            CheckResult(
+                "fmri.activation.%s" % input_name,
+                bool(nonempty),
+                (
+                    "%d of %d %s map(s) non-empty" % (len(nonempty), len(maps), label)
+                    if nonempty
+                    else "every %s map is empty" % label
+                ),
+            )
+        )
+    return checks
+
+
 def _check_integrity(files: list) -> list:
     """Each result must be a loadable, finite, non-constant image."""
     checks = []
@@ -467,7 +525,11 @@ def _check_integrity(files: list) -> list:
         if nonfinite_fraction > 0.01:
             problems.append("%.1f%% non-finite" % (100 * nonfinite_fraction))
         if spread <= 0:
-            problems.append("constant image (all %g)" % float(values.min()))
+            # An all-zero thresholded activation/cluster map is a valid
+            # statistical result (no voxel survived the threshold), not a broken
+            # output. Only flag a constant image for everything else.
+            if not (_is_activation_map(name) and float(values.min()) == 0.0):
+                problems.append("constant image (all %g)" % float(values.min()))
         checks.append(
             CheckResult(
                 "integrity.%s" % name,
@@ -616,6 +678,10 @@ def _check_registration(result, files: list, reference_centre) -> list:
             continue
         if data_input is DIL.T13D:
             continue  # the reference itself is not posed and not registered
+        if data_input in _ACTIVATION_ONLY:
+            # fMRI produces activation maps, not a resampled series; the centre
+            # of mass of a sparse cluster map does not measure registration.
+            continue
         if data_input in _PARTIAL_COVERAGE:
             # A partially-covered series (coronal T2 over the temporal lobes)
             # has a centre of mass several mm from the whole-brain centre by
