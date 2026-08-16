@@ -13,7 +13,7 @@ Overview of 50 construction scenarios across 14 workflow families. Each row is o
 | [new_eddy_cpu_hardcap](snapshots/dti_preproc/new_eddy_cpu_hardcap.txt) | cuda=false; max_cpu=4; multicore_node_limit=HARD_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 20 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
 | [new_eddy_cpu_softcap](snapshots/dti_preproc/new_eddy_cpu_softcap.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 20 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
 | [new_eddy_cuda](snapshots/dti_preproc/new_eddy_cuda.txt) | cuda=true; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 20 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy`, `flirt` | `use_cuda=True` |
-| [new_eddy_tractography](snapshots/dti_preproc/new_eddy_tractography.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=true | 15 / 29 | `bedpostx`, `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt`, `fnirt` | `use_cuda=False`, `use_gpu=False` |
+| [new_eddy_tractography](snapshots/dti_preproc/new_eddy_tractography.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=true | 13 / 25 | `bedpostx`, `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False`, `use_gpu=False` |
 | [old_eddy_correct](snapshots/dti_preproc/old_eddy_correct.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=true; synth_morph=False; synth_strip=False; tractography=false | 11 / 16 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_correct`, `flirt` | — |
 
 ## flat1
@@ -28,7 +28,7 @@ Overview of 50 construction scenarios across 14 workflow families. Each row is o
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
 | [slicetiming_interleaved](snapshots/fmri_preproc/slicetiming_interleaved.txt) | TR=2.0; del_end_vols=0; del_start_vols=0; hpcutoff=30; n_vols=100; slice_timing=INTERLEAVED | 27 / 41 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `slicetimer`, `susan` | — |
-| [slicetiming_unknown](snapshots/fmri_preproc/slicetiming_unknown.txt) | TR=2.0; del_end_vols=0; del_start_vols=0; hpcutoff=30; n_vols=100; slice_timing=UNKNOWN | 27 / 41 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `slicetimer`, `susan` | — |
+| [slicetiming_unknown](snapshots/fmri_preproc/slicetiming_unknown.txt) | TR=2.0; del_end_vols=0; del_start_vols=0; hpcutoff=30; n_vols=100; slice_timing=UNKNOWN | 26 / 39 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `susan` | — |
 | [slicetiming_up](snapshots/fmri_preproc/slicetiming_up.txt) | TR=2.0; del_end_vols=0; del_start_vols=0; hpcutoff=30; n_vols=100; slice_timing=UP | 27 / 41 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `slicetimer`, `susan` | — |
 | [trim_start_end_vols](snapshots/fmri_preproc/trim_start_end_vols.txt) | TR=3.0; del_end_vols=3; del_start_vols=5; hpcutoff=50; n_vols=120; slice_timing=UP | 27 / 41 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `slicetimer`, `susan` | — |
 
@@ -36,16 +36,16 @@ Overview of 50 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [aroma_on](snapshots/fmri_resting_state/aroma_on.txt) | aroma=true; melodic_dim=0; melodic_thr=0.5 | 44 / 75 | `applywarp`, `bet`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `fslmaths`, `mcflirt`, `melodic`, `slicetimer`, `susan` | — |
-| [melodic_auto_dim](snapshots/fmri_resting_state/melodic_auto_dim.txt) | aroma=false; melodic_dim=0; melodic_thr=0.5 | 32 / 50 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `melodic`, `slicetimer`, `susan` | — |
-| [melodic_fixed_dim](snapshots/fmri_resting_state/melodic_fixed_dim.txt) | aroma=false; melodic_dim=30; melodic_thr=0.9 | 32 / 50 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `melodic`, `slicetimer`, `susan` | — |
+| [aroma_on](snapshots/fmri_resting_state/aroma_on.txt) | aroma=true; melodic_dim=0; melodic_thr=0.5 | 43 / 74 | `applywarp`, `bet`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `fslmaths`, `mcflirt`, `melodic`, `susan` | — |
+| [melodic_auto_dim](snapshots/fmri_resting_state/melodic_auto_dim.txt) | aroma=false; melodic_dim=0; melodic_thr=0.5 | 31 / 49 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `melodic`, `susan` | — |
+| [melodic_fixed_dim](snapshots/fmri_resting_state/melodic_fixed_dim.txt) | aroma=false; melodic_dim=30; melodic_thr=0.9 | 31 / 49 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `melodic`, `susan` | — |
 
 ## fmri_task
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [single_contrast_rara](snapshots/fmri_task/single_contrast_rara.txt) | block_design=RARA; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 43 / 88 | `bet`, `cluster`, `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fslmaths`, `mcflirt`, `slicetimer`, `smoothest`, `susan` | — |
-| [two_contrasts_rarb](snapshots/fmri_task/two_contrasts_rarb.txt) | block_design=RARB; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 51 / 118 | `bet`, `cluster`, `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fslmaths`, `mcflirt`, `slicetimer`, `smoothest`, `susan` | — |
+| [single_contrast_rara](snapshots/fmri_task/single_contrast_rara.txt) | block_design=RARA; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 42 / 86 | `bet`, `cluster`, `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fslmaths`, `mcflirt`, `smoothest`, `susan` | — |
+| [two_contrasts_rarb](snapshots/fmri_task/two_contrasts_rarb.txt) | block_design=RARB; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 50 / 116 | `bet`, `cluster`, `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fslmaths`, `mcflirt`, `smoothest`, `susan` | — |
 
 ## freesurfer
 
