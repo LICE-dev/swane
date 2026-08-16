@@ -840,6 +840,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.VENOUS_CT],
             venous2_ct_dir=venous2_ct_dir,
             slicer_path=self.global_config.get_slicer_path(),
+            test_run=self.test_run,
         )
         self.venous_ct.long_name = "Venous CT analysis"
 
