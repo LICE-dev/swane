@@ -4,7 +4,7 @@
 #   melodic_dim = 0
 #   melodic_thr = 0.5
 #
-# nodes=32 edges=50
+# nodes=32 edges=51
 
 - fmri_rs_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
@@ -204,6 +204,7 @@ inputnode.reference_brain -> zstats_2_ref.reference
 melodic.out_dir -> melodic_output.base_directory
 melodic.out_dir -> melodic_output.melodic_dir
 melodic_output.('thresh_zstat_files', 'def registered_file_name(in_file_names):\n    """\n    Adds prefix \'r-\' and use 2 digid number at end.\n    Example: \'zstat1.nii.gz\' -> \'r-zstat01.nii.gz\'\n    """\n    from os.path import basename\n    import re\n\n    out_files = []\n    for f in in_file_names:\n        base_name = basename(f)\n        # Cerca un numero prima dell\'estensione .nii o .nii.gz\n        m = re.search(r"(\\d+)(\\.nii(?:\\.gz)?)$", base_name)\n        if m:\n            num = int(m.group(1))\n            ext = m.group(2)\n            new_name = re.sub(r"\\d+(\\.nii(?:\\.gz)?)$", f"{num:02d}{ext}", base_name)\n        else:\n            new_name = base_name\n        out_files.append("r-" + new_name)\n    return out_files\n', ()) -> zstats_2_ref.out_file
+melodic_output.mel_mix -> outputnode.mel_mix
 melodic_output.thresh_zstat_files -> zstats_2_ref.in_file
 merge_node.out -> melodic.in_files
 zstats_2_ref.out_file -> outputnode.thresh_zstat_files
