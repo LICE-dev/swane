@@ -28,6 +28,7 @@ def fMRI_preproc_workflow(
     del_end_vols: int,
     hpcutoff: int,
     base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     fMRI first level anlysis for a single task with constant task-rest paradigm.
@@ -52,6 +53,10 @@ def fMRI_preproc_workflow(
         cutoff for highpass filtering
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, cut MCFLIRT motion-correction search levels and switch to
+        trilinear interpolation to speed up prerelease test runs at the cost
+        of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -143,7 +148,15 @@ def fMRI_preproc_workflow(
     motion_correct.inputs.save_mats = True
     motion_correct.inputs.save_plots = True
     motion_correct.inputs.save_rms = True
-    motion_correct.inputs.interpolation = "spline"
+    if test_run:
+        # FSL default stages=3; we explicitly request the slower spline
+        # interpolation normally, so drop both for prerelease speed (cost
+        # scales with the number of fMRI volumes). MCFLIRT's interpolation
+        # trait only accepts 'spline'/'nn'/'sinc' -- trilinear is the tool's
+        # own default and is what you get by leaving the trait unset.
+        motion_correct.inputs.stages = 1
+    else:
+        motion_correct.inputs.interpolation = "spline"
     workflow.connect(img2float, "out_file", motion_correct, "in_file")
     workflow.connect(extract_ref, "out_file", motion_correct, "ref_file")
 

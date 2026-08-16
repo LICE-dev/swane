@@ -14,7 +14,11 @@ SIDES = ["lh", "rh"]
 
 
 def tractography_workflow(
-    name: str, config: SectionProxy, synth_config: SectionProxy, base_dir: str = "/"
+    name: str,
+    config: SectionProxy,
+    synth_config: SectionProxy,
+    base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
@@ -29,6 +33,9 @@ def tractography_workflow(
         FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, halve the xtract-derived n_samples to speed up prerelease
+        test runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -120,6 +127,9 @@ def tractography_workflow(
         n_samples = int(TRACTS[name][2] / track_threads)
     except:
         n_samples = int(DEFAULT_N_SAMPLES / track_threads)
+    if test_run:
+        # Halve the xtract-protocol sample count for prerelease speed.
+        n_samples = max(1, n_samples // 2)
 
     for side in SIDES:
         # Xtract protocol loading

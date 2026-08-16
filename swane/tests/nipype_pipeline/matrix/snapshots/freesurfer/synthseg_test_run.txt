@@ -1,0 +1,56 @@
+# workflow snapshot: freesurfer / synthseg_test_run
+#
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
+#   step = SYNTHSEG
+#   test_run = True
+#
+# nodes=8 edges=11
+
+- bgROI [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    operation = 'add'
+    out_file = 'bgROI.nii.gz'
+    output_type = 'NIFTI_GZ'
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- lhbgROI [ThrROI] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'lhbgROI.nii.gz'
+    output_type = 'NIFTI_GZ'
+    seg_val_max = 13.0
+    seg_val_min = 11.0
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- rhbgROI [ThrROI] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'rhbgROI.nii.gz'
+    output_type = 'NIFTI_GZ'
+    seg_val_max = 52.0
+    seg_val_min = 50.0
+- segmentation_holder [IdentityInterface] mem_gb=0.2 n_procs=1
+- synth_seg [SynthSeg] cmd=mri_synthseg mem_gb=0.2 n_procs=1
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
+    fast = True
+    keep_geometry = True
+    out_file = 'r-aparc_aseg.mgz'
+    parcellation = True
+    robust = False
+    subjects_dir = '<SUBJECTS_DIR>'
+    use_cpu = True
+- synth_seg2nii [ApplyVolTransform] cmd=mri_vol2vol mem_gb=0.2 n_procs=1
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
+    interp = 'nearest'
+    reg_header = True
+    subjects_dir = '<SUBJECTS_DIR>'
+    transformed_file = 'seg.nii.gz'
+# connections
+bgROI.out_file -> outputnode.bgROI
+inputnode.reference -> synth_seg.in_file
+inputnode.reference -> synth_seg2nii.target_file
+lhbgROI.out_file -> bgROI.in_file
+rhbgROI.out_file -> bgROI.operand_file
+segmentation_holder.seg_nii -> lhbgROI.in_file
+segmentation_holder.seg_nii -> rhbgROI.in_file
+synth_seg.out_file -> outputnode.vol_label_file
+synth_seg.out_file -> synth_seg2nii.source_file
+synth_seg2nii.transformed_file -> outputnode.vol_label_file_nii
+synth_seg2nii.transformed_file -> segmentation_holder.seg_nii

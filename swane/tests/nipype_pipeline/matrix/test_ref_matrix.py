@@ -60,3 +60,38 @@ def test_ref_matrix(
         config=config_echo,
         title="ref / %s" % scenario,
     )
+
+
+def test_ref_matrix_test_run(
+    subject_config, global_config, make_input_dir, graph_snapshot
+):
+    """test_run=True over otherwise-default settings.
+
+    The prerelease sweep runs with test_run=True by default, so this scenario
+    is the golden reference for what it actually builds here: N4 gets a capped
+    max_iterations, nothing else in the graph shape changes.
+    """
+    section = subject_config[DataInputList.T13D]
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+
+    wf = ref_workflow(
+        "ref",
+        dicom_dir=make_input_dir(),
+        config=section,
+        synth_config=synth,
+        test_run=True,
+    )
+
+    config_echo = {
+        "synth_strip": synth["strip"],
+        "bet_bias_correction": section["bet_bias_correction"],
+        "bet_thr": section["bet_thr"],
+        "test_run": True,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="test_run",
+        config=config_echo,
+        title="ref / test_run",
+    )

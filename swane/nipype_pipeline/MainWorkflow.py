@@ -50,6 +50,7 @@ class MainWorkflow(CustomWorkflow):
     Result_DIR: str = "results"
 
     is_resource_monitor: bool = False
+    test_run: bool = False
     max_cpu: int = -1
     max_gpu: int = -1
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP
@@ -91,6 +92,7 @@ class MainWorkflow(CustomWorkflow):
         subject_config: ConfigManager,
         dependency_manager: DependencyManager,
         subject_input_state_list: SubjectInputStateList,
+        test_run: bool = False,
     ):
         """
         Create the Workflows and their sub-workflows based on the list of available data inputs
@@ -107,11 +109,16 @@ class MainWorkflow(CustomWorkflow):
             The state of application dependency
         subject_input_state_list : SubjectInputStateList
             The list of all available input data from the DICOM directory.
+        test_run : bool, optional
+            If True, tweak heavy node parameters to speed up prerelease test
+            runs at the cost of accuracy, without overriding options the user
+            has explicitly configured. The default is False.
 
         """
 
         super().__init__(name, base_dir)
 
+        self.test_run = test_run
         self.global_config = global_config
         self.subject_config = subject_config
         self.dependency_manager = dependency_manager
@@ -212,6 +219,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=ref_dir,
             config=self.subject_config[DIL.T13D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.t1.long_name = "3D T1w analysis"
         self.add_nodes([self.t1])
@@ -243,6 +251,7 @@ class MainWorkflow(CustomWorkflow):
         self.sym = nonlinear_reg_workflow(
             name="sym",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.sym.long_name = "Symmetric atlas registration"
 
@@ -264,6 +273,7 @@ class MainWorkflow(CustomWorkflow):
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.freesurfer.long_name = "Freesurfer analysis"
 
@@ -325,6 +335,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.FLAIR3D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            test_run=self.test_run,
         )
         self.flair.long_name = "3D Flair analysis"
         self.add_nodes([self.flair])
@@ -378,6 +389,7 @@ class MainWorkflow(CustomWorkflow):
         self.mni1 = nonlinear_reg_workflow(
             name="mni1",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.mni1.long_name = "MNI atlas registration"
 
@@ -400,6 +412,7 @@ class MainWorkflow(CustomWorkflow):
             name="FLAT1",
             mni1_dir=mni1_path,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.flat1.long_name = "FLAT1 analysis"
 
@@ -462,6 +475,7 @@ class MainWorkflow(CustomWorkflow):
                     config=None,
                     is_volumetric=False,
                     synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                    test_run=self.test_run,
                 )
                 self.flair2d.long_name = "2D %s FLAIR analysis" % plane.value
                 self.add_nodes([self.flair2d])
@@ -500,6 +514,7 @@ class MainWorkflow(CustomWorkflow):
             is_volumetric=True,  # perform better with volumetric settings
             is_partial_coverage=True,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.t2_cor.long_name = "2D coronal T2 analysis"
         self.add_nodes([self.t2_cor])
@@ -545,6 +560,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.MDC],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            test_run=self.test_run,
         )
         self.mdc.long_name = "Post-contrast 3D T1w analysis"
         self.add_nodes([self.mdc])
@@ -582,6 +598,7 @@ class MainWorkflow(CustomWorkflow):
             freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.ASL],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.asl.long_name = "Arterial Spin Labelling analysis"
 
@@ -696,6 +713,7 @@ class MainWorkflow(CustomWorkflow):
             freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.PET],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.pet.long_name = "Pet analysis"
 
@@ -822,6 +840,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.VENOUS_CT],
             venous2_ct_dir=venous2_ct_dir,
             slicer_path=self.global_config.get_slicer_path(),
+            test_run=self.test_run,
         )
         self.venous_ct.long_name = "Venous CT analysis"
 
@@ -863,6 +882,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.VENOUS_MR],
             venous2_mr_dir=venous2_mr_dir,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.venous_mr.long_name = "Venous MRA analysis"
 
@@ -933,6 +953,7 @@ class MainWorkflow(CustomWorkflow):
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
         self.connect(
@@ -970,6 +991,7 @@ class MainWorkflow(CustomWorkflow):
                     name=tract,
                     config=self.subject_config[DIL.DTI],
                     synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                    test_run=self.test_run,
                 )
                 if tract_workflow is not None:
                     tract_workflow.long_name = TRACTS[tract][0] + " tractography"
@@ -1052,6 +1074,7 @@ class MainWorkflow(CustomWorkflow):
                 dicom_dir=dicom_dir,
                 config=self.subject_config[DIL["FMRI_%d" % y]],
                 base_dir=self.base_dir,
+                test_run=self.test_run,
             )
             self.fMRI.long_name = "Task fMRI analysis - %d" % y
             self.connect(
@@ -1092,6 +1115,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=dicom_dir,
             config=self.subject_config[DIL.FMRI_RS],
             base_dir=self.base_dir,
+            test_run=self.test_run,
         )
         self.fMRI_resting_state.long_name = "Resting state fMRI analysis"
         self.connect(

@@ -60,3 +60,40 @@ def test_func_map_matrix(
         config=config_echo,
         title="func_map / %s" % scenario,
     )
+
+
+def test_func_map_matrix_test_run(
+    subject_config, global_config, make_input_dir, graph_snapshot
+):
+    """test_run=True on the ASL baseline.
+
+    func_map's registration to reference is linear-only, so test_run's only
+    effect here is propagation through get_registration_node with no visible
+    parameter change yet -- this locks in that the wiring doesn't break the
+    graph as new linear-only speed knobs get added later.
+    """
+    section = subject_config[DataInputList.ASL]
+
+    wf = func_map_workflow(
+        "asl",
+        dicom_dir=make_input_dir(),
+        freesurfer_step=FreesurferStep.DISABLED,
+        config=section,
+        synth_config=global_config[GlobalPrefCategoryList.SYNTH],
+        test_run=True,
+    )
+
+    config_echo = {
+        "freesurfer_step": FreesurferStep.DISABLED.name,
+        "ai": section["ai"],
+        "cost_func": section["cost_func"],
+        "config": DataInputList.ASL.name,
+        "test_run": True,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="test_run",
+        config=config_echo,
+        title="func_map / test_run",
+    )

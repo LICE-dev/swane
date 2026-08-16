@@ -51,3 +51,44 @@ def test_venous_ct_matrix(
         config=config_echo,
         title="venous_ct / %s" % scenario,
     )
+
+
+def test_venous_ct_matrix_test_run(
+    subject_config, make_input_dir, make_file, graph_snapshot
+):
+    """test_run=True, with the user explicitly away from the SWANe defaults.
+
+    segment_endocranium_iteration/oversampling are set to values different
+    from *both* the SWANe default (6 / 1.5) and the test_run target (2 /
+    1.0), to prove in the golden file that test_run overrides them
+    unconditionally (unlike most other test_run knobs, which only apply when
+    the user left the default alone) -- see venous_ct_workflow.py.
+    """
+    section = subject_config[DataInputList.VENOUS_CT]
+    section["skull_threshold"] = "-1"
+    section["segment_endocranium_iteration"] = "10"
+    section["segment_endocranium_oversampling"] = "3.0"
+
+    wf = venous_ct_workflow(
+        "venous_ct",
+        venous_ct_dir=make_input_dir("noncontrast"),
+        config=section,
+        venous2_ct_dir=[make_input_dir("contrast_0")],
+        slicer_path=make_file("Slicer.exe", "x"),
+        test_run=True,
+    )
+
+    config_echo = {
+        "contrast_series": 1,
+        "skull_threshold": "-1",
+        "segment_endocranium_iteration_user_value": "10",
+        "segment_endocranium_oversampling_user_value": "3.0",
+        "test_run": True,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="test_run",
+        config=config_echo,
+        title="venous_ct / test_run",
+    )

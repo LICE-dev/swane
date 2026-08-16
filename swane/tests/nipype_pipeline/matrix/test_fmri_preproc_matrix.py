@@ -70,3 +70,41 @@ def test_fmri_preproc_matrix(scenario, make_input_dir, graph_snapshot):
         config=config_echo,
         title="fmri_preproc / %s" % scenario,
     )
+
+
+def test_fmri_preproc_matrix_test_run(make_input_dir, graph_snapshot):
+    """test_run=True: MCFLIRT drops to stages=1 with the tool's own trilinear
+    default (leaving `interpolation` unset -- nipype's MCFLIRT only accepts
+    'spline'/'nn'/'sinc' explicitly, passing 'trilinear' crashes construction,
+    see the fix in fMRI_preproc_workflow.py). This scenario is the regression
+    guard for that.
+    """
+    p = SCENARIOS["slicetiming_up"]
+    wf = fMRI_preproc_workflow(
+        "fmri_0",
+        dicom_dir=make_input_dir(),
+        TR=p["TR"],
+        slice_timing=p["slice_timing"],
+        n_vols=p["n_vols"],
+        del_start_vols=p["del_start"],
+        del_end_vols=p["del_end"],
+        hpcutoff=p["hp"],
+        test_run=True,
+    )
+
+    config_echo = {
+        "TR": p["TR"],
+        "slice_timing": p["slice_timing"].name,
+        "n_vols": p["n_vols"],
+        "del_start_vols": p["del_start"],
+        "del_end_vols": p["del_end"],
+        "hpcutoff": p["hp"],
+        "test_run": True,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="test_run",
+        config=config_echo,
+        title="fmri_preproc / test_run",
+    )

@@ -9,7 +9,10 @@ from swane.nipype_pipeline.nodes.utils import (
 
 # TODO check base_dir = "./"
 def nonlinear_reg_workflow(
-    name: str, synth_config: SectionProxy, base_dir: str = "/"
+    name: str,
+    synth_config: SectionProxy,
+    base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Transforms input images in a reference space through a nonlinear registration.
@@ -23,6 +26,9 @@ def nonlinear_reg_workflow(
         FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, speed up the underlying nonlinear registration for
+        prerelease test runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -72,6 +78,7 @@ def nonlinear_reg_workflow(
         flirt_cost="corratio",
         inverse=True,
         non_linear=True,
+        test_run=test_run,
     )
 
     unbetted_2_atlas = apply_registration_node(
