@@ -92,9 +92,7 @@ def _drain(q: Queue, result: PassResult, verbose: bool) -> None:
             print("      ! FAILED %s" % report.node_name, flush=True)
         elif signal == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES:
             result.insufficient_resources = True
-            print(
-                "      ! a node needs more RAM than the budget allows", flush=True
-            )
+            print("      ! a node needs more RAM than the budget allows", flush=True)
         elif signal == WorkflowSignals.WORKFLOW_STOP:
             raise _Finished
 
@@ -260,9 +258,9 @@ def run_sweep(
     for index, pass_item in enumerate(plan, start=1):
         previous = state.get(pass_item.name)
         if previous and _reusable(previous, retry_failed):
-            result = PassResult(**{
-                k: v for k, v in previous.items() if k in PassResult.__annotations__
-            })
+            result = PassResult(
+                **{k: v for k, v in previous.items() if k in PassResult.__annotations__}
+            )
             print(
                 "[%2d/%2d] %-28s reused (%s)"
                 % (index, len(plan), pass_item.name, result.status),
@@ -333,9 +331,7 @@ def _reusable(previous: dict, retry_failed: bool) -> bool:
 
 def _write_pass_result(result: PassResult) -> None:
     try:
-        with open(
-            os.path.join(result.subject_dir, PASS_RESULT_FILE), "w"
-        ) as handle:
+        with open(os.path.join(result.subject_dir, PASS_RESULT_FILE), "w") as handle:
             json.dump(result.to_json(), handle, indent=2)
     except OSError:
         pass

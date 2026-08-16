@@ -65,7 +65,9 @@ class Capabilities:
         return [c for c in self.items.values() if not c.available]
 
     def describe(self) -> str:
-        lines = ["Host capabilities (cores=%d, ram=%.1f GB):" % (self.cores, self.ram_gb)]
+        lines = [
+            "Host capabilities (cores=%d, ram=%.1f GB):" % (self.cores, self.ram_gb)
+        ]
         lines.extend(str(self.items[k]) for k in sorted(self.items))
         return "\n".join(lines)
 
@@ -95,7 +97,9 @@ def _probe_dcm2niix(dependency_manager: DependencyManager, caps: Capabilities) -
     )
 
 
-def _probe_freesurfer(dependency_manager: DependencyManager, caps: Capabilities) -> None:
+def _probe_freesurfer(
+    dependency_manager: DependencyManager, caps: Capabilities
+) -> None:
     has_fs = dependency_manager.is_freesurfer()
     caps.add(
         "freesurfer",

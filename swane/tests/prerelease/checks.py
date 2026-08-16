@@ -168,9 +168,11 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
         CheckResult(
             "results.present",
             bool(files),
-            "%d result image(s)" % len(files)
-            if files
-            else "the results folder is empty",
+            (
+                "%d result image(s)" % len(files)
+                if files
+                else "the results folder is empty"
+            ),
         )
     )
     if not files:
@@ -189,11 +191,13 @@ def _check_execution(result) -> list:
         CheckResult(
             "execution.no_failed_nodes",
             not result.node_errors,
-            "all %d node(s) completed" % result.nodes_completed
-            if not result.node_errors
-            else "; ".join(
-                "%s (%s)" % (e["node"], e.get("crash_file") or "no crash file")
-                for e in result.node_errors[:5]
+            (
+                "all %d node(s) completed" % result.nodes_completed
+                if not result.node_errors
+                else "; ".join(
+                    "%s (%s)" % (e["node"], e.get("crash_file") or "no crash file")
+                    for e in result.node_errors[:5]
+                )
             ),
         ),
         CheckResult(
@@ -252,9 +256,7 @@ def _check_integrity(files: list) -> list:
 
         finite = np.isfinite(data)
         if not finite.any():
-            checks.append(
-                CheckResult("integrity.%s" % name, False, "no finite voxel")
-            )
+            checks.append(CheckResult("integrity.%s" % name, False, "no finite voxel"))
             continue
         values = data[finite]
         nonfinite_fraction = 1.0 - finite.mean()
@@ -268,9 +270,11 @@ def _check_integrity(files: list) -> list:
             CheckResult(
                 "integrity.%s" % name,
                 not problems,
-                "; ".join(problems)
-                if problems
-                else "range [%.4g, %.4g]" % (values.min(), values.max()),
+                (
+                    "; ".join(problems)
+                    if problems
+                    else "range [%.4g, %.4g]" % (values.min(), values.max())
+                ),
             )
         )
     return checks
@@ -337,9 +341,11 @@ def _check_reference(result, files: list) -> list:
         CheckResult(
             "reference.registered_share_grid",
             not off_grid,
-            "all registered results on the reference grid"
-            if not off_grid
-            else "not on the reference grid: %s" % ", ".join(sorted(off_grid)[:5]),
+            (
+                "all registered results on the reference grid"
+                if not off_grid
+                else "not on the reference grid: %s" % ", ".join(sorted(off_grid)[:5])
+            ),
         )
     )
     return checks
@@ -365,34 +371,90 @@ def _check_plausibility(result, files: list, truth: GroundTruth) -> list:
             )
         )
 
-    # --- registration must have removed the known inter-series offset -------
-    # Every phantom series except t13d carries a small rigid pose. After
-    # registration to the reference the content must line up again; a
-    # registration that silently did nothing leaves the original offset.
-    for path in files:
-        name = os.path.basename(path)
-        lowered = name.lower()
-        if not lowered.startswith("r-") or "brain" not in lowered:
-            continue
-        try:
-            img, data = _load(path)
-        except Exception:
-            continue
-        moved = _centre_of_mass_ras(np.clip(data, 0, None), img.affine)
-        if moved is None or centre is None:
-            continue
-        distance = float(np.linalg.norm(moved - centre))
-        checks.append(
-            CheckResult(
-                "plausibility.aligned.%s" % name,
-                distance <= REGISTRATION_TOLERANCE_MM,
-                "%.2f mm from the reference brain centre" % distance,
-                severity=WARNING,
-            )
-        )
-
+    checks.extend(_check_registration(result, files, centre))
     checks.extend(_check_fa(files, truth))
     checks.extend(_check_feature(files, truth, "veins", "venous_sinus"))
+    return checks
+
+
+def _converted_image(subject_dir: str, workflow_name: str):
+    """The series as dcm2niix produced it, before any registration.
+
+    Lives in the workflow working directory under ``<input>/<input>_conv/``.
+    """
+    pattern = os.path.join(subject_dir, "**", workflow_name, "*conv*", "*.nii.gz")
+    hits = [h for h in glob.glob(pattern, recursive=True) if os.path.isfile(h)]
+    return sorted(hits, key=len)[0] if hits else None
+
+
+def _check_registration(result, files: list, reference_centre) -> list:
+    """Verify the registration tools really realigned the deliberately posed series.
+
+    The phantom displaces every series except the reference by a few
+    millimetres and degrees, on an otherwise clean scanner grid — the content
+    moves, the header does not, so header-based alignment cannot fake it and
+    FLIRT/FNIRT/SynthMorph have genuine work to do.
+
+    Judging the registered result against the reference *alone* is weak,
+    because two different modalities never share a centre of mass exactly. So
+    the comparison is made **before and after**: the same series, same
+    modality, measured against the same reference. The modality bias cancels,
+    and what remains is whether registration moved the content closer. A
+    registration that silently did nothing leaves the offset untouched.
+    """
+    checks = []
+    if reference_centre is None or not result.subject_dir:
+        return checks
+
+    names = {os.path.basename(f).lower(): f for f in files}
+    for input_name in result.inputs:
+        try:
+            data_input = DIL[input_name.upper()]
+        except KeyError:
+            continue
+        if data_input is DIL.T13D:
+            continue  # the reference itself is not posed and not registered
+
+        # Only the *series itself*, resampled into reference space, can be
+        # compared with its own pre-registration image. Derived maps (the vein
+        # score, FA, cluster z-stats) hold different content, so a before/after
+        # centre-of-mass comparison against them would be meaningless -- the
+        # modality bias no longer cancels because the two images are not the
+        # same thing.
+        workflow_name = str(data_input.value.workflow_name)
+        prefix = "r-%s" % workflow_name.lower()
+        registered = next(
+            (path for name, path in sorted(names.items()) if name.startswith(prefix)),
+            None,
+        )
+        if registered is None:
+            continue
+
+        converted = _converted_image(result.subject_dir, workflow_name)
+        if converted is None:
+            continue
+
+        try:
+            post_img, post_data = _load(registered)
+            pre_img, pre_data = _load(converted)
+        except Exception:
+            continue
+
+        post = _centre_of_mass_ras(np.clip(post_data, 0, None), post_img.affine)
+        pre = _centre_of_mass_ras(np.clip(pre_data, 0, None), pre_img.affine)
+        if post is None or pre is None:
+            continue
+
+        before = float(np.linalg.norm(pre - reference_centre))
+        after = float(np.linalg.norm(post - reference_centre))
+        checks.append(
+            CheckResult(
+                "registration.%s" % input_name,
+                after <= before + 0.25,  # a small tolerance for interpolation
+                "centre-of-mass offset from the reference: %.2f mm before, "
+                "%.2f mm after registration" % (before, after),
+            )
+        )
     return checks
 
 
@@ -471,9 +533,26 @@ def _check_feature(files: list, truth: GroundTruth, token: str, truth_key: str) 
     return checks
 
 
+def _fields(check) -> tuple:
+    """Read ``(passed, severity)`` from a check, live object or reloaded dict.
+
+    Results read back from a previous run arrive as plain dicts, so counting
+    must not assume attribute access.
+    """
+    if isinstance(check, dict):
+        return bool(check.get("passed")), check.get("severity", ERROR)
+    return bool(check.passed), check.severity
+
+
 def summarise(checks: list) -> tuple:
     """Return ``(passed, failed_errors, failed_warnings)`` counts."""
-    passed = sum(1 for c in checks if c.passed)
-    errors = sum(1 for c in checks if not c.passed and c.severity == ERROR)
-    warnings = sum(1 for c in checks if not c.passed and c.severity == WARNING)
+    passed = errors = warnings = 0
+    for check in checks:
+        ok, severity = _fields(check)
+        if ok:
+            passed += 1
+        elif severity == WARNING:
+            warnings += 1
+        else:
+            errors += 1
     return passed, errors, warnings
