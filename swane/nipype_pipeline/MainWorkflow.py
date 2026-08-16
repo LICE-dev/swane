@@ -1108,3 +1108,10 @@ class MainWorkflow(CustomWorkflow):
             sub_folder=os.path.join(self.Result_DIR, "fMRI_resting_state"),
             remove_mapnode_subdir=True,
         )
+
+        self.fMRI_resting_state.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="mel_mix",
+            sub_folder=os.path.join(self.Result_DIR, "fMRI_resting_state"),
+        )
