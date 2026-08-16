@@ -134,6 +134,26 @@ not just faster garbage:
   defaults 6 / 1.5; unconditionally overridden in test_run since these don't
   change the workflow graph): confirm the venous CT vein localisation checks
   still pass with the coarser endocranium mask.
+- **recon-all** (opt-in, `--with-reconall`): test_run adds top-level flags
+  `-nuiterations 1 -norm3diters 1 -no-fix-with-ga` plus an `-expert` file
+  (`mris_register -N 10`, `mris_inflate -n 7`, `mris_fix_topology -niters 2`,
+  `synthseg --fast`) shared by all three ReconAll nodes (recon2/pial use
+  `xopts=overwrite`). Never run end to end yet. To validate:
+  - confirm recon-all completes and still produces usable pial/white
+    surfaces and aparc+aseg on the phantom, at both the classic and the
+    `reconall=true` (FS v8 synth) paths — the `synthseg --fast` line only
+    bites on the latter;
+  - the chosen expert values are deliberately conservative guesses; measure
+    the actual time saved vs accuracy lost and tune. `mris_register -N` is
+    the biggest lever (default unknown/high); `-N 10` may be too high or too
+    low.
+  - `-no-fix-with-ga` and `mris_fix_topology -niters 2` overlap (niters bounds
+    the genetic search that -no-fix-with-ga partly disables); confirm the
+    combination behaves and drop one if redundant.
+  - the expert file lives at a fixed path in the system temp dir
+    (`swane_reconall_test_expert.txt`); confirm that plays well with resume
+    and with concurrent subjects (content is always identical, so shared
+    read-only use should be fine).
 
 If any of these turn out to break downstream checks on the phantom, either
 tune the value or exclude that node from `test_run` and note why here.
