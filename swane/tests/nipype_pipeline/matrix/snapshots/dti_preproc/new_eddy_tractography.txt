@@ -1,0 +1,142 @@
+# workflow snapshot: dti_preproc / new_eddy_tractography
+#
+#   cuda = false
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
+#   old_eddy_correct = false
+#   synth_morph = False
+#   synth_strip = False
+#   tractography = true
+#
+# nodes=15 edges=29
+
+- dif2ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'corratio'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interp = 'trilinear'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
+- dif2ref_invwarp [ConvertXFM] cmd=convert_xfm mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    invert_xfm = True
+    output_type = 'NIFTI_GZ'
+- dti_bedpostx [BEDPOSTX5] cmd=bedpostx mem_gb=0.2 n_procs=1
+    burn_in = 1000
+    burn_in_no_ard = 0
+    environ = {FSLSUB_PARALLEL='4'}
+    force_dir = True
+    n_fibres = 2
+    n_jumps = 1250
+    out_dir = 'bedpostx'
+    output_type = 'NIFTI_GZ'
+    rician = True
+    sample_every = 25
+    update_proposal_every = 40
+    use_gpu = False
+- dti_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'dti'
+    output_dir = '.'
+    request_dti = True
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- dti_deskull_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    frac = 0.3
+    mask = True
+    out_file = 'nodif_brain.nii.gz'
+    output_type = 'NIFTI_GZ'
+    robust = True
+    threshold = True
+- dti_dtifit [DTIFit] cmd=dtifit mem_gb=0.2 n_procs=1
+    base_name = 'dtifit_'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- dti_eddy [CustomEddy] cmd=eddy_openmp mem_gb=1 n_procs=1
+    args = '--nthr=4'
+    environ = {FSL_SKIP_GLOBAL='1', OMP_NUM_THREADS='4'}
+    flm = 'quadratic'
+    fudge_factor = 10.0
+    interp = 'spline'
+    method = 'jac'
+    niter = 5
+    num_threads = 1
+    nvoxhp = 1000
+    out_base = 'eddy_corrected'
+    output_type = 'NIFTI_GZ'
+    slm = 'none'
+    use_cuda = False
+- dti_eddy_files [GenEddyFiles] mem_gb=0.2 n_procs=1
+- dti_nodif [ExtractVolumes] mem_gb=0.2 n_procs=1
+    num_volumes = 1
+    out_file = 'nodif.nii.gz'
+    start_volume = 0
+- dti_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
+- fa_2_ref_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'r-FA.nii.gz'
+    output_type = 'NIFTI_GZ'
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- mni_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'corratio'
+    dof = 12
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    in_file = '<FSLDIR>/data/standard/MNI152_T1_1mm_brain.nii.gz'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
+- mni_2_ref_fnirt [FNIRT] cmd=fnirt mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    fieldcoeff_file = True
+    in_file = '<FSLDIR>/data/standard/MNI152_T1_1mm.nii.gz'
+    output_type = 'NIFTI_GZ'
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+# connections
+dif2ref_flirt.out_matrix_file -> dif2ref_invwarp.in_file
+dif2ref_flirt.out_matrix_file -> fa_2_ref_apply_xfm.in_matrix_file
+dif2ref_flirt.out_matrix_file -> outputnode.diff2ref_mat
+dif2ref_invwarp.out_file -> outputnode.ref2diff_mat
+dti_bedpostx.merged_fsamples -> outputnode.fsamples
+dti_bedpostx.merged_phsamples -> outputnode.phsamples
+dti_bedpostx.merged_thsamples -> outputnode.thsamples
+dti_conv.bvals -> dti_bedpostx.bvals
+dti_conv.bvals -> dti_dtifit.bvals
+dti_conv.bvals -> dti_eddy.in_bval
+dti_conv.bvals -> dti_eddy_files.bval
+dti_conv.bvecs -> dti_bedpostx.bvecs
+dti_conv.bvecs -> dti_dtifit.bvecs
+dti_conv.bvecs -> dti_eddy.in_bvec
+dti_conv.converted_files -> dti_reOrient.in_file
+dti_deskull_bet.mask_file -> dti_bedpostx.mask
+dti_deskull_bet.mask_file -> dti_dtifit.mask
+dti_deskull_bet.mask_file -> dti_eddy.in_mask
+dti_deskull_bet.mask_file -> outputnode.nodiff_mask_file
+dti_deskull_bet.out_file -> dif2ref_flirt.in_file
+dti_dtifit.FA -> fa_2_ref_apply_xfm.in_file
+dti_eddy.out_corrected -> dti_bedpostx.dwi
+dti_eddy.out_corrected -> dti_dtifit.dwi
+dti_eddy_files.acqp -> dti_eddy.in_acqp
+dti_eddy_files.index -> dti_eddy.in_index
+dti_nodif.out_file -> dti_deskull_bet.in_file
+dti_reOrient.out_file -> dti_eddy.in_file
+dti_reOrient.out_file -> dti_nodif.in_file
+fa_2_ref_apply_xfm.out_file -> outputnode.FA
+inputnode.reference -> fa_2_ref_apply_xfm.reference
+inputnode.reference -> mni_2_ref_fnirt.ref_file
+inputnode.reference_brain -> dif2ref_flirt.reference
+inputnode.reference_brain -> mni_2_ref_flirt.reference
+mni_2_ref_flirt.out_matrix_file -> mni_2_ref_fnirt.affine_file
+mni_2_ref_fnirt.fieldcoeff_file -> outputnode.mni2ref_warp

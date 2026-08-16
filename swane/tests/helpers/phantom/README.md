@@ -46,8 +46,14 @@ carries no external, licence-restricted content.
 - **Real contrast per modality** (WM/GM/CSF ordering, HU for CT, GM≈4×WM for
   ASL/PET, bright vessels for venous, etc.).
 - **Bias field** on 3D T1w and 3D FLAIR, to exercise bias-field correction.
-- **Inter-series misalignment**: every series except the `t13d` reference has
-  its anatomy displaced by a few mm / degrees on an otherwise clean scanner
+- **Non-linear deformation from the atlas**: the whole subject carries one
+  fixed, smooth, low-frequency warp (see `deformation.py`), applied once before
+  any per-series pose, so the subject differs *non-linearly* from MNI and
+  FNIRT / SynthMorph have real work. Identical across series, so it does not
+  disturb the inter-series (rigid) relationship. We generate the field, so it is
+  known exactly and diffeomorphic.
+- **Inter-series misalignment**: every series except the `t13d` reference then
+  has its anatomy displaced by a few mm / degrees on an otherwise clean scanner
   grid — the "subject moved between series" case, so a registration that
   silently fails leaves a visible offset.
 - **Anatomical CST**: a wide-but-centred cortico-spinal corridor following the
