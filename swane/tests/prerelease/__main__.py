@@ -111,6 +111,13 @@ def build_parser() -> argparse.ArgumentParser:
         "like a real analysis; slower",
     )
     behaviour.add_argument(
+        "--no-cuda",
+        action="store_true",
+        help="pretend the host has no GPU: force the CUDA capability off so "
+        "the CUDA paths (eddy/bedpostx/probtrackx) downgrade to CPU. Useful on "
+        "a box whose GPU is present but has a broken CUDA/FSL build.",
+    )
+    behaviour.add_argument(
         "--no-ground-truth",
         action="store_true",
         help="skip the anatomical plausibility checks (they rebuild the "
@@ -161,6 +168,8 @@ def main(argv=None) -> int:
     caps = caps_mod.probe(
         global_config=global_config, cores=args.cores, ram_gb=args.ram
     )
+    if args.no_cuda:
+        caps.add("cuda", False, "forced off by --no-cuda")
     print(caps.describe())
     print("")
 
