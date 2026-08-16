@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -39,13 +40,11 @@ INFO = "info"
 
 RESULTS_DIR = "results"
 
-#: How far the centre of mass of a registered series may sit from the
-#: reference, in millimetres. The phantom's inter-series poses are a few mm, so
-#: a registration that did nothing at all lands well outside this.
-REGISTRATION_TOLERANCE_MM = 2.5
-
-#: A feature (veins, electrodes) must land within this distance of the
-#: structure the phantom actually drew.
+#: A feature (veins, electrodes, high-FA corridor) must land within this
+#: distance of the structure the phantom actually drew. Calibrated against a
+#: real run: measured margins are the reference brain at 8.1 mm, the CST at
+#: 3.1 mm and the venous sinus at 1.6 mm, so 15 mm leaves headroom for
+#: cross-machine variation without masking a gross mislocalisation.
 FEATURE_TOLERANCE_MM = 15.0
 
 
@@ -55,6 +54,12 @@ class CheckResult:
     passed: bool
     detail: str = ""
     severity: str = ERROR
+
+    def __post_init__(self):
+        # Checks often derive ``passed`` from numpy comparisons, which yield a
+        # numpy.bool_ that the JSON report cannot serialise. Normalise to a
+        # plain Python bool at the source.
+        self.passed = bool(self.passed)
 
     def to_json(self) -> dict:
         return {
@@ -132,7 +137,10 @@ def _find_results(subject_dir: str) -> list:
 #: and the point is to catch "this input produced nothing at all".
 EXPECTED_RESULT_HINTS = {
     DIL.T13D: ("ref",),
-    DIL.FLAIR3D: ("flair3d",),
+    # SWANe names the 3D FLAIR result after its output_name "flair"
+    # (r-flair.nii.gz), not "flair3d"; the trailing-digit guard in the matcher
+    # keeps it from also claiming the 2D "flair2d_*" results.
+    DIL.FLAIR3D: ("flair",),
     DIL.MDC: ("mdc",),
     DIL.T2_COR: ("t2_cor",),
     DIL.FLAIR2D_TRA: ("flair2d",),
@@ -147,6 +155,18 @@ EXPECTED_RESULT_HINTS = {
     DIL.FMRI_0: ("fmri_0", "cluster"),
     DIL.FMRI_1: ("fmri_1", "cluster"),
     DIL.FMRI_RS: ("zstat", "resting"),
+}
+
+#: Inputs whose resampled-series result is named after an output name that
+#: differs from the workflow name (used by the registration check).
+_REGISTERED_SERIES_NAME = {
+    DIL.FLAIR3D: "flair",
+}
+
+#: Inputs that only partially cover the brain, for which a centre-of-mass
+#: comparison against the whole-brain reference centre is not meaningful.
+_PARTIAL_COVERAGE = {
+    DIL.T2_COR,
 }
 
 
@@ -218,6 +238,19 @@ def _check_execution(result) -> list:
     return checks
 
 
+def _hint_matches(hint: str, name: str) -> bool:
+    """True if ``hint`` occurs in ``name`` but not as the prefix of a longer,
+    digit-suffixed token.
+
+    SWANe distinguishes some inputs only by a trailing number in the output
+    name (``flair`` vs ``flair2d``), so a bare substring test would let the 3D
+    FLAIR hint also claim the 2D results. Refusing a match when a digit follows
+    separates the two while still allowing plural/compound names (``vein`` in
+    ``veins``, ``cluster`` in ``cluster_task_a``).
+    """
+    return re.search(re.escape(hint) + r"(?![0-9])", name) is not None
+
+
 def _check_expected_outputs(result, files: list) -> list:
     """Every loaded input must contribute at least one result."""
     names = [os.path.basename(f).lower() for f in files]
@@ -230,7 +263,7 @@ def _check_expected_outputs(result, files: list) -> list:
         hints = EXPECTED_RESULT_HINTS.get(data_input)
         if not hints:
             continue
-        found = [n for n in names if any(h in n for h in hints)]
+        found = [n for n in names if any(_hint_matches(h, n) for h in hints)]
         checks.append(
             CheckResult(
                 "output.%s" % input_name,
@@ -414,6 +447,13 @@ def _check_registration(result, files: list, reference_centre) -> list:
             continue
         if data_input is DIL.T13D:
             continue  # the reference itself is not posed and not registered
+        if data_input in _PARTIAL_COVERAGE:
+            # A partially-covered series (coronal T2 over the temporal lobes)
+            # has a centre of mass several mm from the whole-brain centre by
+            # construction, and that offset dwarfs the ~1 mm pose it must
+            # recover, so before/after against the whole-brain centre cannot
+            # tell a good registration from a bad one. Skip rather than warn.
+            continue
 
         # Only the *series itself*, resampled into reference space, can be
         # compared with its own pre-registration image. Derived maps (the vein
@@ -422,13 +462,20 @@ def _check_registration(result, files: list, reference_centre) -> list:
         # modality bias no longer cancels because the two images are not the
         # same thing.
         workflow_name = str(data_input.value.workflow_name)
-        prefix = "r-%s" % workflow_name.lower()
-        registered = next(
-            (path for name, path in sorted(names.items()) if name.startswith(prefix)),
-            None,
-        )
-        if registered is None:
+        # The resampled series is named after the workflow's *output name*, which
+        # usually equals the workflow name but not always (3D FLAIR is written
+        # as r-flair, not r-flair3d). The digit guard stops "flair" from also
+        # matching the 2D "r-flair2d_*" results.
+        core = _REGISTERED_SERIES_NAME.get(data_input, workflow_name).lower()
+        candidates = [
+            path
+            for name, path in names.items()
+            if name.startswith("r-" + core) and _hint_matches(core, name)
+        ]
+        if not candidates:
             continue
+        # Prefer the plain series (r-<core>.nii.gz) over the _brain variant.
+        registered = min(candidates, key=lambda p: len(os.path.basename(p)))
 
         converted = _converted_image(result.subject_dir, workflow_name)
         if converted is None:
@@ -462,7 +509,10 @@ def _check_fa(files: list, truth: GroundTruth) -> list:
     """FA must be in range, and anisotropy must concentrate in the CST."""
     checks = []
     for path in files:
-        if "fa" not in os.path.basename(path).lower().replace("-", "_").split("_"):
+        # Drop the extension before tokenising: "r-FA.nii.gz" -> ["r", "fa"],
+        # otherwise the token is "fa.nii.gz" and the FA result is never matched.
+        stem = os.path.basename(path).lower().split(".")[0]
+        if "fa" not in stem.replace("-", "_").split("_"):
             continue
         img, data = _load(path)
         finite = data[np.isfinite(data)]
