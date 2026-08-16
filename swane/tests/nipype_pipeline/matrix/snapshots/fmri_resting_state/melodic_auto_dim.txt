@@ -4,7 +4,7 @@
 #   melodic_dim = 0
 #   melodic_thr = 0.5
 #
-# nodes=32 edges=51
+# nodes=31 edges=49
 
 - fmri_rs_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
@@ -127,10 +127,6 @@
     out_data_type = 'char'
     output_type = 'NIFTI_GZ'
     suffix = '_thresh'
-- fmri_rs_timing_correction [CustomSliceTimer] cmd=slicetimer mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    output_type = 'NIFTI_GZ'
-    slice_timing = <SliceTiming.UNKNOWN: 'Unknown'>
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - melodic [MELODIC] cmd=melodic mem_gb=0.2 n_procs=1
     dim = 0
@@ -165,7 +161,6 @@ fmri_rs_dilatemask.out_file -> melodic.mask
 fmri_rs_extract_ref.out_file -> fmri_rs_motion_correct.ref_file
 fmri_rs_flirt_2_ref.out_matrix_file -> zstats_2_ref.in_matrix_file
 fmri_rs_getTR.TR -> fmri_rs_merge_tr_meanfunc3.in1
-fmri_rs_getTR.TR -> fmri_rs_timing_correction.time_repetition
 fmri_rs_getTR.TR -> melodic.tr_sec
 fmri_rs_getthresh.('percentile_values', 'def get_thresh_op(thresh):\n    return "-thr %.10f -Tmin -bin" % (0.1 * thresh[0])\n', ()) -> fmri_rs_threshold.op_string
 fmri_rs_highpass.out_file -> merge_node.in1
@@ -188,17 +183,16 @@ fmri_rs_medianval.('percentile_values', 'def get_first_percentile(percentile_val
 fmri_rs_medianval.('percentile_values', 'def get_inorm_scale(percentile_values):\n    return "-mul %.10f" % (10000.0 / percentile_values[0])\n', ()) -> fmri_rs_intnorm.op_string
 fmri_rs_merge_tr_meanfunc3.('out', 'def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return "-bptf %f -1 -add %s" % (hp_sigma_vol, merged[1])\n', (100,)) -> fmri_rs_highpass.op_string
 fmri_rs_mergenode.('out', 'def get_usans(x):\n    return [tuple([x[0], 0.75 * x[1]])]\n', ()) -> fmri_rs_smooth.usans
-fmri_rs_motion_correct.out_file -> fmri_rs_timing_correction.in_file
+fmri_rs_motion_correct.out_file -> fmri_rs_maskfunc.in_file
+fmri_rs_motion_correct.out_file -> fmri_rs_maskfunc2.in_file
+fmri_rs_motion_correct.out_file -> fmri_rs_meanfunc.in_file
+fmri_rs_motion_correct.out_file -> fmri_rs_medianval.in_file
 fmri_rs_nvols.nvols -> fmri_rs_del_vols.nvols
 fmri_rs_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle\n', ()) -> fmri_rs_extract_ref.start_volume
 fmri_rs_reorient.out_file -> fmri_rs_img2float.in_file
 fmri_rs_smooth.smoothed_file -> fmri_rs_maskfunc3.in_file
 fmri_rs_threshold.out_file -> fmri_rs_dilatemask.in_file
 fmri_rs_threshold.out_file -> fmri_rs_medianval.mask_file
-fmri_rs_timing_correction.slice_time_corrected_file -> fmri_rs_maskfunc.in_file
-fmri_rs_timing_correction.slice_time_corrected_file -> fmri_rs_maskfunc2.in_file
-fmri_rs_timing_correction.slice_time_corrected_file -> fmri_rs_meanfunc.in_file
-fmri_rs_timing_correction.slice_time_corrected_file -> fmri_rs_medianval.in_file
 inputnode.reference_brain -> fmri_rs_flirt_2_ref.reference
 inputnode.reference_brain -> zstats_2_ref.reference
 melodic.out_dir -> melodic_output.base_directory
