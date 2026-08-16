@@ -50,3 +50,35 @@ def test_fmri_task_matrix(scenario, subject_config, make_input_dir, graph_snapsh
         config=config_echo,
         title="fmri_task / %s" % scenario,
     )
+
+
+def test_fmri_task_matrix_test_run(subject_config, make_input_dir, graph_snapshot):
+    """test_run=True on the single-contrast baseline: exercises the shared
+    fMRI_preproc_workflow's MCFLIRT speed knobs through the task path too
+    (slice_timing is a real enum here, unlike resting-state's UNKNOWN).
+    """
+    section = subject_config[DataInputList.FMRI_0]
+    section["block_design"] = BlockDesign.RARA.name
+
+    wf = fMRI_task_workflow(
+        "fmri_0",
+        dicom_dir=make_input_dir(),
+        config=section,
+        test_run=True,
+    )
+
+    config_echo = {
+        "block_design": BlockDesign.RARA.name,
+        "task_a_name": section["task_a_name"],
+        "task_b_name": section["task_b_name"],
+        "task_duration": section["task_duration"],
+        "rest_duration": section["rest_duration"],
+        "test_run": True,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="test_run",
+        config=config_echo,
+        title="fmri_task / test_run",
+    )

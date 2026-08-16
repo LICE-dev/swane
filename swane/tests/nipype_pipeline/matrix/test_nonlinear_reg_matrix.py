@@ -34,3 +34,32 @@ def test_nonlinear_reg_matrix(scenario, global_config, graph_snapshot):
         config={"synth_morph": synth["morph"]},
         title="nonlinear_reg / %s" % scenario,
     )
+
+
+TEST_RUN_SCENARIOS = {
+    "fsl_backend_test_run": False,
+    "synthmorph_backend_test_run": True,
+}
+
+
+@pytest.mark.parametrize(
+    "scenario", list(TEST_RUN_SCENARIOS), ids=list(TEST_RUN_SCENARIOS)
+)
+def test_nonlinear_reg_matrix_test_run(scenario, global_config, graph_snapshot):
+    """test_run=True on both backends: FNIRT/InvWarp strategy A (FSL) and
+    SynthMorphReg steps=5 (Synth) -- this is the shared registration used by
+    sym/mni1, which prerelease's default test_run=True actually builds.
+    """
+    synth_morph = TEST_RUN_SCENARIOS[scenario]
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["morph"] = "true" if synth_morph else "false"
+
+    wf = nonlinear_reg_workflow("sym", synth_config=synth, test_run=True)
+
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name=scenario,
+        config={"synth_morph": synth["morph"], "test_run": True},
+        title="nonlinear_reg / %s" % scenario,
+    )

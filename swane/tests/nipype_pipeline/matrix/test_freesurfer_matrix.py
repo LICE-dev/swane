@@ -56,3 +56,48 @@ def test_freesurfer_matrix(scenario, global_config, graph_snapshot):
         config=config_echo,
         title="freesurfer / %s" % scenario,
     )
+
+
+# name -> step (test_run only branches on SYNTHSEG vs any recon-all directive,
+# not on hippo/synth_reconall, so one representative scenario per branch)
+TEST_RUN_SCENARIOS = {
+    "synthseg_test_run": FreesurferStep.SYNTHSEG,
+    "reconall_test_run": FreesurferStep.RECONALL,
+}
+
+
+@pytest.mark.parametrize(
+    "scenario", list(TEST_RUN_SCENARIOS), ids=list(TEST_RUN_SCENARIOS)
+)
+def test_freesurfer_matrix_test_run(scenario, global_config, graph_snapshot):
+    """test_run=True: SynthSeg gets --fast/no-robust, recon-all gets the
+    top-level flags + -expert file. Golden reference for what prerelease's
+    default test_run=True actually builds (recon-all is opt-in there via
+    --with-reconall, but test_run applies to it all the same).
+    """
+    step = TEST_RUN_SCENARIOS[scenario]
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+
+    wf = freesurfer_workflow(
+        "freesurfer",
+        step=step,
+        is_hippo_amyg_labels=False,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
+        synth_config=synth,
+        test_run=True,
+    )
+
+    config_echo = {
+        "step": step.name,
+        "max_cpu": MAX_CPU,
+        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
+        "test_run": True,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name=scenario,
+        config=config_echo,
+        title="freesurfer / %s" % scenario,
+    )

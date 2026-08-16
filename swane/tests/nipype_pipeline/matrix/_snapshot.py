@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import os
 import sysconfig
+import tempfile
 from typing import Any
 
 from nipype.interfaces.base import isdefined
@@ -59,6 +60,10 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
     add(os.environ.get("USERPROFILE"), "<HOME>")
     add(sysconfig.get_paths().get("purelib"), "<SITE>")
     add(os.getcwd(), "<CWD>")
+    # test_run's recon-all -expert file lives at a fixed path in the system
+    # temp dir (see freesurfer_workflow._reconall_test_expert_file), which
+    # differs by OS (/tmp vs Windows' AppData\Local\Temp).
+    add(tempfile.gettempdir(), "<SYSTEMP>")
 
     # De-duplicate while preserving the longest-first order.
     seen: set[str] = set()

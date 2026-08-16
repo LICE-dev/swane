@@ -78,6 +78,46 @@ def test_dti_matrix(
     )
 
 
+def test_dti_matrix_test_run(subject_config, global_config, make_input_dir, graph_snapshot):
+    """test_run=True with tractography on: exercises CustomEddy niter=1 and
+    BEDPOSTX5's cut MCMC parameters (n_fibres/n_jumps/burn_in/sample_every),
+    both unvalidated end-to-end yet -- see prerelease/TODO.md.
+    """
+    section = subject_config[DataInputList.DTI]
+    section["cuda"] = "false"
+    section["old_eddy_correct"] = "false"
+    section["tractography"] = "true"
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+
+    wf = dti_preproc_workflow(
+        "dti",
+        dti_dir=make_input_dir(),
+        config=section,
+        synth_config=synth,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
+        test_run=True,
+    )
+
+    config_echo = {
+        "cuda": "false",
+        "old_eddy_correct": "false",
+        "tractography": "true",
+        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
+        "max_cpu": MAX_CPU,
+        "synth_strip": synth["strip"],
+        "synth_morph": synth["morph"],
+        "test_run": True,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="test_run",
+        config=config_echo,
+        title="dti_preproc / test_run",
+    )
+
+
 def test_no_limit_eddy_uses_host_cpu_count(
     subject_config, global_config, make_input_dir
 ):
