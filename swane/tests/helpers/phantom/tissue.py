@@ -109,7 +109,9 @@ def _in(vol: np.ndarray, labels) -> np.ndarray:
 
 
 def build_tissue_model(
-    freesurfer_home: str | None = None, crop_margin_mm: float = 12.0
+    freesurfer_home: str | None = None,
+    crop_margin_mm: float = 12.0,
+    deform: bool = True,
 ) -> TissueModel:
     """Construct the phantom tissue class map from ``fsaverage``.
 
@@ -122,6 +124,12 @@ def build_tissue_model(
         air margin, which cuts memory and render time for the coarse "fast"
         profile without changing world coordinates.  Set to a negative value to
         keep the full 256^3 grid.
+    deform : bool
+        Apply the fixed smooth non-linear deformation (see
+        :mod:`swane.tests.helpers.phantom.deformation`) to the anatomy before
+        cropping. On by default and deterministic, so the generator and the
+        ground-truth checks build the *same* deformed subject. Turn off only to
+        inspect the undeformed anatomy.
 
     Returns
     -------
@@ -191,6 +199,22 @@ def build_tissue_model(
 
     venous = _build_venous_sinuses(brain, aseg, zooms, affine)
     out[venous & (out == TissueClass.CSF_EXTRA)] = TissueClass.VENOUS_SINUS
+
+    # Warp the whole subject by the fixed smooth field *before* cropping, so the
+    # head bounding box is measured on the deformed anatomy and nothing is
+    # clipped. Labels, feature masks and the fibre directions move together.
+    if deform:
+        from swane.tests.helpers.phantom.deformation import deform_anatomy
+
+        out, warped_masks, cst_dir = deform_anatomy(
+            out,
+            {"precentral": precentral, "cst": cst_stampable},
+            cst_dir,
+            affine,
+            zooms,
+        )
+        precentral = warped_masks["precentral"]
+        cst_stampable = warped_masks["cst"]
 
     precentral_out = precentral
     cst_out = cst_stampable
