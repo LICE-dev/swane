@@ -9,14 +9,16 @@
 # nodes=12 edges=18
 
 - aparc_aseg2nii [ApplyVolTransform] cmd=mri_vol2vol mem_gb=0.2 n_procs=1
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     interp = 'nearest'
     reg_header = True
+    subjects_dir = '<SUBJECTS_DIR>'
     transformed_file = 'r-aparc_aseg.nii.gz'
 - aparc_aseg2ref [ApplyVolTransform] cmd=mri_vol2vol mem_gb=0.2 n_procs=1
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     interp = 'nearest'
     reg_header = True
+    subjects_dir = '<SUBJECTS_DIR>'
     transformed_file = 'r-aparc_aseg.mgz'
 - bgROI [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}

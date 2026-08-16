@@ -29,6 +29,20 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # environment (e.g. a real FSL's fsl.sh) already set.
 os.environ.setdefault("FSLOUTPUTTYPE", "NIFTI_GZ")
 
+# Mirror image of the above, for FreeSurfer. As soon as FreeSurfer is detected,
+# nipype's FSCommand.__init__ reads os.environ["SUBJECTS_DIR"] with no default
+# (nipype.interfaces.freesurfer.base.Info.subjectsdir) and raises a bare
+# KeyError when it is unset — normally FreeSurferEnv.sh provides it. That makes
+# the construction tests pass only on machines *without* FreeSurfer, which is
+# backwards: a fully equipped box is the reference, not the exception. Point it
+# at a real empty directory (the trait is Directory(exists=True), so a
+# non-existent path would fail validation too) and never override a value the
+# environment already set.
+if not os.environ.get("SUBJECTS_DIR"):
+    import tempfile
+
+    os.environ["SUBJECTS_DIR"] = tempfile.mkdtemp(prefix="swane_tests_subjects_")
+
 # Some nipype FSL interfaces pick their *input spec class* once, at import
 # time, based on nipype.interfaces.fsl.base.Info.version() (e.g. FILMGLS:
 # FSL <=5.0.6 lacks the tcon_file/fcon_file inputs swane wires — see
@@ -43,20 +57,32 @@ os.environ.setdefault("FSLOUTPUTTYPE", "NIFTI_GZ")
 # heavy/integration tests), real detection wins and this fallback never
 # triggers. Must run before anything below imports nipype.interfaces.fsl
 # (swane.utils.DependencyManager does, transitively).
-_FALLBACK_FSL_VERSION = "6.0.7.22"
+#
+# The same reasoning applies to FreeSurfer, for a different trait: nipype's
+# FSCommand fills ``subjects_dir`` from SUBJECTS_DIR *only when FreeSurfer is
+# detected* (freesurfer.base.Info.subjectsdir), so the assembled graph — and
+# therefore the golden snapshots — would otherwise depend on whether the tool
+# happens to be installed. Faking the version here makes construction identical
+# on both, and the snapshot renderer rewrites the directory to a token.
+_FALLBACK_VERSIONS = {
+    "nipype.interfaces.fsl": "6.0.7.22",
+    "nipype.interfaces.freesurfer": "8.0.0",
+}
 from nipype.interfaces.base import core as _nipype_core
 
 _real_package_version = _nipype_core.PackageInfo.version.__func__
 
 
-def _package_version_with_fsl_fallback(klass):
+def _package_version_with_fallback(klass):
     version = _real_package_version(klass)
-    if version is None and klass.__module__.startswith("nipype.interfaces.fsl"):
-        return _FALLBACK_FSL_VERSION
+    if version is None:
+        for prefix, fallback in _FALLBACK_VERSIONS.items():
+            if klass.__module__.startswith(prefix):
+                return fallback
     return version
 
 
-_nipype_core.PackageInfo.version = classmethod(_package_version_with_fsl_fallback)
+_nipype_core.PackageInfo.version = classmethod(_package_version_with_fallback)
 
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DependencyManager import DependencyManager

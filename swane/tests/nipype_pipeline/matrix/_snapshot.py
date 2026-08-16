@@ -52,6 +52,9 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
     except Exception:
         pass
     add(os.environ.get("FSLDIR"), "<FSLDIR>")
+    # nipype stamps SUBJECTS_DIR onto every FreeSurfer node; its value is
+    # machine-specific (and, in the test session, a throwaway directory).
+    add(os.environ.get("SUBJECTS_DIR"), "<SUBJECTS_DIR>")
     add(os.environ.get("HOME"), "<HOME>")
     add(os.environ.get("USERPROFILE"), "<HOME>")
     add(sysconfig.get_paths().get("purelib"), "<SITE>")
