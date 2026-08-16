@@ -201,8 +201,86 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
     checks.extend(_check_expected_outputs(result, files))
     checks.extend(_check_integrity(files))
     checks.extend(_check_reference(result, files))
+    checks.extend(_check_nonlinear_registration(result))
     if ground_truth is not None:
         checks.extend(_check_plausibility(result, files, ground_truth))
+    return checks
+
+
+#: Bounds (mm) on the mean magnitude of a non-linear warp's displacement field.
+#: FNIRT ref->MNI on the deformed phantom measures ~8 mm mean, which is the
+#: fsaverage->MNI152 baseline plus our injected deformation. The window is
+#: deliberately wide: it only has to separate a real warp from a degenerate one
+#: (~0 mm, a silently-failed FNIRT) or a diverged one (tens of mm).
+NONLINEAR_WARP_MIN_MM = 0.5
+NONLINEAR_WARP_MAX_MM = 30.0
+
+
+def _check_nonlinear_registration(result) -> list:
+    """Validate the non-linear registration actually produced a real warp.
+
+    The phantom now carries a fixed non-linear deformation from the atlas (see
+    ``helpers/phantom/deformation.py``), so any pass that registers the subject
+    to MNI or the symmetric template (FLAT1, the asymmetry index) must recover a
+    non-trivial warp. FNIRT writes the forward transform as spline coefficients
+    (intent ``fnirt cubic spline coef``) and ``invwarp`` writes the inverse as a
+    real displacement field (intent ``fnirt disp field``); the latter is the one
+    we can measure directly.
+
+    What this deliberately does *not* do is compare the recovered warp against
+    the known deformation field voxel-by-voxel: SWANe registers to MNI, not to
+    the undeformed phantom, so the recovered warp also carries the (unknown)
+    fsaverage-to-MNI152 baseline, which cannot be separated out here. It reads
+    only SWANe's own outputs and derives nothing from the FSL atlases.
+    """
+    forward = glob.glob(
+        os.path.join(result.subject_dir, "**", "*_fieldwarp.nii.gz"), recursive=True
+    )
+    inverse = glob.glob(
+        os.path.join(result.subject_dir, "**", "*_fieldwarp_inverse.nii.gz"),
+        recursive=True,
+    )
+    if not forward and not inverse:
+        return []  # this pass performs no non-linear registration
+
+    checks = [
+        CheckResult(
+            "nonlinear.warp_present",
+            bool(forward) and bool(inverse),
+            "forward coefficients: %d, inverse field: %d"
+            % (len(forward), len(inverse)),
+        )
+    ]
+
+    for path in sorted(inverse):
+        try:
+            img, data = _load(path)
+        except Exception as exc:
+            checks.append(
+                CheckResult(
+                    "nonlinear.warp_field", False, "cannot load %s: %s" % (path, exc)
+                )
+            )
+            continue
+        if data.ndim != 4 or data.shape[-1] != 3:
+            continue  # not a displacement field
+        magnitude = np.linalg.norm(data, axis=-1)
+        finite = magnitude[np.isfinite(magnitude)]
+        moved = finite[finite > 1e-3]
+        mean_mm = float(moved.mean()) if moved.size else 0.0
+        max_mm = float(finite.max()) if finite.size else float("inf")
+        ok = (
+            finite.size == magnitude.size  # no non-finite displacements
+            and NONLINEAR_WARP_MIN_MM <= mean_mm
+            and max_mm <= NONLINEAR_WARP_MAX_MM
+        )
+        checks.append(
+            CheckResult(
+                "nonlinear.warp_nontrivial",
+                ok,
+                "displacement mean %.2f mm, max %.2f mm" % (mean_mm, max_mm),
+            )
+        )
     return checks
 
 
