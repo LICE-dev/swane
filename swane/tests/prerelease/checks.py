@@ -230,7 +230,12 @@ def _check_nonlinear_registration(result) -> list:
     The phantom now carries a fixed non-linear deformation from the atlas (see
     ``helpers/phantom/deformation.py``), so any pass that registers the subject
     to MNI or the symmetric template (FLAT1, the asymmetry index, ICA-AROMA)
-    must recover a non-trivial warp. FNIRT writes the forward transform as
+    must recover a non-trivial warp. DTI tractography no longer runs its own
+    MNI<->reference registration: it reuses the same "mni1" warp FLAT1 computes
+    (built once by ``MainWorkflow.ensure_mni1_registration``, whenever FLAT1 or
+    tractography is requested), so there is nothing tractography-specific to
+    check here beyond what the FLAT1/"mni1" case already covers. FNIRT writes
+    the forward transform as
     spline coefficients (intent ``fnirt cubic spline coef``); ``invwarp`` writes
     the inverse as a real displacement field (intent ``fnirt disp field``).
 
@@ -312,13 +317,12 @@ def _registration_target(node_dir: str):
     allowed; we never copy or derive committed images from them.
     """
     if node_dir.startswith("mni1"):
+        # Shared by FLAT1 and DTI tractography: both now consume the single
+        # "mni1" nonlinear_reg_workflow instance instead of DTI computing its
+        # own MNI<->reference registration (dti_preproc no longer has one).
         fsldir = os.environ.get("FSLDIR")
         if fsldir:
             return os.path.join(fsldir, "data/standard/MNI152_T1_1mm_brain.nii.gz")
-    elif node_dir.startswith("mni2"):
-        fsldir = os.environ.get("FSLDIR")
-        if fsldir:
-            return os.path.join(fsldir, "data/standard/MNI152_T1_2mm_brain.nii.gz")
     elif node_dir.startswith("sym"):
         try:
             import swane_supplement

@@ -20,8 +20,6 @@ from swane.nipype_pipeline.nodes.utils import (
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
 from multiprocessing import cpu_count
-import os
-from os.path import abspath
 
 
 def dti_preproc_workflow(
@@ -83,8 +81,6 @@ def dti_preproc_workflow(
         Linear registration matrix from diffusion to T13D reference space.
     ref2diff_mat : path
         Linear registration inverse matrix from T13D reference to diffusion space.
-    mni2ref_warp : path
-        Nonlinear registration warp from MNI atlas to T13D reference space.
 
     """
 
@@ -106,7 +102,6 @@ def dti_preproc_workflow(
                 "thsamples",
                 "diff2ref_mat",
                 "ref2diff_mat",
-                "mni2ref_warp",
             ]
         ),
         name="outputnode",
@@ -253,32 +248,6 @@ def dti_preproc_workflow(
 
     is_tractography = config.getboolean_safe("tractography")
     if is_tractography:
-
-        mni = abspath(
-            os.path.join(os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm.nii.gz")
-        )
-        mni_brain = abspath(
-            os.path.join(
-                os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm_brain.nii.gz"
-            )
-        )
-
-        mni_2_ref = get_registration_node(
-            name="mni_2_ref",
-            name_prefix="MNI atlas",
-            name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
-            workflow=workflow,
-            moving=mni,
-            moving_brain=mni_brain,
-            reference=[inputnode, "reference"],
-            reference_brain=[inputnode, "reference_brain"],
-            flirt_cost="corratio",
-            non_linear=True,
-        )
-        workflow.connect(
-            mni_2_ref.out_registered_node, mni_2_ref.warp, outputnode, "mni2ref_warp"
-        )
 
         # NODE 8: Bayesian estimation of diffusion parameters
         bedpostx = Node(BEDPOSTX5(), name="dti_bedpostx")
