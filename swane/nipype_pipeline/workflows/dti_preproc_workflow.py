@@ -30,6 +30,7 @@ def dti_preproc_workflow(
     base_dir: str = "/",
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     DTI preprocessing workflow with eddy current and motion artifact correction.
@@ -52,6 +53,9 @@ def dti_preproc_workflow(
         If greater than 0, limit the core usage of bedpostx. The default is 0.
     multicore_node_limit: CORE_LIMIT, optional
         Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
+    test_run : bool, optional
+        If True, tweak eddy, registration and bedpostx parameters to speed up
+        prerelease test runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -161,6 +165,9 @@ def dti_preproc_workflow(
         eddy = Node(CustomEddy(), name="dti_eddy")
         eddy.inputs.use_cuda = is_cuda
         eddy._mem_gb = 1
+        if test_run:
+            # FSL default is 5; cut to the minimum for prerelease speed.
+            eddy.inputs.niter = 1
         if not is_cuda:
             if multicore_node_limit == CoreLimit.HARD_CAP:
                 eddy_cpu = max_cpu
@@ -205,6 +212,7 @@ def dti_preproc_workflow(
         flirt_cost="corratio",
         non_linear=False,
         inverse=True,
+        test_run=test_run,
     )
 
     # Output mat must be fsl format to be used directly in probtrackx
@@ -251,11 +259,20 @@ def dti_preproc_workflow(
 
         # NODE 8: Bayesian estimation of diffusion parameters
         bedpostx = Node(BEDPOSTX5(), name="dti_bedpostx")
-        bedpostx.inputs.n_fibres = 2
         bedpostx.inputs.rician = True
-        bedpostx.inputs.sample_every = 25
-        bedpostx.inputs.n_jumps = 1250
-        bedpostx.inputs.burn_in = 1000
+        if test_run:
+            # Cut the MCMC cost, dominated by burn_in + n_jumps * sample_every
+            # (~32k iterations/voxel by default): drop it to ~1.1k, plus halve
+            # the fibres modeled per voxel.
+            bedpostx.inputs.n_fibres = 1
+            bedpostx.inputs.sample_every = 5
+            bedpostx.inputs.n_jumps = 200
+            bedpostx.inputs.burn_in = 100
+        else:
+            bedpostx.inputs.n_fibres = 2
+            bedpostx.inputs.sample_every = 25
+            bedpostx.inputs.n_jumps = 1250
+            bedpostx.inputs.burn_in = 1000
         bedpostx.inputs.use_gpu = is_cuda
         if not is_cuda:
             # if cuda is enabled only 1 process is launched
