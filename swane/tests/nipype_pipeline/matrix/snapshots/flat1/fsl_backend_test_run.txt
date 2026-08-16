@@ -1,0 +1,186 @@
+# workflow snapshot: flat1 / fsl_backend_test_run
+#
+#   synth_morph = false
+#   test_run = True
+#
+# nodes=30 edges=44
+
+- binary_flair_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'r-binary_flair.nii.gz'
+    output_type = 'NIFTI_GZ'
+- extension_z_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'r-extension_z.nii.gz'
+    output_type = 'NIFTI_GZ'
+- fast_segment_split [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def pick_first_two(file_list):\n    return file_list[1], file_list[2]\n'
+- flair_2_mni1_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    ref_file = '<TMP>/mni1.nii.gz'
+- flat1_binaryFLAIR [ThrROI] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'binary_flair.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_cerebellum_mean [ImageStatistics] mem_gb=0.2 n_procs=1
+    percentiles = []
+- flat1_convolution_flair [SpatialFilter] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    kernel_shape = 'boxv'
+    kernel_size = 5.0
+    operation = 'mean'
+    out_file = 'convolution_flair.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_cortexMask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    mask_file = '<SUPPLEMENT>/resources/doMAP_template/brain_cortex_mas_OK.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_fast [FAST] cmd=fast mem_gb=4 n_procs=1
+    bias_iters = 1
+    bias_lowpass = 40
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    hyper = 0.1
+    img_type = 1
+    iters_afterbias = 1
+    number_classes = 3
+    output_biascorrected = True
+    output_type = 'NIFTI_GZ'
+    segment_iters = 5
+- flat1_flairDIVref [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    operation = 'div'
+    output_type = 'NIFTI_GZ'
+- flat1_gmMask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- flat1_gm_mean [ImageStatistics] mem_gb=0.2 n_procs=1
+    percentiles = []
+- flat1_image_extension [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    operand_file = '<SUPPLEMENT>/resources/doMAP_template/mean_extension.nii.gz'
+    operation = 'sub'
+    out_file = 'extension_image.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_image_extensionz [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    operand_file = '<SUPPLEMENT>/resources/doMAP_template/std_final_extension.nii.gz'
+    operation = 'div'
+    out_file = 'extension_z.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_junction_mean [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    operand_file = '<SUPPLEMENT>/resources/doMAP_template/mean_flair.nii.gz'
+    operation = 'sub'
+    out_file = 'junction_flair.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_junctionz [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    operand_file = '<SUPPLEMENT>/resources/doMAP_template/std_final_flair.nii.gz'
+    operation = 'div'
+    out_file = 'junctionZ_flair.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_masked_cerebellum [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    mask_file = '<SUPPLEMENT>/resources/doMAP_template/binary_cerebellum.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_no_cereb_extension_z [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    mask_file = '<SUPPLEMENT>/resources/doMAP_template/brain_cortex_mas_OK.nii.gz'
+    out_file = 'no_cereb_extension_z.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_normalised_GM_mask [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    operation = 'div'
+    out_file = 'normalised_GM_mask.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_outliers_mask [Threshold] cmd=fslmaths mem_gb=0.2 n_procs=1
+    direction = 'above'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    thresh = 97.0
+    use_nonzero_voxels = True
+    use_robust_range = True
+- flat1_restore_gmMask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'masked_image_GM.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_smoothed_image_extension [SpatialFilter] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    kernel_shape = 'boxv'
+    kernel_size = 5.0
+    operation = 'mean'
+    out_file = 'smoothed_image_extension.nii.gz'
+    output_type = 'NIFTI_GZ'
+- flat1_wmMask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- flat1_wm_mean [ImageStatistics] mem_gb=0.2 n_procs=1
+    percentiles = []
+- gm_2_mni1_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    ref_file = '<TMP>/mni1.nii.gz'
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- junction_z_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'r-junction_z.nii.gz'
+    output_type = 'NIFTI_GZ'
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- restore_2_mni1_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    ref_file = '<TMP>/mni1.nii.gz'
+- wm_2_mni1_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    ref_file = '<TMP>/mni1.nii.gz'
+# connections
+binary_flair_2_ref_apply_warp.out_file -> outputnode.binary_flair
+extension_z_2_ref_apply_warp.out_file -> outputnode.extension_z
+fast_segment_split.gm_seg -> gm_2_mni1_apply_warp.in_file
+fast_segment_split.wm_seg -> wm_2_mni1_apply_warp.in_file
+flair_2_mni1_apply_warp.out_file -> flat1_flairDIVref.in_file
+flat1_binaryFLAIR.out_file -> binary_flair_2_ref_apply_warp.in_file
+flat1_binaryFLAIR.out_file -> flat1_convolution_flair.in_file
+flat1_cerebellum_mean.mean -> flat1_normalised_GM_mask.operand_value
+flat1_convolution_flair.out_file -> flat1_junction_mean.in_file
+flat1_cortexMask.out_file -> flat1_binaryFLAIR.in_file
+flat1_cortexMask.out_file -> flat1_gmMask.in_file
+flat1_cortexMask.out_file -> flat1_wmMask.in_file
+flat1_fast.partial_volume_files -> fast_segment_split.file_list
+flat1_fast.restored_image -> restore_2_mni1_apply_warp.in_file
+flat1_flairDIVref.out_file -> flat1_outliers_mask.in_file
+flat1_gmMask.out_file -> flat1_gm_mean.in_file
+flat1_gm_mean.mean -> flat1_binaryFLAIR.seg_val_max
+flat1_image_extension.out_file -> flat1_image_extensionz.in_file
+flat1_image_extensionz.out_file -> flat1_no_cereb_extension_z.in_file
+flat1_junction_mean.out_file -> flat1_junctionz.in_file
+flat1_junctionz.out_file -> junction_z_2_ref_apply_warp.in_file
+flat1_masked_cerebellum.out_file -> flat1_cerebellum_mean.in_file
+flat1_no_cereb_extension_z.out_file -> extension_z_2_ref_apply_warp.in_file
+flat1_normalised_GM_mask.out_file -> flat1_smoothed_image_extension.in_file
+flat1_outliers_mask.out_file -> flat1_cortexMask.in_file
+flat1_restore_gmMask.out_file -> flat1_normalised_GM_mask.in_file
+flat1_smoothed_image_extension.out_file -> flat1_image_extension.in_file
+flat1_wmMask.out_file -> flat1_wm_mean.in_file
+flat1_wm_mean.mean -> flat1_binaryFLAIR.seg_val_min
+gm_2_mni1_apply_warp.out_file -> flat1_gmMask.mask_file
+gm_2_mni1_apply_warp.out_file -> flat1_restore_gmMask.mask_file
+inputnode.flair_brain -> flair_2_mni1_apply_warp.in_file
+inputnode.ref_2_mni1_inverse_warp -> binary_flair_2_ref_apply_warp.field_file
+inputnode.ref_2_mni1_inverse_warp -> extension_z_2_ref_apply_warp.field_file
+inputnode.ref_2_mni1_inverse_warp -> junction_z_2_ref_apply_warp.field_file
+inputnode.ref_2_mni1_warp -> flair_2_mni1_apply_warp.field_file
+inputnode.ref_2_mni1_warp -> gm_2_mni1_apply_warp.field_file
+inputnode.ref_2_mni1_warp -> restore_2_mni1_apply_warp.field_file
+inputnode.ref_2_mni1_warp -> wm_2_mni1_apply_warp.field_file
+inputnode.reference_brain -> binary_flair_2_ref_apply_warp.ref_file
+inputnode.reference_brain -> extension_z_2_ref_apply_warp.ref_file
+inputnode.reference_brain -> flat1_fast.in_files
+inputnode.reference_brain -> junction_z_2_ref_apply_warp.ref_file
+junction_z_2_ref_apply_warp.out_file -> outputnode.junction_z
+restore_2_mni1_apply_warp.out_file -> flat1_flairDIVref.operand_file
+restore_2_mni1_apply_warp.out_file -> flat1_masked_cerebellum.in_file
+restore_2_mni1_apply_warp.out_file -> flat1_restore_gmMask.in_file
+wm_2_mni1_apply_warp.out_file -> flat1_wmMask.mask_file

@@ -37,3 +37,36 @@ def test_flat1_matrix(scenario, global_config, make_file, graph_snapshot):
         config={"synth_morph": synth["morph"]},
         title="flat1 / %s" % scenario,
     )
+
+
+TEST_RUN_SCENARIOS = {
+    "fsl_backend_test_run": False,
+    "synthmorph_backend_test_run": True,
+}
+
+
+@pytest.mark.parametrize(
+    "scenario", list(TEST_RUN_SCENARIOS), ids=list(TEST_RUN_SCENARIOS)
+)
+def test_flat1_matrix_test_run(scenario, global_config, make_file, graph_snapshot):
+    """test_run=True on both backends: FAST gets cut iterations (-I=1 -W=5
+    -O=1, unvalidated -- see prerelease/TODO.md) regardless of backend.
+    """
+    synth_morph = TEST_RUN_SCENARIOS[scenario]
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["morph"] = "true" if synth_morph else "false"
+
+    wf = flat1_workflow(
+        "flat1",
+        mni1_dir=make_file("mni1.nii.gz", "x"),
+        synth_config=synth,
+        test_run=True,
+    )
+
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name=scenario,
+        config={"synth_morph": synth["morph"], "test_run": True},
+        title="flat1 / %s" % scenario,
+    )
