@@ -1070,6 +1070,7 @@ class MainWorkflow(CustomWorkflow):
                 dicom_dir=dicom_dir,
                 config=self.subject_config[DIL["FMRI_%d" % y]],
                 base_dir=self.base_dir,
+                test_run=self.test_run,
             )
             self.fMRI.long_name = "Task fMRI analysis - %d" % y
             self.connect(
@@ -1110,6 +1111,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=dicom_dir,
             config=self.subject_config[DIL.FMRI_RS],
             base_dir=self.base_dir,
+            test_run=self.test_run,
         )
         self.fMRI_resting_state.long_name = "Resting state fMRI analysis"
         self.connect(

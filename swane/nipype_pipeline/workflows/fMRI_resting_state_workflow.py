@@ -24,7 +24,11 @@ import os
 
 
 def fMRI_resting_state_workflow(
-    name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/"
+    name: str,
+    dicom_dir: str,
+    config: SectionProxy,
+    base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     fMRI resting state anlysis
@@ -39,6 +43,11 @@ def fMRI_resting_state_workflow(
         workflow settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, speed up the ref-to-atlas registration for prerelease test
+        runs at the cost of accuracy. melodic_dim is never touched: the
+        phantom dataset used for testing is built to yield a specific
+        component count. The default is False.
 
     Input Node Fields
     ----------
@@ -77,6 +86,7 @@ def fMRI_resting_state_workflow(
         del_start_vols=del_start_vols,
         del_end_vols=del_end_vols,
         base_dir=base_dir,
+        test_run=test_run,
     )
 
     # TODO: preference per melodic dim e per soglia
@@ -170,6 +180,14 @@ def fMRI_resting_state_workflow(
         fnirt.long_name = "%s to atlas"
         fnirt.inputs.fieldcoeff_file = True
         fnirt.inputs.ref_file = mni2
+        if test_run:
+            # Same strategy A as get_registration_node: drop the two
+            # full-resolution pyramid levels (FSL defaults subsamp=4,2,1,1 /
+            # miter=5,5,5,5).
+            fnirt.inputs.subsampling_scheme = [4, 2]
+            fnirt.inputs.max_nonlin_iter = [5, 5]
+            fnirt.inputs.in_fwhm = [6, 4]
+            fnirt.inputs.ref_fwhm = [4, 2]
         workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
         workflow.connect(inputnode, "reference_brain", fnirt, "in_file")
 
@@ -234,6 +252,9 @@ def fMRI_resting_state_workflow(
         workflow.connect(input_list_denoised, "out", melodic, "in_files")
 
     melodic.inputs.mm_thresh = melodic_thr
+    # melodic_dim is never overridden by test_run: the phantom dataset is
+    # built to yield a specific component count, which forcing a fixed dim
+    # would defeat.
     melodic.inputs.dim = melodic_dim
     melodic.inputs.out_stats = True
     melodic.inputs.no_bet = True
