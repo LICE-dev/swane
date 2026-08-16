@@ -336,6 +336,7 @@ def fMRI_preproc_workflow(
     workflow.connect(intnorm, "out_file", highpass, "in_file")
 
     # NODE 27: Coregister the mean functional image to the structural image
+    # Stick to FSL intentionally avoiding synth for reproducibility reason
     flirt_2_ref = Node(FLIRT(), name="%s_flirt_2_ref" % name)
     flirt_2_ref.long_name = "%s to reference space"
     flirt_2_ref.inputs.out_matrix_file = "fMRI2ref.mat"
