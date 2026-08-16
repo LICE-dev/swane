@@ -181,13 +181,16 @@ def fMRI_resting_state_workflow(
         fnirt.inputs.fieldcoeff_file = True
         fnirt.inputs.ref_file = mni2
         if test_run:
-            # Same strategy A as get_registration_node: drop the two
-            # full-resolution pyramid levels (FSL defaults subsamp=4,2,1,1 /
-            # miter=5,5,5,5).
-            fnirt.inputs.subsampling_scheme = [4, 2]
-            fnirt.inputs.max_nonlin_iter = [5, 5]
-            fnirt.inputs.in_fwhm = [6, 4]
-            fnirt.inputs.ref_fwhm = [4, 2]
+            # Same speedup as get_registration_node: keep FNIRT's default
+            # 4-level pyramid but never go to full resolution and do fewer
+            # iterations at the finer levels. Dropping levels (2-element lists)
+            # aborts FNIRT, because its --lambda/--estint/--applyin/refmask stay
+            # at 4-level defaults and the per-level list lengths must all match.
+            # Coarsest-first, stopping at subsamp 2 (never full resolution):
+            # fastest length-4 scheme measured on the phantom, still clears the
+            # nonlinear target alignment check with margin.
+            fnirt.inputs.subsampling_scheme = [4, 4, 4, 2]
+            fnirt.inputs.max_nonlin_iter = [5, 5, 5, 3]
         workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
         workflow.connect(inputnode, "reference_brain", fnirt, "in_file")
 
