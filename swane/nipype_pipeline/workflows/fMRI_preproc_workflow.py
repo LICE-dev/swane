@@ -149,12 +149,23 @@ def fMRI_preproc_workflow(
 
     # NODE 8: Perform slice timing correction if needed
     # TODO: per resting state NON usare lo slice timing correction
-    slice_timing_correction = Node(
-        CustomSliceTimer(), name="%s_timing_correction" % name
-    )
-    slice_timing_correction.inputs.slice_timing = slice_timing
-    workflow.connect(getTR, "TR", slice_timing_correction, "time_repetition")
-    workflow.connect(motion_correct, "out_file", slice_timing_correction, "in_file")
+    # When the slice timing is unknown there is nothing to correct: skip the
+    # node at the workflow level (rather than no-op inside it) so that
+    # whenever CustomSliceTimer *is* built, it always calls slicetimer.
+    if slice_timing == SliceTiming.UNKNOWN:
+        slice_time_corrected_node = motion_correct
+        slice_time_corrected_field = "out_file"
+    else:
+        slice_timing_correction = Node(
+            CustomSliceTimer(), name="%s_timing_correction" % name
+        )
+        slice_timing_correction.inputs.slice_timing = slice_timing
+        workflow.connect(getTR, "TR", slice_timing_correction, "time_repetition")
+        workflow.connect(
+            motion_correct, "out_file", slice_timing_correction, "in_file"
+        )
+        slice_time_corrected_node = slice_timing_correction
+        slice_time_corrected_field = "slice_time_corrected_file"
 
     # NODE 9: Extract the mean volume of the first functional run
     meanfunc = Node(ImageMaths(), name="%s_meanfunc" % name)
@@ -162,7 +173,7 @@ def fMRI_preproc_workflow(
     meanfunc.inputs.op_string = "-Tmean"
     meanfunc.inputs.suffix = "_mean"
     workflow.connect(
-        slice_timing_correction, "slice_time_corrected_file", meanfunc, "in_file"
+        slice_time_corrected_node, slice_time_corrected_field, meanfunc, "in_file"
     )
 
     # NODE 10: Strip the skull from the mean functional to generate a mask
@@ -178,7 +189,7 @@ def fMRI_preproc_workflow(
     maskfunc.inputs.suffix = "_bet"
     maskfunc.inputs.op_string = "-mas"
     workflow.connect(
-        slice_timing_correction, "slice_time_corrected_file", maskfunc, "in_file"
+        slice_time_corrected_node, slice_time_corrected_field, maskfunc, "in_file"
     )
     workflow.connect(meanfuncmask, "mask_file", maskfunc, "in_file2")
 
@@ -212,7 +223,7 @@ def fMRI_preproc_workflow(
     medianval.long_name = "median value calculation"
     medianval.inputs.percentiles = [50]
     workflow.connect(
-        slice_timing_correction, "slice_time_corrected_file", medianval, "in_file"
+        slice_time_corrected_node, slice_time_corrected_field, medianval, "in_file"
     )
     workflow.connect(threshold, "out_file", medianval, "mask_file")
 
@@ -229,7 +240,7 @@ def fMRI_preproc_workflow(
     maskfunc2.inputs.suffix = "_mask"
     maskfunc2.inputs.op_string = "-mas"
     workflow.connect(
-        slice_timing_correction, "slice_time_corrected_file", maskfunc2, "in_file"
+        slice_time_corrected_node, slice_time_corrected_field, maskfunc2, "in_file"
     )
     workflow.connect(dilatemask, "out_file", maskfunc2, "in_file2")
 

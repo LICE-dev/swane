@@ -6,7 +6,7 @@
 #   task_b_name = Task_B
 #   task_duration = 30
 #
-# nodes=51 edges=118
+# nodes=50 edges=116
 
 - fmri_0_art [ArtifactDetect] mem_gb=0.2 n_procs=1
     bound_by_brainmask = False
@@ -283,10 +283,6 @@
     out_data_type = 'char'
     output_type = 'NIFTI_GZ'
     suffix = '_thresh'
-- fmri_0_timing_correction [CustomSliceTimer] cmd=slicetimer mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    output_type = 'NIFTI_GZ'
-    slice_timing = <SliceTiming.UNKNOWN: 'Unknown'>
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 # connections
@@ -339,7 +335,6 @@ fmri_0_getTR.TR -> fmri_0_genSpec.TR
 fmri_0_getTR.TR -> fmri_0_level_1_design.interscan_interval
 fmri_0_getTR.TR -> fmri_0_merge_tr_meanfunc3.in1
 fmri_0_getTR.TR -> fmri_0_modelspec.time_repetition
-fmri_0_getTR.TR -> fmri_0_timing_correction.time_repetition
 fmri_0_getthresh.('percentile_values', 'def get_thresh_op(thresh):\n    return "-thr %.10f -Tmin -bin" % (0.1 * thresh[0])\n', ()) -> fmri_0_threshold.op_string
 fmri_0_highpass.out_file -> fmri_0_modelestimate.in_file
 fmri_0_highpass.out_file -> fmri_0_modelspec.functional_runs
@@ -378,7 +373,10 @@ fmri_0_modelgen.con_file -> fmri_0_modelestimate.tcon_file
 fmri_0_modelgen.design_file -> fmri_0_modelestimate.design_file
 fmri_0_modelspec.session_info -> fmri_0_level_1_design.session_info
 fmri_0_motion_correct.out_file -> fmri_0_art.realigned_files
-fmri_0_motion_correct.out_file -> fmri_0_timing_correction.in_file
+fmri_0_motion_correct.out_file -> fmri_0_maskfunc.in_file
+fmri_0_motion_correct.out_file -> fmri_0_maskfunc2.in_file
+fmri_0_motion_correct.out_file -> fmri_0_meanfunc.in_file
+fmri_0_motion_correct.out_file -> fmri_0_medianval.in_file
 fmri_0_motion_correct.par_file -> fmri_0_art.realignment_parameters
 fmri_0_motion_correct.par_file -> fmri_0_modelspec.realignment_parameters
 fmri_0_nvols.nvols -> fmri_0_del_vols.nvols
@@ -407,10 +405,6 @@ fmri_0_smoothness.volume -> fmri_0_cluster_t7_1.volume
 fmri_0_smoothness.volume -> fmri_0_cluster_t7_2.volume
 fmri_0_threshold.out_file -> fmri_0_dilatemask.in_file
 fmri_0_threshold.out_file -> fmri_0_medianval.mask_file
-fmri_0_timing_correction.slice_time_corrected_file -> fmri_0_maskfunc.in_file
-fmri_0_timing_correction.slice_time_corrected_file -> fmri_0_maskfunc2.in_file
-fmri_0_timing_correction.slice_time_corrected_file -> fmri_0_meanfunc.in_file
-fmri_0_timing_correction.slice_time_corrected_file -> fmri_0_medianval.in_file
 inputnode.reference_brain -> fmri_0_cluster_t3_1_to_ref.reference
 inputnode.reference_brain -> fmri_0_cluster_t3_2_to_ref.reference
 inputnode.reference_brain -> fmri_0_cluster_t5_1_to_ref.reference
