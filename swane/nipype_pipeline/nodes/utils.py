@@ -102,6 +102,7 @@ def get_registration_node(
     flirt_search: int = 90,
     name_prefix: str = "",
     name_suffix: str = "",
+    test_run: bool = False,
 ) -> RegistrationNodeWrapper:
 
     # Sometimes we want to use flirt on unbetted images to take advantage of skull for registration
@@ -125,6 +126,10 @@ def get_registration_node(
         )
         synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
+        if test_run and non_linear:
+            # Reduce deformable integration steps (default 7) for prerelease
+            # test runs. FreeSurfer advises not to go below 5.
+            synth_morph_reg.inputs.steps = 5
         if type(moving) == str:
             synth_morph_reg.inputs.in_file = moving
         else:
@@ -168,6 +173,14 @@ def get_registration_node(
             fnirt.long_name = name_prefix + " %s " + name_suffix
             fnirt.ram_estimator = FnirtRamEstimator()
             fnirt.inputs.fieldcoeff_file = True
+            if test_run:
+                # Speed up prerelease test runs by dropping the two full-resolution
+                # pyramid levels (subsamp=1) from the FSL defaults (subsamp=4,2,1,1
+                # / miter=5,5,5,5). All per-level lists must share the same length.
+                fnirt.inputs.subsampling_scheme = [4, 2]
+                fnirt.inputs.max_nonlin_iter = [5, 5]
+                fnirt.inputs.in_fwhm = [6, 4]
+                fnirt.inputs.ref_fwhm = [4, 2]
             workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
             if type(moving) == str:
                 fnirt.inputs.in_file = moving
@@ -182,6 +195,9 @@ def get_registration_node(
             if inverse:
                 inv_warp = Node(InvWarp(), name=name + "_invwarp")
                 inv_warp.ram_estimator = InvWarpRamEstimator()
+                if test_run:
+                    # Halve the inversion iterations (FSL default niter=10)
+                    inv_warp.inputs.niter = 5
                 workflow.connect(fnirt, "fieldcoeff_file", inv_warp, "warp")
                 if type(moving) == str:
                     inv_warp.inputs.ref_file = moving
