@@ -76,34 +76,57 @@ RAS millimetres, so nothing has to be resampled to be judged.
 
 ### What the phantom makes checkable — and what is still missing
 
-The phantom displaces every series except the reference by a small **rigid**
-pose (rotations ~0.5–1.3°, translations ~0.7–1.7 mm), fixed per series and
-deterministic, applied to the *content* on an otherwise clean scanner grid.
-The header does not move with it, so header-based alignment cannot fake the
-result and FLIRT genuinely has to solve it. That is what
-`registration.<input>` measures, comparing the same series against the
-reference before and after registration so the modality bias cancels.
+SWANe performs two different registrations, and the phantom lets us grade the
+quality of **both** quantitatively — not by eye.
 
-**Non-linear registration** is covered by a *fixed*, smooth, low-frequency
-deformation applied to the anatomy **before** the per-series rigid pose (see
+**Linear, series → reference (T13D).** The phantom displaces every series except
+the reference by a small **rigid** pose (rotations ~0.5–1.3°, translations
+~0.7–1.7 mm), fixed per series, applied to the *content* on an otherwise clean
+scanner grid; the header does not move with it, so header-based alignment cannot
+fake the result. The target here is the subject's *own* T13D in subject space —
+no atlas is involved — and because the deformation below is identical across
+series, series and reference differ only by that known pose. Two checks:
+
+* `registration.<input>` — the series' centre of mass moves closer to the
+  reference after registration than before (modality bias cancels in the
+  before/after difference);
+* `registration.overlap.<input>` — the registered brain mask actually coincides
+  with the reference brain mask (Dice ~0.97 measured; gate 0.90). This is the
+  goodness measure: a gross misregistration drops a brain-sized Dice well below
+  the gate.
+
+**Non-linear, subject → atlas.** A *fixed*, smooth, low-frequency deformation is
+applied to the anatomy **before** the per-series rigid pose (see
 `helpers/phantom/deformation.py`, generator version 5):
 
-* applied before the pose, and identical across series, it leaves the
-  inter-series relationship rigid — which is what a real scanner produces (the
-  reference brain centre barely moves, ~0.2 mm, while local features move a few
-  mm: precentral ~3.5 mm, venous sinus ~2.7 mm);
+* applied before the pose and identical across series, it leaves the
+  inter-series relationship rigid — a real scanner (the reference brain centre
+  barely moves, ~0.2 mm, while local features move a few mm: precentral ~3.5 mm,
+  venous sinus ~2.7 mm);
 * it makes the subject differ non-linearly **from the atlas**, giving real work
-  to the subject→MNI paths (`nonlinear_reg`, FLAT1, the asymmetry index, the
-  tractography MNI→ref warp);
-* being a closed-form sum of sinusoids we generate ourselves, the field is
-  known exactly (`deformation.displacement`) and diffeomorphic (Jacobian
-  determinant stays positive), so it can serve as ground truth for the
-  recovered warp. It derives nothing from FSL, its atlases, or XTRACT.
+  to the subject→MNI / →symmetric paths (`nonlinear_reg`, FLAT1, the asymmetry
+  index, the tractography MNI→ref warp);
+* it is a closed-form sum of sinusoids we generate ourselves, known exactly
+  (`deformation.displacement`) and diffeomorphic. It derives nothing from FSL,
+  its atlases, or XTRACT, and `build_tissue_model` applies it by default so the
+  generator and the ground-truth checks build the *same* deformed subject.
 
-Because `build_tissue_model` applies it by default, the generator and the
-ground-truth checks build the *same* deformed subject. A calibration run
-against this deformed phantom is the next step, to set the check tolerances
-from measured margins.
+Its quality is graded by:
+
+* `nonlinear.warp_present` / `nonlinear.warp_nontrivial` — FNIRT wrote a forward
+  transform and invwarp a real inverse field, whose displacement is finite and
+  of sane magnitude (a degenerate FNIRT gives ~0, a diverged one tens of mm);
+* `nonlinear.target_alignment.<space>` — the warped subject that SWANe writes
+  into the target space is compared against the **real target**, read at run
+  time from `$FSLDIR` (MNI152) or `swane_supplement` (the symmetric template).
+  Measured against the real MNI152 1 mm brain: Dice 0.94, intensity NCC 0.78
+  (gates 0.85 / 0.5). Reading the target to score the result is licence-clean —
+  the tools are run and their output inspected; no atlas image or code is copied
+  into the repo.
+
+The one thing left to the human is *absolute* anatomical correctness of the
+atlas registration beyond overlap and intensity agreement; everything the
+automated checks cover is graded from measured margins, not eyeballed.
 
 ### Licensing
 
