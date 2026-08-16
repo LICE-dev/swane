@@ -24,6 +24,7 @@ def linear_reg_workflow(
     is_volumetric: bool = True,
     is_partial_coverage: bool = False,
     bias_field_correction: bool = False,
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Transforms input images in a reference space through a linear registration.
@@ -46,6 +47,9 @@ def linear_reg_workflow(
         True if series only includes brain partially. The default is False.
     bias_field_correction : bool, optional
         True to enable bias field correction. The default is False.
+    test_run : bool, optional
+        If True, speed up registration and N4 bias field correction for
+        prerelease test runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -183,6 +187,7 @@ def linear_reg_workflow(
         is_volumetric=is_volumetric,
         flirt_cost="mutualinfo",
         flirt_search=flirt_search,
+        test_run=test_run,
     )
 
     unbetted_2_ref = apply_registration_node(
@@ -225,6 +230,9 @@ def linear_reg_workflow(
             bias_correction = Node(
                 N4BiasFieldCorrection(), name="bias_correction", mem_gb=2
             )
+            if test_run:
+                # SimpleITK default is [50, 50, 50, 50] per resolution level.
+                bias_correction.inputs.max_iterations = [30, 20, 10, 5]
             workflow.connect(unbetted_name, "out_file", bias_correction, "out_file")
             workflow.connect(deskull_2_ref, "out_file", bias_correction, "mask_file")
             workflow.connect(unbetted_2_ref, "out_file", bias_correction, "in_file")

@@ -219,6 +219,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=ref_dir,
             config=self.subject_config[DIL.T13D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.t1.long_name = "3D T1w analysis"
         self.add_nodes([self.t1])
@@ -334,6 +335,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.FLAIR3D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            test_run=self.test_run,
         )
         self.flair.long_name = "3D Flair analysis"
         self.add_nodes([self.flair])
@@ -472,6 +474,7 @@ class MainWorkflow(CustomWorkflow):
                     config=None,
                     is_volumetric=False,
                     synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                    test_run=self.test_run,
                 )
                 self.flair2d.long_name = "2D %s FLAIR analysis" % plane.value
                 self.add_nodes([self.flair2d])
@@ -510,6 +513,7 @@ class MainWorkflow(CustomWorkflow):
             is_volumetric=True,  # perform better with volumetric settings
             is_partial_coverage=True,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.t2_cor.long_name = "2D coronal T2 analysis"
         self.add_nodes([self.t2_cor])
@@ -555,6 +559,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.MDC],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            test_run=self.test_run,
         )
         self.mdc.long_name = "Post-contrast 3D T1w analysis"
         self.add_nodes([self.mdc])

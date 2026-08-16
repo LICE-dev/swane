@@ -17,6 +17,7 @@ def ref_workflow(
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     T13D workflow to use as reference.
@@ -33,6 +34,9 @@ def ref_workflow(
         Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, cap the N4 bias field correction iterations to speed up
+        prerelease test runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -114,6 +118,9 @@ def ref_workflow(
         N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2
     )
     ref_bias_correction.inputs.out_file = "ref.nii.gz"
+    if test_run:
+        # SimpleITK default is [50, 50, 50, 50] per resolution level.
+        ref_bias_correction.inputs.max_iterations = [30, 20, 10, 5]
     workflow.connect(ref_reScale, "out_file", ref_bias_correction, "in_file")
     workflow.connect(ref_deskull, "mask_file", ref_bias_correction, "mask_file")
 
