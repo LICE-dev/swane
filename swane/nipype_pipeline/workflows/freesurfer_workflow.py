@@ -1,3 +1,5 @@
+import os
+import tempfile
 from configparser import SectionProxy
 
 from nipype.interfaces.freesurfer import ReconAll, ApplyVolTransform
@@ -16,6 +18,39 @@ from nipype.interfaces.utility import IdentityInterface
 from swane.utils.ResourceManager import ResourceManager
 
 FS_DIR = "FS"
+
+# recon-all top-level flags for test_run, appended to the existing args.
+# -nuiterations 1 : halve NU intensity-correction iterations (default 2)
+# -norm3diters 1  : cut mri_normalize 3D iterations (both runs)
+# -no-fix-with-ga : drop the genetic-algorithm optimisation in the topology fixer
+RECONALL_TEST_ARGS = "-nuiterations 1 -norm3diters 1 -no-fix-with-ga"
+
+# Per-binary overrides for the -expert file. Moderate reductions (kept
+# deliberately conservative, "non esageriamo"): the surface steps are the
+# heaviest, mris_register above all. The synthseg line is only consulted when
+# recon-all actually runs SynthSeg internally (FS v8 synth path); it is inert
+# for the classic path, so including it unconditionally is safe.
+RECONALL_TEST_EXPERT = (
+    "mris_register -N 10\n"
+    "mris_inflate -n 7\n"
+    "mris_fix_topology -niters 2\n"
+    "synthseg --fast\n"
+)
+
+
+def _reconall_test_expert_file() -> str:
+    """Write (idempotently) the test_run recon-all expert-options file.
+
+    A deterministic path with fixed content keeps the nipype hash stable
+    across runs, so an opt-in recon-all pass stays resumable. The same file
+    is shared by the three sequential ReconAll nodes; recon2/pial pass
+    xopts='overwrite' because recon1 has already copied it into the subject's
+    scripts dir.
+    """
+    path = os.path.join(tempfile.gettempdir(), "swane_reconall_test_expert.txt")
+    with open(path, "w") as handle:
+        handle.write(RECONALL_TEST_EXPERT)
+    return path
 
 
 def freesurfer_workflow(
@@ -48,6 +83,11 @@ def freesurfer_workflow(
         If greater than 0, limit the core usage of bedpostx. The default is 0.
     multicore_node_limit: CORE_LIMIT, optional
         Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
+    test_run : bool, optional
+        If True, speed up prerelease test runs at the cost of accuracy: for
+        the SynthSeg step, enable --fast and drop the robust variant; for the
+        recon-all steps, add lighter iteration counts via top-level flags and
+        an -expert file of per-binary overrides. The default is False.
 
     Input Node Fields
     ----------
@@ -180,6 +220,15 @@ def freesurfer_workflow(
                 reconall_openmp = max(trunc(max_cpu / 2), 1)
                 reconall_nprocs = reconall_openmp * 2
 
+        # test_run: speed up recon-all with lighter iteration counts, via
+        # top-level flags plus an -expert file of per-binary overrides. The
+        # same expert file feeds all three sequential nodes.
+        reconall_args = "-no-isrunning"
+        reconall_expert = None
+        if test_run:
+            reconall_args = "-no-isrunning " + RECONALL_TEST_ARGS
+            reconall_expert = _reconall_test_expert_file()
+
         # NODE 1: Freesurfer autorecon1
         recon_all_recon1 = Node(ReconAll(), name="recon_all_recon1")
         recon_all_recon1.long_name = "%s: Preprocessing 1"
@@ -190,7 +239,10 @@ def freesurfer_workflow(
         recon_all_recon1.inputs.openmp = reconall_openmp
         recon_all_recon1.n_procs = reconall_nprocs
         recon_all_recon1.inputs.directive = "autorecon1"
-        recon_all_recon1.inputs.args = "-no-isrunning"
+        recon_all_recon1.inputs.args = reconall_args
+        if reconall_expert is not None:
+            recon_all_recon1.inputs.expert = reconall_expert
+            recon_all_recon1.inputs.xopts = "overwrite"
         workflow.connect(inputnode, "reference", recon_all_recon1, "T1_files")
         workflow.connect(inputnode, "subjects_dir", recon_all_recon1, "subjects_dir")
 
@@ -206,7 +258,10 @@ def freesurfer_workflow(
         recon_all_recon2.inputs.openmp = reconall_openmp
         recon_all_recon2.n_procs = reconall_nprocs
         recon_all_recon2.inputs.directive = "autorecon2"
-        recon_all_recon2.inputs.args = "-no-isrunning"
+        recon_all_recon2.inputs.args = reconall_args
+        if reconall_expert is not None:
+            recon_all_recon2.inputs.expert = reconall_expert
+            recon_all_recon2.inputs.xopts = "overwrite"
         workflow.connect(
             recon_all_recon1, "subjects_dir", recon_all_recon2, "subjects_dir"
         )
@@ -221,7 +276,10 @@ def freesurfer_workflow(
         recon_all_recon_pial.inputs.openmp = reconall_openmp
         recon_all_recon_pial.n_procs = reconall_nprocs
         recon_all_recon_pial.inputs.directive = "autorecon-pial"
-        recon_all_recon_pial.inputs.args = "-no-isrunning"
+        recon_all_recon_pial.inputs.args = reconall_args
+        if reconall_expert is not None:
+            recon_all_recon_pial.inputs.expert = reconall_expert
+            recon_all_recon_pial.inputs.xopts = "overwrite"
         workflow.connect(
             recon_all_recon2, "subjects_dir", recon_all_recon_pial, "subjects_dir"
         )
