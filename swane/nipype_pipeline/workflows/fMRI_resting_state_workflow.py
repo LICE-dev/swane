@@ -148,6 +148,7 @@ def fMRI_resting_state_workflow(
             os.environ["FSLDIR"], "data", "standard", "MNI152_T1_2mm_brain.nii.gz"
         )
 
+        # Stick to FSL intentionally avoiding synth for reproducibility reason
         flirt = Node(FLIRT(), name="ref_2_mni_flirt")
         flirt.long_name = "%s to atlas"
         flirt.inputs.searchr_x = [-90, 90]
@@ -160,6 +161,7 @@ def fMRI_resting_state_workflow(
         workflow.connect(inputnode, "reference_brain", flirt, "in_file")
 
         # NODE 2: Nonlinear registration
+        # Stick to FSL intentionally avoiding synth for reproducibility reason
         fnirt = Node(FNIRT(), name="ref_2_mni_fnirt")
         fnirt.long_name = "%s to atlas"
         fnirt.inputs.fieldcoeff_file = True
@@ -167,6 +169,7 @@ def fMRI_resting_state_workflow(
         workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
         workflow.connect(inputnode, "reference_brain", fnirt, "in_file")
 
+        # Stick to FSL intentionally avoiding synth for reproducibility reason
         apply_warp = Node(ApplyWarp(), name="func2mni")
         apply_warp.inputs.ref_file = mni2
         workflow.connect(flirt_2_ref, "out_matrix_file", apply_warp, "premat")
