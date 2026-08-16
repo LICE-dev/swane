@@ -104,6 +104,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="regenerate the phantom DICOM even if a cached copy exists",
     )
     behaviour.add_argument(
+        "--full-accuracy",
+        action="store_true",
+        help="disable test_run speed shortcuts (subsampling, reduced "
+        "iterations/samples, ...) and run every pass at full accuracy, "
+        "like a real analysis; slower",
+    )
+    behaviour.add_argument(
         "--no-ground-truth",
         action="store_true",
         help="skip the anatomical plausibility checks (they rebuild the "
@@ -205,6 +212,7 @@ def main(argv=None) -> int:
             resume=not args.no_resume,
             retry_failed=args.retry_failed,
             verbose=args.verbose,
+            test_run=not args.full_accuracy,
         )
 
     print("")
@@ -229,6 +237,7 @@ def main(argv=None) -> int:
             "with_reconall": args.with_reconall,
             "only": args.only,
             "ground_truth": ground_truth is not None,
+            "test_run": not args.full_accuracy,
         },
     )
     json_path = report_mod.write_json(report, work_dir)
