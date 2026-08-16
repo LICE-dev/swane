@@ -161,9 +161,7 @@ def fMRI_preproc_workflow(
         )
         slice_timing_correction.inputs.slice_timing = slice_timing
         workflow.connect(getTR, "TR", slice_timing_correction, "time_repetition")
-        workflow.connect(
-            motion_correct, "out_file", slice_timing_correction, "in_file"
-        )
+        workflow.connect(motion_correct, "out_file", slice_timing_correction, "in_file")
         slice_time_corrected_node = slice_timing_correction
         slice_time_corrected_field = "slice_time_corrected_file"
 
