@@ -62,6 +62,11 @@ class SynthMorphRegInputSpec(FSTraitedSpec):
         nohash=True,
         desc="number of threads to be used by the CPU version",
     )
+    steps = traits.Int(
+        argstr="-n %d",
+        desc="integration steps for deformable registration "
+        "(default 7, should not be less than 5)",
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
