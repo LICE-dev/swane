@@ -5,15 +5,18 @@
 # nodes=30 edges=44
 
 - binary_flair_2_ref_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     out_file = 'r-binary_flair.nii.gz'
+    subjects_dir = '<SUBJECTS_DIR>'
 - extension_z_2_ref_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     out_file = 'r-extension_z.nii.gz'
+    subjects_dir = '<SUBJECTS_DIR>'
 - fast_segment_split [Function] mem_gb=0.2 n_procs=1
     function_str = 'def pick_first_two(file_list):\n    return file_list[1], file_list[2]\n'
 - flair_2_mni1_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
+    subjects_dir = '<SUBJECTS_DIR>'
 - flat1_binaryFLAIR [ThrROI] cmd=fslmaths mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'binary_flair.nii.gz'
@@ -111,16 +114,20 @@
 - flat1_wm_mean [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = []
 - gm_2_mni1_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
+    subjects_dir = '<SUBJECTS_DIR>'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - junction_z_2_ref_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     out_file = 'r-junction_z.nii.gz'
+    subjects_dir = '<SUBJECTS_DIR>'
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - restore_2_mni1_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
+    subjects_dir = '<SUBJECTS_DIR>'
 - wm_2_mni1_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
+    subjects_dir = '<SUBJECTS_DIR>'
 # connections
 binary_flair_2_ref_morph_apply.out_file -> outputnode.binary_flair
 extension_z_2_ref_morph_apply.out_file -> outputnode.extension_z

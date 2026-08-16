@@ -46,42 +46,46 @@
     output_type = 'NIFTI_GZ'
 - asl_surf_lh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
     cortex_mask = True
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     hemi = 'lh'
     out_file = 'asl_surf_lh.mgz'
     reg_header = True
     sampling_method = 'point'
     sampling_range = 0.5
     sampling_units = 'frac'
+    subjects_dir = '<SUBJECTS_DIR>'
 - asl_surf_rh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
     cortex_mask = True
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     hemi = 'rh'
     out_file = 'asl_surf_rh.mgz'
     reg_header = True
     sampling_method = 'point'
     sampling_range = 0.5
     sampling_units = 'frac'
+    subjects_dir = '<SUBJECTS_DIR>'
 - asl_zscore [Zscore] mem_gb=0.2 n_procs=1
     out_file = 'r-asl_zscore.nii.gz'
 - asl_zscore_surf_lh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
     cortex_mask = True
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     hemi = 'lh'
     out_file = 'asl_zscore_surf_lh.mgz'
     reg_header = True
     sampling_method = 'point'
     sampling_range = 0.5
     sampling_units = 'frac'
+    subjects_dir = '<SUBJECTS_DIR>'
 - asl_zscore_surf_rh [SampleToSurface] cmd=mri_vol2surf mem_gb=0.2 n_procs=1
     cortex_mask = True
-    environ = {}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     hemi = 'rh'
     out_file = 'asl_zscore_surf_rh.mgz'
     reg_header = True
     sampling_method = 'point'
     sampling_range = 0.5
     sampling_units = 'frac'
+    subjects_dir = '<SUBJECTS_DIR>'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 # connections
