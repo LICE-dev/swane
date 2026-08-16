@@ -941,6 +941,7 @@ class MainWorkflow(CustomWorkflow):
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
         self.connect(
