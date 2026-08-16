@@ -1,0 +1,179 @@
+# workflow snapshot: fmri_preproc / slicetiming_up
+#
+#   TR = 2.0
+#   del_end_vols = 0
+#   del_start_vols = 0
+#   hpcutoff = 30
+#   n_vols = 100
+#   slice_timing = UP
+#
+# nodes=27 edges=41
+
+- fmri_0_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'fmri_0'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- fmri_0_del_vols [DeleteVolumes] mem_gb=0.2 n_procs=1
+    del_end_vols = 0
+    del_start_vols = 0
+- fmri_0_dilatemask [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-dilF'
+    output_type = 'NIFTI_GZ'
+    suffix = '_dil'
+- fmri_0_extract_ref [ExtractVolumes] mem_gb=0.2 n_procs=1
+    num_volumes = 1
+    start_volume = 0
+- fmri_0_flirt_2_ref [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'corratio'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_matrix_file = 'fMRI2ref.mat'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
+- fmri_0_getTR [GetNiftiTR] mem_gb=0.2 n_procs=1
+    force_value = 2.0
+- fmri_0_getthresh [ImageStatistics] mem_gb=0.2 n_procs=1
+    percentiles = [98.0]
+- fmri_0_highpass [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    suffix = '_tempfilt'
+- fmri_0_img2float [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = ''
+    out_data_type = 'float'
+    output_type = 'NIFTI_GZ'
+    suffix = '_dtype'
+- fmri_0_intnorm [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    suffix = '_intnorm'
+- fmri_0_maskfunc [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_bet'
+- fmri_0_maskfunc2 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mask'
+- fmri_0_maskfunc3 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mask'
+- fmri_0_meanfunc [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
+- fmri_0_meanfunc2 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
+- fmri_0_meanfunc3 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
+- fmri_0_meanfuncmask [BET] cmd=bet mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    frac = 0.3
+    mask = True
+    no_output = True
+    output_type = 'NIFTI_GZ'
+- fmri_0_medianval [ImageStatistics] mem_gb=0.2 n_procs=1
+    percentiles = [50.0]
+- fmri_0_merge_tr_meanfunc3 [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- fmri_0_mergenode [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- fmri_0_motion_correct [MCFLIRT] cmd=mcflirt mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interpolation = 'spline'
+    output_type = 'NIFTI_GZ'
+    save_mats = True
+    save_plots = True
+    save_rms = True
+- fmri_0_nvols [NVols] mem_gb=0.2 n_procs=1
+    force_value = 100
+- fmri_0_reorient [ForceOrient] mem_gb=0.2 n_procs=1
+- fmri_0_smooth [SUSAN] cmd=susan mem_gb=0.2 n_procs=1
+    dimension = 3
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    fwhm = 4.9996179300001655
+    output_type = 'NIFTI_GZ'
+    usans = []
+    use_median = 1
+- fmri_0_threshold [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_data_type = 'char'
+    output_type = 'NIFTI_GZ'
+    suffix = '_thresh'
+- fmri_0_timing_correction [CustomSliceTimer] cmd=slicetimer mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    slice_timing = <SliceTiming.UP: 'Regular up'>
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+# connections
+fmri_0_conv.converted_files -> fmri_0_del_vols.in_file
+fmri_0_conv.converted_files -> fmri_0_getTR.in_file
+fmri_0_conv.converted_files -> fmri_0_nvols.in_file
+fmri_0_del_vols.out_file -> fmri_0_reorient.in_file
+fmri_0_dilatemask.out_file -> fmri_0_maskfunc2.in_file2
+fmri_0_dilatemask.out_file -> fmri_0_maskfunc3.in_file2
+fmri_0_extract_ref.out_file -> fmri_0_motion_correct.ref_file
+fmri_0_getTR.TR -> fmri_0_merge_tr_meanfunc3.in1
+fmri_0_getTR.TR -> fmri_0_timing_correction.time_repetition
+fmri_0_getthresh.('percentile_values', 'def get_thresh_op(thresh):\n    return "-thr %.10f -Tmin -bin" % (0.1 * thresh[0])\n', ()) -> fmri_0_threshold.op_string
+fmri_0_img2float.out_file -> fmri_0_extract_ref.in_file
+fmri_0_img2float.out_file -> fmri_0_motion_correct.in_file
+fmri_0_intnorm.out_file -> fmri_0_highpass.in_file
+fmri_0_intnorm.out_file -> fmri_0_meanfunc3.in_file
+fmri_0_maskfunc.out_file -> fmri_0_getthresh.in_file
+fmri_0_maskfunc.out_file -> fmri_0_threshold.in_file
+fmri_0_maskfunc2.out_file -> fmri_0_meanfunc2.in_file
+fmri_0_maskfunc2.out_file -> fmri_0_smooth.in_file
+fmri_0_maskfunc3.out_file -> fmri_0_intnorm.in_file
+fmri_0_meanfunc.out_file -> fmri_0_meanfuncmask.in_file
+fmri_0_meanfunc2.out_file -> fmri_0_flirt_2_ref.in_file
+fmri_0_meanfunc2.out_file -> fmri_0_mergenode.in1
+fmri_0_meanfunc3.out_file -> fmri_0_merge_tr_meanfunc3.in2
+fmri_0_meanfuncmask.mask_file -> fmri_0_maskfunc.in_file2
+fmri_0_medianval.('percentile_values', 'def get_bt_thresh(percentile_values):\n    return 0.75 * percentile_values[0]\n', ()) -> fmri_0_smooth.brightness_threshold
+fmri_0_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]\n', ()) -> fmri_0_mergenode.in2
+fmri_0_medianval.('percentile_values', 'def get_inorm_scale(percentile_values):\n    return "-mul %.10f" % (10000.0 / percentile_values[0])\n', ()) -> fmri_0_intnorm.op_string
+fmri_0_merge_tr_meanfunc3.('out', 'def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return "-bptf %f -1 -add %s" % (hp_sigma_vol, merged[1])\n', (30,)) -> fmri_0_highpass.op_string
+fmri_0_mergenode.('out', 'def get_usans(x):\n    return [tuple([x[0], 0.75 * x[1]])]\n', ()) -> fmri_0_smooth.usans
+fmri_0_motion_correct.out_file -> fmri_0_timing_correction.in_file
+fmri_0_nvols.nvols -> fmri_0_del_vols.nvols
+fmri_0_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle\n', ()) -> fmri_0_extract_ref.start_volume
+fmri_0_reorient.out_file -> fmri_0_img2float.in_file
+fmri_0_smooth.smoothed_file -> fmri_0_maskfunc3.in_file
+fmri_0_threshold.out_file -> fmri_0_dilatemask.in_file
+fmri_0_threshold.out_file -> fmri_0_medianval.mask_file
+fmri_0_timing_correction.slice_time_corrected_file -> fmri_0_maskfunc.in_file
+fmri_0_timing_correction.slice_time_corrected_file -> fmri_0_maskfunc2.in_file
+fmri_0_timing_correction.slice_time_corrected_file -> fmri_0_meanfunc.in_file
+fmri_0_timing_correction.slice_time_corrected_file -> fmri_0_medianval.in_file
+inputnode.reference_brain -> fmri_0_flirt_2_ref.reference

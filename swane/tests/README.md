@@ -9,8 +9,9 @@ swane/tests/
 ├── conftest.py            # shared fixtures + marker auto-skip
 ├── pytest.ini             # marker registration / warning filters
 ├── helpers/               # test-only utilities (NOT tests)
-│   ├── dicom_factory.py   #   synthesise phantom DICOM files
-│   └── dicom_scenarios.py #   ready-made scenarios + expected metadata
+│   ├── dicom_factory.py   #   header-only phantom DICOM (unit tests, no pixel data)
+│   ├── dicom_scenarios.py #   ready-made scenarios + expected metadata
+│   └── phantom/           #   full synthetic exam, real pixel data (used by prerelease/)
 ├── config/                # swane/config  (ConfigManager, preferences, enums)
 ├── utils/                 # swane/utils   (Subject, DicomTree, managers, ...)
 ├── workers/               # swane/workers (DICOM search, Slicer, workflow, ...)
@@ -18,18 +19,30 @@ swane/tests/
 ├── nipype_pipeline/       # swane/nipype_pipeline
 │   ├── engine/            #   engine helpers (report, ram estimator, workflow)
 │   ├── nodes/             #   node interfaces (FSL-free logic)
-│   └── workflows/         #   workflow *construction* (graph structure only)
+│   └── matrix/            #   settings matrix + golden snapshots (incl. CUDA on/off)
+├── prerelease/            # real-execution sweep on the phantom (opt-in, heavy)
 └── integration/           # slow end-to-end tests (real FSL/FreeSurfer/Slicer)
 ```
 
 `swane/nipype_pipeline/` is covered by the light unit tests under
-`nipype_pipeline/`: engine helpers, pure-Python (and pure-helper) node logic,
-and workflow **construction** tests that assemble a builder's node graph and
-assert its structure. None of these run FSL/FreeSurfer/Slicer or read DICOM —
-workflow tests pass an empty directory as the "DICOM" input, since the path is
-only stored on a conversion node. Node/workflow *execution* that needs real
-tools and data stays in `integration/`. See `nipype_pipeline/TODO_dicom.md` for
-what still needs modality-specific DICOM, FSL data files, or a code fix.
+`nipype_pipeline/`: engine helpers and pure-Python (and pure-helper) node logic.
+Workflow **construction** — assembling each builder's node graph and asserting
+its structure across every relevant setting — is covered by
+`nipype_pipeline/matrix/`, which records a deterministic golden *snapshot* of
+each resulting graph under `matrix/snapshots/` (including **CUDA on/off**), so
+both a reviewer and the regression suite can check what SWANe assembles for each
+configuration. None of these run FSL/FreeSurfer/Slicer or read DICOM. Browse the
+overview in [`nipype_pipeline/matrix/MATRIX.md`](nipype_pipeline/matrix/MATRIX.md);
+see [`nipype_pipeline/matrix/README.md`](nipype_pipeline/matrix/README.md) for
+how it works.
+
+`prerelease/` goes the other way: it *executes* the real workflows
+(dcm2niix + FSL/FreeSurfer/Slicer) over a synthetic phantom exam generated at
+run time (`helpers/phantom/`), across the same setting matrix, and checks the
+output is scientifically plausible — registration overlap, FA localisation,
+activation, vein position. It is opt-in and heavy; see
+[`prerelease/README.md`](prerelease/README.md) and
+[`prerelease/TODO.md`](prerelease/TODO.md).
 
 ## Naming standard
 
@@ -42,15 +55,16 @@ what still needs modality-specific DICOM, FSL data files, or a code fix.
 
 ## Phantom DICOM
 
-Never commit real DICOM files. Generate them at runtime:
+Never commit real DICOM files. Two generators, for two different jobs:
 
-```python
-from swane.tests.helpers.dicom_factory import write_series
-from swane.tests.helpers.dicom_scenarios import build_dicom_tree
-```
-
-or, more conveniently, use the session-scoped `phantom_dicom_tree` fixture,
-which returns a `dict[str, Scenario]` (path + expected scan result).
+- **Header-only** (`helpers/dicom_factory.py` / `dicom_scenarios.py`): tiny
+  files with no pixel data, for testing DICOM *parsing* logic
+  (`DicomSearchWorker`, `DicomTree`). Use directly, or the session-scoped
+  `phantom_dicom_tree` fixture (`dict[str, Scenario]`, path + expected result).
+- **Full exam, real pixel data** (`helpers/phantom/`): a complete synthetic
+  subject dcm2niix actually converts and FSL/FreeSurfer actually process, used
+  by `prerelease/` to run and validate the real workflows. See
+  [`helpers/phantom/README.md`](helpers/phantom/README.md).
 
 ## Markers
 

@@ -1,0 +1,72 @@
+# workflow snapshot: linear_reg / flair2d_non_volumetric
+#
+#   bias_field_correction = False
+#   config = None
+#   is_partial_coverage = False
+#   is_volumetric = False
+#   synth_morph = false
+#   synth_strip = false
+#
+# nodes=11 edges=18
+
+- betted_name [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def get_betted_name(basename):\n    return "r-%s_brain.nii.gz" % basename\n'
+- deskulled_flair2d_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- flair2d_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- flair2d_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'flair2d'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- flair2d_deskull_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    mask = True
+    output_type = 'NIFTI_GZ'
+    robust = True
+    threshold = False
+- flair2d_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- flair2d_reorient [ForceOrient] mem_gb=0.2 n_procs=1
+- flair2d_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- unbetted_name [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def get_unbetted_name(basename):\n    return "r-%s.nii.gz" % basename\n'
+# connections
+betted_name.out_file -> deskulled_flair2d_apply_xfm.out_file
+deskulled_flair2d_apply_xfm.out_file -> outputnode.registered_file_brain
+flair2d_apply_xfm.out_file -> outputnode.registered_file
+flair2d_conv.converted_files -> flair2d_reorient.in_file
+flair2d_deskull_bet.out_file -> deskulled_flair2d_apply_xfm.in_file
+flair2d_deskull_bet.out_file -> flair2d_flirt.in_file
+flair2d_flirt.out_matrix_file -> deskulled_flair2d_apply_xfm.in_matrix_file
+flair2d_flirt.out_matrix_file -> flair2d_apply_xfm.in_matrix_file
+flair2d_flirt.out_matrix_file -> outputnode.out_matrix_file
+flair2d_reorient.out_file -> flair2d_robustfov.in_file
+flair2d_robustfov.out_roi -> flair2d_apply_xfm.in_file
+flair2d_robustfov.out_roi -> flair2d_deskull_bet.in_file
+inputnode.output_name -> betted_name.basename
+inputnode.output_name -> unbetted_name.basename
+inputnode.reference -> deskulled_flair2d_apply_xfm.reference
+inputnode.reference -> flair2d_apply_xfm.reference
+inputnode.reference_brain -> flair2d_flirt.reference
+unbetted_name.out_file -> flair2d_apply_xfm.out_file

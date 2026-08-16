@@ -31,7 +31,10 @@ from swane.tests.helpers.phantom.sequences import (
 from swane.tests.helpers.phantom.tissue import TissueClass as TC, build_tissue_model
 
 #: Bump when the generated data changes in a way tests must notice.
-GENERATOR_VERSION = "4"
+#: v5: anatomy carries a fixed smooth non-linear deformation (deformation.py)
+#: so the subject differs non-linearly from the atlas and FNIRT/SynthMorph are
+#: exercised, not only the rigid inter-series alignment.
+GENERATOR_VERSION = "5"
 
 #: Default cache root; ``SWANE_PHANTOM_DIR`` overrides it.
 DEFAULT_CACHE_ROOT = os.path.join(os.path.expanduser("~"), "test_swane", "phantom")

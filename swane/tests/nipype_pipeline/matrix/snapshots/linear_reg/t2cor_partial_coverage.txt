@@ -1,0 +1,69 @@
+# workflow snapshot: linear_reg / t2cor_partial_coverage
+#
+#   bias_field_correction = False
+#   config = None
+#   is_partial_coverage = True
+#   is_volumetric = True
+#   synth_morph = false
+#   synth_strip = false
+#
+# nodes=10 edges=16
+
+- betted_name [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def get_betted_name(basename):\n    return "r-%s_brain.nii.gz" % basename\n'
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- t2_cor_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- t2_cor_brain_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- t2_cor_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 't2_cor'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- t2_cor_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'mutualinfo'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interp = 'trilinear'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-40, 40]
+    searchr_y = [-40, 40]
+    searchr_z = [-40, 40]
+- t2_cor_reorient [ForceOrient] mem_gb=0.2 n_procs=1
+- t2_cor_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- unbetted_name [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def get_unbetted_name(basename):\n    return "r-%s.nii.gz" % basename\n'
+# connections
+betted_name.out_file -> t2_cor_brain_mask.out_file
+inputnode.brain_mask -> t2_cor_brain_mask.mask_file
+inputnode.output_name -> betted_name.basename
+inputnode.output_name -> unbetted_name.basename
+inputnode.reference -> t2_cor_apply_xfm.reference
+inputnode.reference -> t2_cor_flirt.reference
+t2_cor_apply_xfm.out_file -> outputnode.registered_file
+t2_cor_apply_xfm.out_file -> t2_cor_brain_mask.in_file
+t2_cor_brain_mask.out_file -> outputnode.registered_file_brain
+t2_cor_conv.converted_files -> t2_cor_reorient.in_file
+t2_cor_flirt.out_matrix_file -> outputnode.out_matrix_file
+t2_cor_flirt.out_matrix_file -> t2_cor_apply_xfm.in_matrix_file
+t2_cor_reorient.out_file -> t2_cor_robustfov.in_file
+t2_cor_robustfov.out_roi -> t2_cor_apply_xfm.in_file
+t2_cor_robustfov.out_roi -> t2_cor_flirt.in_file
+unbetted_name.out_file -> t2_cor_apply_xfm.out_file
