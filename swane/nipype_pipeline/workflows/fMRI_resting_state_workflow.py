@@ -115,7 +115,7 @@ def fMRI_resting_state_workflow(
     else:
         preproc_melodic = Node(MELODIC(), name="preproc_melodic")
         preproc_melodic.inputs.mm_thresh = 0.5
-        # TODO: valutare se creare una impostazione per limitare il numero di IC
+        # When running aroma, the first melodic run dim must be automatic and not capped by user configuration, to ensure noise identification
         preproc_melodic.inputs.dim = 0
         preproc_melodic.inputs.out_stats = True
         preproc_melodic.inputs.no_bet = True
