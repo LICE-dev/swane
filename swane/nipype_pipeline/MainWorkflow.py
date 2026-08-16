@@ -250,6 +250,7 @@ class MainWorkflow(CustomWorkflow):
         self.sym = nonlinear_reg_workflow(
             name="sym",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.sym.long_name = "Symmetric atlas registration"
 
@@ -386,6 +387,7 @@ class MainWorkflow(CustomWorkflow):
         self.mni1 = nonlinear_reg_workflow(
             name="mni1",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.mni1.long_name = "MNI atlas registration"
 
@@ -979,6 +981,7 @@ class MainWorkflow(CustomWorkflow):
                     name=tract,
                     config=self.subject_config[DIL.DTI],
                     synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                    test_run=self.test_run,
                 )
                 if tract_workflow is not None:
                     tract_workflow.long_name = TRACTS[tract][0] + " tractography"
