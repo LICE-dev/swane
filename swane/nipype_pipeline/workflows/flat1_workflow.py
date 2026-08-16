@@ -20,7 +20,11 @@ from swane.nipype_pipeline.nodes.utils import apply_registration_node
 
 
 def flat1_workflow(
-    name: str, mni1_dir: str, synth_config: SectionProxy, base_dir: str = "/"
+    name: str,
+    mni1_dir: str,
+    synth_config: SectionProxy,
+    base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
@@ -36,6 +40,12 @@ def flat1_workflow(
         reeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, cut FAST segmentation iterations to speed up prerelease
+        test runs at the cost of accuracy. The default is False.
+        TODO: verify on the phantom dataset that the reduced iteration
+        counts (-I=1, -W=5, -O=1) still yield a segmentation usable by the
+        rest of the workflow before relying on this in real prerelease runs.
 
     Input Node Fields
     ----------
@@ -100,7 +110,13 @@ def flat1_workflow(
     fast.inputs.hyper = 0.1  # param -H
     fast.inputs.bias_lowpass = 40  # param -l
     fast.inputs.output_biascorrected = True  # param -B
-    fast.inputs.bias_iters = 4  # param -I
+    if test_run:
+        # FSL defaults: -I 4, -W 15, -O 4. Aggressively cut all three.
+        fast.inputs.bias_iters = 1  # param -I
+        fast.inputs.segment_iters = 5  # param -W
+        fast.inputs.iters_afterbias = 1  # param -O
+    else:
+        fast.inputs.bias_iters = 4  # param -I
     workflow.add_nodes([fast])
     workflow.connect(inputnode, "reference_brain", fast, "in_files")
 
