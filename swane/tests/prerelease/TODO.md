@@ -66,13 +66,13 @@ time. Still unexercised **on any box so far**:
 - **Venous CT bilateral reconstruction**: confirm the check actually verifies
   the subtract-then-sum recovers *both* sinus sides (the phantom opacifies one
   side per contrast); a dropped addend must fail.
-- **CPU vs GPU equivalence** (from the old §4): the `use_cuda`/`use_gpu`
+- **CPU vs GPU equivalence**: the `use_cuda`/`use_gpu`
   outputs of eddy / bedpostx / probtrackx must be equivalent to the CPU path at
   the contract level, not merely both terminate. Needs a GPU box.
-- **Geometry / interpolation** (from the old §4): assert affine, orientation and
+- **Geometry / interpolation**: assert affine, orientation and
   voxel size are preserved where a node must not transform them, and that masks/
   labels use nearest-neighbour (no interpolation-smeared labels).
-- **Regression vs a committed baseline** (from the old §4): the checks are
+- **Regression vs a committed baseline**: the checks are
   absolute thresholds, which catch "broken", not "changed". A mode that diffs an
   output against a previous verified run (kept out of the repo) would catch a
   silent numeric drift between SWANe versions — separate from clinical validity,
@@ -90,7 +90,7 @@ time. Still unexercised **on any box so far**:
 
 ### 4. Calibration
 
-Tolerances (`FEATURE_TOLERANCE_MM`, `REGISTRATION_MIN_DICE`,
+Tolerances (`FEATURE_TOLERANCE_MM`, `REGISTRATION_MIN_DICE`,p
 `NONLINEAR_*`, FA bounds) were set from a single run on one box. Confirm they
 hold across machines and FSL/atlas versions before trusting them as gates;
 widen only with a measured reason.
