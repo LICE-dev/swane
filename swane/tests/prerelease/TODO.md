@@ -130,6 +130,10 @@ not just faster garbage:
 - **SynthSeg `--fast` + `robust=False`** (freesurfer_workflow, SYNTHSEG step):
   confirm parcellation/segmentation checks still pass without the robust
   variant and with postprocessing skipped.
+- **SegmentEndocranium** (`iterations=2 oversampling=1.0`, down from the SWANe
+  defaults 6 / 1.5; unconditionally overridden in test_run since these don't
+  change the workflow graph): confirm the venous CT vein localisation checks
+  still pass with the coarser endocranium mask.
 
 If any of these turn out to break downstream checks on the phantom, either
 tune the value or exclude that node from `test_run` and note why here.

@@ -47,9 +47,9 @@ def venous_ct_workflow(
         The base directory path relative to parent workflow. The default is "/".
     test_run : bool, optional
         If True, speed up the endocranium segmentation for prerelease test
-        runs at the cost of accuracy, without overriding a value the user
-        has explicitly moved away from its SWANe default. The default is
-        False.
+        runs at the cost of accuracy. These parameters don't change the
+        workflow graph, so they are overridden unconditionally (even over an
+        explicit user value). The default is False.
 
     Input Node Fields
     ----------
@@ -132,13 +132,15 @@ def venous_ct_workflow(
     deskull.inputs.slicer_cmd = slicer_path
     seg_iterations = config.getint_safe("segment_endocranium_iteration")
     seg_oversampling = config.getfloat_safe("segment_endocranium_oversampling")
-    # SWANe defaults (preference_list.py) are tuned above the underlying
-    # tool's own baseline for accuracy: iteration=6 vs tool default 2,
-    # oversampling=1.5 vs tool default 1.0. In test_run, drop back to the
-    # tool's baseline, but only when the user left the SWANe default alone.
-    if test_run and seg_iterations == 6:
+    if test_run:
+        # SegmentEndocranium's own parameters don't change the workflow
+        # graph (same nodes either way), so unlike other test_run knobs we
+        # unconditionally override them here, even if the user picked a
+        # different value. SWANe defaults (preference_list.py) are tuned
+        # above the underlying tool's own baseline for accuracy:
+        # iteration=6 vs tool default 2, oversampling=1.5 vs tool default
+        # 1.0. Drop to the tool's own baseline.
         seg_iterations = 2
-    if test_run and seg_oversampling == 1.5:
         seg_oversampling = 1.0
     deskull.inputs.iterations = seg_iterations
     deskull.inputs.smoothingKernelSize = config.getfloat_safe(
