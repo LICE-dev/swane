@@ -149,11 +149,12 @@ def fMRI_preproc_workflow(
     motion_correct.inputs.save_plots = True
     motion_correct.inputs.save_rms = True
     if test_run:
-        # FSL defaults: stages=3, interpolation=trilinear. We explicitly
-        # request the slower spline interpolation normally; drop both for
-        # prerelease speed (cost scales with the number of fMRI volumes).
+        # FSL default stages=3; we explicitly request the slower spline
+        # interpolation normally, so drop both for prerelease speed (cost
+        # scales with the number of fMRI volumes). MCFLIRT's interpolation
+        # trait only accepts 'spline'/'nn'/'sinc' -- trilinear is the tool's
+        # own default and is what you get by leaving the trait unset.
         motion_correct.inputs.stages = 1
-        motion_correct.inputs.interpolation = "trilinear"
     else:
         motion_correct.inputs.interpolation = "spline"
     workflow.connect(img2float, "out_file", motion_correct, "in_file")
