@@ -202,6 +202,7 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
     checks.extend(_check_integrity(files))
     checks.extend(_check_reference(result, files))
     checks.extend(_check_nonlinear_registration(result))
+    checks.extend(_check_nonlinear_target_alignment(result))
     if ground_truth is not None:
         checks.extend(_check_plausibility(result, files, ground_truth))
     return checks
@@ -282,6 +283,96 @@ def _check_nonlinear_registration(result) -> list:
             )
         )
     return checks
+
+
+#: The non-linearly warped subject must resemble its actual registration target
+#: this much. Measured against the real MNI152 1mm brain: Dice 0.94, intensity
+#: NCC 0.78. The thresholds keep margin for atlas/version differences while
+#: still failing a warp that did not really bring the subject onto the target.
+NONLINEAR_TARGET_MIN_DICE = 0.85
+NONLINEAR_TARGET_MIN_NCC = 0.5
+
+
+def _registration_target(node_dir: str):
+    """The real image a given nonlinear_reg instance registers to, read at run
+    time. MNI templates come from ``$FSLDIR``; the symmetric template ships with
+    ``swane_supplement`` (not an FSL atlas). Reading them to score the result is
+    allowed; we never copy or derive committed images from them.
+    """
+    if node_dir.startswith("mni1"):
+        fsldir = os.environ.get("FSLDIR")
+        if fsldir:
+            return os.path.join(fsldir, "data/standard/MNI152_T1_1mm_brain.nii.gz")
+    elif node_dir.startswith("mni2"):
+        fsldir = os.environ.get("FSLDIR")
+        if fsldir:
+            return os.path.join(fsldir, "data/standard/MNI152_T1_2mm_brain.nii.gz")
+    elif node_dir.startswith("sym"):
+        try:
+            import swane_supplement
+
+            return swane_supplement.sym_template
+        except Exception:
+            return None
+    return None
+
+
+def _check_nonlinear_target_alignment(result) -> list:
+    """Score the non-linear registration against its *actual* target.
+
+    The subject-space checks cannot judge the subject->atlas step, so here the
+    warped subject (the reference resampled into the target space by SWANe's own
+    apply-warp node) is compared with the real target read at run time. High
+    overlap and intensity correlation mean the non-linear registration genuinely
+    landed the subject on the atlas, not merely that it produced some warp.
+    """
+    checks = []
+    warped_images = glob.glob(
+        os.path.join(result.subject_dir, "**", "*_apply_warp", "*warp.nii.gz"),
+        recursive=True,
+    )
+    for path in sorted(warped_images):
+        node_dir = os.path.basename(os.path.dirname(path))  # e.g. mni1_apply_warp
+        target = _registration_target(node_dir)
+        if not target or not os.path.isfile(target):
+            continue
+        try:
+            warped_img, warped = _load(path)
+            target_img, tdata = _load(target)
+        except Exception:
+            continue
+        if warped_img.shape != target_img.shape or not np.allclose(
+            warped_img.affine, target_img.affine, atol=1e-2
+        ):
+            continue
+        wmask, tmask = warped > 0, tdata > 0
+        denom = int(wmask.sum()) + int(tmask.sum())
+        if denom == 0:
+            continue
+        dice = 2.0 * int(np.logical_and(wmask, tmask).sum()) / denom
+        ncc = _ncc(warped, tdata, np.logical_and(wmask, tmask))
+        label = node_dir.replace("_apply_warp", "")
+        checks.append(
+            CheckResult(
+                "nonlinear.target_alignment.%s" % label,
+                dice >= NONLINEAR_TARGET_MIN_DICE and ncc >= NONLINEAR_TARGET_MIN_NCC,
+                "aligned to %s: brain Dice %.3f, intensity NCC %.3f"
+                % (os.path.basename(target), dice, ncc),
+            )
+        )
+    return checks
+
+
+def _ncc(a: np.ndarray, b: np.ndarray, mask: np.ndarray) -> float:
+    """Normalised cross-correlation of two volumes over ``mask``."""
+    x = a[mask].astype(np.float64)
+    y = b[mask].astype(np.float64)
+    if x.size < 2:
+        return 0.0
+    x -= x.mean()
+    y -= y.mean()
+    denom = np.sqrt(float((x * x).sum()) * float((y * y).sum()))
+    return float((x * y).sum() / denom) if denom > 0 else 0.0
 
 
 def _check_execution(result) -> list:
@@ -580,7 +671,66 @@ def _check_registration(result, files: list, reference_centre) -> list:
                 "%.2f mm after registration" % (before, after),
             )
         )
+
+        # Goodness, not just improvement: the registered brain must actually
+        # overlap the reference brain. Both are the *same* subject in the *same*
+        # (reference) space -- this is a subject-space, atlas-free comparison --
+        # so a correct linear registration makes the masks coincide. Dice falls
+        # off sharply under a gross misregistration. A few percent below 1 is
+        # expected from cross-modality skull-strip differences and interpolation.
+        overlap = _brain_overlap(names, core)
+        if overlap is not None:
+            checks.append(
+                CheckResult(
+                    "registration.overlap.%s" % input_name,
+                    overlap >= REGISTRATION_MIN_DICE,
+                    "brain Dice with the reference: %.3f" % overlap,
+                )
+            )
     return checks
+
+
+#: A registered series' brain must overlap the reference brain at least this
+#: much (Dice). Measured 0.97 for the 3D/2D FLAIR and MDC series; 0.90 leaves
+#: room for cross-modality skull-strip differences while still failing a gross
+#: misregistration (a 5 mm shift drops a brain-sized mask well below this).
+REGISTRATION_MIN_DICE = 0.90
+
+
+def _brain_overlap(names: dict, core: str):
+    """Dice between the registered series brain and the reference brain.
+
+    Both live in reference space on the same grid, so the masks are directly
+    comparable. Returns ``None`` if either brain image is missing or the grids
+    do not match.
+    """
+    ref = names.get("ref_brain.nii.gz")
+    brain = next(
+        (
+            path
+            for name, path in names.items()
+            if name.startswith("r-" + core)
+            and name.endswith("_brain.nii.gz")
+            and _hint_matches(core, name)
+        ),
+        None,
+    )
+    if ref is None or brain is None:
+        return None
+    try:
+        ref_img, ref_data = _load(ref)
+        brain_img, brain_data = _load(brain)
+    except Exception:
+        return None
+    if ref_img.shape != brain_img.shape or not np.allclose(
+        ref_img.affine, brain_img.affine, atol=1e-2
+    ):
+        return None
+    a, b = ref_data > 0, brain_data > 0
+    denom = int(a.sum()) + int(b.sum())
+    if denom == 0:
+        return None
+    return 2.0 * int(np.logical_and(a, b).sum()) / denom
 
 
 def _check_fa(files: list, truth: GroundTruth) -> list:
