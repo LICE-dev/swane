@@ -95,7 +95,46 @@ Tolerances (`FEATURE_TOLERANCE_MM`, `REGISTRATION_MIN_DICE`,p
 hold across machines and FSL/atlas versions before trusting them as gates;
 widen only with a measured reason.
 
-### 5. CI / invocation
+### 5. test_run speed shortcuts need validation
+
+`MainWorkflow(test_run=True)` (the sweep's default, see `--full-accuracy` to
+disable) trades accuracy for speed on several heavy nodes. Most are safe
+parameter reductions with no failure mode beyond "less accurate", but a few
+are aggressive enough that they need a specific pass on the phantom dataset
+to confirm they still produce output the rest of the pipeline can consume,
+not just faster garbage:
+
+- **FAST in `flat1_workflow`** (`-I=1 -W=5 -O=1`, FSL defaults are 4/15/4):
+  the most aggressive cut, on the segmentation step FLAT1's z-score maps
+  depend on. Not yet checked that this still yields a usable 3-class
+  segmentation on the phantom.
+- **BEDPOSTX5 MCMC** (`n_jumps=200 burn_in=100 sample_every=5`, cutting
+  ~32k iterations/voxel to ~1.1k): confirm `dti_tractography` passes still
+  produce sane `fsamples`/`phsamples`/`thsamples` and downstream ProbTrackX2
+  paths, not just that bedpostx exits zero.
+- **CustomEddy `niter=1`** (FSL default 5): confirm DTI FA range / CST
+  localisation checks still pass with eddy this undercorrected.
+- **MCFLIRT `stages=1` + trilinear** (FSL default `stages=3` + spline):
+  confirm fMRI activation checks still pass with coarser motion correction.
+- **FNIRT "strategy A"** (drop the two full-resolution pyramid levels:
+  `subsamp=[4,2] miter=[5,5] infwhm=[6,4] reffwhm=[4,2]`, FSL defaults are
+  4 levels `4,2,1,1`/`5,5,5,5`), applied everywhere `get_registration_node`
+  or a direct `FNIRT` node runs non-linear registration in `test_run`
+  (dif2ref, sym, mni1, and the resting-state `ref_2_mni_fnirt`): the
+  **non-linear registration goodness** check is calibrated against
+  full-resolution warps — confirm it still passes at coarse resolution, or
+  give it a separate `test_run` tolerance.
+- **ProbTrackX2 `n_samples` halved** (tractography_workflow): confirm
+  `dti_tractography` fdt_paths/waytotal outputs stay non-degenerate with half
+  the streamline samples.
+- **SynthSeg `--fast` + `robust=False`** (freesurfer_workflow, SYNTHSEG step):
+  confirm parcellation/segmentation checks still pass without the robust
+  variant and with postprocessing skipped.
+
+If any of these turn out to break downstream checks on the phantom, either
+tune the value or exclude that node from `test_run` and note why here.
+
+### 6. CI / invocation
 
 The light `test_plan_integrity.py` runs in CI. The heavy sweep is local/nightly
 by nature (hours, real tools). Decide and document how it is meant to be

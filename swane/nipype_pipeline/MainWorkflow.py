@@ -598,6 +598,7 @@ class MainWorkflow(CustomWorkflow):
             freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.ASL],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.asl.long_name = "Arterial Spin Labelling analysis"
 
@@ -712,6 +713,7 @@ class MainWorkflow(CustomWorkflow):
             freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.PET],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.pet.long_name = "Pet analysis"
 
@@ -879,6 +881,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.VENOUS_MR],
             venous2_mr_dir=venous2_mr_dir,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.venous_mr.long_name = "Venous MRA analysis"
 
