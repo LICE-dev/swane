@@ -206,6 +206,7 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
 
     checks.extend(_check_expected_outputs(result, files))
     checks.extend(_check_integrity(files))
+    checks.extend(_check_fmri_activation(result, files))
     checks.extend(_check_reference(result, files))
     checks.extend(_check_nonlinear_registration(result))
     checks.extend(_check_nonlinear_target_alignment(result))
@@ -228,11 +229,17 @@ def _check_nonlinear_registration(result) -> list:
 
     The phantom now carries a fixed non-linear deformation from the atlas (see
     ``helpers/phantom/deformation.py``), so any pass that registers the subject
-    to MNI or the symmetric template (FLAT1, the asymmetry index) must recover a
-    non-trivial warp. FNIRT writes the forward transform as spline coefficients
-    (intent ``fnirt cubic spline coef``) and ``invwarp`` writes the inverse as a
-    real displacement field (intent ``fnirt disp field``); the latter is the one
-    we can measure directly.
+    to MNI or the symmetric template (FLAT1, the asymmetry index, ICA-AROMA)
+    must recover a non-trivial warp. FNIRT writes the forward transform as
+    spline coefficients (intent ``fnirt cubic spline coef``); ``invwarp`` writes
+    the inverse as a real displacement field (intent ``fnirt disp field``).
+
+    Only some registrations need the inverse: FLAT1 builds it (to carry atlas
+    ROIs back into subject space), while the resting-state ICA-AROMA path only
+    warps *forward* to MNI and never inverts. So the inverse is optional here;
+    what every non-linear registration must have is the forward warp, and the
+    inverse — when present — is what we can measure directly (coefficients are
+    not a displacement field, so their magnitude is not read here).
 
     What this deliberately does *not* do is compare the recovered warp against
     the known deformation field voxel-by-voxel: SWANe registers to MNI, not to
@@ -253,9 +260,8 @@ def _check_nonlinear_registration(result) -> list:
     checks = [
         CheckResult(
             "nonlinear.warp_present",
-            bool(forward) and bool(inverse),
-            "forward coefficients: %d, inverse field: %d"
-            % (len(forward), len(inverse)),
+            bool(forward),  # the inverse is optional (AROMA warps forward only)
+            "forward warp(s): %d, inverse field(s): %d" % (len(forward), len(inverse)),
         )
     ]
 
