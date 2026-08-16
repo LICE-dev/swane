@@ -109,6 +109,7 @@ def run_pass(
     ram_gb: float,
     slicer_path: str = "",
     verbose: bool = False,
+    test_run: bool = True,
 ) -> PassResult:
     """Build and execute one pass, returning its result."""
     from swane.nipype_pipeline.MainWorkflow import MainWorkflow
@@ -144,6 +145,7 @@ def run_pass(
             subject_config=subject_config,
             dependency_manager=DependencyManager(),
             subject_input_state_list=input_state_list,
+            test_run=test_run,
         )
     except Exception:
         result.status = "error"
@@ -231,6 +233,7 @@ def run_sweep(
     resume: bool = True,
     retry_failed: bool = False,
     verbose: bool = False,
+    test_run: bool = True,
     on_pass_done=None,
 ) -> list:
     """Run every planned pass in order, persisting progress as it goes.
@@ -242,6 +245,11 @@ def run_sweep(
     retry_failed : bool
         With ``resume``, re-run passes that previously failed instead of
         keeping their old result.
+    test_run : bool
+        Tweak heavy node parameters to speed up each workflow at the cost of
+        accuracy, without overriding options the user has explicitly
+        configured. Defaults to True since this sweep exists to be fast; pass
+        False for full-accuracy passes.
     on_pass_done : callable, optional
         Invoked with each :class:`PassResult` as soon as it is available, so a
         caller can report progress without waiting for the whole sweep.
@@ -297,6 +305,7 @@ def run_sweep(
                 ram_gb=ram_gb,
                 slicer_path=slicer_path,
                 verbose=verbose,
+                test_run=test_run,
             )
             print(
                 "         -> %s in %s (%d/%d nodes)"

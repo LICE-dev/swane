@@ -25,6 +25,7 @@ def venous_ct_workflow(
     venous2_ct_dir: list,
     slicer_path: str,
     base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Analysis of CT angiography to obtain in skull veins
@@ -44,6 +45,11 @@ def venous_ct_workflow(
         Path to 3D Slicer executable
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, speed up the endocranium segmentation for prerelease test
+        runs at the cost of accuracy. These parameters don't change the
+        workflow graph, so they are overridden unconditionally (even over an
+        explicit user value). The default is False.
 
     Input Node Fields
     ----------
@@ -124,13 +130,23 @@ def venous_ct_workflow(
     deskull = Node(SegmentEndocranium(), name="segment_endocranium", mem_gb=2.5)
     deskull.long_name = "Non-contrast scan %s"
     deskull.inputs.slicer_cmd = slicer_path
-    deskull.inputs.iterations = config.getint_safe("segment_endocranium_iteration")
+    seg_iterations = config.getint_safe("segment_endocranium_iteration")
+    seg_oversampling = config.getfloat_safe("segment_endocranium_oversampling")
+    if test_run:
+        # SegmentEndocranium's own parameters don't change the workflow
+        # graph (same nodes either way), so unlike other test_run knobs we
+        # unconditionally override them here, even if the user picked a
+        # different value. SWANe defaults (preference_list.py) are tuned
+        # above the underlying tool's own baseline for accuracy:
+        # iteration=6 vs tool default 2, oversampling=1.5 vs tool default
+        # 1.0. Drop to the tool's own baseline.
+        seg_iterations = 2
+        seg_oversampling = 1.0
+    deskull.inputs.iterations = seg_iterations
     deskull.inputs.smoothingKernelSize = config.getfloat_safe(
         "segment_endocranium_kernel"
     )
-    deskull.inputs.oversampling = config.getfloat_safe(
-        "segment_endocranium_oversampling"
-    )
+    deskull.inputs.oversampling = seg_oversampling
     deskull.inputs.skull_threshold = config.getint_safe("skull_threshold")
     workflow.connect(veins_robustfov, "out_roi", deskull, "in_file")
 

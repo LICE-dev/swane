@@ -25,6 +25,7 @@ def venous_mr_workflow(
     synth_config: SectionProxy,
     venous2_mr_dir: str = None,
     base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Analysis of phase contrasts images (in single or two series) to obtain in skull veins
@@ -44,6 +45,9 @@ def venous_mr_workflow(
         If veins phase is divided from anatomic phase, use this param to load the second DICOM files directory.
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, speed up the underlying registration for prerelease test
+        runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -170,6 +174,7 @@ def venous_mr_workflow(
         reference=[inputnode, "reference"],
         reference_brain=[inputnode, "reference_brain"],
         flirt_cost="mutualinfo",
+        test_run=test_run,
     )
 
     veins_2_ref = apply_registration_node(

@@ -119,3 +119,44 @@ def test_linear_reg_matrix(
         config=config_echo,
         title="linear_reg / %s" % scenario,
     )
+
+
+def test_linear_reg_matrix_test_run(
+    subject_config, global_config, make_input_dir, graph_snapshot
+):
+    """test_run=True on the 3D FLAIR / bias-corrected configuration.
+
+    Exercises both the shared get_registration_node speed knobs and the N4
+    max_iterations cap (bias_field_correction=True), which prerelease's
+    default test_run=True actually builds for FLAIR3D/MDC.
+    """
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    config = subject_config[DataInputList.FLAIR3D]
+
+    wf = linear_reg_workflow(
+        "flair3d",
+        dicom_dir=make_input_dir(),
+        config=config,
+        synth_config=synth,
+        is_volumetric=True,
+        is_partial_coverage=False,
+        bias_field_correction=True,
+        test_run=True,
+    )
+
+    config_echo = {
+        "is_volumetric": True,
+        "is_partial_coverage": False,
+        "bias_field_correction": True,
+        "synth_strip": synth["strip"],
+        "synth_morph": synth["morph"],
+        "config": DataInputList.FLAIR3D.name,
+        "test_run": True,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="test_run",
+        config=config_echo,
+        title="linear_reg / test_run",
+    )

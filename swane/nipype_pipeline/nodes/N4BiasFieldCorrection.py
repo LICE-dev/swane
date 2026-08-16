@@ -23,6 +23,11 @@ class N4BiasFieldCorrectionInputSpec(BaseInterfaceInputSpec):
         desc="Set to True if the input image is already skull stripped",
     )
     mask_file = File(exists=True, desc="the mask image")
+    max_iterations = traits.List(
+        traits.Int,
+        desc="maximum number of iterations per resolution level "
+        "(SimpleITK default is [50, 50, 50, 50])",
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -76,6 +81,8 @@ class N4BiasFieldCorrection(BaseInterface):
 
         # --- N4 ---
         corrector = sitk.N4BiasFieldCorrectionImageFilter()
+        if isdefined(self.inputs.max_iterations):
+            corrector.SetMaximumNumberOfIterations(self.inputs.max_iterations)
         corrected = corrector.Execute(img, mask)
 
         # save output

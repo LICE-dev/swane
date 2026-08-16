@@ -54,3 +54,34 @@ def test_known_tract_real_graph(subject_config, global_config, graph_snapshot):
         config={"tract": "cst", "cuda": "false", "xtract_data": "present"},
         title="tractography / cst_real_graph",
     )
+
+
+def test_known_tract_real_graph_test_run(subject_config, global_config, graph_snapshot):
+    """test_run=True: n_samples is halved from the xtract-protocol value.
+    Unvalidated end-to-end yet -- see prerelease/TODO.md.
+    """
+    require_fsl_data(os.path.join(XTRACT_DATA_DIR, "cst_l"))
+
+    section = subject_config[DataInputList.DTI]
+    section["cuda"] = "false"
+
+    wf = tractography_workflow(
+        "cst",
+        config=section,
+        synth_config=global_config[GlobalPrefCategoryList.SYNTH],
+        test_run=True,
+    )
+    assert wf is not None, "cst graph should build when XTRACT data is present"
+
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="cst_real_graph_test_run",
+        config={
+            "tract": "cst",
+            "cuda": "false",
+            "xtract_data": "present",
+            "test_run": True,
+        },
+        title="tractography / cst_real_graph_test_run",
+    )

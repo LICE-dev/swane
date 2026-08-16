@@ -56,3 +56,39 @@ def test_venous_mr_matrix(
         config=config_echo,
         title="venous_mr / %s" % scenario,
     )
+
+
+def test_venous_mr_matrix_test_run(
+    subject_config, global_config, make_input_dir, graph_snapshot
+):
+    """test_run=True on the single-series baseline.
+
+    venous_mr's registration to reference is linear-only, so this mainly
+    locks in that test_run wiring doesn't break the graph.
+    """
+    section = subject_config[DataInputList.VENOUS_MR]
+    section["vein_detection_mode"] = VeinDetectionMode.SD.name
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+
+    wf = venous_mr_workflow(
+        "venous_mr",
+        venous_mr_dir=make_input_dir("phase1"),
+        config=section,
+        synth_config=synth,
+        test_run=True,
+    )
+
+    config_echo = {
+        "two_series": False,
+        "vein_detection_mode": VeinDetectionMode.SD.name,
+        "synth_strip": synth["strip"],
+        "synth_morph": synth["morph"],
+        "test_run": True,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="test_run",
+        config=config_echo,
+        title="venous_mr / test_run",
+    )

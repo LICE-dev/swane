@@ -18,7 +18,11 @@ from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_w
 
 
 def fMRI_task_workflow(
-    name: str, dicom_dir: str, config: SectionProxy, base_dir: str = "/"
+    name: str,
+    dicom_dir: str,
+    config: SectionProxy,
+    base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     fMRI first level anlysis for a single task with constant task-rest paradigm.
@@ -33,6 +37,10 @@ def fMRI_task_workflow(
         workflow settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, speed up the underlying fMRI preprocessing (motion
+        correction) for prerelease test runs at the cost of accuracy.
+        The default is False.
 
     Input Node Fields
     ----------
@@ -77,6 +85,7 @@ def fMRI_task_workflow(
         del_start_vols=del_start_vols,
         del_end_vols=del_end_vols,
         base_dir=base_dir,
+        test_run=test_run,
     )
 
     # Output Node
