@@ -9,20 +9,19 @@ CPU thread counts are made deterministic by passing an explicit ``max_cpu`` and
 only using the ``SOFT_CAP`` / ``HARD_CAP`` core-limit modes; ``NO_LIMIT`` would
 fall back to the host ``cpu_count()`` and is left to a behavioural assertion.
 
-The ``tractography=True`` branch reads ``$FSLDIR`` MNI templates at construction
-(and adds BEDPOSTX + MNI-to-reference registration): on a fully-equipped box
-that is the norm and is snapshotted; on a box without those templates the
-scenario degrades to a skip (see ``conftest.require_fsl_data``).
+The ``tractography=True`` branch adds BEDPOSTX. The MNI-to-reference nonlinear
+registration used to be built here too, but it is the same registration FLAT1
+relies on (see ``test_nonlinear_reg_matrix.py``), so it now lives in the shared
+``mni1`` workflow instantiated once by ``MainWorkflow`` and is out of scope for
+this per-builder snapshot; ``dti_preproc_workflow`` no longer reads ``$FSLDIR``
+MNI templates at construction time.
 """
-
-import os
 
 import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
 from swane.utils.DataInputList import DataInputList
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
-from swane.tests.nipype_pipeline.matrix.conftest import fsl_data_path, require_fsl_data
 
 SUBDIR = "dti_preproc"
 MAX_CPU = 4
@@ -46,12 +45,6 @@ def test_dti_matrix(
     scenario, subject_config, global_config, make_input_dir, graph_snapshot
 ):
     cuda, old_eddy, multicore, tractography = SCENARIOS[scenario]
-    if tractography:
-        # tractography=True reads the MNI templates at construction time.
-        require_fsl_data(
-            fsl_data_path("data", "standard", "MNI152_T1_1mm.nii.gz"),
-            fsl_data_path("data", "standard", "MNI152_T1_1mm_brain.nii.gz"),
-        )
     section = subject_config[DataInputList.DTI]
     section["cuda"] = _bool(cuda)
     section["old_eddy_correct"] = _bool(old_eddy)

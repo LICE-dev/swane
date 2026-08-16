@@ -59,7 +59,6 @@ class MainWorkflow(CustomWorkflow):
     is_flat1: bool = False
     is_tractography: bool = False
     is_slicer: bool = False
-    is_ai: bool = False
     t1: CustomWorkflow
     freesurfer: CustomWorkflow
     sym: CustomWorkflow
@@ -125,7 +124,6 @@ class MainWorkflow(CustomWorkflow):
         self.set_analyses_request()
 
         self.launch_3dt1_analysis()
-        self.launch_ai_analysis()
         self.launch_freesurfer_analysis()
         self.launch_3dflair_analysis()
         self.launch_flat1_analysis()
@@ -200,14 +198,6 @@ class MainWorkflow(CustomWorkflow):
             self.subject_config.getboolean_safe(DIL.T13D, "flat1")
             and self.subject_input_state_list[DIL.FLAIR3D].loaded
         )
-        # Check for Asymmetry Index request
-        self.is_ai = (
-            self.subject_config.getboolean_safe(DIL.PET, "ai")
-            and self.subject_input_state_list[DIL.PET].loaded
-        ) or (
-            self.subject_config.getboolean_safe(DIL.ASL, "ai")
-            and self.subject_input_state_list[DIL.ASL].loaded
-        )
         # Check for Tractography request
         self.is_tractography = self.subject_config.getboolean_safe(
             DIL.DTI, "tractography"
@@ -239,8 +229,14 @@ class MainWorkflow(CustomWorkflow):
             sub_folder=self.Result_DIR,
         )
 
-    def launch_ai_analysis(self):
-        if not self.is_ai:
+    def ensure_sym_registration(self) -> None:
+        """
+        Build the shared nonlinear registration to the symmetric atlas ("sym")
+        once. It feeds the asymmetry index for both PET and ASL, so it is
+        created lazily by the first requester; a second attempt would make
+        nipype raise on a duplicate node, hence the idempotency guard.
+        """
+        if getattr(self, "sym", None) is not None:
             return
 
         # Non linear registration for Asymmetry Index
@@ -251,8 +247,7 @@ class MainWorkflow(CustomWorkflow):
         self.sym.long_name = "Symmetric atlas registration"
 
         sym_inputnode = self.sym.get_node("inputnode")
-        sym_template = swane_supplement.sym_template
-        sym_inputnode.inputs.atlas = sym_template
+        sym_inputnode.inputs.atlas = swane_supplement.sym_template
         self.connect(
             self.t1, "outputnode.reference_brain", self.sym, "inputnode.in_file"
         )
@@ -358,11 +353,28 @@ class MainWorkflow(CustomWorkflow):
             sub_folder=self.Result_DIR,
         )
 
-    def launch_flat1_analysis(self):
-        if not self.is_flat1:
-            return
+    def ensure_mni1_registration(self) -> str:
+        """
+        Build the shared nonlinear registration to the MNI1mm atlas (``mni1``)
+        once. It feeds both FLAT1 and DTI tractography, so it is created lazily
+        by the first requester; a second attempt would make nipype raise on a
+        duplicate node, hence the idempotency guard.
 
-        # Non linear registration to MNI1mm Atlas for FLAT1
+        Returns
+        -------
+        mni1_path : str
+            The MNI1mm brain atlas path (also needed as a FLAT1 input).
+        """
+        mni1_path = abspath(
+            os.path.join(
+                os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm_brain.nii.gz"
+            )
+        )
+
+        if getattr(self, "mni1", None) is not None:
+            return mni1_path
+
+        # Non linear registration to MNI1mm Atlas (shared by FLAT1 and DTI)
         self.mni1 = nonlinear_reg_workflow(
             name="mni1",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
@@ -370,15 +382,18 @@ class MainWorkflow(CustomWorkflow):
         self.mni1.long_name = "MNI atlas registration"
 
         mni1_inputnode = self.mni1.get_node("inputnode")
-        mni1_path = abspath(
-            os.path.join(
-                os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm_brain.nii.gz"
-            )
-        )
         mni1_inputnode.inputs.atlas = mni1_path
         self.connect(
             self.t1, "outputnode.reference_brain", self.mni1, "inputnode.in_file"
         )
+
+        return mni1_path
+
+    def launch_flat1_analysis(self):
+        if not self.is_flat1:
+            return
+
+        mni1_path = self.ensure_mni1_registration()
 
         # FLAT1 analysis
         self.flat1 = flat1_workflow(
@@ -632,6 +647,7 @@ class MainWorkflow(CustomWorkflow):
                 )
 
         if self.subject_config.getboolean_safe(DIL.ASL, "ai"):
+            self.ensure_sym_registration()
             self.connect(
                 self.sym,
                 "outputnode.fieldcoeff_file",
@@ -745,6 +761,7 @@ class MainWorkflow(CustomWorkflow):
                 )
 
         if self.subject_config.getboolean_safe(DIL.PET, "ai"):
+            self.ensure_sym_registration()
             self.connect(
                 self.sym,
                 "outputnode.fieldcoeff_file",
@@ -936,6 +953,12 @@ class MainWorkflow(CustomWorkflow):
         )
 
         if self.is_tractography:
+            # The MNI->reference nonlinear warp is the same registration FLAT1
+            # relies on: reuse the shared mni1 workflow instead of recomputing
+            # it inside dti_preproc. It must run whenever tractography is on,
+            # even if no tract is selected.
+            self.ensure_mni1_registration()
+
             for tract in TRACTS.keys():
                 try:
                     if not self.subject_config.getboolean_safe(DIL.DTI, tract):
@@ -993,8 +1016,8 @@ class MainWorkflow(CustomWorkflow):
                         "inputnode.ref2diff_mat",
                     )
                     self.connect(
-                        self.dti_preproc,
-                        "outputnode.mni2ref_warp",
+                        self.mni1,
+                        "outputnode.inverse_warp",
                         tract_workflow,
                         "inputnode.mni2ref_warp",
                     )

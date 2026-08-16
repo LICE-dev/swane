@@ -105,7 +105,9 @@ applied to the anatomy **before** the per-series rigid pose (see
   venous sinus ~2.7 mm);
 * it makes the subject differ non-linearly **from the atlas**, giving real work
   to the subject→MNI / →symmetric paths (`nonlinear_reg`, FLAT1, the asymmetry
-  index, the tractography MNI→ref warp);
+  index). DTI tractography no longer computes its own MNI→ref warp — it reuses
+  the FLAT1/`mni1` one (built whenever FLAT1 or tractography is requested), so
+  it rides on the same check rather than adding a separate path;
 * it is a closed-form sum of sinusoids we generate ourselves, known exactly
   (`deformation.displacement`) and diffeomorphic. It derives nothing from FSL,
   its atlases, or XTRACT, and `build_tissue_model` applies it by default so the
