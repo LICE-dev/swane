@@ -50,6 +50,7 @@ class MainWorkflow(CustomWorkflow):
     Result_DIR: str = "results"
 
     is_resource_monitor: bool = False
+    test_run: bool = False
     max_cpu: int = -1
     max_gpu: int = -1
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP
@@ -91,6 +92,7 @@ class MainWorkflow(CustomWorkflow):
         subject_config: ConfigManager,
         dependency_manager: DependencyManager,
         subject_input_state_list: SubjectInputStateList,
+        test_run: bool = False,
     ):
         """
         Create the Workflows and their sub-workflows based on the list of available data inputs
@@ -107,11 +109,16 @@ class MainWorkflow(CustomWorkflow):
             The state of application dependency
         subject_input_state_list : SubjectInputStateList
             The list of all available input data from the DICOM directory.
+        test_run : bool, optional
+            If True, tweak heavy node parameters to speed up prerelease test
+            runs at the cost of accuracy, without overriding options the user
+            has explicitly configured. The default is False.
 
         """
 
         super().__init__(name, base_dir)
 
+        self.test_run = test_run
         self.global_config = global_config
         self.subject_config = subject_config
         self.dependency_manager = dependency_manager
@@ -264,6 +271,7 @@ class MainWorkflow(CustomWorkflow):
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.freesurfer.long_name = "Freesurfer analysis"
 

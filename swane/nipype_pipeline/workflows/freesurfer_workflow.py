@@ -26,6 +26,7 @@ def freesurfer_workflow(
     base_dir: str = "/",
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Freesurfer cortical reconstruction, white matter ROI, basal ganglia and thalami ROI.
@@ -120,7 +121,13 @@ def freesurfer_workflow(
     if step == FreesurferStep.SYNTHSEG:
         synth_seg = Node(SynthSeg(), name="synth_seg")
         synth_seg.inputs.parcellation = True
-        synth_seg.inputs.robust = True
+        if test_run:
+            # Prerelease test runs: trade accuracy for speed by skipping
+            # postprocessing (--fast) and dropping the slower robust variant.
+            synth_seg.inputs.fast = True
+            synth_seg.inputs.robust = False
+        else:
+            synth_seg.inputs.robust = True
         synth_seg.inputs.use_cpu = True
         synth_seg.inputs.keep_geometry = True
         # synth_seg.inputs.num_threads = 1
