@@ -699,9 +699,7 @@ def build_plan(caps, with_reconall: bool = False, only=None) -> list:
                     )
                     break
                 item.values[axis_name] = fallback
-                item.downgrades.append(
-                    (axis_name, wanted, fallback, caps.reason(gate))
-                )
+                item.downgrades.append((axis_name, wanted, fallback, caps.reason(gate)))
 
         # A pass whose whole reason for existing is now unavailable is skipped
         # rather than silently degraded into a duplicate of another pass.
@@ -810,9 +808,9 @@ def describe_plan(plan: list, cover: dict) -> str:
     """A human summary of what will run, what will not, and why."""
     lines = []
     active = [p for p in plan if not p.skipped]
-    lines.append("Planned passes: %d to run, %d skipped" % (
-        len(active), len(plan) - len(active)
-    ))
+    lines.append(
+        "Planned passes: %d to run, %d skipped" % (len(active), len(plan) - len(active))
+    )
     for item in plan:
         if item.skipped:
             lines.append("  - %-28s SKIPPED  (%s)" % (item.name, item.skip_reason))

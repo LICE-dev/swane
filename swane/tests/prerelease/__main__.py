@@ -30,9 +30,7 @@ import sys
 
 from swane.utils.ResourceManager import ResourceManager
 
-DEFAULT_WORK_DIR = os.path.join(
-    os.path.expanduser("~"), "test_swane", "prerelease"
-)
+DEFAULT_WORK_DIR = os.path.join(os.path.expanduser("~"), "test_swane", "prerelease")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,7 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
     behaviour.add_argument(
         "--slicer",
         default=os.environ.get("SWANE_SLICER_PATH", ""),
-        help="path to the Slicer executable, needed by the venous CT passes",
+        help="path to the Slicer executable, needed by the venous CT passes "
+        "(default: whatever the user's ~/.SWANe configuration records)",
     )
     behaviour.add_argument(
         "-v", "--verbose", action="store_true", help="print every node as it starts"
@@ -145,7 +144,11 @@ def main(argv=None) -> int:
     work_dir = os.path.abspath(args.work_dir)
     os.makedirs(work_dir, exist_ok=True)
 
-    slicer_path = args.slicer
+    # Slicer comes from the user's real SWANe settings unless overridden: that
+    # is where the application records it after validating the version.
+    slicer_path = args.slicer or user_slicer_path()
+    if slicer_path:
+        print("Slicer: %s" % slicer_path)
     global_config = _slicer_probe_config(slicer_path)
 
     caps = caps_mod.probe(
@@ -174,7 +177,7 @@ def main(argv=None) -> int:
         print("No pass can run on this host with these options.")
         return 2
 
-    from swane.tests.prerelease.runner import load_state, run_sweep
+    from swane.tests.prerelease.runner import run_sweep
     from swane.tests.prerelease.subject import load_phantom
 
     ground_truth = None
@@ -238,6 +241,35 @@ def main(argv=None) -> int:
     return 0 if report_mod.overall_success(report) else 1
 
 
+def user_slicer_path() -> str:
+    """Read the Slicer path out of the user's real SWANe configuration.
+
+    SWANe stores it in ``~/.SWANe`` once Slicer has been configured (and
+    version-validated) in the application, so that file — not an environment
+    variable — is the natural source for anyone running this sweep.
+
+    Deliberately read-only: instantiating :class:`ConfigManager` on the real
+    file would rewrite it as a side effect of loading, and a test suite has no
+    business editing the user's settings.
+    """
+    import configparser
+
+    from swane import strings
+    from swane.config.config_enums import GlobalPrefCategoryList
+
+    path = os.path.join(os.path.expanduser("~"), "." + strings.APPNAME)
+    if not os.path.isfile(path):
+        return ""
+    parser = configparser.ConfigParser()
+    try:
+        parser.read(path)
+        return parser.get(
+            str(GlobalPrefCategoryList.MAIN), "slicer_path", fallback=""
+        ).strip()
+    except configparser.Error:
+        return ""
+
+
 def _slicer_probe_config(slicer_path: str):
     """A throwaway global config carrying only the Slicer path, for probing."""
     if not slicer_path:
@@ -275,11 +307,7 @@ def _reload_results(work_dir: str, plan: list) -> list:
             continue
         results.append(
             PassResult(
-                **{
-                    k: v
-                    for k, v in stored.items()
-                    if k in PassResult.__annotations__
-                }
+                **{k: v for k, v in stored.items() if k in PassResult.__annotations__}
             )
         )
     return results

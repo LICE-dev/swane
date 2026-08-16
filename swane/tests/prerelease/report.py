@@ -30,9 +30,7 @@ def build_report(results, caps, cover, work_dir: str, options: dict) -> dict:
     """Assemble the full machine-readable record of a sweep."""
     passes = []
     for result in results:
-        passed, errors, warnings = summarise(
-            [_as_check(c) for c in result.checks]
-        )
+        passed, errors, warnings = summarise(result.checks)
         passes.append(
             {
                 "name": result.name,
@@ -56,6 +54,8 @@ def build_report(results, caps, cover, work_dir: str, options: dict) -> dict:
     executed = [p for p in passes if p["status"] not in ("skipped",)]
     return {
         "generated": datetime.now().isoformat(timespec="seconds"),
+        # A restricted run cannot be judged on coverage.
+        "partial_run": bool(options.get("only")),
         "host": {
             "platform": platform.platform(),
             "python": platform.python_version(),
@@ -88,10 +88,6 @@ def build_report(results, caps, cover, work_dir: str, options: dict) -> dict:
     }
 
 
-def _as_check(check):
-    return check
-
-
 def _check_json(check) -> dict:
     if isinstance(check, dict):
         return check
@@ -106,12 +102,17 @@ def write_json(report: dict, work_dir: str) -> str:
 
 
 def overall_success(report: dict) -> bool:
-    """A sweep succeeds when nothing failed to run and no error check failed."""
+    """A sweep succeeds when nothing failed to run and no error check failed.
+
+    Coverage holes count only in a full sweep. When the run was deliberately
+    restricted with ``--only``, the uncovered axes are the direct consequence
+    of that choice, not a defect in the plan.
+    """
     summary = report["summary"]
     holes = any(c["missing"] for c in report["coverage"].values())
-    return (
-        summary["failed"] == 0 and summary["checks_failed"] == 0 and not holes
-    )
+    if report.get("partial_run"):
+        holes = False
+    return summary["failed"] == 0 and summary["checks_failed"] == 0 and not holes
 
 
 # --------------------------------------------------------------------------- #
@@ -227,8 +228,10 @@ def _pass_section(item: dict) -> str:
             "<th>detail</th></tr>"
         )
         for check in checks:
-            cls = "ok" if check["passed"] else (
-                "bad" if check["severity"] == ERROR else "warn"
+            cls = (
+                "ok"
+                if check["passed"]
+                else ("bad" if check["severity"] == ERROR else "warn")
             )
             label = "pass" if check["passed"] else check["severity"]
             rows.append(
@@ -244,7 +247,7 @@ def _pass_section(item: dict) -> str:
 
     open_attr = " open" if failed or item["status"] in ("failed", "error") else ""
     return (
-        "<details%s><summary>%s<span class=\"meta\">%s</span></summary>%s</details>"
+        '<details%s><summary>%s<span class="meta">%s</span></summary>%s</details>'
         % (open_attr, html.escape(item["name"]), meta, "".join(rows))
     )
 
@@ -280,7 +283,8 @@ def write_html(report: dict, work_dir: str) -> str:
         ("total time", _fmt_time(summary["seconds"]), ""),
     ]
     tile_html = "".join(
-        '<div class="tile"><b class="%s">%s</b><span>%s</span></div>' % (cls, value, label)
+        '<div class="tile"><b class="%s">%s</b><span>%s</span></div>'
+        % (cls, value, label)
         for label, value, cls in tiles
     )
 
@@ -346,7 +350,7 @@ def write_html(report: dict, work_dir: str) -> str:
     )
 
     page = (
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         "<title>SWANe pre-release sweep</title><style>%s</style></head>"
         "<body>%s</body></html>" % (_CSS, body)
@@ -361,7 +365,10 @@ def print_summary(report: dict) -> None:
     summary = report["summary"]
     print("")
     print("=" * 66)
-    print("Pre-release sweep: %s" % ("PASSED" if overall_success(report) else "ATTENTION NEEDED"))
+    print(
+        "Pre-release sweep: %s"
+        % ("PASSED" if overall_success(report) else "ATTENTION NEEDED")
+    )
     print("-" * 66)
     print(
         "  passes: %d run, %d completed, %d failed, %d skipped"
@@ -379,7 +386,12 @@ def print_summary(report: dict) -> None:
     print("  time:   %s" % _fmt_time(summary["seconds"]))
 
     holes = {n: c["missing"] for n, c in report["coverage"].items() if c["missing"]}
-    if holes:
+    if holes and report.get("partial_run"):
+        print(
+            "  (%d axis value(s) not covered: the run was restricted with --only)"
+            % sum(len(v) for v in holes.values())
+        )
+    elif holes:
         print("  PLAN HOLES (no pass covers these):")
         for name, values in sorted(holes.items()):
             print("    - %s: %s" % (name, ", ".join(map(str, values))))
