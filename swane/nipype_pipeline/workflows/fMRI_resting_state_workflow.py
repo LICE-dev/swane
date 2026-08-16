@@ -49,6 +49,8 @@ def fMRI_resting_state_workflow(
     ----------
     IC : path
         Independent components 4d nifti.
+    mel_mix : path
+        melodic_mix file from Melodic run
 
     Returns
     -------
@@ -81,7 +83,9 @@ def fMRI_resting_state_workflow(
 
     # Output Node
     outputnode = Node(
-        IdentityInterface(fields=["thresh_zstat_files", "aroma_classification"]),
+        IdentityInterface(
+            fields=["thresh_zstat_files", "aroma_classification", "mel_mix"]
+        ),
         name="outputnode",
     )
 
@@ -242,29 +246,6 @@ def fMRI_resting_state_workflow(
     workflow.connect(melodic, "out_dir", melodic_output, "melodic_dir")
     workflow.connect(melodic, "out_dir", melodic_output, "base_directory")
 
-    # Function to generate the name for the file of registered output zstats
-    def registered_file_name(in_file_names):
-        """
-        Adds prefix 'r-' and use 2 digid number at end.
-        Example: 'zstat1.nii.gz' -> 'r-zstat01.nii.gz'
-        """
-        from os.path import basename
-        import re
-
-        out_files = []
-        for f in in_file_names:
-            base_name = basename(f)
-            # Cerca un numero prima dell'estensione .nii o .nii.gz
-            m = re.search(r"(\d+)(\.nii(?:\.gz)?)$", base_name)
-            if m:
-                num = int(m.group(1))
-                ext = m.group(2)
-                new_name = re.sub(r"\d+(\.nii(?:\.gz)?)$", f"{num:02d}{ext}", base_name)
-            else:
-                new_name = base_name
-            out_files.append("r-" + new_name)
-        return out_files
-
     zstats_2_ref = MapNode(
         ApplyXFM(), name="zstats_2_ref", iterfield=["in_file", "out_file"]
     )
@@ -279,5 +260,30 @@ def fMRI_resting_state_workflow(
     )
 
     workflow.connect(zstats_2_ref, "out_file", outputnode, "thresh_zstat_files")
+    workflow.connect(melodic_output, "mel_mix", outputnode, "mel_mix")
 
     return workflow
+
+
+# Function to generate the name for the file of registered output zstats
+def registered_file_name(in_file_names):
+    """
+    Adds prefix 'r-' and use 2 digid number at end.
+    Example: 'zstat1.nii.gz' -> 'r-zstat01.nii.gz'
+    """
+    from os.path import basename
+    import re
+
+    out_files = []
+    for f in in_file_names:
+        base_name = basename(f)
+        # Cerca un numero prima dell'estensione .nii o .nii.gz
+        m = re.search(r"(\d+)(\.nii(?:\.gz)?)$", base_name)
+        if m:
+            num = int(m.group(1))
+            ext = m.group(2)
+            new_name = re.sub(r"\d+(\.nii(?:\.gz)?)$", f"{num:02d}{ext}", base_name)
+        else:
+            new_name = base_name
+        out_files.append("r-" + new_name)
+    return out_files

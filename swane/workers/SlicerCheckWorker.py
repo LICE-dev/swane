@@ -16,38 +16,50 @@ class SlicerCheckWorker(QRunnable):
 
     """
 
-    BEGIN_MARKER = "# === BEGIN HIDEZERO PATCH ==="
-    END_MARKER = "# === END HIDEZERO PATCH ==="
-    HIDE_ZERO_CODE = f"""{BEGIN_MARKER}
-def apply_hide_zero(node):
-    if not node or not node.IsA("vtkMRMLScalarVolumeNode"):
-        return
-    if node.GetAttribute("HideZero") != "True":
-        return
-    dn = node.GetDisplayNode()
-    if not dn:
-        return
-    dn.SetApplyThreshold(True)
-    dn.SetLowerThreshold(1e-6)
-    dn.SetUpperThreshold(float("inf"))
-    dn.SetAutoWindowLevel(False)
+    BEGIN_MARKER = "# === BEGIN SWANE PATCH ==="
+    END_MARKER = "# === END SWANE PATCH ==="
+    # Older SWANe versions injected an inline hide-zero patch under these
+    # markers. hide-zero is now handled entirely at scene-export time, so the
+    # block is dead; clean it up on migration.
+    LEGACY_MARKERS = [
+        ("# === BEGIN HIDEZERO PATCH ===", "# === END HIDEZERO PATCH ==="),
+    ]
 
-def apply_hide_zero_to_all():
-    for node in slicer.mrmlScene.GetNodesByClass("vtkMRMLScalarVolumeNode"):
-        apply_hide_zero(node)
+    @staticmethod
+    def build_startup_patch() -> str:
+        """
+        Build the SWANe startup stub for ``~/.slicerrc.py``.
 
-def on_scene_imported(caller, event):
-    apply_hide_zero_to_all()
+        The stub is deliberately tiny and stable: it only adds SWANe's
+        ``workers`` folder to ``sys.path`` and imports ``slicerrc_swane``,
+        which holds the actual logic and ships with SWANe. That way future
+        changes to SWANe's Slicer helpers take effect without rewriting the
+        user's slicerrc, and any failure is swallowed so an unrelated Slicer
+        session is never broken.
 
-if not hasattr(slicer, "_hideZeroInstalled"):
-    slicer._hideZeroInstalled = True
-    slicer.mrmlScene.AddObserver(
-        slicer.mrmlScene.EndImportEvent,
-        on_scene_imported
-    )
-    apply_hide_zero_to_all()
-{END_MARKER}
-    """
+        Returns
+        -------
+        str
+            The full marker-delimited patch text.
+        """
+        workers_dir = os.path.dirname(os.path.abspath(__file__))
+        return f"""{SlicerCheckWorker.BEGIN_MARKER}
+# Managed by SWANe. Bootstraps SWANe's Slicer helpers (e.g. the resting-state
+# MELODIC timecourse viewer). Safe to delete; SWANe re-adds it on its next
+# Slicer dependency check.
+import os as _swane_os
+import sys as _swane_sys
+
+_swane_workers_dir = {workers_dir!r}
+if _swane_os.path.isdir(_swane_workers_dir):
+    if _swane_workers_dir not in _swane_sys.path:
+        _swane_sys.path.insert(0, _swane_workers_dir)
+    try:
+        import slicerrc_swane as _swane_rc
+    except Exception as _swane_err:
+        print("SWANE: slicerrc bootstrap failed:", _swane_err)
+{SlicerCheckWorker.END_MARKER}
+"""
 
     def __init__(self, current_slicer_path: str):
         super(SlicerCheckWorker, self).__init__()
@@ -114,7 +126,7 @@ if not hasattr(slicer, "_hideZeroInstalled"):
     # -------------------------
     @staticmethod
     def check_patch(slicerrc_path):
-        """Return True if the HideZero patch exists and is identical to our snippet."""
+        """Return True if the SWANe patch exists and matches the current stub."""
         content = SlicerCheckWorker.read_slicerrc(slicerrc_path)
         if (
             SlicerCheckWorker.BEGIN_MARKER in content
@@ -125,21 +137,43 @@ if not hasattr(slicer, "_hideZeroInstalled"):
                 SlicerCheckWorker.END_MARKER
             )
             current_patch = content[start:end]
-            return current_patch.strip() == SlicerCheckWorker.HIDE_ZERO_CODE.strip()
+            return (
+                current_patch.strip() == SlicerCheckWorker.build_startup_patch().strip()
+            )
         return False
 
     # -------------------------
     # Add or replace patch
     # -------------------------
     @staticmethod
+    def _strip_marked_block(content, begin_marker, end_marker):
+        """Return content with a single begin/end-delimited block removed."""
+        if begin_marker in content and end_marker in content:
+            start = content.index(begin_marker)
+            end = content.index(end_marker) + len(end_marker)
+            return content[:start] + content[end:]
+        return content
+
+    @staticmethod
     def add_slicer_startup_patch():
-        """Add the HideZero patch to slicerrc.py. Replaces old patch if different."""
+        """Add the SWANe patch to slicerrc.py. Replaces an outdated patch if different."""
         slicerrc_path = os.path.expanduser("~/.slicerrc.py")
+
+        # Always drop legacy blocks from superseded SWANe versions, even when
+        # the current patch is already up to date.
+        content = SlicerCheckWorker.read_slicerrc(slicerrc_path)
+        cleaned = content
+        for begin_marker, end_marker in SlicerCheckWorker.LEGACY_MARKERS:
+            cleaned = SlicerCheckWorker._strip_marked_block(
+                cleaned, begin_marker, end_marker
+            )
+        if cleaned != content:
+            SlicerCheckWorker.write_slicerrc(slicerrc_path, cleaned)
 
         if SlicerCheckWorker.check_patch(slicerrc_path):
             return
 
-        # Remove old patch if exists
+        # Remove old (mismatched) SWANe patch if present
         content = SlicerCheckWorker.remove_patch(slicerrc_path, return_content=True)
 
         # Ensure trailing newline
@@ -147,7 +181,7 @@ if not hasattr(slicer, "_hideZeroInstalled"):
             content += "\n"
 
         # Append the new patch
-        content += SlicerCheckWorker.HIDE_ZERO_CODE + "\n"
+        content += SlicerCheckWorker.build_startup_patch() + "\n"
         SlicerCheckWorker.write_slicerrc(slicerrc_path, content)
 
     # -------------------------
@@ -155,7 +189,7 @@ if not hasattr(slicer, "_hideZeroInstalled"):
     # -------------------------
     @staticmethod
     def remove_patch(slicerrc_path, return_content=False):
-        """Remove the HideZero patch from slicerrc.py."""
+        """Remove the SWANe patch from slicerrc.py, leaving the rest untouched."""
         content = SlicerCheckWorker.read_slicerrc(slicerrc_path)
         if (
             SlicerCheckWorker.BEGIN_MARKER in content

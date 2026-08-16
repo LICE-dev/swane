@@ -41,6 +41,61 @@ def test_patch_add_and_remove(monkeypatch, tmp_path):
     )
 
 
+def test_patch_is_idempotent(monkeypatch, tmp_path):
+    slicerrc = tmp_path / ".slicerrc.py"
+    slicerrc.write_text('print("hello")\n')
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(slicerrc))
+
+    SlicerCheckWorker.add_slicer_startup_patch()
+    first = SlicerCheckWorker.read_slicerrc(str(slicerrc))
+    SlicerCheckWorker.add_slicer_startup_patch()
+    second = SlicerCheckWorker.read_slicerrc(str(slicerrc))
+    assert first == second
+    assert second.count(SlicerCheckWorker.BEGIN_MARKER) == 1
+
+
+def test_patch_replaces_outdated_patch(monkeypatch, tmp_path):
+    slicerrc = tmp_path / ".slicerrc.py"
+    slicerrc.write_text('print("hello")\n')
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(slicerrc))
+
+    stale = (
+        SlicerCheckWorker.BEGIN_MARKER
+        + "\n# stale content\n"
+        + SlicerCheckWorker.END_MARKER
+        + "\n"
+    )
+    slicerrc.write_text(slicerrc.read_text() + stale)
+    assert not SlicerCheckWorker.check_patch(str(slicerrc))
+
+    SlicerCheckWorker.add_slicer_startup_patch()
+    content = SlicerCheckWorker.read_slicerrc(str(slicerrc))
+    assert "stale content" not in content
+    assert content.count(SlicerCheckWorker.BEGIN_MARKER) == 1
+    assert SlicerCheckWorker.check_patch(str(slicerrc))
+
+
+def test_patch_migrates_away_legacy_hidezero_block(monkeypatch, tmp_path):
+    slicerrc = tmp_path / ".slicerrc.py"
+    legacy = (
+        'print("user line before")\n'
+        "# === BEGIN HIDEZERO PATCH ===\n"
+        "def apply_hide_zero(node):\n"
+        "    pass\n"
+        "# === END HIDEZERO PATCH ===\n"
+        'print("user line after")\n'
+    )
+    slicerrc.write_text(legacy)
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(slicerrc))
+
+    SlicerCheckWorker.add_slicer_startup_patch()
+    content = SlicerCheckWorker.read_slicerrc(str(slicerrc))
+    assert "HIDEZERO" not in content
+    assert "user line before" in content
+    assert "user line after" in content
+    assert SlicerCheckWorker.check_patch(str(slicerrc))
+
+
 def test_run_detects_slicer_and_modules(monkeypatch, tmp_path):
     # Prepare worker
     w = SlicerCheckWorker(current_slicer_path="")
