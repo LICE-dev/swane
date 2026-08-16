@@ -29,6 +29,10 @@ class SlicerViewerWorker(QRunnable):
         self.scene_path: str = scene_path
 
     def run(self):
+        # Just opens the scene; the automatic MELODIC resting-state
+        # timecourse viewer is wired up by the SWANe slicerrc bootstrap
+        # (see SlicerCheckWorker), so it also works when the user opens the
+        # scene manually, outside SWANe.
         cmd = self.slicer_path + " " + self.scene_path
         popen = subprocess.Popen(
             cmd,

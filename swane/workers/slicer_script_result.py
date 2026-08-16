@@ -19,11 +19,21 @@ Note:
 """
 
 import os
+import re
 import sys
 import glob
 import subprocess
 import argparse
 import SimpleITK as sitk
+
+# slicer/vtk/qt are auto-injected as globals only into the script Slicer runs
+# directly via --python-script; this module must import them explicitly so
+# it also works when imported (e.g. by slicerrc_swane.py, at Slicer startup)
+# to reuse install_melodic_timecourse_viewer() without re-running the whole
+# export.
+import slicer
+import vtk
+import qt
 
 os.environ["QT_LOGGING_RULES"] = "*.warning=false"
 
@@ -88,7 +98,20 @@ def _make_colormap_transparent_at_zero(
     clone = slicer.mrmlScene.AddNewNodeByClass(
         "vtkMRMLColorTableNode", f"{volume_name}_hide0"
     )
-    clone.Copy(original_color_node)
+    # Rebuild the table entry-by-entry instead of clone.Copy(original_color_node):
+    # Copy() also duplicates the source's SingletonTag, so the clone ends up
+    # sharing Slicer's built-in singleton identity. On the next scene
+    # save/reload round-trip this either silently drops our edited clone
+    # (recent Slicer) or corrupts the shared built-in table for every other
+    # volume using it (observed on Slicer 5.6.1). A "User" type table with
+    # its own identity, populated by hand, has nothing to collide with.
+    clone.SetTypeToUser()
+    clone.SetNumberOfColors(n_colors)
+    clone.SetNamesInitialised(True)
+    original_lut = original_color_node.GetLookupTable()
+    for i in range(n_colors):
+        r, g, b, a = original_lut.GetTableValue(i)
+        clone.SetColor(i, original_color_node.GetColorName(i), r, g, b, a)
 
     zero_fraction = min(max((0.0 - window_min) / (window_max - window_min), 0.0), 1.0)
     zero_index = int(round(zero_fraction * (n_colors - 1)))
@@ -377,9 +400,86 @@ def load_fmri_task(scene_dir: str):
             )
 
 
+MELODIC_MIX_TABLE_NAME = "melodic_mix"
+MELODIC_MIX_TABLE_ATTRIBUTE = "SwaneMelodicMix"
+
+
+def _read_melodic_mix(fmri_dir: str):
+    """
+    Parse FSL MELODIC's ``melodic_mix`` file into one timecourse per
+    independent component.
+
+    The file has one row per fMRI timepoint and one column per component.
+
+    Parameters
+    ----------
+    fmri_dir : str
+        Directory containing the ``melodic_mix`` file.
+
+    Returns
+    -------
+    list[list[float]] or None
+        ``timecourses[i]`` is the timecourse of IC ``i + 1``, or None if the
+        file is missing or unreadable.
+    """
+    mix_path = os.path.join(fmri_dir, "melodic_mix")
+    if not os.path.exists(mix_path):
+        return None
+    try:
+        with open(mix_path, "r") as mix_file:
+            rows = [line.split() for line in mix_file if line.strip()]
+        n_components = len(rows[0])
+        return [[float(row[ic]) for row in rows] for ic in range(n_components)]
+    except Exception as e:
+        print(f"SLICERLOADER: Failed to read melodic_mix: {e}")
+        return None
+
+
+def _bake_melodic_mix_table(fmri_dir: str):
+    """
+    Store each independent component's timecourse as a column of a
+    vtkMRMLTableNode saved with the scene.
+
+    The original ``melodic_mix`` text file lives next to the zstat NIfTI
+    files on disk, but once results are bundled into a .mrb Slicer extracts
+    volumes into its own temporary layout and that folder is no longer
+    reachable. Baking the timecourses into a table node keeps them
+    available to the interactive timecourse viewer after save/reload.
+
+    Parameters
+    ----------
+    fmri_dir : str
+        Directory containing the ``melodic_mix`` file.
+
+    Returns
+    -------
+    None
+    """
+    timecourses = _read_melodic_mix(fmri_dir)
+    if not timecourses:
+        return
+
+    table_node = slicer.mrmlScene.AddNewNodeByClass(
+        "vtkMRMLTableNode", MELODIC_MIX_TABLE_NAME
+    )
+    table_node.SetAttribute(MELODIC_MIX_TABLE_ATTRIBUTE, "1")
+    table = table_node.GetTable()
+    for ic, timecourse in enumerate(timecourses, start=1):
+        column = vtk.vtkDoubleArray()
+        column.SetName(f"IC{ic}")
+        for value in timecourse:
+            column.InsertNextValue(value)
+        table.AddColumn(column)
+    table.Modified()
+    print(
+        f"SLICERLOADER: Baked melodic_mix timecourses "
+        f"({len(timecourses)} IC(s)) into scene"
+    )
+
+
 def load_fmri_resting_state(scene_dir: str):
     """
-    Load resting-state fMRI volumes.
+    Load resting-state fMRI volumes and their MELODIC timecourses.
 
     Parameters
     ----------
@@ -394,7 +494,6 @@ def load_fmri_resting_state(scene_dir: str):
     if not os.path.exists(fmri_dir):
         return
 
-    pattern = "r-*[0-9].nii.gz"
     pattern = os.path.join(fmri_dir, "r-*[0-9].nii.gz")
     zstat_files = glob.glob(pattern)
 
@@ -405,6 +504,236 @@ def load_fmri_resting_state(scene_dir: str):
             "vtkMRMLColorTableNodeFileColdToHotRainbow.txt",
             hide_zero=True,
         )
+
+    _bake_melodic_mix_table(fmri_dir)
+
+
+# -----------------------------
+# Resting-state fMRI timecourse viewer
+# -----------------------------
+#
+# Activated at Slicer startup by the SWANe slicerrc bootstrap (see
+# slicerrc_swane.py / SlicerCheckWorker), not during main_export() itself:
+# the headless export has no slice view to react to, and this needs to be
+# active in *any* interactive session, including scenes opened manually,
+# outside SWANe.
+
+
+def _get_ic_from_volume_name(name: str):
+    """
+    Extract the 1-based independent-component index from a zstat volume
+    name such as "r-thresh_zstat01" or "zstat1".
+
+    Parameters
+    ----------
+    name : str
+        Volume node name.
+
+    Returns
+    -------
+    int or None
+        The IC index, or None if the name doesn't encode one.
+    """
+    match = re.search(r"(?:r-)?(?:thresh_)?zstat(\d+)", name, re.IGNORECASE)
+    if match is None:
+        return None
+    ic = int(match.group(1))
+    return ic if ic >= 1 else None
+
+
+def _get_melodic_mix_table():
+    """
+    Find the table node baked by _bake_melodic_mix_table(), if any.
+
+    Returns
+    -------
+    vtkMRMLTableNode or None
+    """
+    for node in slicer.mrmlScene.GetNodesByClass("vtkMRMLTableNode"):
+        if node.GetAttribute(MELODIC_MIX_TABLE_ATTRIBUTE) == "1":
+            return node
+    return None
+
+
+def _get_active_zstat(composite_node):
+    """
+    Find the MELODIC zstat volume shown in a slice view, if any.
+
+    Foreground takes priority over background, matching how the volume the
+    user is currently looking at is layered.
+
+    Parameters
+    ----------
+    composite_node : vtkMRMLSliceCompositeNode
+
+    Returns
+    -------
+    (vtkMRMLScalarVolumeNode, int) or (None, None)
+        The volume node and its IC index.
+    """
+    if composite_node is None:
+        return None, None
+    for get_volume_id in (
+        composite_node.GetForegroundVolumeID,
+        composite_node.GetBackgroundVolumeID,
+    ):
+        volume_id = get_volume_id()
+        if not volume_id:
+            continue
+        node = slicer.mrmlScene.GetNodeByID(volume_id)
+        ic = _get_ic_from_volume_name(node.GetName()) if node else None
+        if ic is not None:
+            return node, ic
+    return None, None
+
+
+class MelodicTimecourseViewer:
+    """
+    Keeps a single Plot chart in sync with whichever MELODIC IC zstat map is
+    currently shown in the foreground/background of any slice view.
+    """
+
+    CHART_NAME = "MELODIC_Timecourse_Chart"
+    SERIES_NAME = "MELODIC_Timecourse_Series"
+    TABLE_NAME = "MELODIC_Timecourse_Plot"
+
+    def __init__(self):
+        self._last_ic = None
+        self._plot_table_node = None
+        self._series_node = None
+        self._chart_node = None
+        self._observed_composite_nodes = []
+
+    def _ensure_plot_nodes(self):
+        if self._plot_table_node is None:
+            self._plot_table_node = slicer.mrmlScene.AddNewNodeByClass(
+                "vtkMRMLTableNode", self.TABLE_NAME
+            )
+            table = self._plot_table_node.GetTable()
+            x_array = vtk.vtkIntArray()
+            x_array.SetName("Volume")
+            y_array = vtk.vtkDoubleArray()
+            y_array.SetName("Timecourse")
+            table.AddColumn(x_array)
+            table.AddColumn(y_array)
+
+        if self._series_node is None:
+            self._series_node = slicer.mrmlScene.AddNewNodeByClass(
+                "vtkMRMLPlotSeriesNode", self.SERIES_NAME
+            )
+            self._series_node.SetAndObserveTableNodeID(self._plot_table_node.GetID())
+            self._series_node.SetXColumnName("Volume")
+            self._series_node.SetYColumnName("Timecourse")
+            self._series_node.SetPlotType(self._series_node.PlotTypeLine)
+
+        if self._chart_node is None:
+            self._chart_node = slicer.mrmlScene.AddNewNodeByClass(
+                "vtkMRMLPlotChartNode", self.CHART_NAME
+            )
+            self._chart_node.AddAndObservePlotSeriesNodeID(self._series_node.GetID())
+
+    def _show(self, ic: int, volume_name: str):
+        mix_table_node = _get_melodic_mix_table()
+        if mix_table_node is None:
+            return
+        column = mix_table_node.GetTable().GetColumnByName(f"IC{ic}")
+        if column is None:
+            print(f"SLICERLOADER: No timecourse for IC{ic} in melodic_mix table")
+            return
+
+        self._ensure_plot_nodes()
+        n = column.GetNumberOfTuples()
+        table = self._plot_table_node.GetTable()
+        table.SetNumberOfRows(n)
+        x_array = table.GetColumnByName("Volume")
+        y_array = table.GetColumnByName("Timecourse")
+        for i in range(n):
+            x_array.SetValue(i, i + 1)
+            y_array.SetValue(i, column.GetValue(i))
+        table.Modified()
+
+        self._chart_node.SetTitle(f"MELODIC IC {ic} - {volume_name}")
+        slicer.modules.plots.logic().ShowChartInLayout(self._chart_node)
+
+    def _hide(self):
+        plot_widget = slicer.modules.plots.widgetRepresentation()
+        if plot_widget:
+            plot_widget.setVisible(False)
+
+    def _find_zstat_in_other_views(self, exclude_composite_node):
+        for node in slicer.util.getNodesByClass("vtkMRMLSliceCompositeNode"):
+            if node is exclude_composite_node:
+                continue
+            volume, ic = _get_active_zstat(node)
+            if ic is not None:
+                return volume, ic
+        return None, None
+
+    def _on_composite_modified(self, caller, event):
+        volume, ic = _get_active_zstat(caller)
+        if ic is None:
+            volume, ic = self._find_zstat_in_other_views(caller)
+
+        if ic is None:
+            if self._last_ic is not None:
+                self._last_ic = None
+                self._hide()
+            return
+
+        if ic == self._last_ic:
+            return
+        self._last_ic = ic
+        self._show(ic, volume.GetName())
+
+    def _observe_composite_node(self, node):
+        tag = node.AddObserver(
+            vtk.vtkCommand.ModifiedEvent, self._on_composite_modified
+        )
+        self._observed_composite_nodes.append((node, tag))
+
+    def install(self):
+        """
+        Start observing every existing (and future) slice view so the
+        timecourse plot follows whatever MELODIC IC map the user looks at.
+        """
+        for node in slicer.util.getNodesByClass("vtkMRMLSliceCompositeNode"):
+            self._observe_composite_node(node)
+
+        @vtk.calldata_type(vtk.VTK_OBJECT)
+        def _on_node_added(caller, event, calldata):
+            if calldata is not None and calldata.IsA("vtkMRMLSliceCompositeNode"):
+                self._observe_composite_node(calldata)
+
+        slicer.mrmlScene.AddObserver(slicer.vtkMRMLScene.NodeAddedEvent, _on_node_added)
+        # keep the callback (and its closure over self) alive for the
+        # session, since AddObserver doesn't hold a Python reference
+        self._on_node_added = _on_node_added
+
+
+def install_melodic_timecourse_viewer():
+    """
+    Activate the automatic MELODIC timecourse plot for this Slicer session.
+
+    Registers observers on the slice views (existing and future), so that
+    whenever a MELODIC IC zstat map is shown the matching timecourse plot
+    appears. When the current scene has no baked-in melodic_mix table (e.g.
+    a non-SWANe scene, or a subject without resting-state analysis) the
+    observers simply never find data to plot, so this stays harmless.
+
+    Meant to be called once per session, typically from the SWANe slicerrc
+    bootstrap so it also covers scenes opened manually, outside SWANe.
+    Idempotent: a second call is a no-op.
+
+    Returns
+    -------
+    None
+    """
+    if getattr(slicer, "swaneMelodicTimecourseViewer", None) is not None:
+        return
+    viewer = MelodicTimecourseViewer()
+    viewer.install()
+    # keep a reference alive for the lifetime of the Slicer session
+    slicer.swaneMelodicTimecourseViewer = viewer
 
 
 def create_grayscale_model(
@@ -977,5 +1306,9 @@ def main_export():
     slicer.util.saveScene(os.path.join(results_folder, "scene.mrb"))
 
 
-main_export()
-qt.QTimer.singleShot(0, slicer.app.quit)
+if __name__ == "__main__":
+    # Guarded so this file can also be imported (e.g. by slicerrc_swane.py, at
+    # Slicer startup) to reuse install_melodic_timecourse_viewer() without
+    # re-running the whole batch export.
+    main_export()
+    qt.QTimer.singleShot(0, slicer.app.quit)
