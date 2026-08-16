@@ -43,9 +43,6 @@ def flat1_workflow(
     test_run : bool, optional
         If True, cut FAST segmentation iterations to speed up prerelease
         test runs at the cost of accuracy. The default is False.
-        TODO: verify on the phantom dataset that the reduced iteration
-        counts (-I=1, -W=5, -O=1) still yield a segmentation usable by the
-        rest of the workflow before relying on this in real prerelease runs.
 
     Input Node Fields
     ----------

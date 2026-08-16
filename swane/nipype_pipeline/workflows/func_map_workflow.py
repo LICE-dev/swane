@@ -28,6 +28,7 @@ def func_map_workflow(
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Analysis for PET or ASL:
@@ -49,6 +50,9 @@ def func_map_workflow(
         FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, speed up the underlying registrations for prerelease test
+        runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -171,6 +175,7 @@ def func_map_workflow(
         is_volumetric=True,
         flirt_cost=cost,
         non_linear=False,
+        test_run=test_run,
     )
 
     smooth_2_ref = apply_registration_node(
