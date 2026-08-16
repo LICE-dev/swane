@@ -412,6 +412,7 @@ class MainWorkflow(CustomWorkflow):
             name="FLAT1",
             mni1_dir=mni1_path,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.flat1.long_name = "FLAT1 analysis"
 
