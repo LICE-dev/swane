@@ -202,9 +202,12 @@ def get_registration_node(
             if inverse:
                 inv_warp = Node(InvWarp(), name=name + "_invwarp")
                 inv_warp.ram_estimator = InvWarpRamEstimator()
-                if test_run:
-                    # Halve the inversion iterations (FSL default niter=10)
-                    inv_warp.inputs.niter = 5
+                # No test_run speedup here: nipype's InvWarp interface defines
+                # a `niter` trait (--niter=%d), but the actual FSL `invwarp`
+                # binary has no such option ("Option doesn't exist!") -- it
+                # takes no iteration-count argument at all. Setting it always
+                # crashed the node; there is no real accuracy/speed knob to
+                # cut on this tool.
                 workflow.connect(fnirt, "fieldcoeff_file", inv_warp, "warp")
                 if type(moving) == str:
                     inv_warp.inputs.ref_file = moving

@@ -218,7 +218,12 @@ LUT_CT = {
     TC.CSF_VENTRICLE: 6,
     TC.CSF_EXTRA: 6,
     TC.VENOUS_SINUS: 55,
-    TC.SKULL: 1100,
+    # Real cortical bone commonly reads 1500-1900 HU; kept comfortably above
+    # the prerelease sweep's fixed skull_threshold test value (1500, see
+    # tests/prerelease/plan.py) so that pass has real bone to segment, and
+    # comfortably below the lowest electrode_threshold (2000) so it never
+    # gets picked up as an SEEG electrode.
+    TC.SKULL: 1900,
     TC.DIPLOE: 250,
     TC.SCALP: 50,
 }
