@@ -166,6 +166,15 @@ def freesurfer_workflow(
             # postprocessing (--fast) and dropping the slower robust variant.
             synth_seg.inputs.fast = True
             synth_seg.inputs.robust = False
+            # With --fast/robust=False SynthSeg fits in less RAM; reserve the
+            # same lowered figure the prerelease gate uses
+            # (capabilities._probe_synth_ram), so a host sized for that gate can
+            # actually schedule the node instead of tripping the plugin's prerun
+            # resource check.
+            synth_seg._mem_gb = (
+                ResourceManager.synth_seg_ram_requirements()
+                * ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR
+            )
         else:
             synth_seg.inputs.robust = True
         synth_seg.inputs.use_cpu = True

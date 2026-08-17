@@ -14,6 +14,7 @@ from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.ram_estimators import *
+from swane.utils.ResourceManager import ResourceManager
 from nipype.utils.filemanip import fname_presuffix
 
 
@@ -120,6 +121,13 @@ def get_registration_node(
         else:
             mem_gb = 9
             model = "rigid"
+
+        # test_run only cuts the *nonlinear* SynthMorph work (steps=5 below), so
+        # only the joint node genuinely needs less RAM. Scale its reservation to
+        # match the lowered gate (capabilities._probe_synth_ram), or the plugin's
+        # prerun check would abort the pass on a host sized for the reduced gate.
+        if test_run and non_linear:
+            mem_gb *= ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR
 
         synth_morph_reg = Node(
             SynthMorphReg(), name=name + "_synthmorphreg", mem_gb=mem_gb

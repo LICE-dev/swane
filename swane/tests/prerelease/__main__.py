@@ -176,8 +176,15 @@ def main(argv=None) -> int:
     if args.view:
         return view_pass(args.view, work_dir, slicer_path)
 
+    # test_run (the default) lightens SynthSeg/SynthMorph, so their RAM gate is
+    # lowered to match; --full-accuracy turns both the shortcuts and the lower
+    # gate off together.
+    test_run = not args.full_accuracy
     caps = caps_mod.probe(
-        global_config=global_config, cores=args.cores, ram_gb=args.ram
+        global_config=global_config,
+        cores=args.cores,
+        ram_gb=args.ram,
+        test_run=test_run,
     )
     if args.no_cuda:
         caps.add("cuda", False, "forced off by --no-cuda")
@@ -232,7 +239,7 @@ def main(argv=None) -> int:
             resume=not args.no_resume,
             retry_failed=args.retry_failed,
             verbose=args.verbose,
-            test_run=not args.full_accuracy,
+            test_run=test_run,
         )
 
     print("")
@@ -257,7 +264,7 @@ def main(argv=None) -> int:
             "with_reconall": args.with_reconall,
             "only": args.only,
             "ground_truth": ground_truth is not None,
-            "test_run": not args.full_accuracy,
+            "test_run": test_run,
         },
     )
     json_path = report_mod.write_json(report, work_dir)
