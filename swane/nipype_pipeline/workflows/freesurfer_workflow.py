@@ -26,15 +26,24 @@ FS_DIR = "FS"
 RECONALL_TEST_ARGS = "-nuiterations 1 -norm3diters 1 -no-fix-with-ga"
 
 # Per-binary overrides for the -expert file. Moderate reductions (kept
-# deliberately conservative, "non esageriamo"): the surface steps are the
-# heaviest, mris_register above all. The synthseg line is only consulted when
-# recon-all actually runs SynthSeg internally (FS v8 synth path); it is inert
-# for the classic path, so including it unconditionally is safe.
+# deliberately conservative, "non esageriamo"). The synthseg line is only
+# consulted when recon-all actually runs SynthSeg internally (FS v8 synth
+# path); it is inert for the classic path, so including it unconditionally is
+# safe.
+#
+# NOT included: "mris_register -N 10" -- would have been the biggest lever,
+# but FreeSurfer 8.2.0's rca-surfreg (unrelated to, and not fixed by, the
+# recon-all -expert patch below) splices xopts into the mris_register command
+# BETWEEN the first positional arg and the rest (`mris_register ... lh.sphere
+# -N 10 target.tif out.reg`), and mris_register does not accept a flag there --
+# it reads "-N" itself as the target filename ("could not open template file
+# -N"). mris_inflate/mris_fix_topology/mri_synthseg all place xopts safely (all
+# flags first, or all positionals first), so only this one line is unsafe.
+# fsr-getxopts's own comments date the current xopts-merging behaviour to
+# 10/16/24, so this whole mechanism is young; re-add the line once FreeSurfer
+# fixes rca-surfreg's argument ordering (see TODO.md).
 RECONALL_TEST_EXPERT = (
-    "mris_register -N 10\n"
-    "mris_inflate -n 7\n"
-    "mris_fix_topology -niters 2\n"
-    "synthseg --fast\n"
+    "mris_inflate -n 7\n" "mris_fix_topology -niters 2\n" "synthseg --fast\n"
 )
 
 
