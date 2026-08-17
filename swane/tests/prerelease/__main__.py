@@ -104,7 +104,8 @@ def build_parser() -> argparse.ArgumentParser:
     behaviour.add_argument(
         "--retry-failed",
         action="store_true",
-        help="when resuming, re-run passes that previously failed",
+        help="deprecated no-op: previously-failed passes are now always retried "
+        "on resume (a fix may have landed since), so this is the default",
     )
     behaviour.add_argument(
         "--rebuild-phantom",
