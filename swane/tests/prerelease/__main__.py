@@ -81,6 +81,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-check results already on disk without running any workflow",
     )
+    selection.add_argument(
+        "--view",
+        metavar="PASS",
+        help="open a finished pass's results in the Slicer GUI exactly as SWANe "
+        "builds the result scene, for inspection, then exit. The scene is built "
+        "live and NOT saved (no scene.mrb), so it costs no disk; close Slicer "
+        "when done. See --list for pass names.",
+    )
 
     behaviour = parser.add_argument_group("behaviour")
     behaviour.add_argument(
@@ -164,6 +172,9 @@ def main(argv=None) -> int:
     if slicer_path:
         print("Slicer: %s" % slicer_path)
     global_config = _slicer_probe_config(slicer_path)
+
+    if args.view:
+        return view_pass(args.view, work_dir, slicer_path)
 
     caps = caps_mod.probe(
         global_config=global_config, cores=args.cores, ram_gb=args.ram
@@ -257,6 +268,46 @@ def main(argv=None) -> int:
     print("Results kept under: %s" % work_dir)
 
     return 0 if report_mod.overall_success(report) else 1
+
+
+def view_pass(pass_name: str, work_dir: str, slicer_path: str) -> int:
+    """Open a finished pass's result scene in the Slicer GUI, without saving it.
+
+    Runs the very script SWANe uses to build a subject's result scene
+    (``workers/slicer_script_result.py``) over the pass's ``results/`` folder,
+    but with a main window and ``--no-save``: the scene is assembled live for
+    inspection and nothing is written to disk, so any pass can be reviewed on
+    demand without a per-pass ``scene.mrb`` eating space. Blocks until the user
+    closes Slicer.
+    """
+    import subprocess
+
+    import swane
+
+    if not slicer_path:
+        print("No Slicer configured (pass --slicer or set it in ~/.SWANe).")
+        return 2
+    results_dir = os.path.join(work_dir, pass_name, "results")
+    if not os.path.isdir(results_dir):
+        print("No results for pass %r under %s" % (pass_name, work_dir))
+        print("Run the pass first; use --list for the pass names.")
+        return 2
+
+    script = os.path.join(
+        os.path.dirname(swane.__file__), "workers", "slicer_script_result.py"
+    )
+    # slicer_script_result.py reads its results folder from the CWD, so launch
+    # Slicer there. No --no-main-window: we want the GUI. --no-save keeps it
+    # ephemeral (and leaves the window open until the user closes it).
+    print("Building the result scene for %r in Slicer (not saved)." % pass_name)
+    print("Close Slicer when you are done inspecting.")
+    try:
+        return subprocess.call(
+            [slicer_path, "--python-script", script, "--no-save"], cwd=results_dir
+        )
+    except (OSError, FileNotFoundError) as exc:
+        print("Could not launch Slicer at %s (%s)" % (slicer_path, exc))
+        return 2
 
 
 def user_slicer_path() -> str:
