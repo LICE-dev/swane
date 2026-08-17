@@ -314,15 +314,10 @@ AXES = (
         values=_enum_values(SliceTiming, "INTERLEAVED", "DOWN"),
         needs_input=DIL.FMRI_1,
     ),
-    # The phantom pads every BOLD run with dummy volumes at both ends, so
-    # trimming has something identifiable to remove.
-    Axis(
-        name="fmri0_del_vols",
-        scope=SHAPE,
-        values=("none", "trim"),
-        needs_input=DIL.FMRI_0,
-        note="0/0 vs the phantom's actual dummy-volume counts",
-    ),
+    # Dummy-volume trimming is not an axis: it is baked into the phantom data.
+    # fmri_0 carries real padding (subject.py trims it), fmri_1 carries none
+    # (del=0 is then correct), so every pass loading both exercises "trim real
+    # padding" and "correctly declare none" at once. No del_vols toggle.
     # ---- resting-state fMRI ---------------------------------------------------
     Axis(
         name="aroma",
@@ -624,8 +619,8 @@ PASSES = (
     PassSpec(
         name="fmri_task_and_rest",
         description=(
-            "Both task runs (rArA and rArBrArB, different slice timings and "
-            "volume trimming) plus resting state with MELODIC and ICA-AROMA."
+            "Both task runs (rArA with dummy padding, rArBrArB without, "
+            "different slice timings) plus resting state with MELODIC/ICA-AROMA."
         ),
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
@@ -635,7 +630,6 @@ PASSES = (
             "fmri1_block_design": "RARB",
             "fmri0_slice_timing": "UNKNOWN",
             "fmri1_slice_timing": "INTERLEAVED",
-            "fmri0_del_vols": "trim",
             "aroma": "true",
             "melodic_dim": "0",
         },
@@ -644,7 +638,7 @@ PASSES = (
         name="fmri_alt_settings",
         description=(
             "The remaining fMRI preference values: the other slice-timing "
-            "modes, no trimming, a fixed MELODIC dimensionality, AROMA off."
+            "modes, a fixed MELODIC dimensionality, AROMA off."
         ),
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
@@ -654,7 +648,6 @@ PASSES = (
             "fmri1_block_design": "RARB",
             "fmri0_slice_timing": "UP",
             "fmri1_slice_timing": "DOWN",
-            "fmri0_del_vols": "none",
             "aroma": "false",
             "melodic_dim": "20",
         },
