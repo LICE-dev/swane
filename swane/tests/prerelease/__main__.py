@@ -102,12 +102,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="ignore previous results and run everything again",
     )
     behaviour.add_argument(
-        "--retry-failed",
-        action="store_true",
-        help="deprecated no-op: previously-failed passes are now always retried "
-        "on resume (a fix may have landed since), so this is the default",
-    )
-    behaviour.add_argument(
         "--rebuild-phantom",
         action="store_true",
         help="regenerate the phantom DICOM even if a cached copy exists",
@@ -238,7 +232,6 @@ def main(argv=None) -> int:
             ram_gb=args.ram,
             slicer_path=slicer_path,
             resume=not args.no_resume,
-            retry_failed=args.retry_failed,
             verbose=args.verbose,
             test_run=test_run,
         )

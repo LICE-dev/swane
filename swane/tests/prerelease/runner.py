@@ -231,7 +231,6 @@ def run_sweep(
     ram_gb: float,
     slicer_path: str = "",
     resume: bool = True,
-    retry_failed: bool = False,
     verbose: bool = False,
     test_run: bool = True,
     on_pass_done=None,
@@ -241,10 +240,8 @@ def run_sweep(
     Parameters
     ----------
     resume : bool
-        Reuse results already recorded in the work directory.
-    retry_failed : bool
-        With ``resume``, re-run passes that previously failed instead of
-        keeping their old result.
+        Reuse the *completed* passes already recorded in the work directory
+        (skipped and failed passes are always re-evaluated / retried).
     test_run : bool
         Tweak heavy node parameters to speed up each workflow at the cost of
         accuracy, without overriding options the user has explicitly
@@ -265,7 +262,7 @@ def run_sweep(
 
     for index, pass_item in enumerate(plan, start=1):
         previous = state.get(pass_item.name)
-        if previous and _reusable(previous, retry_failed):
+        if previous and _reusable(previous):
             result = PassResult(
                 **{k: v for k, v in previous.items() if k in PassResult.__annotations__}
             )
@@ -329,7 +326,7 @@ def run_sweep(
     return results
 
 
-def _reusable(previous: dict, retry_failed: bool) -> bool:
+def _reusable(previous: dict) -> bool:
     # Only a *completed* pass is reused on resume: it has real results worth
     # keeping. Everything else is re-evaluated against the CURRENT host and plan:
     #   * skipped -- whether it should still be skipped depends on the current
@@ -338,8 +335,8 @@ def _reusable(previous: dict, retry_failed: bool) -> bool:
     #     This is what lets the Synth passes run once the RAM budget is raised.
     #   * failed/error -- a failed pass has no valid results, and a fix may well
     #     have landed since it ran, so it is retried rather than kept failed.
-    # ``retry_failed`` is accepted for backward compatibility but no longer gates
-    # this: failures are always retried now.
+    #     nipype's per-node cache means the retry resumes from the first failed
+    #     node, so it is cheap.
     return previous.get("status") == "completed"
 
 
