@@ -330,12 +330,17 @@ def run_sweep(
 
 
 def _reusable(previous: dict, retry_failed: bool) -> bool:
-    status = previous.get("status")
-    if status in ("completed", "skipped"):
-        return True
-    if status in ("failed", "error") and not retry_failed:
-        return True
-    return False
+    # Only a *completed* pass is reused on resume: it has real results worth
+    # keeping. Everything else is re-evaluated against the CURRENT host and plan:
+    #   * skipped -- whether it should still be skipped depends on the current
+    #     capabilities/budget (more RAM, --with-reconall, ...), so an old skip is
+    #     never cached; the loop re-skips it for free if it still cannot run.
+    #     This is what lets the Synth passes run once the RAM budget is raised.
+    #   * failed/error -- a failed pass has no valid results, and a fix may well
+    #     have landed since it ran, so it is retried rather than kept failed.
+    # ``retry_failed`` is accepted for backward compatibility but no longer gates
+    # this: failures are always retried now.
+    return previous.get("status") == "completed"
 
 
 def _write_pass_result(result: PassResult) -> None:
