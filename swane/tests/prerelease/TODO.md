@@ -8,158 +8,162 @@ graph-*construction* coverage it also tracked lives in `nipype_pipeline/matrix/`
 
 ## Done
 
+### Infrastructure
 - **Capability probe** (`capabilities.py`): FSL / dcm2niix / FreeSurfer (+ Synth
-  RAM thresholds from the dependency manager) / Slicer (read from the user's
-  real `~/.SWANe`) / CUDA / XTRACT / MNI templates, plus a user-set core/RAM
-  budget for the `MonitoredMultiProcPlugin`.
+  RAM thresholds) / Slicer (from the user's real `~/.SWANe`) / CUDA / XTRACT /
+  MNI templates / `reconall_expert` (see below), plus a user-set core/RAM budget.
 - **Plan** (`plan.py`): a covering array over the same axes as the matrix,
   degrading or skipping per host capability, never silently dropping coverage.
   Guarded by `test_plan_integrity.py` in the light suite.
 - **Runner** (`runner.py`): strictly sequential, through the real
-  `WorkflowProcess`, resumable via an on-disk state file. Default work dir
-  `~/test_swane/prerelease` is persistent (survives `/tmp` cleanup / reboot).
+  `WorkflowProcess`, resumable. Reuses only *completed* passes; skipped and
+  failed passes are re-evaluated/retried on the next run (so raising `--ram`
+  runs the Synth passes, and a fix makes a failed pass retry — cheaply, since
+  nipype's per-node cache resumes from the first failed node).
 - **Checks** (`checks.py`): execution, expected outputs, integrity, reference
-  position, **linear registration goodness** (before/after COM + brain-mask
-  Dice vs the reference), **non-linear registration goodness** (warp present /
-  non-trivial + alignment of the warped subject to the real MNI/sym target read
-  at run time), DTI FA range + CST localisation, fMRI activation, venous/vein
-  localisation. Calibrated once against a real run on this box.
-- **Phantom deformation** (`helpers/phantom/deformation.py`): a fixed smooth
-  non-linear warp so FNIRT/SynthMorph have real work; the subject differs
-  non-linearly from the atlas while series stay rigid to each other.
-- **fMRI config follows the phantom**: task/rest durations and dummy trimming
-  are taken from the manifest; TR and volume count stay on auto-detect.
-- **Reporting/CLI** (`report.py`, `__main__.py`): JSON + self-contained HTML,
-  `--dry-run`, `--only`, `--checks-only`, `--with-reconall`, `--cores/--ram`.
+  position, linear/non-linear registration goodness, DTI FA + CST localisation,
+  fMRI activation, venous localisation.
+- **Phantom** (`helpers/phantom/`): fixed smooth non-linear deformation; CT bone
+  at 1900 HU (generator v6). **fMRI config follows the phantom.**
+- **Reporting/CLI** (`report.py`, `__main__.py`): JSON + HTML, `--dry-run`,
+  `--only`, `--checks-only`, `--with-reconall`, `--cores/--ram`, `--no-cuda`,
+  `--full-accuracy`, `--view PASS` (open a pass's result scene in Slicer without
+  saving a scene.mrb).
 
-Verified end to end on this box (FSL + FreeSurfer, 11.6 GB, GPU present):
-`structural_fsl`, `structural_synthstrip`, `structural_alt_settings`,
-`dti_classic`, `venous_ct_slicer`, `venous_mr_*`, `fmri_task_and_rest`.
+### Plan coverage added
+- **CPU/GPU tractography split**: `dti_tractography` (CPU baseline, always runs)
+  + `dti_tractography_gpu` (needs a GPU), so a CUDA box exercises both.
+- **Synth in every workflow that uses it** (except fMRI, which avoids synth by
+  design; venous_ct/seeg use FLIRT by design): `func_map_synthmorph`,
+  `dti_synthmorph`, `venous_mr_synth`, and `structural_synthmorph` with flat1.
+- **recon-all RAM split**: `freesurfer_reconall` (classic ~5 GB) +
+  `freesurfer_reconall_synth` (FS v8 synth ~20 GB), so a big box tests both.
+- **SYNTHSEG** gated on `synth_seg` (RAM/version), and `asl_ai`/`pet_ai=true`
+  moved to `func_map_no_freesurfer` so the asymmetry index is covered in the
+  fast sweep, not tied to a 14 GB SynthSeg pass.
+
+### test_run fixes (were crashing / hanging)
+- **FNIRT** test_run scheme was invalid (2-level lists, per-level length
+  mismatch → "Expression Syntax" abort). Fixed to a length-4 coarse schedule
+  `subsampling_scheme=[4,4,4,2]`, `max_nonlin_iter=[5,5,5,3]` (never full
+  resolution). Nonlinear target-alignment check still clears with margin
+  (Dice 0.94, NCC 0.79).
+- **InvWarp** `niter=5` removed: FSL `invwarp` has no such option (crashed every
+  inverse warp). No iteration knob exists on that tool.
+- **CustomEddy** `--nthr` removed (pre-existing bug, not test_run): recent FSL's
+  `eddy_cpu` has no `--nthr`; `OMP_NUM_THREADS` already sets the thread count.
+- **SegmentEndocranium** hang: an empty bone segment (skull_threshold above the
+  scan's max HU) made Wrap Solidify hang forever. Now fails fast with a clear
+  error and actually exits Slicer (`slicer.util.exit`). Phantom CT bone raised
+  1100→1900 HU so the fixed `skull_threshold=1500` test value has bone.
+
+### test_run RAM
+- **Synth RAM floor lowered 30% in test_run** for SynthSeg/SynthMorph only
+  (they do less work under `--fast`/`robust=False`/`steps=5`), applied to BOTH
+  the capability gate and the per-node `mem_gb` reservation together, so the
+  plugin's prerun check does not abort a pass the gate admitted. SynthStrip and
+  Synth recon-all are unchanged. Lets an ~11.6 GB box run the synth passes at
+  `--ram 10`.
+
+### FreeSurfer recon-all -expert bug (found + handled)
+Unpatched FreeSurfer 8.x `recon-all` mishandles the `-expert` path in its
+surface-registration stage (`if($XOptsFile)` instead of `if($#XOptsFile ...)`),
+aborting with "if: Expression Syntax." whenever an expert file is present (and,
+once copied into the subject's scripts dir, on later nodes too). FreeSurfer
+fixed it in `fs820_updates.sh` (mid-2026). We keep the expert speedups and
+detect the buggy build (`capabilities.reconall_expert`), gating the recon-all
+passes on it in test_run so they are skipped with an "apply the patch" message
+instead of failing hours in. `--full-accuracy` passes no expert file.
+
+### Passes verified end to end this box (FSL + patched FS 8.2.0, --ram 10)
+execution + integrity + anatomical plausibility all green: `structural_fsl`,
+`structural_alt_settings`, `structural_synthstrip`, `venous_ct_slicer`,
+`func_map_synthseg`, `func_map_no_freesurfer`, `dti_classic`,
+`fmri_task_and_rest`, `venous_mr_detection_modes`, `venous_mr_second_phase`.
+This validates the test_run cuts they exercise: FAST (`flat1`), the FNIRT
+schedule, MCFLIRT `stages=1`, SynthSeg `--fast`, CustomEddy `niter=1` (FA range).
 
 ## What is left
 
-### 1. Coverage never exercised yet
+### 1. bedpostx test_run cut breaks the left CST — TUNE (priority)
+`dti_tractography` completes but `r-cst_lh` is all-zero (waytotal 0; right is a
+thin 118). Root cause isolated this session: NOT the warp (full-res FNIRT still
+0), NOT ProbTrackX `n_samples` (full still 0), NOT the seed/FA/fibre direction
+(free tracking gives 87 000 streamlines both sides), NOT the phantom↔protocol
+geometry. It is the **BEDPOSTX5 MCMC reduction** (`n_fibres=1 n_jumps=200
+burn_in=100 sample_every=5`): re-running bedpostx at full accuracy recovers the
+left CST (waytotal 432). Find the *minimal* relaxation (bisect n_fibres / n_jumps
+/ burn_in) that recovers the left CST at least cost, and set it in
+`dti_preproc_workflow.py`.
 
-No full sweep has been run start to finish; only the passes above, one at a
-time. Still unexercised **on any box so far**:
+### 2. fMRI `del_vols=none` empties activation — DECISION
+`fmri_alt_settings` completes but both task contrasts have empty activation
+clusters. Cause: the phantom always pads dummy volumes, and `FMRIGenSpec`
+computes block onsets from volume 0 of the *used* series; with `del_vols=none`
+the dummies are not trimmed, so the whole block design is shifted and the GLM
+decorrelates. This is arguably expected for that config on this data, not a
+SWANe bug. Decide: exempt tract/activation for the `del_vols=none` pass, drop
+that pass, or give the phantom a no-dummy variant for it.
 
-- **Full run** of the whole plan in one go, and a `--with-reconall` run
-  (recon-all passes are opt-in and slow, never run).
-- **Synth family** (`structural_synthmorph`, `func_map_synthseg`, synth
-  recon-all): need ≥14–20 GB RAM; this box has 11.6, so they *skip* here. Run on
-  a bigger box to cover `synth_morph`/`synth_seg`/`synth_reconall=true`.
-- **CUDA paths** (eddy `cuda`, bedpostx/probtrackx `use_gpu` via
-  `dti_tractography`): some CUDA tools reportedly fail on this machine, so these
-  need a box with a working CUDA/FSL GPU build. Until then treat CUDA passes as
-  unverified.
+### 3. venous_ct_fixed_threshold — re-run on the fresh phantom
+The endocranium fix (fail-fast + bone 1900 HU) was never actually exercised: the
+overnight run reused stale nipype intermediates built from the old 1100 HU
+phantom (see §"phantom cache" below). Delete the pass dir and re-run with the v6
+phantom to confirm the venous-CT vein-localisation check passes with the coarse
+test_run endocranium params.
+
+### 4. Coverage still not exercised end to end
+- **Full sweep** start to finish in one go.
+- **Synth family**: now runnable at `--ram 10` (30% reduction) but not yet
+  executed — confirm `structural_synthmorph` / `func_map_synthmorph` /
+  `dti_synthmorph` / `venous_mr_synth` actually pass, and watch real RAM vs the
+  9.8 GB estimate (swap is the cushion).
+- **recon-all**: now runnable with the FS patch. Run end to end (classic and,
+  on a 20 GB box, synth), confirm usable pial/white surfaces + aparc+aseg, and
+  measure time saved vs accuracy lost — tune the expert values (`mris_register
+  -N 10` is the biggest lever; `-no-fix-with-ga` vs `mris_fix_topology -niters 2`
+  overlap, drop one if redundant).
+- **CUDA paths** (`dti_tractography_gpu`, eddy `cuda`): need a working CUDA/FSL
+  box; unverified here.
 - **hippo/amygdala labels** (`hippo_amyg_labels=true`): needs the FreeSurfer
   Matlab runtime, absent here.
-- Remaining single-axis variants not yet run: `fmri_alt_settings` (aroma off,
-  alt slice timing, `del_vols=none`), `venous_ct_fixed_threshold`,
-  `venous_mr_detection_modes`.
 
-### 2. Check gaps
+### 5. Check gaps
+- **sEEG electrode localisation**: no `seeg.*` position check yet (only presence
+  + integrity). Add one mirroring `veins.position` against the known contacts.
+- **Venous CT bilateral reconstruction**: confirm the check verifies the
+  subtract-then-sum recovers *both* sinus sides; a dropped addend must fail.
+- **CPU vs GPU equivalence**: eddy/bedpostx/probtrackx GPU output must be
+  equivalent to CPU at the contract level. Needs a GPU box.
+- **Geometry / interpolation**: assert affine/orientation/voxel size preserved
+  where a node must not transform them, and masks/labels use nearest-neighbour.
+- **Regression vs a committed baseline**: absolute thresholds catch "broken",
+  not "changed"; a diff-against-previous-run mode would catch silent numeric
+  drift between SWANe versions.
 
-- **sEEG electrode localisation**: the phantom stamps electrodes on known
-  trajectories, but there is still no `seeg.*` position check (only presence +
-  integrity). Add one, mirroring `veins.position`, against the known contacts.
-- **Venous CT bilateral reconstruction**: confirm the check actually verifies
-  the subtract-then-sum recovers *both* sinus sides (the phantom opacifies one
-  side per contrast); a dropped addend must fail.
-- **CPU vs GPU equivalence**: the `use_cuda`/`use_gpu`
-  outputs of eddy / bedpostx / probtrackx must be equivalent to the CPU path at
-  the contract level, not merely both terminate. Needs a GPU box.
-- **Geometry / interpolation**: assert affine, orientation and
-  voxel size are preserved where a node must not transform them, and that masks/
-  labels use nearest-neighbour (no interpolation-smeared labels).
-- **Regression vs a committed baseline**: the checks are
-  absolute thresholds, which catch "broken", not "changed". A mode that diffs an
-  output against a previous verified run (kept out of the repo) would catch a
-  silent numeric drift between SWANe versions — separate from clinical validity,
-  which stays a human call.
-
-### 3. Robustness / operability
-
-- **Resume** was verified once by hand (SIGINT → clean teardown, reused on
-  re-run); make it an automated test.
-- **Out-of-memory / insufficient-resources** path is recorded but has never
-  actually been triggered — force it once to confirm the sweep records and
-  continues rather than dying.
-- **Per-pass timeout**: a hung workflow currently blocks the whole sweep.
+### 6. Robustness / operability
+- **Phantom cache staleness**: nipype hashes the DICOM *directory path*, not its
+  recursive content, so regenerating the phantom (bumped `GENERATOR_VERSION`)
+  is NOT picked up by pass dirs that already exist — the stale intermediates are
+  reused and the new data never reaches the workflow. Today the only fix is to
+  delete the affected pass dir. Document, or force-invalidate on a version bump.
+- **Resume**: the reuse-only-completed logic is in; make an automated test
+  (SIGINT → clean teardown → reused on re-run).
+- **Out-of-memory / insufficient-resources** path is recorded but never actually
+  triggered — force it once to confirm the sweep records and continues.
+- **Per-pass timeout**: a hung workflow currently blocks the whole sweep (we hit
+  exactly this with the endocranium hang; the fail-fast fixed that instance, but
+  a generic timeout is still missing).
 - Review the **HTML report** on a full run for legibility.
 
-### 4. Calibration
+### 7. Calibration
+`REGISTRATION_MIN_DICE` lowered to 0.85 (SynthStrip agrees with the reference
+brainmask at ~0.88 by itself, so a correct SynthStrip registration lands ~0.89).
+The other tolerances (`FEATURE_TOLERANCE_MM`, `NONLINEAR_*`, FA bounds) were set
+from one box; confirm they hold across machines and FSL/atlas versions before
+trusting them as gates; widen only with a measured reason.
 
-Tolerances (`FEATURE_TOLERANCE_MM`, `REGISTRATION_MIN_DICE`,p
-`NONLINEAR_*`, FA bounds) were set from a single run on one box. Confirm they
-hold across machines and FSL/atlas versions before trusting them as gates;
-widen only with a measured reason.
-
-### 5. test_run speed shortcuts need validation
-
-`MainWorkflow(test_run=True)` (the sweep's default, see `--full-accuracy` to
-disable) trades accuracy for speed on several heavy nodes. Most are safe
-parameter reductions with no failure mode beyond "less accurate", but a few
-are aggressive enough that they need a specific pass on the phantom dataset
-to confirm they still produce output the rest of the pipeline can consume,
-not just faster garbage:
-
-- **FAST in `flat1_workflow`** (`-I=1 -W=5 -O=1`, FSL defaults are 4/15/4):
-  the most aggressive cut, on the segmentation step FLAT1's z-score maps
-  depend on. Not yet checked that this still yields a usable 3-class
-  segmentation on the phantom.
-- **BEDPOSTX5 MCMC** (`n_jumps=200 burn_in=100 sample_every=5`, cutting
-  ~32k iterations/voxel to ~1.1k): confirm `dti_tractography` passes still
-  produce sane `fsamples`/`phsamples`/`thsamples` and downstream ProbTrackX2
-  paths, not just that bedpostx exits zero.
-- **CustomEddy `niter=1`** (FSL default 5): confirm DTI FA range / CST
-  localisation checks still pass with eddy this undercorrected.
-- **MCFLIRT `stages=1` + trilinear** (FSL default `stages=3` + spline):
-  confirm fMRI activation checks still pass with coarser motion correction.
-- **FNIRT "strategy A"** (drop the two full-resolution pyramid levels:
-  `subsamp=[4,2] miter=[5,5] infwhm=[6,4] reffwhm=[4,2]`, FSL defaults are
-  4 levels `4,2,1,1`/`5,5,5,5`), applied everywhere `get_registration_node`
-  or a direct `FNIRT` node runs non-linear registration in `test_run`
-  (dif2ref, sym, mni1, and the resting-state `ref_2_mni_fnirt`): the
-  **non-linear registration goodness** check is calibrated against
-  full-resolution warps — confirm it still passes at coarse resolution, or
-  give it a separate `test_run` tolerance.
-- **ProbTrackX2 `n_samples` halved** (tractography_workflow): confirm
-  `dti_tractography` fdt_paths/waytotal outputs stay non-degenerate with half
-  the streamline samples.
-- **SynthSeg `--fast` + `robust=False`** (freesurfer_workflow, SYNTHSEG step):
-  confirm parcellation/segmentation checks still pass without the robust
-  variant and with postprocessing skipped.
-- **SegmentEndocranium** (`iterations=2 oversampling=1.0`, down from the SWANe
-  defaults 6 / 1.5; unconditionally overridden in test_run since these don't
-  change the workflow graph): confirm the venous CT vein localisation checks
-  still pass with the coarser endocranium mask.
-- **recon-all** (opt-in, `--with-reconall`): test_run adds top-level flags
-  `-nuiterations 1 -norm3diters 1 -no-fix-with-ga` plus an `-expert` file
-  (`mris_register -N 10`, `mris_inflate -n 7`, `mris_fix_topology -niters 2`,
-  `synthseg --fast`) shared by all three ReconAll nodes (recon2/pial use
-  `xopts=overwrite`). Never run end to end yet. To validate:
-  - confirm recon-all completes and still produces usable pial/white
-    surfaces and aparc+aseg on the phantom, at both the classic and the
-    `reconall=true` (FS v8 synth) paths — the `synthseg --fast` line only
-    bites on the latter;
-  - the chosen expert values are deliberately conservative guesses; measure
-    the actual time saved vs accuracy lost and tune. `mris_register -N` is
-    the biggest lever (default unknown/high); `-N 10` may be too high or too
-    low.
-  - `-no-fix-with-ga` and `mris_fix_topology -niters 2` overlap (niters bounds
-    the genetic search that -no-fix-with-ga partly disables); confirm the
-    combination behaves and drop one if redundant.
-  - the expert file lives at a fixed path in the system temp dir
-    (`swane_reconall_test_expert.txt`); confirm that plays well with resume
-    and with concurrent subjects (content is always identical, so shared
-    read-only use should be fine).
-
-If any of these turn out to break downstream checks on the phantom, either
-tune the value or exclude that node from `test_run` and note why here.
-
-### 6. CI / invocation
-
+### 8. CI / invocation
 The light `test_plan_integrity.py` runs in CI. The heavy sweep is local/nightly
-by nature (hours, real tools). Decide and document how it is meant to be
-launched — nightly job, release gate — and where its report is published.
+by nature (hours, real tools). Decide and document how it is launched — nightly
+job, release gate — and where its report is published.
