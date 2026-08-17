@@ -337,7 +337,14 @@ def _reusable(previous: dict) -> bool:
     #     have landed since it ran, so it is retried rather than kept failed.
     #     nipype's per-node cache means the retry resumes from the first failed
     #     node, so it is cheap.
-    return previous.get("status") == "completed"
+    if previous.get("status") != "completed":
+        return False
+    # A "completed" record is only as good as the results it points to: if the
+    # pass directory was since removed (by hand, by cleanup, ...), trusting the
+    # stale record would silently skip re-running it forever -- the same class
+    # of staleness check_pass() already applies when it can score the record.
+    subject_dir = previous.get("subject_dir")
+    return bool(subject_dir) and os.path.isdir(subject_dir)
 
 
 def _write_pass_result(result: PassResult) -> None:
