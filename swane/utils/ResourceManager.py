@@ -18,6 +18,15 @@ class ResourceManager:
     SYNTH_SEG_RAM_REQUIREMENT = {"mac": 30, "linux": 14, "other": 14}
     SYNTH_RECONALL_RAM_REQUIREMENT = {"mac": 20, "linux": 20, "other": 20}
 
+    #: In prerelease test_run mode ONLY, the SynthSeg (--fast, robust=False) and
+    #: SynthMorph (steps=5) paths do genuinely less work and use less RAM, so
+    #: both their gate (whether the host may run them) and the per-node mem_gb
+    #: reservation are scaled by this factor. SynthStrip and Synth recon-all get
+    #: no such flag, so they are NOT scaled. The application (test_run=False)
+    #: never applies this. See swane/tests/prerelease and the test_run branches
+    #: in nodes/utils.py (SynthMorphReg) and workflows/freesurfer_workflow.py.
+    TEST_RUN_SYNTH_RAM_FACTOR = 0.7
+
     @staticmethod
     def to_gb(bt: float) -> float:
         return round(bt / (1024**3), 2)
