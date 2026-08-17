@@ -364,6 +364,14 @@ def parse_arguments():
         default=97.5,
         help="Threshold for vein detection",
     )
+    parser.add_argument(
+        "--no-save",
+        dest="no_save",
+        action="store_true",
+        help="build the scene for inspection but do not write scene.mrb "
+        "(and, when run with a main window, leave Slicer open instead of "
+        "quitting). Lets results be viewed on demand without spending disk.",
+    )
     return parser.parse_args()
 
 
@@ -1302,6 +1310,9 @@ def main_export():
     load_seeg(results_folder)
     show_node(ref_node)
 
+    if args.no_save:
+        print("SLICERLOADER: Scene built (not saved: --no-save)")
+        return
     print("SLICERLOADER: Saving Slicer scene")
     slicer.util.saveScene(os.path.join(results_folder, "scene.mrb"))
 
@@ -1311,4 +1322,7 @@ if __name__ == "__main__":
     # Slicer startup) to reuse install_melodic_timecourse_viewer() without
     # re-running the whole batch export.
     main_export()
-    qt.QTimer.singleShot(0, slicer.app.quit)
+    # In --no-save (inspection) mode, leave Slicer open so the user can look at
+    # the scene and close it themselves; only auto-quit in the headless export.
+    if "--no-save" not in sys.argv:
+        qt.QTimer.singleShot(0, slicer.app.quit)
