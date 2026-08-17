@@ -130,14 +130,6 @@ The one thing left to the human is *absolute* anatomical correctness of the
 atlas registration beyond overlap and intensity agreement; everything the
 automated checks cover is graded from measured margins, not eyeballed.
 
-### Licensing
-
-The checks read **no FSL or XTRACT atlas** and reuse **no FSL code**. The tools
-are executed and their outputs inspected, which is what their licences allow.
-The phantom anatomy is derived at run time from `fsaverage`, shipped with the
-user's own FreeSurfer install; only Desikan-Killiany label *ids* (integers)
-live in the repository, and no image data is committed.
-
 ## Running it
 
 ### Requirements
