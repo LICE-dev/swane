@@ -88,7 +88,12 @@ AXES = (
             FreesurferStep, "DISABLED", "SYNTHSEG", "AUTORECON_PIAL", "RECONALL"
         ),
         gates={
-            "SYNTHSEG": "freesurfer",
+            # SynthSeg ships with the same recent-FreeSurfer "Synth" bundle as
+            # SynthStrip/SynthMorph (capabilities.py), and needs the same RAM
+            # floor as SynthMorph (14 GB linux / 30 GB mac, see
+            # ResourceManager.synth_seg_ram_requirements) -- "freesurfer" alone
+            # (just presence, >=7.3.2) does not capture either requirement.
+            "SYNTHSEG": "synth_seg",
             "AUTORECON_PIAL": "freesurfer",
             "RECONALL": "freesurfer",
         },
@@ -488,8 +493,10 @@ PASSES = (
     PassSpec(
         name="func_map_synthseg",
         description=(
-            "ASL and PET with the SynthSeg parcellation and the asymmetry "
-            "index enabled, exercising the symmetric-atlas registration."
+            "ASL and PET with the SynthSeg parcellation, to exercise the "
+            "SynthSeg segmentation path (the asymmetry index is covered "
+            "separately by func_map_no_freesurfer, since it does not depend "
+            "on the FreeSurfer step)."
         ),
         inputs=(DIL.T13D, DIL.ASL, DIL.PET),
         values={
@@ -497,20 +504,29 @@ PASSES = (
             "synth_strip": "false",
             "synth_morph": "false",
             "cuda": "false",
-            "asl_ai": "true",
-            "pet_ai": "true",
+            "asl_ai": "false",
+            "pet_ai": "false",
             "multicore_node_limit": "SOFT_CAP",
         },
     ),
+    # The asymmetry index lives here, not on func_map_synthseg: the symmetric
+    # registration it needs is built from the reference alone
+    # (MainWorkflow.ensure_sym_registration) and is independent of the
+    # FreeSurfer step, so pinning AI to the SynthSeg pass (which needs 14 GB of
+    # RAM) would leave AI untested on the default sweep of any host that cannot
+    # run SynthSeg. Here it only needs the MNI templates and runs everywhere.
     PassSpec(
         name="func_map_no_freesurfer",
-        description="ASL and PET without FreeSurfer and without the asymmetry index.",
+        description=(
+            "ASL and PET without FreeSurfer, with the asymmetry index enabled "
+            "(the symmetric-atlas registration path)."
+        ),
         inputs=(DIL.T13D, DIL.ASL, DIL.PET),
         values={
             "freesurfer_step": "DISABLED",
             "cuda": "false",
-            "asl_ai": "false",
-            "pet_ai": "false",
+            "asl_ai": "true",
+            "pet_ai": "true",
         },
     ),
     # SynthMorph coverage for the functional-map registrations: func_map_workflow
@@ -833,7 +849,12 @@ _PASS_REQUIREMENTS = {
     "dti_synthmorph": ("synth_morph", "xtract"),
     "venous_ct_slicer": ("slicer",),
     "venous_ct_fixed_threshold": ("slicer",),
-    "func_map_synthseg": ("freesurfer",),
+    # Matches the axis gate above: without synth_seg's RAM/version floor,
+    # freesurfer_step would otherwise silently downgrade SYNTHSEG->DISABLED
+    # (the first ungated axis value _safe_value finds), turning this pass into
+    # an undetected duplicate of func_map_no_freesurfer instead of being
+    # skipped with a clear reason.
+    "func_map_synthseg": ("synth_seg",),
     "dti_tractography": ("xtract",),
     # The GPU pass needs both the protocols and an actual GPU; without one it
     # would only duplicate the CPU baseline, so it is skipped there.
