@@ -36,7 +36,10 @@ from swane.tests.helpers.phantom.tissue import TissueClass as TC, build_tissue_m
 #: exercised, not only the rigid inter-series alignment.
 #: v6: CT skull HU raised 1100 -> 1900 (catalog.LUT_CT) so a fixed
 #: skull_threshold=1500 (tests/prerelease/plan.py) has real bone to segment.
-GENERATOR_VERSION = "6"
+#: v7: fmri_1 generated with no dummy volumes (catalog), so the sweep can test
+#: del_vols=0 on data that genuinely has none instead of faking "no trim" on
+#: padded data (which desynced the GLM and emptied the activation maps).
+GENERATOR_VERSION = "7"
 
 #: Default cache root; ``SWANE_PHANTOM_DIR`` overrides it.
 DEFAULT_CACHE_ROOT = os.path.join(os.path.expanduser("~"), "test_swane", "phantom")

@@ -24,7 +24,8 @@ graph-*construction* coverage it also tracked lives in `nipype_pipeline/matrix/`
   position, linear/non-linear registration goodness, DTI FA + CST localisation,
   fMRI activation, venous localisation.
 - **Phantom** (`helpers/phantom/`): fixed smooth non-linear deformation; CT bone
-  at 1900 HU (generator v6). **fMRI config follows the phantom.**
+  at 1900 HU; `fmri_0` padded with dummy volumes, `fmri_1` with none (generator
+  v7). **fMRI config follows the phantom.**
 - **Reporting/CLI** (`report.py`, `__main__.py`): JSON + HTML, `--dry-run`,
   `--only`, `--checks-only`, `--with-reconall`, `--cores/--ram`, `--no-cuda`,
   `--full-accuracy`, `--view PASS` (open a pass's result scene in Slicer without
@@ -56,6 +57,17 @@ graph-*construction* coverage it also tracked lives in `nipype_pipeline/matrix/`
   scan's max HU) made Wrap Solidify hang forever. Now fails fast with a clear
   error and actually exits Slicer (`slicer.util.exit`). Phantom CT bone raised
   1100→1900 HU so the fixed `skull_threshold=1500` test value has bone.
+
+### fMRI dummy-volume trimming
+- **Baked into the phantom instead of a `del_vols` axis toggle**: `fmri_0` is
+  generated with dummy padding (subject.py trims it), `fmri_1` with none (so
+  del=0 is the correct declaration). Every fMRI pass exercises both "trim real
+  padding" and "correctly declare none" at once. Replaces the old
+  `fmri0_del_vols=none` config, which asked the workflow not to trim padding the
+  data still had — desyncing the GLM and emptying the activation maps. Removed
+  the `fmri0_del_vols` axis; `subject.py` now always uses the manifest's real
+  per-series dummy counts. (Resting state was never trimmed and never will be —
+  MELODIC is data-driven, not onset-locked — so it is unaffected.)
 
 ### test_run RAM
 - **Synth RAM floor lowered 30% in test_run** for SynthSeg/SynthMorph only
@@ -111,23 +123,14 @@ left CST (waytotal 432). Find the *minimal* relaxation (bisect n_fibres / n_jump
 / burn_in) that recovers the left CST at least cost, and set it in
 `dti_preproc_workflow.py`.
 
-### 2. fMRI `del_vols=none` empties activation — DECISION
-`fmri_alt_settings` completes but both task contrasts have empty activation
-clusters. Cause: the phantom always pads dummy volumes, and `FMRIGenSpec`
-computes block onsets from volume 0 of the *used* series; with `del_vols=none`
-the dummies are not trimmed, so the whole block design is shifted and the GLM
-decorrelates. This is arguably expected for that config on this data, not a
-SWANe bug. Decide: exempt tract/activation for the `del_vols=none` pass, drop
-that pass, or give the phantom a no-dummy variant for it.
-
-### 3. venous_ct_fixed_threshold — re-run on the fresh phantom
+### 2. venous_ct_fixed_threshold — re-run on the fresh phantom
 The endocranium fix (fail-fast + bone 1900 HU) was never actually exercised: the
 overnight run reused stale nipype intermediates built from the old 1100 HU
 phantom (see §"phantom cache" below). Delete the pass dir and re-run with the v6
 phantom to confirm the venous-CT vein-localisation check passes with the coarse
 test_run endocranium params.
 
-### 4. Coverage still not exercised end to end
+### 3. Coverage still not exercised end to end
 - **Full sweep** start to finish in one go.
 - **Synth family**: now runnable at `--ram 10` (30% reduction) but not yet
   executed — confirm `structural_synthmorph` / `func_map_synthmorph` /
@@ -143,7 +146,7 @@ test_run endocranium params.
 - **hippo/amygdala labels** (`hippo_amyg_labels=true`): needs the FreeSurfer
   Matlab runtime, absent here.
 
-### 5. Check gaps
+### 4. Check gaps
 - **sEEG electrode localisation**: no `seeg.*` position check yet (only presence
   + integrity). Add one mirroring `veins.position` against the known contacts.
 - **Venous CT bilateral reconstruction**: confirm the check verifies the
@@ -156,7 +159,7 @@ test_run endocranium params.
   not "changed"; a diff-against-previous-run mode would catch silent numeric
   drift between SWANe versions.
 
-### 6. Robustness / operability
+### 5. Robustness / operability
 - **Phantom cache staleness**: nipype hashes the DICOM *directory path*, not its
   recursive content, so regenerating the phantom (bumped `GENERATOR_VERSION`)
   is NOT picked up by pass dirs that already exist — the stale intermediates are
@@ -171,14 +174,14 @@ test_run endocranium params.
   a generic timeout is still missing).
 - Review the **HTML report** on a full run for legibility.
 
-### 7. Calibration
+### 6. Calibration
 `REGISTRATION_MIN_DICE` lowered to 0.85 (SynthStrip agrees with the reference
 brainmask at ~0.88 by itself, so a correct SynthStrip registration lands ~0.89).
 The other tolerances (`FEATURE_TOLERANCE_MM`, `NONLINEAR_*`, FA bounds) were set
 from one box; confirm they hold across machines and FSL/atlas versions before
 trusting them as gates; widen only with a measured reason.
 
-### 8. CI / invocation
+### 7. CI / invocation
 The light `test_plan_integrity.py` runs in CI. The heavy sweep is local/nightly
 by nature (hours, real tools). Decide and document how it is launched — nightly
 job, release gate — and where its report is published.

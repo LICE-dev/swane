@@ -622,8 +622,16 @@ def build_catalog(profile) -> list:
     # --- task fMRI: two motor runs with the two SWANe block designs ---------
     # Activation is contralateral: condition A is a right-hand task -> left
     # precentral cortex; condition B is a left-hand task -> right precentral.
-    #   fmri_0: rArA      - single condition (A = right hand)
-    #   fmri_1: rArBrArB  - A (right hand) alternating with B (left hand)
+    #   fmri_0: rArA      - single condition (A = right hand), WITH dummy
+    #     volumes -- the real-world case a scanner leaves in, needing trim.
+    #   fmri_1: rArBrArB  - A (right hand) alternating with B (left hand), with
+    #     NO dummy volumes -- the real-world case where there is nothing to
+    #     trim, so del_start_vols=del_end_vols=0 is the CORRECT declaration,
+    #     not a lie. Fixed, not toggled per pass: every pass that loads both
+    #     series exercises trimming real padding (fmri_0) and correctly
+    #     declaring none (fmri_1) at once, rather than needing a separate
+    #     "no trim" pass with padding it must then pretend isn't there (that
+    #     mismatch used to desync the GLM and empty the activation maps).
     # FMRI_2 stays empty: the exam has two task runs by design.
     def _bold_spec(name):
         return SequenceSpec(
@@ -668,20 +676,22 @@ def build_catalog(profile) -> list:
         SeriesEntry(
             input_name="fmri_1",
             series_number=19,
-            description="Task fMRI motor rArBrArB phantom",
+            description="Task fMRI motor rArBrArB phantom (no dummy volumes)",
             pose=_misalign((1.0, -0.9, 1.2), (1.3, -1.4, 1.1)),
             kind="bold",
             tr_s=profile.bold_tr_s,
             te_ms=30.0,
             scanning_sequence="EP",
             image_type=("ORIGINAL", "PRIMARY", "M", "NONE"),
-            n_vols=d_start + profile.bold_task_dual_core_vols + d_end,
+            # No dummy padding on this run (see comment above): the block design
+            # starts at volume 0, so del_start_vols=del_end_vols=0 is correct.
+            n_vols=profile.bold_task_dual_core_vols,
             design=TaskDesign(
                 paradigm="RARBRARB",
                 task_s=task_s,
                 rest_s=rest_s,
-                dummy_start=d_start,
-                dummy_end=d_end,
+                dummy_start=0,
+                dummy_end=0,
             ),
             spec=_bold_spec("fmri_1"),
         )

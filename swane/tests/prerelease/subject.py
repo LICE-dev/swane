@@ -197,11 +197,11 @@ def _configure_fmri(pass_item, subject_config, exam, wiring) -> None:
     purpose -- reading them back correctly from the DICOM is itself part of what
     the workflow must get right, so pinning them would hide a real regression.
 
-    The ``fmri0_del_vols`` axis can still force *no* trimming ("none") to
-    exercise that path deliberately; otherwise the phantom's real padding is
-    removed.
+    Each task series is told exactly how many dummy volumes it actually has
+    (from the manifest): ``fmri_0`` carries real padding to trim, ``fmri_1`` has
+    none (del=0 is then the correct declaration). Both scenarios are exercised
+    together, so no separate "no trim" pass is needed.
     """
-    trim = pass_item.values.get("fmri0_del_vols") != "none"
     task_s = exam.fmri_task_seconds()
     rest_s = exam.fmri_rest_seconds()
     for data_input in (DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_2):
@@ -212,7 +212,7 @@ def _configure_fmri(pass_item, subject_config, exam, wiring) -> None:
             section["task_duration"] = str(task_s)
         if rest_s:
             section["rest_duration"] = str(rest_s)
-        start, end = exam.dummy_volumes(str(data_input)) if trim else (0, 0)
+        start, end = exam.dummy_volumes(str(data_input))
         section["del_start_vols"] = str(start)
         section["del_end_vols"] = str(end)
 
