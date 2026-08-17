@@ -65,7 +65,7 @@ graph-*construction* coverage it also tracked lives in `nipype_pipeline/matrix/`
   Synth recon-all are unchanged. Lets an ~11.6 GB box run the synth passes at
   `--ram 10`.
 
-### FreeSurfer recon-all -expert bug (found + handled)
+### FreeSurfer recon-all -expert bugs (two found; one patched, one worked around)
 Unpatched FreeSurfer 8.x `recon-all` mishandles the `-expert` path in its
 surface-registration stage (`if($XOptsFile)` instead of `if($#XOptsFile ...)`),
 aborting with "if: Expression Syntax." whenever an expert file is present (and,
@@ -73,7 +73,22 @@ once copied into the subject's scripts dir, on later nodes too). FreeSurfer
 fixed it in `fs820_updates.sh` (mid-2026). We keep the expert speedups and
 detect the buggy build (`capabilities.reconall_expert`), gating the recon-all
 passes on it in test_run so they are skipped with an "apply the patch" message
-instead of failing hours in. `--full-accuracy` passes no expert file.
+instead of failing hours in. `--full-accuracy` passes no expert file. Confirmed
+on this box: unpatched -> skipped with the message; patched -> passes run.
+
+After patching, a **second, separate, still-unpatched** bug surfaced:
+`rca-surfreg` (untouched by `fs820_updates.sh`, last modified 3/24 vs
+`recon-all`'s 3/29) splices the `mris_register` xopts override BETWEEN the
+first positional arg and the rest (`mris_register ... lh.sphere -N 10
+target.tif out.reg`), which `mris_register` cannot parse -- it reads "-N"
+itself as the target filename. `mris_inflate`/`mris_fix_topology`/`mri_synthseg`
+all place their xopts safely elsewhere in the command, so only the
+`mris_register -N 10` line is affected. Dropped it from
+`RECONALL_TEST_EXPERT` in `freesurfer_workflow.py` (kept the other three
+lines). **Re-add `"mris_register -N 10\n"` once FreeSurfer fixes rca-surfreg's
+argument ordering** -- it was the single biggest speed lever for the surface
+steps. (`fsr-getxopts`'s own comments date the current xopts-merging behaviour
+to 10/16/24, so this whole mechanism is young -- expect more rough edges.)
 
 ### Passes verified end to end this box (FSL + patched FS 8.2.0, --ram 10)
 execution + integrity + anatomical plausibility all green: `structural_fsl`,
