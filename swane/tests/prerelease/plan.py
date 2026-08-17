@@ -840,7 +840,8 @@ def build_plan(caps, with_reconall: bool = False, only=None) -> list:
     return resolved
 
 
-#: Passes that only make sense when a given capability is present.
+#: Passes that only make sense when a given capability is present. Public so the
+#: plan-integrity test can grant every gating capability to its "capable host".
 _PASS_REQUIREMENTS = {
     "structural_synthstrip": ("synth_strip",),
     "structural_synthmorph": ("synth_morph",),
@@ -859,11 +860,15 @@ _PASS_REQUIREMENTS = {
     # The GPU pass needs both the protocols and an actual GPU; without one it
     # would only duplicate the CPU baseline, so it is skipped there.
     "dti_tractography_gpu": ("xtract", "cuda"),
-    "freesurfer_autorecon_pial": ("freesurfer",),
-    "freesurfer_reconall": ("freesurfer",),
+    # recon-all passes lean on an -expert file in test_run, which an unpatched
+    # FS 8.x recon-all crashes on (reconall_expert capability, false only on the
+    # buggy build in test_run) -- gate them so they are skipped with a clear
+    # "apply the patch" reason instead of failing hours in.
+    "freesurfer_autorecon_pial": ("freesurfer", "reconall_expert"),
+    "freesurfer_reconall": ("freesurfer", "reconall_expert"),
     # The synth recon-all needs its ~20 GB RAM floor; without it the classic
     # freesurfer_reconall pass already covers recon-all, so skip this one.
-    "freesurfer_reconall_synth": ("synth_reconall",),
+    "freesurfer_reconall_synth": ("synth_reconall", "reconall_expert"),
 }
 
 
