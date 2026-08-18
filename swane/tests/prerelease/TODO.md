@@ -136,38 +136,48 @@ wait on. Verified both `AUTORECON_PIAL` and `RECONALL` build correctly (no
 `NameError` when stopping at the earlier step). `SegmentHA` (hippo/amygdala)
 was already wired correctly from `recon_all_recon_pial`, unaffected.
 
-### Passes verified end to end this box (FSL + patched FS 8.2.0, --ram 10)
-execution + integrity + anatomical plausibility all green: `structural_fsl`,
-`structural_alt_settings`, `structural_synthstrip`, `venous_ct_slicer`,
-`func_map_synthseg`, `func_map_no_freesurfer`, `dti_classic`,
-`fmri_task_and_rest`, `venous_mr_detection_modes`, `venous_mr_second_phase`.
-This validates the test_run cuts they exercise: FAST (`flat1`), the FNIRT
-schedule, MCFLIRT `stages=1`, SynthSeg `--fast`, CustomEddy `niter=1` (FA range).
+### Full sweep run start to finish, --checks-only confirmed (--ram 10, --with-reconall)
+First complete run of the whole plan in one go, overnight (19 run, 2 skipped
+[CUDA / synth recon-all, both need hardware this box lacks], 6h00m). A
+`--checks-only` pass (execution + integrity + full anatomical plausibility,
+ground truth rebuilt) came back green for **16 of 19** passes: `structural_fsl`,
+`structural_alt_settings`, `structural_synthstrip`, `structural_synthmorph`,
+`venous_ct_slicer`, `venous_ct_fixed_threshold`, `func_map_synthseg`,
+`func_map_no_freesurfer`, `func_map_synthmorph`, `dti_classic`,
+`fmri_task_and_rest`, `fmri_alt_settings`, `venous_mr_detection_modes`,
+`venous_mr_second_phase`, `venous_mr_synth`, `freesurfer_autorecon_pial`. This
+is the first full-checks confirmation of: the Synth family end to end, the
+`mris_register` recon-all fix, the SegmentEndocranium fix (on the regenerated
+v7 phantom), and -- notably -- **the fMRI `del_vols` fix**: both
+`fmri_task_and_rest` and `fmri_alt_settings` show no activation errors, so
+`fmri_1`'s no-dummy-padding redesign is confirmed working, not just
+theoretically sound.
+
+The remaining 3 all have an **already-committed** fix that landed after this
+run's process had imported the old code, so they only show pre-fix symptoms:
+- `dti_tractography`, `dti_synthmorph`: `integrity.r-cst_lh` constant zero --
+  the BEDPOSTX `n_fibres=1` bug, fixed to `n_fibres=2` (see above).
+- `freesurfer_reconall`: `asl_surf_lh/rh`, `pet_surf_lh/rh` node failures --
+  the ASL/PET race condition, fixed (see above).
 
 ## What is left
 
-### 1. venous_ct_fixed_threshold — re-run on the fresh phantom
-The endocranium fix (fail-fast + bone 1900 HU) was never actually exercised: the
-overnight run reused stale nipype intermediates built from the old 1100 HU
-phantom (see §"phantom cache" below). Delete the pass dir and re-run with the v6
-phantom to confirm the venous-CT vein-localisation check passes with the coarse
-test_run endocranium params.
+### 1. Re-run to confirm this session's fixes (cheap: nipype resumes from the
+first changed/failed node, not a full re-run)
+- `freesurfer_reconall` -- ASL/PET race-condition fix.
+- `dti_tractography`, `dti_synthmorph` -- BEDPOSTX `n_fibres=2` fix (left CST).
 
 ### 2. Coverage still not exercised end to end
-- **Full sweep** start to finish in one go.
-- **Synth family**: now runnable at `--ram 10` (30% reduction) but not yet
-  executed — confirm `structural_synthmorph` / `func_map_synthmorph` /
-  `dti_synthmorph` / `venous_mr_synth` actually pass, and watch real RAM vs the
-  9.8 GB estimate (swap is the cushion).
-- **recon-all**: now runnable with the FS patch. Run end to end (classic and,
-  on a 20 GB box, synth), confirm usable pial/white surfaces + aparc+aseg, and
-  measure time saved vs accuracy lost — tune the expert values (`mris_register
-  -N 10` is the biggest lever; `-no-fix-with-ga` vs `mris_fix_topology -niters 2`
-  overlap, drop one if redundant).
+- **recon-all on a 20 GB box**: `freesurfer_reconall_synth` (FS v8 synth path)
+  still needs a bigger box than this one.
 - **CUDA paths** (`dti_tractography_gpu`, eddy `cuda`): need a working CUDA/FSL
   box; unverified here.
 - **hippo/amygdala labels** (`hippo_amyg_labels=true`): needs the FreeSurfer
   Matlab runtime, absent here.
+- Once `freesurfer_reconall` passes cleanly: confirm usable pial/white
+  surfaces + aparc+aseg, and measure time saved vs accuracy lost on the expert
+  values (`-no-fix-with-ga` vs `mris_fix_topology -niters 2` overlap, drop one
+  if redundant).
 
 ### 3. Check gaps
 - **sEEG electrode localisation**: no `seeg.*` position check yet (only presence
