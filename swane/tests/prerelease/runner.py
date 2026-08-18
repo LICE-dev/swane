@@ -101,6 +101,16 @@ class _Finished(Exception):
     """Internal signal: the workflow process reported WORKFLOW_STOP."""
 
 
+class _TimedOut(Exception):
+    """Internal signal: the pass exceeded its wall-clock budget."""
+
+
+#: Default per-pass wall-clock budget: generous enough for a full-accuracy
+#: recon-all pass, tight enough that a hung node (see the SegmentEndocranium
+#: hang this once caught) does not block the rest of the sweep overnight.
+DEFAULT_TIMEOUT_SECONDS = 3 * 3600
+
+
 def run_pass(
     pass_item,
     exam,
@@ -110,8 +120,16 @@ def run_pass(
     slicer_path: str = "",
     verbose: bool = False,
     test_run: bool = True,
+    timeout_seconds: float | None = DEFAULT_TIMEOUT_SECONDS,
 ) -> PassResult:
-    """Build and execute one pass, returning its result."""
+    """Build and execute one pass, returning its result.
+
+    Parameters
+    ----------
+    timeout_seconds : float, optional
+        Kill the pass and record it as failed if it runs longer than this
+        (wall clock, from process start). ``None`` disables the timeout.
+    """
     from swane.nipype_pipeline.MainWorkflow import MainWorkflow
 
     result = PassResult(
@@ -170,6 +188,24 @@ def run_pass(
             if not process.is_alive():
                 # The process died without sending WORKFLOW_STOP.
                 break
+            if (
+                timeout_seconds is not None
+                and time.time() - started > timeout_seconds
+            ):
+                raise _TimedOut
+    except _TimedOut:
+        result.status = "error"
+        result.reason = "timed out after %s (limit %s); the workflow was killed" % (
+            _human_time(time.time() - started),
+            _human_time(timeout_seconds),
+        )
+        print("      ! TIMED OUT after %s" % _human_time(timeout_seconds), flush=True)
+        process.stop_event.set()
+        process.join(timeout=30)
+        if process.is_alive():
+            process.terminate()
+        result.seconds = time.time() - started
+        return result
     except KeyboardInterrupt:
         result.status = "error"
         result.reason = "interrupted by the user"
@@ -233,6 +269,7 @@ def run_sweep(
     resume: bool = True,
     verbose: bool = False,
     test_run: bool = True,
+    timeout_seconds: float | None = DEFAULT_TIMEOUT_SECONDS,
     on_pass_done=None,
 ) -> list:
     """Run every planned pass in order, persisting progress as it goes.
@@ -247,6 +284,10 @@ def run_sweep(
         accuracy, without overriding options the user has explicitly
         configured. Defaults to True since this sweep exists to be fast; pass
         False for full-accuracy passes.
+    timeout_seconds : float, optional
+        Per-pass wall-clock budget passed through to :func:`run_pass`; a pass
+        that exceeds it is killed and recorded as failed rather than blocking
+        the rest of the sweep. ``None`` disables it.
     on_pass_done : callable, optional
         Invoked with each :class:`PassResult` as soon as it is available, so a
         caller can report progress without waiting for the whole sweep.
@@ -262,7 +303,7 @@ def run_sweep(
 
     for index, pass_item in enumerate(plan, start=1):
         previous = state.get(pass_item.name)
-        if previous and _reusable(previous):
+        if previous and _reusable(previous, pass_item):
             result = PassResult(
                 **{k: v for k, v in previous.items() if k in PassResult.__annotations__}
             )
@@ -303,6 +344,7 @@ def run_sweep(
                 slicer_path=slicer_path,
                 verbose=verbose,
                 test_run=test_run,
+                timeout_seconds=timeout_seconds,
             )
             print(
                 "         -> %s in %s (%d/%d nodes)"
@@ -326,7 +368,7 @@ def run_sweep(
     return results
 
 
-def _reusable(previous: dict) -> bool:
+def _reusable(previous: dict, pass_item) -> bool:
     # Only a *completed* pass is reused on resume: it has real results worth
     # keeping. Everything else is re-evaluated against the CURRENT host and plan:
     #   * skipped -- whether it should still be skipped depends on the current
@@ -344,7 +386,18 @@ def _reusable(previous: dict) -> bool:
     # stale record would silently skip re-running it forever -- the same class
     # of staleness check_pass() already applies when it can score the record.
     subject_dir = previous.get("subject_dir")
-    return bool(subject_dir) and os.path.isdir(subject_dir)
+    if not subject_dir or not os.path.isdir(subject_dir):
+        return False
+    # A capability the plan gates on can appear or disappear between runs (the
+    # Matlab runtime installed, more RAM, a GPU added/removed, ...), which
+    # changes what build_plan() resolves this pass's axis values to (e.g.
+    # hippo_amyg_labels false->true once freesurfer_matlab shows up). A
+    # "completed" record from before that still reflects the OLD, downgraded
+    # values, so blindly reusing it would silently keep the pass permanently
+    # degraded even after the missing requirement is fixed. Re-run instead:
+    # nipype's per-node cache in the same subject_dir means only the nodes
+    # whose inputs actually changed (e.g. SegmentHA) run again.
+    return previous.get("values") == dict(pass_item.values)
 
 
 def _write_pass_result(result: PassResult) -> None:

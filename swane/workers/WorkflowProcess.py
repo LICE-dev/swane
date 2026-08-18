@@ -76,7 +76,7 @@ class WorkflowProcess(Process):
         if self.workflow.max_cpu > 0:
             plugin_args["n_procs"] = self.workflow.max_cpu
         if self.workflow.max_gpu > 0:
-            plugin_args["n_gpu_proc"] = self.workflow.max_gpu
+            plugin_args["n_gpu_procs"] = self.workflow.max_gpu
 
         # Assign to niype specified RAM
         plugin_args["memory_gb"] = self.workflow.memory_gb

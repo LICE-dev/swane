@@ -77,3 +77,16 @@ Results live under `~/test_swane/phantom/phantom_<key>/` (override with
 `$SWANE_PHANTOM_DIR`). The `<key>` hashes the generator version, the
 `PhantomProfile`, and the `fsaverage` build, so retuning any parameter
 transparently invalidates the cache. Pass `force=True` to rebuild.
+
+**Always bump `GENERATOR_VERSION`** in `dataset.py` when the generated data
+changes, even for changes that don't touch `PhantomProfile`. The prerelease
+sweep's own pass directories (`~/test_swane/prerelease/<pass>/`, see
+`tests/prerelease/`) are nipype working directories whose node caching keys
+off the **DICOM directory path string**, not its recursive content. A version
+bump changes `<key>` and therefore the phantom's path, so an existing pass
+directory correctly sees a new input and reconverts. Without the bump, the
+phantom path stays the same, its on-disk content silently changes underneath
+it, and any prerelease pass directory that already ran keeps reusing its
+stale converted intermediates — the new phantom data never reaches the
+workflow. If that happens, the only fix today is to delete the affected pass
+directory under `~/test_swane/prerelease/` and let it rerun.

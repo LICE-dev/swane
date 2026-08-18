@@ -30,7 +30,11 @@ from swane.tests.helpers.phantom.sequences import (
 )
 from swane.tests.helpers.phantom.tissue import TissueClass as TC, build_tissue_model
 
-#: Bump when the generated data changes in a way tests must notice.
+#: Bump when the generated data changes in a way tests must notice -- always,
+#: even for changes that don't touch PhantomProfile. The prerelease sweep's
+#: pass directories cache nipype nodes by DICOM directory *path*, not content
+#: (see the "Caching" section of README.md); skipping the bump leaves those
+#: pass directories silently reusing stale converted data.
 #: v5: anatomy carries a fixed smooth non-linear deformation (deformation.py)
 #: so the subject differs non-linearly from the atlas and FNIRT/SynthMorph are
 #: exercised, not only the rigid inter-series alignment.
