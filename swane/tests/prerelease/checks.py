@@ -88,17 +88,37 @@ class GroundTruth:
         )
 
         model = build_tissue_model(freesurfer_home)
+        sinus = model.labels == TC.VENOUS_SINUS
+        # Same hemisphere split the phantom generator itself uses to opacify
+        # venous_ct2/venous_ct3 one side each (world x > 0 = right; see
+        # helpers/phantom/sequences.py:_apply_side_override), so the L/R
+        # ground truth matches how the phantom was actually built.
+        world_x = _world_x_ras(sinus.shape, model.affine)
         centres = {}
         for name, mask in (
             ("brain", np.isin(model.labels, [TC.CORTICAL_GM, TC.DEEP_GM, TC.WM])),
             ("precentral", model.precentral),
             ("cst", model.cst),
-            ("venous_sinus", model.labels == TC.VENOUS_SINUS),
+            ("venous_sinus", sinus),
+            ("venous_sinus_L", sinus & (world_x < 0)),
+            ("venous_sinus_R", sinus & (world_x > 0)),
         ):
             centre = _centre_of_mass_ras(np.asarray(mask, dtype=float), model.affine)
             if centre is not None:
                 centres[name] = centre
         return cls(centres=centres)
+
+
+def _world_x_ras(shape, affine: np.ndarray) -> np.ndarray:
+    """World-space RAS x coordinate of every voxel of ``shape``, given ``affine``.
+
+    Computed from ``affine`` rather than assumed from array layout, so it is
+    correct whatever the grid's orientation -- in particular for a *result*
+    image that has been resampled onto the reference/T1 grid by registration,
+    whose axis order/direction need not match the phantom's native grid.
+    """
+    ii, jj, kk = np.indices(shape, dtype=np.float32)
+    return affine[0, 0] * ii + affine[0, 1] * jj + affine[0, 2] * kk + affine[0, 3]
 
 
 def _centre_of_mass_ras(weights: np.ndarray, affine: np.ndarray):
@@ -130,6 +150,19 @@ def _find_results(subject_dir: str) -> list:
     for pattern in ("*.nii.gz", "*.nii", "*.mgz"):
         found.extend(glob.glob(os.path.join(root, "**", pattern), recursive=True))
     return sorted(found)
+
+
+def _find_waytotal_files(subject_dir: str) -> list:
+    """Extensionless ``r-<tract>_<side>_waytotal`` companion files.
+
+    These sit next to the tract density map (see ``SumMultiTracks.py``) but
+    have no suffix, so :func:`_find_results`' image-extension glob never
+    picks them up -- they need their own pattern.
+    """
+    root = _results_root(subject_dir)
+    if not os.path.isdir(root):
+        return []
+    return sorted(glob.glob(os.path.join(root, "**", "*_waytotal"), recursive=True))
 
 
 #: Per input, a substring that must appear in at least one result file name.
@@ -212,6 +245,104 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
     checks.extend(_check_nonlinear_target_alignment(result))
     if ground_truth is not None:
         checks.extend(_check_plausibility(result, files, ground_truth))
+    return checks
+
+
+#: How far a GPU tractography waytotal may relatively differ from its CPU
+#: counterpart before flagging. Measured on one box (test_run, coarse MCMC):
+#: cst_lh differed 2%, cst_rh 25% between the CPU and GPU bedpostx/probtrackx
+#: paths -- real MCMC-sampling and FSL-implementation variance, not a bug --
+#: so this is set generous on purpose.
+GPU_WAYTOTAL_REL_TOLERANCE = 0.6
+
+#: Same idea for the tract density maps themselves, compared as "any positive
+#: voxel" masks (a streamline visited here at all). Measured whole-tract Dice
+#: was ~0.68 on both CST sides on that same box.
+GPU_TRACT_DICE_MIN = 0.4
+
+
+def check_cpu_gpu_equivalence(cpu_result, gpu_result) -> list:
+    """Cross-check a CUDA tractography pass against its CPU counterpart.
+
+    ``dti_tractography`` (CPU) and ``dti_tractography_gpu`` (CUDA) run the
+    same eddy/bedpostx/probtrackx pipeline over the identical phantom exam;
+    only the compute backend differs. Both passing their own checks
+    independently (the ``_check_*`` functions above) only says each is
+    internally plausible -- it does not say the two backends *agree* with
+    each other, which is the actual equivalence claim a GPU box needs to
+    hold. Compares every ``*_waytotal`` count file and its paired tract
+    density map present under both results directories.
+
+    WARNING severity throughout, deliberately: bedpostx's MCMC sampling is
+    stochastic and the CPU/GPU FSL implementations are not bit-identical, so
+    some divergence is expected. This flags a real behavioural gap for a
+    human to read, it does not gate the sweep on natural sampling variance.
+    """
+    if cpu_result.status != "completed" or gpu_result.status != "completed":
+        return []
+    cpu_images = {os.path.basename(p): p for p in _find_results(cpu_result.subject_dir)}
+    gpu_images = {os.path.basename(p): p for p in _find_results(gpu_result.subject_dir)}
+    cpu_files = {
+        os.path.basename(p): p for p in _find_waytotal_files(cpu_result.subject_dir)
+    }
+    gpu_files = {
+        os.path.basename(p): p for p in _find_waytotal_files(gpu_result.subject_dir)
+    }
+
+    checks = []
+    for name in sorted(cpu_files):
+        if name not in gpu_files:
+            continue
+        tract = name[: -len("_waytotal")]
+
+        try:
+            with open(cpu_files[name]) as handle:
+                cpu_total = int(handle.read().strip())
+            with open(gpu_files[name]) as handle:
+                gpu_total = int(handle.read().strip())
+        except (OSError, ValueError):
+            continue
+        rel_diff = abs(cpu_total - gpu_total) / max(cpu_total, gpu_total, 1)
+        checks.append(
+            CheckResult(
+                "gpu_equivalence.%s.waytotal" % tract,
+                rel_diff <= GPU_WAYTOTAL_REL_TOLERANCE,
+                "CPU %d vs GPU %d (%.0f%% relative difference)"
+                % (cpu_total, gpu_total, 100 * rel_diff),
+                severity=WARNING,
+            )
+        )
+
+        mask_name = tract + ".nii.gz"
+        if mask_name not in cpu_images or mask_name not in gpu_images:
+            continue
+        cpu_img, cpu_data = _load(cpu_images[mask_name])
+        gpu_img, gpu_data = _load(gpu_images[mask_name])
+        if cpu_data.shape != gpu_data.shape:
+            checks.append(
+                CheckResult(
+                    "gpu_equivalence.%s.dice" % tract,
+                    False,
+                    "CPU/GPU tract maps have different shapes (%s vs %s)"
+                    % (cpu_data.shape, gpu_data.shape),
+                    severity=WARNING,
+                )
+            )
+            continue
+        cpu_mask = cpu_data > 0
+        gpu_mask = gpu_data > 0
+        union = int(cpu_mask.sum() + gpu_mask.sum())
+        if union == 0:
+            continue  # both empty: already flagged by the pass's own checks
+        dice = 2.0 * int(np.logical_and(cpu_mask, gpu_mask).sum()) / union
+        checks.append(
+            CheckResult(
+                "gpu_equivalence.%s.dice" % tract,
+                dice >= GPU_TRACT_DICE_MIN,
+                "Dice %.2f between the CPU and GPU tract maps" % dice,
+                severity=WARNING,
+            )
+        )
     return checks
 
 
@@ -648,6 +779,7 @@ def _check_plausibility(result, files: list, truth: GroundTruth) -> list:
     checks.extend(_check_registration(result, files, centre))
     checks.extend(_check_fa(files, truth))
     checks.extend(_check_feature(files, truth, "veins", "venous_sinus"))
+    checks.extend(_check_venous_ct_bilateral(result, files, truth))
     return checks
 
 
@@ -888,6 +1020,58 @@ def _check_feature(files: list, truth: GroundTruth, token: str, truth_key: str) 
                     )
                 )
         break
+    return checks
+
+
+def _check_venous_ct_bilateral(result, files: list, truth: GroundTruth) -> list:
+    """The venous CT reconstruction must recover BOTH opacified sinus sides.
+
+    The workflow sums a non-contrast baseline (``venous_ct``) with two
+    one-sided contrast acquisitions -- ``venous_ct2`` opacifies the right
+    dural sinuses, ``venous_ct3`` the left (see
+    ``helpers/phantom/catalog.py``) -- so a correct reconstruction is
+    opacified on both sides. A bug that drops one addend collapses the result
+    to one-sided opacification, which the combined centre-of-mass check in
+    ``_check_feature`` can miss: losing one side only nudges the overall
+    centroid, it does not zero it out. So check each hemisphere's voxel count
+    directly instead of just the combined centroid.
+
+    Reads the FINAL registered result (filename starting with ``r-``, same
+    convention as ``reference.registered_share_grid``) -- the one actually
+    resampled onto the reference/T1 grid SWANe hands to the user -- and uses
+    THAT image's own affine to decide world x sign, not the phantom's native
+    grid, so this is correct regardless of how registration reoriented the
+    data.
+    """
+    if "venous_ct" not in result.inputs:
+        return []
+    if "venous_sinus_L" not in truth.centres or "venous_sinus_R" not in truth.centres:
+        return []
+    candidates = [
+        p
+        for p in files
+        if os.path.basename(p).lower().startswith("r-")
+        and "vein" in os.path.basename(p).lower()
+    ]
+    if not candidates:
+        return []
+
+    img, data = _load(candidates[0])
+    positive = data > (np.nanmax(data) * 0.5 if np.isfinite(data).any() else 0)
+    if not positive.any():
+        return []  # already flagged by veins.detected in _check_feature
+
+    world_x = _world_x_ras(positive.shape, img.affine)
+    checks = []
+    for side, hemi in (("left", world_x < 0), ("right", world_x > 0)):
+        count = int((positive & hemi).sum())
+        checks.append(
+            CheckResult(
+                "veins.bilateral_%s" % side,
+                count > 0,
+                "%d voxel(s) above half-max on the %s side" % (count, side),
+            )
+        )
     return checks
 
 

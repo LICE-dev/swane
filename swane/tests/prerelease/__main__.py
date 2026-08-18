@@ -133,6 +133,16 @@ def build_parser() -> argparse.ArgumentParser:
         "(default: whatever the user's ~/.SWANe configuration records)",
     )
     behaviour.add_argument(
+        "--timeout",
+        type=float,
+        default=3.0,
+        metavar="HOURS",
+        help="kill and fail a pass that runs longer than this many hours "
+        "wall clock, so a hung workflow (e.g. the SegmentEndocranium hang) "
+        "cannot block the rest of the sweep; 0 disables it (default: "
+        "%(default)s)",
+    )
+    behaviour.add_argument(
         "-v", "--verbose", action="store_true", help="print every node as it starts"
     )
     return parser
@@ -144,7 +154,11 @@ def main(argv=None) -> int:
     # Imported late so --help and --list stay instant.
     from swane.tests.prerelease import capabilities as caps_mod
     from swane.tests.prerelease import report as report_mod
-    from swane.tests.prerelease.checks import GroundTruth, check_pass
+    from swane.tests.prerelease.checks import (
+        GroundTruth,
+        check_cpu_gpu_equivalence,
+        check_pass,
+    )
     from swane.tests.prerelease.plan import (
         PASSES,
         build_plan,
@@ -234,12 +248,25 @@ def main(argv=None) -> int:
             resume=not args.no_resume,
             verbose=args.verbose,
             test_run=test_run,
+            timeout_seconds=args.timeout * 3600 if args.timeout > 0 else None,
         )
 
     print("")
     print("Checking results...")
     for result in results:
         result.checks = check_pass(result, ground_truth)
+
+    # The GPU tractography pass is only meaningful compared against its CPU
+    # counterpart: both can pass their own checks independently while the two
+    # backends silently disagree. Fold that comparison into the GPU pass's
+    # own check list, keeping the report's per-pass structure unchanged.
+    by_name = {result.name: result for result in results}
+    cpu_pass = by_name.get("dti_tractography")
+    gpu_pass = by_name.get("dti_tractography_gpu")
+    if cpu_pass is not None and gpu_pass is not None:
+        gpu_pass.checks.extend(check_cpu_gpu_equivalence(cpu_pass, gpu_pass))
+
+    for result in results:
         if result.status == "skipped":
             continue
         print("  %s" % result.name)

@@ -172,6 +172,94 @@ check green. First confirmation of the **CUDA path**: `dti_tractography_gpu`
 completed 40/40 nodes with the same integrity/registration/CST checks as the
 CPU pass.
 
+### Resume was reusing passes stuck at a stale capability downgrade
+Found by hand: a sweep run without the Matlab runtime downgrades
+`hippo_amyg_labels` `true` -> `false` for `freesurfer_reconall` and completes
+without the subfield labels; once Matlab became available, re-running the
+sweep kept reusing that old "completed" record forever, since `_reusable()`
+(`runner.py`) only checked `status == "completed"` and that `subject_dir`
+still existed -- it never compared the axis values the *current* host
+resolves the pass to against the ones the record was actually built with.
+Any capability gate works the same way (RAM, GPU, Slicer, ...), so this was
+general, not Matlab-specific. Fixed: `_reusable()` now also requires
+`previous["values"] == dict(pass_item.values)`; a value that changed because
+a requirement appeared (or disappeared) forces a re-run in the *same*
+`subject_dir`, so nipype's per-node cache only executes the nodes whose
+inputs actually changed (e.g. just `SegmentHA` and downstream) rather than
+redoing the whole pass.
+
+### Insufficient-resources signaling: tested at the right altitude, and a real bug found doing it
+Originally scoped as "force it once in the sweep" -- redirected to a proper
+unit test instead: `MonitoredMultiProcPlugin._prerun_check()` is where the
+CPU/RAM/GPU budget gate and the `WORKFLOW_INSUFFICIENT_RESOURCES` signal
+actually live, so it belongs in
+`tests/nipype_pipeline/engine/test_monitored_multiproc_plugin.py`, exercised
+directly against a minimal fake graph/node -- no phantom, no real workflow,
+no hours-long sweep pass needed to hit three `if` branches. Covers all three
+budgets (RAM, CPU threads, GPU slots) both over and within budget.
+
+Writing it surfaced a real, previously silent bug: `WorkflowProcess.py`
+built nipype's `plugin_args` with the key `"n_gpu_proc"` (missing the
+trailing `s`); nipype's `MultiProcPlugin.__init__` reads `"n_gpu_procs"`, so
+the typo'd key was simply never seen and it fell back to
+`self.n_gpus_visible` (every GPU physically present) instead of the user's
+configured `max_subj_gpu`. A user who deliberately capped or disabled GPU
+use from SWANe's Performance settings had that limit silently ignored, and
+`_prerun_check`'s GPU-over-budget gate could never fire against the
+configured limit either. Fixed the key; added a regression test
+(`test_workflow_process.py::test_workflow_run_worker_gpu_budget_reaches_the_plugin`)
+that inspects the actual `plugin_args` dict built by `workflow_run_worker()`.
+
+That regression test also exposed a pre-existing test-isolation bug:
+`test_add_and_remove_handlers` called `WorkflowProcess.add_handlers()` and
+`.remove_handlers()` with two *different* `DummyHandler()` instances, so the
+removal was a silent no-op and the (attribute-less) added handler stayed on
+the real `nipype.workflow`/`nipype.utils`/`nipype.filemanip`/`nipype.interface`
+loggers for the rest of the pytest session -- any later `logger.warning(...)`
+through those channels (exactly what `_prerun_check` does) crashed with
+`AttributeError: 'DummyHandler' object has no attribute 'level'`. Fixed to
+reuse one instance and assert it is actually gone afterward.
+
+### Venous CT bilateral reconstruction now checked per hemisphere
+`checks.py`'s only venous check was a combined centre-of-mass (`_check_feature`,
+`veins.position`), which a one-sided reconstruction can pass: losing one
+addend (`venous_ct2` right, or `venous_ct3` left, see `catalog.py`) only
+nudges the overall centroid rather than zeroing it out. `GroundTruth.build()`
+now also splits the phantom's `venous_sinus` mask into `venous_sinus_L`/`_R`
+by world x sign (same convention the phantom generator itself uses to
+one-side-opacify `venous_ct2`/`venous_ct3`, see
+`helpers/phantom/sequences.py:_apply_side_override`). A new
+`_check_venous_ct_bilateral()` reads the FINAL registered result (`r-veins*`,
+on the reference/T1 grid) and counts above-half-max voxels on each side using
+THAT image's own affine for the world x split -- not the phantom's native
+grid -- so it is correct however registration reoriented the data. Gated on
+`"venous_ct" in result.inputs`, so it does not fire for the venous MR passes
+(different, non-bilateral reconstruction). `veins.bilateral_left` /
+`veins.bilateral_right`, both severity `error`: a dropped addend now fails
+the pass outright rather than only warning. Verified against real sweep
+results (`venous_ct_slicer`, `venous_ct_fixed_threshold`): both sides detected
+on the good data; zeroing the left hemisphere of a copy reproduces exactly
+the "dropped addend" failure (`veins.bilateral_left` -> 0 voxels, fails).
+
+### CPU vs GPU tractography equivalence: Dice on tracts, numeric on waytotal
+New `checks.check_cpu_gpu_equivalence(cpu_result, gpu_result)`, called once
+from `__main__.py` after the per-pass check loop and folded into the GPU
+pass's own `checks` list (report structure stays per-pass). Pairs up every
+`*_waytotal` file present under both `dti_tractography` and
+`dti_tractography_gpu`'s results (extensionless, so needed a new
+`_find_waytotal_files()` -- `_find_results()`'s image-extension glob never
+sees them) and, for each, checks the waytotal counts' relative difference
+and the Dice of the two tract density maps as any-positive-voxel masks.
+WARNING severity throughout, deliberately: bedpostx's MCMC sampling is
+stochastic and the CPU/GPU FSL implementations are not bit-identical, so
+some divergence is real and expected, not a bug -- confirmed on this box:
+measured `r-cst_lh` differed 2% (waytotal) / Dice 0.68, `r-cst_rh` 25% /
+Dice 0.68; `GPU_WAYTOTAL_REL_TOLERANCE`/`GPU_TRACT_DICE_MIN` set generous
+around those numbers so the check catches a real regression (e.g. an empty
+or wildly displaced GPU tract) without flagging normal sampling noise.
+Verified end to end against the real sweep's `--checks-only` results: both
+tracts pass on both metrics.
+
 ## What is left
 
 ### 1. Coverage still not exercised end to end
@@ -179,20 +267,10 @@ CPU pass.
   still needs a bigger box than this one.
 - **hippo/amygdala labels** (`hippo_amyg_labels=true`): needs the FreeSurfer
   Matlab runtime, absent here.
-- Once `freesurfer_reconall` passes cleanly: confirm usable pial/white
-  surfaces + aparc+aseg, and measure time saved vs accuracy lost on the expert
-  values (`-no-fix-with-ga` vs `mris_fix_topology -niters 2` overlap, drop one
-  if redundant).
 
 ### 2. Check gaps
 - **sEEG electrode localisation**: no `seeg.*` position check yet (only presence
   + integrity). Add one mirroring `veins.position` against the known contacts.
-- **Venous CT bilateral reconstruction**: confirm the check verifies the
-  subtract-then-sum recovers *both* sinus sides; a dropped addend must fail.
-- **CPU vs GPU equivalence**: eddy/bedpostx/probtrackx GPU output must be
-  equivalent to CPU at the contract level. A GPU box is now available (this
-  one); `dti_tractography_gpu` runs and passes the same checks as the CPU
-  pass, but nothing yet asserts the two outputs agree with each other.
 - **Geometry / interpolation**: assert affine/orientation/voxel size preserved
   where a node must not transform them, and masks/labels use nearest-neighbour.
 - **Regression vs a committed baseline**: absolute thresholds catch "broken",
@@ -200,19 +278,9 @@ CPU pass.
   drift between SWANe versions.
 
 ### 3. Robustness / operability
-- **Phantom cache staleness**: nipype hashes the DICOM *directory path*, not its
-  recursive content, so regenerating the phantom (bumped `GENERATOR_VERSION`)
-  is NOT picked up by pass dirs that already exist — the stale intermediates are
-  reused and the new data never reaches the workflow. Today the only fix is to
-  delete the affected pass dir. Document, or force-invalidate on a version bump.
-- **Resume**: the reuse-only-completed logic is in; make an automated test
-  (SIGINT → clean teardown → reused on re-run).
-- **Out-of-memory / insufficient-resources** path is recorded but never actually
-  triggered — force it once to confirm the sweep records and continues.
-- **Per-pass timeout**: a hung workflow currently blocks the whole sweep (we hit
-  exactly this with the endocranium hang; the fail-fast fixed that instance, but
-  a generic timeout is still missing).
-- Review the **HTML report** on a full run for legibility.
+- **Resume**: the reuse-only-completed logic (including the stale-downgrade
+  check above) is in; make an automated test (SIGINT → clean teardown →
+  reused on re-run).
 
 ### 4. Calibration
 `REGISTRATION_MIN_DICE` lowered to 0.85 (SynthStrip agrees with the reference
