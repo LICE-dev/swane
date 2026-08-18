@@ -102,6 +102,20 @@ argument ordering** -- it was the single biggest speed lever for the surface
 steps. (`fsr-getxopts`'s own comments date the current xopts-merging behaviour
 to 10/16/24, so this whole mechanism is young -- expect more rough edges.)
 
+### BEDPOSTX test_run cut was breaking the left CST — bisected, fixed
+`dti_tractography` completed but `r-cst_lh` was all-zero (waytotal 0; right was
+a thin 118). Isolated to the BEDPOSTX5 MCMC reduction (NOT the warp: full-res
+FNIRT still gave 0; NOT ProbTrackX `n_samples`: full still gave 0; NOT
+seed/FA/fibre direction: free tracking gives 87 000 streamlines both sides).
+Bisected the MCMC cut directly: n_fibres=2 with the *cheap* test_run MCMC
+settings (`n_jumps=200 burn_in=100 sample_every=5`) recovers the left CST
+(waytotal 463, 683s) -- but n_fibres=1 stays at 0 even with much heavier MCMC
+(`n_jumps=800 burn_in=500 sample_every=15`, ~13k iterations/voxel, still 0). The
+lever that matters is n_fibres, not MCMC depth: a single-fibre model can't
+represent the crossing along the left CST's path, no matter how well-sampled.
+Set `n_fibres=2` in test_run (`dti_preproc_workflow.py`), matching the
+full-accuracy path; MCMC stays cheap.
+
 ### Passes verified end to end this box (FSL + patched FS 8.2.0, --ram 10)
 execution + integrity + anatomical plausibility all green: `structural_fsl`,
 `structural_alt_settings`, `structural_synthstrip`, `venous_ct_slicer`,
@@ -112,25 +126,14 @@ schedule, MCFLIRT `stages=1`, SynthSeg `--fast`, CustomEddy `niter=1` (FA range)
 
 ## What is left
 
-### 1. bedpostx test_run cut breaks the left CST — TUNE (priority)
-`dti_tractography` completes but `r-cst_lh` is all-zero (waytotal 0; right is a
-thin 118). Root cause isolated this session: NOT the warp (full-res FNIRT still
-0), NOT ProbTrackX `n_samples` (full still 0), NOT the seed/FA/fibre direction
-(free tracking gives 87 000 streamlines both sides), NOT the phantom↔protocol
-geometry. It is the **BEDPOSTX5 MCMC reduction** (`n_fibres=1 n_jumps=200
-burn_in=100 sample_every=5`): re-running bedpostx at full accuracy recovers the
-left CST (waytotal 432). Find the *minimal* relaxation (bisect n_fibres / n_jumps
-/ burn_in) that recovers the left CST at least cost, and set it in
-`dti_preproc_workflow.py`.
-
-### 2. venous_ct_fixed_threshold — re-run on the fresh phantom
+### 1. venous_ct_fixed_threshold — re-run on the fresh phantom
 The endocranium fix (fail-fast + bone 1900 HU) was never actually exercised: the
 overnight run reused stale nipype intermediates built from the old 1100 HU
 phantom (see §"phantom cache" below). Delete the pass dir and re-run with the v6
 phantom to confirm the venous-CT vein-localisation check passes with the coarse
 test_run endocranium params.
 
-### 3. Coverage still not exercised end to end
+### 2. Coverage still not exercised end to end
 - **Full sweep** start to finish in one go.
 - **Synth family**: now runnable at `--ram 10` (30% reduction) but not yet
   executed — confirm `structural_synthmorph` / `func_map_synthmorph` /
@@ -146,7 +149,7 @@ test_run endocranium params.
 - **hippo/amygdala labels** (`hippo_amyg_labels=true`): needs the FreeSurfer
   Matlab runtime, absent here.
 
-### 4. Check gaps
+### 3. Check gaps
 - **sEEG electrode localisation**: no `seeg.*` position check yet (only presence
   + integrity). Add one mirroring `veins.position` against the known contacts.
 - **Venous CT bilateral reconstruction**: confirm the check verifies the
@@ -159,7 +162,7 @@ test_run endocranium params.
   not "changed"; a diff-against-previous-run mode would catch silent numeric
   drift between SWANe versions.
 
-### 5. Robustness / operability
+### 4. Robustness / operability
 - **Phantom cache staleness**: nipype hashes the DICOM *directory path*, not its
   recursive content, so regenerating the phantom (bumped `GENERATOR_VERSION`)
   is NOT picked up by pass dirs that already exist — the stale intermediates are
@@ -174,14 +177,14 @@ test_run endocranium params.
   a generic timeout is still missing).
 - Review the **HTML report** on a full run for legibility.
 
-### 6. Calibration
+### 5. Calibration
 `REGISTRATION_MIN_DICE` lowered to 0.85 (SynthStrip agrees with the reference
 brainmask at ~0.88 by itself, so a correct SynthStrip registration lands ~0.89).
 The other tolerances (`FEATURE_TOLERANCE_MM`, `NONLINEAR_*`, FA bounds) were set
 from one box; confirm they hold across machines and FSL/atlas versions before
 trusting them as gates; widen only with a measured reason.
 
-### 7. CI / invocation
+### 6. CI / invocation
 The light `test_plan_integrity.py` runs in CI. The heavy sweep is local/nightly
 by nature (hours, real tools). Decide and document how it is launched — nightly
 job, release gate — and where its report is published.
