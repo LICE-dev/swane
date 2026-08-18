@@ -160,18 +160,23 @@ run's process had imported the old code, so they only show pre-fix symptoms:
 - `freesurfer_reconall`: `asl_surf_lh/rh`, `pet_surf_lh/rh` node failures --
   the ASL/PET race condition, fixed (see above).
 
+### Re-run on a CUDA box, `--checks-only` confirmed (--ram 10, --with-reconall)
+Second full run (this box now has a working FreeSurfer 8.2.0 + license, and a
+CUDA GPU): 20 of 21 passes executed, **all 20 completed with zero failed
+nodes and zero failed/warned checks** (`freesurfer_reconall_synth` skipped --
+needs 20 GB, box has 10 GB allocated). Confirms both fixes from the previous
+run: `dti_tractography`/`dti_synthmorph` now show non-zero `r-cst_lh` (171 and
+30 respectively) and passing `dti.anisotropy_in_cst`; `freesurfer_reconall`
+completed all 81 nodes with zero `node_errors` and every `asl_*`/`pet_*`
+check green. First confirmation of the **CUDA path**: `dti_tractography_gpu`
+completed 40/40 nodes with the same integrity/registration/CST checks as the
+CPU pass.
+
 ## What is left
 
-### 1. Re-run to confirm this session's fixes (cheap: nipype resumes from the
-first changed/failed node, not a full re-run)
-- `freesurfer_reconall` -- ASL/PET race-condition fix.
-- `dti_tractography`, `dti_synthmorph` -- BEDPOSTX `n_fibres=2` fix (left CST).
-
-### 2. Coverage still not exercised end to end
+### 1. Coverage still not exercised end to end
 - **recon-all on a 20 GB box**: `freesurfer_reconall_synth` (FS v8 synth path)
   still needs a bigger box than this one.
-- **CUDA paths** (`dti_tractography_gpu`, eddy `cuda`): need a working CUDA/FSL
-  box; unverified here.
 - **hippo/amygdala labels** (`hippo_amyg_labels=true`): needs the FreeSurfer
   Matlab runtime, absent here.
 - Once `freesurfer_reconall` passes cleanly: confirm usable pial/white
@@ -179,20 +184,22 @@ first changed/failed node, not a full re-run)
   values (`-no-fix-with-ga` vs `mris_fix_topology -niters 2` overlap, drop one
   if redundant).
 
-### 3. Check gaps
+### 2. Check gaps
 - **sEEG electrode localisation**: no `seeg.*` position check yet (only presence
   + integrity). Add one mirroring `veins.position` against the known contacts.
 - **Venous CT bilateral reconstruction**: confirm the check verifies the
   subtract-then-sum recovers *both* sinus sides; a dropped addend must fail.
 - **CPU vs GPU equivalence**: eddy/bedpostx/probtrackx GPU output must be
-  equivalent to CPU at the contract level. Needs a GPU box.
+  equivalent to CPU at the contract level. A GPU box is now available (this
+  one); `dti_tractography_gpu` runs and passes the same checks as the CPU
+  pass, but nothing yet asserts the two outputs agree with each other.
 - **Geometry / interpolation**: assert affine/orientation/voxel size preserved
   where a node must not transform them, and masks/labels use nearest-neighbour.
 - **Regression vs a committed baseline**: absolute thresholds catch "broken",
   not "changed"; a diff-against-previous-run mode would catch silent numeric
   drift between SWANe versions.
 
-### 4. Robustness / operability
+### 3. Robustness / operability
 - **Phantom cache staleness**: nipype hashes the DICOM *directory path*, not its
   recursive content, so regenerating the phantom (bumped `GENERATOR_VERSION`)
   is NOT picked up by pass dirs that already exist — the stale intermediates are
@@ -207,14 +214,14 @@ first changed/failed node, not a full re-run)
   a generic timeout is still missing).
 - Review the **HTML report** on a full run for legibility.
 
-### 5. Calibration
+### 4. Calibration
 `REGISTRATION_MIN_DICE` lowered to 0.85 (SynthStrip agrees with the reference
 brainmask at ~0.88 by itself, so a correct SynthStrip registration lands ~0.89).
 The other tolerances (`FEATURE_TOLERANCE_MM`, `NONLINEAR_*`, FA bounds) were set
 from one box; confirm they hold across machines and FSL/atlas versions before
 trusting them as gates; widen only with a measured reason.
 
-### 6. CI / invocation
+### 5. CI / invocation
 The light `test_plan_integrity.py` runs in CI. The heavy sweep is local/nightly
 by nature (hours, real tools). Decide and document how it is launched — nightly
 job, release gate — and where its report is published.
