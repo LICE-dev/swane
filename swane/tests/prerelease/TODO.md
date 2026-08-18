@@ -267,6 +267,23 @@ runtime. Runtime installed and the pass re-run (resume correctly picked it
 up as a stale downgrade, see above, and only re-ran the newly-unblocked
 nodes): passes.
 
+### sEEG electrode position check, mirroring veins.position
+The phantom's electrode geometry (`helpers/phantom/dataset.py`) was pure RAS
+mm arithmetic private to the CT-stamping function -- no ground truth existed
+to check against. Extracted it into public `seeg_trajectories()` (entry/target
+pairs) and `seeg_contact_points()` (mm coordinates of every contact),
+refactoring `_add_seeg_electrodes` to use them so rendering and ground truth
+can never drift apart; verified byte-identical output against the pre-refactor
+function on the same tissue model. `GroundTruth.build()` now sets a `"seeg"`
+centre from the contacts' centroid (pure geometry, needs no affine/voxel
+grid, unlike the tissue-model-derived centres). `_check_plausibility` now
+also calls `_check_feature(files, truth, "seeg", "seeg")` -- the exact same
+function `veins.position` uses, just a different token/truth key -- giving
+`seeg.detected`/`seeg.position`. Verified end to end against the real
+sweep's `structural_alt_settings` results: 367 voxels detected, 6.5 mm from
+the phantom's known contacts (added to the `FEATURE_TOLERANCE_MM` margins
+comment alongside the brain/CST/venous-sinus measurements).
+
 ## What is left
 
 ### 1. Coverage still not exercised end to end
@@ -274,8 +291,6 @@ nodes): passes.
   still needs a bigger box than this one.
 
 ### 2. Check gaps
-- **sEEG electrode localization**: no `seeg.*` position check yet (only presence
-  + integrity). Add one mirroring `veins.position` against the known contacts.
 - **Geometry / interpolation**: assert affine/orientation/voxel size preserved
   where a node must not transform them, and masks/labels use nearest-neighbour.
 - **Regression vs a committed baseline**: absolute thresholds catch "broken",
