@@ -43,8 +43,10 @@ RESULTS_DIR = "results"
 #: A feature (veins, electrodes, high-FA corridor) must land within this
 #: distance of the structure the phantom actually drew. Calibrated against a
 #: real run: measured margins are the reference brain at 8.1 mm, the CST at
-#: 3.1 mm and the venous sinus at 1.6 mm, so 15 mm leaves headroom for
-#: cross-machine variation without masking a gross mislocalisation.
+#: 3.1 mm, the venous sinus at 1.6 mm and the SEEG contacts at 6.5 mm, so
+#: 15 mm leaves headroom for cross-machine variation without masking a gross
+#: mislocalisation. ``_check_feature`` doubles it for its own ``*.position``
+#: checks (electrodes/veins), which is looser on purpose.
 FEATURE_TOLERANCE_MM = 15.0
 
 
@@ -106,6 +108,13 @@ class GroundTruth:
             centre = _centre_of_mass_ras(np.asarray(mask, dtype=float), model.affine)
             if centre is not None:
                 centres[name] = centre
+
+        # SEEG contacts are pure RAS-mm geometry (see
+        # helpers/phantom/dataset.py:seeg_trajectories), not derived from the
+        # tissue model -- their centroid needs no affine/voxel grid.
+        from swane.tests.helpers.phantom.dataset import seeg_contact_points
+
+        centres["seeg"] = seeg_contact_points().mean(axis=0)
         return cls(centres=centres)
 
 
@@ -780,6 +789,7 @@ def _check_plausibility(result, files: list, truth: GroundTruth) -> list:
     checks.extend(_check_fa(files, truth))
     checks.extend(_check_feature(files, truth, "veins", "venous_sinus"))
     checks.extend(_check_venous_ct_bilateral(result, files, truth))
+    checks.extend(_check_feature(files, truth, "seeg", "seeg"))
     return checks
 
 

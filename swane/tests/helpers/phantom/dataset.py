@@ -316,18 +316,16 @@ def _dwi_scheme(n_directions: int, b_value: float):
     return bvals, bvecs
 
 
-def _add_seeg_electrodes(data, affine, tissue, n_electrodes: int = 6):
-    """Stamp hyperdense electrode tracks into a CT volume.
+def seeg_trajectories(n_electrodes: int = 6) -> list:
+    """(entry, target) RAS mm point pairs for the phantom's SEEG electrodes.
 
-    Straight trajectories entering laterally and aiming at deep targets, with
-    discrete high-density contacts - what the SEEG workflow looks for.
+    Straight trajectories entering laterally and aiming at deep targets. Pure
+    geometry, independent of any grid/affine, shared by the CT rendering
+    (``_add_seeg_electrodes`` below) and the pre-release ground truth
+    (``seeg_contact_points`` here, used by ``tests/prerelease/checks.py`` as
+    the known answer for ``electrode.position``) -- one source of truth, so
+    the two can never drift apart.
     """
-    from scipy.spatial import cKDTree
-
-    inv = np.linalg.inv(affine)
-    shape = data.shape[:3]
-
-    # entry (lateral scalp) -> target (deep, near the midline) in RAS mm
     trajectories = []
     for i in range(n_electrodes):
         side = 1.0 if i % 2 == 0 else -1.0
@@ -336,17 +334,46 @@ def _add_seeg_electrodes(data, affine, tissue, n_electrodes: int = 6):
         entry_pt = np.array([side * 75.0, y, z])
         target_pt = np.array([side * 12.0, y * 0.6, z * 0.6])
         trajectories.append((entry_pt, target_pt))
+    return trajectories
+
+
+def _seeg_shaft_samples(entry_pt, target_pt):
+    """RAS mm points along one electrode shaft, and which of them are contacts.
+
+    Contacts are 2 mm long every 5 mm along the shaft -- what
+    ``_add_seeg_electrodes`` stamps hyperdense and what
+    :func:`seeg_contact_points` reports as the known contact positions.
+    """
+    length = float(np.linalg.norm(target_pt - entry_pt))
+    n_samples = max(int(length / 0.5), 2)
+    t = np.linspace(0.0, 1.0, n_samples)[:, None]
+    line = entry_pt + (target_pt - entry_pt) * t
+    along = np.linspace(0.0, length, n_samples)
+    is_contact = (along % 5.0) < 2.0
+    return line, is_contact
+
+
+def seeg_contact_points(n_electrodes: int = 6) -> np.ndarray:
+    """RAS mm coordinates of every electrode contact in the phantom."""
+    points = []
+    for entry_pt, target_pt in seeg_trajectories(n_electrodes):
+        line, is_contact = _seeg_shaft_samples(entry_pt, target_pt)
+        points.append(line[is_contact])
+    return np.concatenate(points, axis=0)
+
+
+def _add_seeg_electrodes(data, affine, tissue, n_electrodes: int = 6):
+    """Stamp hyperdense electrode tracks into a CT volume.
+
+    Straight trajectories entering laterally and aiming at deep targets, with
+    discrete high-density contacts - what the SEEG workflow looks for.
+    """
+    inv = np.linalg.inv(affine)
+    shape = data.shape[:3]
 
     out = np.asarray(data).copy()
-    for entry_pt, target_pt in trajectories:
-        length = float(np.linalg.norm(target_pt - entry_pt))
-        n_samples = max(int(length / 0.5), 2)
-        t = np.linspace(0.0, 1.0, n_samples)[:, None]
-        line = entry_pt + (target_pt - entry_pt) * t
-
-        # contacts: 2 mm long every 5 mm along the shaft
-        along = np.linspace(0.0, length, n_samples)
-        is_contact = (along % 5.0) < 2.0
+    for entry_pt, target_pt in seeg_trajectories(n_electrodes):
+        line, is_contact = _seeg_shaft_samples(entry_pt, target_pt)
 
         vox = line @ inv[:3, :3].T + inv[:3, 3]
         vox = np.rint(vox).astype(int)
