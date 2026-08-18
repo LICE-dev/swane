@@ -116,6 +116,26 @@ represent the crossing along the left CST's path, no matter how well-sampled.
 Set `n_fibres=2` in test_run (`dti_preproc_workflow.py`), matching the
 full-accuracy path; MCMC stays cheap.
 
+### ASL/PET surface sampling race condition (production bug, found via freesurfer_reconall)
+`freesurfer_reconall` failed on `asl_surf_lh/rh`/`pet_surf_lh/rh` (`mri_vol2surf`
+couldn't find `lh.white`) even though recon-all itself completed cleanly and
+the file existed on disk 23 minutes later. Root cause: `MainWorkflow` connects
+ASL/PET's surface sampling to `self.freesurfer`'s `outputnode.subjects_dir`/
+`subject_id` -- plain strings FreeSurfer tools use to *locate* `lh.white`/
+`lh.pial` on disk by convention, not a tracked nipype dependency on the node
+that writes them. `freesurfer_workflow.py`'s `outputnode` sourced those two
+fields from `recon_all_recon1` (the FIRST node), so nipype considered ASL/PET
+surface sampling "ready" as soon as recon1 finished, regardless of whether
+recon2/recon_pial/recon3 (which actually write the surfaces) had run yet. This
+mostly went unnoticed because timing usually left enough slack; a resumed,
+multi-hour recon2 (9195s here) removed it, causing a real, deterministic crash.
+Fixed: `outputnode.subject_id`/`subjects_dir` now connect from the chain's
+*actual last node* (`recon_all_recon_pial`, or `recon_all_recon3` when
+`step == RECONALL`) via a `final_recon` variable, so nipype has a real edge to
+wait on. Verified both `AUTORECON_PIAL` and `RECONALL` build correctly (no
+`NameError` when stopping at the earlier step). `SegmentHA` (hippo/amygdala)
+was already wired correctly from `recon_all_recon_pial`, unaffected.
+
 ### Passes verified end to end this box (FSL + patched FS 8.2.0, --ram 10)
 execution + integrity + anatomical plausibility all green: `structural_fsl`,
 `structural_alt_settings`, `structural_synthstrip`, `venous_ct_slicer`,
