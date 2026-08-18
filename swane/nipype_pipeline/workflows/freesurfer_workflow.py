@@ -264,8 +264,16 @@ def freesurfer_workflow(
         workflow.connect(inputnode, "reference", recon_all_recon1, "T1_files")
         workflow.connect(inputnode, "subjects_dir", recon_all_recon1, "subjects_dir")
 
-        workflow.connect(recon_all_recon1, "subject_id", outputnode, "subject_id")
-        workflow.connect(recon_all_recon1, "subjects_dir", outputnode, "subjects_dir")
+        # outputnode.subject_id/subjects_dir are connected below, from the LAST
+        # recon-all node in this chain (not recon1): consumers outside this
+        # workflow (ASL/PET surface sampling in MainWorkflow) only get these two
+        # plain strings, not a tracked dependency on the actual surface files --
+        # they locate lh.white/lh.pial etc. on disk by FreeSurfer's own
+        # subjects_dir/subject_id convention. Wiring from recon1 let nipype
+        # consider them "ready" as soon as the FIRST node finished, so a slow
+        # recon2/recon_pial (e.g. a resumed multi-hour run) let ASL/PET surface
+        # sampling start and crash well before the files existed. Connecting
+        # from the last node gives nipype a real edge to wait on.
 
         # NODE 2: Freesurfer autorecon2
         recon_all_recon2 = Node(ReconAll(), name="recon_all_recon2")
@@ -307,6 +315,12 @@ def freesurfer_workflow(
 
         workflow.connect(recon_all_recon_pial, "pial", outputnode, "pial")
         workflow.connect(recon_all_recon_pial, "white", outputnode, "white")
+
+        # The actual last node in this chain: recon_all_recon_pial unless the
+        # RECONALL step adds recon_all_recon3 below. outputnode.subject_id/
+        # subjects_dir connect from whichever this ends up being (see the note
+        # by recon_all_recon1's own subjects_dir connection, above).
+        final_recon = recon_all_recon_pial
 
         # NODE 2: Aparcaseg linear transformation in reference space
         aparc_aseg2ref = Node(ApplyVolTransform(), name="aparc_aseg2ref")
@@ -366,6 +380,10 @@ def freesurfer_workflow(
             workflow.connect(
                 recon_all_recon_pial, "subject_id", recon_all_recon3, "subject_id"
             )
+            final_recon = recon_all_recon3
+
+        workflow.connect(final_recon, "subject_id", outputnode, "subject_id")
+        workflow.connect(final_recon, "subjects_dir", outputnode, "subjects_dir")
 
         if is_hippo_amyg_labels:
             # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
