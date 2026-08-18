@@ -291,8 +291,8 @@ comment alongside the brain/CST/venous-sinus measurements).
   still needs a bigger box than this one.
 
 ### 2. Check gaps
-- **Geometry / interpolation**: assert affine/orientation/voxel size preserved
-  where a node must not transform them, and masks/labels use nearest-neighbour.
+- **Interpolation**: identify every nifti that undergo a transformation: 
+  if it is a mask/labelmap verify that nearest-neighbour is used.
 - **Regression vs a committed baseline**: absolute thresholds catch "broken",
   not "changed"; a diff-against-previous-run mode would catch silent numeric
   drift between SWANe versions.
