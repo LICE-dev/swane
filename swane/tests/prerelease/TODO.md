@@ -260,16 +260,21 @@ or wildly displaced GPU tract) without flagging normal sampling noise.
 Verified end to end against the real sweep's `--checks-only` results: both
 tracts pass on both metrics.
 
+### hippo/amygdala labels confirmed with the Matlab runtime now available
+`hippo_amyg_labels=true` (`freesurfer_reconall`, SegmentHA) was only ever
+run downgraded to `false` on this box for lack of the FreeSurfer Matlab
+runtime. Runtime installed and the pass re-run (resume correctly picked it
+up as a stale downgrade, see above, and only re-ran the newly-unblocked
+nodes): passes.
+
 ## What is left
 
 ### 1. Coverage still not exercised end to end
 - **recon-all on a 20 GB box**: `freesurfer_reconall_synth` (FS v8 synth path)
   still needs a bigger box than this one.
-- **hippo/amygdala labels** (`hippo_amyg_labels=true`): needs the FreeSurfer
-  Matlab runtime, absent here.
 
 ### 2. Check gaps
-- **sEEG electrode localisation**: no `seeg.*` position check yet (only presence
+- **sEEG electrode localization**: no `seeg.*` position check yet (only presence
   + integrity). Add one mirroring `veins.position` against the known contacts.
 - **Geometry / interpolation**: assert affine/orientation/voxel size preserved
   where a node must not transform them, and masks/labels use nearest-neighbour.
