@@ -213,7 +213,7 @@ def _probe_synth_ram(caps: Capabilities, test_run: bool = False) -> None:
         ("synth_strip", ResourceManager.synth_strip_ram_requirements(), False),
         ("synth_morph", ResourceManager.synth_morph_ram_requirements(), True),
         ("synth_seg", ResourceManager.synth_seg_ram_requirements(), True),
-        ("synth_reconall", ResourceManager.synth_reconall_ram_requirements(), False),
+        ("synth_reconall", ResourceManager.synth_reconall_ram_requirements(), True),
     ):
         if not has_synth:
             caps.add(name, False, "requires the FreeSurfer Synth tools")

@@ -44,6 +44,7 @@ RECONALL_TEST_ARGS = "-nuiterations 1 -norm3diters 1 -no-fix-with-ga"
 # fixes rca-surfreg's argument ordering (see TODO.md).
 RECONALL_TEST_EXPERT = (
     "mris_inflate -n 7\n" "mris_fix_topology -niters 2\n" "synthseg --fast\n"
+    "mri_ca_register -tol 0.2 -N 100 -LEVELS 4 -A 125 -DT 0.1\n"
 )
 
 
@@ -186,6 +187,7 @@ def freesurfer_workflow(
             )
         else:
             synth_seg.inputs.robust = True
+            synth_seg._mem_gb = ResourceManager.synth_seg_ram_requirements()
         synth_seg.inputs.use_cpu = True
         synth_seg.inputs.keep_geometry = True
         # synth_seg.inputs.num_threads = 1
@@ -216,27 +218,31 @@ def freesurfer_workflow(
         reconall_nprocs = 1
 
         if synth_config.getboolean_safe("reconall"):
-            reconall_mem_gb = (
-                ResourceManager.synth_reconall_ram_requirements()
-            )  # new recon-all needs a lot of RAM
-            # New reconall may heavily increase RAM usage with more than 1 cpu, for now skip openmp if using synth tools
+            if test_run:
+                reconall_mem_gb = (
+                    ResourceManager.synth_reconall_ram_requirements()
+                    * ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR
+                )
+            else:
+                reconall_mem_gb = ResourceManager.synth_reconall_ram_requirements()
         else:
             reconall_environ = {"FS_V8_XOPTS": "0"}
-            # parallel option splits some steps in right and left
-            if max_cpu > 1:
-                reconall_parallel = True
-            # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
-            if multicore_node_limit == CoreLimit.NO_LIMIT:
-                # no limit
-                reconall_openmp = cpu_count()
-            elif multicore_node_limit == CoreLimit.SOFT_CAP:
-                # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
-                reconall_openmp = max_cpu
-                reconall_nprocs = reconall_openmp
-            elif max_cpu > 1:
-                # for hard cap we use half of max_cpu setting, but at least 1
-                reconall_openmp = max(trunc(max_cpu / 2), 1)
-                reconall_nprocs = reconall_openmp * 2
+
+        # parallel option splits some steps in right and left
+        if max_cpu > 1:
+            reconall_parallel = True
+        # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
+        if multicore_node_limit == CoreLimit.NO_LIMIT:
+            # no limit
+            reconall_openmp = cpu_count()
+        elif multicore_node_limit == CoreLimit.SOFT_CAP:
+            # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
+            reconall_openmp = max_cpu
+            reconall_nprocs = reconall_openmp
+        elif max_cpu > 1:
+            # for hard cap we use half of max_cpu setting, but at least 1
+            reconall_openmp = max(trunc(max_cpu / 2), 1)
+            reconall_nprocs = reconall_openmp * 2
 
         # test_run: speed up recon-all with lighter iteration counts, via
         # top-level flags plus an -expert file of per-binary overrides. The
