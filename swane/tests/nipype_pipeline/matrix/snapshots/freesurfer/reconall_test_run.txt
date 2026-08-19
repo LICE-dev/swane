@@ -80,9 +80,9 @@ inputnode.reference -> aparc_aseg2ref.target_file
 inputnode.reference -> recon_all_recon1.T1_files
 inputnode.subjects_dir -> recon_all_recon1.subjects_dir
 lhbgROI.out_file -> bgROI.in_file
-recon_all_recon1.subject_id -> outputnode.subject_id
+reconAll.subject_id -> outputnode.subject_id
+reconAll.subjects_dir -> outputnode.subjects_dir
 recon_all_recon1.subject_id -> recon_all_recon2.subject_id
-recon_all_recon1.subjects_dir -> outputnode.subjects_dir
 recon_all_recon1.subjects_dir -> recon_all_recon2.subjects_dir
 recon_all_recon2.subject_id -> recon_all_recon_pial.subject_id
 recon_all_recon2.subjects_dir -> recon_all_recon_pial.subjects_dir

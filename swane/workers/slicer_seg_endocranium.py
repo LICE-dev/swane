@@ -158,6 +158,29 @@ def main(argv=None):
     effect.setParameter("MaximumThreshold", str(volumeScalarRange[1]))
     effect.self().onApply()
 
+    # Wrap Solidify hangs instead of failing when handed an empty segment (no
+    # voxel in [skull_threshold, max]), which a too-high fixed threshold for
+    # the scan at hand can easily produce. Fail loudly here instead.
+    boneRawLabelmap = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
+    slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
+        segmentationNode, [boneRawID], boneRawLabelmap, inputVolume
+    )
+    boneRawVoxelCount = int(
+        (slicer.util.arrayFromVolume(boneRawLabelmap) != 0).sum()
+    )
+    slicer.mrmlScene.RemoveNode(boneRawLabelmap)
+    if boneRawVoxelCount == 0:
+        raise RuntimeError(
+            "Skull threshold %s selects no voxel in [%s, %s]; the volume's "
+            "own scalar range is %s. Lower skull_threshold."
+            % (
+                skull_threshold,
+                skull_threshold,
+                volumeScalarRange[1],
+                volumeScalarRange,
+            )
+        )
+
     # 2. bone_smooth (copy + smoothing)
     boneSmoothID = seg.AddEmptySegment("bone_smooth")
     seg.GetSegment(boneSmoothID).DeepCopy(seg.GetSegment(boneRawID))
@@ -219,4 +242,14 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # An unhandled exception here only prints a traceback: Slicer's script
+        # runner does not stop the Qt event loop on its own, so the process
+        # would sit alive forever instead of exiting non-zero (this is exactly
+        # what let an empty-segment RuntimeError hang instead of failing fast).
+        import traceback
+
+        traceback.print_exc()
+        slicer.util.exit(status=1)

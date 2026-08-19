@@ -16,6 +16,7 @@ from swane.tests.prerelease.plan import (
     AXES_BY_NAME,
     PASSES,
     SHAPE,
+    _PASS_REQUIREMENTS,
     build_plan,
     coverage,
     plan_holes,
@@ -30,6 +31,9 @@ def all_capable():
     needed.update(
         {"fsl", "dcm2niix", "freesurfer", "fsaverage", "slicer", "ram_budget"}
     )
+    # Capabilities that gate whole passes (not tied to an axis value), e.g.
+    # reconall_expert, so a fully capable host really skips nothing.
+    needed.update(cap for caps_tuple in _PASS_REQUIREMENTS.values() for cap in caps_tuple)
     for name in needed:
         caps.add(name, True, "assumed available in this test")
     return caps

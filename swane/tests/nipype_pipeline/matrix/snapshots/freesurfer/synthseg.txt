@@ -28,7 +28,7 @@
     seg_val_max = 52.0
     seg_val_min = 50.0
 - segmentation_holder [IdentityInterface] mem_gb=0.2 n_procs=1
-- synth_seg [SynthSeg] cmd=mri_synthseg mem_gb=0.2 n_procs=1
+- synth_seg [SynthSeg] cmd=mri_synthseg mem_gb=14 n_procs=1
     environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     keep_geometry = True
     out_file = 'r-aparc_aseg.mgz'

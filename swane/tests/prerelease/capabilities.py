@@ -139,26 +139,97 @@ def _probe_freesurfer(
     )
 
 
-def _probe_synth_ram(caps: Capabilities) -> None:
-    """Each Synth tool has its own RAM floor; check the allocated budget."""
+def _recon_all_path() -> str:
+    fs_home = os.environ.get("FREESURFER_HOME")
+    if fs_home:
+        candidate = os.path.join(fs_home, "bin", "recon-all")
+        if os.path.isfile(candidate):
+            return candidate
+    return shutil.which("recon-all") or ""
+
+
+def _recon_all_has_expert_bug(path: str) -> bool:
+    """True if this recon-all is the unpatched FS 8.x build that crashes on -expert.
+
+    The surface-registration stage tests the expert-options path as a tcsh
+    boolean: ``if($XOptsFile)`` -- a path string in a numeric context, which
+    aborts with "if: Expression Syntax." The fix (and every correct use of the
+    variable elsewhere in the same script) is ``if($#XOptsFile ...)``. So the
+    bare ``if($XOptsFile)`` form is a reliable fingerprint of the buggy build.
+    """
+    try:
+        with open(path, errors="ignore") as handle:
+            text = handle.read()
+    except OSError:
+        return False
+    return "if($XOptsFile)" in text or "if ($XOptsFile)" in text
+
+
+def _probe_reconall_expert(caps: Capabilities, test_run: bool = False) -> None:
+    """Detect the FreeSurfer 8.x recon-all ``-expert`` bug.
+
+    The prerelease recon-all passes lean on an ``-expert`` options file to run
+    faster in test_run, but an unpatched FS 8.x recon-all crashes at surface
+    registration whenever an expert file is present (see
+    :func:`_recon_all_has_expert_bug`). FreeSurfer fixed it in its own patch
+    (``fs820_updates.sh``, mid-2026). A ``--full-accuracy`` run passes no expert
+    file, so it is unaffected -- hence this only gates the test_run passes.
+    """
+    if not test_run or not caps.has("freesurfer"):
+        caps.add("reconall_expert", True, "no -expert file used (full accuracy)")
+        return
+    recon_all = _recon_all_path()
+    if not recon_all:
+        caps.add("reconall_expert", True, "recon-all not found; assuming usable")
+        return
+    buggy = _recon_all_has_expert_bug(recon_all)
+    caps.add(
+        "reconall_expert",
+        not buggy,
+        (
+            "recon-all handles -expert correctly"
+            if not buggy
+            else "recon-all mishandles -expert (crashes at surface registration); "
+            "apply the FreeSurfer fs820_updates.sh patch, or run --full-accuracy"
+        ),
+    )
+
+
+def _probe_synth_ram(caps: Capabilities, test_run: bool = False) -> None:
+    """Each Synth tool has its own RAM floor; check the allocated budget.
+
+    ``test_run`` mirrors the sweep's own test_run mode: SynthSeg (``--fast``,
+    ``robust=False``) and SynthMorph (``steps=5``) then do less work and fit in
+    less RAM, so their floor is lowered by ``TEST_RUN_SYNTH_RAM_FACTOR``. This
+    must stay in lock-step with the per-node ``mem_gb`` those tools reserve
+    under test_run (nodes/utils.py, freesurfer_workflow.py): lower the gate but
+    not the reservation and the pass is planned yet aborts in the plugin's
+    prerun check; lower the reservation but not the gate and it is never planned.
+    SynthStrip and Synth recon-all have no such flag, so they are not scaled.
+    """
     has_synth = caps.has("freesurfer_synth")
-    for name, needed in (
-        ("synth_strip", ResourceManager.synth_strip_ram_requirements()),
-        ("synth_morph", ResourceManager.synth_morph_ram_requirements()),
-        ("synth_seg", ResourceManager.synth_seg_ram_requirements()),
-        ("synth_reconall", ResourceManager.synth_reconall_ram_requirements()),
+    factor = ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR if test_run else 1.0
+    for name, base_needed, reducible in (
+        ("synth_strip", ResourceManager.synth_strip_ram_requirements(), False),
+        ("synth_morph", ResourceManager.synth_morph_ram_requirements(), True),
+        ("synth_seg", ResourceManager.synth_seg_ram_requirements(), True),
+        ("synth_reconall", ResourceManager.synth_reconall_ram_requirements(), True),
     ):
         if not has_synth:
             caps.add(name, False, "requires the FreeSurfer Synth tools")
             continue
+        needed = base_needed * factor if reducible else base_needed
         enough = caps.ram_gb >= needed
+        note = " (test_run)" if reducible and test_run else ""
         caps.add(
             name,
             enough,
             (
-                "%.1f GB allocated >= %.1f GB required" % (caps.ram_gb, needed)
+                "%.1f GB allocated >= %.1f GB required%s"
+                % (caps.ram_gb, needed, note)
                 if enough
-                else "needs %.1f GB, only %.1f GB allocated" % (needed, caps.ram_gb)
+                else "needs %.1f GB%s, only %.1f GB allocated"
+                % (needed, note, caps.ram_gb)
             ),
         )
 
@@ -266,7 +337,12 @@ def _probe_freesurfer_subject(caps: Capabilities) -> None:
     )
 
 
-def probe(global_config=None, cores: int = 0, ram_gb: float = 0.0) -> Capabilities:
+def probe(
+    global_config=None,
+    cores: int = 0,
+    ram_gb: float = 0.0,
+    test_run: bool = False,
+) -> Capabilities:
     """Probe the host for everything the pre-release sweep depends on.
 
     Parameters
@@ -277,6 +353,9 @@ def probe(global_config=None, cores: int = 0, ram_gb: float = 0.0) -> Capabiliti
         The budget the user allocated; the Synth thresholds are checked against
         ``ram_gb`` rather than against total system memory, because that is what
         the workflows will actually be allowed to use.
+    test_run
+        When the sweep runs in test_run mode, SynthSeg/SynthMorph fit in less
+        RAM, so their gate is lowered to match (see :func:`_probe_synth_ram`).
     """
     caps = Capabilities(cores=cores, ram_gb=ram_gb)
     dependency_manager = DependencyManager()
@@ -284,9 +363,10 @@ def probe(global_config=None, cores: int = 0, ram_gb: float = 0.0) -> Capabiliti
     _probe_fsl(dependency_manager, caps)
     _probe_dcm2niix(dependency_manager, caps)
     _probe_freesurfer(dependency_manager, caps)
+    _probe_reconall_expert(caps, test_run=test_run)
     _probe_freesurfer_subject(caps)
     _probe_ram_budget(caps)
-    _probe_synth_ram(caps)
+    _probe_synth_ram(caps, test_run=test_run)
     _probe_gpu(caps)
     _probe_xtract(caps)
     _probe_mni(caps)
