@@ -4,7 +4,7 @@
 #   melodic_dim = 0
 #   melodic_thr = 0.5
 #
-# nodes=43 edges=74
+# nodes=44 edges=75
 
 - aroma_classification [AromaClassification] mem_gb=0.2 n_procs=1
 - feature_frequency [FeatureFrequency] mem_gb=0.2 n_procs=1
@@ -14,6 +14,15 @@
     mask_out = '/home/mau/.local/lib/python3.12/site-packages/ica_aroma_py/resources/mask_out.nii.gz'
 - feature_spatial_prep [FeatureSpatialPrep] mem_gb=0.2 n_procs=1
 - feature_time_series [FeatureTimeSeries] mem_gb=0.2 n_procs=1
+- fmri_rs_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'corratio'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interp = 'trilinear'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
 - fmri_rs_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
     compress = 'y'
@@ -40,15 +49,6 @@
 - fmri_rs_extract_ref [ExtractVolumes] mem_gb=0.2 n_procs=1
     num_volumes = 1
     start_volume = 0
-- fmri_rs_flirt_2_ref [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
-    cost = 'corratio'
-    dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    out_matrix_file = 'fMRI2ref.mat'
-    output_type = 'NIFTI_GZ'
-    searchr_x = [-90, 90]
-    searchr_y = [-90, 90]
-    searchr_z = [-90, 90]
 - fmri_rs_getTR [GetNiftiTR] mem_gb=0.2 n_procs=1
     force_value = -1.0
 - fmri_rs_getthresh [ImageStatistics] mem_gb=0.2 n_procs=1
@@ -135,10 +135,14 @@
     out_data_type = 'char'
     output_type = 'NIFTI_GZ'
     suffix = '_thresh'
-- func2mni [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+- func2mni_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     ref_file = '<FSLDIR>/data/standard/MNI152_T1_2mm_brain.nii.gz'
+- func_2_mni_warp [ConvertWarp] cmd=convertwarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    reference = '<FSLDIR>/data/standard/MNI152_T1_2mm_brain.nii.gz'
 - input_list_denoised [Merge] mem_gb=0.2 n_procs=1
     axis = 'vstack'
     no_flatten = False
@@ -183,7 +187,6 @@
     cost = 'corratio'
     dof = 12
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    out_matrix_file = 'ref_2_mni.mat'
     output_type = 'NIFTI_GZ'
     reference = '<FSLDIR>/data/standard/MNI152_T1_2mm_brain.nii.gz'
     searchr_x = [-90, 90]
@@ -194,7 +197,7 @@
     fieldcoeff_file = True
     output_type = 'NIFTI_GZ'
     ref_file = '<FSLDIR>/data/standard/MNI152_T1_2mm_brain.nii.gz'
-- zstats_2_ref [ApplyXFM] cmd=flirt mapnode(iterfield=in_file,out_file) mem_gb=0.2 n_procs=1
+- zstats_apply_xfm [ApplyXFM] cmd=flirt mapnode(iterfield=in_file,out_file) mem_gb=0.2 n_procs=1
     apply_xfm = True
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
@@ -204,8 +207,10 @@ aroma_classification.motion_ics -> nonaggr_denoising.filter_columns
 feature_frequency.HFC -> aroma_classification.HFC
 feature_spatial.csf_fract -> aroma_classification.csf_fract
 feature_spatial.edge_fract -> aroma_classification.edge_fract
-feature_spatial_prep.out_file -> func2mni.in_file
+feature_spatial_prep.out_file -> func2mni_apply_warp.in_file
 feature_time_series.max_rp_corr -> aroma_classification.max_rp_corr
+fmri_rs_2_ref_flirt.out_matrix_file -> func_2_mni_warp.premat
+fmri_rs_2_ref_flirt.out_matrix_file -> zstats_apply_xfm.in_matrix_file
 fmri_rs_conv.converted_files -> fmri_rs_del_vols.in_file
 fmri_rs_conv.converted_files -> fmri_rs_getTR.in_file
 fmri_rs_conv.converted_files -> fmri_rs_nvols.in_file
@@ -214,8 +219,6 @@ fmri_rs_dilatemask.out_file -> fmri_rs_maskfunc2.in_file2
 fmri_rs_dilatemask.out_file -> fmri_rs_maskfunc3.in_file2
 fmri_rs_dilatemask.out_file -> melodic.mask
 fmri_rs_extract_ref.out_file -> fmri_rs_motion_correct.ref_file
-fmri_rs_flirt_2_ref.out_matrix_file -> func2mni.premat
-fmri_rs_flirt_2_ref.out_matrix_file -> zstats_2_ref.in_matrix_file
 fmri_rs_getTR.TR -> feature_frequency.TR
 fmri_rs_getTR.TR -> fmri_rs_merge_tr_meanfunc3.in1
 fmri_rs_getTR.TR -> melodic.tr_sec
@@ -233,7 +236,7 @@ fmri_rs_maskfunc2.out_file -> fmri_rs_meanfunc2.in_file
 fmri_rs_maskfunc2.out_file -> fmri_rs_smooth.in_file
 fmri_rs_maskfunc3.out_file -> fmri_rs_intnorm.in_file
 fmri_rs_meanfunc.out_file -> fmri_rs_meanfuncmask.in_file
-fmri_rs_meanfunc2.out_file -> fmri_rs_flirt_2_ref.in_file
+fmri_rs_meanfunc2.out_file -> fmri_rs_2_ref_flirt.in_file
 fmri_rs_meanfunc2.out_file -> fmri_rs_mergenode.in1
 fmri_rs_meanfunc3.out_file -> fmri_rs_merge_tr_meanfunc3.in2
 fmri_rs_meanfuncmask.mask_file -> feature_spatial_prep.mask_file
@@ -255,17 +258,18 @@ fmri_rs_reorient.out_file -> fmri_rs_img2float.in_file
 fmri_rs_smooth.smoothed_file -> fmri_rs_maskfunc3.in_file
 fmri_rs_threshold.out_file -> fmri_rs_dilatemask.in_file
 fmri_rs_threshold.out_file -> fmri_rs_medianval.mask_file
-func2mni.out_file -> feature_spatial.in_file
+func2mni_apply_warp.out_file -> feature_spatial.in_file
+func_2_mni_warp.out_file -> func2mni_apply_warp.field_file
 input_list_denoised.out -> melodic.in_files
-inputnode.reference_brain -> fmri_rs_flirt_2_ref.reference
+inputnode.reference_brain -> fmri_rs_2_ref_flirt.reference
 inputnode.reference_brain -> ref_2_mni_flirt.in_file
 inputnode.reference_brain -> ref_2_mni_fnirt.in_file
-inputnode.reference_brain -> zstats_2_ref.reference
+inputnode.reference_brain -> zstats_apply_xfm.reference
 melodic.out_dir -> melodic_output.base_directory
 melodic.out_dir -> melodic_output.melodic_dir
-melodic_output.('thresh_zstat_files', 'def registered_file_name(in_file_names):\n    """\n    Adds prefix \'r-\' and use 2 digid number at end.\n    Example: \'zstat1.nii.gz\' -> \'r-zstat01.nii.gz\'\n    """\n    from os.path import basename\n    import re\n\n    out_files = []\n    for f in in_file_names:\n        base_name = basename(f)\n        # Cerca un numero prima dell\'estensione .nii o .nii.gz\n        m = re.search(r"(\\d+)(\\.nii(?:\\.gz)?)$", base_name)\n        if m:\n            num = int(m.group(1))\n            ext = m.group(2)\n            new_name = re.sub(r"\\d+(\\.nii(?:\\.gz)?)$", f"{num:02d}{ext}", base_name)\n        else:\n            new_name = base_name\n        out_files.append("r-" + new_name)\n    return out_files\n', ()) -> zstats_2_ref.out_file
+melodic_output.('thresh_zstat_files', 'def registered_file_name(in_file_names):\n    """\n    Adds prefix \'r-\' and use 2 digid number at end.\n    Example: \'zstat1.nii.gz\' -> \'r-zstat01.nii.gz\'\n    """\n    from os.path import basename\n    import re\n\n    out_files = []\n    for f in in_file_names:\n        base_name = basename(f)\n        # Cerca un numero prima dell\'estensione .nii o .nii.gz\n        m = re.search(r"(\\d+)(\\.nii(?:\\.gz)?)$", base_name)\n        if m:\n            num = int(m.group(1))\n            ext = m.group(2)\n            new_name = re.sub(r"\\d+(\\.nii(?:\\.gz)?)$", f"{num:02d}{ext}", base_name)\n        else:\n            new_name = base_name\n        out_files.append("r-" + new_name)\n    return out_files\n', ()) -> zstats_apply_xfm.out_file
 melodic_output.mel_mix -> outputnode.mel_mix
-melodic_output.thresh_zstat_files -> zstats_2_ref.in_file
+melodic_output.thresh_zstat_files -> zstats_apply_xfm.in_file
 merge_node.out -> preproc_melodic.in_files
 nonaggr_denoising.out_file -> input_list_denoised.in1
 preproc_melodic.out_dir -> preproc_melodic_output.base_directory
@@ -275,5 +279,5 @@ preproc_melodic_output.mel_mix -> feature_time_series.mel_mix
 preproc_melodic_output.mel_mix -> nonaggr_denoising.design_file
 preproc_melodic_output.thresh_zstat_files -> feature_spatial_prep.in_files
 ref_2_mni_flirt.out_matrix_file -> ref_2_mni_fnirt.affine_file
-ref_2_mni_fnirt.fieldcoeff_file -> func2mni.field_file
-zstats_2_ref.out_file -> outputnode.thresh_zstat_files
+ref_2_mni_fnirt.fieldcoeff_file -> func_2_mni_warp.warp1
+zstats_apply_xfm.out_file -> outputnode.thresh_zstat_files

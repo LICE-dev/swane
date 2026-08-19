@@ -40,10 +40,10 @@ Overview of 66 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [aroma_on](snapshots/fmri_resting_state/aroma_on.txt) | aroma=true; melodic_dim=0; melodic_thr=0.5 | 43 / 74 | `applywarp`, `bet`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `fslmaths`, `mcflirt`, `melodic`, `susan` | — |
+| [aroma_on](snapshots/fmri_resting_state/aroma_on.txt) | aroma=true; melodic_dim=0; melodic_thr=0.5 | 44 / 75 | `applywarp`, `bet`, `convertwarp`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `fslmaths`, `mcflirt`, `melodic`, `susan` | — |
 | [melodic_auto_dim](snapshots/fmri_resting_state/melodic_auto_dim.txt) | aroma=false; melodic_dim=0; melodic_thr=0.5 | 31 / 49 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `melodic`, `susan` | — |
 | [melodic_fixed_dim](snapshots/fmri_resting_state/melodic_fixed_dim.txt) | aroma=false; melodic_dim=30; melodic_thr=0.9 | 31 / 49 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `mcflirt`, `melodic`, `susan` | — |
-| [test_run](snapshots/fmri_resting_state/test_run.txt) | aroma=true; melodic_dim=0; melodic_thr=0.5; test_run=True | 43 / 74 | `applywarp`, `bet`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `fslmaths`, `mcflirt`, `melodic`, `susan` | — |
+| [test_run](snapshots/fmri_resting_state/test_run.txt) | aroma=true; melodic_dim=0; melodic_thr=0.5; test_run=True | 44 / 75 | `applywarp`, `bet`, `convertwarp`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `fslmaths`, `mcflirt`, `melodic`, `susan` | — |
 
 ## fmri_task
 

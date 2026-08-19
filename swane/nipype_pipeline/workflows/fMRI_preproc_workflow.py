@@ -4,7 +4,6 @@ from nipype.interfaces.fsl import (
     MCFLIRT,
     BET,
     SUSAN,
-    FLIRT,
 )
 from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
 from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
@@ -16,6 +15,7 @@ from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
 from swane.config.config_enums import SliceTiming
+from swane.nipype_pipeline.nodes.utils import get_registration_node
 
 
 def fMRI_preproc_workflow(
@@ -359,15 +359,20 @@ def fMRI_preproc_workflow(
 
     # NODE 27: Coregister the mean functional image to the structural image
     # Stick to FSL intentionally avoiding synth for reproducibility reason
-    flirt_2_ref = Node(FLIRT(), name="%s_flirt_2_ref" % name)
-    flirt_2_ref.long_name = "%s to reference space"
-    flirt_2_ref.inputs.out_matrix_file = "fMRI2ref.mat"
-    flirt_2_ref.inputs.cost = "corratio"
-    flirt_2_ref.inputs.searchr_x = [-90, 90]
-    flirt_2_ref.inputs.searchr_y = [-90, 90]
-    flirt_2_ref.inputs.searchr_z = [-90, 90]
-    flirt_2_ref.inputs.dof = 6
-    workflow.connect(meanfunc2, "out_file", flirt_2_ref, "in_file")
-    workflow.connect(inputnode, "reference_brain", flirt_2_ref, "reference")
+    flirt_2_ref = get_registration_node(
+        name = "%s_2_ref" % name,
+        name_prefix = name,
+        name_suffix = "to reference space",
+        use_synth = False,
+        workflow = workflow,
+        moving = [meanfunc2, "out_file"],
+        reference = [inputnode, "reference_brain"],
+        non_linear = False,
+        inverse = False,
+        is_volumetric = True,
+        flirt_cost = "corratio",
+        flirt_search = 90,
+        test_run = test_run
+    )
 
     return workflow
