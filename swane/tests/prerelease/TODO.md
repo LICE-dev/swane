@@ -284,30 +284,23 @@ sweep's `structural_alt_settings` results: 367 voxels detected, 6.5 mm from
 the phantom's known contacts (added to the `FEATURE_TOLERANCE_MM` margins
 comment alongside the brain/CST/venous-sinus measurements).
 
+### Tested and fixed freesurfer_reconall_synth
+Reduced ram to match "fast" configuration, improved phantom to avoid
+scalp below the bran and cause wrong synthstrip output
+
 ## What is left
 
 ### 1. Coverage still not exercised end to end
-- **recon-all on a 20 GB box**: `freesurfer_reconall_synth` (FS v8 synth path)
-  still needs a bigger box than this one.
 
 ### 2. Check gaps
-- **Interpolation**: identify every nifti that undergo a transformation: 
+- **Interpolation**: identify every nifti that undergo a transformati 
   if it is a mask/labelmap verify that nearest-neighbour is used.
-- **Regression vs a committed baseline**: absolute thresholds catch "broken",
-  not "changed"; a diff-against-previous-run mode would catch silent numeric
-  drift between SWANe versions.
+- **Result match and selection**: the current version use filename match
+  to select checkable result, we need to find a more robust way.
 
 ### 3. Robustness / operability
-- **Resume**: the reuse-only-completed logic (including the stale-downgrade
-  check above) is in; make an automated test (SIGINT → clean teardown →
-  reused on re-run).
 
 ### 4. Calibration
-`REGISTRATION_MIN_DICE` lowered to 0.85 (SynthStrip agrees with the reference
-brainmask at ~0.88 by itself, so a correct SynthStrip registration lands ~0.89).
-The other tolerances (`FEATURE_TOLERANCE_MM`, `NONLINEAR_*`, FA bounds) were set
-from one box; confirm they hold across machines and FSL/atlas versions before
-trusting them as gates; widen only with a measured reason.
 
 ### 5. CI / invocation
 The light `test_plan_integrity.py` runs in CI. The heavy sweep is local/nightly

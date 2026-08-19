@@ -43,7 +43,8 @@ from swane.tests.helpers.phantom.tissue import TissueClass as TC, build_tissue_m
 #: v7: fmri_1 generated with no dummy volumes (catalog), so the sweep can test
 #: del_vols=0 on data that genuinely has none instead of faking "no trim" on
 #: padded data (which desynced the GLM and emptied the activation maps).
-GENERATOR_VERSION = "7"
+#: v8: increased subarachnoid space width to improve deskull performance
+GENERATOR_VERSION = "8"
 
 #: Default cache root; ``SWANE_PHANTOM_DIR`` overrides it.
 DEFAULT_CACHE_ROOT = os.path.join(os.path.expanduser("~"), "test_swane", "phantom")
