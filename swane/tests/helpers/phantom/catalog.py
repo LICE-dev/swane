@@ -53,7 +53,7 @@ LUT_T1 = {
     TC.CSF_EXTRA: 30,
     TC.VENOUS_SINUS: 85,
     TC.SKULL: 12,
-    TC.DIPLOE: 205,
+    TC.DIPLOE: 120,
     TC.SCALP: 175,
 }
 
