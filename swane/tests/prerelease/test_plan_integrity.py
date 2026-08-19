@@ -33,7 +33,9 @@ def all_capable():
     )
     # Capabilities that gate whole passes (not tied to an axis value), e.g.
     # reconall_expert, so a fully capable host really skips nothing.
-    needed.update(cap for caps_tuple in _PASS_REQUIREMENTS.values() for cap in caps_tuple)
+    needed.update(
+        cap for caps_tuple in _PASS_REQUIREMENTS.values() for cap in caps_tuple
+    )
     for name in needed:
         caps.add(name, True, "assumed available in this test")
     return caps

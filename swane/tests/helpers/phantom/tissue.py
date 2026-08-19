@@ -181,7 +181,7 @@ def build_tissue_model(
     # IMPORTANT: this cutoff is intentionally expressed in ORIGINAL VOXEL
     # coordinates, before the non-linear deformation and before cropping.
     yy = np.arange(labels.shape[1], dtype=np.int32)[None, :, None]
-    scalp = (dist > 7.0) & (dist <= 12.0) # & (yy < 150)
+    scalp = (dist > 7.0) & (dist <= 12.0)  # & (yy < 150)
 
     labels[csf_gap] = TissueClass.CSF_EXTRA
     labels[bone] = TissueClass.SKULL

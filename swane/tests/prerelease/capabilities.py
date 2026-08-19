@@ -225,8 +225,7 @@ def _probe_synth_ram(caps: Capabilities, test_run: bool = False) -> None:
             name,
             enough,
             (
-                "%.1f GB allocated >= %.1f GB required%s"
-                % (caps.ram_gb, needed, note)
+                "%.1f GB allocated >= %.1f GB required%s" % (caps.ram_gb, needed, note)
                 if enough
                 else "needs %.1f GB%s, only %.1f GB allocated"
                 % (needed, note, caps.ram_gb)
