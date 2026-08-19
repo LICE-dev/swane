@@ -43,7 +43,9 @@ RECONALL_TEST_ARGS = "-nuiterations 1 -norm3diters 1 -no-fix-with-ga"
 # 10/16/24, so this whole mechanism is young; re-add the line once FreeSurfer
 # fixes rca-surfreg's argument ordering (see TODO.md).
 RECONALL_TEST_EXPERT = (
-    "mris_inflate -n 7\n" "mris_fix_topology -niters 2\n" "synthseg --fast\n"
+    "mris_inflate -n 7\n"
+    "mris_fix_topology -niters 2\n"
+    "synthseg --fast\n"
     "mri_ca_register -tol 0.2 -N 100 -LEVELS 4 -A 125 -DT 0.1\n"
 )
 
