@@ -173,10 +173,15 @@ def build_tissue_model(
     # distance (mm) from the nearest brain voxel, isotropic 1 mm grid
     dist = ndi.distance_transform_edt(~brain, sampling=zooms)
     # subarachnoid CSF just outside the brain, then bone, then scalp/fat
-    csf_gap = (dist > 0) & (dist <= 2.5)
-    bone = (dist > 2.5) & (dist <= 7.0)
-    diploe = (dist > 3.8) & (dist <= 5.7)  # marrow core inside the bone table
-    scalp = (dist > 7.0) & (dist <= 12.0)
+    csf_gap = (dist > 0) & (dist <= 5)
+    bone = (dist > 5) & (dist <= 9.5)
+    diploe = (dist > 6.3) & (dist <= 8.2)  # marrow core inside the bone table
+
+    # Scalp only on the superior/head side of the original fsaverage grid.
+    # IMPORTANT: this cutoff is intentionally expressed in ORIGINAL VOXEL
+    # coordinates, before the non-linear deformation and before cropping.
+    yy = np.arange(labels.shape[1], dtype=np.int32)[None, :, None]
+    scalp = (dist > 7.0) & (dist <= 12.0) # & (yy < 150)
 
     labels[csf_gap] = TissueClass.CSF_EXTRA
     labels[bone] = TissueClass.SKULL

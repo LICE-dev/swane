@@ -81,6 +81,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-check results already on disk without running any workflow",
     )
+    selection.add_argument(
+        "--view",
+        metavar="PASS",
+        help="open a finished pass's results in the Slicer GUI exactly as SWANe "
+        "builds the result scene, for inspection, then exit. The scene is built "
+        "live and NOT saved (no scene.mrb), so it costs no disk; close Slicer "
+        "when done. See --list for pass names.",
+    )
 
     behaviour = parser.add_argument_group("behaviour")
     behaviour.add_argument(
@@ -92,11 +100,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-resume",
         action="store_true",
         help="ignore previous results and run everything again",
-    )
-    behaviour.add_argument(
-        "--retry-failed",
-        action="store_true",
-        help="when resuming, re-run passes that previously failed",
     )
     behaviour.add_argument(
         "--rebuild-phantom",
@@ -111,6 +114,13 @@ def build_parser() -> argparse.ArgumentParser:
         "like a real analysis; slower",
     )
     behaviour.add_argument(
+        "--no-cuda",
+        action="store_true",
+        help="pretend the host has no GPU: force the CUDA capability off so "
+        "the CUDA paths (eddy/bedpostx/probtrackx) downgrade to CPU. Useful on "
+        "a box whose GPU is present but has a broken CUDA/FSL build.",
+    )
+    behaviour.add_argument(
         "--no-ground-truth",
         action="store_true",
         help="skip the anatomical plausibility checks (they rebuild the "
@@ -121,6 +131,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("SWANE_SLICER_PATH", ""),
         help="path to the Slicer executable, needed by the venous CT passes "
         "(default: whatever the user's ~/.SWANe configuration records)",
+    )
+    behaviour.add_argument(
+        "--timeout",
+        type=float,
+        default=3.0,
+        metavar="HOURS",
+        help="kill and fail a pass that runs longer than this many hours "
+        "wall clock, so a hung workflow (e.g. the SegmentEndocranium hang) "
+        "cannot block the rest of the sweep; 0 disables it (default: "
+        "%(default)s)",
     )
     behaviour.add_argument(
         "-v", "--verbose", action="store_true", help="print every node as it starts"
@@ -134,7 +154,11 @@ def main(argv=None) -> int:
     # Imported late so --help and --list stay instant.
     from swane.tests.prerelease import capabilities as caps_mod
     from swane.tests.prerelease import report as report_mod
-    from swane.tests.prerelease.checks import GroundTruth, check_pass
+    from swane.tests.prerelease.checks import (
+        GroundTruth,
+        check_cpu_gpu_equivalence,
+        check_pass,
+    )
     from swane.tests.prerelease.plan import (
         PASSES,
         build_plan,
@@ -158,9 +182,21 @@ def main(argv=None) -> int:
         print("Slicer: %s" % slicer_path)
     global_config = _slicer_probe_config(slicer_path)
 
+    if args.view:
+        return view_pass(args.view, work_dir, slicer_path)
+
+    # test_run (the default) lightens SynthSeg/SynthMorph, so their RAM gate is
+    # lowered to match; --full-accuracy turns both the shortcuts and the lower
+    # gate off together.
+    test_run = not args.full_accuracy
     caps = caps_mod.probe(
-        global_config=global_config, cores=args.cores, ram_gb=args.ram
+        global_config=global_config,
+        cores=args.cores,
+        ram_gb=args.ram,
+        test_run=test_run,
     )
+    if args.no_cuda:
+        caps.add("cuda", False, "forced off by --no-cuda")
     print(caps.describe())
     print("")
 
@@ -210,15 +246,27 @@ def main(argv=None) -> int:
             ram_gb=args.ram,
             slicer_path=slicer_path,
             resume=not args.no_resume,
-            retry_failed=args.retry_failed,
             verbose=args.verbose,
-            test_run=not args.full_accuracy,
+            test_run=test_run,
+            timeout_seconds=args.timeout * 3600 if args.timeout > 0 else None,
         )
 
     print("")
     print("Checking results...")
     for result in results:
         result.checks = check_pass(result, ground_truth)
+
+    # The GPU tractography pass is only meaningful compared against its CPU
+    # counterpart: both can pass their own checks independently while the two
+    # backends silently disagree. Fold that comparison into the GPU pass's
+    # own check list, keeping the report's per-pass structure unchanged.
+    by_name = {result.name: result for result in results}
+    cpu_pass = by_name.get("dti_tractography")
+    gpu_pass = by_name.get("dti_tractography_gpu")
+    if cpu_pass is not None and gpu_pass is not None:
+        gpu_pass.checks.extend(check_cpu_gpu_equivalence(cpu_pass, gpu_pass))
+
+    for result in results:
         if result.status == "skipped":
             continue
         print("  %s" % result.name)
@@ -237,7 +285,7 @@ def main(argv=None) -> int:
             "with_reconall": args.with_reconall,
             "only": args.only,
             "ground_truth": ground_truth is not None,
-            "test_run": not args.full_accuracy,
+            "test_run": test_run,
         },
     )
     json_path = report_mod.write_json(report, work_dir)
@@ -248,6 +296,46 @@ def main(argv=None) -> int:
     print("Results kept under: %s" % work_dir)
 
     return 0 if report_mod.overall_success(report) else 1
+
+
+def view_pass(pass_name: str, work_dir: str, slicer_path: str) -> int:
+    """Open a finished pass's result scene in the Slicer GUI, without saving it.
+
+    Runs the very script SWANe uses to build a subject's result scene
+    (``workers/slicer_script_result.py``) over the pass's ``results/`` folder,
+    but with a main window and ``--no-save``: the scene is assembled live for
+    inspection and nothing is written to disk, so any pass can be reviewed on
+    demand without a per-pass ``scene.mrb`` eating space. Blocks until the user
+    closes Slicer.
+    """
+    import subprocess
+
+    import swane
+
+    if not slicer_path:
+        print("No Slicer configured (pass --slicer or set it in ~/.SWANe).")
+        return 2
+    results_dir = os.path.join(work_dir, pass_name, "results")
+    if not os.path.isdir(results_dir):
+        print("No results for pass %r under %s" % (pass_name, work_dir))
+        print("Run the pass first; use --list for the pass names.")
+        return 2
+
+    script = os.path.join(
+        os.path.dirname(swane.__file__), "workers", "slicer_script_result.py"
+    )
+    # slicer_script_result.py reads its results folder from the CWD, so launch
+    # Slicer there. No --no-main-window: we want the GUI. --no-save keeps it
+    # ephemeral (and leaves the window open until the user closes it).
+    print("Building the result scene for %r in Slicer (not saved)." % pass_name)
+    print("Close Slicer when you are done inspecting.")
+    try:
+        return subprocess.call(
+            [slicer_path, "--python-script", script, "--no-save"], cwd=results_dir
+        )
+    except (OSError, FileNotFoundError) as exc:
+        print("Could not launch Slicer at %s (%s)" % (slicer_path, exc))
+        return 2
 
 
 def user_slicer_path() -> str:

@@ -14,6 +14,7 @@ from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.ram_estimators import *
+from swane.utils.ResourceManager import ResourceManager
 from nipype.utils.filemanip import fname_presuffix
 
 
@@ -121,6 +122,13 @@ def get_registration_node(
             mem_gb = 9
             model = "rigid"
 
+        # test_run only cuts the *nonlinear* SynthMorph work (steps=5 below), so
+        # only the joint node genuinely needs less RAM. Scale its reservation to
+        # match the lowered gate (capabilities._probe_synth_ram), or the plugin's
+        # prerun check would abort the pass on a host sized for the reduced gate.
+        if test_run and non_linear:
+            mem_gb *= ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR
+
         synth_morph_reg = Node(
             SynthMorphReg(), name=name + "_synthmorphreg", mem_gb=mem_gb
         )
@@ -174,13 +182,20 @@ def get_registration_node(
             fnirt.ram_estimator = FnirtRamEstimator()
             fnirt.inputs.fieldcoeff_file = True
             if test_run:
-                # Speed up prerelease test runs by dropping the two full-resolution
-                # pyramid levels (subsamp=1) from the FSL defaults (subsamp=4,2,1,1
-                # / miter=5,5,5,5). All per-level lists must share the same length.
-                fnirt.inputs.subsampling_scheme = [4, 2]
-                fnirt.inputs.max_nonlin_iter = [5, 5]
-                fnirt.inputs.in_fwhm = [6, 4]
-                fnirt.inputs.ref_fwhm = [4, 2]
+                # Speed up prerelease test runs by keeping FNIRT's default
+                # 4-level pyramid but never descending to full resolution
+                # (subsamp 1) and doing fewer iterations at the finer levels.
+                # Dropping levels (2-element lists) is NOT safe: FNIRT keeps
+                # --lambda/--estint/--applyinmask/--applyrefmask at their
+                # 4-level internal defaults, and any mismatch in per-level list
+                # lengths makes it abort (it prints usage and writes no warp).
+                # Staying at length 4 keeps every internal default consistent.
+                # Coarsest-first schedule stopping at subsamp 2 (never full
+                # resolution): measured on the phantom this is the fastest of the
+                # length-4 schemes tried and still clears the nonlinear target
+                # alignment check with margin (Dice 0.94, NCC 0.79 vs 0.85/0.5).
+                fnirt.inputs.subsampling_scheme = [4, 4, 4, 2]
+                fnirt.inputs.max_nonlin_iter = [5, 5, 5, 3]
             workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
             if type(moving) == str:
                 fnirt.inputs.in_file = moving
@@ -195,9 +210,12 @@ def get_registration_node(
             if inverse:
                 inv_warp = Node(InvWarp(), name=name + "_invwarp")
                 inv_warp.ram_estimator = InvWarpRamEstimator()
-                if test_run:
-                    # Halve the inversion iterations (FSL default niter=10)
-                    inv_warp.inputs.niter = 5
+                # No test_run speedup here: nipype's InvWarp interface defines
+                # a `niter` trait (--niter=%d), but the actual FSL `invwarp`
+                # binary has no such option ("Option doesn't exist!") -- it
+                # takes no iteration-count argument at all. Setting it always
+                # crashed the node; there is no real accuracy/speed knob to
+                # cut on this tool.
                 workflow.connect(fnirt, "fieldcoeff_file", inv_warp, "warp")
                 if type(moving) == str:
                     inv_warp.inputs.ref_file = moving

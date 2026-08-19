@@ -157,6 +157,33 @@ summary .meta { font-weight:400; color:var(--muted); margin-left:.5rem;
 code { background:rgba(127,127,127,.14); padding:.1rem .3rem; border-radius:4px;
        font-size:.85em; }
 .kv { color:var(--muted); font-size:.85rem; margin:.4rem 0; }
+.viewbtn { display:inline-flex; align-items:center; gap:.35rem; margin:.2rem 0 .4rem;
+           padding:.25rem .6rem; border:1px solid var(--line); border-radius:6px;
+           background:transparent; color:var(--fg); font:inherit; font-size:.8rem;
+           cursor:pointer; }
+.viewbtn:hover { background:rgba(127,127,127,.12); }
+"""
+
+#: A static HTML file has no server behind it, so a link cannot launch a local
+#: process directly -- the browser sandbox forbids it. This copies the exact
+#: `--view` command to the clipboard instead: one click, then paste into a
+#: terminal. document.execCommand('copy') (not the async Clipboard API) is
+#: used deliberately: it works from a plain file:// page in every browser,
+#: whereas navigator.clipboard often refuses outside a secure context/server.
+_COPY_JS = """
+function swaneCopyView(btn, cmd) {
+  var ta = document.createElement('textarea');
+  ta.value = cmd;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  var original = btn.textContent;
+  btn.textContent = 'copied!';
+  setTimeout(function () { btn.textContent = original; }, 1500);
+}
 """
 
 
@@ -170,7 +197,7 @@ def _badge(status: str) -> str:
     return '<span class="%s">%s</span>' % (cls, html.escape(status))
 
 
-def _pass_section(item: dict) -> str:
+def _pass_section(item: dict, work_dir: str) -> str:
     checks = item["checks"]
     failed = [c for c in checks if not c["passed"] and c["severity"] == ERROR]
     warned = [c for c in checks if not c["passed"] and c["severity"] == WARNING]
@@ -211,6 +238,17 @@ def _pass_section(item: dict) -> str:
             '<p class="kv">Results: <code>%s</code></p>'
             % html.escape(os.path.join(item["subject_dir"], "results"))
         )
+        if os.path.isdir(os.path.join(item["subject_dir"], "results")):
+            view_cmd = "python -m swane.tests.prerelease --view %s --work-dir %s" % (
+                item["name"],
+                work_dir,
+            )
+            onclick = "swaneCopyView(this,%s)" % json.dumps(view_cmd)
+            rows.append(
+                '<button type="button" class="viewbtn" onclick="%s">'
+                "&#128203; copy view-scene command</button>"
+                % html.escape(onclick)
+            )
     if item["node_errors"]:
         rows.append("<table><tr><th>failed node</th><th>crash file</th></tr>")
         for err in item["node_errors"]:
@@ -344,7 +382,7 @@ def write_html(report: dict, work_dir: str) -> str:
         html.escape(report["host"]["platform"]),
         html.escape(report["host"]["python"]),
         tile_html,
-        "".join(_pass_section(p) for p in report["passes"]),
+        "".join(_pass_section(p, work_dir) for p in report["passes"]),
         caps_rows,
         "".join(cover_rows),
     )
@@ -352,8 +390,9 @@ def write_html(report: dict, work_dir: str) -> str:
     page = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>SWANe pre-release sweep</title><style>%s</style></head>"
-        "<body>%s</body></html>" % (_CSS, body)
+        "<title>SWANe pre-release sweep</title><style>%s</style>"
+        "<script>%s</script></head>"
+        "<body>%s</body></html>" % (_CSS, _COPY_JS, body)
     )
     path = os.path.join(work_dir, HTML_REPORT)
     with open(path, "w", encoding="utf-8") as handle:

@@ -262,9 +262,15 @@ def dti_preproc_workflow(
         bedpostx.inputs.rician = True
         if test_run:
             # Cut the MCMC cost, dominated by burn_in + n_jumps * sample_every
-            # (~32k iterations/voxel by default): drop it to ~1.1k, plus halve
-            # the fibres modeled per voxel.
-            bedpostx.inputs.n_fibres = 1
+            # (~32k iterations/voxel by default): drop it to ~1.1k. n_fibres
+            # stays at 2 (matching full accuracy): dropping it to 1 was tried
+            # and made the left CST unreconstructable (waytotal 0, even with
+            # much heavier MCMC settings up to ~13k iterations/voxel) -- a
+            # single-fibre model can't represent the crossing along its path.
+            # n_fibres=2 recovers it even at this cheap MCMC setting (waytotal
+            # 463 vs the full-accuracy path's 432), so it is the one knob that
+            # actually matters here, not MCMC depth.
+            bedpostx.inputs.n_fibres = 2
             bedpostx.inputs.sample_every = 5
             bedpostx.inputs.n_jumps = 200
             bedpostx.inputs.burn_in = 100
