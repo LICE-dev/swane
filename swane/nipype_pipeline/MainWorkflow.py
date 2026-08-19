@@ -1089,6 +1089,7 @@ class MainWorkflow(CustomWorkflow):
                     result_node="outputnode",
                     result_name="threshold_file_cont1_thresh%d" % thresh_i,
                     sub_folder=os.path.join(self.Result_DIR, "fMRI"),
+                    remove_mapnode_subdir=True,
                 )
                 if (
                     self.subject_config.getenum_safe(DIL["FMRI_%d" % y], "block_design")
@@ -1099,6 +1100,7 @@ class MainWorkflow(CustomWorkflow):
                         result_node="outputnode",
                         result_name="threshold_file_cont2_thresh%d" % thresh_i,
                         sub_folder=os.path.join(self.Result_DIR, "fMRI"),
+                        remove_mapnode_subdir=True,
                     )
 
     def launch_fMRI_resting_state_analysis(self):

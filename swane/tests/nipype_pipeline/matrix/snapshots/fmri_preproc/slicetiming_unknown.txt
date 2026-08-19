@@ -9,6 +9,15 @@
 #
 # nodes=26 edges=39
 
+- fmri_0_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'corratio'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interp = 'trilinear'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
 - fmri_0_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
     compress = 'y'
@@ -35,15 +44,6 @@
 - fmri_0_extract_ref [ExtractVolumes] mem_gb=0.2 n_procs=1
     num_volumes = 1
     start_volume = 0
-- fmri_0_flirt_2_ref [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
-    cost = 'corratio'
-    dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    out_matrix_file = 'fMRI2ref.mat'
-    output_type = 'NIFTI_GZ'
-    searchr_x = [-90, 90]
-    searchr_y = [-90, 90]
-    searchr_z = [-90, 90]
 - fmri_0_getTR [GetNiftiTR] mem_gb=0.2 n_procs=1
     force_value = 2.0
 - fmri_0_getthresh [ImageStatistics] mem_gb=0.2 n_procs=1
@@ -151,7 +151,7 @@ fmri_0_maskfunc2.out_file -> fmri_0_meanfunc2.in_file
 fmri_0_maskfunc2.out_file -> fmri_0_smooth.in_file
 fmri_0_maskfunc3.out_file -> fmri_0_intnorm.in_file
 fmri_0_meanfunc.out_file -> fmri_0_meanfuncmask.in_file
-fmri_0_meanfunc2.out_file -> fmri_0_flirt_2_ref.in_file
+fmri_0_meanfunc2.out_file -> fmri_0_2_ref_flirt.in_file
 fmri_0_meanfunc2.out_file -> fmri_0_mergenode.in1
 fmri_0_meanfunc3.out_file -> fmri_0_merge_tr_meanfunc3.in2
 fmri_0_meanfuncmask.mask_file -> fmri_0_maskfunc.in_file2
@@ -170,4 +170,4 @@ fmri_0_reorient.out_file -> fmri_0_img2float.in_file
 fmri_0_smooth.smoothed_file -> fmri_0_maskfunc3.in_file
 fmri_0_threshold.out_file -> fmri_0_dilatemask.in_file
 fmri_0_threshold.out_file -> fmri_0_medianval.mask_file
-inputnode.reference_brain -> fmri_0_flirt_2_ref.reference
+inputnode.reference_brain -> fmri_0_2_ref_flirt.reference
