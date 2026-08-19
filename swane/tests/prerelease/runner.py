@@ -188,10 +188,7 @@ def run_pass(
             if not process.is_alive():
                 # The process died without sending WORKFLOW_STOP.
                 break
-            if (
-                timeout_seconds is not None
-                and time.time() - started > timeout_seconds
-            ):
+            if timeout_seconds is not None and time.time() - started > timeout_seconds:
                 raise _TimedOut
     except _TimedOut:
         result.status = "error"
