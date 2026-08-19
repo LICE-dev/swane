@@ -29,7 +29,7 @@
     burn_in_no_ard = 0
     environ = {FSLSUB_PARALLEL='4'}
     force_dir = True
-    n_fibres = 1
+    n_fibres = 2
     n_jumps = 200
     out_dir = 'bedpostx'
     output_type = 'NIFTI_GZ'

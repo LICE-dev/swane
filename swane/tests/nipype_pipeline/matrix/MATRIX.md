@@ -57,7 +57,7 @@ Overview of 66 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [autorecon_pial](snapshots/freesurfer/autorecon_pial.txt) | hippo_amyg_labels=False; max_cpu=4; multicore_node_limit=SOFT_CAP; step=AUTORECON_PIAL; synth_reconall=false | 11 / 17 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
+| [autorecon_pial](snapshots/freesurfer/autorecon_pial.txt) | hippo_amyg_labels=False; max_cpu=4; multicore_node_limit=SOFT_CAP; step=AUTORECON_PIAL; synth_reconall=false | 11 / 16 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
 | [disabled_returns_none](snapshots/freesurfer/disabled_returns_none.txt) | hippo_amyg_labels=False; max_cpu=4; multicore_node_limit=SOFT_CAP; step=DISABLED; synth_reconall=false | None | — | — |
 | [reconall](snapshots/freesurfer/reconall.txt) | hippo_amyg_labels=False; max_cpu=4; multicore_node_limit=SOFT_CAP; step=RECONALL; synth_reconall=false | 12 / 18 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
 | [reconall_hippo](snapshots/freesurfer/reconall_hippo.txt) | hippo_amyg_labels=True; max_cpu=4; multicore_node_limit=SOFT_CAP; step=RECONALL; synth_reconall=false | 15 / 25 | `fslmaths`, `mri_vol2vol`, `recon-all`, `segmentHA_T1.sh` | — |
