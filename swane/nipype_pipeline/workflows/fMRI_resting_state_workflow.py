@@ -1,15 +1,13 @@
-from nipype import Node, IdentityInterface, SelectFiles, MapNode, Merge
+from nipype import Node, IdentityInterface, SelectFiles, Merge
 from nipype.interfaces.fsl import (
     MELODIC,
-    ApplyXFM,
-    FLIRT,
-    FNIRT,
-    ApplyWarp,
     FilterRegressor,
+    ConvertWarp,
 )
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
+from swane.nipype_pipeline.nodes.utils import get_registration_node, apply_registration_node
 from swane.config.config_enums import SliceTiming
 from ica_aroma_py.services.ICA_AROMA_nodes import (
     FeatureTimeSeries,
@@ -17,7 +15,6 @@ from ica_aroma_py.services.ICA_AROMA_nodes import (
     AromaClassification,
     FeatureSpatial,
     FeatureSpatialPrep,
-    IsoResample,
 )
 from ica_aroma_py import aroma_mask_out, aroma_mask_edge, aroma_mask_csf
 import os
@@ -104,7 +101,7 @@ def fMRI_resting_state_workflow(
     meanfuncmask = workflow.get_node("%s_meanfuncmask" % name)
     motion_correct = workflow.get_node("%s_motion_correct" % name)
     dilatemask = workflow.get_node("%s_dilatemask" % name)
-    flirt_2_ref = workflow.get_node("%s_flirt_2_ref" % name)
+    flirt_2_ref = workflow.get_node("%s_2_ref_flirt" % name)
     highpass = workflow.get_node(
         "%s_highpass" % name
     )  # this is the final preprocessing file
@@ -163,43 +160,39 @@ def fMRI_resting_state_workflow(
         )
 
         # Stick to FSL intentionally avoiding synth for reproducibility reason
-        flirt = Node(FLIRT(), name="ref_2_mni_flirt")
-        flirt.long_name = "%s to atlas"
-        flirt.inputs.searchr_x = [-90, 90]
-        flirt.inputs.searchr_y = [-90, 90]
-        flirt.inputs.searchr_z = [-90, 90]
-        flirt.inputs.dof = 12
-        flirt.inputs.cost = "corratio"
-        flirt.inputs.out_matrix_file = "ref_2_mni.mat"
-        flirt.inputs.reference = mni2
-        workflow.connect(inputnode, "reference_brain", flirt, "in_file")
+        reg_2_mni = get_registration_node(
+            name = "ref_2_mni",
+            name_prefix = name,
+            name_suffix = "to atlas",
+            use_synth = False,
+            workflow = workflow,
+            moving_brain = [inputnode, "reference_brain"],
+            reference_brain = mni2,
+            non_linear = True,
+            inverse = False,
+            flirt_cost = "corratio",
+            flirt_search = 90,
+            test_run = test_run
+        )
 
-        # NODE 2: Nonlinear registration
-        # Stick to FSL intentionally avoiding synth for reproducibility reason
-        fnirt = Node(FNIRT(), name="ref_2_mni_fnirt")
-        fnirt.long_name = "%s to atlas"
-        fnirt.inputs.fieldcoeff_file = True
-        fnirt.inputs.ref_file = mni2
-        if test_run:
-            # Same speedup as get_registration_node: keep FNIRT's default
-            # 4-level pyramid but never go to full resolution and do fewer
-            # iterations at the finer levels. Dropping levels (2-element lists)
-            # aborts FNIRT, because its --lambda/--estint/--applyin/refmask stay
-            # at 4-level defaults and the per-level list lengths must all match.
-            # Coarsest-first, stopping at subsamp 2 (never full resolution):
-            # fastest length-4 scheme measured on the phantom, still clears the
-            # nonlinear target alignment check with margin.
-            fnirt.inputs.subsampling_scheme = [4, 4, 4, 2]
-            fnirt.inputs.max_nonlin_iter = [5, 5, 5, 3]
-        workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")
-        workflow.connect(inputnode, "reference_brain", fnirt, "in_file")
+        # Combine func-to-ref linear matrix + ref-to-mni nonlinear warp into
+        # single warp field, no premat on ApplyWarp.
+        convert_warp = Node(ConvertWarp(), name="func_2_mni_warp")
+        convert_warp.long_name = "func to atlas warp combination"
+        convert_warp.inputs.reference = mni2
+        workflow.connect(flirt_2_ref, "out_matrix_file", convert_warp, "premat")
+        workflow.connect(reg_2_mni.out_registered_node, reg_2_mni.warp, convert_warp, "warp1")
 
         # Stick to FSL intentionally avoiding synth for reproducibility reason
-        apply_warp = Node(ApplyWarp(), name="func2mni")
-        apply_warp.inputs.ref_file = mni2
-        workflow.connect(flirt_2_ref, "out_matrix_file", apply_warp, "premat")
-        workflow.connect(feature_spatial_prep, "out_file", apply_warp, "in_file")
-        workflow.connect(fnirt, "fieldcoeff_file", apply_warp, "field_file")
+        apply_warp = apply_registration_node(
+            name = "func2mni",
+            use_synth = False,
+            workflow = workflow,
+            warp = [convert_warp, "out_field"],
+            moving = [feature_spatial_prep, "out_file"],
+            reference = mni2,
+            non_linear = True,
+        )
 
         feature_spatial = Node(FeatureSpatial(), name="feature_spatial")
         feature_spatial.inputs.mask_csf = aroma_mask_csf
@@ -270,17 +263,18 @@ def fMRI_resting_state_workflow(
     workflow.connect(melodic, "out_dir", melodic_output, "melodic_dir")
     workflow.connect(melodic, "out_dir", melodic_output, "base_directory")
 
-    zstats_2_ref = MapNode(
-        ApplyXFM(), name="zstats_2_ref", iterfield=["in_file", "out_file"]
-    )
-    workflow.connect(flirt_2_ref, "out_matrix_file", zstats_2_ref, "in_matrix_file")
-    workflow.connect(inputnode, "reference_brain", zstats_2_ref, "reference")
-    workflow.connect(melodic_output, "thresh_zstat_files", zstats_2_ref, "in_file")
-    workflow.connect(
-        melodic_output,
-        ("thresh_zstat_files", registered_file_name),
-        zstats_2_ref,
-        "out_file",
+    zstats_2_ref = apply_registration_node(
+        name = "zstats",
+        use_synth = False,
+        workflow = workflow,
+        warp = [flirt_2_ref, "out_matrix_file"],
+        moving = [melodic_output, "thresh_zstat_files"],
+        reference = [inputnode, "reference_brain"],
+        out_file = [melodic_output, ("thresh_zstat_files", registered_file_name)],
+        non_linear = False,
+        name_prefix = "Zstat maps",
+        name_suffix = "to reference",
+        iterfield = ["in_file", "out_file"],
     )
 
     workflow.connect(zstats_2_ref, "out_file", outputnode, "thresh_zstat_files")

@@ -1,4 +1,4 @@
-from nipype import Node
+from nipype import Node, MapNode
 from nipype.interfaces.fsl import (
     BET,
     FLIRT,
@@ -273,21 +273,29 @@ def apply_registration_node(
     warp: list[Node | str],
     moving: str | list[Node | str],
     reference: str | list[Node | str],
-    out_file: str | list[Node | str] = None,
+    out_file: str | list[Node | str | tuple] = None,
     non_linear: bool = False,
     labelmap: bool = False,
     name_prefix: str = "",
     name_suffix: str = "",
+    iterfield: list[str] = None,
 ) -> Node:
+    node_class = Node if iterfield is None else MapNode
+    node_kwargs = {} if iterfield is None else {"iterfield": iterfield}
+
     if use_synth:
-        apply_node = Node(SynthMorphApply(), name=name + "_morph_apply")
+        apply_node = node_class(
+            SynthMorphApply(), name=name + "_morph_apply", **node_kwargs
+        )
         apply_node.long_name = name_prefix + " %s " + name_suffix
         if labelmap:
             apply_node.inputs.method = "nearest"
         workflow.connect(warp[0], warp[1], apply_node, "warp_file")
 
     elif non_linear:
-        apply_node = Node(ApplyWarp(), name=name + "_apply_warp")
+        apply_node = node_class(
+            ApplyWarp(), name=name + "_apply_warp", **node_kwargs
+        )
         apply_node.long_name = name_prefix + " %s " + name_suffix
         if labelmap:
             apply_node.inputs.interp = "nn"
@@ -297,7 +305,9 @@ def apply_registration_node(
         else:
             workflow.connect(reference[0], reference[1], apply_node, "ref_file")
     else:
-        apply_node = Node(ApplyXFM(), name=name + "_apply_xfm")
+        apply_node = node_class(
+            ApplyXFM(), name=name + "_apply_xfm", **node_kwargs
+        )
         apply_node.long_name = name_prefix + " %s " + name_suffix
         if labelmap:
             apply_node.inputs.interp = "nearestneighbour"

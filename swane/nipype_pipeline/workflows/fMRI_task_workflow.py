@@ -8,11 +8,11 @@ from nipype.interfaces.fsl import (
     FILMGLS,
     SmoothEstimate,
     Cluster,
-    ApplyXFM,
 )
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.FMRIGenSpec import FMRIGenSpec
+from swane.nipype_pipeline.nodes.utils import apply_registration_node
 from swane.config.config_enums import BlockDesign
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 
@@ -108,7 +108,7 @@ def fMRI_task_workflow(
     del_vols = workflow.get_node("%s_del_vols" % name)
     motion_correct = workflow.get_node("%s_motion_correct" % name)
     dilatemask = workflow.get_node("%s_dilatemask" % name)
-    flirt_2_ref = workflow.get_node("%s_flirt_2_ref" % name)
+    flirt_2_ref = workflow.get_node("%s_2_ref_flirt" % name)
     highpass = workflow.get_node("%s_highpass" % name)
     inputnode = workflow.get_node("inputnode")
 
@@ -252,33 +252,18 @@ def fMRI_task_workflow(
         workflow.connect(smoothness, "dlh", cluster1, "dlh")
 
         # NODE 37a: Transformation in ref space
-        cluster1_2_ref = Node(ApplyXFM(), name="%s_cluster_t3_%d_to_ref" % (name, cont))
-        cluster1_2_ref.long_name = (
-            "contrast "
-            + str(cont)
-            + " threshold "
-            + str(threshold)
-            + " %s in reference space"
-        )
-        cluster1_2_ref.inputs.apply_xfm = True
-        workflow.connect(cluster1, "threshold_file", cluster1_2_ref, "in_file")
-        workflow.connect(
-            [
-                (
-                    genSpec,
-                    cluster1_2_ref,
-                    [
-                        (
-                            ("contrasts", cluster_file_name, threshold, name, cont),
-                            "out_file",
-                        )
-                    ],
-                )
-            ]
-        )
-        workflow.connect(inputnode, "reference_brain", cluster1_2_ref, "reference")
-        workflow.connect(
-            flirt_2_ref, "out_matrix_file", cluster1_2_ref, "in_matrix_file"
+        cluster1_2_ref = apply_registration_node(
+            name="%s_cluster_t3_%d_to_ref" % (name, cont),
+            use_synth=False,
+            workflow=workflow,
+            warp=[flirt_2_ref, "out_matrix_file"],
+            moving=[cluster1, "threshold_file"],
+            reference=[inputnode, "reference_brain"],
+            out_file=[genSpec, ("contrasts", cluster_file_name, threshold, name, cont)],
+            non_linear=False,
+            name_prefix="contrast " + str(cont) + " threshold " + str(threshold),
+            name_suffix="to reference",
+            iterfield=["in_file", "out_file"],
         )
 
         workflow.connect(
@@ -323,33 +308,18 @@ def fMRI_task_workflow(
         workflow.connect(smoothness, "dlh", cluster2, "dlh")
 
         # NODE 37b: Transformation in ref space
-        cluster2_2_ref = Node(ApplyXFM(), name="%s_cluster_t5_%d_to_ref" % (name, cont))
-        cluster2_2_ref.long_name = (
-            "contrast "
-            + str(cont)
-            + " threshold "
-            + str(threshold)
-            + " %s in reference space"
-        )
-        cluster2_2_ref.inputs.apply_xfm = True
-        workflow.connect(cluster2, "threshold_file", cluster2_2_ref, "in_file")
-        workflow.connect(
-            [
-                (
-                    genSpec,
-                    cluster2_2_ref,
-                    [
-                        (
-                            ("contrasts", cluster_file_name, threshold, name, cont),
-                            "out_file",
-                        )
-                    ],
-                )
-            ]
-        )
-        workflow.connect(inputnode, "reference_brain", cluster2_2_ref, "reference")
-        workflow.connect(
-            flirt_2_ref, "out_matrix_file", cluster2_2_ref, "in_matrix_file"
+        cluster2_2_ref = apply_registration_node(
+            name="%s_cluster_t3_%d_to_ref" % (name, cont),
+            use_synth=False,
+            workflow=workflow,
+            warp=[flirt_2_ref, "out_matrix_file"],
+            moving=[cluster2, "threshold_file"],
+            reference=[inputnode, "reference_brain"],
+            out_file=[genSpec, ("contrasts", cluster_file_name, threshold, name, cont)],
+            non_linear=False,
+            name_prefix="contrast " + str(cont) + " threshold " + str(threshold),
+            name_suffix="to reference",
+            iterfield=["in_file", "out_file"],
         )
 
         workflow.connect(
@@ -394,33 +364,18 @@ def fMRI_task_workflow(
         workflow.connect(smoothness, "dlh", cluster3, "dlh")
 
         # NODE 37c: Transformation in ref space
-        cluster3_2_ref = Node(ApplyXFM(), name="%s_cluster_t7_%d_to_ref" % (name, cont))
-        cluster3_2_ref.long_name = (
-            "contrast "
-            + str(cont)
-            + " threshold "
-            + str(threshold)
-            + " %s in reference space"
-        )
-        cluster3_2_ref.inputs.apply_xfm = True
-        workflow.connect(cluster3, "threshold_file", cluster3_2_ref, "in_file")
-        workflow.connect(
-            [
-                (
-                    genSpec,
-                    cluster3_2_ref,
-                    [
-                        (
-                            ("contrasts", cluster_file_name, threshold, name, cont),
-                            "out_file",
-                        )
-                    ],
-                )
-            ]
-        )
-        workflow.connect(inputnode, "reference_brain", cluster3_2_ref, "reference")
-        workflow.connect(
-            flirt_2_ref, "out_matrix_file", cluster3_2_ref, "in_matrix_file"
+        cluster3_2_ref = apply_registration_node(
+            name="%s_cluster_t3_%d_to_ref" % (name, cont),
+            use_synth=False,
+            workflow=workflow,
+            warp=[flirt_2_ref, "out_matrix_file"],
+            moving=[cluster3, "threshold_file"],
+            reference=[inputnode, "reference_brain"],
+            out_file=[genSpec, ("contrasts", cluster_file_name, threshold, name, cont)],
+            non_linear=False,
+            name_prefix="contrast " + str(cont) + " threshold " + str(threshold),
+            name_suffix="to reference",
+            iterfield=["in_file", "out_file"],
         )
 
         workflow.connect(
