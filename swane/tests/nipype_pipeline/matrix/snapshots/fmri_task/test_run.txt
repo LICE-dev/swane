@@ -9,6 +9,15 @@
 #
 # nodes=42 edges=86
 
+- fmri_0_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'corratio'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interp = 'trilinear'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
 - fmri_0_art [ArtifactDetect] mem_gb=0.2 n_procs=1
     bound_by_brainmask = False
     global_threshold = 8.0
@@ -33,7 +42,7 @@
     pthreshold = 0.05
     threshold = 3.1
     use_mm = False
-- fmri_0_cluster_t3_1_to_ref [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+- fmri_0_cluster_t3_1_to_ref_apply_xfm [ApplyXFM] cmd=flirt mapnode(iterfield=in_file,out_file) mem_gb=0.2 n_procs=1
     apply_xfm = True
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
@@ -49,7 +58,7 @@
     pthreshold = 0.05
     threshold = 5.0
     use_mm = False
-- fmri_0_cluster_t5_1_to_ref [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+- fmri_0_cluster_t5_1_to_ref_apply_xfm [ApplyXFM] cmd=flirt mapnode(iterfield=in_file,out_file) mem_gb=0.2 n_procs=1
     apply_xfm = True
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
@@ -65,7 +74,7 @@
     pthreshold = 0.05
     threshold = 7.0
     use_mm = False
-- fmri_0_cluster_t7_1_to_ref [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+- fmri_0_cluster_t7_1_to_ref_apply_xfm [ApplyXFM] cmd=flirt mapnode(iterfield=in_file,out_file) mem_gb=0.2 n_procs=1
     apply_xfm = True
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
@@ -95,15 +104,6 @@
 - fmri_0_extract_ref [ExtractVolumes] mem_gb=0.2 n_procs=1
     num_volumes = 1
     start_volume = 0
-- fmri_0_flirt_2_ref [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
-    cost = 'corratio'
-    dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    out_matrix_file = 'fMRI2ref.mat'
-    output_type = 'NIFTI_GZ'
-    searchr_x = [-90, 90]
-    searchr_y = [-90, 90]
-    searchr_z = [-90, 90]
 - fmri_0_genSpec [FMRIGenSpec] mem_gb=0.2 n_procs=1
     block_design = <BlockDesign.RARA: 'rArA...'>
     rest_duration = 30
@@ -230,13 +230,16 @@
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 # connections
+fmri_0_2_ref_flirt.out_matrix_file -> fmri_0_cluster_t3_1_to_ref_apply_xfm.in_matrix_file
+fmri_0_2_ref_flirt.out_matrix_file -> fmri_0_cluster_t5_1_to_ref_apply_xfm.in_matrix_file
+fmri_0_2_ref_flirt.out_matrix_file -> fmri_0_cluster_t7_1_to_ref_apply_xfm.in_matrix_file
 fmri_0_art.outlier_files -> fmri_0_modelspec.outlier_files
-fmri_0_cluster_t3_1.threshold_file -> fmri_0_cluster_t3_1_to_ref.in_file
-fmri_0_cluster_t3_1_to_ref.out_file -> outputnode.threshold_file_cont1_thresh1
-fmri_0_cluster_t5_1.threshold_file -> fmri_0_cluster_t5_1_to_ref.in_file
-fmri_0_cluster_t5_1_to_ref.out_file -> outputnode.threshold_file_cont1_thresh2
-fmri_0_cluster_t7_1.threshold_file -> fmri_0_cluster_t7_1_to_ref.in_file
-fmri_0_cluster_t7_1_to_ref.out_file -> outputnode.threshold_file_cont1_thresh3
+fmri_0_cluster_t3_1.threshold_file -> fmri_0_cluster_t3_1_to_ref_apply_xfm.in_file
+fmri_0_cluster_t3_1_to_ref_apply_xfm.out_file -> outputnode.threshold_file_cont1_thresh1
+fmri_0_cluster_t5_1.threshold_file -> fmri_0_cluster_t5_1_to_ref_apply_xfm.in_file
+fmri_0_cluster_t5_1_to_ref_apply_xfm.out_file -> outputnode.threshold_file_cont1_thresh2
+fmri_0_cluster_t7_1.threshold_file -> fmri_0_cluster_t7_1_to_ref_apply_xfm.in_file
+fmri_0_cluster_t7_1_to_ref_apply_xfm.out_file -> outputnode.threshold_file_cont1_thresh3
 fmri_0_conv.converted_files -> fmri_0_del_vols.in_file
 fmri_0_conv.converted_files -> fmri_0_getTR.in_file
 fmri_0_conv.converted_files -> fmri_0_nvols.in_file
@@ -248,15 +251,12 @@ fmri_0_dilatemask.out_file -> fmri_0_maskfunc3.in_file2
 fmri_0_dilatemask.out_file -> fmri_0_maskfunc4_1.in_file2
 fmri_0_dilatemask.out_file -> fmri_0_smoothness.mask_file
 fmri_0_extract_ref.out_file -> fmri_0_motion_correct.ref_file
-fmri_0_flirt_2_ref.out_matrix_file -> fmri_0_cluster_t3_1_to_ref.in_matrix_file
-fmri_0_flirt_2_ref.out_matrix_file -> fmri_0_cluster_t5_1_to_ref.in_matrix_file
-fmri_0_flirt_2_ref.out_matrix_file -> fmri_0_cluster_t7_1_to_ref.in_matrix_file
 fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (3.1, 'fmri_0', 1)) -> fmri_0_cluster_t3_1.out_threshold_file
-fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (3.1, 'fmri_0', 1)) -> fmri_0_cluster_t3_1_to_ref.out_file
+fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (3.1, 'fmri_0', 1)) -> fmri_0_cluster_t3_1_to_ref_apply_xfm.out_file
 fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (5, 'fmri_0', 1)) -> fmri_0_cluster_t5_1.out_threshold_file
-fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (5, 'fmri_0', 1)) -> fmri_0_cluster_t5_1_to_ref.out_file
+fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (5, 'fmri_0', 1)) -> fmri_0_cluster_t5_1_to_ref_apply_xfm.out_file
 fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (7, 'fmri_0', 1)) -> fmri_0_cluster_t7_1.out_threshold_file
-fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (7, 'fmri_0', 1)) -> fmri_0_cluster_t7_1_to_ref.out_file
+fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (7, 'fmri_0', 1)) -> fmri_0_cluster_t7_1_to_ref_apply_xfm.out_file
 fmri_0_genSpec.contrasts -> fmri_0_level_1_design.contrasts
 fmri_0_genSpec.evs_run -> fmri_0_modelspec.subject_info
 fmri_0_getTR.TR -> fmri_0_genSpec.TR
@@ -281,7 +281,7 @@ fmri_0_maskfunc4_1.out_file -> fmri_0_cluster_t3_1.in_file
 fmri_0_maskfunc4_1.out_file -> fmri_0_cluster_t5_1.in_file
 fmri_0_maskfunc4_1.out_file -> fmri_0_cluster_t7_1.in_file
 fmri_0_meanfunc.out_file -> fmri_0_meanfuncmask.in_file
-fmri_0_meanfunc2.out_file -> fmri_0_flirt_2_ref.in_file
+fmri_0_meanfunc2.out_file -> fmri_0_2_ref_flirt.in_file
 fmri_0_meanfunc2.out_file -> fmri_0_mergenode.in1
 fmri_0_meanfunc3.out_file -> fmri_0_merge_tr_meanfunc3.in2
 fmri_0_meanfuncmask.mask_file -> fmri_0_maskfunc.in_file2
@@ -319,7 +319,7 @@ fmri_0_smoothness.volume -> fmri_0_cluster_t5_1.volume
 fmri_0_smoothness.volume -> fmri_0_cluster_t7_1.volume
 fmri_0_threshold.out_file -> fmri_0_dilatemask.in_file
 fmri_0_threshold.out_file -> fmri_0_medianval.mask_file
-inputnode.reference_brain -> fmri_0_cluster_t3_1_to_ref.reference
-inputnode.reference_brain -> fmri_0_cluster_t5_1_to_ref.reference
-inputnode.reference_brain -> fmri_0_cluster_t7_1_to_ref.reference
-inputnode.reference_brain -> fmri_0_flirt_2_ref.reference
+inputnode.reference_brain -> fmri_0_2_ref_flirt.reference
+inputnode.reference_brain -> fmri_0_cluster_t3_1_to_ref_apply_xfm.reference
+inputnode.reference_brain -> fmri_0_cluster_t5_1_to_ref_apply_xfm.reference
+inputnode.reference_brain -> fmri_0_cluster_t7_1_to_ref_apply_xfm.reference

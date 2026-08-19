@@ -309,7 +309,7 @@ def fMRI_task_workflow(
 
         # NODE 37b: Transformation in ref space
         cluster2_2_ref = apply_registration_node(
-            name="%s_cluster_t3_%d_to_ref" % (name, cont),
+            name="%s_cluster_t5_%d_to_ref" % (name, cont),
             use_synth=False,
             workflow=workflow,
             warp=[flirt_2_ref, "out_matrix_file"],
@@ -365,7 +365,7 @@ def fMRI_task_workflow(
 
         # NODE 37c: Transformation in ref space
         cluster3_2_ref = apply_registration_node(
-            name="%s_cluster_t3_%d_to_ref" % (name, cont),
+            name="%s_cluster_t7_%d_to_ref" % (name, cont),
             use_synth=False,
             workflow=workflow,
             warp=[flirt_2_ref, "out_matrix_file"],
