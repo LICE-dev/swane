@@ -165,9 +165,7 @@ def main(argv=None):
     slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
         segmentationNode, [boneRawID], boneRawLabelmap, inputVolume
     )
-    boneRawVoxelCount = int(
-        (slicer.util.arrayFromVolume(boneRawLabelmap) != 0).sum()
-    )
+    boneRawVoxelCount = int((slicer.util.arrayFromVolume(boneRawLabelmap) != 0).sum())
     slicer.mrmlScene.RemoveNode(boneRawLabelmap)
     if boneRawVoxelCount == 0:
         raise RuntimeError(

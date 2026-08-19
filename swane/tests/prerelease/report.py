@@ -246,8 +246,7 @@ def _pass_section(item: dict, work_dir: str) -> str:
             onclick = "swaneCopyView(this,%s)" % json.dumps(view_cmd)
             rows.append(
                 '<button type="button" class="viewbtn" onclick="%s">'
-                "&#128203; copy view-scene command</button>"
-                % html.escape(onclick)
+                "&#128203; copy view-scene command</button>" % html.escape(onclick)
             )
     if item["node_errors"]:
         rows.append("<table><tr><th>failed node</th><th>crash file</th></tr>")
