@@ -874,41 +874,70 @@ def load_vein(
 # -----------------------------
 
 
+def _make_labelmap_zero_transparent(node):
+    """
+    Make labelmap background value 0 fully transparent,
+    while keeping all non-zero labels visible.
+    """
+    if node is None:
+        return
+
+    display_node = node.GetDisplayNode()
+    if display_node is None:
+        node.CreateDefaultDisplayNodes()
+        display_node = node.GetDisplayNode()
+
+    color_node = display_node.GetColorNode()
+    if color_node is None:
+        return
+
+    # For labelmaps, value 0 is the background.
+    # Set its opacity to zero in the existing color table.
+    if color_node.IsA("vtkMRMLColorTableNode"):
+        zero_index = 0
+
+        if color_node.GetNumberOfColors() > zero_index:
+            color_node.SetOpacity(zero_index, 0.0)
+            color_node.Modified()
+            display_node.Modified()
+
 def load_freesurfer_segmentation_file(seg_file: str):
     """
     Load a FreeSurfer segmentation file into Slicer.
-
-    Handles differences between Linux and other platforms to avoid plugin crashes.
-
-    Parameters
-    ----------
-    seg_file : str
-        Full path to the FreeSurfer segmentation file (.mgz).
-
-    Returns
-    -------
-    None
     """
+
     if not os.path.exists(seg_file):
         print(f"SLICERLOADER: Segmentation file not found: {seg_file}")
         return
 
     try:
-        # On Linux, use the old method to prevent Slicer FreeSurfer plugin crashes
         if "linux" in sys.platform:
-            slicer.util.loadVolume(
-                seg_file, {"labelmap": True, "colorNodeID": "vtkMRMLColorTableNodeFile"}
+            node = slicer.util.loadVolume(
+                seg_file,
+                {
+                    "labelmap": True,
+                    "colorNodeID": "vtkMRMLColorTableNodeFile",
+                },
             )
+
+            if node is not None:
+                _make_labelmap_zero_transparent(node)
+
         else:
-            # On Windows/macOS, use FreeSurferImporter plugin logic
-            slicer.util.getModuleLogic("FreeSurferImporter").LoadFreeSurferSegmentation(
-                seg_file
-            )
+            node = slicer.util.getModuleLogic(
+                "FreeSurferImporter"
+            ).LoadFreeSurferSegmentation(seg_file)
+
         print(
-            f"SLICERLOADER: Loaded FreeSurfer segmentation: {os.path.basename(seg_file)}"
+            f"SLICERLOADER: Loaded FreeSurfer segmentation: "
+            f"{os.path.basename(seg_file)}"
         )
+
     except Exception as e:
-        print(f"SLICERLOADER: Failed to load segmentation {seg_file}: {e}")
+        print(
+            f"SLICERLOADER: Failed to load segmentation "
+            f"{seg_file}: {e}"
+        )
 
 
 def load_freesurfer(scene_dir: str, ref_node):
