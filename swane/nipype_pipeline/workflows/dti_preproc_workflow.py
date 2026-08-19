@@ -180,10 +180,7 @@ def dti_preproc_workflow(
                 "OMP_NUM_THREADS": str(eddy_cpu),
                 "FSL_SKIP_GLOBAL": "1",
             }
-            # Thread count is set through OMP_NUM_THREADS above, which both the
-            # old eddy_openmp and the newer eddy_cpu honour. Do NOT also pass a
-            # --nthr flag: recent FSL's eddy_cpu has no such option and aborts
-            # with "Option doesn't exist!" (older eddy_openmp accepted it).
+            eddy.inputs.args = "--nthr=%d" % eddy_cpu
 
         workflow.connect(reorient, "out_file", eddy, "in_file")
         workflow.connect(conversion, "bvals", eddy, "in_bval")
