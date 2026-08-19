@@ -193,12 +193,10 @@
 - ref_2_mni_fnirt [FNIRT] cmd=fnirt mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     fieldcoeff_file = True
-    in_fwhm = [6, 4]
-    max_nonlin_iter = [5, 5]
+    max_nonlin_iter = [5, 5, 5, 3]
     output_type = 'NIFTI_GZ'
     ref_file = '<FSLDIR>/data/standard/MNI152_T1_2mm_brain.nii.gz'
-    ref_fwhm = [4, 2]
-    subsampling_scheme = [4, 2]
+    subsampling_scheme = [4, 4, 4, 2]
 - zstats_2_ref [ApplyXFM] cmd=flirt mapnode(iterfield=in_file,out_file) mem_gb=0.2 n_procs=1
     apply_xfm = True
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
