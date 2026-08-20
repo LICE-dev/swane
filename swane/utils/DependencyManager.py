@@ -208,6 +208,7 @@ class DependencyManager:
         # If Slicer is valid, we need to check if the startup patch is present
         # on every startup
         from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
         SlicerCheckWorker.add_slicer_startup_patch()
 
         return False
