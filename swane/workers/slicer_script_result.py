@@ -641,6 +641,10 @@ class MelodicTimecourseViewer:
             self._chart_node.AddAndObservePlotSeriesNodeID(self._series_node.GetID())
 
     def _show(self, ic: int, volume_name: str):
+        plots_module = getattr(slicer.modules, "plots", None)
+        if plots_module is None:
+            return
+
         mix_table_node = _get_melodic_mix_table()
         if mix_table_node is None:
             return
@@ -664,6 +668,9 @@ class MelodicTimecourseViewer:
         slicer.modules.plots.logic().ShowChartInLayout(self._chart_node)
 
     def _hide(self):
+        plots_module = getattr(slicer.modules, "plots", None)
+        if plots_module is None:
+            return
         plot_widget = slicer.modules.plots.widgetRepresentation()
         if plot_widget:
             plot_widget.setVisible(False)
