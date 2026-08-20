@@ -196,17 +196,21 @@ class DependencyManager:
         if config is None or not config.global_config:
             return False
 
-        check_slicer = False
         if not DependencyManager.is_slicer(config):
-            check_slicer = True
+            return True
 
         if not DependencyManager.check_slicer_version(config.get_slicer_version()):
-            check_slicer = True
+            return True
 
         if config.get_slicer_validator():
-            check_slicer = True
+            return True
 
-        return check_slicer
+        # If Slicer is valid, we need to check if the startup patch is present
+        # on every startup
+        from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+        SlicerCheckWorker.add_slicer_startup_patch()
+
+        return False
 
     @staticmethod
     def check_slicer_version(slicer_version: str) -> bool:
