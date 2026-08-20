@@ -9,6 +9,7 @@ from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, Workflow
 from nipype.external.cloghandler import ConcurrentRotatingFileHandler
 import logging as orig_log
 from typing import TYPE_CHECKING
+from swane.config.config_enums import FreesurferStep
 
 if TYPE_CHECKING:
     from swane.nipype_pipeline.MainWorkflow import MainWorkflow
@@ -140,6 +141,16 @@ class WorkflowProcess(Process):
         formatter = orig_log.Formatter(fmt=nipype_log.fmt, datefmt=nipype_log.datefmt)
         file_handler.setFormatter(formatter)
         WorkflowProcess.add_handlers(file_handler)
+
+        # freesurfer log
+        if self.workflow.freesurfer is not None:
+            from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
+            fs_path = os.path.join(self.workflow.base_dir, FS_DIR)
+            log_target = os.path.join(fs_path, "scripts", "recon-all.log")
+            log_link = os.path.join(log_dir, "recon-all.log")
+            if os.path.lexists(log_link):
+                os.unlink(log_link)
+            os.symlink(log_target, log_link)
 
         # enable resource monitor if required
         if self.workflow.is_resource_monitor:
