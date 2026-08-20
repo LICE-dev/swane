@@ -343,21 +343,32 @@ class DependencyManager:
                 strings.check_dep_fs_error2 % freesurfer_version,
                 DependenceStatus.MISSING,
             )
+
+        # FreeSurfer license file check
         license_file = os.getenv("FS_LICENSE")
-        if license_file is None or not os.path.exists(license_file):
-            license_file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
-        if not os.path.exists(license_file):
-            return Dependence(
-                DependenceStatus.MISSING,
-                strings.check_dep_fs_error4 % freesurfer_version,
-                DependenceStatus.MISSING,
+        if not license_file or not os.path.isfile(license_file):
+            candidates = [
+                os.path.join(os.path.expanduser("~"), "license.txt"),
+                os.path.join(os.environ.get("FREESURFER_HOME", ""), "license.txt"),
+                os.path.join(os.environ.get("FREESURFER_HOME", ""), ".license"),
+            ]
+            license_file = next(
+                (path for path in candidates if os.path.isfile(path)),
+                None,
             )
+            if license_file is None:
+                return Dependence(
+                    DependenceStatus.MISSING,
+                    strings.check_dep_fs_error4 % freesurfer_version,
+                    DependenceStatus.MISSING,
+                )
+            os.environ["FS_LICENSE"] = license_file
+        
+        # FreeSurfer minimum version
         try:
             found_version = version.parse(freesurfer_version)
         except:
             found_version = version.parse("0")
-
-        # FS minimum version
         if found_version < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
             return Dependence(
                 DependenceStatus.WARNING,
