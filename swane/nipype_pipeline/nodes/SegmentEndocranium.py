@@ -78,7 +78,7 @@ class SegmentEndocranium(CommandLine):
     def _list_outputs(self):
         outputs = self.output_spec().get()
 
-        # Usa genfile, NON self.inputs.out_file
+        # Use genfile, NOT self.inputs.out_file
         outputs["out_file"] = self._gen_filename("out_file")
 
         return outputs

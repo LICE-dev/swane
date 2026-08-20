@@ -223,7 +223,7 @@ def flat1_workflow(
     wm_mean.long_name = "White matter mean value calculation"
     workflow.connect(wm_mask, "out_file", wm_mean, "in_file")
 
-    # TODO parametri per ora inutilizzati. Valutare in futuro la loro implementazione
+    # TODO currently unused parameters. Consider their implementation in the future
     # FLAT1_gm_std = Node(ImageStatistics(), name="%s_gm_std")
     # FLAT1_gm_std.inputs.op_string="-S"
     # workflow.connect(FLAT1_gmMask,"out_file",FLAT1_gm_std,"in_file")
