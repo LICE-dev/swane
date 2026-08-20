@@ -75,39 +75,54 @@ if _swane_os.path.isdir(_swane_workers_dir):
         elif os.path.isfile(current_slicer_path):
             current_slicer_path = os.path.dirname(current_slicer_path)
 
-        # Adjust search path based on OS
-        if platform.system() == "Darwin":
-            if current_slicer_path == "":
-                src_path = "/Applications"
-            else:
-                src_path = current_slicer_path
-            find_cmd = (
-                "find "
-                + src_path
-                + " -type f -wholename *app/Contents/bin/PythonSlicer -print -quit 2>/dev/null"
-            )
+        is_macos = platform.system() == "Darwin"
+        if is_macos:
+            pattern = "*app/Contents/bin/PythonSlicer"
             rel_path = "../MacOS/Slicer"
+            exec_flag = ""  # su macOS non serve -executable, il bundle .app basta
         else:
-            if current_slicer_path == "":
-                src_path = "/"
-            else:
-                src_path = current_slicer_path
-            find_cmd = (
-                "find "
-                + src_path
-                + " -executable -type f -wholename *bin/PythonSlicer -print -quit 2>/dev/null"
-            )
-
+            pattern = "*bin/PythonSlicer"
             rel_path = "../Slicer"
+            exec_flag = "-executable "
 
-        # Perform search with find
-        output = subprocess.run(
-            find_cmd, shell=True, stdout=subprocess.PIPE
-        ).stdout.decode("utf-8")
-        split = output.split("\n")
-        while "" in split:
-            split.remove("")
-        return split, rel_path
+        def run_find(src_path: str, xdev: bool, timeout: int) -> list[str]:
+            xdev_flag = "-xdev " if xdev else ""
+            cmd = (
+                f'find "{src_path}" {xdev_flag}{exec_flag}-type f '
+                f'-wholename "{pattern}" -print -quit 2>/dev/null'
+            )
+            try:
+                output = subprocess.run(
+                    cmd, shell=True, stdout=subprocess.PIPE, timeout=timeout
+                ).stdout.decode("utf-8")
+            except subprocess.TimeoutExpired:
+                output = ""
+            split = output.split("\n")
+            while "" in split:
+                split.remove("")
+            return split
+
+        # Se l'utente ha indicato un percorso specifico, cerchiamo solo lì
+        if current_slicer_path != "":
+            return run_find(current_slicer_path, xdev=False, timeout=15), rel_path
+
+        # Ricerca "a stadi" quando non abbiamo un percorso di partenza:
+        # 1) $HOME (veloce, copre l'installazione utente più comune)
+        # 2) filesystem principale con -xdev (evita mount esterni/di rete)
+        # 3) tutto il filesystem, senza limiti, come ultima spiaggia
+        home = os.path.expanduser("~")
+        stages = [
+            (home, False, 10),
+            ("/Applications" if is_macos else "/", True, 15),
+            ("/", False, 30),
+        ]
+
+        for src_path, xdev, timeout in stages:
+            result = run_find(src_path, xdev, timeout)
+            if result:
+                return result, rel_path
+
+        return [], rel_path
 
     @staticmethod
     def read_slicerrc(slicerrc_path):
