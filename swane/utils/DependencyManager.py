@@ -363,7 +363,7 @@ class DependencyManager:
                     DependenceStatus.MISSING,
                 )
             os.environ["FS_LICENSE"] = license_file
-        
+
         # FreeSurfer minimum version
         try:
             found_version = version.parse(freesurfer_version)
