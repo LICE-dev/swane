@@ -145,6 +145,7 @@ class WorkflowProcess(Process):
         # freesurfer log
         if self.workflow.freesurfer is not None:
             from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
+
             fs_path = os.path.join(self.workflow.base_dir, FS_DIR)
             log_target = os.path.join(fs_path, "scripts", "recon-all.log")
             log_link = os.path.join(log_dir, "recon-all.log")
