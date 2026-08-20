@@ -174,7 +174,7 @@ def fMRI_task_workflow(
     # Function to read degree of freedom file
     def dof_from_file(dofFile):
         # Function used out of the box. Import needed
-        import os  # TODO trovare modo per sopprimere alert
+        import os  # TODO find a way to suppress warning
 
         if os.path.exists(dofFile):
             with open(dofFile, "r") as file:

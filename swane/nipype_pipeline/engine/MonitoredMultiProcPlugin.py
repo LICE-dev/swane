@@ -227,7 +227,7 @@ def update_node_mem_gb(node):
         node._mem_gb = float(mem_gb)
         node._ram_estimated = True
         node._ram_debug_str = estimator_string
-        # TODO modificare nipype/engine/utils
+        # TODO modify nipype/engine/utils
 
     except Exception as e:
         if logger:

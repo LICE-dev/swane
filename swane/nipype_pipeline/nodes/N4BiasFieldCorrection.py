@@ -75,8 +75,8 @@ class N4BiasFieldCorrection(BaseInterface):
             else:
                 # If difference is bigger, stop
                 raise RuntimeError(
-                    f"Immagine e Maschera non coincidono! Distanza origini: {distance:.4f} mm. "
-                    f"La soglia massima consentita è {max_tolerance} mm."
+                    f"Image and Mask do not coincide! Origin distance: {distance:.4f} mm. "
+                    f"Maximum allowed threshold is {max_tolerance} mm."
                 )
 
         # --- N4 ---

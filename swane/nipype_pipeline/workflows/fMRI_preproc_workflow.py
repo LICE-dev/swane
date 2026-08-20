@@ -161,7 +161,7 @@ def fMRI_preproc_workflow(
     workflow.connect(extract_ref, "out_file", motion_correct, "ref_file")
 
     # NODE 8: Perform slice timing correction if needed
-    # TODO: per resting state NON usare lo slice timing correction
+    # TODO: for resting state do NOT use slice timing correction
     # When the slice timing is unknown there is nothing to correct: skip the
     # node at the workflow level (rather than no-op inside it) so that
     # whenever CustomSliceTimer *is* built, it always calls slicetimer.
@@ -331,7 +331,7 @@ def fMRI_preproc_workflow(
     # NODE 26: Perform temporal highpass filtering on the data
     highpass = Node(ImageMaths(), name="%s_highpass" % name)
     highpass.long_name = "Highpass temporal filtering"
-    # TODO: per resting state generare hpstring in genSpec con input hpcutoff=100, il cutoff è 100/(2TR)
+    # TODO: for resting state generate hpstring in genSpec with input hpcutoff=100, the cutoff is 100/(2TR)
     highpass.inputs.suffix = "_tempfilt"
 
     # Function to generate the name for the file of output cluster

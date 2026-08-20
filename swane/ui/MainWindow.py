@@ -479,7 +479,7 @@ class MainWindow(QMainWindow):
             parent=self, default_tab=default_tab, search_string=search_str
         )
 
-        # quando viene chiusa, libera il riferimento
+        # when closed, release the reference
         self._tool_reference_window.finished.connect(
             lambda _: setattr(self, "_tool_reference_window", None)
         )
@@ -705,7 +705,7 @@ class MainWindow(QMainWindow):
             lambda: QDesktopServices.openUrl(QUrl(strings.chatgpt_url))
         )
 
-        # Add to status bar (use addPermanentWidget per preferenza)
+        # Add to status bar (use addPermanentWidget as preferred)
         self.statusBar().addPermanentWidget(chatgpt_button)
 
         self.show()

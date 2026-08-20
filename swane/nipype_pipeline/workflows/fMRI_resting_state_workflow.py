@@ -89,7 +89,7 @@ def fMRI_resting_state_workflow(
         test_run=test_run,
     )
 
-    # TODO: preference per melodic dim e per soglia
+    # TODO: preference for melodic dim and threshold
 
     # Output Node
     outputnode = Node(
@@ -300,7 +300,7 @@ def registered_file_name(in_file_names):
     out_files = []
     for f in in_file_names:
         base_name = basename(f)
-        # Cerca un numero prima dell'estensione .nii o .nii.gz
+        # Search for a number before the .nii or .nii.gz extension
         m = re.search(r"(\d+)(\.nii(?:\.gz)?)$", base_name)
         if m:
             num = int(m.group(1))
