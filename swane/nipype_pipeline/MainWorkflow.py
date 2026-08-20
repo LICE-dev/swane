@@ -45,7 +45,7 @@ from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
 DEBUG = False
 
 
-# TODO implementazione error manager
+# TODO error manager implementation
 class MainWorkflow(CustomWorkflow):
     Result_DIR: str = "results"
 

@@ -24,7 +24,7 @@ setup(
         "Operating System :: MacOS",
         "Operating System :: POSIX :: Linux",
     ],
-    # TODO: forse dobbiamo citare tutte le sottolicenze
+    # TODO: maybe we should cite all sublicenses
     # https://packaging.python.org/en/latest/guides/licensing-examples-and-user-scenarios/#my-package-includes-other-code-under-different-licenses
     license="MIT",
     install_requires=[
@@ -36,10 +36,10 @@ setup(
         "pydicom==3.0.1",
         "configparser<=7.1.0",
         "psutil==7.0.0",
-        # TODO: passare a swane_supplement 0.2
+        # TODO: upgrade to swane_supplement 0.2
         "swane_supplement>=0.1.2",
         "matplotlib==3.10.1",
-        # todo: METTIAMO NIBABEL 5.2 come minima per essere più inclusivi?
+        # todo: SET NIBABEL 5.2 as minimum to be more inclusive?
         "nibabel>=5.3.0,<6",
         "dcm2niix>=1.0.20241211,<=1.0.20260724",
         "packaging",

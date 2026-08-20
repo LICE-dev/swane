@@ -119,7 +119,7 @@ class DicomSearchWorker(QRunnable):
                 series_number = ds.get("SeriesNumber", "NA")
                 study_instance_uid = ds.get("StudyInstanceUID", "NA")
 
-                # in GE la maggior parte delle ricostruzioni sono DERIVED\SECONDARY
+                # in GE most reconstructions are DERIVED\SECONDARY
                 if (
                     hasattr(ds, "ImageType")
                     and ds.Modality != "XA"  # xperct images are derived
@@ -130,7 +130,7 @@ class DicomSearchWorker(QRunnable):
                     if ds.ImageType not in self.error_message:
                         self.error_message.append(ds.ImageType)
                     continue
-                # in GE e SIEMENS l'immagine anatomica di ASL è ORIGINAL\PRIMARY\ASL
+                # in GE and SIEMENS the anatomic ASL image is ORIGINAL\PRIMARY\ASL
                 if (
                     hasattr(ds, "ImageType")
                     and "ORIGINAL" in ds.ImageType
@@ -140,7 +140,7 @@ class DicomSearchWorker(QRunnable):
                     if ds.ImageType not in self.error_message:
                         self.error_message.append(ds.ImageType)
                     continue
-                # in Philips e Siemens le ricostruzioni sono PROJECTION IMAGE
+                # in Philips and Siemens reconstructions are PROJECTION IMAGE
                 if hasattr(ds, "ImageType") and "PROJECTION IMAGE" in ds.ImageType:
                     if ds.ImageType not in self.error_message:
                         self.error_message.append(ds.ImageType)
@@ -174,7 +174,7 @@ class DicomSearchWorker(QRunnable):
                             )
                         )
 
-                # TODO: calcolare multiframe alla fine
+                # TODO: calculate multiframe at the end
 
                 if self.classify and dicom_series.classification == "Not classified":
                     dicom_series.classification = (

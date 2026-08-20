@@ -79,7 +79,7 @@ if _swane_os.path.isdir(_swane_workers_dir):
         if is_macos:
             pattern = "*app/Contents/bin/PythonSlicer"
             rel_path = "../MacOS/Slicer"
-            exec_flag = ""  # su macOS non serve -executable, il bundle .app basta
+            exec_flag = ""  # on macOS -executable is not needed, the .app bundle is sufficient
         else:
             pattern = "*bin/PythonSlicer"
             rel_path = "../Slicer"
@@ -102,14 +102,14 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 split.remove("")
             return split
 
-        # Se l'utente ha indicato un percorso specifico, cerchiamo solo lì
+        # If the user specified a path, only search there
         if current_slicer_path != "":
             return run_find(current_slicer_path, xdev=False, timeout=15), rel_path
 
-        # Ricerca "a stadi" quando non abbiamo un percorso di partenza:
-        # 1) $HOME (veloce, copre l'installazione utente più comune)
-        # 2) filesystem principale con -xdev (evita mount esterni/di rete)
-        # 3) tutto il filesystem, senza limiti, come ultima spiaggia
+        # Staged search when there is no initial path:
+        # 1) $HOME (fast, covers most common user installations)
+        # 2) main filesystem with -xdev (avoids external/network mounts)
+        # 3) entire filesystem without limits, as a last resort
         home = os.path.expanduser("~")
         stages = [
             (home, False, 10),
