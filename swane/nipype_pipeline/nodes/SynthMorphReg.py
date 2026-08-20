@@ -92,10 +92,10 @@ class SynthMorphReg(FSCommand):
 
         for name in ["warp_file", "inv_warp_file"]:
             if isdefined(getattr(self.inputs, name)):
-                # usa il valore passato dall’utente
+                # use the value provided by the user
                 outputs[name] = os.path.abspath(getattr(self.inputs, name))
             else:
-                # genera il nome di default
+                # generate default name
                 ext = ".nii.gz"
                 if self.inputs.model in ["affine", "rigid"]:
                     ext = ".lta"

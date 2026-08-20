@@ -718,7 +718,7 @@ class Subject:
                 )
             except:
                 traceback.print_exc()
-                # TODO: generiamo un file crash nella cartella log?
+                # TODO: should we generate a crash file in the log folder?
                 return SubjectRet.GenWfError
 
         graph_dir = self.graph_dir()
@@ -737,7 +737,7 @@ class Subject:
                         f.write("References:\n")
                         for ref in tool.references:
                             f.write(f" - {ref}\n")
-                    f.write("\n" + "=" * 50 + "\n\n")  # separatore tra tools
+                    f.write("\n" + "=" * 50 + "\n\n")  # separator between tools
 
         # Graphviz analysis graphs drawing
         node_list = self.workflow.get_node_array()

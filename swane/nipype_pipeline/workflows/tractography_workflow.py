@@ -201,7 +201,7 @@ def tractography_workflow(
         probtrackx.inputs.rand_fib = 1
         probtrackx.inputs.sample_random_points = 1
         probtrackx.inputs.use_gpu = is_cuda
-        # TODO argomento --ompl che fa??
+        # TODO what does the --ompl argument do??
         probtrackx.inputs.opd = True
         workflow.connect(inputnode, "fsamples", probtrackx, "fsamples")
         workflow.connect(inputnode, "mask", probtrackx, "mask")

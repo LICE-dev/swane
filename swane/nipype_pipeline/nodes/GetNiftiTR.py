@@ -33,7 +33,7 @@ class GetNiftiTR(BaseInterface):
     output_spec = GetNiftiTROutputSpec
 
     def _run_interface(self, runtime):
-        # se l'utente ha inserito un valore forzo quello invece della lettura automatica
+        # if the user entered a value, force that instead of automatic reading
         if isdefined(self.inputs.force_value) and self.inputs.force_value != -1:
             self.TR = self.inputs.force_value
         else:

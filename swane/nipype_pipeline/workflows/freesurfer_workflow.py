@@ -26,7 +26,7 @@ FS_DIR = "FS"
 RECONALL_TEST_ARGS = "-nuiterations 1 -norm3diters 1 -no-fix-with-ga"
 
 # Per-binary overrides for the -expert file. Moderate reductions (kept
-# deliberately conservative, "non esageriamo"). The synthseg line is only
+# deliberately conservative, "let's not overdo it"). The synthseg line is only
 # consulted when recon-all actually runs SynthSeg internally (FS v8 synth
 # path); it is inert for the classic path, so including it unconditionally is
 # safe.

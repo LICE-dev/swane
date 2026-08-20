@@ -13,7 +13,7 @@ from nipype.interfaces.base import (
 )
 
 
-# NODO PER CALCOLARE Z SCORE DA ROI
+# NODE TO CALCULATE Z-SCORE FROM ROI
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class ZscoreInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc="the input image")

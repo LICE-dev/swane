@@ -306,12 +306,12 @@ class NipypeNodeRuntimeWidget(QScrollArea):
     def _add_output_row(self, name, value, row, col):
         """Add a single output row (label + value)."""
 
-        # nome output
+        # output name
         name_lbl = QLabel(self._fmt_output_name(name))
         name_lbl.setMinimumHeight(self.MIN_ROW_HEIGHT)
         self.grid.addWidget(name_lbl, row, col)
 
-        # valore
+        # value
         if isinstance(value, str) and os.path.exists(value):
             self._add_path_button(value, row, col + 1)
         else:
@@ -412,7 +412,7 @@ class NipypeNodeRuntimeWidget(QScrollArea):
                 if not isinstance(bunch, Bunch):
                     continue
 
-                # intestazione iterazione
+                # iteration header
                 hdr = QLabel(f"[{idx}]")
                 hdr.setStyleSheet("font-weight: bold;")
                 self.grid.addWidget(hdr, self._row, col, 1, 6)
