@@ -12,7 +12,7 @@ def test_find_slicer_python_linux(monkeypatch):
         "run",
         lambda cmd, shell, stdout, timeout: type(
             "P", (), {"stdout": b"/opt/Slicer/bin/PythonSlicer\n"}
-        )
+        ),
     )
     monkeypatch.setattr(platform, "system", lambda: "Linux")
     split, rel = SlicerCheckWorker.find_slicer_python("/nonexistent")

@@ -360,19 +360,19 @@ def fMRI_preproc_workflow(
     # NODE 27: Coregister the mean functional image to the structural image
     # Stick to FSL intentionally avoiding synth for reproducibility reason
     flirt_2_ref = get_registration_node(
-        name = "%s_2_ref" % name,
-        name_prefix = name,
-        name_suffix = "to reference space",
-        use_synth = False,
-        workflow = workflow,
-        moving = [meanfunc2, "out_file"],
-        reference = [inputnode, "reference_brain"],
-        non_linear = False,
-        inverse = False,
-        is_volumetric = True,
-        flirt_cost = "corratio",
-        flirt_search = 90,
-        test_run = test_run
+        name="%s_2_ref" % name,
+        name_prefix=name,
+        name_suffix="to reference space",
+        use_synth=False,
+        workflow=workflow,
+        moving=[meanfunc2, "out_file"],
+        reference=[inputnode, "reference_brain"],
+        non_linear=False,
+        inverse=False,
+        is_volumetric=True,
+        flirt_cost="corratio",
+        flirt_search=90,
+        test_run=test_run,
     )
 
     return workflow

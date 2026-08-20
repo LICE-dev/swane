@@ -293,9 +293,7 @@ def apply_registration_node(
         workflow.connect(warp[0], warp[1], apply_node, "warp_file")
 
     elif non_linear:
-        apply_node = node_class(
-            ApplyWarp(), name=name + "_apply_warp", **node_kwargs
-        )
+        apply_node = node_class(ApplyWarp(), name=name + "_apply_warp", **node_kwargs)
         apply_node.long_name = name_prefix + " %s " + name_suffix
         if labelmap:
             apply_node.inputs.interp = "nn"
@@ -305,9 +303,7 @@ def apply_registration_node(
         else:
             workflow.connect(reference[0], reference[1], apply_node, "ref_file")
     else:
-        apply_node = node_class(
-            ApplyXFM(), name=name + "_apply_xfm", **node_kwargs
-        )
+        apply_node = node_class(ApplyXFM(), name=name + "_apply_xfm", **node_kwargs)
         apply_node.long_name = name_prefix + " %s " + name_suffix
         if labelmap:
             apply_node.inputs.interp = "nearestneighbour"

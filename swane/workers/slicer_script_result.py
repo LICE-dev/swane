@@ -901,6 +901,7 @@ def _make_labelmap_zero_transparent(node):
             color_node.Modified()
             display_node.Modified()
 
+
 def load_freesurfer_segmentation_file(seg_file: str):
     """
     Load a FreeSurfer segmentation file into Slicer.
@@ -934,10 +935,7 @@ def load_freesurfer_segmentation_file(seg_file: str):
         )
 
     except Exception as e:
-        print(
-            f"SLICERLOADER: Failed to load segmentation "
-            f"{seg_file}: {e}"
-        )
+        print(f"SLICERLOADER: Failed to load segmentation " f"{seg_file}: {e}")
 
 
 def load_freesurfer(scene_dir: str, ref_node):
