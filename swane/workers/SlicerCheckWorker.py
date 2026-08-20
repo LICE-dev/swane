@@ -79,7 +79,9 @@ if _swane_os.path.isdir(_swane_workers_dir):
         if is_macos:
             pattern = "*app/Contents/bin/PythonSlicer"
             rel_path = "../MacOS/Slicer"
-            exec_flag = ""  # on macOS -executable is not needed, the .app bundle is sufficient
+            exec_flag = (
+                ""  # on macOS -executable is not needed, the .app bundle is sufficient
+            )
         else:
             pattern = "*bin/PythonSlicer"
             rel_path = "../Slicer"
