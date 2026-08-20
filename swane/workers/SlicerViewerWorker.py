@@ -5,12 +5,9 @@ import subprocess
 
 class SlicerViewerWorker(QRunnable):
     """
-    Spawn a thread for 3D Slicer result export
+    Spawn a thread to open the workflow results scene into 3D Slicer.
 
     """
-
-    PROGRESS_MSG_PREFIX = "SLICERLOADER: "
-    END_MSG = "ENDLOADING"
 
     def __init__(self, slicer_path: str, scene_path: str):
         """
@@ -34,10 +31,12 @@ class SlicerViewerWorker(QRunnable):
         # (see SlicerCheckWorker), so it also works when the user opens the
         # scene manually, outside SWANe.
         cmd = self.slicer_path + " " + self.scene_path
-        popen = subprocess.Popen(
+        # Discard stdout instead of piping it: nobody drains the pipe here, so a
+        # PIPE would fill its OS buffer and deadlock Slicer once it prints enough.
+        subprocess.Popen(
             cmd,
             cwd=os.getcwd(),
             shell=True,
-            stdout=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
             universal_newlines=True,
         )

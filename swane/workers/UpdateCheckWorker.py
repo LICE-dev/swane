@@ -22,10 +22,13 @@ class UpdateCheckWorker(QRunnable):
 
     def run(self):
 
-        cmd = sys.executable + " -m pip index versions swane 2>/dev/null"
-        output = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE).stdout.decode(
-            "utf-8"
-        )
+        cmd = sys.executable + " -m pip index versions swane"
+        output = subprocess.run(
+            cmd,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        ).stdout.decode("utf-8")
         for stdout_line in output.split("\n"):
             regex_pattern = r"^swane \((.+)\)$"
             match = re.match(regex_pattern, stdout_line)

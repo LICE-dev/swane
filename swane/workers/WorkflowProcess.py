@@ -69,6 +69,11 @@ class WorkflowProcess(Process):
         Thread that run the workflow
         """
 
+        # TODO: reassess why we explicitly use "fork" as the start method.
+        #  "fork" does not exist on Windows and is not the default on recent macOS
+        #  (spawn): figure out whether it is a real requirement (e.g. sharing
+        #  nipype state/handlers) or a leftover, and possibly make it platform
+        #  dependent.
         plugin_args = {
             "mp_context": "fork",
             "queue": self.queue,

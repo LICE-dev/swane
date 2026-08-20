@@ -1,5 +1,6 @@
 from swane.utils.qt_compat import QRunnable, Signal, QObject
 import os
+import shlex
 import subprocess
 
 from swane.config.ConfigManager import ConfigManager
@@ -41,14 +42,18 @@ class SlicerExportWorker(QRunnable):
             DataInputList.DTI, "tractography_threshold"
         )
 
+        # Keep the script path quoted and separate from its arguments so an
+        # install dir containing spaces does not break the shell word-splitting.
+        result_script = os.path.join(
+            os.path.dirname(__file__), "slicer_script_result.py"
+        )
         cmd = (
             self.slicer_path
             + " --no-splash --no-main-window --python-script "
-            + os.path.join(
-                os.path.dirname(__file__),
-                f"slicer_script_result.py --dti_threshold {str(dti_threshold)} "
-                f"--vein_threshold_mr {str(vein_threshold_mr)} --vein_threshold_ct {str(vein_threshold_ct)}",
-            )
+            + shlex.quote(result_script)
+            + f" --dti_threshold {str(dti_threshold)}"
+            + f" --vein_threshold_mr {str(vein_threshold_mr)}"
+            + f" --vein_threshold_ct {str(vein_threshold_ct)}"
         )
 
         popen = subprocess.Popen(
