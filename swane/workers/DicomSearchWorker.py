@@ -27,9 +27,14 @@ class DicomSearchWorker(QRunnable):
             Try to classify dicom images in series. Default is False
         """
         super(DicomSearchWorker, self).__init__()
+        # Always initialize the attributes: if the directory does not exist
+        # dicom_dir is set to None (load_dir/run handle it gracefully) instead
+        # of leaving the attributes undefined and raising AttributeError later.
+        self.unsorted_list = []
         if os.path.exists(os.path.abspath(dicom_dir)):
             self.dicom_dir = os.path.abspath(dicom_dir)
-            self.unsorted_list = []
+        else:
+            self.dicom_dir = None
         self.signal = DicomSearchSignal()
         self.tree = DicomTree(dicom_dir)
         self.error_message = []
@@ -95,18 +100,15 @@ class DicomSearchWorker(QRunnable):
             return 0
 
     def run(self):
-        try:
-            if len(self.unsorted_list) == 0:
-                self.load_dir()
+        if len(self.unsorted_list) == 0:
+            self.load_dir()
 
-            skip = False
+        for dicom_loc in self.unsorted_list:
+            self.signal.sig_loop.emit(1)
 
-            for dicom_loc in self.unsorted_list:
-                self.signal.sig_loop.emit(1)
-
-                if skip:
-                    continue
-
+            # Each file is scanned in isolation: a single unreadable or corrupt
+            # dicom must be skipped without aborting the whole folder scan.
+            try:
                 # read the file
                 if not os.path.exists(dicom_loc):
                     continue
@@ -118,35 +120,37 @@ class DicomSearchWorker(QRunnable):
 
                 series_number = ds.get("SeriesNumber", "NA")
                 study_instance_uid = ds.get("StudyInstanceUID", "NA")
+                modality = ds.get("Modality", "")
+                image_type = ds.get("ImageType", None)
 
                 # in GE most reconstructions are DERIVED\SECONDARY
                 if (
-                    hasattr(ds, "ImageType")
-                    and ds.Modality != "XA"  # xperct images are derived
-                    and "DERIVED" in ds.ImageType
-                    and "SECONDARY" in ds.ImageType
-                    and "ASL" not in ds.ImageType
+                    image_type is not None
+                    and modality != "XA"  # xperct images are derived
+                    and "DERIVED" in image_type
+                    and "SECONDARY" in image_type
+                    and "ASL" not in image_type
                 ):
-                    if ds.ImageType not in self.error_message:
-                        self.error_message.append(ds.ImageType)
+                    if image_type not in self.error_message:
+                        self.error_message.append(image_type)
                     continue
                 # in GE and SIEMENS the anatomic ASL image is ORIGINAL\PRIMARY\ASL
                 if (
-                    hasattr(ds, "ImageType")
-                    and "ORIGINAL" in ds.ImageType
-                    and "PRIMARY" in ds.ImageType
-                    and "ASL" in ds.ImageType
+                    image_type is not None
+                    and "ORIGINAL" in image_type
+                    and "PRIMARY" in image_type
+                    and "ASL" in image_type
                 ):
-                    if ds.ImageType not in self.error_message:
-                        self.error_message.append(ds.ImageType)
+                    if image_type not in self.error_message:
+                        self.error_message.append(image_type)
                     continue
                 # in Philips and Siemens reconstructions are PROJECTION IMAGE
-                if hasattr(ds, "ImageType") and "PROJECTION IMAGE" in ds.ImageType:
-                    if ds.ImageType not in self.error_message:
-                        self.error_message.append(ds.ImageType)
+                if image_type is not None and "PROJECTION IMAGE" in image_type:
+                    if image_type not in self.error_message:
+                        self.error_message.append(image_type)
                     continue
 
-                self.tree.add_subject(subject_id, str(ds.PatientName))
+                self.tree.add_subject(subject_id, str(ds.get("PatientName", "")))
                 self.tree.add_study(subject_id, study_instance_uid)
                 dicom_series = self.tree.add_series(
                     subject_id, study_instance_uid, series_number
@@ -163,7 +167,7 @@ class DicomSearchWorker(QRunnable):
                 dicom_series.add_dicom_loc(
                     dicom_loc, multi_frame_series, ds.get("SliceLocation"), sop_uid, ds
                 )
-                dicom_series.modality = ds.Modality
+                dicom_series.modality = modality
                 if dicom_series.description == "Not named":
                     if hasattr(ds, "SeriesDescription"):
                         dicom_series.description = ds.SeriesDescription
@@ -180,18 +184,22 @@ class DicomSearchWorker(QRunnable):
                     dicom_series.classification = (
                         DicomSearchWorker.find_series_classification(ds)
                     )
+            except Exception:
+                # unreadable/corrupt file: skip it and keep scanning the rest
+                continue
 
+        try:
             for subject in self.tree.dicom_subjects:
                 for study in self.tree.dicom_subjects[subject].studies:
                     for series in self.tree.dicom_subjects[subject].studies[study]:
                         self.tree.dicom_subjects[subject].studies[study][
                             series
                         ].refine_frame_number()
+        except Exception:
+            pass
 
-            self.signal.sig_loop.emit(1)
-            self.signal.sig_finish.emit(self)
-        except:
-            self.signal.sig_finish.emit(self)
+        self.signal.sig_loop.emit(1)
+        self.signal.sig_finish.emit(self)
 
     @staticmethod
     def find_series_description(image_list: list[str]) -> str:

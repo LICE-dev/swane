@@ -340,12 +340,8 @@ def parse_arguments():
         Parsed arguments.
     """
     parser = argparse.ArgumentParser(description="Load multi-modal data into Slicer")
-    parser.add_argument(
-        "--results_folder",
-        type=str,
-        default=os.getcwd(),
-        help="Directory containing results and imaging data",
-    )
+    # NB: the results folder is always the process CWD (set by SlicerExportWorker
+    # via Popen cwd=result_dir), so no --results_folder argument is exposed.
     parser.add_argument(
         "--dti_threshold",
         type=float,
