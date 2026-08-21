@@ -11,7 +11,11 @@ atlas-transform backend (ApplyWarp vs SynthMorphApply). Snapshots under
 import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList
-from swane.nipype_pipeline.workflows.flat1_workflow import flat1_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+flat1_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.flat1_workflow", "flat1_workflow"
+)
 
 SUBDIR = "flat1"
 

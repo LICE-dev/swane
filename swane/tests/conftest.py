@@ -185,6 +185,26 @@ def dependency_manager():
 
 
 # --------------------------------------------------------------------------- #
+# GUI fixture fallback
+# --------------------------------------------------------------------------- #
+# pytest-qt only registers its ``qtbot`` fixture when a real Qt binding loads.
+# On an environment without a working PySide6 (e.g. the Store-packaged Python
+# where shiboken6 crashes on import), ``qtbot`` would be "fixture not found" and
+# every GUI test would ERROR. Provide a fallback that SKIPS with a clear reason
+# instead — defined only when Qt is unavailable, so it never shadows the real
+# pytest-qt fixture where Qt works.
+from swane.utils.qt_compat import QT_AVAILABLE
+
+if not QT_AVAILABLE:
+
+    @pytest.fixture
+    def qtbot(*args, **kwargs):
+        pytest.skip(
+            "no working Qt binding (PySide6) in this environment — GUI test skipped"
+        )
+
+
+# --------------------------------------------------------------------------- #
 # DICOM fixtures
 # --------------------------------------------------------------------------- #
 @pytest.fixture(scope="session")

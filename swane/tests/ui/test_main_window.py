@@ -4,6 +4,16 @@ The real application spins up an update-check thread (network) on start; the
 ``offline_update`` / ``main_window`` fixtures (ui/conftest.py) keep it offline.
 """
 
+import pytest
+
+from swane.utils.qt_compat import QT_AVAILABLE
+
+if not QT_AVAILABLE:
+    pytest.skip(
+        "no working Qt binding (PySide6) — GUI tests skipped",
+        allow_module_level=True,
+    )
+
 from PySide6.QtWidgets import QDialog, QTabWidget
 
 from swane.ui.PreferencesWindow import PreferencesWindow

@@ -1,5 +1,15 @@
 """Head-less test for :class:`swane.ui.ToolReferenceWindow`."""
 
+import pytest
+
+from swane.utils.qt_compat import QT_AVAILABLE
+
+if not QT_AVAILABLE:
+    pytest.skip(
+        "no working Qt binding (PySide6) — GUI tests skipped",
+        allow_module_level=True,
+    )
+
 from PySide6.QtWidgets import QDialog
 
 from swane.ui.ToolReferenceWindow import ToolReferenceWindow

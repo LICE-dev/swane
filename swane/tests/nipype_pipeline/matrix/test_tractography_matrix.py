@@ -17,7 +17,11 @@ import pytest
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.config.preference_list import XTRACT_DATA_DIR
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.tractography_workflow import tractography_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+tractography_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.tractography_workflow", "tractography_workflow"
+)
 from swane.tests.nipype_pipeline.matrix.conftest import require_fsl_data
 
 SUBDIR = "tractography"

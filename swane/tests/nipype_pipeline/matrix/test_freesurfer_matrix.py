@@ -11,7 +11,11 @@ Snapshots live under ``snapshots/freesurfer/``.
 import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit, FreesurferStep
-from swane.nipype_pipeline.workflows.freesurfer_workflow import freesurfer_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+freesurfer_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.freesurfer_workflow", "freesurfer_workflow"
+)
 
 SUBDIR = "freesurfer"
 MAX_CPU = 4
