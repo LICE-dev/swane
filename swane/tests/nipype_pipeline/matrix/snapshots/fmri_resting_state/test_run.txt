@@ -10,9 +10,9 @@
 - aroma_classification [AromaClassification] mem_gb=0.2 n_procs=1
 - feature_frequency [FeatureFrequency] mem_gb=0.2 n_procs=1
 - feature_spatial [FeatureSpatial] mem_gb=0.2 n_procs=1
-    mask_csf = '/home/mau/.local/lib/python3.12/site-packages/ica_aroma_py/resources/mask_csf.nii.gz'
-    mask_edge = '/home/mau/.local/lib/python3.12/site-packages/ica_aroma_py/resources/mask_edge.nii.gz'
-    mask_out = '/home/mau/.local/lib/python3.12/site-packages/ica_aroma_py/resources/mask_out.nii.gz'
+    mask_csf = '<SITE>/ica_aroma_py/resources/mask_csf.nii.gz'
+    mask_edge = '<SITE>/ica_aroma_py/resources/mask_edge.nii.gz'
+    mask_out = '<SITE>/ica_aroma_py/resources/mask_out.nii.gz'
 - feature_spatial_prep [FeatureSpatialPrep] mem_gb=0.2 n_procs=1
 - feature_time_series [FeatureTimeSeries] mem_gb=0.2 n_procs=1
 - fmri_rs_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
