@@ -67,6 +67,22 @@ def copy_fix_to_clipboard():
         subprocess.run("pbcopy", shell=True, text=True, input=FIX_LINE)
 
 
+def _report_conflict_console(error_string: str) -> bool:
+    """Non-GUI fallback for :func:`fsl_conflict_check`.
+
+    Used when no usable Qt is available (headless run, or FSL's PyQt5 cannot be
+    imported/initialised): print the conflict warning and the manual fix to
+    stderr and copy the fix to the clipboard where possible, so the user still
+    learns about the problem instead of the process crashing on the Qt import.
+    Returns ``False`` (system Python is hidden), like the GUI path.
+    """
+    print(error_string, file=sys.stderr)
+    print(FIX_LINE, file=sys.stderr)
+    if is_command_available("xclip") or is_mac():
+        copy_fix_to_clipboard()
+    return False
+
+
 def fsl_conflict_check() -> bool:
     """
         Handle freesurfer<=7.3.2 overwriting system python executable if fsl>=6.0.6 is installed
@@ -81,27 +97,34 @@ def fsl_conflict_check() -> bool:
     if FSL_CONFLICT_PATH not in sys.executable:
         return True
 
-    # This function uses fsl built-in qt library to show a warning: ignore IDE import error!
-    from PyQt5.QtWidgets import QApplication, QMessageBox
-
-    app = QApplication([])
-    app.setApplicationDisplayName(strings.APPNAME)
-
     config_file = get_config_file()
     error_string = strings.fsl_python_error % config_file
 
-    msg_box = QMessageBox()
-    msg_box.setText(error_string)
-    msg_box.setInformativeText(FIX_LINE)
-    msg_box.setIcon(QMessageBox.Warning)
-    msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.Retry | QMessageBox.Cancel)
-    msg_box.button(QMessageBox.Yes).setText(strings.fsl_python_error_fix)
-    msg_box.button(QMessageBox.Retry).setText(strings.fsl_python_error_restart)
+    # This function uses fsl's built-in Qt (PyQt5) to show a warning: ignore IDE
+    # import error! Qt may be unavailable (headless, or PyQt5 missing/broken) —
+    # degrade to a console message instead of crashing on the import/init.
+    try:
+        from PyQt5.QtWidgets import QApplication, QMessageBox
 
-    if is_command_available("xclip") or is_mac():
-        msg_box.button(QMessageBox.Cancel).setText(strings.fsl_python_error_exit)
-        msg_box.setDefaultButton(QMessageBox.Cancel)
-    ret = msg_box.exec()
+        app = QApplication([])
+        app.setApplicationDisplayName(strings.APPNAME)
+
+        msg_box = QMessageBox()
+        msg_box.setText(error_string)
+        msg_box.setInformativeText(FIX_LINE)
+        msg_box.setIcon(QMessageBox.Warning)
+        msg_box.setStandardButtons(
+            QMessageBox.Yes | QMessageBox.Retry | QMessageBox.Cancel
+        )
+        msg_box.button(QMessageBox.Yes).setText(strings.fsl_python_error_fix)
+        msg_box.button(QMessageBox.Retry).setText(strings.fsl_python_error_restart)
+
+        if is_command_available("xclip") or is_mac():
+            msg_box.button(QMessageBox.Cancel).setText(strings.fsl_python_error_exit)
+            msg_box.setDefaultButton(QMessageBox.Cancel)
+        ret = msg_box.exec()
+    except Exception:
+        return _report_conflict_console(error_string)
 
     if ret == QMessageBox.Retry:
         runtime_fix()

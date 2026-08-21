@@ -109,7 +109,7 @@ veins_ct_flirt_2_ref.out_file -> outputnode.basal
 veins_ct_flirt_2_ref.out_matrix_file -> veins_flirt.in_matrix_file
 veins_ct_mask.out_file -> veins_ct_range.in_file
 veins_ct_mask.out_file -> veins_ct_rescale.in_file
-veins_ct_range.('max_value', 'def rescale_string(max_value):\n    op_string = "-mul 100 -div %f" % max_value\n    return op_string\n', ()) -> veins_ct_rescale.op_string
+veins_ct_range.('max_value', "def rescale_string(max_value):\n    op_string = '-mul 100 -div %f' % max_value\n    return op_string", ()) -> veins_ct_rescale.op_string
 veins_ct_reOrient.out_file -> venous_ct_robustfov.in_file
 veins_ct_rescale.out_file -> veins_flirt.in_file
 veins_ct_subtraction.out_file -> outputnode.contrast

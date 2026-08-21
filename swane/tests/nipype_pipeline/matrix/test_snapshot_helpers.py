@@ -13,6 +13,7 @@ import site
 
 from swane.tests.nipype_pipeline.matrix._snapshot import (
     _normalise,
+    _normalise_conn_field,
     _normalise_function_source,
     build_replacements,
 )
@@ -34,6 +35,20 @@ def test_detects_logic_change():
     a = "def f(x):\n    return x + 1\n"
     b = "def f(x):\n    return x + 2\n"
     assert _normalise_function_source(a) != _normalise_function_source(b)
+
+
+def test_conn_field_normalises_embedded_transform_function():
+    # nipype connections may carry an inline transform: (field, source, args).
+    # A comment/formatting edit inside that source must not change the rendered
+    # connection (same guarantee as node function_str traits).
+    a = ("percentile_values", "def f(v):\n    # a comment\n    return v[0]\n", ())
+    b = ("percentile_values", "def f(v):\n    return v[0]  # other comment\n", ())
+    assert _normalise_conn_field(a, []) == _normalise_conn_field(b, [])
+    # a logic change still shows
+    c = ("percentile_values", "def f(v):\n    return v[1]\n", ())
+    assert _normalise_conn_field(a, []) != _normalise_conn_field(c, [])
+    # a plain (non-tuple) field name is returned unchanged
+    assert _normalise_conn_field("percentile_values", []) == "percentile_values"
 
 
 def test_unparseable_source_falls_back_to_input():
