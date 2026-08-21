@@ -14,16 +14,22 @@ def test_is_newer_version():
 
 def test_run_emits_when_newer_available(monkeypatch):
     emitted = []
+    captured = {}
     worker = UpdateCheckWorker()
     worker.signal.last_available.connect(emitted.append)
 
     def fake_run(cmd, shell, stdout, stderr):
+        captured["cmd"] = cmd
+        captured["stderr"] = stderr
         return type("P", (), {"stdout": b"swane (9999.9.9)\n"})
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     worker.run()
 
     assert emitted == ["9999.9.9"]
+    # stderr is silenced cross-platform via DEVNULL, not the POSIX-only 2>/dev/null
+    assert captured["stderr"] is subprocess.DEVNULL
+    assert "2>/dev/null" not in captured["cmd"]
 
 
 def test_run_silent_when_up_to_date(monkeypatch):
