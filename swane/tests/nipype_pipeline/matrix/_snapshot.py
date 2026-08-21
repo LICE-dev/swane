@@ -144,6 +144,27 @@ def _normalise_function_source(src: str) -> str:
         return src
 
 
+def _normalise_conn_field(field: Any, repl: list[tuple[str, str]]) -> Any:
+    """Canonicalise a connection endpoint for stable rendering.
+
+    nipype allows an inline transform on a connection — expressed as
+    ``(field_name, function_source, args)`` — and the wrapped function's source
+    text (comments included) would otherwise be diffed verbatim, exactly the
+    fragility :func:`_normalise_function_source` removes for a node's
+    ``function_str`` trait. Apply the same normalisation to any string the tuple
+    carries (a plain field name is unaffected by the AST round-trip), so a
+    comment/formatting edit inside a connection transform is not a false diff.
+    """
+    if isinstance(field, tuple):
+        return tuple(
+            _normalise(_normalise_function_source(elem), repl)
+            if isinstance(elem, str)
+            else elem
+            for elem in field
+        )
+    return field
+
+
 def _format_value(value: Any) -> str:
     """Render a (normalised) trait value deterministically."""
     if isinstance(value, dict):
@@ -232,7 +253,14 @@ def _graph_lines(workflow: Any, repl: list[tuple[str, str]], indent: str) -> lis
     for src, dst, data in graph.edges(data=True):
         for src_field, dst_field in data.get("connect", []):
             conn_lines.append(
-                "%s%s.%s -> %s.%s" % (indent, src.name, src_field, dst.name, dst_field)
+                "%s%s.%s -> %s.%s"
+                % (
+                    indent,
+                    src.name,
+                    _normalise_conn_field(src_field, repl),
+                    dst.name,
+                    dst_field,
+                )
             )
     if conn_lines:
         lines.append("%s# connections" % indent)

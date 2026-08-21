@@ -251,19 +251,19 @@ fmri_0_dilatemask.out_file -> fmri_0_maskfunc3.in_file2
 fmri_0_dilatemask.out_file -> fmri_0_maskfunc4_1.in_file2
 fmri_0_dilatemask.out_file -> fmri_0_smoothness.mask_file
 fmri_0_extract_ref.out_file -> fmri_0_motion_correct.ref_file
-fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (3.1, 'fmri_0', 1)) -> fmri_0_cluster_t3_1.out_threshold_file
-fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (3.1, 'fmri_0', 1)) -> fmri_0_cluster_t3_1_to_ref_apply_xfm.out_file
-fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (5, 'fmri_0', 1)) -> fmri_0_cluster_t5_1.out_threshold_file
-fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (5, 'fmri_0', 1)) -> fmri_0_cluster_t5_1_to_ref_apply_xfm.out_file
-fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (7, 'fmri_0', 1)) -> fmri_0_cluster_t7_1.out_threshold_file
-fmri_0_genSpec.('contrasts', 'def cluster_file_name(contrasts, thres, run_name, x):\n    return "r-%s_cluster_%s_threshold%.1f.nii.gz" % (\n        run_name,\n        contrasts[x - 1][0],\n        thres,\n    )\n', (7, 'fmri_0', 1)) -> fmri_0_cluster_t7_1_to_ref_apply_xfm.out_file
+fmri_0_genSpec.('contrasts', "def cluster_file_name(contrasts, thres, run_name, x):\n    return 'r-%s_cluster_%s_threshold%.1f.nii.gz' % (run_name, contrasts[x - 1][0], thres)", (3.1, 'fmri_0', 1)) -> fmri_0_cluster_t3_1.out_threshold_file
+fmri_0_genSpec.('contrasts', "def cluster_file_name(contrasts, thres, run_name, x):\n    return 'r-%s_cluster_%s_threshold%.1f.nii.gz' % (run_name, contrasts[x - 1][0], thres)", (3.1, 'fmri_0', 1)) -> fmri_0_cluster_t3_1_to_ref_apply_xfm.out_file
+fmri_0_genSpec.('contrasts', "def cluster_file_name(contrasts, thres, run_name, x):\n    return 'r-%s_cluster_%s_threshold%.1f.nii.gz' % (run_name, contrasts[x - 1][0], thres)", (5, 'fmri_0', 1)) -> fmri_0_cluster_t5_1.out_threshold_file
+fmri_0_genSpec.('contrasts', "def cluster_file_name(contrasts, thres, run_name, x):\n    return 'r-%s_cluster_%s_threshold%.1f.nii.gz' % (run_name, contrasts[x - 1][0], thres)", (5, 'fmri_0', 1)) -> fmri_0_cluster_t5_1_to_ref_apply_xfm.out_file
+fmri_0_genSpec.('contrasts', "def cluster_file_name(contrasts, thres, run_name, x):\n    return 'r-%s_cluster_%s_threshold%.1f.nii.gz' % (run_name, contrasts[x - 1][0], thres)", (7, 'fmri_0', 1)) -> fmri_0_cluster_t7_1.out_threshold_file
+fmri_0_genSpec.('contrasts', "def cluster_file_name(contrasts, thres, run_name, x):\n    return 'r-%s_cluster_%s_threshold%.1f.nii.gz' % (run_name, contrasts[x - 1][0], thres)", (7, 'fmri_0', 1)) -> fmri_0_cluster_t7_1_to_ref_apply_xfm.out_file
 fmri_0_genSpec.contrasts -> fmri_0_level_1_design.contrasts
 fmri_0_genSpec.evs_run -> fmri_0_modelspec.subject_info
 fmri_0_getTR.TR -> fmri_0_genSpec.TR
 fmri_0_getTR.TR -> fmri_0_level_1_design.interscan_interval
 fmri_0_getTR.TR -> fmri_0_merge_tr_meanfunc3.in1
 fmri_0_getTR.TR -> fmri_0_modelspec.time_repetition
-fmri_0_getthresh.('percentile_values', 'def get_thresh_op(thresh):\n    return "-thr %.10f -Tmin -bin" % (0.1 * thresh[0])\n', ()) -> fmri_0_threshold.op_string
+fmri_0_getthresh.('percentile_values', "def get_thresh_op(thresh):\n    return '-thr %.10f -Tmin -bin' % (0.1 * thresh[0])", ()) -> fmri_0_threshold.op_string
 fmri_0_highpass.out_file -> fmri_0_modelestimate.in_file
 fmri_0_highpass.out_file -> fmri_0_modelspec.functional_runs
 fmri_0_img2float.out_file -> fmri_0_extract_ref.in_file
@@ -285,12 +285,12 @@ fmri_0_meanfunc2.out_file -> fmri_0_2_ref_flirt.in_file
 fmri_0_meanfunc2.out_file -> fmri_0_mergenode.in1
 fmri_0_meanfunc3.out_file -> fmri_0_merge_tr_meanfunc3.in2
 fmri_0_meanfuncmask.mask_file -> fmri_0_maskfunc.in_file2
-fmri_0_medianval.('percentile_values', 'def get_bt_thresh(percentile_values):\n    return 0.75 * percentile_values[0]\n', ()) -> fmri_0_smooth.brightness_threshold
-fmri_0_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]\n', ()) -> fmri_0_mergenode.in2
-fmri_0_medianval.('percentile_values', 'def get_inorm_scale(percentile_values):\n    return "-mul %.10f" % (10000.0 / percentile_values[0])\n', ()) -> fmri_0_intnorm.op_string
-fmri_0_merge_tr_meanfunc3.('out', 'def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return "-bptf %f -1 -add %s" % (hp_sigma_vol, merged[1])\n', (60,)) -> fmri_0_highpass.op_string
-fmri_0_mergenode.('out', 'def get_usans(x):\n    return [tuple([x[0], 0.75 * x[1]])]\n', ()) -> fmri_0_smooth.usans
-fmri_0_modelestimate.('dof_file', 'def dof_from_file(dofFile):\n    # Function used out of the box. Import needed\n    import os  # TODO trovare modo per sopprimere alert\n\n    if os.path.exists(dofFile):\n        with open(dofFile, "r") as file:\n            for line in file.readlines():\n                return int(line)\n', ()) -> fmri_0_smoothness.dof
+fmri_0_medianval.('percentile_values', "def get_inorm_scale(percentile_values):\n    return '-mul %.10f' % (10000.0 / percentile_values[0])", ()) -> fmri_0_intnorm.op_string
+fmri_0_medianval.('percentile_values', 'def get_bt_thresh(percentile_values):\n    return 0.75 * percentile_values[0]', ()) -> fmri_0_smooth.brightness_threshold
+fmri_0_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]', ()) -> fmri_0_mergenode.in2
+fmri_0_merge_tr_meanfunc3.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (60,)) -> fmri_0_highpass.op_string
+fmri_0_mergenode.('out', 'def get_usans(x):\n    return [tuple([x[0], 0.75 * x[1]])]', ()) -> fmri_0_smooth.usans
+fmri_0_modelestimate.('dof_file', "def dof_from_file(dofFile):\n    import os\n    if os.path.exists(dofFile):\n        with open(dofFile, 'r') as file:\n            for line in file.readlines():\n                return int(line)", ()) -> fmri_0_smoothness.dof
 fmri_0_modelestimate.residual4d -> fmri_0_smoothness.residual_fit_file
 fmri_0_modelestimate.results_dir -> fmri_0_results_select_1.base_directory
 fmri_0_modelgen.con_file -> fmri_0_modelestimate.tcon_file
@@ -304,7 +304,7 @@ fmri_0_motion_correct.out_file -> fmri_0_medianval.in_file
 fmri_0_motion_correct.par_file -> fmri_0_art.realignment_parameters
 fmri_0_motion_correct.par_file -> fmri_0_modelspec.realignment_parameters
 fmri_0_nvols.nvols -> fmri_0_del_vols.nvols
-fmri_0_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle\n', ()) -> fmri_0_extract_ref.start_volume
+fmri_0_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle', ()) -> fmri_0_extract_ref.start_volume
 fmri_0_reorient.out_file -> fmri_0_img2float.in_file
 fmri_0_results_select_1.cope -> fmri_0_cluster_t3_1.cope_file
 fmri_0_results_select_1.cope -> fmri_0_cluster_t5_1.cope_file
