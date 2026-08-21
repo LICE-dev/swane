@@ -1,8 +1,10 @@
 import os
+import shlex
 import subprocess
 import tempfile
 import platform
 from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+from swane.utils.DependencyManager import DependencyManager
 
 
 def test_find_slicer_python_linux(monkeypatch):
@@ -131,3 +133,52 @@ def test_run_detects_slicer_and_modules(monkeypatch, tmp_path):
     assert len(results) == 1
     cmd, ver, label, state = results[0]
     assert "Slicer" in label or ver != ""
+
+
+def test_module_install_command_keeps_script_path_separate(monkeypatch):
+    """The slicer_script_module_install.py path must be a single (quoted)
+    argument with the module list as a separate argument, so an install dir
+    containing spaces is not split by the shell (regression for args glued into
+    the os.path.join path)."""
+    w = SlicerCheckWorker(current_slicer_path="")
+
+    monkeypatch.setattr(
+        SlicerCheckWorker,
+        "find_slicer_python",
+        staticmethod(lambda p: (["/fake/path/bin/PythonSlicer"], "../Slicer")),
+    )
+    monkeypatch.setattr(os.path, "exists", lambda p: True)
+    # force the version check to pass so the module-install branch is reached
+    monkeypatch.setattr(
+        DependencyManager, "check_slicer_version", staticmethod(lambda v: True)
+    )
+    # do not touch the real ~/.slicerrc.py on the success path
+    monkeypatch.setattr(
+        SlicerCheckWorker, "add_slicer_startup_patch", staticmethod(lambda: None)
+    )
+
+    commands = []
+
+    def fake_run(cmd, shell, stdout):
+        commands.append(cmd)
+        if "--version" in cmd:
+            s = b"Slicer 5.0\n"
+        elif "slicer_script_module_install.py" in cmd:
+            s = b"MODULE FOUND\n"
+        else:
+            s = b""
+        return type("P", (), {"stdout": s})
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    w.run()
+
+    install_cmd = next(
+        c for c in commands if "slicer_script_module_install.py" in c
+    )
+    tokens = shlex.split(install_cmd)
+    idx = tokens.index("--python-script")
+    # the token right after --python-script is the script path on its own
+    assert tokens[idx + 1].endswith("slicer_script_module_install.py")
+    # modules are passed as their own argument, not glued onto the script path
+    assert tokens[idx + 2] == ",".join(DependencyManager.SLICER_MODULES)
