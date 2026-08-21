@@ -1,4 +1,5 @@
 import os
+import shlex
 import subprocess
 from swane.utils.qt_compat import QRunnable, Signal, QObject
 from swane import strings
@@ -67,7 +68,10 @@ if _swane_os.path.isdir(_swane_workers_dir):
         self.current_slicer_path = current_slicer_path
 
     @staticmethod
-    def find_slicer_python(current_slicer_path: str) -> (list[str], str):
+    def find_slicer_python(current_slicer_path: str) -> tuple[list[str], str]:
+        # TODO: this search relies on GNU `find` (-executable/-wholename) and does
+        #  not work on Windows. Consider a Windows-compatible branch in the future
+        #  (e.g. os.walk/glob or `where`) if/when Windows support is needed.
         # If current_slicer_path doeas not exists, replace with a blank string
         # If it is a file, search in its directory
         if not os.path.exists(current_slicer_path):
@@ -231,6 +235,9 @@ if _swane_os.path.isdir(_swane_workers_dir):
         slicer_version = ""
 
         while repeat:
+            # reset cmd every iteration: otherwise an empty search result would
+            # leave a stale path from the previous loop and emit it as valid.
+            cmd = ""
             split, rel_path = SlicerCheckWorker.find_slicer_python(
                 self.current_slicer_path
             )
@@ -261,14 +268,19 @@ if _swane_os.path.isdir(_swane_workers_dir):
                     )
                     state = DependenceStatus.WARNING
                 else:
-                    # Try to automatically install Slicer extensions
+                    # Try to automatically install Slicer extensions.
+                    # The script path is quoted and kept separate from its
+                    # argument so an install dir containing spaces does not break
+                    # the shell word-splitting.
+                    module_install_script = os.path.join(
+                        os.path.dirname(__file__),
+                        "slicer_script_module_install.py",
+                    )
                     cmd3 = (
                         cmd
                         + " --no-splash --no-main-window --python-script "
-                        + os.path.join(
-                            os.path.dirname(__file__),
-                            "slicer_script_module_install.py ",
-                        )
+                        + shlex.quote(module_install_script)
+                        + " "
                         + ",".join(DependencyManager.SLICER_MODULES)
                     )
                     output3 = subprocess.run(
