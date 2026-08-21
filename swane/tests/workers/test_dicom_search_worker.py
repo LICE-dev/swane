@@ -6,6 +6,7 @@ Consolidates the former ``test_3_dicom_search`` (scenario scan),
 
 import os
 
+import pydicom
 import pytest
 
 from swane.workers.DicomSearchWorker import DicomSearchWorker
@@ -175,3 +176,68 @@ class TestDicomSearchFiltering:
         worker.run()
         assert worker.get_files_len() == 1
         assert worker.tree.get_subject_list() == []
+
+
+class TestDicomSearchRobustness:
+    """Regressions for the worker robustness fixes (invalid dir, corrupt file,
+    incomplete headers)."""
+
+    def test_nonexistent_dir_does_not_raise(self, tmp_path):
+        """A missing directory must not leave attributes undefined: dicom_dir is
+        None, the file list is empty and run()/load_dir() do not raise."""
+        missing = str(tmp_path / "does_not_exist")
+        worker = DicomSearchWorker(missing)
+
+        assert worker.dicom_dir is None
+        assert worker.get_files_len() == 0
+
+        # neither call must raise (previously AttributeError on unsorted_list)
+        worker.load_dir()
+        finished = []
+        worker.signal.sig_finish.connect(finished.append)
+        worker.run()
+
+        assert worker.get_files_len() == 0
+        assert worker.tree.get_subject_list() == []
+        assert finished == [worker]
+
+    def test_corrupt_file_does_not_abort_scan(self, monkeypatch, tmp_path):
+        """A single unreadable dicom must be skipped without aborting the scan of
+        the remaining (valid) files."""
+        good = str(tmp_path / "good.dcm")
+        bad = str(tmp_path / "bad.dcm")
+        write_minimal_dicom(good, patient_id="P_GOOD")
+        write_minimal_dicom(bad, patient_id="P_BAD")
+
+        import swane.workers.DicomSearchWorker as mod
+
+        real_dcmread = mod.pydicom.dcmread
+
+        def flaky_dcmread(path, *args, **kwargs):
+            if str(path).endswith("bad.dcm"):
+                raise ValueError("simulated corrupt dicom")
+            return real_dcmread(path, *args, **kwargs)
+
+        monkeypatch.setattr(mod.pydicom, "dcmread", flaky_dcmread)
+
+        worker = DicomSearchWorker(str(tmp_path))
+        worker.run()
+
+        # the good subject is still found, the corrupt one is silently skipped
+        assert worker.tree.get_subject_list() == ["P_GOOD"]
+
+    def test_missing_modality_and_name_do_not_raise(self, tmp_path):
+        """Headers lacking Modality / PatientName must be handled via ds.get()
+        instead of raising AttributeError and aborting the scan."""
+        path = str(tmp_path / "no_modality.dcm")
+        write_minimal_dicom(path, patient_id="P_NOMOD")
+
+        ds = pydicom.dcmread(path)
+        del ds.Modality
+        del ds.PatientName
+        ds.save_as(path)
+
+        worker = DicomSearchWorker(str(tmp_path))
+        worker.run()
+
+        assert worker.tree.get_subject_list() == ["P_NOMOD"]
