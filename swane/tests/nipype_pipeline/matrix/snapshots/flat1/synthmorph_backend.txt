@@ -13,7 +13,7 @@
     out_file = 'r-extension_z.nii.gz'
     subjects_dir = '<SUBJECTS_DIR>'
 - fast_segment_split [Function] mem_gb=0.2 n_procs=1
-    function_str = 'def pick_first_two(file_list):\n    return file_list[1], file_list[2]\n'
+    function_str = 'def pick_first_two(file_list):\n    return (file_list[1], file_list[2])'
 - flair_2_mni1_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
     environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     subjects_dir = '<SUBJECTS_DIR>'
