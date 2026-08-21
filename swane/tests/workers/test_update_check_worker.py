@@ -17,7 +17,7 @@ def test_run_emits_when_newer_available(monkeypatch):
     worker = UpdateCheckWorker()
     worker.signal.last_available.connect(emitted.append)
 
-    def fake_run(cmd, shell, stdout):
+    def fake_run(cmd, shell, stdout, stderr):
         return type("P", (), {"stdout": b"swane (9999.9.9)\n"})
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -31,7 +31,7 @@ def test_run_silent_when_up_to_date(monkeypatch):
     worker = UpdateCheckWorker()
     worker.signal.last_available.connect(emitted.append)
 
-    def fake_run(cmd, shell, stdout):
+    def fake_run(cmd, shell, stdout, stderr):
         return type("P", (), {"stdout": b"swane (0.0.1)\n"})
 
     monkeypatch.setattr(subprocess, "run", fake_run)
