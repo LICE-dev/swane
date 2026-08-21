@@ -21,6 +21,7 @@ Only construction state is read; nothing is executed.
 
 from __future__ import annotations
 
+import ast
 import os
 import sysconfig
 import tempfile
@@ -94,6 +95,30 @@ def _normalise(value: Any, repl: list[tuple[str, str]]) -> Any:
     return value
 
 
+def _normalise_function_source(src: str) -> str:
+    """Canonicalise a ``Function`` node's captured source, dropping comments.
+
+    ``nipype.interfaces.utility.Function`` stores the wrapped callable's full
+    source text (captured via ``inspect.getsource``) in its ``function_str``
+    input. Comments and incidental whitespace inside that source are not part of
+    the function's behavior, yet a bare diff of the raw text would flag them —
+    so editing a comment inside a ``Function`` body would spuriously fail the
+    snapshot regression.
+
+    Parsing to an AST and unparsing back collapses comments and reformats the
+    body to a canonical form (comments never survive the AST round-trip), while
+    still changing whenever the actual logic changes. ``ast.unparse`` is
+    preferred over ``ast.dump`` so the snapshot stays human-readable — reviewing
+    what each node does by hand is the whole point of these golden files.
+    """
+    try:
+        return ast.unparse(ast.parse(src))
+    except (SyntaxError, ValueError):
+        # Defensive fallback: keep behavior sane if ever handed something that
+        # is not parseable Python (should not happen for a Function's source).
+        return src
+
+
 def _format_value(value: Any) -> str:
     """Render a (normalised) trait value deterministically."""
     if isinstance(value, dict):
@@ -155,7 +180,12 @@ def _node_block(node: Any, repl: list[tuple[str, str]], indent: str) -> list[str
         raw = getattr(inputs, trait_name)
         if not isdefined(raw):
             continue
-        value = _normalise(raw, repl)
+        if trait_name == "function_str" and isinstance(raw, str):
+            # Function nodes capture their source verbatim (comments included);
+            # canonicalise it so a comment/formatting edit is not a false diff.
+            value = _normalise(_normalise_function_source(raw), repl)
+        else:
+            value = _normalise(raw, repl)
         lines.append("%s    %s = %s" % (indent, trait_name, _format_value(value)))
     return lines
 
