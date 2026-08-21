@@ -1,5 +1,15 @@
 """Head-less construction test for :class:`swane.ui.SubjectTab.SubjectTab`."""
 
+import pytest
+
+from swane.utils.qt_compat import QT_AVAILABLE
+
+if not QT_AVAILABLE:
+    pytest.skip(
+        "no working Qt binding (PySide6) — GUI tests skipped",
+        allow_module_level=True,
+    )
+
 from swane.ui.SubjectTab import SubjectTab
 from swane.utils.Subject import Subject, SubjectRet
 

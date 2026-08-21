@@ -10,7 +10,11 @@ inputs, so the matrix records a default and a tuned scenario under
 import pytest
 
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.seeg_ct_workflow import seeg_ct_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+seeg_ct_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.seeg_ct_workflow", "seeg_ct_workflow"
+)
 
 SUBDIR = "seeg_ct"
 

@@ -14,7 +14,11 @@ import pytest
 
 from swane.config.config_enums import BlockDesign
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.fMRI_task_workflow import fMRI_task_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+fMRI_task_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.fMRI_task_workflow", "fMRI_task_workflow"
+)
 
 SUBDIR = "fmri_task"
 

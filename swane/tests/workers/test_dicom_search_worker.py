@@ -125,8 +125,12 @@ class TestDicomSearchHelpers:
     def test_find_series_classification(self, monkeypatch):
         # find_series_classification does a call-time
         # `from dicom_sequence_classifier import extract_metadata, classify_dicom`
-        # so we patch the attributes on that module.
-        import dicom_sequence_classifier as dsc
+        # so we patch the attributes on that module. Skip (not fail) where the
+        # optional classifier package cannot be imported in this environment.
+        dsc = pytest.importorskip(
+            "dicom_sequence_classifier",
+            reason="dicom_sequence_classifier not importable in this environment",
+        )
 
         monkeypatch.setattr(dsc, "extract_metadata", lambda ds: {"dummy": True})
         monkeypatch.setattr(dsc, "classify_dicom", lambda meta: "T1")

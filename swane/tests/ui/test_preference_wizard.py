@@ -1,5 +1,15 @@
 """Head-less tests for :class:`swane.ui.PreferenceWizardWindow`."""
 
+import pytest
+
+from swane.utils.qt_compat import QT_AVAILABLE
+
+if not QT_AVAILABLE:
+    pytest.skip(
+        "no working Qt binding (PySide6) — GUI tests skipped",
+        allow_module_level=True,
+    )
+
 from swane.config.config_enums import FreesurferStep, GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager

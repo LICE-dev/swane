@@ -33,6 +33,13 @@ from nipype import Node
 from swane.config.ConfigManager import ConfigManager
 from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
 from swane.utils.DataInputList import DataInputList
+
+# CustomDcm2niix resolves the bundled dcm2niix binary at import; skip the whole
+# module with a clear reason where that tool package is not installed.
+pytest.importorskip(
+    "dcm2niix",
+    reason="dcm2niix not installed — real-execution tests need the toolchain",
+)
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.workflows.ref_workflow import ref_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow

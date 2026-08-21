@@ -10,7 +10,11 @@ recording snapshots under ``snapshots/fmri_preproc/``.
 import pytest
 
 from swane.config.config_enums import SliceTiming
-from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+fMRI_preproc_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.fMRI_preproc_workflow", "fMRI_preproc_workflow"
+)
 
 SUBDIR = "fmri_preproc"
 

@@ -1,6 +1,15 @@
 import os
 import shutil
 import pytest
+
+from swane.utils.qt_compat import QT_AVAILABLE
+
+if not QT_AVAILABLE:
+    pytest.skip(
+        "no working Qt binding (PySide6) — GUI end-to-end test skipped",
+        allow_module_level=True,
+    )
+
 from swane.config.ConfigManager import ConfigManager
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.workers.WorkflowProcess import LOG_DIR_NAME
