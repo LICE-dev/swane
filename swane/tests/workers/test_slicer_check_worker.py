@@ -173,9 +173,7 @@ def test_module_install_command_keeps_script_path_separate(monkeypatch):
 
     w.run()
 
-    install_cmd = next(
-        c for c in commands if "slicer_script_module_install.py" in c
-    )
+    install_cmd = next(c for c in commands if "slicer_script_module_install.py" in c)
     tokens = shlex.split(install_cmd)
     idx = tokens.index("--python-script")
     # the token right after --python-script is the script path on its own
