@@ -62,7 +62,7 @@
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
 - asl_sym_swap [Function] mem_gb=0.2 n_procs=1
-    function_str = 'def swap_rl(in_file):\n    import os\n    import numpy as np\n    import nibabel as nib\n\n    img = nib.load(in_file)\n    # flip along the x (right-left) axis keeping the affine unchanged,\n    # i.e. the anatomy is mirrored in the same voxel space.\n    # set_data_dtype avoids any residual rescaling on write\n    flipped = np.flip(img.get_fdata(dtype=np.float32), axis=0)\n    hdr = img.header.copy()\n    hdr.set_data_dtype(np.float32)\n    out_file = os.path.abspath("sym_swapped.nii.gz")\n    nib.save(nib.Nifti1Image(flipped, img.affine, hdr), out_file)\n    return out_file\n'
+    function_str = "def swap_rl(in_file):\n    import os\n    import numpy as np\n    import nibabel as nib\n    img = nib.load(in_file)\n    flipped = np.flip(img.get_fdata(dtype=np.float32), axis=0)\n    hdr = img.header.copy()\n    hdr.set_data_dtype(np.float32)\n    out_file = os.path.abspath('sym_swapped.nii.gz')\n    nib.save(nib.Nifti1Image(flipped, img.affine, hdr), out_file)\n    return out_file"
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 # connections

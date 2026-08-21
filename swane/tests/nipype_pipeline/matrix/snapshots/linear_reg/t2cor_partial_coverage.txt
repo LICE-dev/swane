@@ -10,7 +10,7 @@
 # nodes=10 edges=16
 
 - betted_name [Function] mem_gb=0.2 n_procs=1
-    function_str = 'def get_betted_name(basename):\n    return "r-%s_brain.nii.gz" % basename\n'
+    function_str = "def get_betted_name(basename):\n    return 'r-%s_brain.nii.gz' % basename"
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - t2_cor_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
@@ -49,7 +49,7 @@
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
 - unbetted_name [Function] mem_gb=0.2 n_procs=1
-    function_str = 'def get_unbetted_name(basename):\n    return "r-%s.nii.gz" % basename\n'
+    function_str = "def get_unbetted_name(basename):\n    return 'r-%s.nii.gz' % basename"
 # connections
 betted_name.out_file -> t2_cor_brain_mask.out_file
 inputnode.brain_mask -> t2_cor_brain_mask.mask_file

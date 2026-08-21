@@ -58,7 +58,7 @@
     out_file = 'r-veins_mra_inskull.nii.gz'
     output_type = 'NIFTI_GZ'
 - veins_split [Function] mem_gb=0.2 n_procs=1
-    function_str = 'def split_volumes(in_file):\n    import os\n    import nibabel as nib\n\n    img = nib.load(in_file)\n    out_files = []\n    for index in range(img.shape[-1]):\n        out_file = os.path.abspath("vol%04d.nii.gz" % index)\n        nib.save(img.slicer[..., index], out_file)\n        out_files.append(out_file)\n    return out_files\n'
+    function_str = "def split_volumes(in_file):\n    import os\n    import nibabel as nib\n    img = nib.load(in_file)\n    out_files = []\n    for index in range(img.shape[-1]):\n        out_file = os.path.abspath('vol%04d.nii.gz' % index)\n        nib.save(img.slicer[..., index], out_file)\n        out_files.append(out_file)\n    return out_files"
 # connections
 anat_2_ref_flirt.out_matrix_file -> veins_2_ref_apply_xfm.in_matrix_file
 inputnode.reference -> veins_2_ref_apply_xfm.reference
