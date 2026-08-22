@@ -38,6 +38,7 @@ class BetweenModFlirtCost(Enum):
 
 
 class VeinDetectionMode(Enum):
+    KURTOSIS = "Automatic (kurtosis)"
     SD = "Automatic (standard deviation)"
     MEAN = "Automatic (mean value)"
     FIRST = "Always first volume"
