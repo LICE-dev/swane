@@ -86,8 +86,8 @@ recon_all_recon1.subject_id -> recon_all_recon2.subject_id
 recon_all_recon1.subjects_dir -> recon_all_recon2.subjects_dir
 recon_all_recon2.subject_id -> recon_all_recon_pial.subject_id
 recon_all_recon2.subjects_dir -> recon_all_recon_pial.subjects_dir
-recon_all_recon_pial.('aparc_aseg', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n\n    return result_list[index]\n', (0,)) -> aparc_aseg2nii.source_file
-recon_all_recon_pial.('aparc_aseg', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n\n    return result_list[index]\n', (0,)) -> aparc_aseg2ref.source_file
+recon_all_recon_pial.('aparc_aseg', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (0,)) -> aparc_aseg2nii.source_file
+recon_all_recon_pial.('aparc_aseg', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (0,)) -> aparc_aseg2ref.source_file
 recon_all_recon_pial.pial -> outputnode.pial
 recon_all_recon_pial.subject_id -> reconAll.subject_id
 recon_all_recon_pial.subjects_dir -> reconAll.subjects_dir

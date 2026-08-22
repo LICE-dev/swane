@@ -55,7 +55,7 @@ def get_deskull_node(
         deskull_node = Node(BET(), name=name + "_bet")
         deskull_node.inputs.mask = mask
         deskull_node.inputs.threshold = bet_threshold
-        if bet_thr:
+        if bet_thr is not None:
             deskull_node.inputs.frac = bet_thr
         if bet_bias_correction:
             deskull_node.inputs.reduce_bias = True

@@ -91,6 +91,6 @@ veins_check.out_file_veins -> veins_inskull_mask.in_file
 veins_conv.converted_files -> veins_reOrient.in_file
 veins_inskull_mask.out_file -> veins_2_ref_apply_xfm.in_file
 veins_merge.out -> veins_check.in_files
-veins_range.('max_value', 'def rescale_string(max_value):\n    op_string = "-mul 100 -div %f" % max_value\n    return op_string\n', ()) -> veins_rescale.op_string
+veins_range.('max_value', "def rescale_string(max_value):\n    op_string = '-mul 100 -div %f' % max_value\n    return op_string", ()) -> veins_rescale.op_string
 veins_reOrient.out_file -> veins_merge.in1
 veins_rescale.out_file -> outputnode.veins

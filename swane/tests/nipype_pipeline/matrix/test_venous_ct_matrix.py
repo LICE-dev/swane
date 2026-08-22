@@ -11,7 +11,11 @@ threshold. Snapshots under ``snapshots/venous_ct/``.
 import pytest
 
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.venous_ct_workflow import venous_ct_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+venous_ct_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.venous_ct_workflow", "venous_ct_workflow"
+)
 
 SUBDIR = "venous_ct"
 

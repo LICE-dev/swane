@@ -11,8 +11,11 @@ on a box without the template it degrades to a skip (see
 import pytest
 
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.fMRI_resting_state_workflow import (
-    fMRI_resting_state_workflow,
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+fMRI_resting_state_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.fMRI_resting_state_workflow",
+    "fMRI_resting_state_workflow",
 )
 from swane.tests.nipype_pipeline.matrix.conftest import fsl_data_path, require_fsl_data
 

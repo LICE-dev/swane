@@ -14,6 +14,7 @@ change with::
 On a normal run a mismatch fails the test and prints how to update.
 """
 
+import importlib
 import os
 
 import pytest
@@ -45,6 +46,29 @@ def require_fsl_data(*paths):
     missing = [str(p) for p in paths if not os.path.exists(p)]
     if missing:
         pytest.skip("needs FSL data, missing: %s" % ", ".join(missing))
+
+
+def import_workflow_or_skip(module_name, attr):
+    """Import a workflow builder, or SKIP the whole test module with a clear
+    reason when a required tool/dependency is not importable here.
+
+    Workflow modules import their tool packages at module load (e.g.
+    ``import dcm2niix`` to resolve the bundled binary path at construction), so
+    on an environment lacking a given neuroimaging tool the import raises
+    ``ImportError``. Rather than let that hard-error at collection time, we turn
+    it into an explanatory module-level skip — the suite stays runnable on any
+    environment and says *why* it could not test a given builder. Where the tool
+    IS present (any OS), the builder is imported and its matrix runs normally.
+    """
+    try:
+        module = importlib.import_module(module_name)
+    except ImportError as exc:
+        pytest.skip(
+            "cannot test %s in this environment — missing tool/dependency: %s"
+            % (attr, exc),
+            allow_module_level=True,
+        )
+    return getattr(module, attr)
 
 
 @pytest.fixture

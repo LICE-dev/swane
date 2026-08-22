@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import ast
 import os
+import site
 import sysconfig
 import tempfile
 from typing import Any
@@ -59,7 +60,31 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
     add(os.environ.get("SUBJECTS_DIR"), "<SUBJECTS_DIR>")
     add(os.environ.get("HOME"), "<HOME>")
     add(os.environ.get("USERPROFILE"), "<HOME>")
-    add(sysconfig.get_paths().get("purelib"), "<SITE>")
+    # Every package-install root -> <SITE>, so a path into an installed
+    # package's data files (e.g. ica_aroma_py resources) collapses to a stable
+    # token regardless of WHERE/HOW the package was installed: system
+    # site-packages, a virtualenv, or a `pip install --user` user-site
+    # (~/.local/lib/pythonX.Y/site-packages). Covering only sysconfig 'purelib'
+    # missed the user-site, leaking e.g.
+    # /home/<user>/.local/lib/python3.12/site-packages/ica_aroma_py/... into the
+    # golden and tying it to one developer's machine and Python version. All
+    # roots share the <SITE> token so the result is identical across install
+    # layouts; longest-prefix-first ordering keeps nested roots (e.g.
+    # <SUPPLEMENT>) winning over the enclosing site-packages dir.
+    site_roots: list[Any] = [
+        sysconfig.get_paths().get("purelib"),
+        sysconfig.get_paths().get("platlib"),
+    ]
+    try:
+        site_roots.extend(site.getsitepackages())
+    except Exception:
+        pass
+    try:
+        site_roots.append(site.getusersitepackages())
+    except Exception:
+        pass
+    for site_root in site_roots:
+        add(site_root, "<SITE>")
     add(os.getcwd(), "<CWD>")
     # test_run's recon-all -expert file lives at a fixed path in the system
     # temp dir (see freesurfer_workflow._reconall_test_expert_file), which
@@ -117,6 +142,27 @@ def _normalise_function_source(src: str) -> str:
         # Defensive fallback: keep behavior sane if ever handed something that
         # is not parseable Python (should not happen for a Function's source).
         return src
+
+
+def _normalise_conn_field(field: Any, repl: list[tuple[str, str]]) -> Any:
+    """Canonicalise a connection endpoint for stable rendering.
+
+    nipype allows an inline transform on a connection — expressed as
+    ``(field_name, function_source, args)`` — and the wrapped function's source
+    text (comments included) would otherwise be diffed verbatim, exactly the
+    fragility :func:`_normalise_function_source` removes for a node's
+    ``function_str`` trait. Apply the same normalisation to any string the tuple
+    carries (a plain field name is unaffected by the AST round-trip), so a
+    comment/formatting edit inside a connection transform is not a false diff.
+    """
+    if isinstance(field, tuple):
+        return tuple(
+            _normalise(_normalise_function_source(elem), repl)
+            if isinstance(elem, str)
+            else elem
+            for elem in field
+        )
+    return field
 
 
 def _format_value(value: Any) -> str:
@@ -207,7 +253,14 @@ def _graph_lines(workflow: Any, repl: list[tuple[str, str]], indent: str) -> lis
     for src, dst, data in graph.edges(data=True):
         for src_field, dst_field in data.get("connect", []):
             conn_lines.append(
-                "%s%s.%s -> %s.%s" % (indent, src.name, src_field, dst.name, dst_field)
+                "%s%s.%s -> %s.%s"
+                % (
+                    indent,
+                    src.name,
+                    _normalise_conn_field(src_field, repl),
+                    dst.name,
+                    dst_field,
+                )
             )
     if conn_lines:
         lines.append("%s# connections" % indent)

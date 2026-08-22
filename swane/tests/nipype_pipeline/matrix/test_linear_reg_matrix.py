@@ -16,7 +16,11 @@ import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+linear_reg_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.linear_reg_workflow", "linear_reg_workflow"
+)
 
 SUBDIR = "linear_reg"
 

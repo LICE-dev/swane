@@ -61,7 +61,7 @@ class MainWorkflow(CustomWorkflow):
     is_tractography: bool = False
     is_slicer: bool = False
     t1: CustomWorkflow
-    freesurfer: CustomWorkflow
+    freesurfer: CustomWorkflow = None
     sym: CustomWorkflow
     flair: CustomWorkflow
     mni1: CustomWorkflow
