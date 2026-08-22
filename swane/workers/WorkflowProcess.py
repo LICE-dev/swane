@@ -161,6 +161,14 @@ class WorkflowProcess(Process):
         # enable resource monitor if required
         if self.workflow.is_resource_monitor:
             config.enable_resource_monitor()
+            # enable_resource_monitor() only flips the *global* nipype config,
+            # which a "spawn" worker does not inherit. Mirror the flag onto the
+            # workflow's own config so it propagates into every node.config
+            # (pickled to the worker), where swane_run_node re-enables the
+            # monitor. Without this, node.config["monitoring"]["enabled"] keeps
+            # the workflow-creation snapshot ("false") and wins the run() merge,
+            # so no .proc file is produced under spawn.
+            self.workflow.config.setdefault("monitoring", {})["enabled"] = "true"
             resource_log_filename = os.path.join(log_dir, "resource_monitor.log")
             callback_logger = orig_log.getLogger("callback")
             callback_logger.setLevel(orig_log.DEBUG)

@@ -3,6 +3,7 @@
 import traceback
 from nipype.interfaces.base import isdefined
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
+from swane.patches.nipype_patches import swane_run_node
 from swane import strings
 import numpy as np
 from logging import INFO
@@ -314,7 +315,26 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         if hasattr(node.interface.inputs, "environ"):
             node.interface.inputs.environ["LC_ALL"] = "en_US.UTF-8"
 
-        return super(MonitoredMultiProcPlugin, self)._submit_job(node, updatehash)
+        # Reimplementation of MultiProcPlugin._submit_job that submits SWANe's
+        # own run_node wrapper (swane_run_node) instead of Nipype's run_node.
+        # The wrapper redirects the Resource Monitor .proc files into the
+        # configured crashdump_dir and lives in swane.patches, so that a spawn
+        # worker unpickling it also imports (and applies) the ResourceMonitor
+        # patch. See swane/patches/nipype_patches.py.
+        self._taskid += 1
+
+        # Don't allow streaming outputs
+        if getattr(node.interface, "terminal_output", "") == "stream":
+            node.interface.terminal_output = "allatonce"
+
+        result_future = self.pool.submit(swane_run_node, node, updatehash, self._taskid)
+        result_future.add_done_callback(self._async_callback)
+        self._task_obj[self._taskid] = result_future
+
+        logger.debug(
+            "[MultiProc] Submitted task %s (taskid=%d).", node.fullname, self._taskid
+        )
+        return self._taskid
 
     def _submit_mapnode(self, jobid):
         # This class implements signaling for mapnode start
