@@ -459,8 +459,13 @@ def build_catalog(profile) -> list:
     #   * venous_mr_split_anat : anatomic phase, 1 volume  \\ case 2: point
     #   * venous_mr_split_angio: angiographic phase, 1 volume / VENOUS_MR and
     #                            VENOUS_MR2 at these two folders
-    # The angiographic phase has bright vessels (high variance) so VenousCheck
-    # can tell it from the anatomic phase in either arrangement.
+    # The angiographic phase suppresses the background and leaves only bright
+    # vessels, i.e. a sparse, heavy-tailed intensity distribution, while the
+    # anatomic phase is a filled tissue image. VenousCheck tells them apart from
+    # that difference in either arrangement: the default KURTOSIS mode keys on
+    # the heavy tail (used on the single 2-volume series) and the legacy SD/MEAN
+    # modes on the lower spread/mean of the suppressed phase (SD is used on the
+    # two-series arrangement); see tests/helpers/phantom/test_venous_separation.py.
     def _venous_spec(name, lut):
         return SequenceSpec(
             name,

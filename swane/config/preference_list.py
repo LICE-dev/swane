@@ -186,7 +186,7 @@ WF_PREFERENCES[category]["vein_detection_mode"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Venous volume detection mode",
     value_enum=VeinDetectionMode,
-    default=VeinDetectionMode.SD,
+    default=VeinDetectionMode.KURTOSIS,
 )
 WF_PREFERENCES[category]["vein_segment_threshold"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
@@ -452,6 +452,7 @@ WF_PREFERENCES[category]["melodic_dim"] = PreferenceEntry(
     tooltip="Set 0 for automatic detection",
     default=0,
     range=[0, 200],
+    special_value_text="Auto",
 )
 WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
