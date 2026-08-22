@@ -57,9 +57,9 @@ Names and identities cross several layers. Treat input identities, preference ke
 | Utility/config logic | Import/compile plus targeted pytest | Config, subject, or DICOM test module |
 | Preference/input identity | Persistence/default test plus graph construction | Preference UI and workflow enablement tests |
 | Nipype interface | Trait/output test and mocked failure edges | Real external-tool smoke test |
-| Workflow connections/names | Construct graph and assert nodes/connections/outputs | `integration/test_workflow.py` with required tools |
-| GUI/worker | Signal/state test with `pytest-qt` | Complete GUI workflow with a display |
-| Scientific algorithm/flags | Synthetic fixture comparison | Representative workflow comparison and domain review |
+| Workflow connections/names | Construct graph and assert nodes/connections/outputs | `nipype_pipeline/matrix/` golden snapshot with required tools |
+| GUI/worker | Signal/state test with `pytest-qt` | `prerelease/` full-pipeline sweep |
+| Scientific algorithm/flags | Synthetic fixture comparison | `prerelease/` representative workflow comparison and domain review |
 | Packaging/release | Version/import/build-content check | Clean-environment installation smoke test |
 
-The light suite (`config/`, `utils/`, `workers/`, `ui/`) uses disposable `tmp_path` fixtures and needs no external tools. The `integration/` fixtures use `TEST_DIR = ~/test_swane` (defined in `swane/tests/__init__.py`) and delete/recreate task-specific subdirectories. Resolve that path before execution. `integration/test_complete_workflow.py` also reads the configured working directory to find `subj_test`; never substitute real clinical data for this fixture.
+The light suite (`config/`, `utils/`, `workers/`, `ui/`) uses disposable `tmp_path` fixtures and needs no external tools. Tests marked `@pytest.mark.heavy` (opt-in via `--run-heavy`) sit alongside them in the same directories and run against a real toolchain where nothing can be mocked (e.g. `workers/test_slicer_check_worker.py::TestSlicerCheckWorkerReal`, against a real installed Slicer). `swane/tests/prerelease/` (`python -m swane.tests.prerelease`) runs the real workflows over a generated synthetic phantom under the disposable root `~/test_swane/prerelease`; resolve that exact path before execution and never substitute real clinical data.

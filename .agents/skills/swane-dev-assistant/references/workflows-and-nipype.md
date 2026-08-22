@@ -100,6 +100,6 @@ Do not equate successful graph construction with scientific correctness. Require
 - Compile/import changed modules before graph tests.
 - Test Traits defaults, validation, generated commands, declared outputs, and failure paths for custom interfaces.
 - Construct affected graphs and assert boundary fields, node identities, connections, resource metadata, and deterministic output names.
-- Update `swane/tests/integration/test_workflow.py` expectations for graph-level changes; it is marked `heavy`, so run it with `--run-heavy` and only where its FSL/dcm2niix/Graphviz prerequisites are satisfied.
+- Update the affected `swane/tests/nipype_pipeline/matrix/` golden snapshots for graph-level changes (`SWANE_SNAPSHOT_UPDATE=1 pytest swane/tests/nipype_pipeline/matrix`), and re-run `swane/tests/prerelease/` for execution-level changes; the latter needs `--run-heavy`-equivalent real tools (FSL/dcm2niix/FreeSurfer) and is opt-in (`python -m swane.tests.prerelease`).
 - Use mocked or synthetic inputs for focused tests. Run real-tool smoke tests only in a suitable neuroimaging environment.
 - Compare representative de-identified outputs for scientific changes, including geometry and downstream visualization, and state what was not clinically validated.

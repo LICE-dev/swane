@@ -4,6 +4,16 @@ Qt runs with ``QT_QPA_PLATFORM=offscreen`` (set in conftest), so no display is
 required. Every widget is registered with ``qtbot`` for deterministic cleanup.
 """
 
+import pytest
+
+from swane.utils.qt_compat import QT_AVAILABLE
+
+if not QT_AVAILABLE:
+    pytest.skip(
+        "no working Qt binding (PySide6) — GUI tests skipped",
+        allow_module_level=True,
+    )
+
 import swane_supplement
 from PySide6.QtWidgets import QTreeWidget
 from PySide6.QtCore import Qt

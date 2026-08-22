@@ -6,7 +6,7 @@ from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane import strings
 from packaging import version
 from swane.config.ConfigManager import ConfigManager
-from PySide6.QtCore import QThreadPool
+from swane.utils.qt_compat import QThreadPool
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux

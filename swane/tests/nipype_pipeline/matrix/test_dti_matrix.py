@@ -21,7 +21,11 @@ import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+dti_preproc_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.dti_preproc_workflow", "dti_preproc_workflow"
+)
 
 SUBDIR = "dti_preproc"
 MAX_CPU = 4

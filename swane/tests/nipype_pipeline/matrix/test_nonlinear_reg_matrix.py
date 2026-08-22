@@ -10,8 +10,10 @@ InvWarp + ApplyWarp) versus SynthMorph. One snapshot per backend under
 import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList
-from swane.nipype_pipeline.workflows.nonlinear_reg_workflow import (
-    nonlinear_reg_workflow,
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+nonlinear_reg_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.nonlinear_reg_workflow", "nonlinear_reg_workflow"
 )
 
 SUBDIR = "nonlinear_reg"

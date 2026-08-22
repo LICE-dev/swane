@@ -1,11 +1,13 @@
 """Light unit tests for :mod:`swane.utils.DependencyManager`.
 
 Everything here is mocked: no real FSL/FreeSurfer/dcm2niix/Slicer is needed.
-The exhaustive checks against the real toolchain live in
-``integration/test_dependency_manager.py`` (marked ``heavy``).
+The real Slicer detection/install dance lives in
+``workers/test_slicer_check_worker.py`` (marked ``heavy``), since that one
+cannot be faked without a real bundled Slicer.
 """
 
 import os
+import types
 
 import swane.utils.DependencyManager as dm
 from swane.utils.DependencyManager import (
@@ -124,6 +126,44 @@ class TestToolChecksMocked:
         monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "7.4.0")
         monkeypatch.delenv("FREESURFER_HOME", raising=False)
         assert DependencyManager.check_freesurfer().state == DependenceStatus.MISSING
+
+    def test_check_freesurfer_detected(self, monkeypatch, tmp_path):
+        """The full "everything present" branch: version, license, tcsh and the
+        Matlab runtime all found, with enough RAM for the Synth recon-all path.
+        """
+        # check_freesurfer() falls back to a license.txt in the home directory;
+        # isolate it so a real license file in the developer's actual $HOME
+        # doesn't leak into this scenario.
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))
+        monkeypatch.delenv("FS_LICENSE", raising=False)
+
+        monkeypatch.setattr(dm.freesurfer.base.Info, "version", lambda: "8.2.0")
+        monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "8.2.0")
+        fake_fs = tmp_path / "freesurfer"
+        fake_fs.mkdir()
+        monkeypatch.setenv("FREESURFER_HOME", str(fake_fs))
+        (fake_fs / "license.txt").write_text("license")
+        monkeypatch.setattr(dm, "which", lambda cmd: "/usr/bin/tcsh")
+        monkeypatch.setattr(
+            dm.subprocess,
+            "run",
+            lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="", stderr=""),
+        )
+        monkeypatch.setattr(
+            dm.ResourceManager, "total_memory_gb", staticmethod(lambda: 9999)
+        )
+        monkeypatch.setattr(
+            dm.ResourceManager,
+            "synth_reconall_ram_requirements",
+            staticmethod(lambda: 1),
+        )
+
+        dep = DependencyManager.check_freesurfer()
+        assert dep.state == DependenceStatus.DETECTED
+        assert dep.state2 == DependenceStatus.DETECTED
 
     def test_is_freesurfer_synth(self, monkeypatch):
         monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "8.2.0")

@@ -15,8 +15,8 @@ This file is versioned with the repository so every trusted clone uses the same 
 - Never add patient data, identifiers, private DICOM metadata, local subject paths, credentials, decrypted secrets, logs, caches, or generated clinical results.
 - Use synthetic or de-identified fixtures only.
 - Distinguish software regression evidence from scientific or clinical validation.
-- The light suite (`swane/tests/{config,utils,workers,ui}`, run with `-m "not heavy"`) is headless, uses disposable `tmp_path` fixtures, and needs no external tools. Only the `swane/tests/integration/` tests use the disposable root `~/test_swane`; before running those, verify that the resolved root is exactly `~/test_swane` and never substitute a clinical working directory.
-- Do not run `swane/tests/integration/test_complete_workflow.py` unless the user explicitly requests it and a verified de-identified `subj_test` is available.
+- The light suite (`swane/tests/{config,utils,workers,ui,nipype_pipeline}`, run with `-m "not heavy"`) is headless, uses disposable `tmp_path` fixtures, and needs no external tools. Heavy tests (marked `@pytest.mark.heavy`, opt-in via `--run-heavy`) are interleaved in those same directories and run against synthetic/mocked fixtures or a real toolchain (FSL/FreeSurfer/dcm2niix/Slicer), never against patient data.
+- `swane/tests/prerelease/` runs the real workflows over a generated synthetic phantom under the disposable root `~/test_swane/prerelease`; before running it, verify the resolved root is exactly that and never substitute a clinical working directory.
 - Prefer Windows for static and lightweight checks. Use a supported Linux/macOS environment for FSL, FreeSurfer, Slicer, and representative workflow validation.
 
 ## SWANe component map

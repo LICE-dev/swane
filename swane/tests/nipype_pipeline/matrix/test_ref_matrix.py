@@ -13,7 +13,11 @@ import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.ref_workflow import ref_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+ref_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.ref_workflow", "ref_workflow"
+)
 
 SUBDIR = "ref"
 

@@ -16,7 +16,11 @@ import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList, FreesurferStep
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
+from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
+
+func_map_workflow = import_workflow_or_skip(
+    "swane.nipype_pipeline.workflows.func_map_workflow", "func_map_workflow"
+)
 
 SUBDIR = "func_map"
 

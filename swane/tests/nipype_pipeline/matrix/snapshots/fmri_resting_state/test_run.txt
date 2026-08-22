@@ -10,9 +10,9 @@
 - aroma_classification [AromaClassification] mem_gb=0.2 n_procs=1
 - feature_frequency [FeatureFrequency] mem_gb=0.2 n_procs=1
 - feature_spatial [FeatureSpatial] mem_gb=0.2 n_procs=1
-    mask_csf = '/home/mau/.local/lib/python3.12/site-packages/ica_aroma_py/resources/mask_csf.nii.gz'
-    mask_edge = '/home/mau/.local/lib/python3.12/site-packages/ica_aroma_py/resources/mask_edge.nii.gz'
-    mask_out = '/home/mau/.local/lib/python3.12/site-packages/ica_aroma_py/resources/mask_out.nii.gz'
+    mask_csf = '<SITE>/ica_aroma_py/resources/mask_csf.nii.gz'
+    mask_edge = '<SITE>/ica_aroma_py/resources/mask_edge.nii.gz'
+    mask_out = '<SITE>/ica_aroma_py/resources/mask_out.nii.gz'
 - feature_spatial_prep [FeatureSpatialPrep] mem_gb=0.2 n_procs=1
 - feature_time_series [FeatureTimeSeries] mem_gb=0.2 n_procs=1
 - fmri_rs_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
@@ -226,7 +226,7 @@ fmri_rs_getTR.TR -> feature_frequency.TR
 fmri_rs_getTR.TR -> fmri_rs_merge_tr_meanfunc3.in1
 fmri_rs_getTR.TR -> melodic.tr_sec
 fmri_rs_getTR.TR -> preproc_melodic.tr_sec
-fmri_rs_getthresh.('percentile_values', 'def get_thresh_op(thresh):\n    return "-thr %.10f -Tmin -bin" % (0.1 * thresh[0])\n', ()) -> fmri_rs_threshold.op_string
+fmri_rs_getthresh.('percentile_values', "def get_thresh_op(thresh):\n    return '-thr %.10f -Tmin -bin' % (0.1 * thresh[0])", ()) -> fmri_rs_threshold.op_string
 fmri_rs_highpass.out_file -> merge_node.in1
 fmri_rs_highpass.out_file -> nonaggr_denoising.in_file
 fmri_rs_img2float.out_file -> fmri_rs_extract_ref.in_file
@@ -245,18 +245,18 @@ fmri_rs_meanfunc3.out_file -> fmri_rs_merge_tr_meanfunc3.in2
 fmri_rs_meanfuncmask.mask_file -> feature_spatial_prep.mask_file
 fmri_rs_meanfuncmask.mask_file -> fmri_rs_maskfunc.in_file2
 fmri_rs_meanfuncmask.mask_file -> preproc_melodic.mask
-fmri_rs_medianval.('percentile_values', 'def get_bt_thresh(percentile_values):\n    return 0.75 * percentile_values[0]\n', ()) -> fmri_rs_smooth.brightness_threshold
-fmri_rs_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]\n', ()) -> fmri_rs_mergenode.in2
-fmri_rs_medianval.('percentile_values', 'def get_inorm_scale(percentile_values):\n    return "-mul %.10f" % (10000.0 / percentile_values[0])\n', ()) -> fmri_rs_intnorm.op_string
-fmri_rs_merge_tr_meanfunc3.('out', 'def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return "-bptf %f -1 -add %s" % (hp_sigma_vol, merged[1])\n', (100,)) -> fmri_rs_highpass.op_string
-fmri_rs_mergenode.('out', 'def get_usans(x):\n    return [tuple([x[0], 0.75 * x[1]])]\n', ()) -> fmri_rs_smooth.usans
+fmri_rs_medianval.('percentile_values', "def get_inorm_scale(percentile_values):\n    return '-mul %.10f' % (10000.0 / percentile_values[0])", ()) -> fmri_rs_intnorm.op_string
+fmri_rs_medianval.('percentile_values', 'def get_bt_thresh(percentile_values):\n    return 0.75 * percentile_values[0]', ()) -> fmri_rs_smooth.brightness_threshold
+fmri_rs_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]', ()) -> fmri_rs_mergenode.in2
+fmri_rs_merge_tr_meanfunc3.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (100,)) -> fmri_rs_highpass.op_string
+fmri_rs_mergenode.('out', 'def get_usans(x):\n    return [tuple([x[0], 0.75 * x[1]])]', ()) -> fmri_rs_smooth.usans
 fmri_rs_motion_correct.out_file -> fmri_rs_maskfunc.in_file
 fmri_rs_motion_correct.out_file -> fmri_rs_maskfunc2.in_file
 fmri_rs_motion_correct.out_file -> fmri_rs_meanfunc.in_file
 fmri_rs_motion_correct.out_file -> fmri_rs_medianval.in_file
 fmri_rs_motion_correct.par_file -> feature_time_series.mc
 fmri_rs_nvols.nvols -> fmri_rs_del_vols.nvols
-fmri_rs_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle\n', ()) -> fmri_rs_extract_ref.start_volume
+fmri_rs_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle', ()) -> fmri_rs_extract_ref.start_volume
 fmri_rs_reorient.out_file -> fmri_rs_img2float.in_file
 fmri_rs_smooth.smoothed_file -> fmri_rs_maskfunc3.in_file
 fmri_rs_threshold.out_file -> fmri_rs_dilatemask.in_file
@@ -270,7 +270,7 @@ inputnode.reference_brain -> ref_2_mni_fnirt.in_file
 inputnode.reference_brain -> zstats_apply_xfm.reference
 melodic.out_dir -> melodic_output.base_directory
 melodic.out_dir -> melodic_output.melodic_dir
-melodic_output.('thresh_zstat_files', 'def registered_file_name(in_file_names):\n    """\n    Adds prefix \'r-\' and use 2 digid number at end.\n    Example: \'zstat1.nii.gz\' -> \'r-zstat01.nii.gz\'\n    """\n    from os.path import basename\n    import re\n\n    out_files = []\n    for f in in_file_names:\n        base_name = basename(f)\n        # Cerca un numero prima dell\'estensione .nii o .nii.gz\n        m = re.search(r"(\\d+)(\\.nii(?:\\.gz)?)$", base_name)\n        if m:\n            num = int(m.group(1))\n            ext = m.group(2)\n            new_name = re.sub(r"\\d+(\\.nii(?:\\.gz)?)$", f"{num:02d}{ext}", base_name)\n        else:\n            new_name = base_name\n        out_files.append("r-" + new_name)\n    return out_files\n', ()) -> zstats_apply_xfm.out_file
+melodic_output.('thresh_zstat_files', 'def registered_file_name(in_file_names):\n    """\n    Adds prefix \'r-\' and use 2 digid number at end.\n    Example: \'zstat1.nii.gz\' -> \'r-zstat01.nii.gz\'\n    """\n    from os.path import basename\n    import re\n    out_files = []\n    for f in in_file_names:\n        base_name = basename(f)\n        m = re.search(\'(//d+)(//.nii(?://.gz)?)$\', base_name)\n        if m:\n            num = int(m.group(1))\n            ext = m.group(2)\n            new_name = re.sub(\'//d+(//.nii(?://.gz)?)$\', f\'{num:02d}{ext}\', base_name)\n        else:\n            new_name = base_name\n        out_files.append(\'r-\' + new_name)\n    return out_files', ()) -> zstats_apply_xfm.out_file
 melodic_output.mel_mix -> outputnode.mel_mix
 melodic_output.thresh_zstat_files -> zstats_apply_xfm.in_file
 merge_node.out -> preproc_melodic.in_files
