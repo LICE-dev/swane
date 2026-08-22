@@ -11,6 +11,7 @@ from swane.config.preference_list import GLOBAL_PREFERENCES
 from swane.config.config_enums import (
     GlobalPrefCategoryList,
     PerformanceProfile,
+    VeinDetectionMode,
     WorkflowTypes,
 )
 from swane.utils.DataInputList import DataInputList
@@ -125,6 +126,27 @@ class TestSafeGetters:
             config, str(GlobalPrefCategoryList.SYNTH), "strip", "garbage"
         )
         assert config.getboolean_safe(GlobalPrefCategoryList.SYNTH, "strip") is False
+
+    def test_getfloat_safe_falls_back_to_default(self, tmp_path):
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        # Simulate a hand-edited/corrupted config file, bypassing the
+        # validating set() override. WF_PREFERENCES sections (DataInputList)
+        # go through the same fallback code path as GLOBAL_PREFERENCES ones,
+        # so this is also what every workflow node relies on for e.g. bet_thr.
+        configparser.ConfigParser.set(
+            config, str(DataInputList.T13D), "bet_thr", "garbage"
+        )
+        assert config.getfloat_safe(DataInputList.T13D, "bet_thr") == 0.3
+
+    def test_getenum_safe_falls_back_to_default(self, tmp_path):
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        configparser.ConfigParser.set(
+            config, str(DataInputList.VENOUS_MR), "vein_detection_mode", "garbage"
+        )
+        assert (
+            config.getenum_safe(DataInputList.VENOUS_MR, "vein_detection_mode")
+            is VeinDetectionMode.SD
+        )
 
 
 class TestMailManagerFactory:

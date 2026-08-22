@@ -31,6 +31,7 @@
     output_type = 'NIFTI_GZ'
 - ref_deskull_biased_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    frac = 0.0
     mask = True
     output_type = 'NIFTI_GZ'
     reduce_bias = True

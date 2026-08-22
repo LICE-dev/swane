@@ -91,6 +91,28 @@ from swane.tests.helpers.dicom_scenarios import build_dicom_tree
 # --------------------------------------------------------------------------- #
 # Markers
 # --------------------------------------------------------------------------- #
+def _configured_slicer_path():
+    """The ``slicer_path`` swane itself would use, read read-only from the
+    real ``~/.SWANe`` config file (never written here — this must not mutate
+    the user's actual application config as a side effect of collection).
+    3D Slicer is normally an extracted tarball/AppImage, not something on
+    PATH, so swane's own configured path is the only reliable signal.
+    """
+    import configparser
+
+    from swane import strings
+
+    config_file = os.path.join(os.path.expanduser("~"), "." + strings.APPNAME)
+    if not os.path.exists(config_file):
+        return None
+    parser = configparser.ConfigParser()
+    try:
+        parser.read(config_file)
+        return parser["main"]["slicer_path"]
+    except Exception:
+        return None
+
+
 _TOOL_MARKERS = {
     "requires_dcm2niix": lambda: shutil.which("dcm2niix") is not None,
     "requires_fsl": lambda: shutil.which("bet") is not None
@@ -98,7 +120,7 @@ _TOOL_MARKERS = {
     "requires_freesurfer": lambda: shutil.which("recon-all") is not None
     or bool(os.environ.get("FREESURFER_HOME")),
     "requires_slicer": lambda: shutil.which("Slicer") is not None
-    or bool(os.environ.get("SWANE_SLICER_PATH")),
+    or bool(_configured_slicer_path() and os.path.exists(_configured_slicer_path())),
 }
 
 _MARKER_HELP = {
