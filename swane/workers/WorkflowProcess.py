@@ -75,7 +75,7 @@ class WorkflowProcess(Process):
         #  nipype state/handlers) or a leftover, and possibly make it platform
         #  dependent.
         plugin_args = {
-            "mp_context": "spawn",
+            "mp_context": "fork",
             "queue": self.queue,
             "status_callback": swane_log_nodes_cb,
         }
