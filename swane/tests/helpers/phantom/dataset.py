@@ -175,6 +175,19 @@ def build_phantom(
     from pydicom.uid import generate_uid
 
     tissue = build_tissue_model(freesurfer_home)
+
+    # The pre-release ground truth (feature centroids) is a deterministic
+    # function of this very tissue model, so derive it here -- the model is
+    # already in hand -- and cache it beside the DICOM. The sweep then loads it
+    # instead of rebuilding the model a second time. See helpers/phantom/
+    # ground_truth.py and tests/prerelease/checks.py:GroundTruth.load.
+    from swane.tests.helpers.phantom.ground_truth import (
+        compute_centres,
+        save_ground_truth,
+    )
+
+    save_ground_truth(subject_dir, compute_centres(tissue))
+
     dicom_root = os.path.join(subject_dir, DICOM_DIR_NAME)
     os.makedirs(dicom_root, exist_ok=True)
 
