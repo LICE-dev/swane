@@ -223,21 +223,15 @@ def main(argv=None) -> int:
     from swane.tests.prerelease.runner import run_sweep
     from swane.tests.prerelease.subject import load_phantom
 
-    ground_truth = None
-    if not args.no_ground_truth:
-        print("Building the phantom ground truth for the anatomical checks...")
-        try:
-            ground_truth = GroundTruth.build()
-        except Exception as exc:
-            print("  could not build it (%s); those checks are skipped." % exc)
-
     if args.checks_only:
         results = _reload_results(work_dir, plan)
+        phantom_root = None
     else:
         print("Preparing the phantom exam (generated once, then cached)...")
         exam = load_phantom(force=args.rebuild_phantom)
         print("  %s" % exam.root)
         print("")
+        phantom_root = exam.root
         results = run_sweep(
             plan,
             exam,
@@ -250,6 +244,17 @@ def main(argv=None) -> int:
             test_run=test_run,
             timeout_seconds=args.timeout * 3600 if args.timeout > 0 else None,
         )
+
+    ground_truth = None
+    if not args.no_ground_truth:
+        print("")
+        print("Loading the phantom ground truth for the anatomical checks...")
+        try:
+            # Cached beside the phantom when it was built; recomputed only for a
+            # pre-sidecar cache or the checks-only path (no phantom root here).
+            ground_truth = GroundTruth.load(phantom_root)
+        except Exception as exc:
+            print("  could not obtain it (%s); those checks are skipped." % exc)
 
     print("")
     print("Checking results...")

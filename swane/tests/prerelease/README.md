@@ -71,8 +71,12 @@ So the checks are layered:
 
 Layer 3 is possible because we generate the data: the ground truth comes from
 the *same* `build_tissue_model()` call that drew the phantom, so the reference
-cannot drift from what was rendered. Comparisons are done as centres of mass in
-RAS millimetres, so nothing has to be resampled to be judged.
+cannot drift from what was rendered. The feature centroids are computed at build
+time and cached beside the DICOM as `ground_truth.json` (see
+`helpers/phantom/ground_truth.py`); the sweep loads them instead of rebuilding
+the tissue model, falling back to a rebuild for a phantom cached before the
+sidecar existed. Comparisons are done as centres of mass in RAS millimetres, so
+nothing has to be resampled to be judged.
 
 ### What the phantom makes checkable — and what is still missing
 
