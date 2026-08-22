@@ -27,7 +27,9 @@ import pytest
 # constructed. Skip the whole module with a clear reason there: workflow
 # execution (and this plugin) only runs on Linux/macOS.
 try:
-    from nipype.pipeline.plugins.multiproc import MultiProcPlugin as _RealMultiProcPlugin  # noqa: F401
+    from nipype.pipeline.plugins.multiproc import (
+        MultiProcPlugin as _RealMultiProcPlugin,
+    )  # noqa: F401
 except Exception as _exc:  # pragma: no cover - platform dependent
     pytest.skip(
         "nipype MultiProcPlugin unavailable in this environment (%s)" % _exc,
