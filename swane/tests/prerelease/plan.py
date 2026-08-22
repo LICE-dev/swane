@@ -208,7 +208,15 @@ AXES = (
         scope=SUBJECT,
         section=DIL.VENOUS_MR,
         option="vein_detection_mode",
-        values=_enum_values(VeinDetectionMode, "SD", "MEAN", "FIRST", "SECOND"),
+        # Only the two automatic statistics that actually run image analysis are
+        # exercised end to end: KURTOSIS (the default) on the single 2-volume
+        # series and SD on the two-series shape, each graded on vein
+        # localization. FIRST/SECOND/MEAN do not change execution -- they only
+        # relabel which of the two volumes is the venous phase -- so their graph
+        # coverage lives in the construction-only matrix snapshots
+        # (single_series_first.txt et al.) and the VenousCheck unit tests, not in
+        # this hours-long execution sweep.
+        values=_enum_values(VeinDetectionMode, "KURTOSIS", "SD"),
         needs_input=DIL.VENOUS_MR,
     ),
     Axis(
@@ -389,7 +397,7 @@ PASSES = (
             "ref_bet_thr": "0.3",
             "flat1": "true",
             "venous_mr_shape": "single_series",
-            "vein_detection_mode": "SD",
+            "vein_detection_mode": "KURTOSIS",
             "venous_mr_bet_thr": "0.4",
             "electrode_threshold": "2000",
             "erode_kernel_size": "5",
@@ -417,7 +425,7 @@ PASSES = (
             "ref_bet_thr": "0.5",
             "flat1": "false",
             "venous_mr_shape": "two_series",
-            "vein_detection_mode": "FIRST",
+            "vein_detection_mode": "SD",
             "venous_mr_bet_thr": "0.25",
             "electrode_threshold": "2500",
             "erode_kernel_size": "8",
@@ -650,31 +658,6 @@ PASSES = (
             "fmri1_slice_timing": "DOWN",
             "aroma": "false",
             "melodic_dim": "20",
-        },
-    ),
-    PassSpec(
-        name="venous_mr_detection_modes",
-        description=(
-            "The two remaining vein-detection modes, which only reshape the "
-            "venous MR phase selection."
-        ),
-        inputs=(DIL.T13D, DIL.VENOUS_MR),
-        values={
-            "freesurfer_step": "DISABLED",
-            "cuda": "false",
-            "venous_mr_shape": "single_series",
-            "vein_detection_mode": "MEAN",
-        },
-    ),
-    PassSpec(
-        name="venous_mr_second_phase",
-        description="Vein detection pinned to the second volume.",
-        inputs=(DIL.T13D, DIL.VENOUS_MR),
-        values={
-            "freesurfer_step": "DISABLED",
-            "cuda": "false",
-            "venous_mr_shape": "single_series",
-            "vein_detection_mode": "SECOND",
         },
     ),
     # SynthMorph/SynthStrip coverage for the venous MR chain: venous_mr_workflow

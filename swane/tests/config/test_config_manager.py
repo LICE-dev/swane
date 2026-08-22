@@ -145,7 +145,7 @@ class TestSafeGetters:
         )
         assert (
             config.getenum_safe(DataInputList.VENOUS_MR, "vein_detection_mode")
-            is VeinDetectionMode.SD
+            is VeinDetectionMode.KURTOSIS
         )
 
 
