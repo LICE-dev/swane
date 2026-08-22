@@ -21,8 +21,8 @@ plain Windows/CI box. The golden snapshots for the data-gated scenarios are
 generated on an equipped box and committed (FSL paths rewritten to `<FSLDIR>`).
 
 For the complementary *execution* work (real dcm2niix conversion, FSL/FreeSurfer/
-Slicer runs, GPU `use_cuda`/`use_gpu` equivalence) against out-of-tree real
-DICOM data, see `../TODO_dicom.md` and `../../integration/test_real_execution.py`.
+Slicer runs, GPU `use_cuda`/`use_gpu` equivalence) against a generated synthetic
+phantom, see `../../prerelease/`.
 
 ## Layout
 
@@ -102,10 +102,9 @@ To exercise (not just skip) the data-gated scenarios, run on a box with a real
 FSL install whose `$FSLDIR/data` includes the MNI standard templates and the
 XTRACT protocol data.
 
-> Real DICOM data (supplied out-of-tree via `SWANE_TEST_DICOM_DIR`, never
-> committed) is only for the execution/integration tests (real conversion +
-> FSL/FreeSurfer/Slicer, marked `heavy`/`requires_*`) and is irrelevant to this
-> suite — see `../TODO_dicom.md` and `../../integration/test_real_execution.py`.
+> The real-execution sweep (real conversion + FSL/FreeSurfer/Slicer, over a
+> synthetic phantom generated on the machine that runs it — no DICOM is
+> committed or required) is irrelevant to this suite — see `../../prerelease/`.
 
 ### Commands
 
