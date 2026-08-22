@@ -69,6 +69,49 @@ def test_workflow_run_worker_gpu_budget_reaches_the_plugin(monkeypatch, tmp_path
     assert captured.get("memory_gb") == 5
 
 
+def test_run_advertises_monitoring_on_workflow_config(monkeypatch, tmp_path):
+    """
+    Regression: enabling the resource monitor must set ``monitoring.enabled`` on
+    the workflow's OWN config, not only on the global nipype config.
+
+    ``config.enable_resource_monitor()`` flips only the global config, which a
+    ``spawn`` worker does not inherit. If the flag is not mirrored onto
+    ``workflow.config``, the workflow-creation snapshot ("false") wins nipype's
+    ``run()`` merge and every ``node.config`` reaches the (spawn) worker with
+    monitoring disabled -- so no ``.proc`` file is ever produced. See
+    ``swane_run_node`` for the worker-side half of the fix.
+    """
+    from nipype import config as nipype_config
+
+    class FakePlugin:
+        def __init__(self, plugin_args=None):
+            pass
+
+    monkeypatch.setattr(
+        "swane.nipype_pipeline.engine.MonitoredMultiProcPlugin.MonitoredMultiProcPlugin",
+        FakePlugin,
+    )
+
+    workflow = DummyWorkflow()
+    workflow.base_dir = str(tmp_path)
+    workflow.is_resource_monitor = True
+    workflow.freesurfer = None
+    workflow.config = {"execution": {}}
+
+    prev_monitor = nipype_config.resource_monitor
+    prev_cwd = os.getcwd()
+    try:
+        WorkflowProcess("subj", workflow, Queue()).run()
+    finally:
+        nipype_config.resource_monitor = prev_monitor
+        os.chdir(prev_cwd)
+
+    assert workflow.config["monitoring"]["enabled"] == "true"
+    assert workflow.config["execution"]["crashdump_dir"] == os.path.join(
+        str(tmp_path), "log"
+    )
+
+
 def test_swane_log_nodes_cb_creates_dict(monkeypatch):
     class Node:
         def __init__(self):
