@@ -157,9 +157,11 @@ def _normalise_conn_field(field: Any, repl: list[tuple[str, str]]) -> Any:
     """
     if isinstance(field, tuple):
         return tuple(
-            _normalise(_normalise_function_source(elem), repl)
-            if isinstance(elem, str)
-            else elem
+            (
+                _normalise(_normalise_function_source(elem), repl)
+                if isinstance(elem, str)
+                else elem
+            )
             for elem in field
         )
     return field
