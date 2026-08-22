@@ -31,6 +31,12 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from swane.tests.helpers.phantom.ground_truth import (
+    build_centres,
+    centre_of_mass_ras as _centre_of_mass_ras,
+    load_centres,
+    world_x_ras as _world_x_ras,
+)
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
 
 #: Severity levels. Only ``error`` makes a pass fail.
@@ -83,61 +89,28 @@ class GroundTruth:
     centres: dict = field(default_factory=dict)  # feature -> (x, y, z) in RAS mm
 
     @classmethod
+    def load(
+        cls, subject_dir: str = None, freesurfer_home: str = None
+    ) -> "GroundTruth":
+        """Load the centres cached beside the phantom, else recompute them.
+
+        The ground truth is a deterministic property of the phantom, so it is
+        written once at build time (``ground_truth.json`` in the phantom cache
+        directory). When that sidecar is present it is used verbatim; when it is
+        absent -- an old phantom cache, or the checks-only path that has no
+        phantom directory to point at -- fall back to :meth:`build`, which
+        rebuilds the tissue model and derives the centres from scratch.
+        """
+        if subject_dir:
+            centres = load_centres(subject_dir)
+            if centres is not None:
+                return cls(centres=centres)
+        return cls.build(freesurfer_home)
+
+    @classmethod
     def build(cls, freesurfer_home: str = None) -> "GroundTruth":
-        from swane.tests.helpers.phantom.tissue import (
-            TissueClass as TC,
-            build_tissue_model,
-        )
-
-        model = build_tissue_model(freesurfer_home)
-        sinus = model.labels == TC.VENOUS_SINUS
-        # Same hemisphere split the phantom generator itself uses to opacify
-        # venous_ct2/venous_ct3 one side each (world x > 0 = right; see
-        # helpers/phantom/sequences.py:_apply_side_override), so the L/R
-        # ground truth matches how the phantom was actually built.
-        world_x = _world_x_ras(sinus.shape, model.affine)
-        centres = {}
-        for name, mask in (
-            ("brain", np.isin(model.labels, [TC.CORTICAL_GM, TC.DEEP_GM, TC.WM])),
-            ("precentral", model.precentral),
-            ("cst", model.cst),
-            ("venous_sinus", sinus),
-            ("venous_sinus_L", sinus & (world_x < 0)),
-            ("venous_sinus_R", sinus & (world_x > 0)),
-        ):
-            centre = _centre_of_mass_ras(np.asarray(mask, dtype=float), model.affine)
-            if centre is not None:
-                centres[name] = centre
-
-        # SEEG contacts are pure RAS-mm geometry (see
-        # helpers/phantom/dataset.py:seeg_trajectories), not derived from the
-        # tissue model -- their centroid needs no affine/voxel grid.
-        from swane.tests.helpers.phantom.dataset import seeg_contact_points
-
-        centres["seeg"] = seeg_contact_points().mean(axis=0)
-        return cls(centres=centres)
-
-
-def _world_x_ras(shape, affine: np.ndarray) -> np.ndarray:
-    """World-space RAS x coordinate of every voxel of ``shape``, given ``affine``.
-
-    Computed from ``affine`` rather than assumed from array layout, so it is
-    correct whatever the grid's orientation -- in particular for a *result*
-    image that has been resampled onto the reference/T1 grid by registration,
-    whose axis order/direction need not match the phantom's native grid.
-    """
-    ii, jj, kk = np.indices(shape, dtype=np.float32)
-    return affine[0, 0] * ii + affine[0, 1] * jj + affine[0, 2] * kk + affine[0, 3]
-
-
-def _centre_of_mass_ras(weights: np.ndarray, affine: np.ndarray):
-    """Intensity-weighted centre of mass, in RAS millimetres."""
-    total = float(weights.sum())
-    if not np.isfinite(total) or total <= 0:
-        return None
-    grid = np.indices(weights.shape, dtype=float)
-    voxel = np.array([float((grid[i] * weights).sum()) / total for i in range(3)])
-    return affine[:3, :3].dot(voxel) + affine[:3, 3]
+        """Rebuild the phantom tissue model and derive the feature centres."""
+        return cls(centres=build_centres(freesurfer_home))
 
 
 def _load(path: str):
