@@ -10,6 +10,7 @@ This file is loaded into every conversation in this repository. Keep it short; p
 - Never commit, push, merge, or open a pull request unless the user explicitly asks for it in the current conversation.
 - Treat these as stable contracts unless the task explicitly includes a compatibility plan: persisted preference keys, enum member names, workflow/node names, Traits fields, signals, result filenames, Slicer mappings.
 - A change is complete only after the relevant tests have been run and reviewed for correctness (not merely added or left green by accident) and code has been proved to run both on linux and macOS systems. See the `swane-dev-assistant` skill for which suite to run and how to update tests.
+- Any Python command you run in this repo (executing code or tests, exploring, checking files, launching the app) must use the system Python or a dedicated environment that has SWANe's dependencies — never a neuroimaging tool's bundled interpreter, e.g. FSL's (`$FSLDIR/bin/python`, fslpython) or FreeSurfer's (`$FREESURFER_HOME/bin/fspython` and its bundled `python`). Most developers have these tools installed and, when they are sourced, `python`/`python3` on `PATH` may resolve to them; these interpreters lack SWANe's dependencies and pip-installing into them pollutes the tool install. Verify with `python -c "import sys; print(sys.executable)"` when unsure.
 - Every part of SWANe code and documentation is written in English language.
 
 ## Licensing
