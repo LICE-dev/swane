@@ -1,6 +1,7 @@
 """Blocking, sequential dialog to accept external tool licenses at startup."""
 
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor, QFontDatabase, QPalette
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -39,7 +40,18 @@ class LicenseConsentWindow(QDialog):
         line.setFrameShadow(QFrame.Sunken)
         root.addWidget(line)
 
+        # Base point size for the license text; the progress title is made
+        # deliberately larger/bold so it stays more prominent than the license.
+        base_pt = self.font().pointSizeF()
+        if base_pt <= 0:
+            base_pt = 10.0
+        self._license_point_size = base_pt
+
         self._progress = QLabel("")
+        title_font = self._progress.font()
+        title_font.setBold(True)
+        title_font.setPointSizeF(base_pt + 2)
+        self._progress.setFont(title_font)
         root.addWidget(self._progress)
 
         self._stack = QStackedWidget()
@@ -61,6 +73,7 @@ class LicenseConsentWindow(QDialog):
 
             browser = QTextBrowser()
             browser.setOpenExternalLinks(True)
+            self._style_license_browser(browser)
             if res.is_html:
                 browser.setHtml(res.text)
             else:
@@ -95,6 +108,37 @@ class LicenseConsentWindow(QDialog):
 
         self.setLayout(root)
         self._sync_page()
+
+    def _style_license_browser(self, browser):
+        """
+        Give the license view a monospace, inset "code panel" look.
+
+        The panel background is the active palette Base nudged toward the Text
+        (foreground) color: this darkens it in light themes and lightens it in
+        dark themes, so it reads as a clearly distinct "grayer" panel while
+        keeping the text readable, harmonizing with the system theme both ways.
+        The license font is a touch smaller than the (bold) progress title so
+        the title stays the more prominent element.
+        """
+        mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        mono.setPointSizeF(self._license_point_size)
+        browser.setFont(mono)
+        browser.setFrameShape(QFrame.StyledPanel)
+        browser.setFrameShadow(QFrame.Sunken)
+
+        palette = browser.palette()
+        base = palette.color(QPalette.Base)
+        text = palette.color(QPalette.Text)
+        # 90% Base + 10% Text: a subtle shift toward the theme's foreground (a
+        # light gray on light themes, a slightly lighter panel on dark ones),
+        # visible but gentle and readable.
+        panel = QColor(
+            round(base.red() * 0.90 + text.red() * 0.10),
+            round(base.green() * 0.90 + text.green() * 0.10),
+            round(base.blue() * 0.90 + text.blue() * 0.10),
+        )
+        palette.setColor(QPalette.Base, panel)
+        browser.setPalette(palette)
 
     def _current_browser(self):
         return self._browsers[self._stack.currentIndex()]
