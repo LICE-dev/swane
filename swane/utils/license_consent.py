@@ -72,3 +72,58 @@ def resolve_license_text(info: LicenseInfo, context: dict, timeout: float = 8.0)
     with open(bundled_license_path(info), encoding="utf-8", errors="replace") as fh:
         bundled_text = fh.read()
     return ResolvedLicense(info.tool_id, info.display_name, bundled_text, False, LicenseSource.BUNDLED)
+
+
+def _fsl_version():
+    from nipype.interfaces import fsl
+    return fsl.base.Info.version()
+
+
+def _freesurfer_version():
+    from nipype.interfaces import freesurfer
+    if freesurfer.base.Info.version() is None:
+        return None
+    return str(freesurfer.base.Info.looseversion())
+
+
+def _dcm2niix_version():
+    from nipype.interfaces import dcm2nii
+    value = dcm2nii.Info.version()
+    return None if value is None else str(value)
+
+
+def _is_slicer_detected(config) -> bool:
+    from swane.utils.DependencyManager import DependencyManager
+    return DependencyManager.is_slicer(config)
+
+
+def _norm(value) -> str:
+    value = "" if value is None else str(value).strip()
+    return value if value else UNKNOWN_VERSION
+
+
+def detected_tool_versions(dependency_manager, config) -> dict:
+    """Return {tool_id: detected_version_or_UNKNOWN} for each detected tool."""
+    versions = {}
+    if dependency_manager.is_fsl():
+        versions[FSL] = _norm(_fsl_version())
+    if dependency_manager.is_freesurfer():
+        versions[FREESURFER] = _norm(_freesurfer_version())
+    if _is_slicer_detected(config):
+        versions[SLICER] = _norm(config.get_slicer_version())
+    if dependency_manager.is_dcm2niix():
+        versions[DCM2NIIX] = _norm(_dcm2niix_version())
+    return versions
+
+
+def tools_needing_consent(dependency_manager, config) -> list:
+    """Detected tools whose accepted version differs from the detected version."""
+    detected = detected_tool_versions(dependency_manager, config)
+    ordered = [FSL, FREESURFER, SLICER, DCM2NIIX]
+    needing = []
+    for tool_id in ordered:
+        if tool_id not in detected:
+            continue
+        if config.get_accepted_license_version(tool_id) != detected[tool_id]:
+            needing.append(tool_id)
+    return needing
