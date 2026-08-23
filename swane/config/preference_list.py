@@ -125,6 +125,7 @@ WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
         FreesurferStep.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM"
         % ResourceManager.synth_seg_ram_requirements(),
     },
+    section=True,
 )
 
 WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
@@ -672,6 +673,7 @@ GLOBAL_PREFERENCES[category]["limit_cores"] = PreferenceEntry(
     },
     pref_requirement_fail_tooltip="Requires more than %d CPU core allocated per subject"
     % ResourceManager.SYNTH_CORE_LIMIT,
+    section=True,
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}
