@@ -510,6 +510,7 @@ license_consent_banner = (
     "license and to use SWANe accordingly."
 )
 license_consent_progress = "License {current} of {total}: {tool}"
+license_consent_preparing = "Preparing licenses..."
 license_consent_accept_button = "I ACCEPT"
 license_consent_scroll_hint = "Please scroll to the end of the license to continue."
 license_consent_source_online = (

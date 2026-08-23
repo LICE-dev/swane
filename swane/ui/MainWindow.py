@@ -15,9 +15,10 @@ from PySide6.QtWidgets import (
     QDialog,
     QPushButton,
     QStyleOptionButton,
+    QProgressDialog,
 )
 from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent, QDesktopServices
-from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl
+from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl, QEventLoop
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
@@ -32,10 +33,9 @@ from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.utils.license_consent import (
     tools_needing_consent,
     detected_tool_versions,
-    resolve_license_text,
 )
-from swane.utils.LicenseReference import LICENSES
 from swane.ui.LicenseConsentWindow import LicenseConsentWindow
+from swane.workers.LicenseResolveWorker import LicenseResolveWorker
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
@@ -486,9 +486,7 @@ class MainWindow(QMainWindow):
             return True
 
         context = {"slicer_path": self.global_config.get_slicer_path()}
-        resolved = [
-            resolve_license_text(LICENSES[tool_id], context) for tool_id in needing
-        ]
+        resolved = self._resolve_licenses(needing, context)
 
         dialog = LicenseConsentWindow(resolved, parent=self)
         if dialog.exec() != QDialog.Accepted:
@@ -501,6 +499,52 @@ class MainWindow(QMainWindow):
             )
         self.global_config.save()
         return True
+
+    def _resolve_licenses(self, needing, context):
+        """
+        Resolve the license texts for the given tools without freezing the UI.
+
+        Resolution may perform a bounded network fetch when a license is not
+        found locally. Running it on the GUI thread (before the event loop of
+        the consent dialog starts) would freeze the main window while the file
+        is downloaded, so it is offloaded to a worker while a modal busy
+        indicator keeps a local event loop running.
+
+        Parameters
+        ----------
+        needing: list
+            Tool ids that require consent.
+        context: dict
+            Resolution context (e.g. the Slicer path).
+
+        Returns
+        -------
+        list
+            The resolved licenses, in the same order as ``needing``.
+        """
+        progress = QProgressDialog(
+            strings.license_consent_preparing, None, 0, 0, self
+        )
+        progress.setWindowTitle(strings.license_consent_title)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        progress.show()
+
+        loop = QEventLoop()
+        resolved_box = []
+
+        def _on_resolved(resolved):
+            resolved_box.append(resolved)
+            loop.quit()
+
+        worker = LicenseResolveWorker(needing, context)
+        worker.signal.resolved.connect(_on_resolved)
+        QThreadPool.globalInstance().start(worker)
+        loop.exec()
+
+        progress.close()
+        return resolved_box[0] if resolved_box else []
 
     def start_tool_reference(self, default_tab=None, search_str=None):
         """
