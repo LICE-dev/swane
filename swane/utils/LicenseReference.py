@@ -47,11 +47,17 @@ def _fsl_candidates(context: dict) -> list:
 
 
 def _freesurfer_candidates(context: dict) -> list:
-    # The LEGAL license text shipped with FreeSurfer, never the user key file.
+    # The LEGAL license agreement (SLA) shipped with FreeSurfer, never the
+    # per-user registration key file (license.txt / .license / _license.txt).
+    # Use exact filenames: FREESURFER_HOME contains many other files whose name
+    # includes "license" (component/third-party licenses).
     fs_home = os.environ.get("FREESURFER_HOME", "")
     if not fs_home:
         return []
     return [
+        # Real filename shipped by FreeSurfer: the Software License Agreement.
+        os.path.join(fs_home, "docs", "license.freesurfer_SLA.txt"),
+        os.path.join(fs_home, "license.freesurfer_SLA.txt"),
         os.path.join(fs_home, "LICENSE.txt"),
         os.path.join(fs_home, "LICENSE"),
         os.path.join(fs_home, "docs", "LICENSE.txt"),
