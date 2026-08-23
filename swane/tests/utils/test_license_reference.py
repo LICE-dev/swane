@@ -31,7 +31,10 @@ def test_freesurfer_candidates_include_sla_agreement(monkeypatch):
     monkeypatch.setenv("FREESURFER_HOME", "/opt/freesurfer")
     candidates = LR.LICENSES["freesurfer"].installed_path_candidates({})
     # The real legal agreement filename shipped by FreeSurfer
-    assert os.path.join("/opt/freesurfer", "docs", "license.freesurfer_SLA.txt") in candidates
+    assert (
+        os.path.join("/opt/freesurfer", "docs", "license.freesurfer_SLA.txt")
+        in candidates
+    )
     # ...and it must be preferred over the generic guesses
     assert candidates[0].endswith(os.path.join("docs", "license.freesurfer_SLA.txt"))
 
@@ -64,7 +67,9 @@ def test_dcm2niix_candidates_from_pip_dist_info(monkeypatch):
         ("dcm2niix-1.0.dist-info", "licenses", "license.txt"), "license.txt"
     )
     code_entry = _FakeEntry(("dcm2niix", "__init__.py"), "__init__.py")
-    monkeypatch.setattr(im, "distribution", lambda name: _FakeDist([code_entry, license_entry]))
+    monkeypatch.setattr(
+        im, "distribution", lambda name: _FakeDist([code_entry, license_entry])
+    )
 
     candidates = LR.LICENSES["dcm2niix"].installed_path_candidates({})
     assert candidates == ["/abs/dcm2niix-1.0.dist-info/licenses/license.txt"]

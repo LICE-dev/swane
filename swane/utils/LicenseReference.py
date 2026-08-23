@@ -15,7 +15,9 @@ SLICER = "slicer"
 DCM2NIIX = "dcm2niix"
 TOOL_IDS = (FSL, FREESURFER, SLICER, DCM2NIIX)
 
-_BUNDLED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "licenses")
+_BUNDLED_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "licenses"
+)
 
 
 @dataclass(frozen=True)

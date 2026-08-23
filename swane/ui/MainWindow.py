@@ -524,9 +524,7 @@ class MainWindow(QMainWindow):
         list
             The resolved licenses, in the same order as ``needing``.
         """
-        progress = QProgressDialog(
-            strings.license_consent_preparing, None, 0, 0, self
-        )
+        progress = QProgressDialog(strings.license_consent_preparing, None, 0, 0, self)
         progress.setWindowTitle(strings.license_consent_title)
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
