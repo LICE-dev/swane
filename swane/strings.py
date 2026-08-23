@@ -501,3 +501,24 @@ node_names["AromaClassification"] = "Aroma - Noise classification"
 node_names["FilterRegressor"] = "Denoising"
 node_names["N4BiasFieldCorrection"] = "Bias Field Correction"
 node_names["ZIntNorm"] = "Intensity Normalization"
+
+license_consent_title = "Third-party tool licenses"
+license_consent_banner = (
+    "SWANe is a research tool, not a medical device. The external tools it uses "
+    "(FSL, FreeSurfer, 3D Slicer, dcm2niix) are licensed for non-clinical, "
+    "non-commercial use only. By accepting, you agree to comply with each tool's "
+    "license and to use SWANe accordingly."
+)
+mainwindow_home_license_link = "license"
+license_consent_progress = "License {current} of {total}: {tool}"
+license_consent_preparing = "Preparing licenses..."
+license_consent_accept_button = "I ACCEPT"
+license_consent_scroll_hint = "Please scroll to the end of the license to continue."
+license_consent_source_online = (
+    "Installed license file not found for {tool}; showing the current online "
+    "license, which may differ from your installed version."
+)
+license_consent_source_bundled = (
+    "Could not load the online license for {tool}; showing a bundled copy that "
+    "may differ from your installed version."
+)

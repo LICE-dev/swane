@@ -15,9 +15,10 @@ from PySide6.QtWidgets import (
     QDialog,
     QPushButton,
     QStyleOptionButton,
+    QProgressDialog,
 )
 from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent, QDesktopServices
-from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl
+from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl, QEventLoop
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
@@ -29,6 +30,14 @@ from swane.utils.DependencyManager import (
 )
 from swane.ui.SubjectTab import SubjectTab
 from swane.ui.PreferencesWindow import PreferencesWindow
+from swane.utils.license_consent import (
+    tools_needing_consent,
+    detected_tool_versions,
+    version_with_license,
+)
+from swane.utils.LicenseReference import SLICER
+from swane.ui.LicenseConsentWindow import LicenseConsentWindow
+from swane.workers.LicenseResolveWorker import LicenseResolveWorker
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
@@ -457,6 +466,88 @@ class MainWindow(QMainWindow):
         )
         wf_preference_window.exec()
 
+    def run_license_consent_gate(self) -> bool:
+        """
+        Show the external-tool license consent gate if needed.
+
+        Returns
+        -------
+        bool
+            True to proceed with startup, False if the user declined and the
+            application must abort.
+        """
+        # Refresh detection so tools configured during the wizard are considered.
+        # Slicer's detection may complete asynchronously after the wizard; when it
+        # is not yet detected here it is simply consented on a later startup, since
+        # the per-tool model re-prompts only for tools whose detected version
+        # differs from the stored accepted version.
+        self.dependency_manager = DependencyManager()
+
+        needing = tools_needing_consent(self.dependency_manager, self.global_config)
+        if not needing:
+            return True
+
+        context = {"slicer_path": self.global_config.get_slicer_path()}
+        resolved = self._resolve_licenses(needing, context)
+
+        dialog = LicenseConsentWindow(resolved, parent=self)
+        if dialog.exec() != QDialog.Accepted:
+            return False
+
+        detected = detected_tool_versions(self.dependency_manager, self.global_config)
+        for tool_id in dialog.accepted_tool_ids:
+            self.global_config.set_accepted_license_version(
+                tool_id, detected.get(tool_id, "")
+            )
+        self.global_config.save()
+        return True
+
+    def _resolve_licenses(self, needing, context):
+        """
+        Resolve the license texts for the given tools without freezing the UI.
+
+        Resolution may perform a bounded network fetch when a license is not
+        found locally. Running it on the GUI thread (before the event loop of
+        the consent dialog starts) would freeze the main window while the file
+        is downloaded, so it is offloaded to a worker while a modal busy
+        indicator keeps a local event loop running.
+
+        Parameters
+        ----------
+        needing: list
+            Tool ids that require consent.
+        context: dict
+            Resolution context (e.g. the Slicer path).
+
+        Returns
+        -------
+        list
+            The resolved licenses, in the same order as ``needing``.
+        """
+        progress = QProgressDialog(
+            strings.license_consent_preparing, None, 0, 0, self
+        )
+        progress.setWindowTitle(strings.license_consent_title)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        progress.show()
+
+        loop = QEventLoop()
+        resolved_box = []
+
+        def _on_resolved(resolved):
+            resolved_box.append(resolved)
+            loop.quit()
+
+        worker = LicenseResolveWorker(needing, context)
+        worker.signal.resolved.connect(_on_resolved)
+        QThreadPool.globalInstance().start(worker)
+        loop.exec()
+
+        progress.close()
+        return resolved_box[0] if resolved_box else []
+
     def start_tool_reference(self, default_tab=None, search_str=None):
         """
         Open the Tool Reference Window.
@@ -858,8 +949,8 @@ class MainWindow(QMainWindow):
                 self.global_config.get_slicer_path(), self.slicer_row
             )
         else:
-            label = (
-                strings.check_dep_slicer_found % self.global_config.get_slicer_version()
+            label = strings.check_dep_slicer_found % version_with_license(
+                SLICER, self.global_config.get_slicer_version()
             )
             x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, label), x)
 

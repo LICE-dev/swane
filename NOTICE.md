@@ -75,3 +75,28 @@ Neurological Institute, McGill University
 **License**: Permission to use, copy, modify, and distribute this software and its documentation 
 for any purpose and without fee is hereby granted, provided that the above copyright 
 notice appears in all copies. The authors and McGill University make no represe.
+
+---
+## External neuroimaging tools orchestrated by SWANe
+
+SWANe orchestrates the following external tools as separate processes. SWANe
+does not include or redistribute these tools' code; users install them
+separately and must comply with each tool's own license:
+
+- **FSL (FMRIB Software Library)** — free for non-commercial use; commercial use
+  requires a license from Oxford University Innovation.
+  https://fsl.fmrib.ox.ac.uk/fsl/docs/license.html
+- **FreeSurfer** — distributed under the FreeSurfer Software License Agreement;
+  free, restricts commercial use, requires registration for a license key.
+  https://github.com/freesurfer/freesurfer/blob/dev/LICENSE.txt
+- **3D Slicer** — Slicer License (BSD-style).
+  https://github.com/Slicer/Slicer/blob/main/License.txt
+- **dcm2niix** — BSD 2-Clause License.
+  https://github.com/rordenlab/dcm2niix/blob/master/license.txt
+
+At first launch (and whenever a tool's detected version changes), SWANe shows the
+license of each detected tool and requires explicit acceptance. For display,
+SWANe reads the license installed on the user's system when available, otherwise
+fetches the current license online, otherwise falls back to a bundled copy under
+`swane/licenses/`. These bundled copies are license text only (no tool code) and
+are refreshed from upstream before releases via `tools/refresh_bundled_licenses.py`.
