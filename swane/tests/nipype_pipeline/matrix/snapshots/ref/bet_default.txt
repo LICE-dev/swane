@@ -2,6 +2,9 @@
 #
 #   bet_bias_correction = false
 #   bet_thr = 0.3
+#   limit_synth_cores = false
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
 #   synth_strip = false
 #
 # nodes=8 edges=12

@@ -9,7 +9,7 @@ InvWarp + ApplyWarp) versus SynthMorph. One snapshot per backend under
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList
+from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
 nonlinear_reg_workflow = import_workflow_or_skip(
@@ -17,23 +17,40 @@ nonlinear_reg_workflow = import_workflow_or_skip(
 )
 
 SUBDIR = "nonlinear_reg"
+MAX_CPU = 4
 
-SCENARIOS = {"fsl_backend": False, "synthmorph_backend": True}
+# name -> (synth_morph, limit_synth_cores)
+SCENARIOS = {
+    "fsl_backend": (False, False),
+    "synthmorph_backend": (True, False),
+    "synthmorph_backend_limit_cores": (True, True),
+}
 
 
 @pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
 def test_nonlinear_reg_matrix(scenario, global_config, graph_snapshot):
-    synth_morph = SCENARIOS[scenario]
+    synth_morph, limit_synth_cores = SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["morph"] = "true" if synth_morph else "false"
+    synth["limit_cores"] = "true" if limit_synth_cores else "false"
 
-    wf = nonlinear_reg_workflow("sym", synth_config=synth)
+    wf = nonlinear_reg_workflow(
+        "sym",
+        synth_config=synth,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
+    )
 
     graph_snapshot(
         wf,
         subdir=SUBDIR,
         name=scenario,
-        config={"synth_morph": synth["morph"]},
+        config={
+            "synth_morph": synth["morph"],
+            "limit_synth_cores": synth["limit_cores"],
+            "max_cpu": MAX_CPU,
+            "multicore_node_limit": CoreLimit.SOFT_CAP.name,
+        },
         title="nonlinear_reg / %s" % scenario,
     )
 
@@ -56,12 +73,23 @@ def test_nonlinear_reg_matrix_test_run(scenario, global_config, graph_snapshot):
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["morph"] = "true" if synth_morph else "false"
 
-    wf = nonlinear_reg_workflow("sym", synth_config=synth, test_run=True)
+    wf = nonlinear_reg_workflow(
+        "sym",
+        synth_config=synth,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
+        test_run=True,
+    )
 
     graph_snapshot(
         wf,
         subdir=SUBDIR,
         name=scenario,
-        config={"synth_morph": synth["morph"], "test_run": True},
+        config={
+            "synth_morph": synth["morph"],
+            "max_cpu": MAX_CPU,
+            "multicore_node_limit": CoreLimit.SOFT_CAP.name,
+            "test_run": True,
+        },
         title="nonlinear_reg / %s" % scenario,
     )

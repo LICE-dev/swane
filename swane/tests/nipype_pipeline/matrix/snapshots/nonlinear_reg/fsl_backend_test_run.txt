@@ -1,5 +1,7 @@
 # workflow snapshot: nonlinear_reg / fsl_backend_test_run
 #
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
 #   synth_morph = false
 #   test_run = True
 #

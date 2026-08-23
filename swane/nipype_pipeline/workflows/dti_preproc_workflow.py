@@ -144,6 +144,9 @@ def dti_preproc_workflow(
         bet_robust=True,
         bet_threshold=True,
         out_file="nodif_brain.nii.gz",
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     workflow.connect(nodif, "out_file", b0_deskull, "in_file")
 
@@ -213,6 +216,9 @@ def dti_preproc_workflow(
         non_linear=False,
         inverse=True,
         test_run=test_run,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
     # Output mat must be fsl format to be used directly in probtrackx
