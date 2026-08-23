@@ -6,5 +6,6 @@
 #   multicore_node_limit = SOFT_CAP
 #   step = DISABLED
 #   synth_reconall = false
+#   synthseg_fast = False
 #
 (builder returned None — no graph constructed)

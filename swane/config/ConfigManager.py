@@ -390,6 +390,14 @@ class ConfigManager(configparser.ConfigParser):
         """
         return self.getenum_safe(DataInputList.T13D, "freesurfer_step")
 
+    def get_workflow_synthseg_fast_pref(self) -> bool:
+        """
+        Returns
+        -------
+        True if SynthSeg fast mode is enabled
+        """
+        return self.getboolean_safe(DataInputList.T13D, "synthseg_fast")
+
     def get_mail_manager(self) -> MailManager:
         """
         Returns
