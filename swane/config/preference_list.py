@@ -651,11 +651,11 @@ GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["limit_cores"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Limit Synth tools to %d CPU cores" % ResourceManager.SYNTH_CORE_LIMIT,
-    tooltip="Caps SynthStrip, SynthMorph and SynthSeg CPU usage instead of "
-    "following the general multi-core policy set above",
+    tooltip="Caps Synth tools CPU usage instead of "
+    "following the general multi-core policy",
     default=False,
-    pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [("max_subj_cpu", 2)]},
-    pref_requirement_fail_tooltip="Requires more than 1 CPU core allocated per subject",
+    pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [("max_subj_cpu", ResourceManager.SYNTH_CORE_LIMIT+1)]},
+    pref_requirement_fail_tooltip="Requires more than %d CPU core allocated per subject" % ResourceManager.SYNTH_CORE_LIMIT,
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}

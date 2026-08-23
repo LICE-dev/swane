@@ -42,9 +42,7 @@ def get_synth_cpu_config(
 
     Hard cap: the tool uses `threads` cores and nipype's resource accounting
     (node.n_procs) knows and reserves the same amount. Soft cap: the tool
-    still uses `threads` cores, but nipype believes the node uses a single
-    core, exactly like eddy_openmp/BEDPOSTX5 hide their real thread usage
-    from nipype via OMP_NUM_THREADS/FSLSUB_PARALLEL in dti_preproc_workflow.
+    still uses `threads` cores.
 
     """
     if limit_synth_cores:
