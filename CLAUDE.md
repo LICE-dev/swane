@@ -22,6 +22,11 @@ This file is loaded into every conversation in this repository. Keep it short; p
 - Do not present a passing test as clinical or scientific validation — it is software regression evidence only.
 - `swane/tests/prerelease/` runs against the disposable root `~/test_swane/prerelease`; verify that exact path before running it and never point it at a clinical working directory.
 
+## Terminology
+
+- SWANe is a research tool, not a medical device: never describe or imply clinical/medical use in code, comments, docstrings, UI strings, documentation, or commit messages.
+- Never use "patient" (or its translations) anywhere in code or docs — always use "subject".
+
 ## Related repositories
 
 Normally checked out as siblings; discover them from the workspace rather than assuming an absolute path:
