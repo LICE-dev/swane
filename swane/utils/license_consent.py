@@ -31,6 +31,9 @@ class ResolvedLicense:
     text: str
     is_html: bool
     source: LicenseSource
+    # Whether the gate should warn that this text is not the user's installed
+    # copy. False when the source is the tool's official reference anyway.
+    show_source_warning: bool = True
 
 
 def _read_first_existing(candidates: list):
@@ -63,15 +66,24 @@ def fetch_online_license(url: str, is_html_online: bool, timeout: float = 8.0):
 def resolve_license_text(info: LicenseInfo, context: dict, timeout: float = 8.0) -> ResolvedLicense:
     installed = _read_first_existing(info.installed_path_candidates(context))
     if installed is not None:
-        return ResolvedLicense(info.tool_id, info.display_name, installed[0], False, LicenseSource.INSTALLED)
+        return ResolvedLicense(
+            info.tool_id, info.display_name, installed[0], False,
+            LicenseSource.INSTALLED, show_source_warning=False,
+        )
 
     online = fetch_online_license(info.official_url, info.is_html_online, timeout)
     if online is not None:
-        return ResolvedLicense(info.tool_id, info.display_name, online[0], online[1], LicenseSource.ONLINE)
+        return ResolvedLicense(
+            info.tool_id, info.display_name, online[0], online[1],
+            LicenseSource.ONLINE, show_source_warning=not info.online_is_official,
+        )
 
     with open(bundled_license_path(info), encoding="utf-8", errors="replace") as fh:
         bundled_text = fh.read()
-    return ResolvedLicense(info.tool_id, info.display_name, bundled_text, False, LicenseSource.BUNDLED)
+    return ResolvedLicense(
+        info.tool_id, info.display_name, bundled_text, False,
+        LicenseSource.BUNDLED, show_source_warning=True,
+    )
 
 
 def _fsl_version():
