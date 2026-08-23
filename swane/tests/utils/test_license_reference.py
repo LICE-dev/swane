@@ -23,3 +23,49 @@ def test_freesurfer_candidates_exclude_user_key_file(monkeypatch):
     assert any(c.endswith("LICENSE.txt") for c in candidates)
     assert all(not c.endswith(".license") for c in candidates)
     assert all(os.path.basename(c) != "license.txt" for c in candidates)
+    # FreeSurfer ships the per-user key as "_license.txt"; never display it
+    assert all(os.path.basename(c) != "_license.txt" for c in candidates)
+
+
+def test_fsl_candidates_include_real_licence_filename(monkeypatch):
+    monkeypatch.setenv("FSLDIR", "/opt/fsl")
+    candidates = LR.LICENSES["fsl"].installed_path_candidates({})
+    # FSL ships its licence as "LICENCE.FSL" (British spelling, .FSL extension)
+    assert os.path.join("/opt/fsl", "LICENCE.FSL") in candidates
+
+
+class _FakeEntry:
+    def __init__(self, parts, name):
+        self.parts = parts
+        self.name = name
+
+
+class _FakeDist:
+    def __init__(self, files):
+        self.files = files
+
+    def locate_file(self, entry):
+        return "/abs/" + "/".join(entry.parts)
+
+
+def test_dcm2niix_candidates_from_pip_dist_info(monkeypatch):
+    import importlib.metadata as im
+
+    license_entry = _FakeEntry(
+        ("dcm2niix-1.0.dist-info", "licenses", "license.txt"), "license.txt"
+    )
+    code_entry = _FakeEntry(("dcm2niix", "__init__.py"), "__init__.py")
+    monkeypatch.setattr(im, "distribution", lambda name: _FakeDist([code_entry, license_entry]))
+
+    candidates = LR.LICENSES["dcm2niix"].installed_path_candidates({})
+    assert candidates == ["/abs/dcm2niix-1.0.dist-info/licenses/license.txt"]
+
+
+def test_dcm2niix_candidates_missing_package(monkeypatch):
+    import importlib.metadata as im
+
+    def _raise(name):
+        raise im.PackageNotFoundError(name)
+
+    monkeypatch.setattr(im, "distribution", _raise)
+    assert LR.LICENSES["dcm2niix"].installed_path_candidates({}) == []

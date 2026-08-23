@@ -37,8 +37,11 @@ def _fsl_candidates(context: dict) -> list:
     if not fsldir:
         return []
     return [
-        os.path.join(fsldir, "LICENSE"),
+        # Real filename shipped by FSL (British spelling, .FSL extension).
+        os.path.join(fsldir, "LICENCE.FSL"),
+        os.path.join(fsldir, "LICENSE.FSL"),
         os.path.join(fsldir, "LICENCE"),
+        os.path.join(fsldir, "LICENSE"),
         os.path.join(fsldir, "LICENSE.txt"),
     ]
 
@@ -68,8 +71,26 @@ def _slicer_candidates(context: dict) -> list:
 
 
 def _dcm2niix_candidates(context: dict) -> list:
-    # dcm2niix is typically a single binary with no local license file.
-    return []
+    # The dcm2niix pip package (a SWANe dependency) ships its license under the
+    # distribution's .dist-info/licenses/ directory (PEP 639); recover it from
+    # the installed package so the displayed text matches the installed version.
+    try:
+        from importlib.metadata import distribution, PackageNotFoundError
+    except ImportError:
+        return []
+    try:
+        dist = distribution("dcm2niix")
+    except PackageNotFoundError:
+        return []
+    candidates = []
+    for entry in dist.files or []:
+        parts = [part.lower() for part in entry.parts]
+        if "licenses" in parts and entry.name.lower().startswith("licen"):
+            try:
+                candidates.append(str(dist.locate_file(entry)))
+            except Exception:
+                continue
+    return candidates
 
 
 LICENSES = {
