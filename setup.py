@@ -18,6 +18,8 @@ setup(
     author="LICE - Commissione Neuroimmagini",
     author_email="dev@lice.it",
     packages=find_packages(exclude=["swane.tests", "swane.tests.*"]),
+    include_package_data=True,
+    package_data={"swane": ["licenses/*.txt"]},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
