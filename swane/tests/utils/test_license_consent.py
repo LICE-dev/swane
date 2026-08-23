@@ -26,7 +26,9 @@ def test_resolve_prefers_installed(tmp_path, monkeypatch):
 
 def test_resolve_falls_back_to_online(tmp_path, monkeypatch):
     info = _fake_info(tmp_path, installed=None)
-    monkeypatch.setattr(lc, "fetch_online_license", lambda *a, **k: ("ONLINE TEXT", False))
+    monkeypatch.setattr(
+        lc, "fetch_online_license", lambda *a, **k: ("ONLINE TEXT", False)
+    )
     result = lc.resolve_license_text(info, {})
     assert result.source is lc.LicenseSource.ONLINE
     assert "ONLINE TEXT" in result.text
@@ -64,7 +66,9 @@ def test_version_with_license_no_version_returns_unchanged():
 def test_resolve_online_official_source_suppresses_warning(tmp_path, monkeypatch):
     # Slicer-like: online IS the official source, so no "installed not found" warning
     info = _fake_info(tmp_path, installed=None, online_is_official=True)
-    monkeypatch.setattr(lc, "fetch_online_license", lambda *a, **k: ("ONLINE TEXT", False))
+    monkeypatch.setattr(
+        lc, "fetch_online_license", lambda *a, **k: ("ONLINE TEXT", False)
+    )
     result = lc.resolve_license_text(info, {})
     assert result.source is lc.LicenseSource.ONLINE
     assert result.show_source_warning is False
@@ -73,7 +77,9 @@ def test_resolve_online_official_source_suppresses_warning(tmp_path, monkeypatch
 def test_resolve_falls_back_to_bundled_when_offline(tmp_path, monkeypatch):
     info = _fake_info(tmp_path, installed=None)
     monkeypatch.setattr(lc, "fetch_online_license", lambda *a, **k: None)
-    monkeypatch.setattr(LR, "bundled_license_path", lambda i: str(tmp_path / "bundled.txt"))
+    monkeypatch.setattr(
+        LR, "bundled_license_path", lambda i: str(tmp_path / "bundled.txt")
+    )
     (tmp_path / "bundled.txt").write_text("BUNDLED TEXT", encoding="utf-8")
     monkeypatch.setattr(lc, "bundled_license_path", LR.bundled_license_path)
     result = lc.resolve_license_text(info, {})
@@ -84,18 +90,30 @@ def test_resolve_falls_back_to_bundled_when_offline(tmp_path, monkeypatch):
 class _FakeDM:
     def __init__(self, fsl=True, fs=True, dcm=True):
         self._fsl, self._fs, self._dcm = fsl, fs, dcm
-    def is_fsl(self): return self._fsl
-    def is_freesurfer(self): return self._fs
-    def is_dcm2niix(self): return self._dcm
+
+    def is_fsl(self):
+        return self._fsl
+
+    def is_freesurfer(self):
+        return self._fs
+
+    def is_dcm2niix(self):
+        return self._dcm
 
 
 class _FakeConfig:
     def __init__(self, accepted=None, slicer_path="", slicer_version=""):
         self._accepted = accepted or {}
         self._slicer_path, self._slicer_version = slicer_path, slicer_version
-    def get_accepted_license_version(self, tool_id): return self._accepted.get(tool_id, "")
-    def get_slicer_path(self): return self._slicer_path
-    def get_slicer_version(self): return self._slicer_version
+
+    def get_accepted_license_version(self, tool_id):
+        return self._accepted.get(tool_id, "")
+
+    def get_slicer_path(self):
+        return self._slicer_path
+
+    def get_slicer_version(self):
+        return self._slicer_version
 
 
 def _patch_versions(monkeypatch, fsl="6.0.6", fs="7.3.2", dcm="v1.0.20241211"):
@@ -114,14 +132,18 @@ def test_first_run_all_detected_need_consent(monkeypatch):
 def test_unchanged_versions_need_no_consent(monkeypatch):
     _patch_versions(monkeypatch)
     dm = _FakeDM()
-    cfg = _FakeConfig(accepted={"fsl": "6.0.6", "freesurfer": "7.3.2", "dcm2niix": "v1.0.20241211"})
+    cfg = _FakeConfig(
+        accepted={"fsl": "6.0.6", "freesurfer": "7.3.2", "dcm2niix": "v1.0.20241211"}
+    )
     assert lc.tools_needing_consent(dm, cfg) == []
 
 
 def test_upgraded_tool_reprompts_only_that_tool(monkeypatch):
     _patch_versions(monkeypatch, fsl="6.0.7")
     dm = _FakeDM()
-    cfg = _FakeConfig(accepted={"fsl": "6.0.6", "freesurfer": "7.3.2", "dcm2niix": "v1.0.20241211"})
+    cfg = _FakeConfig(
+        accepted={"fsl": "6.0.6", "freesurfer": "7.3.2", "dcm2niix": "v1.0.20241211"}
+    )
     assert lc.tools_needing_consent(dm, cfg) == ["fsl"]
 
 

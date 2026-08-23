@@ -33,7 +33,9 @@ def test_home_entry_renders_label_with_link(main_window):
 
     row = 50
     main_window.add_home_entry(
-        Dependence(DependenceStatus.DETECTED, 'FSL detected (6.0.6 - <a href="x">license</a>)'),
+        Dependence(
+            DependenceStatus.DETECTED, 'FSL detected (6.0.6 - <a href="x">license</a>)'
+        ),
         row,
     )
     label = main_window.home_grid_layout.itemAtPosition(row, 1).widget()
