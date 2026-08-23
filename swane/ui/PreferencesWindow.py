@@ -452,9 +452,11 @@ class PreferencesWindow(QDialog):
                         InputTypes.FLOAT,
                         InputTypes.INT,
                     ):
-                        check = (
-                            self.global_config.getfloat_safe(req_cat, req_key[0])
-                            >= req_key[1]
+                        req_value = self.global_config.getfloat_safe(
+                            req_cat, req_key[0]
+                        )
+                        check = req_value >= req_key[1] or (
+                            req.special_value_text and req_value == req.range[0]
                         )
                     else:
                         check = req_key[1] == self.global_config[req_cat][req_key[0]]
@@ -492,7 +494,12 @@ class PreferencesWindow(QDialog):
                         InputTypes.FLOAT,
                         InputTypes.INT,
                     ):
-                        check = float(self.inputs[req_x].get_value()) >= req_key[1]
+                        req_entry = self.preferences[req_cat][req_key[0]]
+                        req_value = float(self.inputs[req_x].get_value())
+                        check = req_value >= req_key[1] or (
+                            req_entry.special_value_text
+                            and req_value == req_entry.range[0]
+                        )
                     else:
                         check = req_key[1] == self.inputs[req_x].get_value()
 

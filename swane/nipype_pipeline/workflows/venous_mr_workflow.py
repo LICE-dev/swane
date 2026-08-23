@@ -16,6 +16,7 @@ from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     get_registration_node,
 )
+from swane.config.config_enums import CoreLimit
 
 
 def venous_mr_workflow(
@@ -25,6 +26,8 @@ def venous_mr_workflow(
     synth_config: SectionProxy,
     venous2_mr_dir: str = None,
     base_dir: str = "/",
+    max_cpu: int = 0,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -45,6 +48,10 @@ def venous_mr_workflow(
         If veins phase is divided from anatomic phase, use this param to load the second DICOM files directory.
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of Synth tools. The default is 0.
+    multicore_node_limit : CoreLimit, optional
+        Preference for Synth tools core usage. The default is CoreLimit.SOFT_CAP.
     test_run : bool, optional
         If True, speed up the underlying registration for prerelease test
         runs at the cost of accuracy. The default is False.
@@ -151,6 +158,9 @@ def venous_mr_workflow(
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
         bet_surfaces=True,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     workflow.connect(veins_check, "out_file_anat", deskull, "in_file")
 
@@ -175,6 +185,9 @@ def venous_mr_workflow(
         reference_brain=[inputnode, "reference_brain"],
         flirt_cost="mutualinfo",
         test_run=test_run,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
     veins_2_ref = apply_registration_node(

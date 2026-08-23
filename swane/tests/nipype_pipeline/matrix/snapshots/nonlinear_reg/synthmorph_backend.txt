@@ -1,5 +1,8 @@
 # workflow snapshot: nonlinear_reg / synthmorph_backend
 #
+#   limit_synth_cores = false
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
 #   synth_morph = true
 #
 # nodes=4 edges=5
@@ -10,7 +13,7 @@
     environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     subjects_dir = '<SUBJECTS_DIR>'
 - sym_synthmorphreg [SynthMorphReg] cmd=mri_synthmorph register mem_gb=13 n_procs=1
-    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>', TF_NUM_INTEROP_THREADS='4', TF_NUM_INTRAOP_THREADS='4'}
     model = 'joint'
     subjects_dir = '<SUBJECTS_DIR>'
 # connections

@@ -2,6 +2,9 @@
 #
 #   bet_bias_correction = false
 #   bet_thr = 0.3
+#   limit_synth_cores = false
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
 #   synth_strip = true
 #
 # nodes=8 edges=12
@@ -30,7 +33,7 @@
     out_file = 'ref_brain.nii.gz'
     output_type = 'NIFTI_GZ'
 - ref_deskull_biased_synthstrip [SynthStrip] cmd=mri_synthstrip mem_gb=5 n_procs=1
-    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
+    environ = {OMP_NUM_THREADS='4', SUBJECTS_DIR='<SUBJECTS_DIR>'}
     exclude_csf = True
     mask_file = 'brain_mask.nii.gz'
     subjects_dir = '<SUBJECTS_DIR>'

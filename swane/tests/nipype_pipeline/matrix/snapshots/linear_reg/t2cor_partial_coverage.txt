@@ -4,6 +4,9 @@
 #   config = None
 #   is_partial_coverage = True
 #   is_volumetric = True
+#   limit_synth_cores = false
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
 #   synth_morph = false
 #   synth_strip = false
 #

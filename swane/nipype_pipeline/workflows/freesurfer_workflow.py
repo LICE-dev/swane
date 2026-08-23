@@ -9,7 +9,11 @@ from nipype.pipeline.engine import Node
 from math import trunc
 
 from swane.nipype_pipeline.nodes.SynthSeg import SynthSeg
-from swane.nipype_pipeline.nodes.utils import getn
+from swane.nipype_pipeline.nodes.utils import (
+    getn,
+    get_synth_cpu_config,
+    apply_synth_num_threads,
+)
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SegmentHA import SegmentHA
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
@@ -192,7 +196,13 @@ def freesurfer_workflow(
             synth_seg._mem_gb = ResourceManager.synth_seg_ram_requirements()
         synth_seg.inputs.use_cpu = True
         synth_seg.inputs.keep_geometry = True
-        # synth_seg.inputs.num_threads = 1
+        # SynthSeg cannot be tricked into using more threads than nipype
+        # believes it does (no separate env-var thread control), so it is
+        # always a hard, nipype-visible cap regardless of multicore_node_limit.
+        synth_seg_threads, _ = get_synth_cpu_config(
+            max_cpu, multicore_node_limit, synth_config.getboolean_safe("limit_cores")
+        )
+        apply_synth_num_threads(synth_seg, synth_seg_threads, hard=True)
         synth_seg.inputs.out_file = "r-aparc_aseg.mgz"
         workflow.connect(inputnode, "reference", synth_seg, "in_file")
         workflow.connect(synth_seg, "out_file", outputnode, "vol_label_file")
