@@ -10,9 +10,10 @@ from swane.utils.qt_compat import QT_AVAILABLE
 pytestmark = pytest.mark.skipif(not QT_AVAILABLE, reason="requires a working Qt binding")
 
 if QT_AVAILABLE:
-    from PySide6.QtWidgets import QDialog
+    from PySide6.QtWidgets import QDialog, QLabel
     from swane.ui.LicenseConsentWindow import LicenseConsentWindow
     from swane.utils.license_consent import ResolvedLicense, LicenseSource
+    from swane import strings
 
 
 def _mk(text="line\n" * 500):
@@ -76,6 +77,32 @@ def test_long_html_license_starts_disabled(qtbot):
     browser = win._current_browser()
     browser.verticalScrollBar().setValue(browser.verticalScrollBar().maximum())
     assert win._accept_btn.isEnabled()
+
+
+def _label_texts(win):
+    return [w.text() for w in win.findChildren(QLabel)]
+
+
+def test_online_warning_shown_by_default(qtbot):
+    res = [ResolvedLicense("slicer", "3D Slicer", "x", False, LicenseSource.ONLINE)]
+    win = LicenseConsentWindow(res)
+    qtbot.addWidget(win)
+    expected = strings.license_consent_source_online.format(tool="3D Slicer")
+    assert any(expected in t for t in _label_texts(win))
+
+
+def test_online_warning_suppressed_when_official(qtbot):
+    # Slicer: online is the official source -> no "installed not found" warning
+    res = [
+        ResolvedLicense(
+            "slicer", "3D Slicer", "x", False, LicenseSource.ONLINE,
+            show_source_warning=False,
+        )
+    ]
+    win = LicenseConsentWindow(res)
+    qtbot.addWidget(win)
+    expected = strings.license_consent_source_online.format(tool="3D Slicer")
+    assert all(expected not in t for t in _label_texts(win))
 
 
 def test_gate_returns_true_when_nothing_to_consent(qtbot, monkeypatch, global_config, offline_update):

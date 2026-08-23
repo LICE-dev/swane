@@ -48,12 +48,12 @@ class LicenseConsentWindow(QDialog):
             page = QWidget()
             lay = QVBoxLayout()
 
-            if res.source is LicenseSource.ONLINE:
+            if res.show_source_warning and res.source is LicenseSource.ONLINE:
                 warn = QLabel(strings.license_consent_source_online.format(tool=res.display_name))
                 warn.setWordWrap(True)
                 warn.setStyleSheet("color: #b06000;")
                 lay.addWidget(warn)
-            elif res.source is LicenseSource.BUNDLED:
+            elif res.show_source_warning and res.source is LicenseSource.BUNDLED:
                 warn = QLabel(strings.license_consent_source_bundled.format(tool=res.display_name))
                 warn.setWordWrap(True)
                 warn.setStyleSheet("color: #b06000;")

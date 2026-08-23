@@ -3,7 +3,7 @@ from swane.utils import license_consent as lc
 from swane.utils import LicenseReference as LR
 
 
-def _fake_info(tmp_path, installed=None):
+def _fake_info(tmp_path, installed=None, online_is_official=False):
     return LR.LicenseInfo(
         tool_id="fsl",
         display_name="FSL",
@@ -11,6 +11,7 @@ def _fake_info(tmp_path, installed=None):
         is_html_online=False,
         installed_path_candidates=lambda ctx: [installed] if installed else [],
         bundled_filename="fsl.txt",
+        online_is_official=online_is_official,
     )
 
 
@@ -29,6 +30,17 @@ def test_resolve_falls_back_to_online(tmp_path, monkeypatch):
     result = lc.resolve_license_text(info, {})
     assert result.source is lc.LicenseSource.ONLINE
     assert "ONLINE TEXT" in result.text
+    # By default online is a fallback -> warn the user
+    assert result.show_source_warning is True
+
+
+def test_resolve_online_official_source_suppresses_warning(tmp_path, monkeypatch):
+    # Slicer-like: online IS the official source, so no "installed not found" warning
+    info = _fake_info(tmp_path, installed=None, online_is_official=True)
+    monkeypatch.setattr(lc, "fetch_online_license", lambda *a, **k: ("ONLINE TEXT", False))
+    result = lc.resolve_license_text(info, {})
+    assert result.source is lc.LicenseSource.ONLINE
+    assert result.show_source_warning is False
 
 
 def test_resolve_falls_back_to_bundled_when_offline(tmp_path, monkeypatch):

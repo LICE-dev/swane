@@ -26,6 +26,10 @@ class LicenseInfo:
     is_html_online: bool
     installed_path_candidates: Callable[[dict], list]
     bundled_filename: str
+    # When True, the online source IS the official reference for this tool (e.g.
+    # the project repository the app itself links to), so falling back to it is
+    # normal and must not raise a "installed not found" warning in the gate.
+    online_is_official: bool = False
 
 
 def bundled_license_path(info: "LicenseInfo") -> str:
@@ -123,6 +127,9 @@ LICENSES = {
         is_html_online=False,
         installed_path_candidates=_slicer_candidates,
         bundled_filename="slicer.txt",
+        # 3D Slicer does not ship a discoverable local license file; its GUI
+        # points to this same repository file, so online is the official source.
+        online_is_official=True,
     ),
     DCM2NIIX: LicenseInfo(
         tool_id=DCM2NIIX,
