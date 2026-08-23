@@ -8,7 +8,11 @@ and the SynthStrip/SynthMorph backend. Snapshots under ``snapshots/venous_mr/``.
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList, VeinDetectionMode, CoreLimit
+from swane.config.config_enums import (
+    GlobalPrefCategoryList,
+    VeinDetectionMode,
+    CoreLimit,
+)
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 

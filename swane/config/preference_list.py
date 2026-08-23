@@ -654,8 +654,13 @@ GLOBAL_PREFERENCES[category]["limit_cores"] = PreferenceEntry(
     tooltip="Caps Synth tools CPU usage instead of "
     "following the general multi-core policy",
     default=False,
-    pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [("max_subj_cpu", ResourceManager.SYNTH_CORE_LIMIT+1)]},
-    pref_requirement_fail_tooltip="Requires more than %d CPU core allocated per subject" % ResourceManager.SYNTH_CORE_LIMIT,
+    pref_requirement={
+        GlobalPrefCategoryList.PERFORMANCE: [
+            ("max_subj_cpu", ResourceManager.SYNTH_CORE_LIMIT + 1)
+        ]
+    },
+    pref_requirement_fail_tooltip="Requires more than %d CPU core allocated per subject"
+    % ResourceManager.SYNTH_CORE_LIMIT,
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}
