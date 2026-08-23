@@ -1,11 +1,10 @@
-import psutil
-
 from swane.utils.fsl_conflict_handler import fsl_conflict_check
 
 
 def main():
     import sys
     import os
+    import psutil
     from swane import strings
     import swane_supplement
     from PySide6.QtWidgets import QApplication, QMessageBox
@@ -60,7 +59,7 @@ def main():
         )
         global_config.save()
 
-        # MainWindow in a varariable to prenvent garbage collector deletion (might cause crash)
+        # MainWindow in a variable to prevent garbage collector deletion (might cause crash)
         try:
             widget = MainWindow(global_config)
             widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))

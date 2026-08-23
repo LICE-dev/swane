@@ -74,7 +74,7 @@ mainwindow_home_label2 = (
 mainwindow_home_label3 = (
     APPNAME
     + " does NOT implement processing software but integrates in a user-friendly "
-    "interface many external applications, so make sure the check the following dependencies."
+    "interface many external applications, so make sure to check the following dependencies."
 )
 mainwindow_home_label4 = APPNAME + " is not meant for clinical use!\n"
 mainwindow_home_label5 = "\nExternal mandatory dependencies:"
@@ -132,7 +132,7 @@ subj_tab_wrong_min_vols_check_msg = (
 )
 subj_tab_import_copy_error_msg = "Error copying selected series files."
 subj_tab_import_folder_not_empy = "Images are already loaded for this series."
-subj_tab_found_series_type = "{series_description} could be associated with input <b>{data_label}</b>.<br>Dou you want to import it?"
+subj_tab_found_series_type = "{series_description} could be associated with input <b>{data_label}</b>.<br>Do you want to import it?"
 subj_tab_dicom_copy = "Copying DICOM files in subject folder..."
 subj_tab_dicom_check = "Verifying subject folder..."
 subj_tab_dicom_scan = "Scanning folder for primary non derived DICOM images..."
@@ -234,11 +234,11 @@ pref_window_reset_subj_box = (
 )
 
 pref_window_mail_test_button = "Test email settings"
-pref_window_mail_test_hint = "By clicking this button a test mail wil be send using the mail settings preferences"
+pref_window_mail_test_hint = "By clicking this button a test mail will be sent using the mail settings preferences"
 pref_window_mail_test_fail = (
     "An error occurred, check " + APPNAME + " mail configuration"
 )
-pref_window_mail_test_success = "Mail sent succesfully, check in your inbox"
+pref_window_mail_test_success = "Mail sent successfully, check in your inbox"
 
 # Preference Wizard Window
 preference_wizard_title = APPNAME + " Configuration Wizard"
@@ -297,7 +297,7 @@ gpu_acceleration_disabled_tooltip = (
 
 wizard_advanced_models_title = "Advanced Models"
 wizard_advanced_models_text = (
-    "Advanced models implement state-of-the-art FreeSurferdeep learning algorithms (Synth Tools) that can improve results "
+    "Advanced models implement state-of-the-art FreeSurfer deep learning algorithms (Synth Tools) that can improve results "
     "and, in some cases, reduce analysis time.<br>"
     "They may require additional memory and processing power."
 )
@@ -324,9 +324,9 @@ freesurfer_outputs_cortical_parcellation_tooltip = (
 freesurfer_outputs_surfaces = "Surfaces"
 freesurfer_outputs_surfaces_tooltip = "Produces white matter and pial 3D models surface models for surface-based analyses."
 freesurfer_outputs_hippocampal_segmentation = (
-    "Hippocampal/Amigdala Subfield Segmentation"
+    "Hippocampal/Amygdala Subfield Segmentation"
 )
-freesurfer_outputs_hippocampal_segmentation_tooltip = "Produces detailed hippocampal and amigdala subfields segmentation for advanced analyses."
+freesurfer_outputs_hippocampal_segmentation_tooltip = "Produces detailed hippocampal and amygdala subfields segmentation for advanced analyses."
 freesurfer_full_reconall = "Full Recon-All Processing"
 freesurfer_full_reconall_tooltip = (
     "Enables the complete Recon-All pipeline for comprehensive brain analysis."
@@ -499,6 +499,5 @@ node_names["FeatureTimeSeries"] = "Aroma - Time feature"
 node_names["FeatureFrequency"] = "Aroma - Frequency feature"
 node_names["AromaClassification"] = "Aroma - Noise classification"
 node_names["FilterRegressor"] = "Denoising"
-node_names["FeatureFrequency"] = "Aroma - Frequency feature"
 node_names["N4BiasFieldCorrection"] = "Bias Field Correction"
 node_names["ZIntNorm"] = "Intensity Normalization"
