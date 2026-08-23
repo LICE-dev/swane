@@ -34,6 +34,33 @@ def test_resolve_falls_back_to_online(tmp_path, monkeypatch):
     assert result.show_source_warning is True
 
 
+def test_license_link_url_prefers_local_file(tmp_path):
+    f = tmp_path / "LICENCE.FSL"
+    f.write_text("x", encoding="utf-8")
+    info = _fake_info(tmp_path, installed=str(f))
+    url = lc.license_link_url(info, {})
+    assert url.startswith("file://")
+    assert url.endswith("LICENCE.FSL")
+
+
+def test_license_link_url_falls_back_to_official(tmp_path):
+    info = _fake_info(tmp_path, installed=None)
+    assert lc.license_link_url(info, {}) == "https://example.invalid/license"
+
+
+def test_version_with_license_appends_link(monkeypatch):
+    monkeypatch.setattr(lc, "license_link_url", lambda info, ctx: "http://x/lic")
+    out = lc.version_with_license("fsl", "6.0.6")
+    assert out.startswith("6.0.6 - ")
+    assert 'href="http://x/lic"' in out
+    assert "license" in out
+
+
+def test_version_with_license_no_version_returns_unchanged():
+    assert lc.version_with_license("fsl", "") == ""
+    assert lc.version_with_license("fsl", None) is None
+
+
 def test_resolve_online_official_source_suppresses_warning(tmp_path, monkeypatch):
     # Slicer-like: online IS the official source, so no "installed not found" warning
     info = _fake_info(tmp_path, installed=None, online_is_official=True)

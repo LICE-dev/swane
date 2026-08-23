@@ -509,6 +509,7 @@ license_consent_banner = (
     "non-commercial use only. By accepting, you agree to comply with each tool's "
     "license and to use SWANe accordingly."
 )
+mainwindow_home_license_link = "license"
 license_consent_progress = "License {current} of {total}: {tool}"
 license_consent_preparing = "Preparing licenses..."
 license_consent_accept_button = "I ACCEPT"

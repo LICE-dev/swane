@@ -33,7 +33,9 @@ from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.utils.license_consent import (
     tools_needing_consent,
     detected_tool_versions,
+    version_with_license,
 )
+from swane.utils.LicenseReference import SLICER
 from swane.ui.LicenseConsentWindow import LicenseConsentWindow
 from swane.workers.LicenseResolveWorker import LicenseResolveWorker
 import swane_supplement
@@ -947,8 +949,8 @@ class MainWindow(QMainWindow):
                 self.global_config.get_slicer_path(), self.slicer_row
             )
         else:
-            label = (
-                strings.check_dep_slicer_found % self.global_config.get_slicer_version()
+            label = strings.check_dep_slicer_found % version_with_license(
+                SLICER, self.global_config.get_slicer_version()
             )
             x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, label), x)
 

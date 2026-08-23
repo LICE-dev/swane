@@ -4,6 +4,7 @@ import os
 import urllib.request
 from dataclasses import dataclass
 from enum import Enum, auto
+from pathlib import Path
 
 from swane.utils.LicenseReference import (
     LICENSES,
@@ -84,6 +85,55 @@ def resolve_license_text(info: LicenseInfo, context: dict, timeout: float = 8.0)
         info.tool_id, info.display_name, bundled_text, False,
         LicenseSource.BUNDLED, show_source_warning=True,
     )
+
+
+def local_license_path(info: LicenseInfo, context: dict):
+    """
+    Return the first existing local license file for a tool, or None.
+
+    Only references the legal license text (never a per-user key file), because
+    the candidate lists are defined that way.
+    """
+    for path in info.installed_path_candidates(context):
+        try:
+            if path and os.path.isfile(path):
+                return path
+        except OSError:
+            continue
+    return None
+
+
+def version_with_license(tool_id: str, version, context: dict = None) -> str:
+    """
+    Return a version string with an inline license link appended.
+
+    Used to place a license link inside the version parenthesis of a dependency
+    label. When there is no version (the tool/dependency was not found) the
+    value is returned unchanged and no license link is shown.
+    """
+    if not version:
+        return version
+    from swane import strings
+
+    url = license_link_url(LICENSES[tool_id], context or {})
+    return '%s - <a href="%s">%s</a>' % (
+        version,
+        url,
+        strings.mainwindow_home_license_link,
+    )
+
+
+def license_link_url(info: LicenseInfo, context: dict) -> str:
+    """
+    Return a URL to open for a tool's license.
+
+    The local installed license file when present (as a file:// URL), otherwise
+    the tool's official license URL.
+    """
+    local = local_license_path(info, context)
+    if local is not None:
+        return Path(os.path.abspath(local)).as_uri()
+    return info.official_url
 
 
 def _fsl_version():
