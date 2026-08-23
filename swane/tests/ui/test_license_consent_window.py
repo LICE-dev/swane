@@ -7,7 +7,9 @@ skip at module load so the suite stays runnable everywhere.
 import pytest
 from swane.utils.qt_compat import QT_AVAILABLE
 
-pytestmark = pytest.mark.skipif(not QT_AVAILABLE, reason="requires a working Qt binding")
+pytestmark = pytest.mark.skipif(
+    not QT_AVAILABLE, reason="requires a working Qt binding"
+)
 
 if QT_AVAILABLE:
     from PySide6.QtWidgets import QDialog, QLabel
@@ -52,9 +54,11 @@ def test_sequence_and_atomic_accept(qtbot):
 
 
 def test_short_license_enables_immediately(qtbot):
-    win = LicenseConsentWindow([
-        ResolvedLicense("fsl", "FSL", "short", False, LicenseSource.INSTALLED),
-    ])
+    win = LicenseConsentWindow(
+        [
+            ResolvedLicense("fsl", "FSL", "short", False, LicenseSource.INSTALLED),
+        ]
+    )
     qtbot.addWidget(win)
     win.show()
     qtbot.waitExposed(win)
@@ -67,9 +71,11 @@ def test_long_html_license_starts_disabled(qtbot):
     # computed at the first showEvent (scrollbar maximum still 0). It must start
     # disabled and require scrolling to the end.
     html = "<html><body>" + ("<p>License paragraph.</p>\n" * 5000) + "</body></html>"
-    win = LicenseConsentWindow([
-        ResolvedLicense("fsl", "FSL", html, True, LicenseSource.ONLINE),
-    ])
+    win = LicenseConsentWindow(
+        [
+            ResolvedLicense("fsl", "FSL", html, True, LicenseSource.ONLINE),
+        ]
+    )
     qtbot.addWidget(win)
     win.show()
     qtbot.waitExposed(win)
@@ -111,7 +117,11 @@ def test_online_warning_suppressed_when_official(qtbot):
     # Slicer: online is the official source -> no "installed not found" warning
     res = [
         ResolvedLicense(
-            "slicer", "3D Slicer", "x", False, LicenseSource.ONLINE,
+            "slicer",
+            "3D Slicer",
+            "x",
+            False,
+            LicenseSource.ONLINE,
             show_source_warning=False,
         )
     ]
@@ -121,9 +131,12 @@ def test_online_warning_suppressed_when_official(qtbot):
     assert all(expected not in t for t in _label_texts(win))
 
 
-def test_gate_returns_true_when_nothing_to_consent(qtbot, monkeypatch, global_config, offline_update):
+def test_gate_returns_true_when_nothing_to_consent(
+    qtbot, monkeypatch, global_config, offline_update
+):
     import swane.ui.MainWindow as mw
     from swane.ui.MainWindow import MainWindow
+
     monkeypatch.setattr(mw, "tools_needing_consent", lambda dm, cfg: [])
     window = MainWindow(global_config)
     qtbot.addWidget(window)
