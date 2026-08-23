@@ -79,6 +79,22 @@ def test_long_html_license_starts_disabled(qtbot):
     assert win._accept_btn.isEnabled()
 
 
+def test_license_browser_is_monospace_panel(qtbot):
+    from PySide6.QtGui import QFontDatabase
+    from PySide6.QtWidgets import QFrame
+
+    res = [ResolvedLicense("fsl", "FSL", "text", False, LicenseSource.INSTALLED)]
+    win = LicenseConsentWindow(res)
+    qtbot.addWidget(win)
+    browser = win._current_browser()
+    mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+    assert browser.font().family() == mono.family()
+    assert browser.frameShape() == QFrame.StyledPanel
+    # The progress title must stay more prominent than the license text
+    assert win._progress.font().bold()
+    assert win._progress.font().pointSizeF() > browser.font().pointSizeF()
+
+
 def _label_texts(win):
     return [w.text() for w in win.findChildren(QLabel)]
 
