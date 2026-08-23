@@ -102,7 +102,11 @@ class LicenseConsentWindow(QDialog):
     def _sync_page(self):
         idx = self._stack.currentIndex()
         self._progress.setText(
-            strings.license_consent_progress.format(current=idx + 1, total=len(self._licenses))
+            strings.license_consent_progress.format(
+                current=idx + 1,
+                total=len(self._licenses),
+                tool=self._licenses[idx].display_name,
+            )
         )
         self._maybe_enable_accept()
 
