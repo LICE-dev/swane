@@ -27,6 +27,15 @@ def test_freesurfer_candidates_exclude_user_key_file(monkeypatch):
     assert all(os.path.basename(c) != "_license.txt" for c in candidates)
 
 
+def test_freesurfer_candidates_include_sla_agreement(monkeypatch):
+    monkeypatch.setenv("FREESURFER_HOME", "/opt/freesurfer")
+    candidates = LR.LICENSES["freesurfer"].installed_path_candidates({})
+    # The real legal agreement filename shipped by FreeSurfer
+    assert os.path.join("/opt/freesurfer", "docs", "license.freesurfer_SLA.txt") in candidates
+    # ...and it must be preferred over the generic guesses
+    assert candidates[0].endswith(os.path.join("docs", "license.freesurfer_SLA.txt"))
+
+
 def test_fsl_candidates_include_real_licence_filename(monkeypatch):
     monkeypatch.setenv("FSLDIR", "/opt/fsl")
     candidates = LR.LICENSES["fsl"].installed_path_candidates({})
