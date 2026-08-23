@@ -57,6 +57,7 @@ class MainWorkflow(CustomWorkflow):
     memory_gb: float = -1
     freesurfer_step: FreesurferStep = FreesurferStep.DISABLED
     is_hippo_amyg_labels: bool = False
+    is_synthseg_fast: bool = False
     is_flat1: bool = False
     is_tractography: bool = False
     is_slicer: bool = False
@@ -199,6 +200,9 @@ class MainWorkflow(CustomWorkflow):
                 self.dependency_manager.is_freesurfer_matlab()
                 and self.subject_config.get_workflow_hippo_pref()
             )
+            self.is_synthseg_fast = (
+                self.subject_config.get_workflow_synthseg_fast_pref()
+            )
 
         # Check for FLAT1 requirement and request
         self.is_flat1 = (
@@ -274,6 +278,7 @@ class MainWorkflow(CustomWorkflow):
             name="freesurfer",
             step=self.freesurfer_step,
             is_hippo_amyg_labels=self.is_hippo_amyg_labels,
+            synthseg_fast=self.is_synthseg_fast,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],

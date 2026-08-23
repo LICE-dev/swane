@@ -125,6 +125,7 @@ WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
         FreesurferStep.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM"
         % ResourceManager.synth_seg_ram_requirements(),
     },
+    section=True,
 )
 
 WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
@@ -145,6 +146,17 @@ WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
         ]
     },
     pref_requirement_fail_tooltip="Requires Freesurfer Surfaces",
+)
+
+WF_PREFERENCES[category]["synthseg_fast"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SynthSeg fast mode",
+    tooltip="Faster and uses less RAM, but is less accurate.",
+    default="false",
+    pref_requirement={
+        DataInputList.T13D: [("freesurfer_step", FreesurferStep.SYNTHSEG)]
+    },
+    pref_requirement_fail_tooltip="Requires FreeSurfer analysis step set to SynthSeg",
 )
 
 category = DataInputList.FLAIR3D
@@ -661,6 +673,7 @@ GLOBAL_PREFERENCES[category]["limit_cores"] = PreferenceEntry(
     },
     pref_requirement_fail_tooltip="Requires more than %d CPU core allocated per subject"
     % ResourceManager.SYNTH_CORE_LIMIT,
+    section=True,
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}

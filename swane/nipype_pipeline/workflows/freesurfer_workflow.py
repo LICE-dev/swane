@@ -74,6 +74,7 @@ def freesurfer_workflow(
     step: FreesurferStep,
     is_hippo_amyg_labels: bool,
     synth_config: SectionProxy,
+    synthseg_fast: bool = False,
     base_dir: str = "/",
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
@@ -177,22 +178,21 @@ def freesurfer_workflow(
     if step == FreesurferStep.SYNTHSEG:
         synth_seg = Node(SynthSeg(), name="synth_seg")
         synth_seg.inputs.parcellation = True
-        if test_run:
-            # Prerelease test runs: trade accuracy for speed by skipping
-            # postprocessing (--fast) and dropping the slower robust variant.
-            synth_seg.inputs.fast = True
-            synth_seg.inputs.robust = False
-            # With --fast/robust=False SynthSeg fits in less RAM; reserve the
-            # same lowered figure the prerelease gate uses
-            # (capabilities._probe_synth_ram), so a host sized for that gate can
-            # actually schedule the node instead of tripping the plugin's prerun
-            # resource check.
+        # --fast and --robust are mutually exclusive SynthSeg variants:
+        # prerelease test runs always trade accuracy for speed, otherwise
+        # follow the user's Synth tools preference.
+        use_fast = test_run or synthseg_fast
+        synth_seg.inputs.fast = use_fast
+        synth_seg.inputs.robust = not use_fast
+        if use_fast:
+            # With --fast/robust=False SynthSeg fits in less RAM; reserve
+            # the same lowered figure the prerelease gate uses
+            # (capabilities._probe_synth_ram).
             synth_seg._mem_gb = (
                 ResourceManager.synth_seg_ram_requirements()
                 * ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR
             )
         else:
-            synth_seg.inputs.robust = True
             synth_seg._mem_gb = ResourceManager.synth_seg_ram_requirements()
         synth_seg.inputs.use_cpu = True
         synth_seg.inputs.keep_geometry = True
