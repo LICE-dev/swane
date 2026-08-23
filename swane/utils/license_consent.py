@@ -64,26 +64,40 @@ def fetch_online_license(url: str, is_html_online: bool, timeout: float = 8.0):
     return text, is_html_online
 
 
-def resolve_license_text(info: LicenseInfo, context: dict, timeout: float = 8.0) -> ResolvedLicense:
+def resolve_license_text(
+    info: LicenseInfo, context: dict, timeout: float = 8.0
+) -> ResolvedLicense:
     installed = _read_first_existing(info.installed_path_candidates(context))
     if installed is not None:
         return ResolvedLicense(
-            info.tool_id, info.display_name, installed[0], False,
-            LicenseSource.INSTALLED, show_source_warning=False,
+            info.tool_id,
+            info.display_name,
+            installed[0],
+            False,
+            LicenseSource.INSTALLED,
+            show_source_warning=False,
         )
 
     online = fetch_online_license(info.official_url, info.is_html_online, timeout)
     if online is not None:
         return ResolvedLicense(
-            info.tool_id, info.display_name, online[0], online[1],
-            LicenseSource.ONLINE, show_source_warning=not info.online_is_official,
+            info.tool_id,
+            info.display_name,
+            online[0],
+            online[1],
+            LicenseSource.ONLINE,
+            show_source_warning=not info.online_is_official,
         )
 
     with open(bundled_license_path(info), encoding="utf-8", errors="replace") as fh:
         bundled_text = fh.read()
     return ResolvedLicense(
-        info.tool_id, info.display_name, bundled_text, False,
-        LicenseSource.BUNDLED, show_source_warning=True,
+        info.tool_id,
+        info.display_name,
+        bundled_text,
+        False,
+        LicenseSource.BUNDLED,
+        show_source_warning=True,
     )
 
 
@@ -138,11 +152,13 @@ def license_link_url(info: LicenseInfo, context: dict) -> str:
 
 def _fsl_version():
     from nipype.interfaces import fsl
+
     return fsl.base.Info.version()
 
 
 def _freesurfer_version():
     from nipype.interfaces import freesurfer
+
     if freesurfer.base.Info.version() is None:
         return None
     return str(freesurfer.base.Info.looseversion())
@@ -150,12 +166,14 @@ def _freesurfer_version():
 
 def _dcm2niix_version():
     from nipype.interfaces import dcm2nii
+
     value = dcm2nii.Info.version()
     return None if value is None else str(value)
 
 
 def _is_slicer_detected(config) -> bool:
     from swane.utils.DependencyManager import DependencyManager
+
     return DependencyManager.is_slicer(config)
 
 
