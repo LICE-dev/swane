@@ -6,6 +6,7 @@
 #   multicore_node_limit = SOFT_CAP
 #   step = AUTORECON_PIAL
 #   synth_reconall = false
+#   synthseg_fast = false
 #
 # nodes=11 edges=16
 
