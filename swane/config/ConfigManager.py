@@ -337,6 +337,38 @@ class ConfigManager(configparser.ConfigParser):
         if self.global_config:
             self[GlobalPrefCategoryList.MAIN]["slicer_version"] = slicer_version
 
+    def get_accepted_license_version(self, tool_id: str) -> str:
+        """
+        Return the tool version whose license the user last accepted, or "".
+
+        Parameters
+        ----------
+        tool_id: str
+            Canonical tool id ("fsl", "freesurfer", "slicer", "dcm2niix").
+        """
+        if not self.global_config:
+            return ""
+        key = "accepted_license_" + tool_id
+        if key not in self[GlobalPrefCategoryList.MAIN]:
+            return ""
+        return self[GlobalPrefCategoryList.MAIN][key]
+
+    def set_accepted_license_version(self, tool_id: str, tool_version: str):
+        """
+        Store the tool version whose license the user accepted.
+
+        Parameters
+        ----------
+        tool_id: str
+            Canonical tool id ("fsl", "freesurfer", "slicer", "dcm2niix").
+        tool_version: str
+            The detected tool version accepted by the user.
+        """
+        if self.global_config:
+            self[GlobalPrefCategoryList.MAIN]["accepted_license_" + tool_id] = str(
+                tool_version
+            )
+
     def is_optional_series_enabled(self, series_name: DataInputList) -> bool:
         """
         Check if an optional series is enabled
