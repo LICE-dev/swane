@@ -194,7 +194,7 @@ def freesurfer_workflow(
             )
         else:
             synth_seg.inputs.fast = synthseg_fast
-            synth_seg.inputs.robust = True
+            synth_seg.inputs.robust = not synthseg_fast
             synth_seg._mem_gb = ResourceManager.synth_seg_ram_requirements()
         synth_seg.inputs.use_cpu = True
         synth_seg.inputs.keep_geometry = True
