@@ -10,3 +10,4 @@ def test_license_strings_present_and_english():
     assert "{tool}" in strings.license_consent_source_online
     assert "{tool}" in strings.license_consent_source_bundled
     assert strings.license_consent_accept_button
+    assert strings.license_consent_preparing
