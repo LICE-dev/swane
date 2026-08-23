@@ -10,6 +10,8 @@ from swane.utils.qt_compat import QThreadPool
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux
+from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX
+from swane.utils.license_consent import version_with_license
 
 
 class DependenceStatus(Enum):
@@ -270,7 +272,8 @@ class DependencyManager:
             )
         return Dependence(
             DependenceStatus.DETECTED,
-            strings.check_dep_dcm2niix_found % str(dcm2niix_version),
+            strings.check_dep_dcm2niix_found
+            % version_with_license(DCM2NIIX, str(dcm2niix_version)),
         )
 
     @staticmethod
@@ -296,16 +299,18 @@ class DependencyManager:
                     DependenceStatus.MISSING, strings.check_dep_fsl_no_locale
                 )
 
+        fsl_version_lic = version_with_license(FSL, fsl_version)
+
         # check fsl version
         if found_version < version.parse(DependencyManager.MIN_FSL_VERSION):
             return Dependence(
                 DependenceStatus.WARNING,
                 strings.check_dep_fsl_wrong_version
-                % (fsl_version, DependencyManager.MIN_FSL_VERSION),
+                % (fsl_version_lic, DependencyManager.MIN_FSL_VERSION),
             )
 
         return Dependence(
-            DependenceStatus.DETECTED, strings.check_dep_fsl_found % fsl_version
+            DependenceStatus.DETECTED, strings.check_dep_fsl_found % fsl_version_lic
         )
 
     @staticmethod
@@ -335,12 +340,15 @@ class DependencyManager:
                 DependenceStatus.MISSING,
             )
         freesurfer_version = str(freesurfer.base.Info.looseversion())
+        # Version string with an inline license link (used in every label that
+        # reports the version); the raw freesurfer_version is kept for parsing.
+        fs_ver = version_with_license(FREESURFER, freesurfer_version)
 
         # FS version file presence
         if "FREESURFER_HOME" not in os.environ:
             return Dependence(
                 DependenceStatus.MISSING,
-                strings.check_dep_fs_error2 % freesurfer_version,
+                strings.check_dep_fs_error2 % fs_ver,
                 DependenceStatus.MISSING,
             )
 
@@ -359,7 +367,7 @@ class DependencyManager:
             if license_file is None:
                 return Dependence(
                     DependenceStatus.MISSING,
-                    strings.check_dep_fs_error4 % freesurfer_version,
+                    strings.check_dep_fs_error4 % fs_ver,
                     DependenceStatus.MISSING,
                 )
             os.environ["FS_LICENSE"] = license_file
@@ -373,14 +381,14 @@ class DependencyManager:
             return Dependence(
                 DependenceStatus.WARNING,
                 strings.check_dep_fs_outdated_version
-                % (freesurfer_version, DependencyManager.MIN_FREESURFER_VERSION),
+                % (fs_ver, DependencyManager.MIN_FREESURFER_VERSION),
             )
 
         # tcsh shell installed
         if which(DependencyManager.FSL_TCSH_COMMAND) is None:
             return Dependence(
                 DependenceStatus.WARNING,
-                strings.check_dep_fs_no_tcsh % freesurfer_version,
+                strings.check_dep_fs_no_tcsh % fs_ver,
                 DependenceStatus.MISSING,
             )
 
@@ -399,7 +407,7 @@ class DependencyManager:
 
         if found_version < version.parse(DependencyManager.SYNTH_FREESURFER_VERSION):
             error_string = strings.check_dep_fs_synth_version % (
-                freesurfer_version,
+                fs_ver,
                 DependencyManager.SYNTH_FREESURFER_VERSION,
             )
             fs_dep = DependenceStatus.WARNING
@@ -408,12 +416,12 @@ class DependencyManager:
             < ResourceManager.synth_reconall_ram_requirements()
         ):
             error_string = strings.check_dep_fs_low_ram % (
-                freesurfer_version,
+                fs_ver,
                 ResourceManager.synth_reconall_ram_requirements(),
             )
             fs_dep = DependenceStatus.WARNING
         else:
-            error_string = strings.check_dep_fs_found % freesurfer_version
+            error_string = strings.check_dep_fs_found % fs_ver
 
         if not matlab_found:
             fs_dep = DependenceStatus.WARNING
