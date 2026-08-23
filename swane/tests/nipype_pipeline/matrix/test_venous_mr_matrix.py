@@ -8,7 +8,7 @@ and the SynthStrip/SynthMorph backend. Snapshots under ``snapshots/venous_mr/``.
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList, VeinDetectionMode
+from swane.config.config_enums import GlobalPrefCategoryList, VeinDetectionMode, CoreLimit
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
@@ -17,13 +17,20 @@ venous_mr_workflow = import_workflow_or_skip(
 )
 
 SUBDIR = "venous_mr"
+MAX_CPU = 4
 
-# name -> (two_series, detection_mode, synth)
+# name -> (two_series, detection_mode, synth, limit_synth_cores)
 SCENARIOS = {
-    "single_series_sd": (False, VeinDetectionMode.SD, False),
-    "single_series_first": (False, VeinDetectionMode.FIRST, False),
-    "two_series": (True, VeinDetectionMode.SD, False),
-    "single_series_synth_backend": (False, VeinDetectionMode.SD, True),
+    "single_series_sd": (False, VeinDetectionMode.SD, False, False),
+    "single_series_first": (False, VeinDetectionMode.FIRST, False, False),
+    "two_series": (True, VeinDetectionMode.SD, False, False),
+    "single_series_synth_backend": (False, VeinDetectionMode.SD, True, False),
+    "single_series_synth_backend_limit_cores": (
+        False,
+        VeinDetectionMode.SD,
+        True,
+        True,
+    ),
 }
 
 
@@ -31,12 +38,13 @@ SCENARIOS = {
 def test_venous_mr_matrix(
     scenario, subject_config, global_config, make_input_dir, graph_snapshot
 ):
-    two_series, detection_mode, synth_backend = SCENARIOS[scenario]
+    two_series, detection_mode, synth_backend, limit_synth_cores = SCENARIOS[scenario]
     section = subject_config[DataInputList.VENOUS_MR]
     section["vein_detection_mode"] = detection_mode.name
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["strip"] = "true" if synth_backend else "false"
     synth["morph"] = "true" if synth_backend else "false"
+    synth["limit_cores"] = "true" if limit_synth_cores else "false"
 
     second_dir = make_input_dir("phase2") if two_series else None
     wf = venous_mr_workflow(
@@ -45,6 +53,8 @@ def test_venous_mr_matrix(
         config=section,
         synth_config=synth,
         venous2_mr_dir=second_dir,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
 
     config_echo = {
@@ -52,6 +62,9 @@ def test_venous_mr_matrix(
         "vein_detection_mode": detection_mode.name,
         "synth_strip": synth["strip"],
         "synth_morph": synth["morph"],
+        "limit_synth_cores": synth["limit_cores"],
+        "max_cpu": MAX_CPU,
+        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
     }
     graph_snapshot(
         wf,
@@ -79,6 +92,8 @@ def test_venous_mr_matrix_test_run(
         venous_mr_dir=make_input_dir("phase1"),
         config=section,
         synth_config=synth,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
         test_run=True,
     )
 

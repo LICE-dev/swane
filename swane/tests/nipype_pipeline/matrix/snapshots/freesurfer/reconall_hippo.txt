@@ -1,6 +1,7 @@
 # workflow snapshot: freesurfer / reconall_hippo
 #
 #   hippo_amyg_labels = True
+#   limit_synth_cores = false
 #   max_cpu = 4
 #   multicore_node_limit = SOFT_CAP
 #   step = RECONALL

@@ -14,7 +14,7 @@ actually exercised rather than assumed identical.
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList
+from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
@@ -23,6 +23,7 @@ linear_reg_workflow = import_workflow_or_skip(
 )
 
 SUBDIR = "linear_reg"
+MAX_CPU = 4
 
 # name -> dict(builder flags + backend/config), mirroring how MainWorkflow calls
 # this factory for each modality.
@@ -80,6 +81,16 @@ SCENARIOS = {
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
     ),
+    # SynthStrip + SynthMorph backend, capped to Synth core limit.
+    "flair3d_synth_backend_limit_cores": dict(
+        volumetric=True,
+        partial=False,
+        bias=True,
+        synth=True,
+        limit_cores=True,
+        config_input=DataInputList.FLAIR3D,
+        wf_name="flair3d",
+    ),
 }
 
 
@@ -91,6 +102,7 @@ def test_linear_reg_matrix(
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["strip"] = "true" if params["synth"] else "false"
     synth["morph"] = "true" if params["synth"] else "false"
+    synth["limit_cores"] = "true" if params.get("limit_cores") else "false"
 
     config = (
         subject_config[params["config_input"]]
@@ -106,6 +118,8 @@ def test_linear_reg_matrix(
         is_volumetric=params["volumetric"],
         is_partial_coverage=params["partial"],
         bias_field_correction=params["bias"],
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
 
     config_echo = {
@@ -114,6 +128,9 @@ def test_linear_reg_matrix(
         "bias_field_correction": params["bias"],
         "synth_strip": synth["strip"],
         "synth_morph": synth["morph"],
+        "limit_synth_cores": synth["limit_cores"],
+        "max_cpu": MAX_CPU,
+        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
         "config": params["config_input"].name if params["config_input"] else "None",
     }
     graph_snapshot(
@@ -145,6 +162,8 @@ def test_linear_reg_matrix_test_run(
         is_volumetric=True,
         is_partial_coverage=False,
         bias_field_correction=True,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
         test_run=True,
     )
 

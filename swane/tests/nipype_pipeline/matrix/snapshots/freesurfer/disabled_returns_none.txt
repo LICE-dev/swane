@@ -1,6 +1,7 @@
 # workflow snapshot: freesurfer / disabled_returns_none
 #
 #   hippo_amyg_labels = False
+#   limit_synth_cores = false
 #   max_cpu = 4
 #   multicore_node_limit = SOFT_CAP
 #   step = DISABLED
