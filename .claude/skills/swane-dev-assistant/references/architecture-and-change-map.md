@@ -38,6 +38,7 @@ Names and identities cross several layers. Treat input identities, preference ke
 | Global or subject preference, preset, dependency, validation | Catalog, `ConfigManager`, runtime consumers | [configuration-and-preferences.md](configuration-and-preferences.md) |
 | Preferences window or setup wizard | Preference schema plus UI generator | [configuration-and-preferences.md](configuration-and-preferences.md) |
 | General GUI state, worker, callback, Slicer action | State owner, signal producer/consumer, shutdown path | [ui-and-workers.md](ui-and-workers.md) |
+| External tool license display or consent | `LicenseReference`/`license_consent`, `LicenseConsentWindow`, `LicenseResolveWorker`, `DependencyManager` labels, `swane/licenses/` | [ui-and-workers.md](ui-and-workers.md) |
 | External dependency | `setup.py` versus `DependencyManager`, configuration gates, user guidance | Relevant workflow/configuration/UI references |
 | Packaging or release | Version, dependencies, manifest, docs, notices | Live packaging files and release history |
 

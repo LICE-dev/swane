@@ -9,6 +9,7 @@ Read this reference for application lifecycle, general Qt components, GUI state,
 - [Signals, state, and object lifetime](#signals-state-and-object-lifetime)
 - [Workflow progress and cancellation](#workflow-progress-and-cancellation)
 - [Slicer integration](#slicer-integration)
+- [License consent gate](#license-consent-gate)
 - [Error and shutdown behavior](#error-and-shutdown-behavior)
 - [Verification](#verification)
 
@@ -58,6 +59,15 @@ Read this reference for application lifecycle, general Qt components, GUI state,
 - `SlicerExportWorker` generates scenes from result contracts; `SlicerViewerWorker` opens an existing scene. Keep result filenames and scene extensions aligned with scripts and preferences.
 - Treat edits to `~/.slicerrc.py`, `swane/workers/slicerrc_swane.py`, and external Slicer subprocesses as user-visible side effects. Keep the stub itself tiny and stable (real behavior changes belong in `slicerrc_swane.py`, not the injected stub), make markers idempotent, preserve unrelated file content, handle paths containing spaces, and report failures.
 - Handle subprocess return codes, stderr, timeouts, missing modules, unsupported versions, and closure during an active Slicer task.
+
+## License consent gate
+
+- `swane/__main__.py` calls `MainWindow.run_license_consent_gate()` after `MainWindow` construction (so the setup wizard has already run) and before `app.exec()`; a decline aborts startup without entering the event loop and leaves the PID cleanup intact.
+- Consent is per external tool, keyed by the tool's detected version, in the global config `accepted_license_<tool>` MAIN keys. The gate prompts only tools that are detected/usable (non-MISSING) whose stored accepted version differs from the current one; persistence is atomic (written only after the whole flow is accepted).
+- Resolve license text off the GUI thread: `LicenseResolveWorker` (a `QThreadPool` worker) performs the possibly-networked resolution while a modal busy indicator keeps a local `QEventLoop` running, so the main window never freezes during a download. Never fetch on the GUI thread.
+- `swane/utils/license_consent.py` owns resolution (`resolve_license_text`: installed file -> online -> bundled), consent evaluation (`tools_needing_consent`, `detected_tool_versions`), and the inline label helper (`version_with_license`); `swane/utils/LicenseReference.py` is the per-tool registry (display name, official URL, installed-file candidates, bundled fallback under `swane/licenses/`). Reference only the legal license text, never a per-user key file (e.g. FreeSurfer's `_license.txt`).
+- Home dependency labels embed a license link inside the version parenthesis via `version_with_license` (built in `DependencyManager`/`SlicerCheckWorker`): shown whenever a version is detected, opening the local license file when present else the official URL. This "version present" rule is intentionally more permissive than the gate's "tool usable" rule.
+- `LicenseConsentWindow` is a sequential, blocking dialog (one page per tool, fixed non-clinical/non-commercial banner, scroll-to-enable "I ACCEPT", monospace themed panel). Keep it presentation-only; the caller persists consent.
 
 ## Error and shutdown behavior
 
