@@ -18,6 +18,8 @@ python3 -m black --check <changed-python-files>
 python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
 ```
 
+**Interpreter / environment.** Use an interpreter that has SWANe's runtime dependencies (nipype, PySide6, etc.) — a dedicated virtualenv/conda env — and never a neuroimaging tool's bundled Python (FSL's fslpython / FreeSurfer's fspython); see the interpreter rule in `CLAUDE.md` and verify with `python -c "import sys; print(sys.executable)"` before a general test run. If the environment carries a broken `datalad` pytest plugin (`ModuleNotFoundError: fasteners` at collection), add `-p no:datalad` to the pytest commands.
+
 ## Matrix — construction-only golden snapshots (delicate)
 
 `swane/tests/nipype_pipeline/matrix/` builds every workflow factory across a settings matrix (66 scenarios / 14 workflow families) and records each resulting graph as a deterministic, human-reviewed text snapshot in `snapshots/<workflow>/<scenario>.txt`. It never executes FSL/FreeSurfer/Slicer/dcm2niix and reads no real DICOM — it only asserts what graph SWANe *assembles* for a given preference combination. A handful of scenarios do read real FSL data files (MNI templates, XTRACT protocols) at construction time and **skip** (not fail) when that data is absent, via `conftest.require_fsl_data`.
