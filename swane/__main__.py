@@ -15,6 +15,7 @@ def main():
     from swane import EXIT_CODE_REBOOT
     from swane.config.config_enums import GlobalPrefCategoryList
     from swane.utils.last_pid_is_running import last_pid_is_running
+    from swane.utils.linux_desktop_integration import ensure_desktop_entry
 
     # Exit Code definition for automatic reboot
     current_exit_code = EXIT_CODE_REBOOT
@@ -29,8 +30,14 @@ def main():
 
         # SWANe Icon definition
         app.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
+        # Desktop file name definition, needed on Linux/Wayland to match the running
+        # window to the .desktop entry installed by ensure_desktop_entry() below, so
+        # that the taskbar/dock shows the SWANe icon instead of a generic one
+        app.setDesktopFileName("swane")
         # SWANe App Name definition
         app.setApplicationDisplayName(strings.APPNAME)
+        # Install/refresh the Linux .desktop entry so taskbar/dock show the SWANe icon
+        ensure_desktop_entry(swane_supplement.appIcon_file)
 
         # SWANe Configuration loading
         global_config = ConfigManager()
@@ -72,6 +79,19 @@ def main():
 
 
 if __name__ == "__main__":
+
+    import sys
+
+    # Standalone command to immediately remove the Linux .desktop entry created by
+    # ensure_desktop_entry(). Not required for normal cleanup after "pip uninstall
+    # swane": the entry's launcher already self-removes itself and the entry the
+    # first time it is run against a no-longer-existing SWANe executable. This is
+    # only for users who want the menu entry gone right away.
+    if "--remove-desktop-entry" in sys.argv:
+        from swane.utils.linux_desktop_integration import remove_desktop_entry
+
+        remove_desktop_entry()
+        sys.exit(0)
 
     # Before GUI execution check for fsl/python/freesurfer error
     if fsl_conflict_check():
