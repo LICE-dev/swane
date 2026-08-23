@@ -6,7 +6,7 @@
 #   multicore_node_limit = SOFT_CAP
 #   step = SYNTHSEG
 #   synth_reconall = false
-#   synthseg_fast = false
+#   synthseg_fast = False
 #
 # nodes=8 edges=11
 

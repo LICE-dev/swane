@@ -6,7 +6,7 @@
 #   multicore_node_limit = SOFT_CAP
 #   step = RECONALL
 #   synth_reconall = true
-#   synthseg_fast = false
+#   synthseg_fast = False
 #
 # nodes=12 edges=18
 

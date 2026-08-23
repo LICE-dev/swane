@@ -74,6 +74,7 @@ def freesurfer_workflow(
     step: FreesurferStep,
     is_hippo_amyg_labels: bool,
     synth_config: SectionProxy,
+    synthseg_fast: bool = False,
     base_dir: str = "/",
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
@@ -192,7 +193,7 @@ def freesurfer_workflow(
                 * ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR
             )
         else:
-            synth_seg.inputs.fast = synth_config.getboolean_safe("synthseg_fast")
+            synth_seg.inputs.fast = synthseg_fast
             synth_seg.inputs.robust = True
             synth_seg._mem_gb = ResourceManager.synth_seg_ram_requirements()
         synth_seg.inputs.use_cpu = True
