@@ -29,6 +29,13 @@ from swane.utils.DependencyManager import (
 )
 from swane.ui.SubjectTab import SubjectTab
 from swane.ui.PreferencesWindow import PreferencesWindow
+from swane.utils.license_consent import (
+    tools_needing_consent,
+    detected_tool_versions,
+    resolve_license_text,
+)
+from swane.utils.LicenseReference import LICENSES
+from swane.ui.LicenseConsentWindow import LicenseConsentWindow
 import swane_supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
@@ -456,6 +463,44 @@ class MainWindow(QMainWindow):
             self.global_config, self.dependency_manager
         )
         wf_preference_window.exec()
+
+    def run_license_consent_gate(self) -> bool:
+        """
+        Show the external-tool license consent gate if needed.
+
+        Returns
+        -------
+        bool
+            True to proceed with startup, False if the user declined and the
+            application must abort.
+        """
+        # Refresh detection so tools configured during the wizard are considered.
+        # Slicer's detection may complete asynchronously after the wizard; when it
+        # is not yet detected here it is simply consented on a later startup, since
+        # the per-tool model re-prompts only for tools whose detected version
+        # differs from the stored accepted version.
+        self.dependency_manager = DependencyManager()
+
+        needing = tools_needing_consent(self.dependency_manager, self.global_config)
+        if not needing:
+            return True
+
+        context = {"slicer_path": self.global_config.get_slicer_path()}
+        resolved = [
+            resolve_license_text(LICENSES[tool_id], context) for tool_id in needing
+        ]
+
+        dialog = LicenseConsentWindow(resolved, parent=self)
+        if dialog.exec() != QDialog.Accepted:
+            return False
+
+        detected = detected_tool_versions(self.dependency_manager, self.global_config)
+        for tool_id in dialog.accepted_tool_ids:
+            self.global_config.set_accepted_license_version(
+                tool_id, detected.get(tool_id, "")
+            )
+        self.global_config.save()
+        return True
 
     def start_tool_reference(self, default_tab=None, search_str=None):
         """

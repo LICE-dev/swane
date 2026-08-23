@@ -63,7 +63,10 @@ def main():
         try:
             widget = MainWindow(global_config)
             widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
-            current_exit_code = app.exec()
+            if widget.run_license_consent_gate():
+                current_exit_code = app.exec()
+            else:
+                current_exit_code = 0
         finally:
             # At SWANe exit
             # Clearing last PID and create time to allow new SWANe instance launch

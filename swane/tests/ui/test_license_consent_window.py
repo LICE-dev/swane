@@ -76,3 +76,12 @@ def test_long_html_license_starts_disabled(qtbot):
     browser = win._current_browser()
     browser.verticalScrollBar().setValue(browser.verticalScrollBar().maximum())
     assert win._accept_btn.isEnabled()
+
+
+def test_gate_returns_true_when_nothing_to_consent(qtbot, monkeypatch, global_config, offline_update):
+    import swane.ui.MainWindow as mw
+    from swane.ui.MainWindow import MainWindow
+    monkeypatch.setattr(mw, "tools_needing_consent", lambda dm, cfg: [])
+    window = MainWindow(global_config)
+    qtbot.addWidget(window)
+    assert window.run_license_consent_gate() is True
