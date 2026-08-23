@@ -39,12 +39,12 @@ def test_freesurfer_matrix(scenario, global_config, graph_snapshot):
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["reconall"] = "true" if synth_reconall else "false"
     synth["limit_cores"] = "true" if limit_synth_cores else "false"
-    synth["synthseg_fast"] = "true" if synthseg_fast else "false"
 
     wf = freesurfer_workflow(
         "freesurfer",
         step=step,
         is_hippo_amyg_labels=hippo,
+        synthseg_fast=synthseg_fast,
         max_cpu=MAX_CPU,
         multicore_node_limit=CoreLimit.SOFT_CAP,
         synth_config=synth,
@@ -55,7 +55,7 @@ def test_freesurfer_matrix(scenario, global_config, graph_snapshot):
         "hippo_amyg_labels": hippo,
         "synth_reconall": synth["reconall"],
         "limit_synth_cores": synth["limit_cores"],
-        "synthseg_fast": synth["synthseg_fast"],
+        "synthseg_fast": synthseg_fast,
         "max_cpu": MAX_CPU,
         "multicore_node_limit": CoreLimit.SOFT_CAP.name,
     }
