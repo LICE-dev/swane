@@ -5,9 +5,9 @@ import re
 
 
 def get_property(prop):
-    result = re.search(
-        r'{}\s*=\s*[\'"]([^\'"]*)[\'"]'.format(prop), open("swane/__init__.py").read()
-    )
+    with open("swane/__init__.py") as f:
+        content = f.read()
+    result = re.search(r'{}\s*=\s*[\'"]([^\'"]*)[\'"]'.format(prop), content)
     return result.group(1)
 
 
@@ -17,7 +17,7 @@ setup(
     description="Standardized Workflow for Advanced Neuroimaging in Epilepsy",
     author="LICE - Commissione Neuroimmagini",
     author_email="dev@lice.it",
-    packages=find_packages(exclude=["swane.tests"]),
+    packages=find_packages(exclude=["swane.tests", "swane.tests.*"]),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -34,7 +34,6 @@ setup(
         "filelock<3.19",
         "PySide6",
         "pydicom==3.0.1",
-        "configparser<=7.1.0",
         "psutil==7.0.0",
         # TODO: upgrade to swane_supplement 0.2
         "swane_supplement>=0.1.2",
