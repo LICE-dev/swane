@@ -1,3 +1,5 @@
+from multiprocessing import cpu_count
+
 from nipype import Node, MapNode
 from nipype.interfaces.fsl import (
     BET,
@@ -9,6 +11,7 @@ from nipype.interfaces.fsl import (
     ApplyXFM,
 )
 
+from swane.config.config_enums import CoreLimit
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
@@ -27,6 +30,64 @@ def getn(result_list, index):
     return result_list[index]
 
 
+def get_synth_cpu_config(
+    max_cpu: int,
+    multicore_node_limit: CoreLimit,
+    limit_synth_cores: bool,
+) -> tuple[int, bool]:
+    """
+    Computes the thread count for a CPU-bound Synth tool node (SynthStrip,
+    SynthMorphReg, SynthSeg) and whether nipype's own scheduler must be made
+    aware of it.
+
+    Hard cap: the tool uses `threads` cores and nipype's resource accounting
+    (node.n_procs) knows and reserves the same amount. Soft cap: the tool
+    still uses `threads` cores, but nipype believes the node uses a single
+    core, exactly like eddy_openmp/BEDPOSTX5 hide their real thread usage
+    from nipype via OMP_NUM_THREADS/FSLSUB_PARALLEL in dti_preproc_workflow.
+
+    """
+    if limit_synth_cores:
+        cores = ResourceManager.SYNTH_CORE_LIMIT
+        if max_cpu > 0:
+            cores = min(cores, max_cpu)
+        return cores, True
+
+    if multicore_node_limit == CoreLimit.NO_LIMIT:
+        return cpu_count(), False
+    if multicore_node_limit == CoreLimit.HARD_CAP:
+        return max_cpu, True
+    # SOFT_CAP
+    return max_cpu, False
+
+
+def apply_synth_num_threads(
+    node: Node,
+    threads: int,
+    hard: bool,
+    soft_env_vars: tuple[str, ...] = (),
+) -> None:
+    """
+    Applies a Synth tool's CPU thread count.
+
+    Hard cap (or when the tool exposes no way to hide its thread usage from
+    nipype, e.g. SynthSeg): sets the node's `num_threads` input, which
+    nipype's scheduler reads back as node.n_procs -- a real, visible
+    reservation. Soft cap: leaves `num_threads` undefined (n_procs stays at
+    its unaware default of 1) and instead sets the tool-specific environment
+    variables that actually drive its thread count, invisible to nipype.
+
+    """
+    if hard or not soft_env_vars:
+        node.inputs.num_threads = threads
+        node.n_procs = threads
+    else:
+        node.inputs.environ = {
+            **node.inputs.environ,
+            **{var: str(threads) for var in soft_env_vars},
+        }
+
+
 def get_deskull_node(
     name: str,
     use_synth: bool,
@@ -39,6 +100,9 @@ def get_deskull_node(
     synth_exclude_csf: bool = False,
     out_file: str = None,
     name_prefix: str = "",
+    max_cpu: int = 0,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
+    limit_synth_cores: bool = False,
 ) -> Node:
     if use_synth:
         deskull_node = Node(SynthStrip(), name=name + "_synthstrip", mem_gb=5)
@@ -48,7 +112,12 @@ def get_deskull_node(
                 mask_name = fname_presuffix(out_file, suffix="_brain", use_ext=True)
             deskull_node.inputs.mask_file = mask_name
         deskull_node.inputs.exclude_csf = synth_exclude_csf
-        # deskull_node.inputs.num_threads = 1
+        threads, hard = get_synth_cpu_config(
+            max_cpu, multicore_node_limit, limit_synth_cores
+        )
+        apply_synth_num_threads(
+            deskull_node, threads, hard, soft_env_vars=("OMP_NUM_THREADS",)
+        )
         if bet_surfaces:
             deskull_node.inskull_out_name = "mask_file"
     else:
@@ -104,6 +173,9 @@ def get_registration_node(
     name_prefix: str = "",
     name_suffix: str = "",
     test_run: bool = False,
+    max_cpu: int = 0,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
+    limit_synth_cores: bool = False,
 ) -> RegistrationNodeWrapper:
 
     # Sometimes we want to use flirt on unbetted images to take advantage of skull for registration
@@ -134,6 +206,15 @@ def get_registration_node(
         )
         synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
+        threads, hard = get_synth_cpu_config(
+            max_cpu, multicore_node_limit, limit_synth_cores
+        )
+        apply_synth_num_threads(
+            synth_morph_reg,
+            threads,
+            hard,
+            soft_env_vars=("TF_NUM_INTRAOP_THREADS", "TF_NUM_INTEROP_THREADS"),
+        )
         if test_run and non_linear:
             # Reduce deformable integration steps (default 7) for prerelease
             # test runs. FreeSurfer advises not to go below 5.

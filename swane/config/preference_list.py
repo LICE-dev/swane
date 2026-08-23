@@ -648,6 +648,15 @@ GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
     pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
     % ResourceManager.synth_reconall_ram_requirements(),
 )
+GLOBAL_PREFERENCES[category]["limit_cores"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Limit Synth tools to %d CPU cores" % ResourceManager.SYNTH_CORE_LIMIT,
+    tooltip="Caps SynthStrip, SynthMorph and SynthSeg CPU usage instead of "
+    "following the general multi-core policy set above",
+    default=False,
+    pref_requirement={GlobalPrefCategoryList.PERFORMANCE: [("max_subj_cpu", 2)]},
+    pref_requirement_fail_tooltip="Requires more than 1 CPU core allocated per subject",
+)
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}
 for data_input in DataInputList:

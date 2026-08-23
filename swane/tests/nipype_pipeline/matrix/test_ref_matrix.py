@@ -11,7 +11,7 @@ with SynthStrip off; a single SynthStrip scenario covers the Synth backend.
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList
+from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
@@ -20,13 +20,15 @@ ref_workflow = import_workflow_or_skip(
 )
 
 SUBDIR = "ref"
+MAX_CPU = 4
 
-# name -> (synth_strip, bet_bias_correction, bet_thr)
+# name -> (synth_strip, bet_bias_correction, bet_thr, limit_synth_cores)
 SCENARIOS = {
-    "bet_default": (False, False, "0.3"),
-    "bet_bias_thr0": (False, True, "0"),
-    "bet_thr_high": (False, False, "1"),
-    "synthstrip": (True, False, "0.3"),
+    "bet_default": (False, False, "0.3", False),
+    "bet_bias_thr0": (False, True, "0", False),
+    "bet_thr_high": (False, False, "1", False),
+    "synthstrip": (True, False, "0.3", False),
+    "synthstrip_limit_cores": (True, False, "0.3", True),
 }
 
 
@@ -38,24 +40,30 @@ def _bool(value):
 def test_ref_matrix(
     scenario, subject_config, global_config, make_input_dir, graph_snapshot
 ):
-    synth_strip, bias, bet_thr = SCENARIOS[scenario]
+    synth_strip, bias, bet_thr, limit_synth_cores = SCENARIOS[scenario]
     section = subject_config[DataInputList.T13D]
     section["bet_bias_correction"] = _bool(bias)
     section["bet_thr"] = bet_thr
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["strip"] = _bool(synth_strip)
+    synth["limit_cores"] = _bool(limit_synth_cores)
 
     wf = ref_workflow(
         "ref",
         dicom_dir=make_input_dir(),
         config=section,
         synth_config=synth,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
 
     config_echo = {
         "synth_strip": synth["strip"],
         "bet_bias_correction": section["bet_bias_correction"],
         "bet_thr": section["bet_thr"],
+        "limit_synth_cores": synth["limit_cores"],
+        "max_cpu": MAX_CPU,
+        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
     }
     graph_snapshot(
         wf,
@@ -83,6 +91,8 @@ def test_ref_matrix_test_run(
         dicom_dir=make_input_dir(),
         config=section,
         synth_config=synth,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
         test_run=True,
     )
 

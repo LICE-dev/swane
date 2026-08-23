@@ -219,6 +219,8 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=ref_dir,
             config=self.subject_config[DIL.T13D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.t1.long_name = "3D T1w analysis"
@@ -251,6 +253,8 @@ class MainWorkflow(CustomWorkflow):
         self.sym = nonlinear_reg_workflow(
             name="sym",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.sym.long_name = "Symmetric atlas registration"
@@ -335,6 +339,8 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.FLAIR3D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.flair.long_name = "3D Flair analysis"
@@ -389,6 +395,8 @@ class MainWorkflow(CustomWorkflow):
         self.mni1 = nonlinear_reg_workflow(
             name="mni1",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.mni1.long_name = "MNI atlas registration"
@@ -475,6 +483,8 @@ class MainWorkflow(CustomWorkflow):
                     config=None,
                     is_volumetric=False,
                     synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                    max_cpu=self.max_cpu,
+                    multicore_node_limit=self.multicore_node_limit,
                     test_run=self.test_run,
                 )
                 self.flair2d.long_name = "2D %s FLAIR analysis" % plane.value
@@ -514,6 +524,8 @@ class MainWorkflow(CustomWorkflow):
             is_volumetric=True,  # perform better with volumetric settings
             is_partial_coverage=True,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.t2_cor.long_name = "2D coronal T2 analysis"
@@ -560,6 +572,8 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.MDC],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.mdc.long_name = "Post-contrast 3D T1w analysis"
@@ -598,6 +612,8 @@ class MainWorkflow(CustomWorkflow):
             freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.ASL],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.asl.long_name = "Arterial Spin Labelling analysis"
@@ -713,6 +729,8 @@ class MainWorkflow(CustomWorkflow):
             freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.PET],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.pet.long_name = "Pet analysis"
@@ -882,6 +900,8 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.VENOUS_MR],
             venous2_mr_dir=venous2_mr_dir,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.venous_mr.long_name = "Venous MRA analysis"

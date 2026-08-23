@@ -5,6 +5,7 @@ from swane.nipype_pipeline.nodes.utils import (
     get_registration_node,
     apply_registration_node,
 )
+from swane.config.config_enums import CoreLimit
 
 
 # TODO check base_dir = "./"
@@ -12,6 +13,8 @@ def nonlinear_reg_workflow(
     name: str,
     synth_config: SectionProxy,
     base_dir: str = "/",
+    max_cpu: int = 0,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -26,6 +29,10 @@ def nonlinear_reg_workflow(
         FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of Synth tools. The default is 0.
+    multicore_node_limit : CoreLimit, optional
+        Preference for Synth tools core usage. The default is CoreLimit.SOFT_CAP.
     test_run : bool, optional
         If True, speed up the underlying nonlinear registration for
         prerelease test runs at the cost of accuracy. The default is False.
@@ -79,6 +86,9 @@ def nonlinear_reg_workflow(
         inverse=True,
         non_linear=True,
         test_run=test_run,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
     unbetted_2_atlas = apply_registration_node(

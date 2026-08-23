@@ -1,6 +1,6 @@
-# workflow snapshot: venous_mr / single_series_synth_backend
+# workflow snapshot: venous_mr / single_series_synth_backend_limit_cores
 #
-#   limit_synth_cores = false
+#   limit_synth_cores = true
 #   max_cpu = 4
 #   multicore_node_limit = SOFT_CAP
 #   synth_morph = true
@@ -10,16 +10,18 @@
 #
 # nodes=12 edges=14
 
-- anat_2_ref_synthmorphreg [SynthMorphReg] cmd=mri_synthmorph register mem_gb=9 n_procs=1
-    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>', TF_NUM_INTEROP_THREADS='4', TF_NUM_INTRAOP_THREADS='4'}
+- anat_2_ref_synthmorphreg [SynthMorphReg] cmd=mri_synthmorph register mem_gb=9 n_procs=3
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     model = 'rigid'
+    num_threads = 3
     subjects_dir = '<SUBJECTS_DIR>'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
-- vein_mr_deskull_synthstrip [SynthStrip] cmd=mri_synthstrip mem_gb=5 n_procs=1
-    environ = {OMP_NUM_THREADS='4', SUBJECTS_DIR='<SUBJECTS_DIR>'}
+- vein_mr_deskull_synthstrip [SynthStrip] cmd=mri_synthstrip mem_gb=5 n_procs=3
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     exclude_csf = False
     mask_file = 'brain_mask.nii.gz'
+    num_threads = 3
     subjects_dir = '<SUBJECTS_DIR>'
 - veins_2_ref_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
     environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}

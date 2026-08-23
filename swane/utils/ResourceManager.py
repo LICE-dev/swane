@@ -27,6 +27,11 @@ class ResourceManager:
     #: in nodes/utils.py (SynthMorphReg) and workflows/freesurfer_workflow.py.
     TEST_RUN_SYNTH_RAM_FACTOR = 0.7
 
+    #: Cap applied to SynthStrip/SynthMorph/SynthSeg CPU thread count and node
+    #: scheduler reservation when the user enables the "limit Synth tools CPU
+    #: cores" preference (see nodes/utils.py get_synth_cpu_config).
+    SYNTH_CORE_LIMIT = 3
+
     @staticmethod
     def to_gb(bt: float) -> float:
         return round(bt / (1024**3), 2)
