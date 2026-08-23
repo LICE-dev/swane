@@ -4,6 +4,8 @@ import subprocess
 from swane.utils.qt_compat import QRunnable, Signal, QObject
 from swane import strings
 from swane.utils.DependencyManager import DependencyManager, DependenceStatus
+from swane.utils.license_consent import version_with_license
+from swane.utils.LicenseReference import SLICER
 import platform
 
 
@@ -263,7 +265,7 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 slicer_version = output2.replace("Slicer ", "").replace("\n", "")
                 if not DependencyManager.check_slicer_version(slicer_version):
                     label = strings.check_dep_slicer_wrong_version % (
-                        slicer_version,
+                        version_with_license(SLICER, slicer_version),
                         DependencyManager.MIN_SLICER_VERSION,
                     )
                     state = DependenceStatus.WARNING
@@ -288,7 +290,9 @@ if _swane_os.path.isdir(_swane_workers_dir):
                     ).stdout.decode("utf-8")
                     if "MODULE FOUND" in output3:
                         state = DependenceStatus.DETECTED
-                        label = strings.check_dep_slicer_found % slicer_version
+                        label = strings.check_dep_slicer_found % version_with_license(
+                            SLICER, slicer_version
+                        )
                         SlicerCheckWorker.add_slicer_startup_patch()
                     else:
                         missing_modules = ", ".join(DependencyManager.SLICER_MODULES)
