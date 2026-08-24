@@ -67,6 +67,12 @@ class FreesurferStep(Enum):
         }
 
 
+class RegistrationEngine(Enum):
+    FSL = "FSL (FLIRT/FNIRT)"
+    SYNTH = "FreeSurfer SynthMorph"
+    ANTS = "ANTs (antspyx)"
+
+
 class SliceTiming(Enum):
     UNKNOWN = "Unknown"
     UP = "Regular up"
