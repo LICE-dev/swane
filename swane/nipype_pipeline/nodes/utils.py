@@ -491,9 +491,45 @@ def get_registration_node(
             )
 
 
+def wire_transforms(
+    registration: RegistrationNodeWrapper,
+    apply_node: Node,
+    workflow: CustomWorkflow,
+    inverse: bool = False,
+) -> None:
+    """
+    Connect an ANTs registration wrapper's ordered transform list AND its
+    paired which_to_invert flags into an ``AntsApplyTransforms`` node.
+
+    Wiring the flags is mandatory, never optional: antspyx's ``whichtoinvert``
+    default is only correct for a ``[matrix, warp]`` pair. A linear inverse (a
+    lone affine ``.mat``) applied with the default would be treated as *not
+    inverted* and resample silently wrong. ``AntsRegistration`` publishes the
+    correct per-direction flags; this helper always forwards them.
+    """
+    transforms = registration.inv_transforms if inverse else registration.fwd_transforms
+    which = (
+        registration.inv_which_to_invert
+        if inverse
+        else registration.fwd_which_to_invert
+    )
+    if len(transforms) != 1:
+        # Phase 1: a single AntsRegistration node produces the whole ordered
+        # list in one output field. Stacking multiple sources (Phase 2/3) would
+        # need a Merge node here.
+        raise ValueError(
+            "ANTs apply expects exactly one transform-list source, got %d"
+            % len(transforms)
+        )
+    src_node, src_field = transforms[0]
+    workflow.connect(src_node, src_field, apply_node, "transformlist")
+    if which is not None:
+        workflow.connect(which[0], which[1], apply_node, "which_to_invert")
+
+
 def apply_registration_node(
     name: str,
-    use_synth: bool,
+    engine: RegistrationEngine,
     workflow: CustomWorkflow,
     warp: list[Node | str],
     moving: str | list[Node | str],
@@ -504,11 +540,39 @@ def apply_registration_node(
     name_prefix: str = "",
     name_suffix: str = "",
     iterfield: list[str] = None,
+    registration: RegistrationNodeWrapper = None,
+    inverse: bool = False,
 ) -> Node:
     node_class = Node if iterfield is None else MapNode
     node_kwargs = {} if iterfield is None else {"iterfield": iterfield}
 
-    if use_synth:
+    if engine == RegistrationEngine.ANTS:
+        apply_node = node_class(
+            AntsApplyTransforms(), name=name + "_ants_apply", **node_kwargs
+        )
+        apply_node.long_name = name_prefix + " %s " + name_suffix
+        apply_node.inputs.interpolator = "nearestNeighbor" if labelmap else "linear"
+        if type(reference) == str:
+            apply_node.inputs.reference_image = reference
+        else:
+            workflow.connect(reference[0], reference[1], apply_node, "reference_image")
+        wire_transforms(registration, apply_node, workflow, inverse=inverse)
+
+        if out_file:
+            if type(out_file) == str:
+                apply_node.inputs.out_file = out_file
+            else:
+                workflow.connect(out_file[0], out_file[1], apply_node, "out_file")
+        if moving is None:
+            pass
+        elif type(moving) == str:
+            apply_node.inputs.input_image = moving
+        else:
+            workflow.connect(moving[0], moving[1], apply_node, "input_image")
+
+        return apply_node
+
+    if engine == RegistrationEngine.SYNTH:
         apply_node = node_class(
             SynthMorphApply(), name=name + "_morph_apply", **node_kwargs
         )

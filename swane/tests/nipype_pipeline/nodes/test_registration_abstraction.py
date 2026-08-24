@@ -183,3 +183,141 @@ class TestResolveRegistrationEngine:
             resolve_registration_engine(synth, allow_ants=False)
             == RegistrationEngine.SYNTH
         )
+
+
+def _incoming(workflow, dst_node):
+    """List of (src_node, src_field, dst_field) edges feeding ``dst_node``."""
+    conns = []
+    for src, dst, data in workflow._graph.edges(data=True):
+        if dst is dst_node:
+            for src_field, dst_field in data.get("connect", []):
+                conns.append((src, src_field, dst_field))
+    return conns
+
+
+# --------------------------------------------------------------------------- #
+# C3: engine-aware apply_registration_node + which_to_invert wiring
+# --------------------------------------------------------------------------- #
+class TestApplyRegistrationNode:
+    def _reg_and_apply(self, make_nifti, *, non_linear, inverse, labelmap=False):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import (
+            get_registration_node,
+            apply_registration_node,
+        )
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(IdentityInterface(fields=["moving", "reference"]), name="src")
+        reg = get_registration_node(
+            name="reg",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            moving=[src, "moving"],
+            reference=[src, "reference"],
+            non_linear=non_linear,
+            inverse=inverse,
+        )
+        apply_node = apply_registration_node(
+            name="apply",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            warp=None,
+            moving=[src, "moving"],
+            reference=[src, "reference"],
+            registration=reg,
+            inverse=inverse,
+            non_linear=non_linear,
+            labelmap=labelmap,
+        )
+        return wf, reg, apply_node
+
+    def test_ants_apply_interpolator_linear(self, make_nifti):
+        _, _, apply_node = self._reg_and_apply(
+            make_nifti, non_linear=False, inverse=False, labelmap=False
+        )
+        assert _iface(apply_node) == "AntsApplyTransforms"
+        assert apply_node.inputs.interpolator == "linear"
+
+    def test_ants_apply_interpolator_labelmap(self, make_nifti):
+        _, _, apply_node = self._reg_and_apply(
+            make_nifti, non_linear=False, inverse=False, labelmap=True
+        )
+        # antspyx spelling, NOT FSL's nearestneighbour.
+        assert apply_node.inputs.interpolator == "nearestNeighbor"
+
+    def test_ants_forward_wires_transformlist_and_flags(self, make_nifti):
+        wf, reg, apply_node = self._reg_and_apply(
+            make_nifti, non_linear=True, inverse=False
+        )
+        ants = reg.out_registered_node
+        incoming = _incoming(wf, apply_node)
+        assert (ants, "fwd_transforms", "transformlist") in incoming
+        # The which_to_invert flags MUST be wired -- never left to the antspyx
+        # default (see the silent-bug guard).
+        assert (ants, "fwd_which_to_invert", "which_to_invert") in incoming
+
+    def test_ants_inverse_linear_wires_inv_which_to_invert(self, make_nifti):
+        """Regression guard: a linear inverse apply must carry which_to_invert
+        from the node's inv_which_to_invert (which is [True] for a lone affine),
+        not the antspyx default that would apply the matrix un-inverted."""
+        wf, reg, apply_node = self._reg_and_apply(
+            make_nifti, non_linear=False, inverse=True
+        )
+        ants = reg.out_registered_node
+        incoming = _incoming(wf, apply_node)
+        assert (ants, "inv_transforms", "transformlist") in incoming
+        assert (ants, "inv_which_to_invert", "which_to_invert") in incoming
+
+    def test_ants_linear_inverse_flags_value_is_true(self, tmp_path):
+        """The wired source really yields [True] for a lone affine: exercise
+        AntsRegistration._list_outputs with a single .mat inverse transform."""
+        from swane.nipype_pipeline.nodes.AntsRegistration import AntsRegistration
+
+        node = AntsRegistration()
+        affine = str(tmp_path / "reg_0GenericAffine.mat")
+        open(affine, "w").close()
+        node._fwd = [affine]
+        node._inv = [affine]
+        node._warped = str(tmp_path / "warped.nii.gz")
+        outputs = node._list_outputs()
+        assert outputs["inv_which_to_invert"] == [True]
+        assert outputs["fwd_which_to_invert"] == [False]
+
+    def test_fsl_apply_unchanged(self, make_nifti):
+        from swane.nipype_pipeline.nodes.utils import apply_registration_node
+
+        wf = CustomWorkflow(name="wf")
+        from nipype.interfaces.utility import IdentityInterface
+
+        src = Node(IdentityInterface(fields=["warp", "reference"]), name="src")
+        apply_node = apply_registration_node(
+            name="apply",
+            engine=RegistrationEngine.FSL,
+            workflow=wf,
+            warp=[src, "warp"],
+            moving=make_nifti("m.nii.gz", shape=(6, 6, 6)),
+            reference=[src, "reference"],
+            non_linear=False,
+            labelmap=True,
+        )
+        assert _iface(apply_node) == "ApplyXFM"
+        assert apply_node.inputs.interp == "nearestneighbour"
+
+    def test_synth_apply_unchanged(self, make_nifti):
+        from swane.nipype_pipeline.nodes.utils import apply_registration_node
+
+        wf = CustomWorkflow(name="wf")
+        from nipype.interfaces.utility import IdentityInterface
+
+        src = Node(IdentityInterface(fields=["warp"]), name="src")
+        apply_node = apply_registration_node(
+            name="apply",
+            engine=RegistrationEngine.SYNTH,
+            workflow=wf,
+            warp=[src, "warp"],
+            moving=make_nifti("m.nii.gz", shape=(6, 6, 6)),
+            reference=make_nifti("r.nii.gz", shape=(6, 6, 6)),
+            labelmap=True,
+        )
+        assert _iface(apply_node) == "SynthMorphApply"
+        assert apply_node.inputs.method == "nearest"
