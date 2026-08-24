@@ -54,3 +54,33 @@ def test_ants_option_gated_on_antspyx_and_ram():
     entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["engine"]
     assert RegistrationEngine.ANTS in entry.option_pref_requirement
     assert RegistrationEngine.ANTS in entry.option_dependency
+
+
+def test_force_pref_reset_enabled_for_this_upgrade():
+    # This release must ship with the reset mechanism actually armed
+    # (no monkeypatching), so upgrading users get engine=ANTS.
+    from swane.config.preference_list import GLOBAL_PREFERENCES
+    from swane.config.config_enums import GlobalPrefCategoryList
+
+    entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.MAIN]["force_pref_reset"]
+    assert entry.default == "true"
+
+
+def test_upgrade_resets_engine_to_ants_default(tmp_path):
+    from swane.config.ConfigManager import ConfigManager
+    from swane.config.config_enums import GlobalPrefCategoryList, RegistrationEngine
+
+    # A reset is triggered only when the file was written by a different
+    # SWANe version, so we persist an old last_swane_version on disk, with
+    # engine pinned away from its default. force_pref_reset is NOT
+    # monkeypatched here: the shipped default must trigger the reset.
+    config = ConfigManager(global_base_folder=str(tmp_path))
+    config[GlobalPrefCategoryList.SYNTH]["engine"] = RegistrationEngine.FSL.name
+    config[GlobalPrefCategoryList.MAIN]["last_swane_version"] = "0.0.0"
+    config.save()
+
+    reset = ConfigManager(global_base_folder=str(tmp_path))
+    assert (
+        reset.getenum_safe(GlobalPrefCategoryList.SYNTH, "engine")
+        == RegistrationEngine.ANTS
+    )
