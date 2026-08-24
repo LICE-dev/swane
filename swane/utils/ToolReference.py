@@ -6,6 +6,7 @@ class Package(Enum):
     FREESURFER = "freesurfer"
     SLICER = "slicer"
     NIPY = "nipy"
+    ANTS = "ANTsPY"
     OTHER = "Other"
 
 
@@ -334,6 +335,17 @@ tool_reference_list = {
             "Lowekamp BC, Chen DT, Ibáñez L, Blezek D. The Design of SimpleITK. Front Neuroinform. 2013."
         ],
     ),
+    "AntsRegistration": ToolReference(
+        command="antsRegistration",
+        package=Package.ANTS,
+        url="https://antspyx.readthedocs.io/en/latest/registration.html#ants.registration",
+        references=[
+            "Avants BB, Epstein CL, Grossman M, Gee JC. Symmetric diffeomorphic image registration with cross-correlation: evaluating automated labeling of elderly and neurodegenerative brain. Med Image Anal. 2008;12(1):26-41.",
+            "Klein A, Andersson J, Ardekani BA, et al. Evaluation of 14 nonlinear deformation algorithms applied to human brain MRI registration. Neuroimage. 2009;46(3):786-802.",
+            "Murphy K, van Ginneken B, Reinhardt JM, et al. Evaluation of registration methods on thoracic CT: the EMPIRE10 challenge. IEEE Trans Med Imaging. 2011;30(11):1901-1920.",
+            "Avants BB, Tustison NJ, Stauffer M, Song G, Wu B, Gee JC. A reproducible evaluation of ANTs similarity metric performance in brain image registration. Neuroimage. 2011;54(3):2033-2044.",
+        ],
+    ),
 }
 
 # Update url finishing with #
@@ -367,4 +379,5 @@ equivalent_command_list = {
     "FeatureSpatial": "AromaClassification",
     "SynthMorphApply": "SynthMorphReg",
     "EddyCorrect": "Eddy",
+    "AntsApplyTransforms": "AntsRegistration",
 }
