@@ -4,9 +4,7 @@ from enum import Enum
 class Package(Enum):
     FSL = "fsl"
     FREESURFER = "freesurfer"
-    SLICER = "slicer"
     NIPY = "nipy"
-    ANTS = "ANTsPY"
     OTHER = "Other"
 
 
@@ -337,7 +335,7 @@ tool_reference_list = {
     ),
     "AntsRegistration": ToolReference(
         command="antsRegistration",
-        package=Package.ANTS,
+        package=Package.OTHER,
         url="https://antspyx.readthedocs.io/en/latest/registration.html#ants.registration",
         references=[
             "Avants BB, Epstein CL, Grossman M, Gee JC. Symmetric diffeomorphic image registration with cross-correlation: evaluating automated labeling of elderly and neurodegenerative brain. Med Image Anal. 2008;12(1):26-41.",
