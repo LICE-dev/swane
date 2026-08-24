@@ -662,20 +662,28 @@ git commit -m "Add AntsApplyTransforms antspyx node"
 
 ## GROUP D — Wire abstracted workflows to ANTS + wizard + graph/snapshot tests  (Sonnet 5)
 
-> Consumes C. This is where the two abstracted workflows actually default to ANTS.
+> Consumes C.
 
-### Task D1: Engine resolver in `MainWorkflow`
+> **SCOPE DECISION (orchestrator + user, post-CP-C audit): only `linear_reg_workflow` flips to the ANTs default in Phase 1. `nonlinear_reg_workflow` stays explicitly on `RegistrationEngine.FSL`.**
+> The CP-C audit (`docs/superpowers/specs/2026-08-24-ants-phase1-callsite-audit.md`) proved:
+> `linear_reg`'s `out_matrix_file` has zero consumers in `MainWorkflow` (safe to flip);
+> `nonlinear_reg`'s `fieldcoeff_file`/`inverse_warp` are read FSL-specifically by flat1,
+> func_map and tractography (FSL `ApplyWarp`), so flipping it to ANTs would silently break
+> them. Porting those consumers and then flipping nonlinear is deferred to Phase 2/3.
+
+### Task D1: Engine resolver in `MainWorkflow` (linear flips, nonlinear pinned FSL)
 
 **Files:**
 - Modify: `swane/nipype_pipeline/MainWorkflow.py`
 - Test: `swane/tests/nipype_pipeline/` (graph-level; or a focused resolver unit test)
 
 **Interfaces:**
-- Produces: a single helper that reads `GlobalPrefCategoryList.SYNTH["engine"]` → `RegistrationEngine` and passes it to `linear_reg_workflow`/`nonlinear_reg_workflow`. (Keeps a place for Phase 2/3 per-site overrides.)
+- Consumes: C's `resolve_registration_engine(...)` helper and the `allow_ants` per-site pattern already established in C4.
+- Produces: `linear_reg_workflow` is constructed with the resolved engine (ANTS by default); `nonlinear_reg_workflow` is constructed with `engine=RegistrationEngine.FSL` explicitly (pinned, with a comment pointing at the audit and Phase 2/3). Keep the resolver as the single override point so Phase 2/3 can lift the nonlinear pin.
 
-- [ ] **Step 1: Write failing test** — with the config `engine=ANTS`, `MainWorkflow` constructs the two workflows with `engine=RegistrationEngine.ANTS`.
-- [ ] **Step 2–4:** implement resolver; pass into the two factories; run.
-- [ ] **Step 5: Commit** `git commit -m "Resolve registration engine in MainWorkflow for abstracted workflows"`
+- [ ] **Step 1: Write failing tests** — (a) with config `engine=ANTS`, `MainWorkflow` constructs `linear_reg` sites with `engine=RegistrationEngine.ANTS`; (b) `nonlinear_reg` sites are constructed with `engine=RegistrationEngine.FSL` **regardless** of the preference (assert it stays FSL even when the preference is ANTS).
+- [ ] **Step 2–4:** implement resolver wiring; pin nonlinear to FSL; run.
+- [ ] **Step 5: Commit** `git commit -m "Flip linear registration to ANTs default; pin nonlinear to FSL (Phase 1)"`
 
 ### Task D2: Wizard sets `engine`
 
@@ -698,10 +706,10 @@ git commit -m "Add AntsApplyTransforms antspyx node"
 **Interfaces:**
 - Consumes: D1 (default engine flows into construction).
 
-- [ ] **Step 1:** Extend SCENARIOS to cover `engine` ∈ {FSL, SYNTH, ANTS} for these two builders (keep FSL/SYNTH scenarios so all three backends stay tested).
-- [ ] **Step 2: Run** the two matrix tests, expect FAIL (missing ANTS snapshots / changed default).
+- [ ] **Step 1:** Extend SCENARIOS to cover `engine` ∈ {FSL, SYNTH, ANTS} for BOTH builders so all three backends stay tested at the graph level. **But the DEFAULT-path scenario differs per workflow:** `linear_reg`'s default scenario is ANTS (the Phase 1 flip); `nonlinear_reg`'s default scenario stays FSL (pinned). The ANTS scenario for `nonlinear_reg` is a construction-only coverage case, not the MainWorkflow default — do not let it imply nonlinear ships on ANTs.
+- [ ] **Step 2: Run** the two matrix tests, expect FAIL (missing ANTS snapshots / changed linear default).
 - [ ] **Step 3: Regenerate** `SWANE_SNAPSHOT_UPDATE=1 pytest -p no:datalad swane/tests/nipype_pipeline/matrix/test_linear_reg_matrix.py swane/tests/nipype_pipeline/matrix/test_nonlinear_reg_matrix.py`.
-- [ ] **Step 4: Review the snapshot diff by eye** — confirm ANTS nodes/connections/filenames are correct (not merely present). This is a required human/orchestrator review, not an auto-accept.
+- [ ] **Step 4: Review the snapshot diff by eye** — confirm ANTS nodes/connections/filenames are correct (not merely present), and confirm the `nonlinear_reg` MainWorkflow-default snapshot is UNCHANGED (still FSL). This is a required human/orchestrator review, not an auto-accept.
 - [ ] **Step 5: Run** the full matrix suite green.
 - [ ] **Step 6: Commit** `git commit -m "Add ANTS-default golden snapshots for linear/nonlinear registration"`
 
