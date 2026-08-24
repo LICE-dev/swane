@@ -4,6 +4,7 @@ from configparser import SectionProxy
 from swane.nipype_pipeline.nodes.utils import (
     get_registration_node,
     apply_registration_node,
+    resolve_registration_engine,
 )
 from swane.config.config_enums import CoreLimit
 
@@ -64,6 +65,10 @@ def nonlinear_reg_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
+    # nonlinear_reg_workflow is one of the two abstracted workflows that follow
+    # the configured engine (ANTs by default); allow_ants=True.
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
+
     # Input Node
     inputnode = Node(IdentityInterface(fields=["atlas", "in_file"]), name="inputnode")
 
@@ -77,7 +82,7 @@ def nonlinear_reg_workflow(
         name=name,
         name_prefix="reference",
         name_suffix="to atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         moving=[inputnode, "in_file"],
         moving_brain=[inputnode, "in_file"],
@@ -95,9 +100,10 @@ def nonlinear_reg_workflow(
         name=name,
         name_prefix="Unbetted image",
         name_suffix="to atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        registration=reg_wrap,
         moving=[inputnode, "in_file"],
         reference=[inputnode, "atlas"],
         non_linear=True,

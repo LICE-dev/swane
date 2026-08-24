@@ -27,6 +27,8 @@ def test_flat1_matrix(scenario, global_config, make_file, graph_snapshot):
     synth_morph = SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["morph"] = "true" if synth_morph else "false"
+    # flat1 is not yet ported to ANTs; the engine drives FSL/SynthMorph.
+    synth["engine"] = "SYNTH" if synth_morph else "FSL"
 
     wf = flat1_workflow(
         "flat1",
@@ -59,6 +61,8 @@ def test_flat1_matrix_test_run(scenario, global_config, make_file, graph_snapsho
     synth_morph = TEST_RUN_SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["morph"] = "true" if synth_morph else "false"
+    # flat1 is not yet ported to ANTs; the engine drives FSL/SynthMorph.
+    synth["engine"] = "SYNTH" if synth_morph else "FSL"
 
     wf = flat1_workflow(
         "flat1",

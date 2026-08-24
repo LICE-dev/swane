@@ -12,6 +12,7 @@ from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,
+    resolve_registration_engine,
 )
 from swane.config.config_enums import CoreLimit
 
@@ -90,6 +91,10 @@ def linear_reg_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # linear_reg_workflow is one of the two abstracted workflows that follow the
+    # configured engine (ANTs by default); allow_ants=True.
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
 
     # Input Node
     inputnode = Node(
@@ -188,7 +193,7 @@ def linear_reg_workflow(
         name=name,
         name_prefix=name,
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         moving=[robustfov, "out_roi"],
         moving_brain=moving_brain,
@@ -207,9 +212,10 @@ def linear_reg_workflow(
         name=name,
         name_prefix="Unbetted image",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        registration=reg_wrap,
         moving=[robustfov, "out_roi"],
         reference=[inputnode, "reference"],
         out_file=[unbetted_name, "out_file"],
@@ -230,9 +236,10 @@ def linear_reg_workflow(
             name="deskulled_" + name,
             name_prefix="Skull stripped image",
             name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
+            engine=engine,
             workflow=workflow,
             warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+            registration=reg_wrap,
             moving=[deskull, "out_file"],
             reference=[inputnode, "reference"],
             out_file=[betted_name, "out_file"],

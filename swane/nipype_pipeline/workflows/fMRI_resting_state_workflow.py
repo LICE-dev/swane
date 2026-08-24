@@ -11,7 +11,7 @@ from swane.nipype_pipeline.nodes.utils import (
     get_registration_node,
     apply_registration_node,
 )
-from swane.config.config_enums import SliceTiming
+from swane.config.config_enums import SliceTiming, RegistrationEngine
 from ica_aroma_py.services.ICA_AROMA_nodes import (
     FeatureTimeSeries,
     FeatureFrequency,
@@ -167,7 +167,7 @@ def fMRI_resting_state_workflow(
             name="ref_2_mni",
             name_prefix=name,
             name_suffix="to atlas",
-            use_synth=False,
+            engine=RegistrationEngine.FSL,
             workflow=workflow,
             moving=[inputnode, "reference_brain"],
             reference=mni2,
@@ -191,7 +191,7 @@ def fMRI_resting_state_workflow(
         # Stick to FSL intentionally avoiding synth for reproducibility reason
         apply_warp = apply_registration_node(
             name="func2mni",
-            use_synth=False,
+            engine=RegistrationEngine.FSL,
             workflow=workflow,
             warp=[convert_warp, "out_file"],
             moving=[feature_spatial_prep, "out_file"],
@@ -270,7 +270,7 @@ def fMRI_resting_state_workflow(
 
     zstats_2_ref = apply_registration_node(
         name="zstats",
-        use_synth=False,
+        engine=RegistrationEngine.FSL,
         workflow=workflow,
         warp=[flirt_2_ref, "out_matrix_file"],
         moving=[melodic_output, "thresh_zstat_files"],

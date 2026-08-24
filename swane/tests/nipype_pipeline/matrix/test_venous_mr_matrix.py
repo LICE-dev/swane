@@ -48,6 +48,7 @@ def test_venous_mr_matrix(
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["strip"] = "true" if synth_backend else "false"
     synth["morph"] = "true" if synth_backend else "false"
+    synth["engine"] = "SYNTH" if synth_backend else "FSL"
     synth["limit_cores"] = "true" if limit_synth_cores else "false"
 
     second_dir = make_input_dir("phase2") if two_series else None
@@ -90,6 +91,10 @@ def test_venous_mr_matrix_test_run(
     section = subject_config[DataInputList.VENOUS_MR]
     section["vein_detection_mode"] = VeinDetectionMode.SD.name
     synth = global_config[GlobalPrefCategoryList.SYNTH]
+    # venous_mr is not yet ported to ANTs -> FSL (old morph default); morph kept
+    # only for the header echo.
+    synth["morph"] = "False"
+    synth["engine"] = "FSL"
 
     wf = venous_mr_workflow(
         "venous_mr",

@@ -14,7 +14,7 @@ from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
 from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
-from swane.config.config_enums import SliceTiming
+from swane.config.config_enums import SliceTiming, RegistrationEngine
 from swane.nipype_pipeline.nodes.utils import get_registration_node
 
 
@@ -363,7 +363,7 @@ def fMRI_preproc_workflow(
         name="%s_2_ref" % name,
         name_prefix=name,
         name_suffix="to reference space",
-        use_synth=False,
+        engine=RegistrationEngine.FSL,
         workflow=workflow,
         moving=[meanfunc2, "out_file"],
         reference=[inputnode, "reference_brain"],

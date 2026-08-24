@@ -13,7 +13,7 @@ from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.FMRIGenSpec import FMRIGenSpec
 from swane.nipype_pipeline.nodes.utils import apply_registration_node
-from swane.config.config_enums import BlockDesign
+from swane.config.config_enums import BlockDesign, RegistrationEngine
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 
 
@@ -254,7 +254,7 @@ def fMRI_task_workflow(
         # NODE 37a: Transformation in ref space
         cluster1_2_ref = apply_registration_node(
             name="%s_cluster_t3_%d_to_ref" % (name, cont),
-            use_synth=False,
+            engine=RegistrationEngine.FSL,
             workflow=workflow,
             warp=[flirt_2_ref, "out_matrix_file"],
             moving=[cluster1, "threshold_file"],
@@ -310,7 +310,7 @@ def fMRI_task_workflow(
         # NODE 37b: Transformation in ref space
         cluster2_2_ref = apply_registration_node(
             name="%s_cluster_t5_%d_to_ref" % (name, cont),
-            use_synth=False,
+            engine=RegistrationEngine.FSL,
             workflow=workflow,
             warp=[flirt_2_ref, "out_matrix_file"],
             moving=[cluster2, "threshold_file"],
@@ -366,7 +366,7 @@ def fMRI_task_workflow(
         # NODE 37c: Transformation in ref space
         cluster3_2_ref = apply_registration_node(
             name="%s_cluster_t7_%d_to_ref" % (name, cont),
-            use_synth=False,
+            engine=RegistrationEngine.FSL,
             workflow=workflow,
             warp=[flirt_2_ref, "out_matrix_file"],
             moving=[cluster3, "threshold_file"],

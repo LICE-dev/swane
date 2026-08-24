@@ -101,7 +101,12 @@ def test_linear_reg_matrix(
     params = SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["strip"] = "true" if params["synth"] else "false"
+    # ``morph`` is gone; the registration backend is now the ``engine`` enum.
+    # The abstracted workflows follow it, so pin FSL/SYNTH here (the ANTs default
+    # flip is exercised separately by the D-group snapshots). ``morph`` is kept
+    # only so the snapshot header echo stays identical.
     synth["morph"] = "true" if params["synth"] else "false"
+    synth["engine"] = "SYNTH" if params["synth"] else "FSL"
     synth["limit_cores"] = "true" if params.get("limit_cores") else "false"
 
     config = (
@@ -152,6 +157,9 @@ def test_linear_reg_matrix_test_run(
     default test_run=True actually builds for FLAIR3D/MDC.
     """
     synth = global_config[GlobalPrefCategoryList.SYNTH]
+    # FSL backend (old morph default); ``morph`` kept only for the header echo.
+    synth["morph"] = "False"
+    synth["engine"] = "FSL"
     config = subject_config[DataInputList.FLAIR3D]
 
     wf = linear_reg_workflow(

@@ -16,7 +16,10 @@ from swane.nipype_pipeline.nodes.ThrROI import ThrROI
 from nipype.interfaces.utility import IdentityInterface, Function
 
 from swane.nipype_pipeline.nodes.ram_estimators import FastRamEstimator
-from swane.nipype_pipeline.nodes.utils import apply_registration_node
+from swane.nipype_pipeline.nodes.utils import (
+    apply_registration_node,
+    resolve_registration_engine,
+)
 
 
 def flat1_workflow(
@@ -80,6 +83,10 @@ def flat1_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
+    # Not yet ported to the ANTs transform-list format: keep this workflow on
+    # its prior backend (FSL/SynthMorph), so the ANTs default falls back to FSL.
+    engine = resolve_registration_engine(synth_config, allow_ants=False)
+
     # Input Node
     inputnode = Node(
         IdentityInterface(
@@ -135,7 +142,7 @@ def flat1_workflow(
         name="flair_2_mni1",
         name_prefix="flair",
         name_suffix="MNI atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
         moving=[inputnode, "flair_brain"],
@@ -147,7 +154,7 @@ def flat1_workflow(
         name="restore_2_mni1",
         name_prefix="T1",
         name_suffix="MNI atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
         moving=[fast, "restored_image"],
@@ -159,7 +166,7 @@ def flat1_workflow(
         name="gm_2_mni1",
         name_prefix="Gray matter",
         name_suffix="MNI atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
         moving=[fast_segment_split, "gm_seg"],
@@ -171,7 +178,7 @@ def flat1_workflow(
         name="wm_2_mni1",
         name_prefix="White matter",
         name_suffix="MNI atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
         moving=[fast_segment_split, "wm_seg"],
@@ -332,7 +339,7 @@ def flat1_workflow(
         name="extension_z_2_ref",
         name_prefix="Extension",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_inverse_warp"],
         moving=[no_cereb_extension_z, "out_file"],
@@ -345,7 +352,7 @@ def flat1_workflow(
         name="junction_z_2_ref",
         name_prefix="Junction",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_inverse_warp"],
         moving=[junction_z, "out_file"],
@@ -358,7 +365,7 @@ def flat1_workflow(
         name="binary_flair_2_ref",
         name_prefix="Binary Flair",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_inverse_warp"],
         moving=[binary_flair, "out_file"],
