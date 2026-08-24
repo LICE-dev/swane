@@ -2,9 +2,18 @@
 :func:`swane.nipype_pipeline.workflows.nonlinear_reg_workflow.nonlinear_reg_workflow`.
 
 Non-linear atlas registration (used for the FLAT1 MNI warp and the symmetric
-asymmetry-index warp). The only branch is the backend: FSL (FLIRT + FNIRT +
-InvWarp + ApplyWarp) versus SynthMorph. One snapshot per backend under
+asymmetry-index warp). One snapshot per backend under
 ``snapshots/nonlinear_reg/``.
+
+Unlike ``linear_reg_workflow``, this workflow's ``fieldcoeff_file``/
+``inverse_warp`` outputs are read FSL-specifically downstream (flat1/func_map/
+tractography ``ApplyWarp``, per the CP-C audit), so it resolves its engine with
+``allow_ants=False`` -- it stays pinned to FSL regardless of the ``engine``
+preference until those consumers are ported (Phase 2/3). The ``ants_backend``
+scenario below is construction-only coverage proving that pin: with
+``engine=ANTS`` configured, the built graph is still the FSL one (identical to
+``fsl_backend``'s), not an ``AntsRegistration`` node -- it is NOT the
+MainWorkflow default and must not be read as one.
 """
 
 import pytest
@@ -19,23 +28,26 @@ nonlinear_reg_workflow = import_workflow_or_skip(
 SUBDIR = "nonlinear_reg"
 MAX_CPU = 4
 
-# name -> (synth_morph, limit_synth_cores)
+# name -> dict(engine preference + limit_cores)
 SCENARIOS = {
-    "fsl_backend": (False, False),
-    "synthmorph_backend": (True, False),
-    "synthmorph_backend_limit_cores": (True, True),
+    "fsl_backend": dict(engine="FSL"),
+    "synthmorph_backend": dict(engine="SYNTH"),
+    "synthmorph_backend_limit_cores": dict(engine="SYNTH", limit_cores=True),
+    # Construction-only coverage of the FSL pin (see module docstring): the
+    # engine preference is ANTS, but the built graph must still be FSL's.
+    "ants_backend": dict(engine="ANTS"),
 }
 
 
 @pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
 def test_nonlinear_reg_matrix(scenario, global_config, graph_snapshot):
-    synth_morph, limit_synth_cores = SCENARIOS[scenario]
+    params = SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     # ``morph`` is gone; pin the backend through the ``engine`` enum (``morph``
     # kept only so the snapshot header echo stays identical).
-    synth["morph"] = "true" if synth_morph else "false"
-    synth["engine"] = "SYNTH" if synth_morph else "FSL"
-    synth["limit_cores"] = "true" if limit_synth_cores else "false"
+    synth["morph"] = "true" if params["engine"] == "SYNTH" else "false"
+    synth["engine"] = params["engine"]
+    synth["limit_cores"] = "true" if params.get("limit_cores") else "false"
 
     wf = nonlinear_reg_workflow(
         "sym",
@@ -50,6 +62,7 @@ def test_nonlinear_reg_matrix(scenario, global_config, graph_snapshot):
         name=scenario,
         config={
             "synth_morph": synth["morph"],
+            "registration_engine": synth["engine"],
             "limit_synth_cores": synth["limit_cores"],
             "max_cpu": MAX_CPU,
             "multicore_node_limit": CoreLimit.SOFT_CAP.name,
