@@ -1,9 +1,9 @@
-# workflow snapshot: nonlinear_reg / fsl_backend
+# workflow snapshot: nonlinear_reg / ants_backend
 #
 #   limit_synth_cores = false
 #   max_cpu = 4
 #   multicore_node_limit = SOFT_CAP
-#   registration_engine = FSL
+#   registration_engine = ANTS
 #   synth_morph = false
 #
 # nodes=6 edges=10
