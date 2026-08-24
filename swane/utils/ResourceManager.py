@@ -17,6 +17,9 @@ class ResourceManager:
     SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 20, "linux": 14, "other": 14}
     SYNTH_SEG_RAM_REQUIREMENT = {"mac": 30, "linux": 14, "other": 14}
     SYNTH_RECONALL_RAM_REQUIREMENT = {"mac": 20, "linux": 20, "other": 20}
+    #: Placeholder pending real antspyx memory profiling: started at the same
+    #: magnitude as SYNTH_MORPH_RAM_REQUIREMENT (Phase 1 CP-A, to confirm).
+    ANTS_RAM_REQUIREMENT = {"mac": 20, "linux": 14, "other": 14}
 
     #: In prerelease test_run mode ONLY, the SynthSeg (--fast, robust=False) and
     #: SynthMorph (steps=5) paths do genuinely less work and use less RAM, so
@@ -89,6 +92,10 @@ class ResourceManager:
     @staticmethod
     def synth_reconall_ram_requirements():
         return ResourceManager.SYNTH_RECONALL_RAM_REQUIREMENT[get_os_type()]
+
+    @staticmethod
+    def ants_ram_requirements():
+        return ResourceManager.ANTS_RAM_REQUIREMENT[get_os_type()]
 
     @staticmethod
     def get_min_synth_ram_requirement():
