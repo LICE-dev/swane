@@ -529,7 +529,7 @@ for _license_tool in ("fsl", "freesurfer", "slicer", "dcm2niix"):
 GLOBAL_PREFERENCES[category]["force_pref_reset"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     hidden=True,
-    default="false",
+    default="true",
 )
 GLOBAL_PREFERENCES[category]["slicer_scene_ext"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
