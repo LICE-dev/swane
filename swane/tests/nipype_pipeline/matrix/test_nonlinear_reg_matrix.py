@@ -31,7 +31,10 @@ SCENARIOS = {
 def test_nonlinear_reg_matrix(scenario, global_config, graph_snapshot):
     synth_morph, limit_synth_cores = SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
+    # ``morph`` is gone; pin the backend through the ``engine`` enum (``morph``
+    # kept only so the snapshot header echo stays identical).
     synth["morph"] = "true" if synth_morph else "false"
+    synth["engine"] = "SYNTH" if synth_morph else "FSL"
     synth["limit_cores"] = "true" if limit_synth_cores else "false"
 
     wf = nonlinear_reg_workflow(
@@ -72,6 +75,7 @@ def test_nonlinear_reg_matrix_test_run(scenario, global_config, graph_snapshot):
     synth_morph = TEST_RUN_SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["morph"] = "true" if synth_morph else "false"
+    synth["engine"] = "SYNTH" if synth_morph else "FSL"
 
     wf = nonlinear_reg_workflow(
         "sym",

@@ -54,6 +54,10 @@ def test_dti_matrix(
     section["old_eddy_correct"] = _bool(old_eddy)
     section["tractography"] = _bool(tractography)
     synth = global_config[GlobalPrefCategoryList.SYNTH]
+    # dti is not yet ported to ANTs -> FSL (old morph default); morph kept
+    # only for the header echo.
+    synth["morph"] = "False"
+    synth["engine"] = "FSL"
 
     wf = dti_preproc_workflow(
         "dti",
@@ -94,6 +98,10 @@ def test_dti_matrix_test_run(
     section["old_eddy_correct"] = "false"
     section["tractography"] = "true"
     synth = global_config[GlobalPrefCategoryList.SYNTH]
+    # dti is not yet ported to ANTs -> FSL (old morph default); morph kept
+    # only for the header echo.
+    synth["morph"] = "False"
+    synth["engine"] = "FSL"
 
     wf = dti_preproc_workflow(
         "dti",

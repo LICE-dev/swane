@@ -6,7 +6,7 @@ from nipype.interfaces.fsl import (
 from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from nipype.pipeline.engine import Node
-from swane.config.config_enums import CoreLimit
+from swane.config.config_enums import CoreLimit, RegistrationEngine
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -16,6 +16,7 @@ from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,
+    resolve_registration_engine,
 )
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
@@ -89,6 +90,10 @@ def dti_preproc_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # Not yet ported to the ANTs transform-list format: keep this workflow on
+    # its prior backend (FSL/SynthMorph), so the ANTs default falls back to FSL.
+    engine = resolve_registration_engine(synth_config, allow_ants=False)
 
     # Input Node
     inputnode = Node(
@@ -206,7 +211,7 @@ def dti_preproc_workflow(
         name="dif2ref",
         name_prefix="DTI",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         moving=[nodif, "out_file"],
         moving_brain=[b0_deskull, "out_file"],
@@ -221,8 +226,9 @@ def dti_preproc_workflow(
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
-    # Output mat must be fsl format to be used directly in probtrackx
-    if synth_config.getboolean_safe("morph"):
+    # Output mat must be fsl format to be used directly in probtrackx.
+    # SynthMorph emits an LTA that needs converting; FSL already produces a .mat.
+    if engine == RegistrationEngine.SYNTH:
         dif2ref_xfm = Node(LTAConvert(), name="dif2ref_xfm")
         dif2ref_xfm.long_name = "Matrix conversion"
         dif2ref_xfm.inputs.out_fsl = "dif2ref.mat"
@@ -249,7 +255,7 @@ def dti_preproc_workflow(
         name="fa_2_ref",
         name_prefix="FA",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[dif2ref.out_registered_node, dif2ref.warp],
         moving=[dtifit, "FA"],
