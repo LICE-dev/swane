@@ -65,9 +65,13 @@ def nonlinear_reg_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
-    # nonlinear_reg_workflow is one of the two abstracted workflows that follow
-    # the configured engine (ANTs by default); allow_ants=True.
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    # Phase 1 scope decision (docs/superpowers/specs/2026-08-24-ants-phase1-callsite-audit.md):
+    # nonlinear_reg's fieldcoeff_file/inverse_warp are read FSL-specifically by
+    # flat1, func_map and tractography (FSL ApplyWarp), none of which are ported
+    # to the ANTs transform-list/which_to_invert contract in Phase 1. Pin this
+    # workflow to FSL regardless of the configured engine until those consumers
+    # are ported (Phase 2/3); only linear_reg_workflow follows the ANTs default.
+    engine = resolve_registration_engine(synth_config, allow_ants=False)
 
     # Input Node
     inputnode = Node(IdentityInterface(fields=["atlas", "in_file"]), name="inputnode")

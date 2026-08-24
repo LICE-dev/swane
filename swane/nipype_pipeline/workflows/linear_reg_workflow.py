@@ -92,8 +92,11 @@ def linear_reg_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
-    # linear_reg_workflow is one of the two abstracted workflows that follow the
-    # configured engine (ANTs by default); allow_ants=True.
+    # Phase 1 scope decision (docs/superpowers/specs/2026-08-24-ants-phase1-callsite-audit.md):
+    # linear_reg's out_matrix_file has no consumer in Phase 1, so it is safe to
+    # follow the configured engine (ANTs by default). nonlinear_reg_workflow
+    # stays pinned to FSL (see its own allow_ants=False) until its FSL-specific
+    # ApplyWarp consumers are ported (Phase 2/3).
     engine = resolve_registration_engine(synth_config, allow_ants=True)
 
     # Input Node
