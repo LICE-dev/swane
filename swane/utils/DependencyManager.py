@@ -160,6 +160,21 @@ class DependencyManager:
         )
 
     @staticmethod
+    def is_antspyx() -> bool:
+        """
+        Returns
+        -------
+        True if the antspyx package is importable.
+
+        """
+        try:
+            import ants  # noqa: F401
+
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
         """
         Parameters
