@@ -573,6 +573,26 @@ git commit -m "Add AntsApplyTransforms antspyx node"
 
 > Consumes A (`RegistrationEngine`) and B (`AntsRegistration`/`AntsApplyTransforms` interfaces above).
 
+> **AS-BUILT interfaces from Group B (commits 06fc9e5, e11e12c) — these override the B code sketch above where they differ. Verify against the real node files before coding C.**
+>
+> `AntsRegistration` outputs: `fwd_transforms` (list), `inv_transforms` (list),
+> **`fwd_which_to_invert` (list[bool])**, **`inv_which_to_invert` (list[bool])**,
+> `warped_file`, `affine_transform`, `warp_field`, `inverse_warp_field`.
+> Inputs include `transform_type`, **`aff_metric`** and **`syn_metric`** (the plan's
+> single `metric` enum was wrong — antspyx splits them, and "MI" is invalid in both),
+> `num_threads`, `initial_transform`, `out_prefix`.
+>
+> `AntsApplyTransforms` inputs: `input_image`, `reference_image`, `transformlist` (list),
+> `interpolator` (`"linear"`/`"nearestNeighbor"` — note the antspyx spelling, NOT FSL's
+> `nearestneighbour`), **`which_to_invert` (list[bool])**, `out_file`. Output: `out_file`.
+>
+> **CRITICAL (silent-bug guard):** antspyx's `which_to_invert` default is only correct for
+> `[matrix, warp]`. A linear inverse `[affine.mat]` needs `which_to_invert=[True]`; relying on
+> the default silently gives a wrong result (measured corr 0.108 vs 0.997, no error raised).
+> Therefore Group B publishes the flags on the registration node and **C MUST wire
+> `fwd_which_to_invert`/`inv_which_to_invert` into `AntsApplyTransforms.which_to_invert`** —
+> never re-derive or rely on the antspyx default.
+
 ### Task C1: Generalize the CPU-config helpers to be tool-neutral
 
 **Files:**
@@ -596,11 +616,11 @@ git commit -m "Add AntsApplyTransforms antspyx node"
 
 **Interfaces:**
 - Consumes: `RegistrationEngine`, `AntsRegistration`.
-- Produces: `RegistrationNodeWrapper` extended with `fwd_transforms: list[(node, field)]`, `inv_transforms: list[(node, field)]`, and `engine`. `get_registration_node(..., engine: RegistrationEngine, ...)` replaces the `use_synth: bool` parameter and gains an `engine == RegistrationEngine.ANTS` branch. FSL/Synth branches map from `engine` (SYNTH↔ old `use_synth=True`, FSL↔ `False`).
+- Produces: `RegistrationNodeWrapper` extended with `fwd_transforms: list[(node, field)]`, `inv_transforms: list[(node, field)]`, **`fwd_which_to_invert: (node, field)`**, **`inv_which_to_invert: (node, field)`**, and `engine`. `get_registration_node(..., engine: RegistrationEngine, ...)` replaces the `use_synth: bool` parameter and gains an `engine == RegistrationEngine.ANTS` branch. FSL/Synth branches map from `engine` (SYNTH↔ old `use_synth=True`, FSL↔ `False`). For ANTS the wrapper's `fwd_transforms`/`inv_transforms` point at the node's `fwd_transforms`/`inv_transforms` list outputs and the which-to-invert fields at `fwd_which_to_invert`/`inv_which_to_invert` (so C3 can wire them). FSL/Synth set the which-to-invert fields to `None`.
 
 - [ ] **Step 1: Write failing tests** — for each engine, `get_registration_node` returns a wrapper whose node types match (FSL→FLIRT/FNIRT, SYNTH→SynthMorphReg, ANTS→AntsRegistration) and whose `fwd_transforms`/`inv_transforms` are populated (ANTS linear → 1 forward transform; ANTS nonlinear → 2). Build a throwaway `CustomWorkflow` and inspect nodes.
 - [ ] **Step 2: Run to verify fail.**
-- [ ] **Step 3: Implement** the `engine` parameter and ANTS branch. For ANTS: `transform_type = "Affine" if not non_linear else "SyN"` (rigid vs deformable — confirm the linear default matches the FSL `dof` intent: FSL linear uses dof=6 rigid in the volumetric non-linear-affine step and dof=12 for the pre-FNIRT affine; pick `Rigid`/`Affine` accordingly and document). Populate `fwd_transforms`/`inv_transforms` from the node's `fwd_transforms`/`inv_transforms`/`affine_transform`/`warp_field` outputs. Keep `warp`/`inv_warp` set for FSL/Synth compatibility.
+- [ ] **Step 3: Implement** the `engine` parameter and ANTS branch. For ANTS: `transform_type = "Affine" if not non_linear else "SyN"` (rigid vs deformable — confirm the linear default matches the FSL `dof` intent: FSL linear uses dof=6 rigid in the volumetric non-linear-affine step and dof=12 for the pre-FNIRT affine; pick `Rigid`/`Affine` accordingly and document). Set `aff_metric`/`syn_metric` mapping the prior FSL cost intent (document the mapping; "MI" is not a valid antspyx metric). Populate the wrapper's `fwd_transforms`/`inv_transforms` and `fwd_which_to_invert`/`inv_which_to_invert` from the node's list outputs. Keep `warp`/`inv_warp` set for FSL/Synth compatibility; set the which-to-invert fields to `None` on the FSL/Synth branches.
 - [ ] **Step 4: Run to verify pass.**
 - [ ] **Step 5: Commit** `git commit -m "Add ANTs branch and transform-list wrapper to get_registration_node"`
 
@@ -611,11 +631,11 @@ git commit -m "Add AntsApplyTransforms antspyx node"
 - Test: `swane/tests/utils/test_registration_abstraction.py`
 
 **Interfaces:**
-- Produces: `apply_registration_node(..., engine, transformlist=...)` builds `AntsApplyTransforms` for ANTS with the ordered `transformlist`; `labelmap=True` → `interpolator="nearestNeighbor"`. FSL/Synth branches unchanged (still keyed off `engine`).
+- Produces: `apply_registration_node(..., engine, ...)` builds `AntsApplyTransforms` for ANTS with the ordered `transformlist` **and its paired `which_to_invert` flags**; `labelmap=True` → `interpolator="nearestNeighbor"`. FSL/Synth branches unchanged (still keyed off `engine`).
 
-- [ ] **Step 1: Write failing test** — ANTS apply produces an `AntsApplyTransforms` node with `interpolator` set correctly for `labelmap` True/False, and its `transformlist` wired from a provided wrapper's `fwd_transforms`.
+- [ ] **Step 1: Write failing test** — ANTS apply produces an `AntsApplyTransforms` node with `interpolator` correct for `labelmap` True/False, `transformlist` wired from a wrapper's `fwd_transforms` (or `inv_transforms` when `inverse=True`), **and `which_to_invert` wired from the matching `fwd_which_to_invert`/`inv_which_to_invert`**. Add a regression test proving a linear-inverse apply carries `which_to_invert=[True]`, not the wrong antspyx default `[False]`.
 - [ ] **Step 2: Run to verify fail.**
-- [ ] **Step 3: Implement** the ANTS branch; accept the wrapper's transform list (add a helper `wire_transforms(wrapper, apply_node, workflow, inverse=False)`).
+- [ ] **Step 3: Implement** the ANTS branch via a helper `wire_transforms(wrapper, apply_node, workflow, inverse=False)` that connects BOTH the transform list AND its which-to-invert flags (forward or inverse set, per `inverse`). Never leave `which_to_invert` to the antspyx default for ANTS.
 - [ ] **Step 4: Run to verify pass.**
 - [ ] **Step 5: Commit** `git commit -m "Add ANTs branch to apply_registration_node"`
 
