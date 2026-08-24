@@ -639,19 +639,40 @@ GLOBAL_PREFERENCES[category]["strip"] = PreferenceEntry(
     pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
     % ResourceManager.synth_strip_ram_requirements(),
 )
-GLOBAL_PREFERENCES[category]["morph"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Use SynthMorph registration",
-    default=False,
-    dependency="is_freesurfer_synth",
-    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
-    pref_requirement={
-        GlobalPrefCategoryList.PERFORMANCE: [
-            ("ram_gb", ResourceManager.synth_morph_ram_requirements())
-        ]
+GLOBAL_PREFERENCES[category]["engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="Registration engine",
+    value_enum=RegistrationEngine,
+    default=RegistrationEngine.ANTS,
+    option_dependency={
+        RegistrationEngine.SYNTH: [
+            "is_freesurfer_synth",
+            "SynthMorph requires FreeSurfer 8.1.0",
+        ],
+        RegistrationEngine.ANTS: [
+            "is_antspyx",
+            "ANTs registration requires the antspyx package",
+        ],
     },
-    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
-    % ResourceManager.synth_morph_ram_requirements(),
+    option_pref_requirement={
+        RegistrationEngine.SYNTH: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.synth_morph_ram_requirements())
+            ]
+        },
+        RegistrationEngine.ANTS: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.ants_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        RegistrationEngine.SYNTH: "SynthMorph requires at least %.1f GB RAM"
+        % ResourceManager.synth_morph_ram_requirements(),
+        RegistrationEngine.ANTS: "ANTs registration requires at least %.1f GB RAM"
+        % ResourceManager.ants_ram_requirements(),
+    },
+    section=True,
 )
 GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,

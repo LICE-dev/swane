@@ -20,3 +20,37 @@ def test_ants_ram_requirement_positive():
     from swane.utils.ResourceManager import ResourceManager
 
     assert ResourceManager.ants_ram_requirements() > 0
+
+
+def test_engine_pref_defaults_to_ants():
+    from swane.config.preference_list import GLOBAL_PREFERENCES
+    from swane.config.config_enums import GlobalPrefCategoryList, RegistrationEngine
+
+    entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["engine"]
+    assert entry.default == RegistrationEngine.ANTS
+
+
+def test_morph_key_removed():
+    from swane.config.preference_list import GLOBAL_PREFERENCES
+    from swane.config.config_enums import GlobalPrefCategoryList
+
+    assert "morph" not in GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]
+
+
+def test_synth_option_gated_on_ram_and_freesurfer():
+    from swane.config.preference_list import GLOBAL_PREFERENCES
+    from swane.config.config_enums import GlobalPrefCategoryList, RegistrationEngine
+
+    entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["engine"]
+    # SYNTH option keeps the SynthMorph RAM gate and FreeSurfer-Synth dependency
+    assert RegistrationEngine.SYNTH in entry.option_pref_requirement
+    assert RegistrationEngine.SYNTH in entry.option_dependency
+
+
+def test_ants_option_gated_on_antspyx_and_ram():
+    from swane.config.preference_list import GLOBAL_PREFERENCES
+    from swane.config.config_enums import GlobalPrefCategoryList, RegistrationEngine
+
+    entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["engine"]
+    assert RegistrationEngine.ANTS in entry.option_pref_requirement
+    assert RegistrationEngine.ANTS in entry.option_dependency
