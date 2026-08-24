@@ -30,15 +30,15 @@ def getn(result_list, index):
     return result_list[index]
 
 
-def get_synth_cpu_config(
+def get_tool_cpu_config(
     max_cpu: int,
     multicore_node_limit: CoreLimit,
     limit_synth_cores: bool,
 ) -> tuple[int, bool]:
     """
-    Computes the thread count for a CPU-bound Synth tool node (SynthStrip,
-    SynthMorphReg, SynthSeg) and whether nipype's own scheduler must be made
-    aware of it.
+    Computes the thread count for a CPU-bound tool node (SynthStrip,
+    SynthMorphReg, SynthSeg, AntsRegistration) and whether nipype's own
+    scheduler must be made aware of it.
 
     Hard cap: the tool uses `threads` cores and nipype's resource accounting
     (node.n_procs) knows and reserves the same amount. Soft cap: the tool
@@ -59,21 +59,28 @@ def get_synth_cpu_config(
     return max_cpu, False
 
 
-def apply_synth_num_threads(
+def apply_tool_num_threads(
     node: Node,
     threads: int,
     hard: bool,
     soft_env_vars: tuple[str, ...] = (),
 ) -> None:
     """
-    Applies a Synth tool's CPU thread count.
+    Applies a CPU-bound tool's thread count.
 
     Hard cap (or when the tool exposes no way to hide its thread usage from
-    nipype, e.g. SynthSeg): sets the node's `num_threads` input, which
-    nipype's scheduler reads back as node.n_procs -- a real, visible
-    reservation. Soft cap: leaves `num_threads` undefined (n_procs stays at
-    its unaware default of 1) and instead sets the tool-specific environment
-    variables that actually drive its thread count, invisible to nipype.
+    nipype, e.g. SynthSeg, or the ANTs node whose only thread knob is the
+    ``num_threads`` input): sets the node's `num_threads` input, which nipype's
+    scheduler reads back as node.n_procs -- a real, visible reservation. (For
+    the ANTs node that input is what the node exports as
+    ``ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS`` at run time; nipype couples
+    ``num_threads`` to ``n_procs``, so such a tool can never truly hide its
+    thread usage and is always scheduled as a real reservation.)
+
+    Soft cap: leaves `num_threads` undefined (n_procs stays at its unaware
+    default of 1) and instead sets the tool-specific environment variables that
+    actually drive its thread count (SynthStrip's ``OMP_NUM_THREADS``,
+    SynthMorph's ``TF_NUM_*``), invisible to nipype.
 
     """
     if hard or not soft_env_vars:
@@ -84,6 +91,12 @@ def apply_synth_num_threads(
             **node.inputs.environ,
             **{var: str(threads) for var in soft_env_vars},
         }
+
+
+# Backwards-compatible aliases: these helpers were named after Synth tools when
+# they only served Synth nodes; freesurfer_workflow still imports them by name.
+get_synth_cpu_config = get_tool_cpu_config
+apply_synth_num_threads = apply_tool_num_threads
 
 
 def get_deskull_node(
@@ -110,10 +123,10 @@ def get_deskull_node(
                 mask_name = fname_presuffix(out_file, suffix="_brain", use_ext=True)
             deskull_node.inputs.mask_file = mask_name
         deskull_node.inputs.exclude_csf = synth_exclude_csf
-        threads, hard = get_synth_cpu_config(
+        threads, hard = get_tool_cpu_config(
             max_cpu, multicore_node_limit, limit_synth_cores
         )
-        apply_synth_num_threads(
+        apply_tool_num_threads(
             deskull_node, threads, hard, soft_env_vars=("OMP_NUM_THREADS",)
         )
         if bet_surfaces:
@@ -204,10 +217,10 @@ def get_registration_node(
         )
         synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
-        threads, hard = get_synth_cpu_config(
+        threads, hard = get_tool_cpu_config(
             max_cpu, multicore_node_limit, limit_synth_cores
         )
-        apply_synth_num_threads(
+        apply_tool_num_threads(
             synth_morph_reg,
             threads,
             hard,
