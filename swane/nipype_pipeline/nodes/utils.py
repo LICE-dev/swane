@@ -11,14 +11,49 @@ from nipype.interfaces.fsl import (
     ApplyXFM,
 )
 
-from swane.config.config_enums import CoreLimit
+from swane.config.config_enums import CoreLimit, RegistrationEngine
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
+from swane.nipype_pipeline.nodes.AntsRegistration import AntsRegistration
+from swane.nipype_pipeline.nodes.AntsApplyTransforms import AntsApplyTransforms
 from swane.nipype_pipeline.nodes.ram_estimators import *
 from swane.utils.ResourceManager import ResourceManager
 from nipype.utils.filemanip import fname_presuffix
+
+# FSL FLIRT cost -> antspyx affine metric. antspyx has no "MI"/"mutualinfo"
+# literal: Mattes mutual information ("mattes") is its information-theoretic,
+# cross-modality metric and is the closest analogue of FSL's mutualinfo/corratio
+# costs (both used here for potentially cross-modality alignment). Intensity
+# correlation costs map to ANTs global correlation ("GC"), least-squares to
+# "meansquares". Anything unmapped falls back to the robust "mattes".
+_ANTS_AFF_METRIC_BY_FLIRT_COST = {
+    "mutualinfo": "mattes",
+    "corratio": "mattes",
+    "normmi": "mattes",
+    "normcorr": "GC",
+    "leastsq": "meansquares",
+}
+
+
+def resolve_registration_engine(
+    synth_config, allow_ants: bool = True
+) -> RegistrationEngine:
+    """
+    Resolve the configured registration engine from a Synth-tools config section.
+
+    ``allow_ants=False`` keeps a workflow that has not yet been ported to the
+    ANTs ordered-transform-list format on FSL when the (default) engine is ANTS,
+    preserving that workflow's Phase-1 behaviour. SYNTH and FSL are honoured
+    either way. Only ``linear_reg_workflow``/``nonlinear_reg_workflow`` pass
+    ``allow_ants=True``; every other caller passes ``allow_ants=False`` until
+    its own phase ports it.
+    """
+    engine = synth_config.getenum_safe("engine")
+    if not allow_ants and engine == RegistrationEngine.ANTS:
+        return RegistrationEngine.FSL
+    return engine
 
 
 def getn(result_list, index):
@@ -153,6 +188,20 @@ def get_deskull_node(
 
 
 class RegistrationNodeWrapper:
+    """Backend-neutral handle on a registration node and its transform outputs.
+
+    ``warp``/``inv_warp`` keep the single-file view used by the FSL/Synth code
+    paths (a FLIRT ``.mat``, an FNIRT/SynthMorph warp). ``fwd_transforms``/
+    ``inv_transforms`` are the ordered-list view every backend exposes as a list
+    of ``(node, field)`` sources; for FSL/Synth that list is the one single-file
+    source, for ANTs it is the node's ``fwd_transforms``/``inv_transforms`` list
+    outputs (already in ANTs right-to-left order).
+
+    ``fwd_which_to_invert``/``inv_which_to_invert`` are the ``(node, field)``
+    sources of the per-transform invert flags that ``AntsApplyTransforms``
+    needs; they are ``None`` for FSL/Synth (which never invert on apply).
+    """
+
     def __init__(
         self,
         input_node: Node,
@@ -160,17 +209,27 @@ class RegistrationNodeWrapper:
         warp: str,
         inv_warp_node: Node,
         inv_warp: str,
+        engine: RegistrationEngine = RegistrationEngine.FSL,
+        fwd_transforms: list = None,
+        inv_transforms: list = None,
+        fwd_which_to_invert=None,
+        inv_which_to_invert=None,
     ):
         self.input_node = input_node
         self.out_registered_node = out_registered_node
         self.warp = warp
         self.inv_warp_node = inv_warp_node
         self.inv_warp = inv_warp
+        self.engine = engine
+        self.fwd_transforms = fwd_transforms if fwd_transforms is not None else []
+        self.inv_transforms = inv_transforms if inv_transforms is not None else []
+        self.fwd_which_to_invert = fwd_which_to_invert
+        self.inv_which_to_invert = inv_which_to_invert
 
 
 def get_registration_node(
     name: str,
-    use_synth: bool,
+    engine: RegistrationEngine,
     workflow: CustomWorkflow,
     moving: str | list[Node | str],
     reference: str | list[Node | str],
@@ -196,7 +255,7 @@ def get_registration_node(
     if reference_brain is None:
         reference_brain = reference
 
-    if use_synth:
+    if engine == RegistrationEngine.SYNTH:
         # Prepare node inputs value
         if non_linear:
             mem_gb = 13
@@ -245,6 +304,72 @@ def get_registration_node(
             warp="warp_file",
             inv_warp_node=synth_morph_reg,
             inv_warp="inv_warp_file",
+            engine=RegistrationEngine.SYNTH,
+            fwd_transforms=[(synth_morph_reg, "warp_file")],
+            inv_transforms=[(synth_morph_reg, "inv_warp_file")],
+        )
+
+    elif engine == RegistrationEngine.ANTS:
+        # antspyx runs the affine and (for SyN) deformable stages in one node.
+        # transform_type mirrors the FSL dof intent so the ANTs graph aligns
+        # with what FLIRT/FNIRT expressed: dof=6 (rigid) for the volumetric
+        # linear step, FLIRT's default dof=12 (affine) for the 2D linear step,
+        # and SyN for the deformable step. The registration runs on the brain
+        # images (moving_brain/reference_brain), exactly as FSL's affine stage
+        # does; the resulting transform list is then applied to the whole-head
+        # image downstream.
+        if non_linear:
+            transform_type = "SyN"
+        elif is_volumetric:
+            transform_type = "Rigid"
+        else:
+            transform_type = "Affine"
+
+        ants_reg = Node(
+            AntsRegistration(),
+            name=name + "_antsreg",
+            mem_gb=ResourceManager.ants_ram_requirements(),
+        )
+        ants_reg.long_name = name_prefix + " %s " + name_suffix
+        ants_reg.inputs.transform_type = transform_type
+        ants_reg.inputs.aff_metric = _ANTS_AFF_METRIC_BY_FLIRT_COST.get(
+            flirt_cost, "mattes"
+        )
+        # antspyx has no correlation-ratio SyN metric; "mattes" (Mattes MI) is
+        # the cross-modality-safe choice for the deformable stage too.
+        if non_linear:
+            ants_reg.inputs.syn_metric = "mattes"
+        # ANTs takes its thread count only through num_threads (which the node
+        # exports as the ITK env var); nipype couples that to n_procs, so there
+        # is no soft-env-var path -- always a real, nipype-aware reservation.
+        threads, hard = get_tool_cpu_config(
+            max_cpu, multicore_node_limit, limit_synth_cores
+        )
+        apply_tool_num_threads(ants_reg, threads, hard)
+
+        if type(moving_brain) == str:
+            ants_reg.inputs.moving = moving_brain
+        else:
+            workflow.connect(moving_brain[0], moving_brain[1], ants_reg, "moving")
+        if type(reference_brain) == str:
+            ants_reg.inputs.fixed = reference_brain
+        else:
+            workflow.connect(reference_brain[0], reference_brain[1], ants_reg, "fixed")
+
+        return RegistrationNodeWrapper(
+            input_node=ants_reg,
+            out_registered_node=ants_reg,
+            # The single-file view carries the whole ordered list; the field
+            # name contract (out_matrix_file/fieldcoeff_file) is preserved by
+            # the workflow, its content is now an ANTs transform list.
+            warp="fwd_transforms",
+            inv_warp_node=ants_reg,
+            inv_warp="inv_transforms",
+            engine=RegistrationEngine.ANTS,
+            fwd_transforms=[(ants_reg, "fwd_transforms")],
+            inv_transforms=[(ants_reg, "inv_transforms")],
+            fwd_which_to_invert=(ants_reg, "fwd_which_to_invert"),
+            inv_which_to_invert=(ants_reg, "inv_which_to_invert"),
         )
 
     else:
@@ -320,6 +445,11 @@ def get_registration_node(
                 warp="fieldcoeff_file",
                 inv_warp_node=inv_warp,
                 inv_warp="inverse_warp",
+                engine=RegistrationEngine.FSL,
+                fwd_transforms=[(fnirt, "fieldcoeff_file")],
+                inv_transforms=(
+                    [(inv_warp, "inverse_warp")] if inv_warp is not None else []
+                ),
             )
         else:
             flirt = Node(FLIRT(), name=name + "_flirt")
@@ -355,6 +485,9 @@ def get_registration_node(
                 warp="out_matrix_file",
                 inv_warp_node=inv_xfm,
                 inv_warp="out_file",
+                engine=RegistrationEngine.FSL,
+                fwd_transforms=[(flirt, "out_matrix_file")],
+                inv_transforms=([(inv_xfm, "out_file")] if inv_xfm is not None else []),
             )
 
 
