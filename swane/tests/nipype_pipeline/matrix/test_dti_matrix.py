@@ -145,3 +145,4 @@ def test_no_limit_eddy_uses_host_cpu_count(
     )
     eddy = wf.get_node("dti_eddy")
     assert eddy.inputs.args == "--nthr=%d" % cpu_count()
+    assert eddy.inputs.has_metadata("args", "nohash", True)
