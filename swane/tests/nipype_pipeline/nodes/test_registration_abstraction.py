@@ -3,7 +3,9 @@
 Covers the tool-neutral CPU helpers (C1), the ``engine``-aware
 ``get_registration_node`` / ``RegistrationNodeWrapper`` (C2) and the
 ``engine``-aware ``apply_registration_node`` with ANTs ``which_to_invert``
-wiring (C3). Only construction state is inspected; nothing is executed.
+wiring (C3). All but the trailing ``heavy`` class inspect construction state
+only; nothing is executed. The ``heavy`` class runs a real antspyx
+registration to guard the composed-field boundary round-trip end-to-end.
 """
 
 import pytest
@@ -501,3 +503,167 @@ class TestApplyRegistrationNodeSingleField:
         (venous_ct / seeg_ct resample through one composed affine field)."""
         _, _, node = self._apply_single_field(non_linear=False)
         assert _iface(node) == "AntsApplyTransforms"
+
+
+# --------------------------------------------------------------------------- #
+# C5: round-trip correctness guard (risk #1 -- direction/space of composition)
+#
+# Session A already proves, at the node level, that resampling through the
+# single composed field matches resampling through the raw ordered list. This
+# guard closes the loop through the *abstraction*: it composes the boundary
+# field with AntsComposeTransform, then applies it via
+# ``apply_registration_node(registration=None)`` -- the exact single-field path
+# (Merge(1) -> transformlist, no which_to_invert) the Phase-2 consumers use --
+# and asserts the result is identical to the raw-list apply, both directions.
+#
+# If this fails, the composition's direction/space or which_to_invert handling
+# is wrong: the fix belongs in AntsComposeTransform (Session A), not here.
+# --------------------------------------------------------------------------- #
+@pytest.mark.heavy
+class TestAbstractionSingleFieldRoundTrip:
+    @staticmethod
+    def _sphere(shape, center, radius):
+        import numpy as np
+
+        grid = np.mgrid[0 : shape[0], 0 : shape[1], 0 : shape[2]].astype(float)
+        distance = sum((grid[i] - center[i]) ** 2 for i in range(3))
+        return (distance < radius**2).astype(np.float32)
+
+    @staticmethod
+    def _raw_apply(input_image, reference, transformlist, which_to_invert, out_file):
+        """Resample the raw ordered transform list directly (the reference)."""
+        import nibabel as nib
+        from swane.nipype_pipeline.nodes.AntsApplyTransforms import AntsApplyTransforms
+
+        node = AntsApplyTransforms()
+        node.inputs.input_image = input_image
+        node.inputs.reference_image = reference
+        node.inputs.transformlist = transformlist
+        if which_to_invert is not None:
+            node.inputs.which_to_invert = which_to_invert
+        node.inputs.out_file = out_file
+        node.run()
+        return nib.load(node._list_outputs()["out_file"]).get_fdata()
+
+    @staticmethod
+    def _compose(transformlist, which_to_invert, reference, workspace, directory):
+        """Flatten the ordered list into one boundary field (as the producer does)."""
+        import os
+        from swane.nipype_pipeline.nodes.AntsComposeTransform import (
+            AntsComposeTransform,
+        )
+
+        os.mkdir(str(workspace / directory))
+        os.chdir(str(workspace / directory))
+        node = AntsComposeTransform()
+        node.inputs.transformlist = transformlist
+        node.inputs.which_to_invert = which_to_invert
+        node.inputs.reference_image = reference
+        node.run()
+        field = node._list_outputs()["out_field"]
+        os.chdir(str(workspace))
+        return field
+
+    @staticmethod
+    def _apply_through_abstraction(field, moving, reference, workspace, name):
+        """Apply the single boundary field via the real abstraction workflow."""
+        import glob
+        import os
+        import nibabel as nib
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import apply_registration_node
+
+        run_dir = str(workspace / (name + "_run"))
+        wf = CustomWorkflow(name=name)
+        wf.base_dir = run_dir
+        src = Node(
+            IdentityInterface(fields=["field", "moving", "reference"]), name="boundary"
+        )
+        src.inputs.field = field
+        src.inputs.moving = moving
+        src.inputs.reference = reference
+        apply_registration_node(
+            name="apply",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            warp=[src, "field"],
+            moving=[src, "moving"],
+            reference=[src, "reference"],
+            non_linear=True,
+            registration=None,
+            out_file="through_abstraction.nii.gz",
+        )
+        wf.run()
+        os.chdir(str(workspace))
+        matches = glob.glob(
+            os.path.join(run_dir, "**", "through_abstraction.nii.gz"), recursive=True
+        )
+        assert matches, "the abstraction apply produced no output file"
+        return nib.load(matches[0]).get_fdata()
+
+    def test_single_field_apply_matches_raw_list(self, workspace, make_nifti):
+        """Both directions: the abstraction's single-field apply of the composed
+        boundary field reproduces the raw ordered-list apply within tolerance."""
+        import numpy as np
+        from swane.nipype_pipeline.nodes.AntsRegistration import AntsRegistration
+
+        fixed = make_nifti(
+            "fixed.nii.gz", data=self._sphere((32, 32, 32), (16, 16, 16), 8)
+        )
+        moving = make_nifti(
+            "moving.nii.gz",
+            data=self._sphere((32, 32, 32), (18, 15, 16), 7),
+            affine=np.diag([1.2, 1.2, 1.2, 1.0]),
+        )
+
+        reg = AntsRegistration()
+        reg.inputs.fixed = fixed
+        reg.inputs.moving = moving
+        reg.inputs.transform_type = "SyN"
+        reg.inputs.test_run = True
+        reg.run()
+        reg_out = reg._list_outputs()
+
+        # forward: moving -> fixed, composed on the fixed grid
+        raw_forward = self._raw_apply(
+            moving,
+            fixed,
+            reg_out["fwd_transforms"],
+            reg_out["fwd_which_to_invert"],
+            "raw_forward.nii.gz",
+        )
+        fwd_field = self._compose(
+            reg_out["fwd_transforms"],
+            reg_out["fwd_which_to_invert"],
+            fixed,
+            workspace,
+            "compose_fwd",
+        )
+        abstraction_forward = self._apply_through_abstraction(
+            fwd_field, moving, fixed, workspace, "fwd"
+        )
+        assert np.count_nonzero(raw_forward) > 100
+        assert np.allclose(raw_forward, abstraction_forward, atol=1e-4)
+
+        # inverse: fixed -> moving, composed on the moving grid. The inverse list
+        # carries the forward affine, so its invert flag must be baked into the
+        # field for this to hold through the flag-less single-field path.
+        raw_inverse = self._raw_apply(
+            fixed,
+            moving,
+            reg_out["inv_transforms"],
+            reg_out["inv_which_to_invert"],
+            "raw_inverse.nii.gz",
+        )
+        inv_field = self._compose(
+            reg_out["inv_transforms"],
+            reg_out["inv_which_to_invert"],
+            moving,
+            workspace,
+            "compose_inv",
+        )
+        abstraction_inverse = self._apply_through_abstraction(
+            inv_field, fixed, moving, workspace, "inv"
+        )
+        assert np.count_nonzero(raw_inverse) > 100
+        assert np.allclose(raw_inverse, abstraction_inverse, atol=1e-4)
