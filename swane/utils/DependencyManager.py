@@ -13,7 +13,6 @@ from swane.utils.platform_and_tools_utils import is_linux
 from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX
 from swane.utils.license_consent import version_with_license
 
-
 class DependenceStatus(Enum):
     DETECTED = auto()
     WARNING = auto()
@@ -265,16 +264,19 @@ class DependencyManager:
         -------
         A Dependence object with dcm2niix information.
         """
-        dcm2niix_version = dcm2nii.Info.version()
-        if dcm2niix_version is None:
+        try:
+            import dcm2niix
+
             return Dependence(
-                DependenceStatus.MISSING, strings.check_dep_dcm2niix_error
+                DependenceStatus.DETECTED,
+                strings.check_dep_dcm2niix_found
+                % version_with_license(DCM2NIIX, str(dcm2niix.__version__)),
             )
-        return Dependence(
-            DependenceStatus.DETECTED,
-            strings.check_dep_dcm2niix_found
-            % version_with_license(DCM2NIIX, str(dcm2niix_version)),
-        )
+        except (ImportError, AttributeError):
+            return Dependence(
+                DependenceStatus.MISSING,
+                strings.check_dep_dcm2niix_error,
+            )
 
     @staticmethod
     def check_fsl() -> Dependence:
