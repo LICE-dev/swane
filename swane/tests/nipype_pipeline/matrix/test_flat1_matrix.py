@@ -28,7 +28,11 @@ flat1_workflow = import_workflow_or_skip(
 
 SUBDIR = "flat1"
 
-SCENARIOS = {"fsl_backend": "FSL", "synthmorph_backend": "SYNTH", "ants_backend": "ANTS"}
+SCENARIOS = {
+    "fsl_backend": "FSL",
+    "synthmorph_backend": "SYNTH",
+    "ants_backend": "ANTS",
+}
 
 
 @pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
