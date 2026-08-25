@@ -1,8 +1,20 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
-from nipype.interfaces.fsl.epi import Eddy
+from nipype.interfaces.base import traits
+from nipype.interfaces.fsl.epi import Eddy, EddyInputSpec
 from nipype.utils.gpu_count import gpu_count
 from shutil import which
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.epi.EddyInputSpec)  -*-
+class CustomEddyInputSpec(EddyInputSpec):
+    # The thread count only controls resource usage and must not invalidate
+    # otherwise reusable Eddy results.
+    args = traits.Str(
+        argstr="%s",
+        desc="Additional parameters to the command",
+        nohash=True,
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.epi.Eddy)  -*-
@@ -13,6 +25,7 @@ class CustomEddy(Eddy):
     """
 
     _cmd = "eddy_openmp"
+    input_spec = CustomEddyInputSpec
 
     def _use_cuda(self):
         if self.inputs.use_cuda and gpu_count() > 0:
