@@ -1,6 +1,7 @@
 from multiprocessing import cpu_count
 
 from nipype import Node, MapNode
+from nipype.interfaces.utility import Merge
 from nipype.interfaces.fsl import (
     BET,
     FLIRT,
@@ -562,7 +563,20 @@ def apply_registration_node(
             apply_node.inputs.reference_image = reference
         else:
             workflow.connect(reference[0], reference[1], apply_node, "reference_image")
-        wire_transforms(registration, apply_node, workflow, inverse=inverse)
+
+        if registration is not None:
+            # Same-workflow multi-transform apply: forward the wrapper's ordered
+            # list AND its which_to_invert flags (see wire_transforms).
+            wire_transforms(registration, apply_node, workflow, inverse=inverse)
+        else:
+            # A single composed field crossing a workflow boundary (the Phase-2
+            # nonlinear-warp / CT boundary). ``transformlist`` is a List trait,
+            # so the boundary's single File is lifted into a one-element list via
+            # Merge(1); the field is already directional (which_to_invert was
+            # baked in by AntsComposeTransform), so no which_to_invert is set.
+            merge = Node(Merge(1), name=name + "_transformlist")
+            workflow.connect(warp[0], warp[1], merge, "in1")
+            workflow.connect(merge, "out", apply_node, "transformlist")
 
         if out_file:
             if type(out_file) == str:

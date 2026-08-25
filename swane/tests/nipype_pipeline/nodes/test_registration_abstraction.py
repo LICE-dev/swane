@@ -354,3 +354,73 @@ class TestApplyRegistrationNode:
         )
         assert _iface(apply_node) == "SynthMorphApply"
         assert apply_node.inputs.method == "nearest"
+
+
+# --------------------------------------------------------------------------- #
+# C3 (Phase 2): single composed field crossing a workflow boundary
+#
+# A nonlinear-warp consumer (flat1, func_map AI, tractography) receives one
+# composed displacement field per direction from the MainWorkflow boundary and
+# calls ``apply_registration_node(warp=[inputnode, "<field>"], registration=None)``.
+# The ANTs branch must resample through that single field with no wrapper and no
+# ``which_to_invert`` (the composition already baked the direction in).
+# --------------------------------------------------------------------------- #
+class TestApplyRegistrationNodeSingleField:
+    def _apply_single_field(self, *, labelmap=False, non_linear=True):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import apply_registration_node
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(
+            IdentityInterface(fields=["ref_2_sym_warp", "moving", "reference"]),
+            name="src",
+        )
+        node = apply_registration_node(
+            name="ai_2_sym",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            warp=[src, "ref_2_sym_warp"],
+            moving=[src, "moving"],
+            reference=[src, "reference"],
+            non_linear=non_linear,
+            registration=None,
+            labelmap=labelmap,
+        )
+        return wf, src, node
+
+    def test_builds_ants_apply(self):
+        _, _, node = self._apply_single_field()
+        assert _iface(node) == "AntsApplyTransforms"
+
+    def test_transformlist_fed_via_merge_from_boundary(self):
+        """The single boundary File is lifted to the one-element list that
+        ``AntsApplyTransforms.transformlist`` (a List trait) requires, via a
+        ``Merge(1)`` node whose ``in1`` comes straight from the boundary field."""
+        wf, src, node = self._apply_single_field()
+        incoming = _incoming(wf, node)
+        tl = [c for c in incoming if c[2] == "transformlist"]
+        assert len(tl) == 1
+        merge_node, src_field, _ = tl[0]
+        assert _iface(merge_node) == "Merge"
+        assert src_field == "out"
+        # the merge's in1 comes from the boundary (src, "ref_2_sym_warp")
+        assert (src, "ref_2_sym_warp", "in1") in _incoming(wf, merge_node)
+
+    def test_which_to_invert_is_never_wired_or_set(self):
+        """The composed field is already directional: no invert flags cross the
+        boundary and none are set on the apply node."""
+        from nipype.interfaces.base import isdefined
+
+        wf, _, node = self._apply_single_field()
+        assert not any(c[2] == "which_to_invert" for c in _incoming(wf, node))
+        assert not isdefined(node.inputs.which_to_invert)
+
+    def test_labelmap_sets_nearest_neighbor(self):
+        _, _, node = self._apply_single_field(labelmap=True)
+        assert node.inputs.interpolator == "nearestNeighbor"
+
+    def test_linear_boundary_field_also_supported(self):
+        """A composed *linear* boundary field takes the same single-field path
+        (venous_ct / seeg_ct resample through one composed affine field)."""
+        _, _, node = self._apply_single_field(non_linear=False)
+        assert _iface(node) == "AntsApplyTransforms"
