@@ -183,6 +183,11 @@ def dti_preproc_workflow(
                 "OMP_NUM_THREADS": str(eddy_cpu),
                 "FSL_SKIP_GLOBAL": "1",
             }
+            # Keep this runtime workaround outside CustomEddy: the wrapper is
+            # temporary, while the Nipype hash bug applies to EddyInputSpec.
+            from swane.patches.nipype_patches import apply_patches
+
+            apply_patches()
             eddy.inputs.args = "--nthr=%d" % eddy_cpu
 
         workflow.connect(reorient, "out_file", eddy, "in_file")

@@ -8,6 +8,7 @@ import multiprocessing as mp
 import os
 
 import pytest
+from nipype.interfaces.fsl.epi import Eddy, EddyInputSpec
 from nipype.utils.profiler import ResourceMonitor
 
 import swane.patches.nipype_patches as npx
@@ -96,9 +97,63 @@ def test_swane_run_node_resets_proc_dir_when_config_missing(monkeypatch):
 
 def test_apply_patches_is_idempotent():
     npx.apply_patches()
-    first = ResourceMonitor.__init__
+    first_resource_monitor = ResourceMonitor.__init__
+    first_get_hashval = EddyInputSpec.get_hashval
     npx.apply_patches()
-    assert ResourceMonitor.__init__ is first
+    assert ResourceMonitor.__init__ is first_resource_monitor
+    assert EddyInputSpec.get_hashval is first_get_hashval
+
+
+def test_eddy_thread_argument_does_not_change_hash():
+    eddy = Eddy()
+    eddy.inputs.args = "--nthr=2"
+    hashed_inputs, two_thread_hash = eddy.inputs.get_hashval()
+
+    assert "args" not in dict(hashed_inputs)
+
+    eddy.inputs.args = "--nthr=8"
+    _, eight_thread_hash = eddy.inputs.get_hashval()
+    assert eight_thread_hash == two_thread_hash
+
+
+def test_other_eddy_arguments_still_change_hash():
+    eddy = Eddy()
+    eddy.inputs.args = "--repol"
+    hashed_inputs, repol_hash = eddy.inputs.get_hashval()
+
+    assert dict(hashed_inputs)["args"] == "--repol"
+
+    eddy.inputs.args = "--fep"
+    _, fep_hash = eddy.inputs.get_hashval()
+    assert fep_hash != repol_hash
+
+
+@pytest.mark.parametrize(
+    "start_method",
+    [
+        method
+        for method in ("fork", "spawn")
+        if method in mp.get_all_start_methods()
+    ],
+)
+def test_eddy_hash_patch_survives_process_start(start_method):
+    context = mp.get_context(start_method)
+    queue = context.Queue()
+    process = context.Process(target=spawn_helpers.eddy_hash_worker, args=(queue,))
+    try:
+        process.start()
+        process.join(30)
+
+        assert process.exitcode == 0
+        result = queue.get(timeout=5)
+        assert not result["args_in_hash"]
+        assert result["same_hash"]
+    finally:
+        if process.is_alive():
+            process.terminate()
+            process.join(5)
+        queue.close()
+        queue.join_thread()
 
 
 def test_swane_run_node_enables_resource_monitor_from_node_config(monkeypatch):

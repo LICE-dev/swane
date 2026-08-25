@@ -3,6 +3,18 @@
 """
 Monkeypatches for Nipype needed by SWANe.
 
+Eddy thread argument hashing
+----------------------------
+Nipype's generic ``args`` trait contributes to an interface hash, but SWANe
+uses it on Eddy only for ``--nthr=<count>``. The thread count controls resource
+usage and does not change Eddy's result, so changing the CPU allocation must
+not invalidate a valid cache entry.
+
+We wrap :meth:`EddyInputSpec.get_hashval` and hash a clone with ``args``
+undefined only when the complete argument string is exactly
+``--nthr=<count>``. Other Eddy arguments retain Nipype's normal hashing
+semantics.
+
 Resource Monitor ``.proc`` redirection
 --------------------------------------
 Nipype's :class:`nipype.utils.profiler.ResourceMonitor` writes its per-node
@@ -35,9 +47,12 @@ environment variables or ``sitecustomize``.
 """
 
 import os
+import re
 from time import time
 
 from nipype import config as _nipype_config
+from nipype.interfaces.base import Undefined, isdefined
+from nipype.interfaces.fsl.epi import EddyInputSpec
 from nipype.utils.profiler import ResourceMonitor
 from nipype.pipeline.plugins.multiproc import run_node as _orig_run_node
 
@@ -50,6 +65,9 @@ proc_dir = None
 # Captured once, at first import, so it is always the genuine original even if
 # :func:`apply_patches` is (idempotently) called more than once.
 _orig_rm_init = ResourceMonitor.__init__
+_orig_eddy_get_hashval = EddyInputSpec.get_hashval
+
+_EDDY_NTHR_PATTERN = re.compile(r"--nthr=\d+")
 
 _PATCHED = False
 
@@ -68,6 +86,16 @@ def _patched_rm_init(self, pid, freq=5, fname=None, python=True):
         os.makedirs(proc_dir, exist_ok=True)
         fname = os.path.join(proc_dir, _default_proc_name(pid, freq))
     _orig_rm_init(self, pid, freq=freq, fname=fname, python=python)
+
+
+def _patched_get_hashval(self, hash_method=None):
+    """Exclude Eddy's resource-only ``--nthr`` argument from its hash."""
+    args = getattr(self, "args", Undefined)
+    if isdefined(args) and _EDDY_NTHR_PATTERN.fullmatch(args):
+        hash_inputs = self.clone_traits()
+        hash_inputs.trait_set(trait_change_notify=False, args=Undefined)
+        return _orig_eddy_get_hashval(hash_inputs, hash_method=hash_method)
+    return _orig_eddy_get_hashval(self, hash_method=hash_method)
 
 
 def _is_monitor_enabled(node):
@@ -109,11 +137,12 @@ def swane_run_node(node, updatehash, taskid):
 
 
 def apply_patches():
-    """Install the ResourceMonitor patch (idempotent)."""
+    """Install SWANe's Nipype runtime patches (idempotent)."""
     global _PATCHED
     if _PATCHED:
         return
     ResourceMonitor.__init__ = _patched_rm_init
+    EddyInputSpec.get_hashval = _patched_get_hashval
     _PATCHED = True
 
 

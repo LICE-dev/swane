@@ -12,8 +12,9 @@
 
 - betted_name [Function] mem_gb=0.2 n_procs=1
     function_str = "def get_betted_name(basename):\n    return 'r-%s_brain.nii.gz' % basename"
-- bias_correction [N4BiasFieldCorrection] mem_gb=2 n_procs=1
+- bias_correction [N4BiasFieldCorrection] mem_gb=2 n_procs=4
     max_iterations = [30, 20, 10, 5]
+    num_threads = 4
     skull_stripped = False
 - corrected_deskull [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}

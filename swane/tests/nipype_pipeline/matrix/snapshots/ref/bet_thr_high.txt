@@ -10,7 +10,8 @@
 # nodes=8 edges=12
 
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
-- ref_bias_correction [N4BiasFieldCorrection] mem_gb=2 n_procs=1
+- ref_bias_correction [N4BiasFieldCorrection] mem_gb=2 n_procs=4
+    num_threads = 4
     out_file = 'ref.nii.gz'
     skull_stripped = False
 - ref_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
