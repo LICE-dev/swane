@@ -2,6 +2,7 @@ from nipype.interfaces.fsl import RobustFOV, ApplyMask
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
+from swane.config.config_enums import CoreLimit
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
@@ -253,6 +254,8 @@ def linear_reg_workflow(
             bias_correction = Node(
                 N4BiasFieldCorrection(), name="bias_correction", mem_gb=2
             )
+            if max_cpu != 0 and multicore_node_limit is not CoreLimit.NO_LIMIT:
+                bias_correction.inputs.num_threads = max_cpu
             if test_run:
                 # SimpleITK default is [50, 50, 50, 50] per resolution level.
                 bias_correction.inputs.max_iterations = [30, 20, 10, 5]

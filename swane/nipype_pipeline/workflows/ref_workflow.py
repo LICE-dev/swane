@@ -128,6 +128,8 @@ def ref_workflow(
         N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2
     )
     ref_bias_correction.inputs.out_file = "ref.nii.gz"
+    if max_cpu != 0 and multicore_node_limit is not CoreLimit.NO_LIMIT:
+                ref_bias_correction.inputs.num_threads = max_cpu
     if test_run:
         # SimpleITK default is [50, 50, 50, 50] per resolution level.
         ref_bias_correction.inputs.max_iterations = [30, 20, 10, 5]
