@@ -82,7 +82,7 @@ class N4BiasFieldCorrection(BaseInterface):
 
         # --- Threads control ---
         if isdefined(self.inputs.num_threads):
-            sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(self.input.num_threads)
+            sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(self.inputs.num_threads)
 
         # --- N4 ---
         corrector = sitk.N4BiasFieldCorrectionImageFilter()
