@@ -130,11 +130,7 @@ def test_other_eddy_arguments_still_change_hash():
 
 @pytest.mark.parametrize(
     "start_method",
-    [
-        method
-        for method in ("fork", "spawn")
-        if method in mp.get_all_start_methods()
-    ],
+    [method for method in ("fork", "spawn") if method in mp.get_all_start_methods()],
 )
 def test_eddy_hash_patch_survives_process_start(start_method):
     context = mp.get_context(start_method)
