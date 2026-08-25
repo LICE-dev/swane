@@ -201,6 +201,14 @@ class RegistrationNodeWrapper:
     ``fwd_which_to_invert``/``inv_which_to_invert`` are the ``(node, field)``
     sources of the per-transform invert flags that ``AntsApplyTransforms``
     needs; they are ``None`` for FSL/Synth (which never invert on apply).
+
+    ``registered_node``/``registered_field`` are the backend-neutral
+    ``(node, field)`` source of the moving image resampled into the reference
+    space by the registration node itself (FLIRT ``out_file`` / FNIRT & ANTs
+    ``warped_file`` / SynthMorph ``out_file``). It lets a caller consume the
+    already-registered image without a separate apply node -- used by the CT
+    workflows for the basal reference registration and the per-contrast
+    ``map_moving`` MapNode.
     """
 
     def __init__(
@@ -215,6 +223,8 @@ class RegistrationNodeWrapper:
         inv_transforms: list = None,
         fwd_which_to_invert=None,
         inv_which_to_invert=None,
+        registered_node: Node = None,
+        registered_field: str = None,
     ):
         self.input_node = input_node
         self.out_registered_node = out_registered_node
@@ -226,6 +236,8 @@ class RegistrationNodeWrapper:
         self.inv_transforms = inv_transforms if inv_transforms is not None else []
         self.fwd_which_to_invert = fwd_which_to_invert
         self.inv_which_to_invert = inv_which_to_invert
+        self.registered_node = registered_node
+        self.registered_field = registered_field
 
 
 def get_registration_node(
@@ -242,6 +254,7 @@ def get_registration_node(
     flirt_cost: str = "mutualinfo",
     flirt_search: int = 90,
     moving_mask: str | list[Node | str] = None,
+    map_moving: bool = False,
     name_prefix: str = "",
     name_suffix: str = "",
     test_run: bool = False,
@@ -249,6 +262,35 @@ def get_registration_node(
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     limit_synth_cores: bool = False,
 ) -> RegistrationNodeWrapper:
+    """
+    Build a backend-neutral registration (moving -> reference) for the
+    configured ``engine`` and return a :class:`RegistrationNodeWrapper`.
+
+    ``moving_mask`` restricts the registration metric to a region of the moving
+    image: on ANTs it becomes ``AntsRegistration.moving_mask``, on the FSL
+    linear branch it becomes ``FLIRT.in_weight`` (the same binary map serves as
+    both a metric mask and a per-voxel weight). Synth ignores it.
+
+    ``map_moving=True`` builds the registration node as a ``MapNode`` iterating
+    over the moving image, so a caller can register a *list* of moving images to
+    one reference in a single node (e.g. the CT contrast series). Only the
+    single-node linear/ANTs/Synth paths support it; the multi-node FSL nonlinear
+    path raises.
+    """
+
+    if map_moving and engine == RegistrationEngine.FSL and non_linear:
+        raise ValueError(
+            "map_moving is not supported for the FSL nonlinear registration "
+            "(it builds multiple chained nodes)"
+        )
+
+    def make_reg_node(interface, node_name, moving_field, **node_kwargs):
+        """Node, or a MapNode iterating the moving input when map_moving."""
+        if map_moving:
+            return MapNode(
+                interface, name=node_name, iterfield=[moving_field], **node_kwargs
+            )
+        return Node(interface, name=node_name, **node_kwargs)
 
     # Sometimes we want to use flirt on unbetted images to take advantage of skull for registration
     if moving_brain is None:
@@ -273,8 +315,8 @@ def get_registration_node(
         if test_run and non_linear:
             mem_gb *= ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR
 
-        synth_morph_reg = Node(
-            SynthMorphReg(), name=name + "_synthmorphreg", mem_gb=mem_gb
+        synth_morph_reg = make_reg_node(
+            SynthMorphReg(), name + "_synthmorphreg", "in_file", mem_gb=mem_gb
         )
         synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
@@ -309,6 +351,8 @@ def get_registration_node(
             engine=RegistrationEngine.SYNTH,
             fwd_transforms=[(synth_morph_reg, "warp_file")],
             inv_transforms=[(synth_morph_reg, "inv_warp_file")],
+            registered_node=synth_morph_reg,
+            registered_field="out_file",
         )
 
     elif engine == RegistrationEngine.ANTS:
@@ -327,9 +371,10 @@ def get_registration_node(
         else:
             transform_type = "Affine"
 
-        ants_reg = Node(
+        ants_reg = make_reg_node(
             AntsRegistration(),
-            name=name + "_antsreg",
+            name + "_antsreg",
+            "moving",
             mem_gb=ResourceManager.ants_ram_requirements(),
         )
         ants_reg.long_name = name_prefix + " %s " + name_suffix
@@ -390,6 +435,8 @@ def get_registration_node(
             inv_transforms=[(ants_reg, "inv_transforms")],
             fwd_which_to_invert=(ants_reg, "fwd_which_to_invert"),
             inv_which_to_invert=(ants_reg, "inv_which_to_invert"),
+            registered_node=ants_reg,
+            registered_field="warped_file",
         )
 
     else:
@@ -470,9 +517,11 @@ def get_registration_node(
                 inv_transforms=(
                     [(inv_warp, "inverse_warp")] if inv_warp is not None else []
                 ),
+                registered_node=fnirt,
+                registered_field="warped_file",
             )
         else:
-            flirt = Node(FLIRT(), name=name + "_flirt")
+            flirt = make_reg_node(FLIRT(), name + "_flirt", "in_file")
             flirt.long_name = name_prefix + " %s " + name_suffix
             flirt.ram_estimator = FlirtRamEstimator()
             if is_volumetric:
@@ -493,6 +542,14 @@ def get_registration_node(
                     reference_brain[0], reference_brain[1], flirt, "reference"
                 )
 
+            # FSL analogue of the ANTs moving_mask: a per-voxel registration
+            # weight in moving space (used by seeg_ct's electrode weighting).
+            if moving_mask is not None:
+                if type(moving_mask) == str:
+                    flirt.inputs.in_weight = moving_mask
+                else:
+                    workflow.connect(moving_mask[0], moving_mask[1], flirt, "in_weight")
+
             inv_xfm = None
             if inverse:
                 inv_xfm = Node(ConvertXFM(), name=name + "_invwarp")
@@ -508,6 +565,8 @@ def get_registration_node(
                 engine=RegistrationEngine.FSL,
                 fwd_transforms=[(flirt, "out_matrix_file")],
                 inv_transforms=([(inv_xfm, "out_file")] if inv_xfm is not None else []),
+                registered_node=flirt,
+                registered_field="out_file",
             )
 
 
