@@ -861,8 +861,11 @@ class MainWorkflow(CustomWorkflow):
             DIL.VENOUS_CT.value.workflow_name,
             venous_ct_dir=venous_ct_dir,
             config=self.subject_config[DIL.VENOUS_CT],
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             venous2_ct_dir=venous2_ct_dir,
             slicer_path=self.global_config.get_slicer_path(),
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.venous_ct.long_name = "Venous CT analysis"
@@ -941,6 +944,10 @@ class MainWorkflow(CustomWorkflow):
             DIL.SEEG_CT.value.workflow_name,
             seeg_ct_dir=seeg_ct_dir,
             config=self.subject_config[DIL.SEEG_CT],
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
+            test_run=self.test_run,
         )
         self.seeg_ct_dir.long_name = "SEEG CT analysis"
 
