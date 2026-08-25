@@ -411,16 +411,20 @@ PASSES = (
     # The ANTS counterpart of structural_fsl: the same structural family and the
     # same settings, differing only in the registration backend. ANTS is the
     # default engine, so many other passes run it implicitly by omitting the
-    # axis; this pass forces it by name so the ANTS linear backend is a covered,
+    # axis; this pass forces it by name so the ANTS backend is a covered,
     # reviewable A/B pair against structural_fsl rather than riding on the
-    # default. (The nonlinear FLAT1/mni1 paths stay FSL-pinned in Phase 1, so
-    # engine=ANTS here exercises the ANTS *linear* registrations.)
+    # default. Phase 2 lifted the FLAT1/mni1 nonlinear pin and the seeg_ct CT
+    # pin, so with flat1="true" and DIL.SEEG_CT loaded this pass now exercises
+    # the ANTS *nonlinear* registration (composed boundary field into FLAT1)
+    # and the ANTS seeg_ct cross-modality registration end to end, in addition
+    # to the ANTS *linear* registrations it already covered.
     PassSpec(
         name="structural_ants",
         description=(
             "The whole structural family on the ANTs (antspyx) backend: the "
-            "explicit ANTS twin of structural_fsl, forcing the linear "
-            "registrations through antspyx instead of FLIRT."
+            "explicit ANTS twin of structural_fsl, forcing the linear and "
+            "nonlinear registrations (FLAT1) and the seeg_ct cross-modality "
+            "registration through antspyx instead of FLIRT/FNIRT."
         ),
         inputs=_STRUCT + (DIL.VENOUS_MR, DIL.SEEG_CT),
         values={
@@ -520,12 +524,29 @@ PASSES = (
             "multicore_node_limit": "SOFT_CAP",
         },
     ),
+    # The ANTS counterpart of venous_ct_slicer: before Phase 2, venous_ct's
+    # registration was FSL-pinned regardless of ``registration_engine``, so
+    # leaving that axis unset here was harmless. Phase 2 routed venous_ct
+    # through the engine-following abstraction (ANTS by default), which made
+    # the unset axis silently ride the raw config default with NO capability
+    # check at all (build_plan only gates/downgrades axes a pass explicitly
+    # sets). Setting it explicitly puts it back under that gate: on a host
+    # without antspyx it downgrades to FSL (recorded in item.downgrades)
+    # instead of riding an unchecked default -- unlike structural_ants, a
+    # downgrade here does not need a _PASS_REQUIREMENTS skip, since this pass
+    # is not just an ANTS pin: it is also the only one exercising
+    # venous_ct_contrasts=1 / skull_threshold=1500.
     PassSpec(
         name="venous_ct_fixed_threshold",
-        description="Venous CT with a single contrast phase and a fixed skull threshold.",
+        description=(
+            "Venous CT with a single contrast phase and a fixed skull "
+            "threshold, forcing the ANTs backend -- the explicit ANTS twin "
+            "of venous_ct_slicer's FSL registration."
+        ),
         inputs=(DIL.T13D, DIL.VENOUS_CT),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "ANTS",
             "cuda": "false",
             "venous_ct_contrasts": "1",
             "skull_threshold": "1500",
