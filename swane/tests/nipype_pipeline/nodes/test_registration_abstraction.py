@@ -154,6 +154,20 @@ class TestGetRegistrationNode:
         assert node.inputs.transform_type == "SyN"
         assert wrap.fwd_transforms == [(node, "fwd_transforms")]
 
+    def test_ants_test_run_is_off_by_default(self, make_nifti):
+        """Full accuracy unless the sweep explicitly asks for the fast path."""
+        from nipype.interfaces.base import isdefined
+
+        wrap = self._call(RegistrationEngine.ANTS, make_nifti, is_volumetric=True)
+        assert not isdefined(wrap.out_registered_node.inputs.test_run)
+
+    def test_ants_test_run_propagates_to_the_node(self, make_nifti):
+        """test_run reaches AntsRegistration just as it reaches FNIRT/SynthMorph."""
+        wrap = self._call(
+            RegistrationEngine.ANTS, make_nifti, is_volumetric=True, test_run=True
+        )
+        assert wrap.out_registered_node.inputs.test_run is True
+
 
 class TestResolveRegistrationEngine:
     def test_default_is_ants(self, global_config):

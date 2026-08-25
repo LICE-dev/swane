@@ -20,6 +20,17 @@ ITK_THREADS_VAR = "ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"
 AFFINE_SUFFIX = ".mat"
 INVERSE_WARP_MARKER = "InverseWarp"
 
+# test_run schedules: drastically fewer iterations than the antspyx defaults
+# (aff_iterations=(2100, 1200, 1200, 10), reg_iterations=(40, 20, 0)), trading
+# registration accuracy for the speed the prerelease sweep needs. aff_iterations
+# MUST stay length 4: antspyx raises if it does not match the default
+# aff_shrink_factors/aff_smoothing_sigmas (both length 4). reg_iterations keeps
+# the default's 3-level shape. These only apply to the affine/rigid stage
+# (aff_iterations) and, for SyN, the deformable stage (reg_iterations); a
+# Rigid/Affine run simply ignores reg_iterations.
+TEST_RUN_AFF_ITERATIONS = (100, 100, 50, 10)
+TEST_RUN_REG_ITERATIONS = (10, 5, 0)
+
 
 class AntsRegistrationInputSpec(BaseInterfaceInputSpec):
     moving = File(exists=True, mandatory=True, desc="the moving image")
@@ -52,6 +63,9 @@ class AntsRegistrationInputSpec(BaseInterfaceInputSpec):
     )
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
     initial_transform = File(exists=True, desc="initial moving transform")
+    test_run = traits.Bool(
+        desc="reduce antspyx iterations for a faster, lower-accuracy sweep run"
+    )
     out_prefix = traits.Str(
         "ants_reg_",
         usedefault=True,
@@ -107,6 +121,11 @@ class AntsRegistration(BaseInterface):
         }
         if isdefined(self.inputs.initial_transform):
             kwargs["initial_transform"] = self.inputs.initial_transform
+        if isdefined(self.inputs.test_run) and self.inputs.test_run:
+            # Fast, lower-accuracy schedules for the prerelease sweep; the graph
+            # is unchanged (see TEST_RUN_* above).
+            kwargs["aff_iterations"] = TEST_RUN_AFF_ITERATIONS
+            kwargs["reg_iterations"] = TEST_RUN_REG_ITERATIONS
 
         previous_threads = os.environ.get(ITK_THREADS_VAR)
         if isdefined(self.inputs.num_threads):
