@@ -188,6 +188,83 @@ class TestGetRegistrationNode:
         assert wrap.out_registered_node.inputs.test_run is True
 
 
+class TestGetRegistrationNodeMovingMask:
+    """The ANTs branch accepts an optional ``moving_mask`` (an ANTs metric mask
+    in moving space, used by seeg_ct's electrode weighting). FSL/Synth ignore
+    it; when absent the AntsRegistration input stays undefined."""
+
+    def _ants(self, moving_mask):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import get_registration_node
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(
+            IdentityInterface(fields=["moving", "reference", "weight"]), name="src"
+        )
+        wrap = get_registration_node(
+            name="reg",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            moving=[src, "moving"],
+            reference=[src, "reference"],
+            is_volumetric=True,
+            moving_mask=moving_mask,
+        )
+        return wf, src, wrap
+
+    def test_moving_mask_connection(self, make_nifti):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import get_registration_node
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(
+            IdentityInterface(fields=["moving", "reference", "weight"]), name="src"
+        )
+        wrap = get_registration_node(
+            name="reg",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            moving=[src, "moving"],
+            reference=[src, "reference"],
+            is_volumetric=True,
+            moving_mask=[src, "weight"],
+        )
+        node = wrap.out_registered_node
+        assert (src, "weight", "moving_mask") in _incoming(wf, node)
+
+    def test_moving_mask_string_set_directly(self, make_nifti):
+        mask = make_nifti("mask.nii.gz", shape=(6, 6, 6))
+        _, _, wrap = self._ants(mask)
+        assert wrap.out_registered_node.inputs.moving_mask == mask
+
+    def test_moving_mask_undefined_when_absent(self, make_nifti):
+        from nipype.interfaces.base import isdefined
+
+        _, _, wrap = self._ants(None)
+        assert not isdefined(wrap.out_registered_node.inputs.moving_mask)
+
+    def test_fsl_branch_ignores_moving_mask(self, make_nifti):
+        """A moving_mask passed on the FSL branch is silently ignored (FLIRT has
+        no such trait); construction must not raise."""
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import get_registration_node
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(
+            IdentityInterface(fields=["moving", "reference", "weight"]), name="src"
+        )
+        wrap = get_registration_node(
+            name="reg",
+            engine=RegistrationEngine.FSL,
+            workflow=wf,
+            moving=[src, "moving"],
+            reference=[src, "reference"],
+            is_volumetric=True,
+            moving_mask=[src, "weight"],
+        )
+        assert _iface(wrap.out_registered_node) == "FLIRT"
+
+
 class TestResolveRegistrationEngine:
     def test_default_is_ants(self, global_config):
         from swane.config.config_enums import GlobalPrefCategoryList
