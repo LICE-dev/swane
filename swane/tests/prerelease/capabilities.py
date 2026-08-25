@@ -233,6 +233,35 @@ def _probe_synth_ram(caps: Capabilities, test_run: bool = False) -> None:
         )
 
 
+def _probe_antspyx(caps: Capabilities) -> None:
+    """The ANTs registration backend: the antspyx package plus its RAM floor.
+
+    Unlike the Synth tools, antspyx is a plain Python package (no FreeSurfer
+    bundle), so it is probed on its own. Its RAM floor comes from
+    :meth:`ResourceManager.ants_ram_requirements`, the same source the
+    application uses to enable or grey out the ANTS engine option. The floor is
+    checked against the allocated budget, not total system memory, because that
+    is what the workflow will actually be allowed to use.
+    """
+    has_antspyx = DependencyManager.is_antspyx()
+    needed = ResourceManager.ants_ram_requirements()
+    if not has_antspyx:
+        caps.add("antspyx", False, "antspyx not importable; the ANTS engine is dropped")
+        return
+    enough = caps.ram_gb >= needed
+    caps.add(
+        "antspyx",
+        enough,
+        (
+            "antspyx present, %.1f GB allocated >= %.1f GB required"
+            % (caps.ram_gb, needed)
+            if enough
+            else "antspyx present but needs %.1f GB, only %.1f GB allocated"
+            % (needed, caps.ram_gb)
+        ),
+    )
+
+
 def _probe_gpu(caps: Capabilities) -> None:
     try:
         is_cuda = ResourceManager.is_cuda()
@@ -366,6 +395,7 @@ def probe(
     _probe_freesurfer_subject(caps)
     _probe_ram_budget(caps)
     _probe_synth_ram(caps, test_run=test_run)
+    _probe_antspyx(caps)
     _probe_gpu(caps)
     _probe_xtract(caps)
     _probe_mni(caps)
