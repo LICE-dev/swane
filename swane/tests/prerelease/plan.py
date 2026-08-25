@@ -32,6 +32,7 @@ from swane.config.config_enums import (
     CoreLimit,
     FreesurferStep,
     GlobalPrefCategoryList,
+    RegistrationEngine,
     SliceTiming,
     VeinDetectionMode,
 )
@@ -116,13 +117,17 @@ AXES = (
         values=("false", "true"),
         gates={"true": "synth_strip"},
     ),
+    # The registration backend is an ENUM, not the old boolean ``morph`` key
+    # Group A removed. FSL (FLIRT/FNIRT) is always available; SYNTH (SynthMorph)
+    # and ANTS (antspyx) are each gated on their own dependency + RAM floor, so
+    # a host missing one still exercises the others.
     Axis(
-        name="synth_morph",
+        name="registration_engine",
         scope=GLOBAL,
         section=GlobalPrefCategoryList.SYNTH,
-        option="morph",
-        values=("false", "true"),
-        gates={"true": "synth_morph"},
+        option="engine",
+        values=_enum_values(RegistrationEngine, "FSL", "SYNTH", "ANTS"),
+        gates={"SYNTH": "synth_morph", "ANTS": "antspyx"},
     ),
     Axis(
         name="synth_reconall",
@@ -389,7 +394,40 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "hippo_amyg_labels": "false",
             "synth_strip": "false",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
+            "synth_reconall": "false",
+            "cuda": "false",
+            "multicore_node_limit": "SOFT_CAP",
+            "ref_bet_bias_correction": "false",
+            "ref_bet_thr": "0.3",
+            "flat1": "true",
+            "venous_mr_shape": "single_series",
+            "vein_detection_mode": "KURTOSIS",
+            "venous_mr_bet_thr": "0.4",
+            "electrode_threshold": "2000",
+            "erode_kernel_size": "5",
+        },
+    ),
+    # The ANTS counterpart of structural_fsl: the same structural family and the
+    # same settings, differing only in the registration backend. ANTS is the
+    # default engine, so many other passes run it implicitly by omitting the
+    # axis; this pass forces it by name so the ANTS linear backend is a covered,
+    # reviewable A/B pair against structural_fsl rather than riding on the
+    # default. (The nonlinear FLAT1/mni1 paths stay FSL-pinned in Phase 1, so
+    # engine=ANTS here exercises the ANTS *linear* registrations.)
+    PassSpec(
+        name="structural_ants",
+        description=(
+            "The whole structural family on the ANTs (antspyx) backend: the "
+            "explicit ANTS twin of structural_fsl, forcing the linear "
+            "registrations through antspyx instead of FLIRT."
+        ),
+        inputs=_STRUCT + (DIL.VENOUS_MR, DIL.SEEG_CT),
+        values={
+            "freesurfer_step": "DISABLED",
+            "hippo_amyg_labels": "false",
+            "synth_strip": "false",
+            "registration_engine": "ANTS",
             "synth_reconall": "false",
             "cuda": "false",
             "multicore_node_limit": "SOFT_CAP",
@@ -418,7 +456,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "false",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
             "cuda": "false",
             "multicore_node_limit": "HARD_CAP",
             "ref_bet_bias_correction": "true",
@@ -441,7 +479,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
             "cuda": "false",
         },
     ),
@@ -457,7 +495,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "true",
+            "registration_engine": "SYNTH",
             "cuda": "false",
             # flat1 pulls in the nonlinear subject->MNI (mni1) path, so
             # SynthMorph is exercised on a nonlinear registration too, not only
@@ -475,7 +513,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "false",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
             "cuda": "false",
             "venous_ct_contrasts": "2",
             "skull_threshold": "-1",
@@ -505,7 +543,7 @@ PASSES = (
         values={
             "freesurfer_step": "SYNTHSEG",
             "synth_strip": "false",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
             "cuda": "false",
             "asl_ai": "false",
             "pet_ai": "false",
@@ -543,7 +581,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "true",
+            "registration_engine": "SYNTH",
             "cuda": "false",
             "asl_ai": "false",
             "pet_ai": "false",
@@ -617,7 +655,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "true",
+            "registration_engine": "SYNTH",
             "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
@@ -671,7 +709,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "true",
+            "registration_engine": "SYNTH",
             "cuda": "false",
             "venous_mr_shape": "single_series",
             "vein_detection_mode": "SD",
@@ -819,6 +857,10 @@ def build_plan(caps, with_reconall: bool = False, only=None) -> list:
 #: Passes that only make sense when a given capability is present. Public so the
 #: plan-integrity test can grant every gating capability to its "capable host".
 _PASS_REQUIREMENTS = {
+    # Without antspyx the engine axis would silently downgrade ANTS->FSL (the
+    # first ungated value), turning this pass into an undetected duplicate of
+    # structural_fsl; gate it so it is skipped with a clear reason instead.
+    "structural_ants": ("antspyx",),
     "structural_synthstrip": ("synth_strip",),
     "structural_synthmorph": ("synth_morph",),
     "func_map_synthmorph": ("synth_morph",),
