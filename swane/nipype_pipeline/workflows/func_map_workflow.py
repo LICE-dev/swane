@@ -108,9 +108,7 @@ def func_map_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
-    # Not yet ported to the ANTs transform-list format: keep this workflow on
-    # its prior backend (FSL/SynthMorph), so the ANTs default falls back to FSL.
-    engine = resolve_registration_engine(synth_config, allow_ants=False)
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
 
     # Input Node
     inputnode = Node(
@@ -199,6 +197,7 @@ def func_map_workflow(
         engine=engine,
         workflow=workflow,
         warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        registration=reg_wrap,
         moving=[smooth, "out_file"],
         reference=[inputnode, "reference"],
         non_linear=False,

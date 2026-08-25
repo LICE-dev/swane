@@ -7,6 +7,7 @@ from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
 from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
+from swane.config.config_enums import RegistrationEngine
 from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
 from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
@@ -91,9 +92,7 @@ def tractography_workflow(
 
     workflow = CustomWorkflow(name="tract_" + name, base_dir=base_dir)
 
-    # Not yet ported to the ANTs transform-list format: keep this workflow on
-    # its prior backend (FSL/SynthMorph), so the ANTs default falls back to FSL.
-    engine = resolve_registration_engine(synth_config, allow_ants=False)
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
 
     inputnode = Node(
         IdentityInterface(
@@ -190,10 +189,11 @@ def tractography_workflow(
             non_linear=True,
             labelmap=True,
         )
+        moving_field = "input_image" if engine == RegistrationEngine.ANTS else "in_file"
         if len(target_files) > 1:
-            targets_2_ref.iterables = ("in_file", target_files)
+            targets_2_ref.iterables = (moving_field, target_files)
         else:
-            targets_2_ref.inputs.in_file = target_files[0]
+            setattr(targets_2_ref.inputs, moving_field, target_files[0])
 
         # NODE 10: Tractography
         probtrackx = MapNode(
