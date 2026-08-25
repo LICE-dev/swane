@@ -13,6 +13,7 @@ from swane.utils.platform_and_tools_utils import is_linux
 from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX
 from swane.utils.license_consent import version_with_license
 
+
 class DependenceStatus(Enum):
     DETECTED = auto()
     WARNING = auto()
