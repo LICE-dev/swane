@@ -241,6 +241,7 @@ def get_registration_node(
     is_volumetric: bool = True,
     flirt_cost: str = "mutualinfo",
     flirt_search: int = 90,
+    moving_mask: str | list[Node | str] = None,
     name_prefix: str = "",
     name_suffix: str = "",
     test_run: bool = False,
@@ -362,6 +363,18 @@ def get_registration_node(
             ants_reg.inputs.fixed = reference_brain
         else:
             workflow.connect(reference_brain[0], reference_brain[1], ants_reg, "fixed")
+
+        # An optional metric mask in moving space (ANTs moving_mask). Only the
+        # ANTs branch honours it -- FSL's analogue is FLIRT.in_weight, wired by
+        # the caller on the FSL branch; Synth has none. Used by seeg_ct's
+        # electrode weighting.
+        if moving_mask is not None:
+            if type(moving_mask) == str:
+                ants_reg.inputs.moving_mask = moving_mask
+            else:
+                workflow.connect(
+                    moving_mask[0], moving_mask[1], ants_reg, "moving_mask"
+                )
 
         return RegistrationNodeWrapper(
             input_node=ants_reg,
