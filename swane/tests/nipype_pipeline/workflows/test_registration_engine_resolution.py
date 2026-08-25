@@ -1,13 +1,12 @@
-"""Group D / Task D1: engine resolution for the two abstracted registration
-workflows.
+"""Engine resolution for the two abstracted registration workflows.
 
-Per the CP-C call-site audit
-(``docs/superpowers/specs/2026-08-24-ants-phase1-callsite-audit.md``),
-``linear_reg_workflow`` has no transform-field consumer and is safe to follow
-the configured engine (ANTs by default in Phase 1). ``nonlinear_reg_workflow``
-feeds FSL-specific ``ApplyWarp`` consumers (flat1, func_map, tractography) and
-must stay pinned to FSL until those consumers are ported (Phase 2/3) --
-regardless of what the ``engine`` preference says.
+``linear_reg_workflow`` followed the configured engine from Phase 1.
+Phase 2 (CP-D/E) ported ``nonlinear_reg_workflow``'s FSL-specific consumers
+(flat1, func_map, tractography) to the ANTs transform-list/composed-field
+contract and lifted its FSL pin, so ``nonlinear_reg_workflow`` now follows the
+configured engine too: under ANTS it composes its ordered transform list into a
+single directional displacement field per direction (``*_fwd_compose`` /
+``*_inv_compose``) instead of building FLIRT/FNIRT.
 """
 
 from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
@@ -57,11 +56,11 @@ class TestLinearRegFollowsConfiguredEngine:
         assert "flair3d_antsreg" not in wf.list_node_names()
 
 
-class TestNonlinearRegStaysPinnedToFsl:
-    def test_ants_preference_still_builds_fsl_nodes(self, global_config):
-        """The Phase-1 scope decision: nonlinear_reg_workflow must NOT follow
-        the ANTs default -- its warp outputs are read FSL-specifically
-        downstream (flat1/func_map/tractography ApplyWarp nodes)."""
+class TestNonlinearRegFollowsConfiguredEngine:
+    def test_ants_preference_builds_ants_node(self, global_config):
+        """Phase 2 (CP-D/E): with the FSL pin lifted, nonlinear_reg_workflow
+        follows the ANTs default -- it builds an AntsRegistration node and the
+        two AntsComposeTransform nodes (one per direction) and no FLIRT/FNIRT."""
         synth = global_config[GlobalPrefCategoryList.SYNTH]
         synth["engine"] = "ANTS"
 
@@ -71,9 +70,11 @@ class TestNonlinearRegStaysPinnedToFsl:
             multicore_node_limit=CoreLimit.SOFT_CAP,
         )
 
-        assert wf.get_node("sym_flirt") is not None
-        assert wf.get_node("sym_fnirt") is not None
-        assert "sym_antsreg" not in wf.list_node_names()
+        assert wf.get_node("sym_antsreg") is not None
+        assert wf.get_node("sym_fwd_compose") is not None
+        assert wf.get_node("sym_inv_compose") is not None
+        assert "sym_flirt" not in wf.list_node_names()
+        assert "sym_fnirt" not in wf.list_node_names()
 
     def test_fsl_preference_builds_fsl_nodes(self, global_config):
         synth = global_config[GlobalPrefCategoryList.SYNTH]
