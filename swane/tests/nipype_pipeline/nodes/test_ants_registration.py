@@ -20,6 +20,13 @@ import pytest
 from swane.nipype_pipeline.nodes.AntsRegistration import AntsRegistration
 
 
+def inspect_default(func, param):
+    """The default value antspyx declares for one of ``func``'s parameters."""
+    import inspect
+
+    return inspect.signature(func).parameters[param].default
+
+
 def _fake_registration(created, transforms):
     """Build a stand-in for ``ants.registration``.
 
@@ -242,6 +249,55 @@ class TestAntsRegistrationRuntime:
         node.inputs.initial_transform = make_file("init.mat", "x")
         created = _run(node, monkeypatch, LINEAR_FILES)
         assert created["kwargs"]["initial_transform"] == node.inputs.initial_transform
+
+
+class TestAntsRegistrationTestRun:
+    """The ``test_run`` speed knob trades accuracy for a much faster sweep by
+    slashing antspyx's per-level iteration counts, without touching the graph."""
+
+    def _kwargs(self, monkeypatch, make_nifti, **inputs):
+        node = AntsRegistration()
+        node.inputs.moving = make_nifti("m.nii.gz", shape=(6, 6, 6))
+        node.inputs.fixed = make_nifti("f.nii.gz", shape=(6, 6, 6))
+        node.inputs.transform_type = "SyN"
+        for key, value in inputs.items():
+            setattr(node.inputs, key, value)
+        return _run(node, monkeypatch, NONLINEAR_FILES)["kwargs"]
+
+    def test_full_accuracy_by_default(self, workspace, make_nifti, monkeypatch):
+        """Without the knob, antspyx keeps its own (full-accuracy) defaults: the
+        node must not override the iteration schedules at all."""
+        kwargs = self._kwargs(monkeypatch, make_nifti)
+        assert "aff_iterations" not in kwargs
+        assert "reg_iterations" not in kwargs
+
+    def test_test_run_cuts_both_iteration_schedules(
+        self, workspace, make_nifti, monkeypatch
+    ):
+        kwargs = self._kwargs(monkeypatch, make_nifti, test_run=True)
+        # The affine/rigid stage: fewer iterations, but the tuple must stay
+        # length 4 to match antspyx's default aff_shrink_factors /
+        # aff_smoothing_sigmas (a length mismatch raises ValueError).
+        assert "aff_iterations" in kwargs
+        assert len(kwargs["aff_iterations"]) == 4
+        assert max(kwargs["aff_iterations"]) < 2100  # antspyx default coarsest
+        # The SyN deformable stage: fewer iterations than the (40, 20, 0) default.
+        assert "reg_iterations" in kwargs
+        assert max(kwargs["reg_iterations"]) < 40
+
+    def test_reduced_affine_schedule_is_antspyx_valid(self):
+        """A real antspyx call raises if aff_iterations length does not match the
+        default aff_shrink_factors/aff_smoothing_sigmas -- guard that invariant
+        against the live antspyx signature (no monkeypatch here)."""
+        import ants
+
+        from swane.nipype_pipeline.nodes.AntsRegistration import TEST_RUN_AFF_ITERATIONS
+
+        default_shrink = inspect_default(ants.registration, "aff_shrink_factors")
+        default_smooth = inspect_default(ants.registration, "aff_smoothing_sigmas")
+        assert (
+            len(TEST_RUN_AFF_ITERATIONS) == len(default_shrink) == len(default_smooth)
+        )
 
 
 @pytest.mark.heavy

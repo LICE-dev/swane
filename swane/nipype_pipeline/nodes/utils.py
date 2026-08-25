@@ -332,6 +332,12 @@ def get_registration_node(
         )
         ants_reg.long_name = name_prefix + " %s " + name_suffix
         ants_reg.inputs.transform_type = transform_type
+        if test_run:
+            # Same speed-for-accuracy trade the other backends make under
+            # test_run (FNIRT subsampling, SynthMorph steps): the node cuts its
+            # antspyx iteration schedules. Applies to both the linear (affine/
+            # rigid) and the SyN stages.
+            ants_reg.inputs.test_run = True
         ants_reg.inputs.aff_metric = _ANTS_AFF_METRIC_BY_FLIRT_COST.get(
             flirt_cost, "mattes"
         )
