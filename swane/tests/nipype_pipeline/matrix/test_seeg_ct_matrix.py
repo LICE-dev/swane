@@ -12,10 +12,14 @@ as the ANTs metric ``moving_mask`` on ANTs and as FLIRT ``in_weight`` on FSL
 (same map, correct polarity for both).
 
 The FSL registration node name changed with the abstraction, so the old byte
-snapshots are obsolete and were removed; the engine-dimensioned goldens are
-(re)generated and eye-reviewed in Session G. Here the graph is covered by
-node/edge construction assertions for every engine outcome.
+snapshots were obsolete and were removed. Session G (CP-G) created new
+engine-dimensioned golden snapshots from scratch (ANTS-default + FSL;
+SynthMorph falls back to the FSL graph, so it needs no separate golden), eye-
+reviewed alongside the pre-existing node/edge construction assertions below,
+which keep asserting the graph SHAPE independently of the byte snapshots.
 """
+
+import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
@@ -24,6 +28,8 @@ from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 seeg_ct_workflow = import_workflow_or_skip(
     "swane.nipype_pipeline.workflows.seeg_ct_workflow", "seeg_ct_workflow"
 )
+
+SUBDIR = "seeg_ct"
 
 
 def _iface(node):
@@ -48,6 +54,28 @@ def _build(subject_config, global_config, make_input_dir, engine):
         seeg_ct_dir=make_input_dir(),
         config=section,
         synth_config=synth,
+    )
+
+
+# name -> engine. ANTS is the resolved default; FSL is the other backend the
+# abstraction routes to. SynthMorph is deliberately not snapshotted here: it
+# falls back to the FSL graph (see ``test_seeg_ct_synth_falls_back_to_fsl``
+# below), so it would only duplicate the ``fsl_backend`` golden.
+SCENARIOS = {"ants_backend": "ANTS", "fsl_backend": "FSL"}
+
+
+@pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
+def test_seeg_ct_matrix(
+    scenario, subject_config, global_config, make_input_dir, graph_snapshot
+):
+    engine = SCENARIOS[scenario]
+    wf = _build(subject_config, global_config, make_input_dir, engine)
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name=scenario,
+        config={"registration_engine": engine},
+        title="seeg_ct / %s" % scenario,
     )
 
 

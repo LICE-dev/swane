@@ -1,0 +1,96 @@
+# workflow snapshot: func_map / ants_backend
+#
+#   ai = true
+#   config = ASL
+#   cost_func = NORMALIZED_MUTUAL_INFORMATION
+#   freesurfer_step = DISABLED
+#   registration_engine = ANTS
+#
+# nodes=16 edges=25
+
+- asl_2_ref_antsreg [AntsRegistration] mem_gb=14 n_procs=0
+    aff_metric = 'mattes'
+    num_threads = 0
+    out_prefix = 'ants_reg_'
+    syn_metric = 'mattes'
+    transform_type = 'Rigid'
+- asl_2_sym_warp_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+    reference_image = '<SUPPLEMENT>/resources/mni_icbm152_t1_tal_nlin_sym_09c_brain.nii.gz'
+- asl_2_sym_warp_transformlist [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- asl_ai [AsymmetryIndex] mem_gb=0.2 n_procs=1
+    out_file = 'r-asl_ai.nii.gz'
+- asl_ai_2_ref_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+- asl_ai_2_ref_transformlist [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- asl_ai_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'r-asl_ai.nii.gz'
+    output_type = 'NIFTI_GZ'
+- asl_ai_threshold [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-thr -0.850000 -uthr 0.850000'
+    output_type = 'NIFTI_GZ'
+- asl_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'asl'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- asl_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'r-asl.nii.gz'
+    output_type = 'NIFTI_GZ'
+- asl_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
+- asl_smooth [IsotropicSmooth] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    sigma = 2.0
+- asl_smooth_2_ref_flirt_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+- asl_sym_swap [Function] mem_gb=0.2 n_procs=1
+    function_str = "def swap_rl(in_file):\n    import os\n    import numpy as np\n    import nibabel as nib\n    img = nib.load(in_file)\n    flipped = np.flip(img.get_fdata(dtype=np.float32), axis=0)\n    hdr = img.header.copy()\n    hdr.set_data_dtype(np.float32)\n    out_file = os.path.abspath('sym_swapped.nii.gz')\n    nib.save(nib.Nifti1Image(flipped, img.affine, hdr), out_file)\n    return out_file"
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+# connections
+asl_2_ref_antsreg.fwd_transforms -> asl_smooth_2_ref_flirt_ants_apply.transformlist
+asl_2_ref_antsreg.fwd_which_to_invert -> asl_smooth_2_ref_flirt_ants_apply.which_to_invert
+asl_2_sym_warp_ants_apply.out_file -> asl_ai.in_file
+asl_2_sym_warp_ants_apply.out_file -> asl_sym_swap.in_file
+asl_2_sym_warp_transformlist.out -> asl_2_sym_warp_ants_apply.transformlist
+asl_ai.out_file -> asl_ai_threshold.in_file
+asl_ai_2_ref_ants_apply.out_file -> asl_ai_mask.in_file
+asl_ai_2_ref_transformlist.out -> asl_ai_2_ref_ants_apply.transformlist
+asl_ai_mask.out_file -> outputnode.ai
+asl_ai_threshold.out_file -> asl_ai_2_ref_ants_apply.input_image
+asl_conv.converted_files -> asl_reOrient.in_file
+asl_mask.out_file -> outputnode.registered_file
+asl_reOrient.out_file -> asl_2_ref_antsreg.moving
+asl_reOrient.out_file -> asl_smooth.in_file
+asl_smooth.out_file -> asl_smooth_2_ref_flirt_ants_apply.input_image
+asl_smooth_2_ref_flirt_ants_apply.out_file -> asl_2_sym_warp_ants_apply.input_image
+asl_smooth_2_ref_flirt_ants_apply.out_file -> asl_mask.in_file
+asl_smooth_2_ref_flirt_ants_apply.out_file -> outputnode.registered_file_brain
+asl_sym_swap.out_file -> asl_ai.swapped_file
+inputnode.brain_mask -> asl_ai_mask.mask_file
+inputnode.brain_mask -> asl_mask.mask_file
+inputnode.ref_2_sym_invwarp -> asl_ai_2_ref_transformlist.in1
+inputnode.ref_2_sym_warp -> asl_2_sym_warp_transformlist.in1
+inputnode.reference -> asl_2_ref_antsreg.fixed
+inputnode.reference -> asl_ai_2_ref_ants_apply.reference_image
+inputnode.reference -> asl_smooth_2_ref_flirt_ants_apply.reference_image

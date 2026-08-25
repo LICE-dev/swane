@@ -1,0 +1,133 @@
+# workflow snapshot: tractography / cst_real_graph_ants_backend
+#
+#   cuda = false
+#   registration_engine = ANTS
+#   tract = cst
+#   xtract_data = present
+#
+# nodes=19 edges=33
+
+- exclude_2_ref_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    input_image = '<FSLDIR>/data/xtract_data/HUMAN/cst_l/exclude.nii.gz'
+    interpolator = 'nearestNeighbor'
+- exclude_2_ref_cst_lh_transformlist [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- exclude_2_ref_cst_rh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    input_image = '<FSLDIR>/data/xtract_data/HUMAN/cst_r/exclude.nii.gz'
+    interpolator = 'nearestNeighbor'
+- exclude_2_ref_cst_rh_transformlist [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- probtrackx_cst_lh [CustomProbTrackX2] cmd=probtrackx2 mapnode(iterfield=random_seed) mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    force_dir = True
+    loop_check = True
+    n_samples = 600
+    opd = True
+    output_type = 'NIFTI_GZ'
+    rand_fib = 1
+    sample_random_points = 1.0
+    samples_base_name = 'merged'
+    use_gpu = False
+    wayorder = False
+- probtrackx_cst_rh [CustomProbTrackX2] cmd=probtrackx2 mapnode(iterfield=random_seed) mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    force_dir = True
+    loop_check = True
+    n_samples = 600
+    opd = True
+    output_type = 'NIFTI_GZ'
+    rand_fib = 1
+    sample_random_points = 1.0
+    samples_base_name = 'merged'
+    use_gpu = False
+    wayorder = False
+- random_seed [RandomSeedGenerator] mem_gb=0.2 n_procs=1
+    seeds_n = 5
+- seed_2_ref_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    input_image = '<FSLDIR>/data/xtract_data/HUMAN/cst_l/seed.nii.gz'
+    interpolator = 'nearestNeighbor'
+- seed_2_ref_cst_lh_transformlist [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- seed_2_ref_cst_rh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    input_image = '<FSLDIR>/data/xtract_data/HUMAN/cst_r/seed.nii.gz'
+    interpolator = 'nearestNeighbor'
+- seed_2_ref_cst_rh_transformlist [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- sumTrack_cst_lh [SumMultiTracks] mem_gb=0.2 n_procs=1
+    out_file = 'r-cst_lh.nii.gz'
+- sumTrack_cst_rh [SumMultiTracks] mem_gb=0.2 n_procs=1
+    out_file = 'r-cst_rh.nii.gz'
+- targets_2_ref_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    input_image = '<FSLDIR>/data/xtract_data/HUMAN/cst_l/target.nii.gz'
+    interpolator = 'nearestNeighbor'
+- targets_2_ref_cst_lh_transformlist [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- targets_2_ref_cst_rh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    input_image = '<FSLDIR>/data/xtract_data/HUMAN/cst_r/target.nii.gz'
+    interpolator = 'nearestNeighbor'
+- targets_2_ref_cst_rh_transformlist [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+# connections
+exclude_2_ref_cst_lh_ants_apply.out_file -> probtrackx_cst_lh.avoid_mp
+exclude_2_ref_cst_lh_transformlist.out -> exclude_2_ref_cst_lh_ants_apply.transformlist
+exclude_2_ref_cst_rh_ants_apply.out_file -> probtrackx_cst_rh.avoid_mp
+exclude_2_ref_cst_rh_transformlist.out -> exclude_2_ref_cst_rh_ants_apply.transformlist
+inputnode.diff2ref_mat -> probtrackx_cst_lh.inv_xfm
+inputnode.diff2ref_mat -> probtrackx_cst_rh.inv_xfm
+inputnode.fsamples -> probtrackx_cst_lh.fsamples
+inputnode.fsamples -> probtrackx_cst_rh.fsamples
+inputnode.mask -> probtrackx_cst_lh.mask
+inputnode.mask -> probtrackx_cst_rh.mask
+inputnode.mask -> random_seed.mask
+inputnode.mni2ref_warp -> exclude_2_ref_cst_lh_transformlist.in1
+inputnode.mni2ref_warp -> exclude_2_ref_cst_rh_transformlist.in1
+inputnode.mni2ref_warp -> seed_2_ref_cst_lh_transformlist.in1
+inputnode.mni2ref_warp -> seed_2_ref_cst_rh_transformlist.in1
+inputnode.mni2ref_warp -> targets_2_ref_cst_lh_transformlist.in1
+inputnode.mni2ref_warp -> targets_2_ref_cst_rh_transformlist.in1
+inputnode.phsamples -> probtrackx_cst_lh.phsamples
+inputnode.phsamples -> probtrackx_cst_rh.phsamples
+inputnode.ref2diff_mat -> probtrackx_cst_lh.xfm
+inputnode.ref2diff_mat -> probtrackx_cst_rh.xfm
+inputnode.reference_brain -> exclude_2_ref_cst_lh_ants_apply.reference_image
+inputnode.reference_brain -> exclude_2_ref_cst_rh_ants_apply.reference_image
+inputnode.reference_brain -> probtrackx_cst_lh.seed_ref
+inputnode.reference_brain -> probtrackx_cst_rh.seed_ref
+inputnode.reference_brain -> seed_2_ref_cst_lh_ants_apply.reference_image
+inputnode.reference_brain -> seed_2_ref_cst_rh_ants_apply.reference_image
+inputnode.reference_brain -> targets_2_ref_cst_lh_ants_apply.reference_image
+inputnode.reference_brain -> targets_2_ref_cst_rh_ants_apply.reference_image
+inputnode.thsamples -> probtrackx_cst_lh.thsamples
+inputnode.thsamples -> probtrackx_cst_rh.thsamples
+probtrackx_cst_lh.fdt_paths -> sumTrack_cst_lh.path_files
+probtrackx_cst_lh.way_total -> sumTrack_cst_lh.waytotal_files
+probtrackx_cst_rh.fdt_paths -> sumTrack_cst_rh.path_files
+probtrackx_cst_rh.way_total -> sumTrack_cst_rh.waytotal_files
+random_seed.seeds -> probtrackx_cst_lh.random_seed
+random_seed.seeds -> probtrackx_cst_rh.random_seed
+seed_2_ref_cst_lh_ants_apply.out_file -> probtrackx_cst_lh.seed
+seed_2_ref_cst_lh_transformlist.out -> seed_2_ref_cst_lh_ants_apply.transformlist
+seed_2_ref_cst_rh_ants_apply.out_file -> probtrackx_cst_rh.seed
+seed_2_ref_cst_rh_transformlist.out -> seed_2_ref_cst_rh_ants_apply.transformlist
+sumTrack_cst_lh.out_file -> outputnode.fdt_paths_lh
+sumTrack_cst_lh.waytotal_sum -> outputnode.waytotal_lh
+sumTrack_cst_rh.out_file -> outputnode.fdt_paths_rh
+sumTrack_cst_rh.waytotal_sum -> outputnode.waytotal_rh
+targets_2_ref_cst_lh_ants_apply.out_file -> probtrackx_cst_lh.waypoints
+targets_2_ref_cst_lh_transformlist.out -> targets_2_ref_cst_lh_ants_apply.transformlist
+targets_2_ref_cst_rh_ants_apply.out_file -> probtrackx_cst_rh.waypoints
+targets_2_ref_cst_rh_transformlist.out -> targets_2_ref_cst_rh_ants_apply.transformlist

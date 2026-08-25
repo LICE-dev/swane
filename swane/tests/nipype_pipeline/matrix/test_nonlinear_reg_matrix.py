@@ -11,10 +11,10 @@ engine with ``allow_ants=True`` and follows the configured engine like
 ``inverse_warp`` boundary outputs as single composed displacement fields (two
 ``AntsComposeTransform`` nodes), so the field names/cardinality downstream stay
 1:1. The FSL/SYNTH snapshots below are unchanged (those branches are
-byte-identical); the ANTS-default golden snapshot is (re)generated and
-eye-reviewed in Session G. Until then, the ANTS graph is covered here by an
-explicit node/edge construction test (``test_nonlinear_reg_ants_construction``),
-not by a byte snapshot.
+byte-identical). Session G (CP-G) added the ``ants_backend`` scenario as the
+golden ANTS-default snapshot, eye-reviewed alongside the pre-existing
+node/edge construction test (``test_nonlinear_reg_ants_construction``), which
+keeps asserting the graph SHAPE independently of the byte snapshot.
 """
 
 import pytest
@@ -37,6 +37,7 @@ SCENARIOS = {
     "fsl_backend": dict(engine="FSL"),
     "synthmorph_backend": dict(engine="SYNTH"),
     "synthmorph_backend_limit_cores": dict(engine="SYNTH", limit_cores=True),
+    "ants_backend": dict(engine="ANTS"),
 }
 
 
@@ -114,10 +115,8 @@ def test_nonlinear_reg_matrix_test_run(scenario, global_config, graph_snapshot):
 
 
 # --------------------------------------------------------------------------- #
-# CP-D: ANTS-default construction (node/edge assertions, not byte snapshot).
-#
-# Session G regenerates the golden ANTS snapshot after eye review; here we prove
-# the graph SHAPE of the pin lift: an AntsRegistration plus two
+# ANTS-default construction (node/edge assertions, independent of the
+# ``ants_backend`` byte snapshot above): an AntsRegistration plus two
 # AntsComposeTransform nodes composing the ordered transform list (+ its
 # which_to_invert) into the single fieldcoeff_file / inverse_warp boundary
 # fields, with the forward composed on the atlas grid and the inverse on the

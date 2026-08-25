@@ -18,11 +18,11 @@ field is ``input_image``); the multi-target ``.iterables`` path had the same
 FSL-specific field name baked in. Both now resolve the field name from the
 engine. The seed/exclude applies already passed ``moving=<path>`` through
 ``apply_registration_node`` itself, so those needed no change. The FSL
-snapshots below are pinned explicitly and stay byte-identical; the
-ANTS-default golden snapshot is (re)generated and eye-reviewed in Session G.
-Until then, the ANTS graph is covered here by an explicit node/edge
-construction test (``test_tractography_ants_construction``), not by a byte
-snapshot.
+snapshots below are pinned explicitly and stay byte-identical. Session G
+(CP-G) added ``cst_real_graph_ants_backend`` as the golden ANTS-default
+snapshot, eye-reviewed alongside the pre-existing node/edge construction test
+(``test_tractography_ants_construction``), which keeps asserting the graph
+SHAPE independently of the byte snapshot.
 """
 
 import os
@@ -114,8 +114,44 @@ def test_known_tract_real_graph_test_run(subject_config, global_config, graph_sn
     )
 
 
+def test_known_tract_real_graph_ants_backend(
+    subject_config, global_config, graph_snapshot
+):
+    """ANTS-default backend on the cst protocol -- the Phase 2 engine flip.
+    See ``test_tractography_ants_construction`` below for the graph-shape
+    assertions this golden snapshot locks in.
+    """
+    require_fsl_data(os.path.join(XTRACT_DATA_DIR, "cst_l"))
+
+    section = subject_config[DataInputList.DTI]
+    section["cuda"] = "false"
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["engine"] = "ANTS"
+
+    wf = tractography_workflow(
+        "cst",
+        config=section,
+        synth_config=synth,
+    )
+    assert wf is not None, "cst graph should build when XTRACT data is present"
+
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="cst_real_graph_ants_backend",
+        config={
+            "tract": "cst",
+            "cuda": "false",
+            "xtract_data": "present",
+            "registration_engine": "ANTS",
+        },
+        title="tractography / cst_real_graph_ants_backend",
+    )
+
+
 # --------------------------------------------------------------------------- #
-# CP-E: ANTS-default construction (node/edge assertions, not byte snapshot).
+# ANTS-default construction (node/edge assertions, independent of the
+# ``cst_real_graph_ants_backend`` byte snapshot above).
 #
 # The "cst" protocol has exactly one target ROI (target.nii.gz) and an
 # exclude ROI (exclude.nii.gz), no stop/invert -- so it exercises the
