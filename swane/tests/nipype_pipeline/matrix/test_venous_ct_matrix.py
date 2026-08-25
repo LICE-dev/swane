@@ -11,11 +11,14 @@ backend on CT), an ANTs config stays ANTs, an FSL config stays FSL.
 
 Because the FSL registrations now come from the abstraction, their node names
 changed, so the old byte snapshots (which described the previous hand-built
-FLIRT/ApplyXFM graph) are obsolete and were removed. The engine-dimensioned
-golden snapshots are (re)generated and eye-reviewed in Session G; here the graph
-is covered by node/edge construction assertions for every engine outcome.
+FLIRT/ApplyXFM graph) were obsolete and removed. Session G (CP-G) created new
+engine-dimensioned golden snapshots from scratch (ANTS-default + FSL;
+SynthMorph falls back to the FSL graph, so it needs no separate golden), eye-
+reviewed alongside the pre-existing node/edge construction assertions below,
+which keep asserting the graph SHAPE independently of the byte snapshots.
 """
 
+import pytest
 from nipype import MapNode
 from nipype.interfaces.base import isdefined
 
@@ -26,6 +29,8 @@ from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 venous_ct_workflow = import_workflow_or_skip(
     "swane.nipype_pipeline.workflows.venous_ct_workflow", "venous_ct_workflow"
 )
+
+SUBDIR = "venous_ct"
 
 
 def _iface(node):
@@ -56,6 +61,28 @@ def _build(
         venous2_ct_dir=[make_input_dir("contrast_0"), make_input_dir("contrast_1")],
         slicer_path=make_file("Slicer.exe", "x"),
         test_run=test_run,
+    )
+
+
+# name -> engine. ANTS is the resolved default; FSL is the other backend the
+# abstraction routes to. SynthMorph is deliberately not snapshotted here: it
+# falls back to the FSL graph (see ``test_venous_ct_synth_falls_back_to_fsl``
+# below), so it would only duplicate the ``fsl_backend`` golden.
+SCENARIOS = {"ants_backend": "ANTS", "fsl_backend": "FSL"}
+
+
+@pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
+def test_venous_ct_matrix(
+    scenario, subject_config, global_config, make_input_dir, make_file, graph_snapshot
+):
+    engine = SCENARIOS[scenario]
+    wf = _build(subject_config, global_config, make_input_dir, make_file, engine)
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name=scenario,
+        config={"registration_engine": engine},
+        title="venous_ct / %s" % scenario,
     )
 
 

@@ -23,10 +23,11 @@ for FSL/Synth *and* ``registration=reg_wrap`` for ANTS' ``wire_transforms``).
 The AI-branch applies (``func_2_sym_warp``/``ai_2_ref``) already passed
 ``warp=[inputnode, "<field>"]``, ``registration=None`` -- the composed-field
 boundary path -- so those needed no change. The FSL snapshots below are
-pinned explicitly and stay byte-identical; the ANTS-default golden snapshot is
-(re)generated and eye-reviewed in Session G. Until then, the ANTS graph is
-covered here by an explicit node/edge construction test
-(``test_func_map_ants_construction``), not by a byte snapshot.
+pinned explicitly and stay byte-identical. Session G (CP-G) added
+``ants_backend`` as the golden ANTS-default snapshot, eye-reviewed alongside
+the pre-existing node/edge construction test
+(``test_func_map_ants_construction``), which keeps asserting the graph SHAPE
+independently of the byte snapshot.
 """
 
 import pytest
@@ -128,8 +129,45 @@ def test_func_map_matrix_test_run(
     )
 
 
+def test_func_map_matrix_ants_backend(
+    subject_config, global_config, make_input_dir, graph_snapshot
+):
+    """ANTS-default backend on the ASL asymmetry-index configuration -- the
+    Phase 2 engine flip. See ``test_func_map_ants_construction`` below for the
+    graph-shape assertions this golden snapshot locks in.
+    """
+    section = subject_config[DataInputList.ASL]
+    section["ai"] = "true"
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["engine"] = "ANTS"
+
+    wf = func_map_workflow(
+        "asl",
+        dicom_dir=make_input_dir(),
+        freesurfer_step=FreesurferStep.DISABLED,
+        config=section,
+        synth_config=synth,
+    )
+
+    config_echo = {
+        "freesurfer_step": FreesurferStep.DISABLED.name,
+        "ai": section["ai"],
+        "cost_func": section["cost_func"],
+        "registration_engine": "ANTS",
+        "config": DataInputList.ASL.name,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="ants_backend",
+        config=config_echo,
+        title="func_map / ants_backend",
+    )
+
+
 # --------------------------------------------------------------------------- #
-# CP-E: ANTS-default construction (node/edge assertions, not byte snapshot).
+# ANTS-default construction (node/edge assertions, independent of the
+# ``ants_backend`` byte snapshot above).
 # --------------------------------------------------------------------------- #
 def _iface(node):
     return type(node.interface).__name__

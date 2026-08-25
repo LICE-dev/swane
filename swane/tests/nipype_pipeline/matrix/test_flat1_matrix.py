@@ -10,10 +10,11 @@ Phase 2 (CP-E) lifted this workflow's Phase-1 FSL pin: it now resolves its
 engine with ``allow_ants=True``. Its 7 nonlinear applies already passed
 ``warp=[inputnode, "<field>"]``, ``registration=None`` -- the composed-field
 single-file ANTS path built by Session C -- so no wiring changed here. The
-FSL/SynthMorph snapshots below are pinned explicitly and stay byte-identical;
-the ANTS-default golden snapshot is (re)generated and eye-reviewed in Session
-G. Until then, the ANTS graph is covered here by an explicit node/edge
-construction test (``test_flat1_ants_construction``), not by a byte snapshot.
+FSL/SynthMorph snapshots below are pinned explicitly and stay byte-identical.
+Session G (CP-G) added the ``ants_backend`` scenario as the golden
+ANTS-default snapshot, eye-reviewed alongside the pre-existing node/edge
+construction test (``test_flat1_ants_construction``), which keeps asserting
+the graph SHAPE independently of the byte snapshot.
 """
 
 import pytest
@@ -27,17 +28,15 @@ flat1_workflow = import_workflow_or_skip(
 
 SUBDIR = "flat1"
 
-SCENARIOS = {"fsl_backend": False, "synthmorph_backend": True}
+SCENARIOS = {"fsl_backend": "FSL", "synthmorph_backend": "SYNTH", "ants_backend": "ANTS"}
 
 
 @pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
 def test_flat1_matrix(scenario, global_config, make_file, graph_snapshot):
-    synth_morph = SCENARIOS[scenario]
+    engine = SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["morph"] = "true" if synth_morph else "false"
-    # ANTS is exercised separately by test_flat1_ants_construction; pin these
-    # scenarios so they keep matching their existing golden snapshots.
-    synth["engine"] = "SYNTH" if synth_morph else "FSL"
+    synth["morph"] = "true" if engine == "SYNTH" else "false"
+    synth["engine"] = engine
 
     wf = flat1_workflow(
         "flat1",
@@ -49,7 +48,7 @@ def test_flat1_matrix(scenario, global_config, make_file, graph_snapshot):
         wf,
         subdir=SUBDIR,
         name=scenario,
-        config={"synth_morph": synth["morph"]},
+        config={"synth_morph": synth["morph"], "registration_engine": engine},
         title="flat1 / %s" % scenario,
     )
 
@@ -91,10 +90,8 @@ def test_flat1_matrix_test_run(scenario, global_config, make_file, graph_snapsho
 
 
 # --------------------------------------------------------------------------- #
-# CP-E: ANTS-default construction (node/edge assertions, not byte snapshot).
-#
-# Session G regenerates the golden ANTS snapshot after eye review; here we
-# prove the graph SHAPE of the pin lift: the 7 nonlinear applies (4 forward via
+# ANTS-default construction (node/edge assertions, independent of the
+# ``ants_backend`` byte snapshot above): the 7 nonlinear applies (4 forward via
 # ref_2_mni1_warp, 3 inverse via ref_2_mni1_inverse_warp) become
 # AntsApplyTransforms fed the composed boundary field through a Merge(1), with
 # no which_to_invert (the composition already baked the direction in).

@@ -1,0 +1,110 @@
+# workflow snapshot: venous_ct / ants_backend
+#
+#   registration_engine = ANTS
+#
+# nodes=18 edges=24
+
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- segment_endocranium [SegmentEndocranium] cmd=slicer_seg_endocranium.py mem_gb=2.5 n_procs=1
+    environ = {}
+    iterations = 6
+    oversampling = 1.5
+    skull_threshold = -1
+    slicer_cmd = '<TMP>/Slicer.exe'
+    smoothingKernelSize = 3.0
+- veins2_ct_reOrient [ForceOrient] mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
+- veins_2conv [CustomDcm2niix] cmd=dcm2niix mapnode(iterfield=source_dir) mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 0
+    name_conflicts = 2
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = ['<TMP>/contrast_0', '<TMP>/contrast_1']
+    verbose = False
+- veins_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+    out_file = 'r-veins_ct_inskull.nii.gz'
+- veins_ct_2_contrast_antsreg [AntsRegistration] mapnode(iterfield=moving) mem_gb=14 n_procs=0
+    aff_metric = 'mattes'
+    num_threads = 0
+    out_prefix = 'ants_reg_'
+    syn_metric = 'mattes'
+    transform_type = 'Rigid'
+- veins_ct_2_ref_antsreg [AntsRegistration] mem_gb=14 n_procs=0
+    aff_metric = 'mattes'
+    num_threads = 0
+    out_prefix = 'ants_reg_'
+    syn_metric = 'mattes'
+    transform_type = 'Rigid'
+- veins_ct_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'veins'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/noncontrast'
+    verbose = False
+- veins_ct_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- veins_ct_range [ImageStatistics] mem_gb=0.2 n_procs=1
+    percentiles = []
+- veins_ct_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
+- veins_ct_rescale [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- veins_ct_subtraction [BinaryMaths] cmd=fslmaths mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    operation = 'sub'
+    output_type = 'NIFTI_GZ'
+- veins_ct_sum [SumMultiVols] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'vein_contrast_sum.nii.gz'
+    output_type = 'NIFTI_GZ'
+- veins_mask_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
+- venous_ct2_robustfov [RobustFOV] cmd=robustfov mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- venous_ct_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+# connections
+inputnode.reference -> veins_ct_2_ref_antsreg.fixed
+inputnode.reference_brain -> veins_ants_apply.reference_image
+segment_endocranium.out_file -> veins_mask_reOrient.in_file
+veins2_ct_reOrient.out_file -> venous_ct2_robustfov.in_file
+veins_2conv.converted_files -> veins2_ct_reOrient.in_file
+veins_ants_apply.out_file -> outputnode.veins
+veins_ct_2_contrast_antsreg.warped_file -> veins_ct_subtraction.in_file
+veins_ct_2_ref_antsreg.fwd_transforms -> veins_ants_apply.transformlist
+veins_ct_2_ref_antsreg.fwd_which_to_invert -> veins_ants_apply.which_to_invert
+veins_ct_2_ref_antsreg.warped_file -> outputnode.basal
+veins_ct_conv.converted_files -> veins_ct_reOrient.in_file
+veins_ct_mask.out_file -> veins_ct_range.in_file
+veins_ct_mask.out_file -> veins_ct_rescale.in_file
+veins_ct_range.('max_value', "def rescale_string(max_value):\n    op_string = '-mul 100 -div %f' % max_value\n    return op_string", ()) -> veins_ct_rescale.op_string
+veins_ct_reOrient.out_file -> venous_ct_robustfov.in_file
+veins_ct_rescale.out_file -> veins_ants_apply.input_image
+veins_ct_subtraction.out_file -> outputnode.contrast
+veins_ct_subtraction.out_file -> veins_ct_sum.vol_files
+veins_ct_sum.out_file -> veins_ct_mask.in_file
+veins_mask_reOrient.out_file -> veins_ct_mask.mask_file
+venous_ct2_robustfov.out_roi -> veins_ct_2_contrast_antsreg.moving
+venous_ct_robustfov.out_roi -> segment_endocranium.in_file
+venous_ct_robustfov.out_roi -> veins_ct_2_contrast_antsreg.fixed
+venous_ct_robustfov.out_roi -> veins_ct_2_ref_antsreg.moving
+venous_ct_robustfov.out_roi -> veins_ct_subtraction.operand_file
