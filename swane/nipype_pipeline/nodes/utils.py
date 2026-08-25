@@ -441,7 +441,7 @@ def get_registration_node(
                 # cut on this tool.
                 workflow.connect(fnirt, "fieldcoeff_file", inv_warp, "warp")
                 if type(moving) == str:
-                    inv_warp.inputs.ref_file = moving
+                    inv_warp.inputs.reference = moving
                 else:
                     workflow.connect(moving[0], moving[1], inv_warp, "reference")
 

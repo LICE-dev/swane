@@ -154,6 +154,25 @@ class TestGetRegistrationNode:
         assert node.inputs.transform_type == "SyN"
         assert wrap.fwd_transforms == [(node, "fwd_transforms")]
 
+    def test_fsl_nonlinear_string_path_wires_invwarp_reference(self, make_nifti):
+        """The rarely-used string-path branch must set InvWarp's real mandatory
+        ``reference`` trait; ``ref_file`` does not exist and raises at build."""
+        from swane.nipype_pipeline.nodes.utils import get_registration_node
+
+        wf = CustomWorkflow(name="wf")
+        moving = make_nifti("m.nii.gz", shape=(6, 6, 6))
+        reference = make_nifti("r.nii.gz", shape=(6, 6, 6))
+        wrap = get_registration_node(
+            name="reg",
+            engine=RegistrationEngine.FSL,
+            workflow=wf,
+            moving=moving,
+            reference=reference,
+            non_linear=True,
+            inverse=True,
+        )
+        assert wrap.inv_warp_node.inputs.reference == moving
+
     def test_ants_test_run_is_off_by_default(self, make_nifti):
         """Full accuracy unless the sweep explicitly asks for the fast path."""
         from nipype.interfaces.base import isdefined
