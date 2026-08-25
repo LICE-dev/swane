@@ -52,3 +52,21 @@ def spawn_worker(crashdump_dir, queue):
     result = npx.swane_run_node(node, False, 1)
     # Nipype's run_node returns dict(result=..., traceback=..., taskid=...).
     queue.put(result["result"])
+
+
+def eddy_hash_worker(queue):
+    """Verify the Eddy hash patch in a fresh multiprocessing interpreter."""
+    import swane.patches.nipype_patches  # noqa: F401
+    from nipype.interfaces.fsl.epi import Eddy
+
+    eddy = Eddy()
+    eddy.inputs.args = "--nthr=2"
+    hashed_inputs, two_thread_hash = eddy.inputs.get_hashval()
+    eddy.inputs.args = "--nthr=8"
+    _, eight_thread_hash = eddy.inputs.get_hashval()
+    queue.put(
+        {
+            "args_in_hash": "args" in dict(hashed_inputs),
+            "same_hash": two_thread_hash == eight_thread_hash,
+        }
+    )
