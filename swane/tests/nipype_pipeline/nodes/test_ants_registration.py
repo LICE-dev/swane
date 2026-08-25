@@ -84,6 +84,17 @@ class TestAntsRegistrationSpec:
         with pytest.raises(Exception):
             node.inputs.transform_type = "not-a-real-transform"
 
+    def test_moving_mask_optional_and_undefined_by_default(self):
+        from nipype.interfaces.base import isdefined
+
+        node = AntsRegistration()
+        assert not isdefined(node.inputs.moving_mask)
+
+    def test_moving_mask_accepts_existing_file(self, make_nifti):
+        node = AntsRegistration()
+        node.inputs.moving_mask = make_nifti("mask.nii.gz", shape=(6, 6, 6))
+        assert node.inputs.moving_mask.endswith("mask.nii.gz")
+
     def test_metrics_are_constrained_to_the_documented_antspyx_values(self):
         """antspyx silently accepts an unknown metric, so the spec must not."""
         node = AntsRegistration()

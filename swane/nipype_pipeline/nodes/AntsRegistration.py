@@ -63,6 +63,11 @@ class AntsRegistrationInputSpec(BaseInterfaceInputSpec):
     )
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
     initial_transform = File(exists=True, desc="initial moving transform")
+    moving_mask = File(
+        exists=True,
+        desc="binary mask in moving space restricting the registration metric "
+        "(ANTs moving_mask)",
+    )
     test_run = traits.Bool(
         desc="reduce antspyx iterations for a faster, lower-accuracy sweep run"
     )
@@ -121,6 +126,8 @@ class AntsRegistration(BaseInterface):
         }
         if isdefined(self.inputs.initial_transform):
             kwargs["initial_transform"] = self.inputs.initial_transform
+        if isdefined(self.inputs.moving_mask):
+            kwargs["moving_mask"] = ants.image_read(self.inputs.moving_mask)
         if isdefined(self.inputs.test_run) and self.inputs.test_run:
             # Fast, lower-accuracy schedules for the prerelease sweep; the graph
             # is unchanged (see TEST_RUN_* above).
