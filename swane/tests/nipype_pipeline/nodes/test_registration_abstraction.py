@@ -191,9 +191,11 @@ class TestGetRegistrationNode:
 
 
 class TestGetRegistrationNodeMovingMask:
-    """The ANTs branch accepts an optional ``moving_mask`` (an ANTs metric mask
-    in moving space, used by seeg_ct's electrode weighting). FSL/Synth ignore
-    it; when absent the AntsRegistration input stays undefined."""
+    """The registration accepts an optional ``moving_mask`` (a metric mask/weight
+    in moving space, used by seeg_ct's electrode weighting). On ANTs it becomes
+    ``AntsRegistration.moving_mask``; on the FSL linear branch the same map is
+    wired as ``FLIRT.in_weight``. Synth ignores it. When absent the ANTs input
+    stays undefined."""
 
     def _ants(self, moving_mask):
         from nipype.interfaces.utility import IdentityInterface
@@ -245,9 +247,9 @@ class TestGetRegistrationNodeMovingMask:
         _, _, wrap = self._ants(None)
         assert not isdefined(wrap.out_registered_node.inputs.moving_mask)
 
-    def test_fsl_branch_ignores_moving_mask(self, make_nifti):
-        """A moving_mask passed on the FSL branch is silently ignored (FLIRT has
-        no such trait); construction must not raise."""
+    def test_fsl_linear_wires_moving_mask_as_in_weight(self, make_nifti):
+        """On the FSL linear branch the moving_mask is wired as FLIRT.in_weight
+        (its per-voxel registration weight analogue)."""
         from nipype.interfaces.utility import IdentityInterface
         from swane.nipype_pipeline.nodes.utils import get_registration_node
 
@@ -265,6 +267,94 @@ class TestGetRegistrationNodeMovingMask:
             moving_mask=[src, "weight"],
         )
         assert _iface(wrap.out_registered_node) == "FLIRT"
+        assert (src, "weight", "in_weight") in _incoming(wf, wrap.out_registered_node)
+
+    def test_fsl_moving_mask_string_set_directly(self, make_nifti):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import get_registration_node
+
+        mask = make_nifti("mask.nii.gz", shape=(6, 6, 6))
+        wf = CustomWorkflow(name="wf")
+        src = Node(IdentityInterface(fields=["moving", "reference"]), name="src")
+        wrap = get_registration_node(
+            name="reg",
+            engine=RegistrationEngine.FSL,
+            workflow=wf,
+            moving=[src, "moving"],
+            reference=[src, "reference"],
+            is_volumetric=True,
+            moving_mask=mask,
+        )
+        assert wrap.out_registered_node.inputs.in_weight == mask
+
+
+class TestGetRegistrationNodeRegisteredAndMapMoving:
+    """The wrapper exposes the moving image resampled into reference space
+    (``registered_node``/``registered_field``) for every backend, and
+    ``map_moving`` builds the registration as a MapNode iterating the moving
+    image (used by venous_ct's contrast series)."""
+
+    def _wrap(self, engine, non_linear=False, is_volumetric=True, map_moving=False):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import get_registration_node
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(IdentityInterface(fields=["moving", "reference"]), name="src")
+        wrap = get_registration_node(
+            name="reg",
+            engine=engine,
+            workflow=wf,
+            moving=[src, "moving"],
+            reference=[src, "reference"],
+            non_linear=non_linear,
+            is_volumetric=is_volumetric,
+            map_moving=map_moving,
+        )
+        return wf, src, wrap
+
+    def test_registered_field_fsl_linear(self, make_nifti):
+        _, _, wrap = self._wrap(RegistrationEngine.FSL)
+        assert wrap.registered_field == "out_file"
+        assert _iface(wrap.registered_node) == "FLIRT"
+
+    def test_registered_field_fsl_nonlinear(self, make_nifti):
+        _, _, wrap = self._wrap(RegistrationEngine.FSL, non_linear=True)
+        assert wrap.registered_field == "warped_file"
+        assert _iface(wrap.registered_node) == "FNIRT"
+
+    def test_registered_field_ants(self, make_nifti):
+        _, _, wrap = self._wrap(RegistrationEngine.ANTS)
+        assert wrap.registered_field == "warped_file"
+        assert _iface(wrap.registered_node) == "AntsRegistration"
+
+    def test_registered_field_synth(self, make_nifti):
+        _, _, wrap = self._wrap(RegistrationEngine.SYNTH)
+        assert wrap.registered_field == "out_file"
+        assert _iface(wrap.registered_node) == "SynthMorphReg"
+
+    def test_map_moving_default_builds_plain_node(self, make_nifti):
+        from nipype import MapNode
+
+        _, _, wrap = self._wrap(RegistrationEngine.ANTS)
+        assert not isinstance(wrap.registered_node, MapNode)
+
+    def test_map_moving_ants_iterates_moving(self, make_nifti):
+        from nipype import MapNode
+
+        _, _, wrap = self._wrap(RegistrationEngine.ANTS, map_moving=True)
+        assert isinstance(wrap.registered_node, MapNode)
+        assert wrap.registered_node.iterfield == ["moving"]
+
+    def test_map_moving_fsl_linear_iterates_in_file(self, make_nifti):
+        from nipype import MapNode
+
+        _, _, wrap = self._wrap(RegistrationEngine.FSL, map_moving=True)
+        assert isinstance(wrap.registered_node, MapNode)
+        assert wrap.registered_node.iterfield == ["in_file"]
+
+    def test_map_moving_fsl_nonlinear_raises(self, make_nifti):
+        with pytest.raises(ValueError):
+            self._wrap(RegistrationEngine.FSL, non_linear=True, map_moving=True)
 
 
 class TestResolveRegistrationEngine:
