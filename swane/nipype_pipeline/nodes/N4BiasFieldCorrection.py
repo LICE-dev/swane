@@ -28,6 +28,7 @@ class N4BiasFieldCorrectionInputSpec(BaseInterfaceInputSpec):
         desc="maximum number of iterations per resolution level "
         "(SimpleITK default is [50, 50, 50, 50])",
     )
+    num_threads = traits.Int(nohash=True, desc="number of ITK threads")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -78,6 +79,10 @@ class N4BiasFieldCorrection(BaseInterface):
                     f"Image and Mask do not coincide! Origin distance: {distance:.4f} mm. "
                     f"Maximum allowed threshold is {max_tolerance} mm."
                 )
+
+        # --- Threads control ---
+        if isdefined(self.inputs.num_threads):
+            sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(self.input.num_threads)
 
         # --- N4 ---
         corrector = sitk.N4BiasFieldCorrectionImageFilter()
