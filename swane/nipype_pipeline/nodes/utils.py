@@ -606,6 +606,83 @@ def wire_transforms(
         workflow.connect(which[0], which[1], apply_node, "which_to_invert")
 
 
+def wire_transform_stack(
+    registration_stack: list,
+    apply_node: Node,
+    workflow: CustomWorkflow,
+    name: str,
+    inverse: bool = False,
+) -> None:
+    """
+    Connect an ordered list of ANTs registration wrappers into ONE
+    ``AntsApplyTransforms`` node, as a single ``transformlist`` and a single,
+    slot-for-slot matching ``which_to_invert``.
+
+    Each wrapper contributes its own ordered transform list (one ``(node,
+    field)`` source whose field is a ``List`` output) and the paired invert
+    flags. The lists are concatenated by two parallel ``Merge(n,
+    ravel_inputs=True)`` nodes -- ``in1`` gets the first wrapper, ``in2`` the
+    second, and ``ravel_inputs`` flattens each wrapper's sub-list in place, so
+    the run-time ``transformlist`` is exactly wrapper 1's transforms followed by
+    wrapper 2's, and ``which_to_invert`` is flattened identically.
+
+    **Order contract:** ``registration_stack`` IS the ``transformlist`` order,
+    i.e. output space -> input space. ANTs applies a transform list
+    right-to-left, so the LAST wrapper acts on the moving image first. To
+    resample a func image into MNI space through func->ref and ref->mni, pass
+    ``[ref_2_mni, func_2_ref]``. ``inverse=True`` swaps each wrapper's forward
+    view for its inverse one but does NOT reorder the stack -- the caller still
+    owns the order.
+
+    ANTs-only: an FSL/Synth wrapper publishes no ``which_to_invert``, so mixing
+    one in would leave the two merges desynchronised (fewer flags than
+    transforms) and ``AntsApplyTransforms`` would reject the pair at run time.
+    This raises instead, at construction time.
+    """
+    if len(registration_stack) < 1:
+        raise ValueError("registration_stack needs at least one registration")
+
+    transformlist_merge = Node(
+        Merge(len(registration_stack), ravel_inputs=True),
+        name=name + "_transformlist",
+    )
+    which_to_invert_merge = Node(
+        Merge(len(registration_stack), ravel_inputs=True),
+        name=name + "_which_to_invert",
+    )
+
+    for slot, registration in enumerate(registration_stack, start=1):
+        if registration.engine != RegistrationEngine.ANTS:
+            raise ValueError(
+                "registration_stack accepts ANTs registration wrappers only, "
+                "got %s at position %d" % (registration.engine, slot)
+            )
+        transforms = (
+            registration.inv_transforms if inverse else registration.fwd_transforms
+        )
+        which = (
+            registration.inv_which_to_invert
+            if inverse
+            else registration.fwd_which_to_invert
+        )
+        if len(transforms) != 1:
+            raise ValueError(
+                "each stacked ANTs registration must expose exactly one "
+                "transform-list source, got %d at position %d" % (len(transforms), slot)
+            )
+        if which is None:
+            raise ValueError(
+                "each stacked ANTs registration must expose which_to_invert "
+                "flags; position %d has none" % slot
+            )
+        src_node, src_field = transforms[0]
+        workflow.connect(src_node, src_field, transformlist_merge, "in%d" % slot)
+        workflow.connect(which[0], which[1], which_to_invert_merge, "in%d" % slot)
+
+    workflow.connect(transformlist_merge, "out", apply_node, "transformlist")
+    workflow.connect(which_to_invert_merge, "out", apply_node, "which_to_invert")
+
+
 def apply_registration_node(
     name: str,
     engine: RegistrationEngine,
@@ -621,7 +698,34 @@ def apply_registration_node(
     iterfield: list[str] = None,
     registration: RegistrationNodeWrapper = None,
     inverse: bool = False,
+    registration_stack: list[RegistrationNodeWrapper] = None,
 ) -> Node:
+    """
+    Resample ``moving`` into ``reference`` space for the given ``engine``.
+
+    Exactly one transform source is used, and the three are mutually exclusive:
+
+    * ``registration`` -- a single :class:`RegistrationNodeWrapper` in the same
+      workflow (the ``wire_transforms`` path);
+    * ``registration_stack`` -- an ordered list of ANTs wrappers concatenated
+      into one ``transformlist`` + ``which_to_invert`` (the
+      ``wire_transform_stack`` path, ANTS only; see its order contract);
+    * ``warp`` -- a single already-composed transform field crossing a workflow
+      boundary.
+    """
+    if registration_stack is not None:
+        if registration is not None:
+            raise ValueError(
+                "registration and registration_stack are mutually exclusive"
+            )
+        if warp is not None:
+            raise ValueError("warp and registration_stack are mutually exclusive")
+        if engine != RegistrationEngine.ANTS:
+            raise ValueError(
+                "registration_stack is supported by the ANTS engine only, got %s"
+                % engine
+            )
+
     node_class = Node if iterfield is None else MapNode
     node_kwargs = {} if iterfield is None else {"iterfield": iterfield}
 
@@ -636,7 +740,15 @@ def apply_registration_node(
         else:
             workflow.connect(reference[0], reference[1], apply_node, "reference_image")
 
-        if registration is not None:
+        if registration_stack is not None:
+            # Several same-workflow registrations concatenated into one apply
+            # (the resting-state func -> ref -> mni resample): one ordered
+            # transformlist and one matching which_to_invert, both built by
+            # ravel Merges (see wire_transform_stack for the order contract).
+            wire_transform_stack(
+                registration_stack, apply_node, workflow, name, inverse=inverse
+            )
+        elif registration is not None:
             # Same-workflow multi-transform apply: forward the wrapper's ordered
             # list AND its which_to_invert flags (see wire_transforms).
             wire_transforms(registration, apply_node, workflow, inverse=inverse)
