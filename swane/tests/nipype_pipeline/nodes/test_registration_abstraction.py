@@ -996,3 +996,306 @@ class TestApplyRegistrationNodeStack:
                 reference=[src, "ref"],
                 registration_stack=[fsl_reg],
             )
+
+
+# --------------------------------------------------------------------------- #
+# C5 (Phase 3): ordering/direction guard for the multi-warp stack (risk #1)
+#
+# The resting-state concat resamples a func image straight into MNI space
+# through TWO registrations at once. Getting the ``transformlist`` order or the
+# ``which_to_invert`` assembly wrong resamples silently into the wrong place --
+# no crash, no warning, just wrong science. This runs real antspyx
+# registrations on a phantom and checks the production path three ways:
+#
+#   1. against the hand-built concatenated list (exact: same single
+#      interpolation, so the ravel ``Merge`` wiring must reproduce it bit for
+#      bit -- this is the abstraction's own contract);
+#   2. against a SEQUENTIAL two-step apply (approximate only: stacking does one
+#      interpolation where the sequential reference does two, and that blur is
+#      physical, not a bug -- hence a geometric agreement bound, not a
+#      voxel-wise one);
+#   3. against the REVERSED stack as a negative control, which must fail both
+#      bounds by a wide margin -- otherwise the guard would not be sensitive to
+#      the very mistake it exists to catch.
+# --------------------------------------------------------------------------- #
+@pytest.mark.heavy
+class TestAntsStackRoundTrip:
+    @staticmethod
+    def _sphere(shape, center, radius):
+        import numpy as np
+
+        grid = np.mgrid[0 : shape[0], 0 : shape[1], 0 : shape[2]].astype(float)
+        distance = sum((grid[i] - center[i]) ** 2 for i in range(3))
+        return (distance < radius**2).astype("float32")
+
+    @staticmethod
+    def _register(fixed, moving, transform_type, workspace, directory):
+        """Run a real antspyx registration in its own directory."""
+        import os
+        from swane.nipype_pipeline.nodes.AntsRegistration import AntsRegistration
+
+        os.makedirs(str(workspace / directory), exist_ok=True)
+        os.chdir(str(workspace / directory))
+        node = AntsRegistration()
+        node.inputs.fixed = fixed
+        node.inputs.moving = moving
+        node.inputs.transform_type = transform_type
+        node.inputs.test_run = True
+        node.run()
+        outputs = node._list_outputs()
+        os.chdir(str(workspace))
+        return outputs
+
+    @staticmethod
+    def _direct_apply(
+        moving, reference, transformlist, which_to_invert, workspace, name
+    ):
+        """Resample through a hand-built transform list (the reference path)."""
+        import os
+        from swane.nipype_pipeline.nodes.AntsApplyTransforms import AntsApplyTransforms
+
+        os.makedirs(str(workspace / ("direct_" + name)), exist_ok=True)
+        os.chdir(str(workspace / ("direct_" + name)))
+        node = AntsApplyTransforms()
+        node.inputs.input_image = moving
+        node.inputs.reference_image = reference
+        node.inputs.transformlist = list(transformlist)
+        node.inputs.which_to_invert = list(which_to_invert)
+        node.inputs.out_file = name + ".nii.gz"
+        node.run()
+        out_file = node._list_outputs()["out_file"]
+        os.chdir(str(workspace))
+        return out_file
+
+    @staticmethod
+    def _stacked_apply(sources, order, moving, reference, workspace, name, inverse):
+        """Resample through the real ``registration_stack`` production path.
+
+        ``sources`` maps a key to its ``(transforms, which_to_invert)`` pair;
+        ``order`` lists those keys in the intended stack order. Each pair is
+        published on one boundary ``IdentityInterface`` and wrapped in a
+        :class:`RegistrationNodeWrapper`, so the workflow exercises exactly the
+        ravel ``Merge`` -> ``transformlist`` / ``which_to_invert`` wiring that
+        ``apply_registration_node`` builds for a real pair of registrations.
+        """
+        import glob
+        import os
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import (
+            RegistrationNodeWrapper,
+            apply_registration_node,
+        )
+
+        run_dir = str(workspace / (name + "_run"))
+        workflow = CustomWorkflow(name=name)
+        workflow.base_dir = run_dir
+        fields = ["moving", "reference"]
+        for key in sources:
+            fields += [key + "_transforms", key + "_flags"]
+        boundary = Node(IdentityInterface(fields=fields), name="boundary")
+        boundary.inputs.moving = moving
+        boundary.inputs.reference = reference
+        for key, (transforms, flags) in sources.items():
+            setattr(boundary.inputs, key + "_transforms", list(transforms))
+            setattr(boundary.inputs, key + "_flags", list(flags))
+
+        def wrapper(key):
+            transform_field = key + "_transforms"
+            flag_field = key + "_flags"
+            return RegistrationNodeWrapper(
+                input_node=boundary,
+                out_registered_node=boundary,
+                warp=transform_field,
+                inv_warp_node=boundary,
+                inv_warp=transform_field,
+                engine=RegistrationEngine.ANTS,
+                fwd_transforms=[(boundary, transform_field)],
+                inv_transforms=[(boundary, transform_field)],
+                fwd_which_to_invert=(boundary, flag_field),
+                inv_which_to_invert=(boundary, flag_field),
+            )
+
+        apply_registration_node(
+            name="stacked",
+            engine=RegistrationEngine.ANTS,
+            workflow=workflow,
+            warp=None,
+            moving=[boundary, "moving"],
+            reference=[boundary, "reference"],
+            non_linear=True,
+            registration_stack=[wrapper(key) for key in order],
+            inverse=inverse,
+            out_file=name + ".nii.gz",
+        )
+        workflow.run()
+        os.chdir(str(workspace))
+        matches = glob.glob(
+            os.path.join(run_dir, "**", name + ".nii.gz"), recursive=True
+        )
+        assert matches, "the stacked apply produced no output file"
+        return matches[0]
+
+    @staticmethod
+    def _centre_of_mass(data):
+        import numpy as np
+
+        indices = np.argwhere(data > 0.5)
+        assert len(indices), "the resampled phantom is empty"
+        return indices.mean(axis=0)
+
+    def test_stack_roundtrip_matches_concatenated_list_and_sequential(
+        self, workspace, make_nifti
+    ):
+        import numpy as np
+        import nibabel as nib
+
+        # three spaces: func -> ref (linear) -> mni (nonlinear), as in the
+        # resting-state concatenation.
+        shape = (40, 40, 40)
+        func = make_nifti("func.nii.gz", data=self._sphere(shape, (20, 20, 20), 7))
+        ref = make_nifti("ref.nii.gz", data=self._sphere(shape, (24, 18, 20), 7))
+        mni = make_nifti("mni.nii.gz", data=self._sphere(shape, (24, 18, 26), 9))
+
+        func_2_ref = self._register(ref, func, "Rigid", workspace, "reg_func_2_ref")
+        ref_2_mni = self._register(mni, ref, "SyN", workspace, "reg_ref_2_mni")
+        sources = {
+            "mni": (
+                ref_2_mni["fwd_transforms"],
+                ref_2_mni["fwd_which_to_invert"],
+            ),
+            "ref": (
+                func_2_ref["fwd_transforms"],
+                func_2_ref["fwd_which_to_invert"],
+            ),
+        }
+
+        # --- the production path: stack order = [ref->mni, func->ref] ------- #
+        stacked = self._stacked_apply(
+            sources, ["mni", "ref"], func, mni, workspace, "stacked", inverse=False
+        )
+
+        # 1. exact match against the hand-built concatenated list ------------ #
+        handbuilt = self._direct_apply(
+            func,
+            mni,
+            list(ref_2_mni["fwd_transforms"]) + list(func_2_ref["fwd_transforms"]),
+            list(ref_2_mni["fwd_which_to_invert"])
+            + list(func_2_ref["fwd_which_to_invert"]),
+            workspace,
+            "handbuilt",
+        )
+        stacked_image = nib.load(stacked)
+        handbuilt_image = nib.load(handbuilt)
+        target_image = nib.load(mni)
+        stacked_data = stacked_image.get_fdata()
+        assert np.count_nonzero(stacked_data) > 100
+        # geometry: the result lives on the reference grid, untouched
+        assert stacked_image.shape == target_image.shape
+        assert np.allclose(stacked_image.affine, target_image.affine)
+        assert stacked_image.header.get_zooms() == target_image.header.get_zooms()
+        assert np.allclose(stacked_data, handbuilt_image.get_fdata(), atol=1e-4)
+
+        # 2. agreement with the SEQUENTIAL two-step apply -------------------- #
+        # Not voxel-wise: the sequential reference interpolates twice and the
+        # stack once, which blurs the edges of a binary phantom by ~1e-2. The
+        # geometry is what must agree.
+        in_ref = self._direct_apply(
+            func,
+            ref,
+            func_2_ref["fwd_transforms"],
+            func_2_ref["fwd_which_to_invert"],
+            workspace,
+            "step_func_2_ref",
+        )
+        sequential = self._direct_apply(
+            in_ref,
+            mni,
+            ref_2_mni["fwd_transforms"],
+            ref_2_mni["fwd_which_to_invert"],
+            workspace,
+            "step_ref_2_mni",
+        )
+        sequential_data = nib.load(sequential).get_fdata()
+        stacked_centre = self._centre_of_mass(stacked_data)
+        sequential_centre = self._centre_of_mass(sequential_data)
+        stacked_offset = np.linalg.norm(stacked_centre - sequential_centre)
+        assert stacked_offset < 0.1, stacked_offset
+        assert np.corrcoef(stacked_data.ravel(), sequential_data.ravel())[0, 1] > 0.999
+
+        # 3. NEGATIVE CONTROL: the reversed stack must be plainly wrong ------ #
+        # Same production path, caller order flipped. If this passed the bounds
+        # above, the guard would not be sensitive to the ordering mistake.
+        reversed_stack = self._stacked_apply(
+            sources, ["ref", "mni"], func, mni, workspace, "reversed", inverse=False
+        )
+        reversed_data = nib.load(reversed_stack).get_fdata()
+        reversed_offset = np.linalg.norm(
+            self._centre_of_mass(reversed_data) - sequential_centre
+        )
+        assert reversed_offset > 1.0, reversed_offset
+        assert reversed_offset > 10 * stacked_offset
+        assert not np.allclose(reversed_data, stacked_data, atol=1e-4)
+
+    def test_stack_roundtrip_inverse_carries_the_invert_flags(
+        self, workspace, make_nifti
+    ):
+        """The inverse stack (mni -> func) must invert the affines it reuses.
+
+        ANTs writes only the forward affine, so both inverse lists carry it and
+        their ``which_to_invert`` flags are ``True`` for those entries. If the
+        flag merge were dropped or misaligned, antspyx would silently apply the
+        matrices un-inverted -- the exact silent failure ``wire_transforms``
+        guards for a single registration, here across a stack.
+        """
+        import numpy as np
+        import nibabel as nib
+
+        shape = (40, 40, 40)
+        func = make_nifti("func.nii.gz", data=self._sphere(shape, (20, 20, 20), 7))
+        ref = make_nifti("ref.nii.gz", data=self._sphere(shape, (24, 18, 20), 7))
+        mni = make_nifti("mni.nii.gz", data=self._sphere(shape, (24, 18, 26), 9))
+
+        func_2_ref = self._register(ref, func, "Rigid", workspace, "reg_func_2_ref")
+        ref_2_mni = self._register(mni, ref, "SyN", workspace, "reg_ref_2_mni")
+
+        # a lone affine inverse really is flagged for inversion
+        assert func_2_ref["inv_which_to_invert"] == [True]
+        assert any(ref_2_mni["inv_which_to_invert"])
+
+        # mni -> func: output space is func, so the stack runs func->ref first
+        sources = {
+            "ref": (
+                func_2_ref["inv_transforms"],
+                func_2_ref["inv_which_to_invert"],
+            ),
+            "mni": (
+                ref_2_mni["inv_transforms"],
+                ref_2_mni["inv_which_to_invert"],
+            ),
+        }
+        stacked = self._stacked_apply(
+            sources, ["ref", "mni"], mni, func, workspace, "inverse", inverse=True
+        )
+        handbuilt = self._direct_apply(
+            mni,
+            func,
+            list(func_2_ref["inv_transforms"]) + list(ref_2_mni["inv_transforms"]),
+            list(func_2_ref["inv_which_to_invert"])
+            + list(ref_2_mni["inv_which_to_invert"]),
+            workspace,
+            "handbuilt_inverse",
+        )
+        stacked_image = nib.load(stacked)
+        stacked_data = stacked_image.get_fdata()
+        func_image = nib.load(func)
+        assert np.count_nonzero(stacked_data) > 100
+        assert stacked_image.shape == func_image.shape
+        assert np.allclose(stacked_image.affine, func_image.affine)
+        assert np.allclose(stacked_data, nib.load(handbuilt).get_fdata(), atol=1e-4)
+
+        # and the round trip lands back on the original func blob
+        offset = np.linalg.norm(
+            self._centre_of_mass(stacked_data)
+            - self._centre_of_mass(func_image.get_fdata())
+        )
+        assert offset < 1.5, offset
