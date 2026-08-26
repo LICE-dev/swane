@@ -757,3 +757,242 @@ class TestAbstractionSingleFieldRoundTrip:
         )
         assert np.count_nonzero(raw_inverse) > 100
         assert np.allclose(raw_inverse, abstraction_inverse, atol=1e-4)
+
+
+# --------------------------------------------------------------------------- #
+# C3 (Phase 3): ANTS-only multi-warp apply path (``registration_stack``)
+#
+# The resting-state func -> ref -> mni concatenation stacks two registration
+# wrappers into ONE ``AntsApplyTransforms``: one ravel ``Merge`` builds the
+# ordered ``transformlist``, a parallel ravel ``Merge`` builds the matching
+# ``which_to_invert``. The stack order IS the transformlist order
+# (output -> input; ANTs applies the list right-to-left), so the caller passes
+# ``[ref_2_mni, func_2_ref]`` to resample a func image into MNI space.
+# --------------------------------------------------------------------------- #
+class TestApplyRegistrationNodeStack:
+    def _stack(self, *, inverse=False, engine=RegistrationEngine.ANTS, **kwargs):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import (
+            apply_registration_node,
+            get_registration_node,
+        )
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(
+            IdentityInterface(fields=["func", "ref", "mni"]),
+            name="src",
+        )
+        # ref -> mni (nonlinear) and func -> ref (linear), the resting concat
+        reg_mni = get_registration_node(
+            name="ref_2_mni",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            moving=[src, "ref"],
+            reference=[src, "mni"],
+            non_linear=True,
+        )
+        reg_ref = get_registration_node(
+            name="func_2_ref",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            moving=[src, "func"],
+            reference=[src, "ref"],
+            non_linear=False,
+        )
+        apply_node = apply_registration_node(
+            name="func2mni",
+            engine=engine,
+            workflow=wf,
+            warp=None,
+            moving=[src, "func"],
+            reference=[src, "mni"],
+            non_linear=True,
+            registration_stack=[reg_mni, reg_ref],
+            inverse=inverse,
+            **kwargs,
+        )
+        return wf, reg_mni, reg_ref, apply_node
+
+    def _merge_feeding(self, wf, apply_node, dst_field):
+        """The Merge node feeding ``dst_field`` of the apply node."""
+        edges = [c for c in _incoming(wf, apply_node) if c[2] == dst_field]
+        assert len(edges) == 1
+        merge_node, src_field, _ = edges[0]
+        assert _iface(merge_node) == "Merge"
+        assert src_field == "out"
+        return merge_node
+
+    def test_registration_stack_builds_ants_apply_node(self):
+        _, _, _, apply_node = self._stack()
+        assert _iface(apply_node) == "AntsApplyTransforms"
+
+    def test_registration_stack_transformlist_merge_is_ravel_and_sized_to_the_stack(
+        self,
+    ):
+        wf, _, _, apply_node = self._stack()
+        merge = self._merge_feeding(wf, apply_node, "transformlist")
+        assert merge.interface._numinputs == 2
+        assert merge.inputs.ravel_inputs is True
+
+    def test_registration_stack_which_to_invert_merge_is_ravel_and_sized_to_the_stack(
+        self,
+    ):
+        wf, _, _, apply_node = self._stack()
+        merge = self._merge_feeding(wf, apply_node, "which_to_invert")
+        assert merge.interface._numinputs == 2
+        assert merge.inputs.ravel_inputs is True
+
+    def test_registration_stack_transformlist_order_is_output_to_input(self):
+        """``in1`` is the ref->mni registration, ``in2`` the func->ref one.
+
+        ANTs applies a transform list right-to-left, so the last entry acts
+        first: the func image must meet its func->ref transform first and the
+        ref->mni transform second. Reversing this silently resamples wrong.
+        """
+        wf, reg_mni, reg_ref, apply_node = self._stack()
+        merge = self._merge_feeding(wf, apply_node, "transformlist")
+        incoming = _incoming(wf, merge)
+        assert (reg_mni.out_registered_node, "fwd_transforms", "in1") in incoming
+        assert (reg_ref.out_registered_node, "fwd_transforms", "in2") in incoming
+
+    def test_registration_stack_which_to_invert_order_matches_the_transformlist(self):
+        """The flag merge must mirror the transform merge slot for slot."""
+        wf, reg_mni, reg_ref, apply_node = self._stack()
+        merge = self._merge_feeding(wf, apply_node, "which_to_invert")
+        incoming = _incoming(wf, merge)
+        assert (reg_mni.out_registered_node, "fwd_which_to_invert", "in1") in incoming
+        assert (reg_ref.out_registered_node, "fwd_which_to_invert", "in2") in incoming
+
+    def test_registration_stack_inverse_takes_the_inverse_views_slot_for_slot(self):
+        """``inverse=True`` swaps each wrapper's forward view for its inverse
+        one; it does NOT reorder the stack (the caller owns the order)."""
+        wf, reg_mni, reg_ref, apply_node = self._stack(inverse=True)
+        tl = _incoming(wf, self._merge_feeding(wf, apply_node, "transformlist"))
+        wti = _incoming(wf, self._merge_feeding(wf, apply_node, "which_to_invert"))
+        assert (reg_mni.out_registered_node, "inv_transforms", "in1") in tl
+        assert (reg_ref.out_registered_node, "inv_transforms", "in2") in tl
+        assert (reg_mni.out_registered_node, "inv_which_to_invert", "in1") in wti
+        assert (reg_ref.out_registered_node, "inv_which_to_invert", "in2") in wti
+
+    def test_registration_stack_merge_nodes_are_named_after_the_apply_node(self):
+        wf, _, _, _ = self._stack()
+        names = {node.name for node in wf._graph.nodes()}
+        assert "func2mni_transformlist" in names
+        assert "func2mni_which_to_invert" in names
+
+    def test_registration_stack_moving_and_reference_still_wired(self):
+        wf, _, _, apply_node = self._stack()
+        incoming = _incoming(wf, apply_node)
+        assert any(c[2] == "input_image" for c in incoming)
+        assert any(c[2] == "reference_image" for c in incoming)
+
+    def test_registration_stack_labelmap_and_out_file_still_honoured(self):
+        _, _, _, apply_node = self._stack(labelmap=True, out_file="stacked.nii.gz")
+        assert apply_node.inputs.interpolator == "nearestNeighbor"
+        assert apply_node.inputs.out_file == "stacked.nii.gz"
+
+    # -- misuse guards ----------------------------------------------------- #
+    def test_registration_stack_rejects_combining_stack_with_registration(self):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import (
+            apply_registration_node,
+            get_registration_node,
+        )
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(IdentityInterface(fields=["func", "ref"]), name="src")
+        reg = get_registration_node(
+            name="func_2_ref",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            moving=[src, "func"],
+            reference=[src, "ref"],
+        )
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            apply_registration_node(
+                name="apply",
+                engine=RegistrationEngine.ANTS,
+                workflow=wf,
+                warp=None,
+                moving=[src, "func"],
+                reference=[src, "ref"],
+                registration=reg,
+                registration_stack=[reg],
+            )
+
+    def test_registration_stack_rejects_combining_stack_with_bare_warp(self):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import (
+            apply_registration_node,
+            get_registration_node,
+        )
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(IdentityInterface(fields=["func", "ref", "warp"]), name="src")
+        reg = get_registration_node(
+            name="func_2_ref",
+            engine=RegistrationEngine.ANTS,
+            workflow=wf,
+            moving=[src, "func"],
+            reference=[src, "ref"],
+        )
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            apply_registration_node(
+                name="apply",
+                engine=RegistrationEngine.ANTS,
+                workflow=wf,
+                warp=[src, "warp"],
+                moving=[src, "func"],
+                reference=[src, "ref"],
+                registration_stack=[reg],
+            )
+
+    def test_registration_stack_rejects_non_ants_engine(self):
+        with pytest.raises(ValueError, match="ANTS"):
+            self._stack(engine=RegistrationEngine.FSL)
+
+    def test_registration_stack_rejects_empty_stack(self):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import apply_registration_node
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(IdentityInterface(fields=["func", "ref"]), name="src")
+        with pytest.raises(ValueError, match="at least one"):
+            apply_registration_node(
+                name="apply",
+                engine=RegistrationEngine.ANTS,
+                workflow=wf,
+                warp=None,
+                moving=[src, "func"],
+                reference=[src, "ref"],
+                registration_stack=[],
+            )
+
+    def test_registration_stack_rejects_a_non_ants_wrapper_in_the_stack(self):
+        """An FSL wrapper carries no ``which_to_invert``: stacking it would
+        silently desynchronise the two merges."""
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import (
+            apply_registration_node,
+            get_registration_node,
+        )
+
+        wf = CustomWorkflow(name="wf")
+        src = Node(IdentityInterface(fields=["func", "ref"]), name="src")
+        fsl_reg = get_registration_node(
+            name="func_2_ref",
+            engine=RegistrationEngine.FSL,
+            workflow=wf,
+            moving=[src, "func"],
+            reference=[src, "ref"],
+        )
+        with pytest.raises(ValueError, match="ANTs registration"):
+            apply_registration_node(
+                name="apply",
+                engine=RegistrationEngine.ANTS,
+                workflow=wf,
+                warp=None,
+                moving=[src, "func"],
+                reference=[src, "ref"],
+                registration_stack=[fsl_reg],
+            )
