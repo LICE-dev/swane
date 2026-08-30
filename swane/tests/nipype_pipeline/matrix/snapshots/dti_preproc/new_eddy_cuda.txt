@@ -8,7 +8,7 @@
 #   synth_strip = False
 #   tractography = false
 #
-# nodes=12 edges=20
+# nodes=12 edges=21
 
 - dif2ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'corratio'
@@ -79,8 +79,8 @@
 # connections
 dif2ref_flirt.out_matrix_file -> dif2ref_invwarp.in_file
 dif2ref_flirt.out_matrix_file -> fa_2_ref_apply_xfm.in_matrix_file
-dif2ref_flirt.out_matrix_file -> outputnode.diff2ref_mat
-dif2ref_invwarp.out_file -> outputnode.ref2diff_mat
+dif2ref_flirt.out_matrix_file -> outputnode.diff2ref_transforms
+dif2ref_invwarp.out_file -> outputnode.ref2diff_transforms
 dti_conv.bvals -> dti_dtifit.bvals
 dti_conv.bvals -> dti_eddy.in_bval
 dti_conv.bvals -> dti_eddy_files.bval
@@ -90,6 +90,7 @@ dti_conv.converted_files -> dti_reOrient.in_file
 dti_deskull_bet.mask_file -> dti_dtifit.mask
 dti_deskull_bet.mask_file -> dti_eddy.in_mask
 dti_deskull_bet.out_file -> dif2ref_flirt.in_file
+dti_deskull_bet.out_file -> outputnode.nodif_brain
 dti_dtifit.FA -> fa_2_ref_apply_xfm.in_file
 dti_eddy.out_corrected -> dti_dtifit.dwi
 dti_eddy_files.acqp -> dti_eddy.in_acqp
