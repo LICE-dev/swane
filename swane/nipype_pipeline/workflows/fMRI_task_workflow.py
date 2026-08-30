@@ -12,8 +12,11 @@ from nipype.interfaces.fsl import (
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.FMRIGenSpec import FMRIGenSpec
-from swane.nipype_pipeline.nodes.utils import apply_registration_node
-from swane.config.config_enums import BlockDesign, RegistrationEngine
+from swane.nipype_pipeline.nodes.utils import (
+    apply_registration_node,
+    resolve_registration_engine,
+)
+from swane.config.config_enums import BlockDesign, CoreLimit, RegistrationEngine
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 
 
@@ -21,7 +24,10 @@ def fMRI_task_workflow(
     name: str,
     dicom_dir: str,
     config: SectionProxy,
+    synth_config: SectionProxy,
     base_dir: str = "/",
+    max_cpu: int = 0,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -35,8 +41,18 @@ def fMRI_task_workflow(
         The directory path of the DICOM files.
     config: SectionProxy
         workflow settings.
+    synth_config: SectionProxy
+        The Synth-tools configuration section used to resolve the registration
+        engine. EPI avoids SynthMorph, so SYNTH falls back to FSL; the resolved
+        engine drives both the shared func->ref registration and the
+        cluster->reference resamples.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        Per-subject CPU budget passed to the registration node. The default is 0.
+    multicore_node_limit : CoreLimit, optional
+        How the registration node's thread usage is capped/accounted. The
+        default is ``CoreLimit.SOFT_CAP``.
     test_run : bool, optional
         If True, speed up the underlying fMRI preprocessing (motion
         correction) for prerelease test runs at the cost of accuracy.
@@ -75,6 +91,13 @@ def fMRI_task_workflow(
     if block_design == BlockDesign.RARB:
         hpcutoff = hpcutoff * 2
 
+    # The EPI registration engine, resolved once for the shared func->ref
+    # registration built by fMRI_preproc_workflow and for every apply below.
+    # EPI avoids SynthMorph (see spec 1), so SYNTH falls back to FSL.
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    if engine == RegistrationEngine.SYNTH:
+        engine = RegistrationEngine.FSL
+
     workflow = fMRI_preproc_workflow(
         name=name,
         dicom_dir=dicom_dir,
@@ -84,7 +107,10 @@ def fMRI_task_workflow(
         hpcutoff=hpcutoff,
         del_start_vols=del_start_vols,
         del_end_vols=del_end_vols,
+        synth_config=synth_config,
         base_dir=base_dir,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
         test_run=test_run,
     )
 
@@ -108,7 +134,6 @@ def fMRI_task_workflow(
     del_vols = workflow.get_node("%s_del_vols" % name)
     motion_correct = workflow.get_node("%s_motion_correct" % name)
     dilatemask = workflow.get_node("%s_dilatemask" % name)
-    flirt_2_ref = workflow.get_node("%s_2_ref_flirt" % name)
     highpass = workflow.get_node("%s_highpass" % name)
     inputnode = workflow.get_node("inputnode")
 
@@ -254,9 +279,14 @@ def fMRI_task_workflow(
         # NODE 37a: Transformation in ref space
         cluster1_2_ref = apply_registration_node(
             name="%s_cluster_t3_%d_to_ref" % (name, cont),
-            engine=RegistrationEngine.FSL,
+            engine=engine,
             workflow=workflow,
-            warp=[flirt_2_ref, "out_matrix_file"],
+            # The func->ref transform comes from the wrapper fMRI_preproc
+            # exposes: on ANTs registration= feeds the whole ordered transform
+            # list plus its which_to_invert flags (wire_transforms), while the
+            # FSL/Synth branches keep reading the single-file .mat view.
+            warp=[workflow.reg_2_ref.out_registered_node, workflow.reg_2_ref.warp],
+            registration=workflow.reg_2_ref,
             moving=[cluster1, "threshold_file"],
             reference=[inputnode, "reference_brain"],
             out_file=[genSpec, ("contrasts", cluster_file_name, threshold, name, cont)],
@@ -310,9 +340,14 @@ def fMRI_task_workflow(
         # NODE 37b: Transformation in ref space
         cluster2_2_ref = apply_registration_node(
             name="%s_cluster_t5_%d_to_ref" % (name, cont),
-            engine=RegistrationEngine.FSL,
+            engine=engine,
             workflow=workflow,
-            warp=[flirt_2_ref, "out_matrix_file"],
+            # The func->ref transform comes from the wrapper fMRI_preproc
+            # exposes: on ANTs registration= feeds the whole ordered transform
+            # list plus its which_to_invert flags (wire_transforms), while the
+            # FSL/Synth branches keep reading the single-file .mat view.
+            warp=[workflow.reg_2_ref.out_registered_node, workflow.reg_2_ref.warp],
+            registration=workflow.reg_2_ref,
             moving=[cluster2, "threshold_file"],
             reference=[inputnode, "reference_brain"],
             out_file=[genSpec, ("contrasts", cluster_file_name, threshold, name, cont)],
@@ -366,9 +401,14 @@ def fMRI_task_workflow(
         # NODE 37c: Transformation in ref space
         cluster3_2_ref = apply_registration_node(
             name="%s_cluster_t7_%d_to_ref" % (name, cont),
-            engine=RegistrationEngine.FSL,
+            engine=engine,
             workflow=workflow,
-            warp=[flirt_2_ref, "out_matrix_file"],
+            # The func->ref transform comes from the wrapper fMRI_preproc
+            # exposes: on ANTs registration= feeds the whole ordered transform
+            # list plus its which_to_invert flags (wire_transforms), while the
+            # FSL/Synth branches keep reading the single-file .mat view.
+            warp=[workflow.reg_2_ref.out_registered_node, workflow.reg_2_ref.warp],
+            registration=workflow.reg_2_ref,
             moving=[cluster3, "threshold_file"],
             reference=[inputnode, "reference_brain"],
             out_file=[genSpec, ("contrasts", cluster_file_name, threshold, name, cont)],

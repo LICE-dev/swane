@@ -1299,3 +1299,163 @@ class TestAntsStackRoundTrip:
             - self._centre_of_mass(func_image.get_fdata())
         )
         assert offset < 1.5, offset
+
+
+# --------------------------------------------------------------------------- #
+# C3 (Phase 3): the ANTS apply MapNode iterates the moving image
+#
+# The task/resting consumers apply a *list* of statistical maps through one
+# node: ``apply_registration_node(..., iterfield=["in_file", "out_file"])``.
+# ``in_file`` is the FSL/Synth name for the moving image; AntsApplyTransforms
+# calls it ``input_image``, and a nipype MapNode silently ignores an iterfield
+# its interface does not declare -- the whole list would then be handed to a
+# single File input at run time. The abstraction therefore translates the name
+# on the ANTS branch, next to the equivalent translation its connect calls do.
+# --------------------------------------------------------------------------- #
+class TestApplyRegistrationNodeIterfield:
+    @staticmethod
+    def _identity_wrapper(workflow, boundary):
+        from swane.nipype_pipeline.nodes.utils import RegistrationNodeWrapper
+
+        return RegistrationNodeWrapper(
+            input_node=boundary,
+            out_registered_node=boundary,
+            warp="transforms",
+            inv_warp_node=boundary,
+            inv_warp="transforms",
+            engine=RegistrationEngine.ANTS,
+            fwd_transforms=[(boundary, "transforms")],
+            inv_transforms=[(boundary, "transforms")],
+            fwd_which_to_invert=(boundary, "flags"),
+            inv_which_to_invert=(boundary, "flags"),
+        )
+
+    def _apply(self, engine, iterfield=("in_file", "out_file")):
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import apply_registration_node
+
+        workflow = CustomWorkflow(name="wf")
+        boundary = Node(
+            IdentityInterface(
+                fields=["moving", "reference", "transforms", "flags", "names"]
+            ),
+            name="boundary",
+        )
+        return apply_registration_node(
+            name="maps",
+            engine=engine,
+            workflow=workflow,
+            warp=[boundary, "transforms"],
+            registration=self._identity_wrapper(workflow, boundary),
+            moving=[boundary, "moving"],
+            reference=[boundary, "reference"],
+            out_file=[boundary, "names"],
+            non_linear=False,
+            iterfield=list(iterfield),
+        )
+
+    def test_ants_translates_in_file_iterfield(self):
+        node = self._apply(RegistrationEngine.ANTS)
+        assert _iface(node) == "AntsApplyTransforms"
+        assert node.iterfield == ["input_image", "out_file"]
+
+    def test_fsl_iterfield_is_left_alone(self):
+        node = self._apply(RegistrationEngine.FSL)
+        assert _iface(node) == "ApplyXFM"
+        assert node.iterfield == ["in_file", "out_file"]
+
+    def test_caller_may_use_the_ants_name_directly(self):
+        """Translation only renames ``in_file``; anything else passes through."""
+        node = self._apply(RegistrationEngine.ANTS, iterfield=("input_image",))
+        assert node.iterfield == ["input_image"]
+
+
+@pytest.mark.heavy
+class TestAntsApplyIterfieldRun:
+    """Runtime guard for the translation above: the MapNode must really resample
+    each moving image on its own. An identity affine keeps the expensive part
+    out -- what is under test is the iteration, not the resampling maths."""
+
+    @staticmethod
+    def _identity_transform(path):
+        import ants
+
+        ants.write_transform(
+            ants.create_ants_transform(transform_type="AffineTransform", dimension=3),
+            str(path),
+        )
+        return str(path)
+
+    def test_each_moving_image_is_resampled_separately(self, workspace, make_nifti):
+        import glob
+        import os
+
+        import nibabel as nib
+        import numpy as np
+        from nipype.interfaces.utility import IdentityInterface
+        from swane.nipype_pipeline.nodes.utils import (
+            RegistrationNodeWrapper,
+            apply_registration_node,
+        )
+
+        reference = make_nifti("reference.nii.gz", shape=(8, 8, 8))
+        first = np.zeros((8, 8, 8), dtype=np.float32)
+        first[2, 2, 2] = 1.0
+        second = np.zeros((8, 8, 8), dtype=np.float32)
+        second[5, 5, 5] = 1.0
+        movings = [
+            make_nifti("map1.nii.gz", data=first),
+            make_nifti("map2.nii.gz", data=second),
+        ]
+        transform = self._identity_transform(workspace / "identity.mat")
+
+        run_dir = str(workspace / "iterfield_run")
+        workflow = CustomWorkflow(name="iterfield")
+        workflow.base_dir = run_dir
+        boundary = Node(
+            IdentityInterface(
+                fields=["moving", "reference", "transforms", "flags", "names"]
+            ),
+            name="boundary",
+        )
+        boundary.inputs.moving = movings
+        boundary.inputs.reference = reference
+        boundary.inputs.transforms = [transform]
+        boundary.inputs.flags = [False]
+        boundary.inputs.names = ["r-map1.nii.gz", "r-map2.nii.gz"]
+        apply_registration_node(
+            name="maps",
+            engine=RegistrationEngine.ANTS,
+            workflow=workflow,
+            warp=[boundary, "transforms"],
+            registration=RegistrationNodeWrapper(
+                input_node=boundary,
+                out_registered_node=boundary,
+                warp="transforms",
+                inv_warp_node=boundary,
+                inv_warp="transforms",
+                engine=RegistrationEngine.ANTS,
+                fwd_transforms=[(boundary, "transforms")],
+                inv_transforms=[(boundary, "transforms")],
+                fwd_which_to_invert=(boundary, "flags"),
+                inv_which_to_invert=(boundary, "flags"),
+            ),
+            moving=[boundary, "moving"],
+            reference=[boundary, "reference"],
+            out_file=[boundary, "names"],
+            non_linear=False,
+            iterfield=["in_file", "out_file"],
+        )
+        workflow.run()
+        os.chdir(str(workspace))
+
+        # One output per moving image, each carrying its own peak: proof the
+        # MapNode iterated instead of collapsing the list onto one apply.
+        for name, expected_peak in (
+            ("r-map1.nii.gz", (2, 2, 2)),
+            ("r-map2.nii.gz", (5, 5, 5)),
+        ):
+            matches = glob.glob(os.path.join(run_dir, "**", name), recursive=True)
+            assert matches, "the MapNode produced no %s" % name
+            data = nib.load(matches[0]).get_fdata()
+            assert np.unravel_index(int(np.argmax(data)), data.shape) == expected_peak
