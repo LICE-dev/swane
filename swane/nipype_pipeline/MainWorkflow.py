@@ -1106,6 +1106,9 @@ class MainWorkflow(CustomWorkflow):
                 dicom_dir=dicom_dir,
                 config=self.subject_config[DIL["FMRI_%d" % y]],
                 base_dir=self.base_dir,
+                synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                max_cpu=self.max_cpu,
+                multicore_node_limit=self.multicore_node_limit,
                 test_run=self.test_run,
             )
             self.fMRI.long_name = "Task fMRI analysis - %d" % y
@@ -1149,6 +1152,9 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=dicom_dir,
             config=self.subject_config[DIL.FMRI_RS],
             base_dir=self.base_dir,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.fMRI_resting_state.long_name = "Resting state fMRI analysis"
