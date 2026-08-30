@@ -1059,15 +1059,33 @@ class MainWorkflow(CustomWorkflow):
                     )
                     self.connect(
                         self.dti_preproc,
-                        "outputnode.diff2ref_mat",
+                        "outputnode.nodif_brain",
                         tract_workflow,
-                        "inputnode.diff2ref_mat",
+                        "inputnode.nodif_brain",
                     )
                     self.connect(
                         self.dti_preproc,
-                        "outputnode.ref2diff_mat",
+                        "outputnode.diff2ref_transforms",
                         tract_workflow,
-                        "inputnode.ref2diff_mat",
+                        "inputnode.diff2ref_transforms",
+                    )
+                    self.connect(
+                        self.dti_preproc,
+                        "outputnode.diff2ref_which_to_invert",
+                        tract_workflow,
+                        "inputnode.diff2ref_which_to_invert",
+                    )
+                    self.connect(
+                        self.dti_preproc,
+                        "outputnode.ref2diff_transforms",
+                        tract_workflow,
+                        "inputnode.ref2diff_transforms",
+                    )
+                    self.connect(
+                        self.dti_preproc,
+                        "outputnode.ref2diff_which_to_invert",
+                        tract_workflow,
+                        "inputnode.ref2diff_which_to_invert",
                     )
                     self.connect(
                         self.mni1,
