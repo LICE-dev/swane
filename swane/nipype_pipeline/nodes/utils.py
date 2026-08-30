@@ -726,6 +726,17 @@ def apply_registration_node(
                 % engine
             )
 
+    if iterfield is not None and engine == RegistrationEngine.ANTS:
+        # Callers name their iterfields in the FSL/Synth vocabulary ("in_file"),
+        # but AntsApplyTransforms takes the moving image as "input_image". A
+        # MapNode silently ignores an iterfield its interface does not declare,
+        # which would hand the whole list to a single File input at run time --
+        # so the moving-image name is translated here, next to the equivalent
+        # translation the connect calls below already do.
+        iterfield = [
+            "input_image" if field == "in_file" else field for field in iterfield
+        ]
+
     node_class = Node if iterfield is None else MapNode
     node_kwargs = {} if iterfield is None else {"iterfield": iterfield}
 
