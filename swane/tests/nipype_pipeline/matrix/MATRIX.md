@@ -1,6 +1,6 @@
 # SWANe workflow settings matrix
 
-Overview of 72 construction scenarios across 14 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
+Overview of 75 construction scenarios across 14 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
 > Generated from the golden snapshots by `python swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
@@ -10,20 +10,21 @@ Overview of 72 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [new_eddy_cpu_hardcap](snapshots/dti_preproc/new_eddy_cpu_hardcap.txt) | cuda=false; max_cpu=4; multicore_node_limit=HARD_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 20 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
-| [new_eddy_cpu_softcap](snapshots/dti_preproc/new_eddy_cpu_softcap.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 20 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
-| [new_eddy_cuda](snapshots/dti_preproc/new_eddy_cuda.txt) | cuda=true; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 20 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy`, `flirt` | `use_cuda=True` |
+| [new_eddy_cpu_hardcap](snapshots/dti_preproc/new_eddy_cpu_hardcap.txt) | cuda=false; max_cpu=4; multicore_node_limit=HARD_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 21 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
+| [new_eddy_cpu_softcap](snapshots/dti_preproc/new_eddy_cpu_softcap.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 21 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
+| [new_eddy_cuda](snapshots/dti_preproc/new_eddy_cuda.txt) | cuda=true; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=false | 12 / 21 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy`, `flirt` | `use_cuda=True` |
 | [new_eddy_tractography](snapshots/dti_preproc/new_eddy_tractography.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; tractography=true | 13 / 25 | `bedpostx`, `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False`, `use_gpu=False` |
-| [old_eddy_correct](snapshots/dti_preproc/old_eddy_correct.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=true; synth_morph=False; synth_strip=False; tractography=false | 11 / 16 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_correct`, `flirt` | — |
+| [old_eddy_correct](snapshots/dti_preproc/old_eddy_correct.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=true; synth_morph=False; synth_strip=False; tractography=false | 11 / 17 | `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_correct`, `flirt` | — |
 | [test_run](snapshots/dti_preproc/test_run.txt) | cuda=false; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; synth_strip=False; test_run=True; tractography=true | 13 / 25 | `bedpostx`, `bet`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False`, `use_gpu=False` |
 
 ## flat1
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [fsl_backend](snapshots/flat1/fsl_backend.txt) | synth_morph=false | 30 / 44 | `applywarp`, `fast`, `fslmaths` | — |
+| [ants_backend](snapshots/flat1/ants_backend.txt) | registration_engine=ANTS; synth_morph=false | 37 / 55 | `fast`, `fslmaths` | — |
+| [fsl_backend](snapshots/flat1/fsl_backend.txt) | registration_engine=FSL; synth_morph=false | 30 / 44 | `applywarp`, `fast`, `fslmaths` | — |
 | [fsl_backend_test_run](snapshots/flat1/fsl_backend_test_run.txt) | synth_morph=false; test_run=True | 30 / 44 | `applywarp`, `fast`, `fslmaths` | — |
-| [synthmorph_backend](snapshots/flat1/synthmorph_backend.txt) | synth_morph=true | 30 / 44 | `fast`, `fslmaths`, `mri_synthmorph` | — |
+| [synthmorph_backend](snapshots/flat1/synthmorph_backend.txt) | registration_engine=SYNTH; synth_morph=true | 30 / 44 | `fast`, `fslmaths`, `mri_synthmorph` | — |
 | [synthmorph_backend_test_run](snapshots/flat1/synthmorph_backend_test_run.txt) | synth_morph=true; test_run=True | 30 / 44 | `fast`, `fslmaths`, `mri_synthmorph` | — |
 
 ## fmri_preproc
@@ -72,6 +73,7 @@ Overview of 72 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
+| [ants_backend](snapshots/func_map/ants_backend.txt) | ai=true; config=ASL; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=DISABLED; registration_engine=ANTS | 16 / 25 | `dcm2niix`, `fslmaths` | — |
 | [no_freesurfer_ai](snapshots/func_map/no_freesurfer_ai.txt) | ai=true; config=ASL; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=DISABLED | 14 / 22 | `applywarp`, `dcm2niix`, `flirt`, `fslmaths` | — |
 | [no_freesurfer_no_ai](snapshots/func_map/no_freesurfer_no_ai.txt) | ai=false; config=ASL; cost_func=NORMALIZED_MUTUAL_INFORMATION; freesurfer_step=DISABLED | 8 / 11 | `dcm2niix`, `flirt`, `fslmaths` | — |
 | [pet_reconall_ai](snapshots/func_map/pet_reconall_ai.txt) | ai=true; config=PET; cost_func=MUTUAL_INFORMATION; freesurfer_step=RECONALL | 21 / 43 | `applywarp`, `dcm2niix`, `flirt`, `fslmaths`, `mri_vol2surf` | — |
@@ -84,23 +86,25 @@ Overview of 72 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [flair2d_non_volumetric](snapshots/linear_reg/flair2d_non_volumetric.txt) | bias_field_correction=False; config=None; is_partial_coverage=False; is_volumetric=False; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; synth_strip=false | 11 / 18 | `bet`, `dcm2niix`, `flirt`, `robustfov` | — |
-| [flair3d_bias](snapshots/linear_reg/flair3d_bias.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; synth_strip=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
-| [flair3d_no_bias](snapshots/linear_reg/flair3d_no_bias.txt) | bias_field_correction=False; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; synth_strip=false | 11 / 18 | `bet`, `dcm2niix`, `flirt`, `robustfov` | — |
-| [flair3d_synth_backend](snapshots/linear_reg/flair3d_synth_backend.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=true; synth_strip=true | 13 / 24 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip`, `robustfov` | — |
-| [flair3d_synth_backend_limit_cores](snapshots/linear_reg/flair3d_synth_backend_limit_cores.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=true; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=true; synth_strip=true | 13 / 24 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip`, `robustfov` | — |
-| [mdc_bias](snapshots/linear_reg/mdc_bias.txt) | bias_field_correction=True; config=MDC; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; synth_strip=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
-| [t2cor_partial_coverage](snapshots/linear_reg/t2cor_partial_coverage.txt) | bias_field_correction=False; config=None; is_partial_coverage=True; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; synth_strip=false | 10 / 16 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
+| [flair2d_non_volumetric](snapshots/linear_reg/flair2d_non_volumetric.txt) | bias_field_correction=False; config=None; is_partial_coverage=False; is_volumetric=False; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false; synth_strip=false | 11 / 18 | `bet`, `dcm2niix`, `flirt`, `robustfov` | — |
+| [flair3d_ants_backend](snapshots/linear_reg/flair3d_ants_backend.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=ANTS; synth_morph=false; synth_strip=false | 13 / 26 | `bet`, `dcm2niix`, `fslmaths`, `robustfov` | — |
+| [flair3d_bias](snapshots/linear_reg/flair3d_bias.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false; synth_strip=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
+| [flair3d_no_bias](snapshots/linear_reg/flair3d_no_bias.txt) | bias_field_correction=False; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false; synth_strip=false | 11 / 18 | `bet`, `dcm2niix`, `flirt`, `robustfov` | — |
+| [flair3d_synth_backend](snapshots/linear_reg/flair3d_synth_backend.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=SYNTH; synth_morph=true; synth_strip=true | 13 / 24 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip`, `robustfov` | — |
+| [flair3d_synth_backend_limit_cores](snapshots/linear_reg/flair3d_synth_backend_limit_cores.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=true; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=SYNTH; synth_morph=true; synth_strip=true | 13 / 24 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip`, `robustfov` | — |
+| [mdc_bias](snapshots/linear_reg/mdc_bias.txt) | bias_field_correction=True; config=MDC; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false; synth_strip=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
+| [t2cor_partial_coverage](snapshots/linear_reg/t2cor_partial_coverage.txt) | bias_field_correction=False; config=None; is_partial_coverage=True; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false; synth_strip=false | 10 / 16 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
 | [test_run](snapshots/linear_reg/test_run.txt) | bias_field_correction=True; config=FLAIR3D; is_partial_coverage=False; is_volumetric=True; synth_morph=False; synth_strip=False; test_run=True | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
 
 ## nonlinear_reg
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [fsl_backend](snapshots/nonlinear_reg/fsl_backend.txt) | limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false | 6 / 10 | `applywarp`, `flirt`, `fnirt`, `invwarp` | — |
+| [ants_backend](snapshots/nonlinear_reg/ants_backend.txt) | limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=ANTS; synth_morph=false | 6 / 10 | — | — |
+| [fsl_backend](snapshots/nonlinear_reg/fsl_backend.txt) | limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false | 6 / 10 | `applywarp`, `flirt`, `fnirt`, `invwarp` | — |
 | [fsl_backend_test_run](snapshots/nonlinear_reg/fsl_backend_test_run.txt) | max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; test_run=True | 6 / 10 | `applywarp`, `flirt`, `fnirt`, `invwarp` | — |
-| [synthmorph_backend](snapshots/nonlinear_reg/synthmorph_backend.txt) | limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=true | 4 / 5 | `mri_synthmorph` | — |
-| [synthmorph_backend_limit_cores](snapshots/nonlinear_reg/synthmorph_backend_limit_cores.txt) | limit_synth_cores=true; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=true | 4 / 5 | `mri_synthmorph` | — |
+| [synthmorph_backend](snapshots/nonlinear_reg/synthmorph_backend.txt) | limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=SYNTH; synth_morph=true | 4 / 5 | `mri_synthmorph` | — |
+| [synthmorph_backend_limit_cores](snapshots/nonlinear_reg/synthmorph_backend_limit_cores.txt) | limit_synth_cores=true; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=SYNTH; synth_morph=true | 4 / 5 | `mri_synthmorph` | — |
 | [synthmorph_backend_test_run](snapshots/nonlinear_reg/synthmorph_backend_test_run.txt) | max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=true; test_run=True | 4 / 5 | `mri_synthmorph` | — |
 
 ## ref
@@ -118,24 +122,23 @@ Overview of 72 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [default](snapshots/seeg_ct/default.txt) | electrode_threshold=2000; erode_kernel_size=5 | 13 / 16 | `dcm2niix`, `flirt`, `fslmaths` | — |
-| [tuned_threshold_kernel](snapshots/seeg_ct/tuned_threshold_kernel.txt) | electrode_threshold=2500; erode_kernel_size=8 | 13 / 16 | `dcm2niix`, `flirt`, `fslmaths` | — |
+| [ants_backend](snapshots/seeg_ct/ants_backend.txt) | registration_engine=ANTS | 13 / 16 | `dcm2niix`, `fslmaths` | — |
+| [fsl_backend](snapshots/seeg_ct/fsl_backend.txt) | registration_engine=FSL | 13 / 16 | `dcm2niix`, `flirt`, `fslmaths` | — |
 
 ## tractography
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [cst_real_graph](snapshots/tractography/cst_real_graph.txt) | cuda=false; tract=cst; xtract_data=present | 13 / 21 | `applywarp`, `probtrackx2` | `use_gpu=False` |
-| [cst_real_graph_test_run](snapshots/tractography/cst_real_graph_test_run.txt) | cuda=false; test_run=True; tract=cst; xtract_data=present | 13 / 21 | `applywarp`, `probtrackx2` | `use_gpu=False` |
+| [cst_real_graph](snapshots/tractography/cst_real_graph.txt) | cuda=false; tract=cst; xtract_data=present | 21 / 39 | `applywarp`, `flirt`, `probtrackx2` | `use_gpu=False` |
+| [cst_real_graph_ants_backend](snapshots/tractography/cst_real_graph_ants_backend.txt) | cuda=false; registration_engine=ANTS; tract=cst; xtract_data=present | 27 / 51 | `probtrackx2` | `use_gpu=False` |
+| [cst_real_graph_test_run](snapshots/tractography/cst_real_graph_test_run.txt) | cuda=false; test_run=True; tract=cst; xtract_data=present | 21 / 39 | `applywarp`, `flirt`, `probtrackx2` | `use_gpu=False` |
 
 ## venous_ct
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [auto_threshold_two_contrast](snapshots/venous_ct/auto_threshold_two_contrast.txt) | contrast_series=2; skull_threshold=-1 | 18 / 24 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov`, `slicer_seg_endocranium.py` | — |
-| [fixed_threshold_two_contrast](snapshots/venous_ct/fixed_threshold_two_contrast.txt) | contrast_series=2; skull_threshold=1500 | 18 / 24 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov`, `slicer_seg_endocranium.py` | — |
-| [single_contrast](snapshots/venous_ct/single_contrast.txt) | contrast_series=1; skull_threshold=-1 | 18 / 24 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov`, `slicer_seg_endocranium.py` | — |
-| [test_run](snapshots/venous_ct/test_run.txt) | contrast_series=1; segment_endocranium_iteration_user_value=10; segment_endocranium_oversampling_user_value=3.0; skull_threshold=-1; test_run=True | 18 / 24 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov`, `slicer_seg_endocranium.py` | — |
+| [ants_backend](snapshots/venous_ct/ants_backend.txt) | registration_engine=ANTS | 18 / 24 | `dcm2niix`, `fslmaths`, `robustfov`, `slicer_seg_endocranium.py` | — |
+| [fsl_backend](snapshots/venous_ct/fsl_backend.txt) | registration_engine=FSL | 18 / 24 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov`, `slicer_seg_endocranium.py` | — |
 
 ## venous_mr
 
