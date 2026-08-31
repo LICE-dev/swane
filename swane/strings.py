@@ -382,6 +382,16 @@ check_dep_antspyx_wrong_version = (
     "<a href='https://github.com/antsx/antspy#installation'>update</a>"
 )
 check_dep_antspyx_found = "antspyx detected (%s)"
+check_dep_antspynet_error = (
+    "antspynet not detected (<a href='https://github.com/antsx/antspynet#installation"
+    "'>installation info</a>)"
+)
+check_dep_antspynet_no_version = "antspynet detected, but its version could not be determined"
+check_dep_antspynet_wrong_version = (
+    "antspynet version outdated (found %s, required %s). Please "
+    "<a href='https://github.com/antsx/antspynet#installation'>update</a>"
+)
+check_dep_antspynet_found = "antspynet detected (%s)"
 check_dep_fs_found = "FreeSurfer detected (%s)"
 check_dep_fs_error1 = (
     "FreeSurfer not detected (<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall"
