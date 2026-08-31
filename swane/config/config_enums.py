@@ -84,9 +84,10 @@ class DeskullModality(Enum):
     FLAIR = "flair"
     T2 = "t2"
     BOLD = "bold"
-    # Oracle-decided antspynet keys; placeholders replaced in Task 12.
-    NODIF = "__oracle_nodif__"
-    VENOUS = "__oracle_venous__"
+    # Per-input antspynet networks; see the note at the deskull node in
+    # venous_mr_workflow for the VENOUS choice.
+    NODIF = "bold"
+    VENOUS = "flair.v0"
 
 
 class SliceTiming(Enum):
