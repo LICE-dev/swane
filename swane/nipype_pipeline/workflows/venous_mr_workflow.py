@@ -161,6 +161,16 @@ def venous_mr_workflow(
         workflow.connect(veins_merge, "out", veins_check, "in_files")
 
     # NODE 5: Scalp removal and in skull structures segmentation
+    #
+    # The mask is applied to the venous phase (NODE 6), so it must cover the
+    # whole intracranial space: a mask following the brain surface clips the
+    # superior sagittal sinus and the veins running against the inner skull
+    # table. Hence BET surfaces (inskull mask) and DeskullModality.VENOUS.
+    #
+    # VENOUS uses the antspynet "flair.v0" network, which needs no post-step.
+    # It is a previous-version network: if it is dropped from a future antspynet
+    # release, the second choice is "t2" plus a 3 mm dilation of the mask in
+    # physical space (not in voxels - venous phases are often anisotropic).
     deskull = get_deskull_node(
         name_prefix="anatomic phase",
         name="vein_mr_deskull",

@@ -15,7 +15,6 @@ def test_deskull_modality_fixed_keys_are_antspynet_literals():
     assert DeskullModality.BOLD.value == "bold"
 
 
-def test_oracle_decided_modalities_exist():
-    # Placeholder values filled by the oracle (Task 12); the members must exist now.
-    assert DeskullModality.NODIF in DeskullModality
-    assert DeskullModality.VENOUS in DeskullModality
+def test_oracle_decided_modalities():
+    assert DeskullModality.NODIF.value == "bold"
+    assert DeskullModality.VENOUS.value == "flair.v0"
