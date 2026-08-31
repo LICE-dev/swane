@@ -851,6 +851,76 @@ git commit -m "feat: add antspynet license reference and bundled license"
 
 ---
 
+### Task 7b: Wire antspynet into the license-consent gate
+
+**Model:** sonnet5
+**Depends on:** Task 4 (`is_antspynet`), Task 7 (`ANTSPYNET` id). **Reason:** `license_consent.py` enumerates tools with a **hardcoded** helper + ordered list (the plan's §7 "picks up automatically" note was wrong), so without this the antspynet row never appears in the consent gate.
+
+**Files:**
+- Modify: `swane/utils/license_consent.py` (import block ~9; add `_antspynet_version`; `detected_tool_versions` ~206; `ordered` list ~214)
+- Test: `swane/tests/utils/test_license_consent.py` (extend `_FakeDM`; update the ordered-list expectations)
+
+**Interfaces:**
+- Consumes: `DependencyManager.is_antspynet()` (Task 4), `ANTSPYNET` id (Task 7).
+- Produces: `detected_tool_versions` includes `ANTSPYNET` when detected; `tools_needing_consent` orders it after `ANTSPYX`.
+
+- [ ] **Step 1: Write/extend the failing test**
+
+In `swane/tests/utils/test_license_consent.py`, add an `antspynet` flag to `_FakeDM` (constructor param + `is_antspynet(self)` method), extend the version-setter helper (~line 123) to set `antspynet` and `monkeypatch.setattr(lc, "_antspynet_version", lambda: antspynet)`, and update `test_first_run_all_detected_need_consent` so the expected list includes `"antspynet"` after `"antspyx"`, and `test_unchanged_versions_need_no_consent`'s accepted-version dict includes `"antspynet"`. Add a focused test:
+
+```python
+def test_antspynet_detected_is_offered(monkeypatch):
+    dm, cfg = _all_detected(monkeypatch)  # or the existing helper name
+    assert "antspynet" in lc.detected_tool_versions(dm, cfg)
+    assert "antspynet" in lc.tools_needing_consent(dm, cfg)
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `/media/Dati/venv/bin/python -m pytest swane/tests/utils/test_license_consent.py -v`
+Expected: FAIL (`_FakeDM` has no `is_antspynet`, or antspynet missing from output).
+
+- [ ] **Step 3: Implement**
+
+In `license_consent.py`, add `ANTSPYNET` to the `from swane.utils.LicenseReference import (...)` block. Add the helper (no antspynet import — reads metadata, so tensorflow never loads):
+
+```python
+def _antspynet_version():
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("antspynet")
+    except Exception:
+        return None
+```
+
+In `detected_tool_versions`, after the antspyx block:
+
+```python
+    if dependency_manager.is_antspynet():
+        versions[ANTSPYNET] = _norm(_antspynet_version())
+```
+
+In `tools_needing_consent`:
+
+```python
+    ordered = [FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET]
+```
+
+- [ ] **Step 4: Run tests**
+
+Run: `/media/Dati/venv/bin/python -m pytest swane/tests/utils/test_license_consent.py -v`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add swane/utils/license_consent.py swane/tests/utils/test_license_consent.py
+git commit -m "feat: offer antspynet in the license consent gate"
+```
+
+---
+
 ### Task 8: Home-window antspynet row
 
 **Model:** sonnet5
