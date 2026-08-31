@@ -25,6 +25,7 @@ from swane.config.config_enums import (
     GlobalPrefCategoryList,
     PerformanceProfile,
     RegistrationEngine,
+    DeskullEngine,
 )
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
@@ -1020,16 +1021,31 @@ class PreferenceWizardWindow(QDialog):
         )
 
         if self.user_prefs.use_advanced_models:
-            self.global_config[GlobalPrefCategoryList.SYNTH]["strip"] = str(
-                available_ram >= ResourceManager.synth_strip_ram_requirements()
-            )
             self.global_config[GlobalPrefCategoryList.SYNTH]["reconall"] = str(
                 available_ram >= ResourceManager.synth_reconall_ram_requirements()
             )
 
+        # Brain extraction engine: antspynet is the general default and does not
+        # require the advanced-models opt-in. SynthStrip stays gated behind that
+        # opt-in, like the other FreeSurfer Synth tools (reconall/synthseg); FSL
+        # BET is the fallback when neither is available.
+        if self.dependency_manager.is_antspynet() and (available_ram >= 5.0):
+            deskull_engine = DeskullEngine.ANTSPYNET
+        elif (
+            self.user_prefs.use_advanced_models
+            and self.dependency_manager.is_freesurfer_synth()
+            and available_ram >= ResourceManager.synth_strip_ram_requirements()
+        ):
+            deskull_engine = DeskullEngine.SYNTHSTRIP
+        else:
+            deskull_engine = DeskullEngine.BET
+        self.global_config[GlobalPrefCategoryList.SYNTH][
+            "deskull_engine"
+        ] = deskull_engine.name
+
         # Registration engine: ANTs is the general default and does not require
         # the advanced-models opt-in. SynthMorph stays gated behind that opt-in,
-        # like the other FreeSurfer Synth tools (strip/reconall/synthseg above).
+        # like the other FreeSurfer Synth tools (reconall/synthseg above).
         if self.dependency_manager.is_antspyx() and (
             available_ram >= ResourceManager.ants_ram_requirements()
         ):
