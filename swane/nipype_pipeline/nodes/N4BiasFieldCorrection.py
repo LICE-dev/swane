@@ -84,12 +84,21 @@ class N4BiasFieldCorrection(BaseInterface):
         if isdefined(self.inputs.num_threads):
             sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(self.inputs.num_threads)
 
+        # --- Apply a minimal shrink factor to speed up ---
+        shrink_factor = 2
+        img_shrunk = sitk.Shrink(img, [shrink_factor] * img.GetDimension())
+        mask_shrunk = sitk.Shrink(mask, [shrink_factor] * mask.GetDimension())
+
         # --- N4 ---
         corrector = sitk.N4BiasFieldCorrectionImageFilter()
         if isdefined(self.inputs.max_iterations):
             corrector.SetMaximumNumberOfIterations(self.inputs.max_iterations)
-        corrected = corrector.Execute(img, mask)
+        corrector.Execute(img_shrunk, mask_shrunk)
 
+        # --- Apply full resolution bias fied ---
+        log_bias_field = corrector.GetLogBiasFieldAsImage(img)
+        corrected = img / sitk.Exp(log_bias_field)
+        
         # save output
         sitk.WriteImage(corrected, out_file)
 
