@@ -88,8 +88,8 @@ def test_resolve_falls_back_to_bundled_when_offline(tmp_path, monkeypatch):
 
 
 class _FakeDM:
-    def __init__(self, fsl=True, fs=True, dcm=True):
-        self._fsl, self._fs, self._dcm = fsl, fs, dcm
+    def __init__(self, fsl=True, fs=True, dcm=True, antspyx=True):
+        self._fsl, self._fs, self._dcm, self._antspyx = fsl, fs, dcm, antspyx
 
     def is_fsl(self):
         return self._fsl
@@ -99,6 +99,9 @@ class _FakeDM:
 
     def is_dcm2niix(self):
         return self._dcm
+
+    def is_antspyx(self):
+        return self._antspyx
 
 
 class _FakeConfig:
@@ -116,24 +119,37 @@ class _FakeConfig:
         return self._slicer_version
 
 
-def _patch_versions(monkeypatch, fsl="6.0.6", fs="7.3.2", dcm="v1.0.20241211"):
+def _patch_versions(
+    monkeypatch, fsl="6.0.6", fs="7.3.2", dcm="v1.0.20241211", antspyx="0.6.3"
+):
     monkeypatch.setattr(lc, "_fsl_version", lambda: fsl)
     monkeypatch.setattr(lc, "_freesurfer_version", lambda: fs)
     monkeypatch.setattr(lc, "_dcm2niix_version", lambda: dcm)
+    monkeypatch.setattr(lc, "_antspyx_version", lambda: antspyx)
     monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
 
 
 def test_first_run_all_detected_need_consent(monkeypatch):
     _patch_versions(monkeypatch)
     dm, cfg = _FakeDM(), _FakeConfig()
-    assert lc.tools_needing_consent(dm, cfg) == ["fsl", "freesurfer", "dcm2niix"]
+    assert lc.tools_needing_consent(dm, cfg) == [
+        "fsl",
+        "freesurfer",
+        "dcm2niix",
+        "antspyx",
+    ]
 
 
 def test_unchanged_versions_need_no_consent(monkeypatch):
     _patch_versions(monkeypatch)
     dm = _FakeDM()
     cfg = _FakeConfig(
-        accepted={"fsl": "6.0.6", "freesurfer": "7.3.2", "dcm2niix": "v1.0.20241211"}
+        accepted={
+            "fsl": "6.0.6",
+            "freesurfer": "7.3.2",
+            "dcm2niix": "v1.0.20241211",
+            "antspyx": "0.6.3",
+        }
     )
     assert lc.tools_needing_consent(dm, cfg) == []
 
@@ -142,13 +158,18 @@ def test_upgraded_tool_reprompts_only_that_tool(monkeypatch):
     _patch_versions(monkeypatch, fsl="6.0.7")
     dm = _FakeDM()
     cfg = _FakeConfig(
-        accepted={"fsl": "6.0.6", "freesurfer": "7.3.2", "dcm2niix": "v1.0.20241211"}
+        accepted={
+            "fsl": "6.0.6",
+            "freesurfer": "7.3.2",
+            "dcm2niix": "v1.0.20241211",
+            "antspyx": "0.6.3",
+        }
     )
     assert lc.tools_needing_consent(dm, cfg) == ["fsl"]
 
 
 def test_undeterminable_version_uses_sentinel(monkeypatch):
     _patch_versions(monkeypatch, fsl=None)
-    dm = _FakeDM(fs=False, dcm=False)
+    dm = _FakeDM(fs=False, dcm=False, antspyx=False)
     cfg = _FakeConfig()
     assert lc.detected_tool_versions(dm, cfg) == {"fsl": lc.UNKNOWN_VERSION}

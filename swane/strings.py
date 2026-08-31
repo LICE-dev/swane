@@ -506,8 +506,8 @@ node_names["ZIntNorm"] = "Intensity Normalization"
 
 license_consent_title = "Third-party tool licenses"
 license_consent_banner = (
-    "SWANe is a research tool, not a medical device. The external tools it uses "
-    "(FSL, FreeSurfer, 3D Slicer, dcm2niix) are licensed for non-clinical, "
+    "SWANe is a research tool, not a medical device. Several external tools it "
+    "uses (FSL, FreeSurfer, 3D Slicer, dcm2niix, antspyx) are licensed for non-clinical, "
     "non-commercial use only. By accepting, you agree to comply with each tool's "
     "license and to use SWANe accordingly."
 )

@@ -131,7 +131,7 @@ This project includes subsection derived from other software, which licenses can
 
 #### Added
 
-- License consent gate: on startup (after the setup wizard) SWANe shows and requires acceptance of the licenses of the detected external tools (FSL, FreeSurfer, 3D Slicer, dcm2niix). Acceptance is stored per tool and re-prompted only when a tool's version changes.
+- License consent gate: on startup (after the setup wizard) SWANe shows and requires acceptance of the licenses of the detected external tools (FSL, FreeSurfer, 3D Slicer, dcm2niix, ANTs/antspyx). Acceptance is stored per tool and re-prompted only when a tool's version changes.
 - Home dependency labels now include an inline link to each detected tool's license, opening the locally installed license file when available, otherwise the official source.
 
 ### [0.2.1.1] - 2026-08-08
