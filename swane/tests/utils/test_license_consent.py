@@ -88,8 +88,14 @@ def test_resolve_falls_back_to_bundled_when_offline(tmp_path, monkeypatch):
 
 
 class _FakeDM:
-    def __init__(self, fsl=True, fs=True, dcm=True, antspyx=True):
-        self._fsl, self._fs, self._dcm, self._antspyx = fsl, fs, dcm, antspyx
+    def __init__(self, fsl=True, fs=True, dcm=True, antspyx=True, antspynet=True):
+        self._fsl, self._fs, self._dcm, self._antspyx, self._antspynet = (
+            fsl,
+            fs,
+            dcm,
+            antspyx,
+            antspynet,
+        )
 
     def is_fsl(self):
         return self._fsl
@@ -102,6 +108,9 @@ class _FakeDM:
 
     def is_antspyx(self):
         return self._antspyx
+
+    def is_antspynet(self):
+        return self._antspynet
 
 
 class _FakeConfig:
@@ -120,12 +129,18 @@ class _FakeConfig:
 
 
 def _patch_versions(
-    monkeypatch, fsl="6.0.6", fs="7.3.2", dcm="v1.0.20241211", antspyx="0.6.3"
+    monkeypatch,
+    fsl="6.0.6",
+    fs="7.3.2",
+    dcm="v1.0.20241211",
+    antspyx="0.6.3",
+    antspynet="0.2.4",
 ):
     monkeypatch.setattr(lc, "_fsl_version", lambda: fsl)
     monkeypatch.setattr(lc, "_freesurfer_version", lambda: fs)
     monkeypatch.setattr(lc, "_dcm2niix_version", lambda: dcm)
     monkeypatch.setattr(lc, "_antspyx_version", lambda: antspyx)
+    monkeypatch.setattr(lc, "_antspynet_version", lambda: antspynet)
     monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
 
 
@@ -137,6 +152,7 @@ def test_first_run_all_detected_need_consent(monkeypatch):
         "freesurfer",
         "dcm2niix",
         "antspyx",
+        "antspynet",
     ]
 
 
@@ -149,6 +165,7 @@ def test_unchanged_versions_need_no_consent(monkeypatch):
             "freesurfer": "7.3.2",
             "dcm2niix": "v1.0.20241211",
             "antspyx": "0.6.3",
+            "antspynet": "0.2.4",
         }
     )
     assert lc.tools_needing_consent(dm, cfg) == []
@@ -163,6 +180,7 @@ def test_upgraded_tool_reprompts_only_that_tool(monkeypatch):
             "freesurfer": "7.3.2",
             "dcm2niix": "v1.0.20241211",
             "antspyx": "0.6.3",
+            "antspynet": "0.2.4",
         }
     )
     assert lc.tools_needing_consent(dm, cfg) == ["fsl"]
@@ -170,6 +188,13 @@ def test_upgraded_tool_reprompts_only_that_tool(monkeypatch):
 
 def test_undeterminable_version_uses_sentinel(monkeypatch):
     _patch_versions(monkeypatch, fsl=None)
-    dm = _FakeDM(fs=False, dcm=False, antspyx=False)
+    dm = _FakeDM(fs=False, dcm=False, antspyx=False, antspynet=False)
     cfg = _FakeConfig()
     assert lc.detected_tool_versions(dm, cfg) == {"fsl": lc.UNKNOWN_VERSION}
+
+
+def test_antspynet_detected_is_offered(monkeypatch):
+    _patch_versions(monkeypatch)
+    dm, cfg = _FakeDM(), _FakeConfig()
+    assert "antspynet" in lc.detected_tool_versions(dm, cfg)
+    assert "antspynet" in lc.tools_needing_consent(dm, cfg)
