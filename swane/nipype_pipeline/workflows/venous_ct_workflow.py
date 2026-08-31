@@ -1,9 +1,7 @@
 from nipype.interfaces.fsl import (
-    FLIRT,
     ApplyMask,
     BinaryMaths,
     ImageMaths,
-    ApplyXFM,
     RobustFOV,
 )
 from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
@@ -15,16 +13,24 @@ from swane.nipype_pipeline.nodes.SumMultiVols import SumMultiVols
 from swane.nipype_pipeline.nodes.SegmentEndocranium import SegmentEndocranium
 from configparser import SectionProxy
 
-from swane.nipype_pipeline.nodes.ram_estimators import FlirtRamEstimator
+from swane.config.config_enums import CoreLimit, RegistrationEngine
+from swane.nipype_pipeline.nodes.utils import (
+    apply_registration_node,
+    get_registration_node,
+    resolve_registration_engine,
+)
 
 
 def venous_ct_workflow(
     name: str,
     venous_ct_dir: str,
     config: SectionProxy,
+    synth_config: SectionProxy,
     venous2_ct_dir: list,
     slicer_path: str,
     base_dir: str = "/",
+    max_cpu: int = 0,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -39,12 +45,20 @@ def venous_ct_workflow(
         The directory path of the no contrast scan DICOM files.
     config: SectionProxy
         workflow settings.
+    synth_config: SectionProxy
+        FreeSurfer Synth tools settings (drives the registration engine).
     venous2_ct_dir : list
         A list of directory paths of the contrast scans DICOM files.
     slicer_path: path
         Path to 3D Slicer executable
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of the registration tools. The
+        default is 0.
+    multicore_node_limit : CoreLimit, optional
+        Preference for the registration tools core usage. The default is
+        CoreLimit.SOFT_CAP.
     test_run : bool, optional
         If True, speed up the endocranium segmentation for prerelease test
         runs at the cost of accuracy. These parameters don't change the
@@ -71,6 +85,16 @@ def venous_ct_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # CT follows the global registration engine (ANTs by default). The former
+    # scientific FSL pin (``# FLIRT performs better on CT``) is lifted so CT
+    # exercises ANTs, and the comparative oracle validates it on real data.
+    # SynthMorph is the known-worse backend on CT, so an explicit SynthMorph
+    # choice falls back to FSL; an ANTs config stays ANTs (that is the point of
+    # this work), and an explicit FSL choice stays FSL.
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    if engine == RegistrationEngine.SYNTH:
+        engine = RegistrationEngine.FSL
 
     # Input Node
     inputnode = Node(
@@ -156,39 +180,53 @@ def venous_ct_workflow(
     workflow.connect(deskull, "out_file", veins_mask_reOrient, "in_file")
 
     # NODE 7: Linear registration of veins to reference space
-    # Do not use synthmorph, FLIRT performs better on CT
-    basal_2_ref = Node(FLIRT(), name="veins_ct_flirt_2_ref")
-    basal_2_ref.long_name = "%s to reference space"
-    basal_2_ref.ram_estimator = FlirtRamEstimator()
-    basal_2_ref.inputs.out_matrix_file = "veins2ref.mat"
-    basal_2_ref.inputs.cost = "mutualinfo"
-    basal_2_ref.inputs.searchr_x = [-90, 90]
-    basal_2_ref.inputs.searchr_y = [-90, 90]
-    basal_2_ref.inputs.searchr_z = [-90, 90]
-    basal_2_ref.inputs.dof = 6
-    basal_2_ref.inputs.interp = "trilinear"
-    workflow.connect(veins_robustfov, "out_roi", basal_2_ref, "in_file")
-    workflow.connect(inputnode, "reference", basal_2_ref, "reference")
-    workflow.connect(basal_2_ref, "out_file", outputnode, "basal")
-
-    # NODE 8: Linear registration of contrast to basal veins
-    # Do not use synthmorph, FLIRT performs better on CT
-    contrast_2_basal = MapNode(
-        FLIRT(),
-        name="veins_ct_flirt_2_contrast",
-        iterfield=["in_file"],
+    basal_2_ref = get_registration_node(
+        name="veins_ct_2_ref",
+        name_prefix="Non-contrast scan",
+        name_suffix="to reference space",
+        engine=engine,
+        workflow=workflow,
+        moving=[veins_robustfov, "out_roi"],
+        reference=[inputnode, "reference"],
+        non_linear=False,
+        is_volumetric=True,
+        flirt_cost="mutualinfo",
+        flirt_search=90,
+        test_run=test_run,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
-    contrast_2_basal.long_name = "%s to non-contrast scan"
-    contrast_2_basal.ram_estimator = FlirtRamEstimator()
-    contrast_2_basal.inputs.out_matrix_file = "veins2ref.mat"
-    contrast_2_basal.inputs.cost = "mutualinfo"
-    contrast_2_basal.inputs.searchr_x = [-90, 90]
-    contrast_2_basal.inputs.searchr_y = [-90, 90]
-    contrast_2_basal.inputs.searchr_z = [-90, 90]
-    contrast_2_basal.inputs.dof = 6
-    contrast_2_basal.inputs.interp = "trilinear"
-    workflow.connect(veins2_robustfov, "out_roi", contrast_2_basal, "in_file")
-    workflow.connect(veins_robustfov, "out_roi", contrast_2_basal, "reference")
+    # The basal scan resampled into reference space.
+    workflow.connect(
+        basal_2_ref.registered_node,
+        basal_2_ref.registered_field,
+        outputnode,
+        "basal",
+    )
+
+    # NODE 8: Linear registration of every contrast scan to the basal veins.
+    # map_moving builds the registration as a MapNode iterating the contrast
+    # series; its already-registered output (``registered_field``) is what the
+    # subtraction consumes, so no separate apply node is needed.
+    contrast_2_basal = get_registration_node(
+        name="veins_ct_2_contrast",
+        name_prefix="Contrast scan",
+        name_suffix="to non-contrast scan",
+        engine=engine,
+        workflow=workflow,
+        moving=[veins2_robustfov, "out_roi"],
+        reference=[veins_robustfov, "out_roi"],
+        non_linear=False,
+        is_volumetric=True,
+        flirt_cost="mutualinfo",
+        flirt_search=90,
+        map_moving=True,
+        test_run=test_run,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
+    )
 
     # NODE 9: Subtract basal from contrast scan
     veins_subtraction = MapNode(
@@ -198,7 +236,12 @@ def venous_ct_workflow(
     )
     veins_subtraction.long_name = "Subtract non-contrast scan"
     veins_subtraction.inputs.operation = "sub"
-    workflow.connect(contrast_2_basal, "out_file", veins_subtraction, "in_file")
+    workflow.connect(
+        contrast_2_basal.registered_node,
+        contrast_2_basal.registered_field,
+        veins_subtraction,
+        "in_file",
+    )
     workflow.connect(veins_robustfov, "out_roi", veins_subtraction, "operand_file")
 
     # NODE 10: Sum all contrasts
@@ -233,13 +276,23 @@ def venous_ct_workflow(
     )
     workflow.connect(veins_inskull_mask, "out_file", veins_rescale, "in_file")
 
-    veins_2_ref = Node(ApplyXFM(), name="veins_flirt")
-    veins_2_ref.long_name = "%s to reference space"
-    veins_2_ref.inputs.out_file = "r-veins_ct_inskull.nii.gz"
-    veins_2_ref.inputs.interp = "trilinear"
-    workflow.connect(veins_rescale, "out_file", veins_2_ref, "in_file")
-    workflow.connect(basal_2_ref, "out_matrix_file", veins_2_ref, "in_matrix_file")
-    workflow.connect(inputnode, "reference_brain", veins_2_ref, "reference")
+    # NODE 14: Bring the rescaled veins into reference space, reusing the basal
+    # reference registration. registration=basal_2_ref is mandatory on the ANTs
+    # branch so the reused linear transform is applied through wire_transforms
+    # (correct which_to_invert), not the composed-boundary single-field path.
+    veins_2_ref = apply_registration_node(
+        name="veins",
+        name_prefix="Rescaled veins",
+        name_suffix="to reference space",
+        engine=engine,
+        workflow=workflow,
+        warp=[basal_2_ref.out_registered_node, basal_2_ref.warp],
+        registration=basal_2_ref,
+        moving=[veins_rescale, "out_file"],
+        reference=[inputnode, "reference_brain"],
+        out_file="r-veins_ct_inskull.nii.gz",
+        non_linear=False,
+    )
 
     workflow.connect(veins_2_ref, "out_file", outputnode, "veins")
 

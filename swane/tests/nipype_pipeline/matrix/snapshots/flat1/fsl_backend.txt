@@ -1,5 +1,6 @@
 # workflow snapshot: flat1 / fsl_backend
 #
+#   registration_engine = FSL
 #   synth_morph = false
 #
 # nodes=30 edges=44

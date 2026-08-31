@@ -1,7 +1,6 @@
-# workflow snapshot: venous_ct / fixed_threshold_two_contrast
+# workflow snapshot: venous_ct / fsl_backend
 #
-#   contrast_series = 2
-#   skull_threshold = 1500
+#   registration_engine = FSL
 #
 # nodes=18 edges=24
 
@@ -11,7 +10,7 @@
     environ = {}
     iterations = 6
     oversampling = 1.5
-    skull_threshold = 1500
+    skull_threshold = -1
     slicer_cmd = '<TMP>/Slicer.exe'
     smoothingKernelSize = 3.0
 - veins2_ct_reOrient [ForceOrient] mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
@@ -29,6 +28,29 @@
     single_file = False
     source_dir = ['<TMP>/contrast_0', '<TMP>/contrast_1']
     verbose = False
+- veins_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    out_file = 'r-veins_ct_inskull.nii.gz'
+    output_type = 'NIFTI_GZ'
+- veins_ct_2_contrast_flirt [FLIRT] cmd=flirt mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
+    cost = 'mutualinfo'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interp = 'trilinear'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
+- veins_ct_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'mutualinfo'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interp = 'trilinear'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
 - veins_ct_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
     compress = 'y'
@@ -44,26 +66,6 @@
     single_file = False
     source_dir = '<TMP>/noncontrast'
     verbose = False
-- veins_ct_flirt_2_contrast [FLIRT] cmd=flirt mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
-    cost = 'mutualinfo'
-    dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    interp = 'trilinear'
-    out_matrix_file = 'veins2ref.mat'
-    output_type = 'NIFTI_GZ'
-    searchr_x = [-90, 90]
-    searchr_y = [-90, 90]
-    searchr_z = [-90, 90]
-- veins_ct_flirt_2_ref [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
-    cost = 'mutualinfo'
-    dof = 6
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    interp = 'trilinear'
-    out_matrix_file = 'veins2ref.mat'
-    output_type = 'NIFTI_GZ'
-    searchr_x = [-90, 90]
-    searchr_y = [-90, 90]
-    searchr_z = [-90, 90]
 - veins_ct_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
@@ -81,12 +83,6 @@
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'vein_contrast_sum.nii.gz'
     output_type = 'NIFTI_GZ'
-- veins_flirt [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
-    apply_xfm = True
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    interp = 'trilinear'
-    out_file = 'r-veins_ct_inskull.nii.gz'
-    output_type = 'NIFTI_GZ'
 - veins_mask_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - venous_ct2_robustfov [RobustFOV] cmd=robustfov mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
@@ -95,27 +91,27 @@
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
 # connections
-inputnode.reference -> veins_ct_flirt_2_ref.reference
-inputnode.reference_brain -> veins_flirt.reference
+inputnode.reference -> veins_ct_2_ref_flirt.reference
+inputnode.reference_brain -> veins_apply_xfm.reference
 segment_endocranium.out_file -> veins_mask_reOrient.in_file
 veins2_ct_reOrient.out_file -> venous_ct2_robustfov.in_file
 veins_2conv.converted_files -> veins2_ct_reOrient.in_file
+veins_apply_xfm.out_file -> outputnode.veins
+veins_ct_2_contrast_flirt.out_file -> veins_ct_subtraction.in_file
+veins_ct_2_ref_flirt.out_file -> outputnode.basal
+veins_ct_2_ref_flirt.out_matrix_file -> veins_apply_xfm.in_matrix_file
 veins_ct_conv.converted_files -> veins_ct_reOrient.in_file
-veins_ct_flirt_2_contrast.out_file -> veins_ct_subtraction.in_file
-veins_ct_flirt_2_ref.out_file -> outputnode.basal
-veins_ct_flirt_2_ref.out_matrix_file -> veins_flirt.in_matrix_file
 veins_ct_mask.out_file -> veins_ct_range.in_file
 veins_ct_mask.out_file -> veins_ct_rescale.in_file
 veins_ct_range.('max_value', "def rescale_string(max_value):\n    op_string = '-mul 100 -div %f' % max_value\n    return op_string", ()) -> veins_ct_rescale.op_string
 veins_ct_reOrient.out_file -> venous_ct_robustfov.in_file
-veins_ct_rescale.out_file -> veins_flirt.in_file
+veins_ct_rescale.out_file -> veins_apply_xfm.in_file
 veins_ct_subtraction.out_file -> outputnode.contrast
 veins_ct_subtraction.out_file -> veins_ct_sum.vol_files
 veins_ct_sum.out_file -> veins_ct_mask.in_file
-veins_flirt.out_file -> outputnode.veins
 veins_mask_reOrient.out_file -> veins_ct_mask.mask_file
-venous_ct2_robustfov.out_roi -> veins_ct_flirt_2_contrast.in_file
+venous_ct2_robustfov.out_roi -> veins_ct_2_contrast_flirt.in_file
 venous_ct_robustfov.out_roi -> segment_endocranium.in_file
-venous_ct_robustfov.out_roi -> veins_ct_flirt_2_contrast.reference
-venous_ct_robustfov.out_roi -> veins_ct_flirt_2_ref.in_file
+venous_ct_robustfov.out_roi -> veins_ct_2_contrast_flirt.reference
+venous_ct_robustfov.out_roi -> veins_ct_2_ref_flirt.in_file
 venous_ct_robustfov.out_roi -> veins_ct_subtraction.operand_file

@@ -13,7 +13,8 @@ FSL = "fsl"
 FREESURFER = "freesurfer"
 SLICER = "slicer"
 DCM2NIIX = "dcm2niix"
-TOOL_IDS = (FSL, FREESURFER, SLICER, DCM2NIIX)
+ANTSPYX = "antspyx"
+TOOL_IDS = (FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX)
 
 _BUNDLED_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "licenses"
@@ -105,6 +106,30 @@ def _dcm2niix_candidates(context: dict) -> list:
     return candidates
 
 
+def _antspyx_candidates(context: dict) -> list:
+    # The antspyx pip package (a SWANe dependency, imported as "ants") ships its
+    # license under the distribution's .dist-info/licenses/ directory (PEP 639);
+    # recover it from the installed package so the displayed text matches the
+    # installed version.
+    try:
+        from importlib.metadata import distribution, PackageNotFoundError
+    except ImportError:
+        return []
+    try:
+        dist = distribution("antspyx")
+    except PackageNotFoundError:
+        return []
+    candidates = []
+    for entry in dist.files or []:
+        parts = [part.lower() for part in entry.parts]
+        if "licenses" in parts and entry.name.lower().startswith("licen"):
+            try:
+                candidates.append(str(dist.locate_file(entry)))
+            except Exception:
+                continue
+    return candidates
+
+
 LICENSES = {
     FSL: LicenseInfo(
         tool_id=FSL,
@@ -140,5 +165,13 @@ LICENSES = {
         is_html_online=False,
         installed_path_candidates=_dcm2niix_candidates,
         bundled_filename="dcm2niix.txt",
+    ),
+    ANTSPYX: LicenseInfo(
+        tool_id=ANTSPYX,
+        display_name="ANTs (antspyx)",
+        official_url="https://raw.githubusercontent.com/ANTsX/ANTsPy/main/LICENSE",
+        is_html_online=False,
+        installed_path_candidates=_antspyx_candidates,
+        bundled_filename="antspyx.txt",
     ),
 }

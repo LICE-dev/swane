@@ -3,13 +3,22 @@
 
 This single builder backs several inputs (3D FLAIR, post-contrast MDC, coronal
 T2, 2D FLAIR). The graph is reshaped by the builder flags ``is_volumetric``,
-``is_partial_coverage`` and ``bias_field_correction`` and by the SynthStrip/
-SynthMorph backend, so each meaningful combination gets a golden snapshot under
-``snapshots/linear_reg/``. MDC mirrors 3D FLAIR's flags exactly (see
-``MainWorkflow.launch_mdc_analysis``) but reads its *own* preference section,
-which has a different default in practice — kept as a separate scenario built
-from ``DataInputList.MDC`` (not copy-pasted from FLAIR3D's) so that default is
-actually exercised rather than assumed identical.
+``is_partial_coverage`` and ``bias_field_correction`` and by the SynthStrip
+deskull step and the registration ``engine`` (FSL/SYNTH/ANTS), so each
+meaningful combination gets a golden snapshot under ``snapshots/linear_reg/``.
+MDC mirrors 3D FLAIR's flags exactly (see ``MainWorkflow.launch_mdc_analysis``)
+but reads its *own* preference section, which has a different default in
+practice — kept as a separate scenario built from ``DataInputList.MDC`` (not
+copy-pasted from FLAIR3D's) so that default is actually exercised rather than
+assumed identical.
+
+``linear_reg_workflow`` resolves its registration engine with
+``allow_ants=True`` (see ``resolve_registration_engine``), so it follows the
+``engine`` preference -- ANTS by default since the Phase 1 flip (Group D,
+CP-C audit: ``out_matrix_file`` has no transform-field consumer). The
+``flair3d_ants_backend`` scenario below exercises that default explicitly;
+every other scenario pins FSL/SYNTH to keep isolated coverage of those
+backends too.
 """
 
 import pytest
@@ -33,7 +42,7 @@ SCENARIOS = {
         volumetric=True,
         partial=False,
         bias=True,
-        synth=False,
+        engine="FSL",
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
     ),
@@ -41,7 +50,7 @@ SCENARIOS = {
         volumetric=True,
         partial=False,
         bias=False,
-        synth=False,
+        engine="FSL",
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
     ),
@@ -50,7 +59,7 @@ SCENARIOS = {
         volumetric=True,
         partial=False,
         bias=True,
-        synth=False,
+        engine="FSL",
         config_input=DataInputList.MDC,
         wf_name="mdc",
     ),
@@ -59,7 +68,7 @@ SCENARIOS = {
         volumetric=True,
         partial=True,
         bias=False,
-        synth=False,
+        engine="FSL",
         config_input=None,
         wf_name="t2_cor",
     ),
@@ -68,7 +77,7 @@ SCENARIOS = {
         volumetric=False,
         partial=False,
         bias=False,
-        synth=False,
+        engine="FSL",
         config_input=None,
         wf_name="flair2d",
     ),
@@ -77,7 +86,7 @@ SCENARIOS = {
         volumetric=True,
         partial=False,
         bias=True,
-        synth=True,
+        engine="SYNTH",
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
     ),
@@ -86,8 +95,19 @@ SCENARIOS = {
         volumetric=True,
         partial=False,
         bias=True,
-        synth=True,
+        engine="SYNTH",
         limit_cores=True,
+        config_input=DataInputList.FLAIR3D,
+        wf_name="flair3d",
+    ),
+    # ANTs backend on the 3D FLAIR configuration -- this is the Phase 1 default
+    # (see module docstring): linear_reg_workflow follows the ``engine``
+    # preference, which defaults to ANTS.
+    "flair3d_ants_backend": dict(
+        volumetric=True,
+        partial=False,
+        bias=True,
+        engine="ANTS",
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
     ),
@@ -100,8 +120,12 @@ def test_linear_reg_matrix(
 ):
     params = SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["strip"] = "true" if params["synth"] else "false"
-    synth["morph"] = "true" if params["synth"] else "false"
+    synth["strip"] = "true" if params["engine"] == "SYNTH" else "false"
+    # ``morph`` is gone; the registration backend is now the ``engine`` enum.
+    # Kept (mirroring ``strip``) only so the snapshot header echo stays
+    # identical for the pre-existing FSL/SYNTH scenarios.
+    synth["morph"] = "true" if params["engine"] == "SYNTH" else "false"
+    synth["engine"] = params["engine"]
     synth["limit_cores"] = "true" if params.get("limit_cores") else "false"
 
     config = (
@@ -128,6 +152,7 @@ def test_linear_reg_matrix(
         "bias_field_correction": params["bias"],
         "synth_strip": synth["strip"],
         "synth_morph": synth["morph"],
+        "registration_engine": synth["engine"],
         "limit_synth_cores": synth["limit_cores"],
         "max_cpu": MAX_CPU,
         "multicore_node_limit": CoreLimit.SOFT_CAP.name,
@@ -152,6 +177,9 @@ def test_linear_reg_matrix_test_run(
     default test_run=True actually builds for FLAIR3D/MDC.
     """
     synth = global_config[GlobalPrefCategoryList.SYNTH]
+    # FSL backend (old morph default); ``morph`` kept only for the header echo.
+    synth["morph"] = "False"
+    synth["engine"] = "FSL"
     config = subject_config[DataInputList.FLAIR3D]
 
     wf = linear_reg_workflow(

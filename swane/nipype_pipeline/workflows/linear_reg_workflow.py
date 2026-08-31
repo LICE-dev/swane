@@ -7,12 +7,13 @@ from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
 
-from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
+from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import AntsN4BiasFieldCorrection
 from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,
+    resolve_registration_engine,
 )
 from swane.config.config_enums import CoreLimit
 
@@ -91,6 +92,13 @@ def linear_reg_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # Phase 1 scope decision (docs/superpowers/specs/2026-08-24-ants-phase1-callsite-audit.md):
+    # linear_reg's out_matrix_file has no consumer in Phase 1, so it is safe to
+    # follow the configured engine (ANTs by default). nonlinear_reg_workflow
+    # stays pinned to FSL (see its own allow_ants=False) until its FSL-specific
+    # ApplyWarp consumers are ported (Phase 2/3).
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
 
     # Input Node
     inputnode = Node(
@@ -189,7 +197,7 @@ def linear_reg_workflow(
         name=name,
         name_prefix=name,
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         moving=[robustfov, "out_roi"],
         moving_brain=moving_brain,
@@ -208,9 +216,10 @@ def linear_reg_workflow(
         name=name,
         name_prefix="Unbetted image",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        registration=reg_wrap,
         moving=[robustfov, "out_roi"],
         reference=[inputnode, "reference"],
         out_file=[unbetted_name, "out_file"],
@@ -231,9 +240,10 @@ def linear_reg_workflow(
             name="deskulled_" + name,
             name_prefix="Skull stripped image",
             name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
+            engine=engine,
             workflow=workflow,
             warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+            registration=reg_wrap,
             moving=[deskull, "out_file"],
             reference=[inputnode, "reference"],
             out_file=[betted_name, "out_file"],
@@ -242,12 +252,12 @@ def linear_reg_workflow(
 
         if bias_field_correction:
             bias_correction = Node(
-                N4BiasFieldCorrection(), name="bias_correction", mem_gb=2
+                AntsN4BiasFieldCorrection(), name="bias_correction", mem_gb=2
             )
             if max_cpu != 0 and multicore_node_limit is not CoreLimit.NO_LIMIT:
                 bias_correction.inputs.num_threads = max_cpu
             if test_run:
-                # SimpleITK default is [50, 50, 50, 50] per resolution level.
+                # antspyx default is [50, 50, 50, 50] per resolution level.
                 bias_correction.inputs.max_iterations = [30, 20, 10, 5]
             workflow.connect(unbetted_name, "out_file", bias_correction, "out_file")
             workflow.connect(deskull_2_ref, "out_file", bias_correction, "mask_file")

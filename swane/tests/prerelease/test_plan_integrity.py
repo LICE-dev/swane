@@ -128,13 +128,45 @@ def test_missing_capability_downgrades_instead_of_failing():
     cover = coverage(plan, caps)
 
     assert (
-        "true" in cover["synth_morph"].unreachable
-    ), "an unavailable SynthMorph must be reported as unreachable"
+        "SYNTH" in cover["registration_engine"].unreachable
+    ), "an unavailable SynthMorph engine must be reported as unreachable"
     assert (
-        "true" not in cover["synth_morph"].covered
+        "SYNTH" not in cover["registration_engine"].covered
     ), "an unavailable option must never be counted as covered"
-    # Everything that does not depend on SynthMorph must still be covered.
+    # Everything that does not depend on SynthMorph must still be covered
+    # (FSL and ANTS engine values included).
     assert not plan_holes(cover), (
         "losing one capability must not take unrelated axes down with it: %s"
         % plan_holes(cover)
     )
+
+
+def test_registration_engine_axis_has_the_three_backends():
+    """Group A replaced the dead ``morph`` key with the engine ENUM; the sweep
+    must drive that ENUM, with one value per registration backend."""
+    axis = AXES_BY_NAME["registration_engine"]
+    assert axis.option == "engine"
+    assert set(axis.values) == {"FSL", "SYNTH", "ANTS"}
+    # FSL is always available; SYNTH and ANTS are gated on their dependencies.
+    assert axis.gate_for("FSL") == ""
+    assert axis.gate_for("SYNTH") == "synth_morph"
+    assert axis.gate_for("ANTS") == "antspyx"
+
+
+def test_every_registration_backend_is_covered_by_a_named_pass(all_capable):
+    """FSL, SYNTH and ANTS must each be forced by at least one named pass, so
+    no backend rides only on the (implicit) default."""
+    plan = build_plan(all_capable, with_reconall=True)
+    cover = coverage(plan, all_capable)
+    covered = cover["registration_engine"].covered
+    for backend in ("FSL", "SYNTH", "ANTS"):
+        assert covered.get(
+            backend
+        ), "no named pass forces registration_engine=%s: %s" % (backend, covered)
+
+
+def test_structural_ants_pass_forces_the_ants_backend():
+    """A named ANTS pass makes the default backend explicit and reviewable."""
+    by_name = {spec.name: spec for spec in PASSES}
+    assert "structural_ants" in by_name, "missing the named ANTS structural pass"
+    assert by_name["structural_ants"].values["registration_engine"] == "ANTS"

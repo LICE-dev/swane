@@ -24,6 +24,7 @@ from swane.config.config_enums import (
     FreesurferStep,
     GlobalPrefCategoryList,
     PerformanceProfile,
+    RegistrationEngine,
 )
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
@@ -1014,19 +1015,34 @@ class PreferenceWizardWindow(QDialog):
             bool(self.user_prefs.use_gpu_acceleration)
         )
 
+        available_ram = self.global_config.getfloat_safe(
+            GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
+        )
+
         if self.user_prefs.use_advanced_models:
-            available_ram = self.global_config.getfloat_safe(
-                GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
-            )
             self.global_config[GlobalPrefCategoryList.SYNTH]["strip"] = str(
                 available_ram >= ResourceManager.synth_strip_ram_requirements()
-            )
-            self.global_config[GlobalPrefCategoryList.SYNTH]["morph"] = str(
-                available_ram >= ResourceManager.synth_morph_ram_requirements()
             )
             self.global_config[GlobalPrefCategoryList.SYNTH]["reconall"] = str(
                 available_ram >= ResourceManager.synth_reconall_ram_requirements()
             )
+
+        # Registration engine: ANTs is the general default and does not require
+        # the advanced-models opt-in. SynthMorph stays gated behind that opt-in,
+        # like the other FreeSurfer Synth tools (strip/reconall/synthseg above).
+        if self.dependency_manager.is_antspyx() and (
+            available_ram >= ResourceManager.ants_ram_requirements()
+        ):
+            engine = RegistrationEngine.ANTS
+        elif (
+            self.user_prefs.use_advanced_models
+            and self.dependency_manager.is_freesurfer_synth()
+            and available_ram >= ResourceManager.synth_morph_ram_requirements()
+        ):
+            engine = RegistrationEngine.SYNTH
+        else:
+            engine = RegistrationEngine.FSL
+        self.global_config[GlobalPrefCategoryList.SYNTH]["engine"] = engine.name
 
         self.global_config[DataInputList.T13D][
             "freesurfer_step"
