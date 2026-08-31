@@ -131,7 +131,7 @@ def ref_workflow(
     if max_cpu != 0 and multicore_node_limit is not CoreLimit.NO_LIMIT:
         ref_bias_correction.inputs.num_threads = max_cpu
     if test_run:
-        # SimpleITK default is [50, 50, 50, 50] per resolution level.
+        # antspyx default is [50, 50, 50, 50] per resolution level.
         ref_bias_correction.inputs.max_iterations = [30, 20, 10, 5]
     workflow.connect(ref_reScale, "out_file", ref_bias_correction, "in_file")
     workflow.connect(ref_deskull, "mask_file", ref_bias_correction, "mask_file")
