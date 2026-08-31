@@ -1089,11 +1089,15 @@ git commit -m "feat: set oracle-decided nodif/venous deskull modalities"
 
 Add `preload_antspynet_models(modalities)` that, for each modality, runs `antspynet.brain_extraction` once on a tiny synthetic image (forcing the weight download), so the prerelease sweep never downloads mid-workflow. Call it from the prerelease setup before running workflows. Verify it is a no-op when weights already exist.
 
-- [ ] **Step 2: Regenerate matrix snapshots**
+- [ ] **Step 2: Convert leftover `strip` config usages, then regenerate matrix snapshots**
+
+The `strip` boolean is gone (Task 6). These tracked files still construct config with the old key and must be converted to `deskull_engine` (values from `DeskullEngine`) **before** regenerating snapshots:
+- `swane/tests/prerelease/plan.py:116` — the `option="strip"` sweep. Convert to a `deskull_engine` sweep across `DeskullEngine` (e.g. ANTSPYNET/BET; include SYNTHSTRIP only where FreeSurfer-gated), matching how the prerelease plan sweeps other enum options.
+- `swane/tests/nipype_pipeline/matrix/test_dti_matrix.py`, `test_venous_mr_matrix.py`, `test_linear_reg_matrix.py`, `test_ref_matrix.py` — replace `synth["strip"] = ...` with `synth["deskull_engine"] = <DeskullEngine ...>` so each snapshot exercises the intended engine.
 
 The default deskull node names changed to `_antspynet`. Regenerate the golden snapshots per `swane/tests/nipype_pipeline/matrix/README.md`, then **review the diff** to confirm only the deskull node identity/inputs changed as intended (no unintended graph changes).
 
-Run: `python -m pytest swane/tests/nipype_pipeline/matrix/ -v` (after regeneration)
+Run: `python -m pytest swane/tests/nipype_pipeline/matrix/ -v` (after conversion + regeneration)
 Expected: PASS.
 
 - [ ] **Step 3: Light suite + targeted deskull suite**
