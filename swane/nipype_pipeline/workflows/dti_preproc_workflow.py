@@ -29,6 +29,7 @@ def dti_preproc_workflow(
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
+    deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
@@ -50,6 +51,9 @@ def dti_preproc_workflow(
         workflow settings.
     synth_config: SectionProxy
         FreeSurfer Synth tools settings.
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the b0 deskull node. The
+        default is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
     multicore_node_limit: CORE_LIMIT, optional
@@ -164,7 +168,7 @@ def dti_preproc_workflow(
         name="dti_deskull",
         name_prefix="DTI",
         deskull_engine=resolve_deskull_engine(synth_config),
-        deskull_modality=DeskullModality.T1,
+        deskull_modality=deskull_modality,
         mask=True,
         bet_thr=0.3,
         bet_robust=True,

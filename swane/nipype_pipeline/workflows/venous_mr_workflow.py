@@ -28,6 +28,7 @@ def venous_mr_workflow(
     synth_config: SectionProxy,
     venous2_mr_dir: str = None,
     base_dir: str = "/",
+    deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
@@ -50,6 +51,9 @@ def venous_mr_workflow(
         If veins phase is divided from anatomic phase, use this param to load the second DICOM files directory.
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the deskull node. The default
+        is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of Synth tools. The default is 0.
     multicore_node_limit : CoreLimit, optional
@@ -161,7 +165,7 @@ def venous_mr_workflow(
         name_prefix="anatomic phase",
         name="vein_mr_deskull",
         deskull_engine=resolve_deskull_engine(synth_config),
-        deskull_modality=DeskullModality.T1,
+        deskull_modality=deskull_modality,
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
         bet_surfaces=True,

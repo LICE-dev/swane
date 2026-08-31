@@ -14,6 +14,7 @@ from swane.config.config_enums import (
     BlockDesign,
     GlobalPrefCategoryList,
     FreesurferStep,
+    DeskullModality,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -223,6 +224,7 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=ref_dir,
             config=self.subject_config[DIL.T13D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.T1,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
@@ -344,6 +346,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.FLAIR3D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            deskull_modality=DeskullModality.FLAIR,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
@@ -488,6 +491,7 @@ class MainWorkflow(CustomWorkflow):
                     config=None,
                     is_volumetric=False,
                     synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                    deskull_modality=DeskullModality.FLAIR,
                     max_cpu=self.max_cpu,
                     multicore_node_limit=self.multicore_node_limit,
                     test_run=self.test_run,
@@ -529,6 +533,7 @@ class MainWorkflow(CustomWorkflow):
             is_volumetric=True,  # perform better with volumetric settings
             is_partial_coverage=True,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.T2,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
@@ -577,6 +582,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.MDC],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            deskull_modality=DeskullModality.T1,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
@@ -908,6 +914,7 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.VENOUS_MR],
             venous2_mr_dir=venous2_mr_dir,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.VENOUS,
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
@@ -985,6 +992,7 @@ class MainWorkflow(CustomWorkflow):
             max_cpu=self.max_cpu,
             multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.NODIF,
             test_run=self.test_run,
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"

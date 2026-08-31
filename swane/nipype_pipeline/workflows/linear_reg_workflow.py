@@ -30,6 +30,7 @@ def linear_reg_workflow(
     is_volumetric: bool = True,
     is_partial_coverage: bool = False,
     bias_field_correction: bool = False,
+    deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
@@ -55,6 +56,9 @@ def linear_reg_workflow(
         True if series only includes brain partially. The default is False.
     bias_field_correction : bool, optional
         True to enable bias field correction. The default is False.
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the deskull node. The default
+        is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of Synth tools. The default is 0.
     multicore_node_limit : CoreLimit, optional
@@ -185,7 +189,7 @@ def linear_reg_workflow(
             name=name + "_deskull",
             name_prefix=name,
             deskull_engine=resolve_deskull_engine(synth_config),
-            deskull_modality=DeskullModality.T1,
+            deskull_modality=deskull_modality,
             mask=True,
             bet_thr=bet_thr,
             bet_robust=True,
