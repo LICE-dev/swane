@@ -258,7 +258,7 @@ wizard_welcome_text = (
     "You’ll be able to:\n"
     "• Select a performance profile that matches your priorities.\n"
     "• Enable hardware acceleration, if supported.\n"
-    "• Choose whether to use advanced models for improved results.\n"
+    "• Choose whether to use FreeSurfer advanced models for improved results.\n"
     "• Select Freesurfer output of your interest, if supported.\n"
     "• Review a summary of your configuration before applying it.\n\n"
     "These settings can always be adjusted later in Application Settings, or you can rerun "
@@ -295,16 +295,16 @@ gpu_acceleration_disabled_tooltip = (
     "All processing will run on the CPU, even if GPU acceleration is available."
 )
 
-wizard_advanced_models_title = "Advanced Models"
+wizard_advanced_models_title = "FreeSurfer Advanced Models"
 wizard_advanced_models_text = (
-    "Advanced models implement state-of-the-art FreeSurfer deep learning algorithms (Synth Tools) that can improve results "
+    "FreeSurfer advanced models implement state-of-the-art FreeSurfer deep learning algorithms (Synth Tools) that can improve results "
     "and, in some cases, reduce analysis time.<br>"
     "They may require additional memory and processing power."
 )
 wizard_advanced_models_macos_warn = "<b>Please note</b>: The synth tools consume a significant amount of RAM on macOS. For this reason, we do <b>not recommend</b> using them on this platform."
-advanced_models_enabled = "Use advanced models when supported"
+advanced_models_enabled = "Use FreeSurfer advanced models when supported"
 advanced_models_enabled_tooltip = (
-    "Enable advanced models when the system can handle them reliably."
+    "Enable FreeSurfer advanced models when the system can handle them reliably."
 )
 advanced_models_disabled = "Use standard models only"
 advanced_models_disabled_tooltip = (
@@ -351,7 +351,7 @@ wizard_applied_text = (
 
 wizard_selected_profile = "<b>Selected profile</b>: {profile}"
 wizard_gpu_accelleration = "<b>GPU acceleration</b>: {gpu_status}"
-wizard_advanced_models = "<b>Advanced models</b>: {adv_status}"
+wizard_advanced_models = "<b>FreeSurfer advanced models</b>: {adv_status}"
 wizard_freesurfer_outputs = "<b>FreeSurfer outputs</b>: {fs_outputs}"
 
 # Workflow
