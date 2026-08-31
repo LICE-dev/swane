@@ -326,11 +326,11 @@ tool_reference_list = {
         ],
     ),
     "N4BiasFieldCorrection": ToolReference(
-        command="N4BiasFieldCorrection [SimpleITK]",
+        command="N4BiasFieldCorrection [antspyx]",
         package=Package.OTHER,
-        url="https://simpleitk.readthedocs.io/en/master/link_N4BiasFieldCorrection_docs.html",
+        url="https://antspyx.readthedocs.io/en/latest/utils.html#ants.n4_bias_field_correction",
         references=[
-            "Lowekamp BC, Chen DT, Ibáñez L, Blezek D. The Design of SimpleITK. Front Neuroinform. 2013."
+            "Tustison NJ, Avants BB, Cook PA, et al. N4ITK: improved N3 bias correction. IEEE Trans Med Imaging. 2010;29(6):1310-1320."
         ],
     ),
     "AntsRegistration": ToolReference(

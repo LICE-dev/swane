@@ -49,7 +49,6 @@ setup(
         "cryptography",
         "dicom-sequence-classifier==1.0.5",
         "ica_aroma_py==0.1.2",
-        "SimpleITK>=2.5.0",
         "antspyx==0.6.3",
     ],
     python_requires=">=3.10",

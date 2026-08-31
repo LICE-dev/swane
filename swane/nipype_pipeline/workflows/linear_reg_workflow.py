@@ -257,7 +257,7 @@ def linear_reg_workflow(
             if max_cpu != 0 and multicore_node_limit is not CoreLimit.NO_LIMIT:
                 bias_correction.inputs.num_threads = max_cpu
             if test_run:
-                # SimpleITK default is [50, 50, 50, 50] per resolution level.
+                # antspyx default is [50, 50, 50, 50] per resolution level.
                 bias_correction.inputs.max_iterations = [30, 20, 10, 5]
             workflow.connect(unbetted_name, "out_file", bias_correction, "out_file")
             workflow.connect(deskull_2_ref, "out_file", bias_correction, "mask_file")
