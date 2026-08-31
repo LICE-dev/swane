@@ -73,6 +73,22 @@ class RegistrationEngine(Enum):
     ANTS = "ANTs (antspyx)"
 
 
+class DeskullEngine(Enum):
+    ANTSPYNET = "ANTs (antspynet)"
+    SYNTHSTRIP = "FreeSurfer SynthStrip"
+    BET = "FSL BET"
+
+
+class DeskullModality(Enum):
+    T1 = "t1"
+    FLAIR = "flair"
+    T2 = "t2"
+    BOLD = "bold"
+    # Oracle-decided antspynet keys; placeholders replaced in Task 12.
+    NODIF = "__oracle_nodif__"
+    VENOUS = "__oracle_venous__"
+
+
 class SliceTiming(Enum):
     UNKNOWN = "Unknown"
     UP = "Regular up"
