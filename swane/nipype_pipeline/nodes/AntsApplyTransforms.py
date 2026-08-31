@@ -73,11 +73,20 @@ class AntsApplyTransforms(BaseInterface):
                 )
             kwargs["whichtoinvert"] = self.inputs.which_to_invert
 
+        moving = ants.image_read(self.inputs.input_image)
+        # antspyx refuses a 4D moving image (e.g. a whole fMRI run) under the
+        # default imagetype=0 (scalar) with "Set imagetype 3 to transform time
+        # series images." -- moving.dimension is 4 exactly for that case in
+        # every caller of this generic node (every 3D use -- FA, CT, ROI masks
+        # -- stays imagetype 0).
+        imagetype = 3 if moving.dimension == 4 else 0
+
         resampled = ants.apply_transforms(
             fixed=ants.image_read(self.inputs.reference_image),
-            moving=ants.image_read(self.inputs.input_image),
+            moving=moving,
             transformlist=self.inputs.transformlist,
             interpolator=self.inputs.interpolator,
+            imagetype=imagetype,
             **kwargs,
         )
 
@@ -98,13 +107,33 @@ class AntsApplyTransforms(BaseInterface):
         ``set_data_dtype`` clears any residual scaling so values are not
         re-scaled on write. Skipped if the result is not on the reference grid
         (nothing to preserve, and the reference header would be wrong).
+
+        A time-series moving image (``imagetype=3``, e.g. a whole fMRI run)
+        resamples onto the reference's spatial grid plus its own, unrelated
+        time axis: the reference (a static volume) has no repetition time to
+        borrow, so that axis's size/zoom/units are taken from the original
+        moving image instead of the reference.
         """
         reference = nib.load(self.inputs.reference_image)
         resampled = nib.load(out_file)
-        if resampled.shape != reference.shape:
+        ref_shape = reference.shape
+        if resampled.shape[: len(ref_shape)] != ref_shape:
             return
         header = reference.header.copy()
         header.set_data_dtype(np.float32)
+        if resampled.ndim > reference.ndim:
+            moving = nib.load(self.inputs.input_image)
+            header.set_data_shape(resampled.shape)
+            header.set_zooms(
+                reference.header.get_zooms()
+                + moving.header.get_zooms()[len(ref_shape) :]
+            )
+            xyz_unit, _ = header.get_xyzt_units()
+            _, t_unit = moving.header.get_xyzt_units()
+            header.set_xyzt_units(xyz_unit, t_unit)
+            data = resampled.get_fdata(dtype=np.float32)
+            nib.save(nib.Nifti1Image(data, reference.affine, header), out_file)
+            return
         data = resampled.get_fdata(dtype=np.float32)
         nib.save(nib.Nifti1Image(data, reference.affine, header), out_file)
 
