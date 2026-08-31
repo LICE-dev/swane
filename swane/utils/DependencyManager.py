@@ -85,8 +85,8 @@ class DependencyManager:
     MIN_FSL_VERSION = "6.0.6"
     # Kept in sync with the antspyx pin in setup.py.
     MIN_ANTSPYX_VERSION = "0.6.3"
-    # Conservative floor until Task 9 sets the real antspynet pin from setup.py.
-    MIN_ANTSPYNET_VERSION = "0.0.0"
+    # Kept in sync with the antspynet pin in setup.py.
+    MIN_ANTSPYNET_VERSION = "0.3.2"
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"
