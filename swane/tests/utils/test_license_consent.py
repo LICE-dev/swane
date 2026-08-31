@@ -1,4 +1,6 @@
 import os
+from types import SimpleNamespace
+
 from swane.utils import license_consent as lc
 from swane.utils import LicenseReference as LR
 
@@ -154,6 +156,20 @@ def test_unchanged_versions_need_no_consent(monkeypatch):
     assert lc.tools_needing_consent(dm, cfg) == []
 
 
+def test_tools_needing_consent_reuses_detected_snapshot(monkeypatch):
+    dm = _FakeDM()
+    cfg = _FakeConfig(accepted={"fsl": "6.0.6"})
+    monkeypatch.setattr(
+        lc,
+        "detected_tool_versions",
+        lambda *args: (_ for _ in ()).throw(AssertionError("unexpected re-detection")),
+    )
+
+    assert lc.tools_needing_consent(dm, cfg, {"fsl": "6.0.6", "antspyx": "0.6.3"}) == [
+        "antspyx"
+    ]
+
+
 def test_upgraded_tool_reprompts_only_that_tool(monkeypatch):
     _patch_versions(monkeypatch, fsl="6.0.7")
     dm = _FakeDM()
@@ -173,3 +189,33 @@ def test_undeterminable_version_uses_sentinel(monkeypatch):
     dm = _FakeDM(fs=False, dcm=False, antspyx=False)
     cfg = _FakeConfig()
     assert lc.detected_tool_versions(dm, cfg) == {"fsl": lc.UNKNOWN_VERSION}
+
+
+def test_detected_versions_reuse_dependency_check_results(monkeypatch):
+    dm = _FakeDM(dcm=False)
+    dm.fsl = SimpleNamespace(detected_version="6.0.6")
+    dm.freesurfer = SimpleNamespace(detected_version="7.3.2")
+    dm.antspyx = SimpleNamespace(detected_version="0.6.3")
+    cfg = _FakeConfig()
+    monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
+    monkeypatch.setattr(
+        lc,
+        "_fsl_version",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected FSL check")),
+    )
+    monkeypatch.setattr(
+        lc,
+        "_freesurfer_version",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected FreeSurfer check")),
+    )
+    monkeypatch.setattr(
+        lc,
+        "_antspyx_version",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected ANTs check")),
+    )
+
+    assert lc.detected_tool_versions(dm, cfg) == {
+        "fsl": "6.0.6",
+        "freesurfer": "7.3.2",
+        "antspyx": "0.6.3",
+    }

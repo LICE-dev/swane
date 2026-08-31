@@ -18,6 +18,7 @@ from swane.utils.LicenseReference import (
 )
 
 UNKNOWN_VERSION = "unknown"
+DEFAULT_LICENSE_FETCH_TIMEOUT = 3.0
 
 
 class LicenseSource(Enum):
@@ -49,7 +50,11 @@ def _read_first_existing(candidates: list):
     return None
 
 
-def fetch_online_license(url: str, is_html_online: bool, timeout: float = 8.0):
+def fetch_online_license(
+    url: str,
+    is_html_online: bool,
+    timeout: float = DEFAULT_LICENSE_FETCH_TIMEOUT,
+):
     """Fetch license text online. Return (text, is_html) or None on any failure."""
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:
@@ -66,7 +71,9 @@ def fetch_online_license(url: str, is_html_online: bool, timeout: float = 8.0):
 
 
 def resolve_license_text(
-    info: LicenseInfo, context: dict, timeout: float = 8.0
+    info: LicenseInfo,
+    context: dict,
+    timeout: float = DEFAULT_LICENSE_FETCH_TIMEOUT,
 ) -> ResolvedLicense:
     installed = _read_first_existing(info.installed_path_candidates(context))
     if installed is not None:
@@ -192,25 +199,50 @@ def _norm(value) -> str:
     return value if value else UNKNOWN_VERSION
 
 
+def _cached_dependency_version(dependency_manager, attribute: str, resolver):
+    dependence = getattr(dependency_manager, attribute, None)
+    detected_version = getattr(dependence, "detected_version", None)
+    return resolver() if detected_version is None else detected_version
+
+
 def detected_tool_versions(dependency_manager, config) -> dict:
     """Return {tool_id: detected_version_or_UNKNOWN} for each detected tool."""
     versions = {}
     if dependency_manager.is_fsl():
-        versions[FSL] = _norm(_fsl_version())
+        versions[FSL] = _norm(
+            _cached_dependency_version(dependency_manager, "fsl", _fsl_version)
+        )
     if dependency_manager.is_freesurfer():
-        versions[FREESURFER] = _norm(_freesurfer_version())
+        versions[FREESURFER] = _norm(
+            _cached_dependency_version(
+                dependency_manager, "freesurfer", _freesurfer_version
+            )
+        )
     if _is_slicer_detected(config):
         versions[SLICER] = _norm(config.get_slicer_version())
     if dependency_manager.is_dcm2niix():
         versions[DCM2NIIX] = _norm(_dcm2niix_version())
     if dependency_manager.is_antspyx():
-        versions[ANTSPYX] = _norm(_antspyx_version())
+        versions[ANTSPYX] = _norm(
+            _cached_dependency_version(dependency_manager, "antspyx", _antspyx_version)
+        )
     return versions
 
 
-def tools_needing_consent(dependency_manager, config) -> list:
-    """Detected tools whose accepted version differs from the detected version."""
-    detected = detected_tool_versions(dependency_manager, config)
+def tools_needing_consent(
+    dependency_manager, config, detected_versions: dict = None
+) -> list:
+    """Detected tools whose accepted version differs from the detected version.
+
+    ``detected_versions`` accepts a startup snapshot so callers can compare and
+    later persist exactly the same versions without probing external tools
+    multiple times.
+    """
+    detected = (
+        detected_tool_versions(dependency_manager, config)
+        if detected_versions is None
+        else detected_versions
+    )
     ordered = [FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX]
     needing = []
     for tool_id in ordered:

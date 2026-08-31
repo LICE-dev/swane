@@ -476,25 +476,26 @@ class MainWindow(QMainWindow):
             True to proceed with startup, False if the user declined and the
             application must abort.
         """
-        # Refresh detection so tools configured during the wizard are considered.
-        # Slicer's detection may complete asynchronously after the wizard; when it
-        # is not yet detected here it is simply consented on a later startup, since
-        # the per-tool model re-prompts only for tools whose detected version
-        # differs from the stored accepted version.
-        self.dependency_manager = DependencyManager()
-
-        needing = tools_needing_consent(self.dependency_manager, self.global_config)
+        # DependencyManager already performed the expensive import/external-tool
+        # checks during MainWindow construction. Slicer is evaluated directly
+        # from the current configuration, so rebuilding the manager here only
+        # repeats work on the GUI thread.
+        detected = detected_tool_versions(self.dependency_manager, self.global_config)
+        needing = tools_needing_consent(
+            self.dependency_manager, self.global_config, detected
+        )
         if not needing:
             return True
 
         context = {"slicer_path": self.global_config.get_slicer_path()}
         resolved = self._resolve_licenses(needing, context)
+        if resolved is None or len(resolved) != len(needing):
+            return False
 
         dialog = LicenseConsentWindow(resolved, parent=self)
         if dialog.exec() != QDialog.Accepted:
             return False
 
-        detected = detected_tool_versions(self.dependency_manager, self.global_config)
         for tool_id in dialog.accepted_tool_ids:
             self.global_config.set_accepted_license_version(
                 tool_id, detected.get(tool_id, "")
@@ -507,10 +508,8 @@ class MainWindow(QMainWindow):
         Resolve the license texts for the given tools without freezing the UI.
 
         Resolution may perform a bounded network fetch when a license is not
-        found locally. Running it on the GUI thread (before the event loop of
-        the consent dialog starts) would freeze the main window while the file
-        is downloaded, so it is offloaded to a worker while a modal busy
-        indicator keeps a local event loop running.
+        found locally. It is offloaded to a worker while a modal busy indicator
+        keeps processing GUI events until the worker emits its terminal signal.
 
         Parameters
         ----------
@@ -531,20 +530,35 @@ class MainWindow(QMainWindow):
         progress.setValue(0)
         progress.show()
 
-        loop = QEventLoop()
+        loop = QEventLoop(self)
         resolved_box = []
+        error_box = []
 
         def _on_resolved(resolved):
             resolved_box.append(resolved)
-            loop.quit()
+
+        def _on_failed(message):
+            error_box.append(message)
 
         worker = LicenseResolveWorker(needing, context)
+        self._license_resolve_worker = worker
         worker.signal.resolved.connect(_on_resolved)
-        QThreadPool.globalInstance().start(worker)
-        loop.exec()
-
-        progress.close()
-        return resolved_box[0] if resolved_box else []
+        worker.signal.failed.connect(_on_failed)
+        worker.signal.finished.connect(loop.quit)
+        try:
+            QThreadPool.globalInstance().start(worker)
+            loop.exec()
+        finally:
+            progress.close()
+            self._license_resolve_worker = None
+        if error_box:
+            msg_box = QMessageBox(parent=self)
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setWindowTitle(strings.license_consent_title)
+            msg_box.setText(strings.license_consent_resolution_error)
+            msg_box.exec()
+            return None
+        return resolved_box[0] if resolved_box else None
 
     def start_tool_reference(self, default_tab=None, search_str=None):
         """
