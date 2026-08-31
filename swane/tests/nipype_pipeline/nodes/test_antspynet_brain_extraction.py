@@ -74,3 +74,62 @@ def test_num_threads_sets_itk_env(tmp_path, fake_antspynet):
     node.inputs.out_file = str(tmp_path / "brain.nii.gz")
     node.run()
     assert seen["itk"] == "3"
+
+
+def test_tf_thread_env_vars_set(tmp_path, fake_antspynet):
+    seen = {}
+    real_be = sys.modules["antspynet"].brain_extraction
+
+    def spy(image, modality=None, **kwargs):
+        seen["intra"] = os.environ.get("TF_NUM_INTRAOP_THREADS")
+        seen["inter"] = os.environ.get("TF_NUM_INTEROP_THREADS")
+        seen["omp"] = os.environ.get("OMP_NUM_THREADS")
+        return real_be(image, modality=modality, **kwargs)
+
+    sys.modules["antspynet"].brain_extraction = spy
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.num_threads = 2
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+    assert seen == {"intra": "2", "inter": "2", "omp": "2"}
+
+
+def test_non_image_return_raises(tmp_path, monkeypatch):
+    module = types.ModuleType("antspynet")
+    module.brain_extraction = lambda image, modality=None, **k: {"foreground": image}
+    monkeypatch.setitem(sys.modules, "antspynet", module)
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1threetissue"
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    with pytest.raises(TypeError):
+        node.run()
+
+
+def test_keeps_only_largest_component(tmp_path):
+    # fake returns a prob map with a large blob and a small detached blob
+    def be(image, modality=None, **k):
+        arr = np.zeros(image.shape, dtype="float32")
+        arr[1:5, 1:5, 1:5] = 0.9  # large
+        arr[0, 0, 0] = 0.9  # detached false positive
+        return image.new_image_like(arr)
+
+    module = types.ModuleType("antspynet")
+    module.brain_extraction = be
+    import sys as _sys
+
+    _sys.modules["antspynet"] = module
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.mask_file = str(tmp_path / "mask.nii.gz")
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+    mask = ants.image_read(str(tmp_path / "mask.nii.gz")).numpy()
+    assert mask[0, 0, 0] == 0.0  # detached blob removed
+    assert mask[1:5, 1:5, 1:5].sum() > 0
