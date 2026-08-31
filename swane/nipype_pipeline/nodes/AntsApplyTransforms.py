@@ -1,5 +1,5 @@
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 import os
-
 import numpy as np
 import nibabel as nib
 from nipype.interfaces.base import (
@@ -14,6 +14,7 @@ from nipype.interfaces.base import (
 # antspyx is imported lazily inside _run_interface, as in AntsRegistration.
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class AntsApplyTransformsInputSpec(BaseInterfaceInputSpec):
     input_image = File(exists=True, mandatory=True, desc="the image to resample")
     reference_image = File(
@@ -40,10 +41,12 @@ class AntsApplyTransformsInputSpec(BaseInterfaceInputSpec):
     out_file = File(genfile=True, hash_files=False, desc="the resampled image")
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class AntsApplyTransformsOutputSpec(TraitedSpec):
     out_file = File(desc="the resampled image")
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class AntsApplyTransforms(BaseInterface):
     """Resamples an image through an ordered ANTs transform list.
 
