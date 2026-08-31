@@ -519,7 +519,7 @@ GLOBAL_PREFERENCES[category]["last_swane_version"] = PreferenceEntry(
     hidden=True,
     default=__version__,
 )
-for _license_tool in ("fsl", "freesurfer", "slicer", "dcm2niix"):
+for _license_tool in ("fsl", "freesurfer", "slicer", "dcm2niix", "antspyx"):
     GLOBAL_PREFERENCES[category]["accepted_license_" + _license_tool] = PreferenceEntry(
         input_type=InputTypes.TEXT,
         label="Accepted license version for " + _license_tool,
