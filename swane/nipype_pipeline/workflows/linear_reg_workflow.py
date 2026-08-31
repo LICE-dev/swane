@@ -7,15 +7,18 @@ from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
 
-from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import AntsN4BiasFieldCorrection
+from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import (
+    AntsN4BiasFieldCorrection,
+)
 from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,
     resolve_registration_engine,
+    resolve_deskull_engine,
 )
-from swane.config.config_enums import CoreLimit
+from swane.config.config_enums import CoreLimit, DeskullModality
 
 
 def linear_reg_workflow(
@@ -181,7 +184,8 @@ def linear_reg_workflow(
         deskull = get_deskull_node(
             name=name + "_deskull",
             name_prefix=name,
-            use_synth=synth_config.getboolean_safe("strip"),
+            deskull_engine=resolve_deskull_engine(synth_config),
+            deskull_modality=DeskullModality.T1,
             mask=True,
             bet_thr=bet_thr,
             bet_robust=True,

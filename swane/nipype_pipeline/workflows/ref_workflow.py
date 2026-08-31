@@ -2,14 +2,16 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
-from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import AntsN4BiasFieldCorrection
+from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import (
+    AntsN4BiasFieldCorrection,
+)
 from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
-from swane.nipype_pipeline.nodes.utils import get_deskull_node
+from swane.nipype_pipeline.nodes.utils import get_deskull_node, resolve_deskull_engine
 from configparser import SectionProxy
 from nipype.interfaces.fsl import RobustFOV, ApplyMask
 from nipype.interfaces.utility import IdentityInterface
 from nipype import Node
-from swane.config.config_enums import CoreLimit
+from swane.config.config_enums import CoreLimit, DeskullModality
 
 
 def ref_workflow(
@@ -112,7 +114,8 @@ def ref_workflow(
     # NODE 5: Scalp removal
     ref_deskull = get_deskull_node(
         name="ref_deskull_biased",
-        use_synth=synth_config.getboolean_safe("strip"),
+        deskull_engine=resolve_deskull_engine(synth_config),
+        deskull_modality=DeskullModality.T1,
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
         bet_robust=True,
