@@ -165,6 +165,18 @@ class TestToolChecksMocked:
         assert dep.state == DependenceStatus.DETECTED
         assert dep.state2 == DependenceStatus.DETECTED
 
+    def test_check_antspyx(self, monkeypatch):
+        import ants
+
+        monkeypatch.setattr(ants, "__version__", "0.6.3")
+        assert DependencyManager.check_antspyx().state == DependenceStatus.DETECTED
+
+        monkeypatch.setattr(ants, "__version__", "0.6.2")
+        assert DependencyManager.check_antspyx().state == DependenceStatus.WARNING
+
+        monkeypatch.delattr(ants, "__version__", raising=False)
+        assert DependencyManager.check_antspyx().state == DependenceStatus.MISSING
+
     def test_is_freesurfer_synth(self, monkeypatch):
         monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "8.2.0")
         assert DependencyManager.is_freesurfer_synth() is True
