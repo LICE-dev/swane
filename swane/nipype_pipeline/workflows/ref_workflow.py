@@ -20,6 +20,7 @@ def ref_workflow(
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
+    deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
@@ -39,6 +40,9 @@ def ref_workflow(
         Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the deskull node. The default
+        is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of Synth tools. The default is 0.
     multicore_node_limit : CoreLimit, optional
@@ -115,7 +119,7 @@ def ref_workflow(
     ref_deskull = get_deskull_node(
         name="ref_deskull_biased",
         deskull_engine=resolve_deskull_engine(synth_config),
-        deskull_modality=DeskullModality.T1,
+        deskull_modality=deskull_modality,
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
         bet_robust=True,
