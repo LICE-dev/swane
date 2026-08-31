@@ -12,13 +12,21 @@ from nipype.interfaces.fsl import (
     ApplyXFM,
 )
 
-from swane.config.config_enums import CoreLimit, RegistrationEngine
+from swane.config.config_enums import (
+    CoreLimit,
+    RegistrationEngine,
+    DeskullEngine,
+    DeskullModality,
+)
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.AntsRegistration import AntsRegistration
 from swane.nipype_pipeline.nodes.AntsApplyTransforms import AntsApplyTransforms
+from swane.nipype_pipeline.nodes.AntsPyNetBrainExtraction import (
+    AntsPyNetBrainExtraction,
+)
 from swane.nipype_pipeline.nodes.ram_estimators import *
 from swane.utils.ResourceManager import ResourceManager
 from nipype.utils.filemanip import fname_presuffix
@@ -54,6 +62,23 @@ def resolve_registration_engine(
     engine = synth_config.getenum_safe("engine")
     if not allow_ants and engine == RegistrationEngine.ANTS:
         return RegistrationEngine.FSL
+    return engine
+
+
+def resolve_deskull_engine(
+    synth_config, allow_synthstrip: bool = True
+) -> DeskullEngine:
+    """
+    Resolve the configured brain-extraction engine.
+
+    ``allow_synthstrip=False`` keeps a workflow that must avoid FreeSurfer Synth
+    tools (fMRI_preproc, mirroring its SynthMorph exclusion) off SYNTHSTRIP: when
+    the configured engine is SYNTHSTRIP it falls back to the default ANTSPYNET.
+    ANTSPYNET and BET are honoured either way.
+    """
+    engine = synth_config.getenum_safe("deskull_engine")
+    if not allow_synthstrip and engine == DeskullEngine.SYNTHSTRIP:
+        return DeskullEngine.ANTSPYNET
     return engine
 
 
@@ -137,7 +162,7 @@ apply_synth_num_threads = apply_tool_num_threads
 
 def get_deskull_node(
     name: str,
-    use_synth: bool,
+    deskull_engine: DeskullEngine,
     mask: bool = False,
     bet_thr: float = None,
     bet_bias_correction: bool = False,
@@ -145,13 +170,33 @@ def get_deskull_node(
     bet_threshold: bool = False,
     bet_surfaces: bool = False,
     synth_exclude_csf: bool = False,
+    deskull_modality: DeskullModality = None,
     out_file: str = None,
     name_prefix: str = "",
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     limit_synth_cores: bool = False,
 ) -> Node:
-    if use_synth:
+    if deskull_engine == DeskullEngine.ANTSPYNET:
+        deskull_node = Node(
+            AntsPyNetBrainExtraction(), name=name + "_antspynet", mem_gb=5
+        )
+        if deskull_modality is not None:
+            deskull_node.inputs.modality = deskull_modality.value
+        if mask:
+            mask_name = "brain_mask.nii.gz"
+            if out_file:
+                mask_name = fname_presuffix(out_file, suffix="_brain", use_ext=True)
+            deskull_node.inputs.mask_file = mask_name
+        threads, hard = get_tool_cpu_config(
+            max_cpu, multicore_node_limit, limit_synth_cores
+        )
+        # antspynet/ITK take threads only through num_threads (a real, nipype-aware
+        # reservation), like the ANTs registration node -- no soft env-var path.
+        apply_tool_num_threads(deskull_node, threads, hard)
+        if bet_surfaces:
+            deskull_node.inskull_out_name = "mask_file"
+    elif deskull_engine == DeskullEngine.SYNTHSTRIP:
         deskull_node = Node(SynthStrip(), name=name + "_synthstrip", mem_gb=5)
         if mask:
             mask_name = "brain_mask.nii.gz"
@@ -167,7 +212,7 @@ def get_deskull_node(
         )
         if bet_surfaces:
             deskull_node.inskull_out_name = "mask_file"
-    else:
+    else:  # DeskullEngine.BET
         deskull_node = Node(BET(), name=name + "_bet")
         deskull_node.inputs.mask = mask
         deskull_node.inputs.threshold = bet_threshold

@@ -16,8 +16,9 @@ from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     get_registration_node,
     resolve_registration_engine,
+    resolve_deskull_engine,
 )
-from swane.config.config_enums import CoreLimit
+from swane.config.config_enums import CoreLimit, DeskullModality
 
 
 def venous_mr_workflow(
@@ -159,7 +160,8 @@ def venous_mr_workflow(
     deskull = get_deskull_node(
         name_prefix="anatomic phase",
         name="vein_mr_deskull",
-        use_synth=synth_config.getboolean_safe("strip"),
+        deskull_engine=resolve_deskull_engine(synth_config),
+        deskull_modality=DeskullModality.T1,
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
         bet_surfaces=True,

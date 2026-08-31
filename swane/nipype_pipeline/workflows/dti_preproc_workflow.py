@@ -5,7 +5,7 @@ from nipype.interfaces.fsl import (
 )
 from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
 from nipype.pipeline.engine import Node
-from swane.config.config_enums import CoreLimit, RegistrationEngine
+from swane.config.config_enums import CoreLimit, RegistrationEngine, DeskullModality
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -16,6 +16,7 @@ from swane.nipype_pipeline.nodes.utils import (
     get_registration_node,
     apply_registration_node,
     resolve_registration_engine,
+    resolve_deskull_engine,
 )
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
@@ -162,7 +163,8 @@ def dti_preproc_workflow(
     b0_deskull = get_deskull_node(
         name="dti_deskull",
         name_prefix="DTI",
-        use_synth=synth_config.getboolean_safe("strip"),
+        deskull_engine=resolve_deskull_engine(synth_config),
+        deskull_modality=DeskullModality.T1,
         mask=True,
         bet_thr=0.3,
         bet_robust=True,
