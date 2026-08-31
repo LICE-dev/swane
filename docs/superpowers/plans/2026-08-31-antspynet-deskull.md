@@ -368,6 +368,153 @@ git commit -m "feat: add AntsPyNetBrainExtraction node"
 
 ---
 
+### Task 3b: `AntsPyNetBrainExtraction` corrections from the oracle
+
+**Model:** opus4.8
+**Depends on:** Task 3 (committed). **Reason:** the oracle (Task 2) measured three real problems in the committed node.
+
+**Files:**
+- Modify: `swane/nipype_pipeline/nodes/AntsPyNetBrainExtraction.py`
+- Test: `swane/tests/nipype_pipeline/nodes/test_antspynet_brain_extraction.py` (extend)
+
+The three corrections:
+1. **Thread control:** `ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS` does **not** limit antspynet (oracle measured 211% CPU with ITK=1; only `TF_NUM_INTRAOP_THREADS` + `TF_NUM_INTEROP_THREADS` + `OMP_NUM_THREADS` brought it to ~98%). Set all of them (keep ITK too) from `num_threads`. No `get_deskull_node` change is needed — it already passes `num_threads`.
+2. **Return-type guard:** some modalities (`t1threetissue`/`t1hemi`/`t1lobes`) return a `dict`; `prob.numpy() >= 0.5` would silently produce garbage. Raise `TypeError` if the return is not an `ANTsImage`.
+3. **Largest connected component:** after binarization, keep only the largest component (`ants.iMath(mask, "GetLargestComponent")`) to drop detached orbital/nasal false positives (oracle measured up to 6.4 ml). Cheap on clean models.
+
+- [ ] **Step 1: Extend the failing tests**
+
+```python
+# add to test_antspynet_brain_extraction.py
+def test_tf_thread_env_vars_set(tmp_path, fake_antspynet):
+    seen = {}
+    real_be = sys.modules["antspynet"].brain_extraction
+
+    def spy(image, modality=None, **kwargs):
+        seen["intra"] = os.environ.get("TF_NUM_INTRAOP_THREADS")
+        seen["inter"] = os.environ.get("TF_NUM_INTEROP_THREADS")
+        seen["omp"] = os.environ.get("OMP_NUM_THREADS")
+        return real_be(image, modality=modality, **kwargs)
+
+    sys.modules["antspynet"].brain_extraction = spy
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.num_threads = 2
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+    assert seen == {"intra": "2", "inter": "2", "omp": "2"}
+
+
+def test_non_image_return_raises(tmp_path, monkeypatch):
+    module = types.ModuleType("antspynet")
+    module.brain_extraction = lambda image, modality=None, **k: {"foreground": image}
+    monkeypatch.setitem(sys.modules, "antspynet", module)
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1threetissue"
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    with pytest.raises(TypeError):
+        node.run()
+
+
+def test_keeps_only_largest_component(tmp_path):
+    # fake returns a prob map with a large blob and a small detached blob
+    def be(image, modality=None, **k):
+        arr = np.zeros(image.shape, dtype="float32")
+        arr[1:5, 1:5, 1:5] = 0.9   # large
+        arr[0, 0, 0] = 0.9          # detached false positive
+        return image.new_image_like(arr)
+
+    module = types.ModuleType("antspynet")
+    module.brain_extraction = be
+    import sys as _sys
+    _sys.modules["antspynet"] = module
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.mask_file = str(tmp_path / "mask.nii.gz")
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+    mask = ants.image_read(str(tmp_path / "mask.nii.gz")).numpy()
+    assert mask[0, 0, 0] == 0.0        # detached blob removed
+    assert mask[1:5, 1:5, 1:5].sum() > 0
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `/media/Dati/venv/bin/python -m pytest swane/tests/nipype_pipeline/nodes/test_antspynet_brain_extraction.py -v`
+Expected: the three new tests FAIL.
+
+- [ ] **Step 3: Apply the corrections**
+
+Replace `_run_interface` (keep `ITK_THREADS_VAR` module constant):
+
+```python
+    THREAD_ENV_VARS = (
+        ITK_THREADS_VAR,
+        "TF_NUM_INTRAOP_THREADS",
+        "TF_NUM_INTEROP_THREADS",
+        "OMP_NUM_THREADS",
+    )
+
+    def _run_interface(self, runtime):
+        import ants
+        import antspynet
+        from ants.core.ants_image import ANTsImage
+
+        out_file = self._gen_outfilename()
+        img = ants.image_read(self.inputs.in_file, pixeltype="float")
+
+        saved = {v: os.environ.get(v) for v in self.THREAD_ENV_VARS}
+        if isdefined(self.inputs.num_threads):
+            for v in self.THREAD_ENV_VARS:
+                os.environ[v] = str(self.inputs.num_threads)
+        try:
+            prob = antspynet.brain_extraction(img, modality=self.inputs.modality)
+        finally:
+            for v, prev in saved.items():
+                if prev is None:
+                    os.environ.pop(v, None)
+                else:
+                    os.environ[v] = prev
+
+        if not isinstance(prob, ANTsImage):
+            raise TypeError(
+                "antspynet.brain_extraction returned %s, not a probability "
+                "ANTsImage; modality %r is unsupported by this node"
+                % (type(prob).__name__, self.inputs.modality)
+            )
+
+        mask = prob.new_image_like((prob.numpy() >= 0.5).astype("float32"))
+        # Drop detached false positives (orbital/nasal); some models emit them.
+        mask = ants.iMath(mask, "GetLargestComponent")
+
+        if isdefined(self.inputs.mask_file):
+            ants.image_write(mask, abspath(self.inputs.mask_file))
+
+        ants.image_write(img * mask, out_file)
+        return runtime
+```
+
+- [ ] **Step 4: Run tests (all, incl. the original two)**
+
+Run: `/media/Dati/venv/bin/python -m pytest swane/tests/nipype_pipeline/nodes/test_antspynet_brain_extraction.py -v`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add swane/nipype_pipeline/nodes/AntsPyNetBrainExtraction.py \
+        swane/tests/nipype_pipeline/nodes/test_antspynet_brain_extraction.py
+git commit -m "fix: antspynet node TF threads, return guard, largest component"
+```
+
+---
+
 ### Task 4: `DependencyManager.is_antspynet` / `check_antspynet` + strings
 
 **Model:** sonnet5
@@ -966,11 +1113,13 @@ git commit -m "feat: show antspynet dependency row in home window"
 In `install_requires`, after `"antspyx==0.6.3",`:
 
 ```python
-        "antspynet==<X>",
-        "tensorflow==<Y>",
+        "antspynet==0.3.2",
+        "tensorflow==2.21.0",
 ```
 
-Set `MIN_ANTSPYNET_VERSION = "<X>"` in `DependencyManager.py`.
+(Oracle-verified working triple on Python 3.12: `antspyx 0.6.3 + antspynet 0.3.2 + tensorflow 2.21.0`, `pip install antspyx==0.6.3 antspynet==0.3.2` resolves tensorflow itself with no conflict; per-call peak RSS ~2.0 GB, so `mem_gb=5` holds. The exact `antspynet==0.3.2` pin is also the primary mitigation for the `flair.v0` removal risk — see Task 13.)
+
+Set `MIN_ANTSPYNET_VERSION = "0.3.2"` in `DependencyManager.py`.
 
 - [ ] **Step 2: Verify the environment resolves and imports**
 
@@ -1105,43 +1254,55 @@ git commit -m "refactor: route fMRI_preproc brain extraction through deskull wra
 
 ---
 
-### Task 12: Finalize oracle-derived constants (NODIF/VENOUS + optional intracranial)
+### Task 12: Finalize oracle-derived constants (NODIF="bold", VENOUS="flair.v0")
 
 **Model:** sonnet5
-**Depends on:** Task 2 (reported results), Task 1, Task 3, Task 10.
+**Depends on:** Task 2 (reported), Task 1, Task 3, Task 10.
+
+**Oracle outcome:** `NODIF = "bold"`, `VENOUS = "flair.v0"`. **No intracranial post-step is needed** — `flair.v0` reaches BET-`-A` level on its own (venous retention 0.983/0.920 vs 0.982/0.906 baseline; Dice vs inskull 0.984/0.978, best of the grid). The conditional dilation step from the original plan is **dropped**.
+
+**Working-tree state:** the oracle already applied these edits (uncommitted): `config_enums.py` sets the two values with a pointer comment; `venous_mr_workflow.py` has a NODE-5 rationale comment (why the whole intracranial space is needed; why `flair.v0`; and the `t2` + 3 mm physical-space dilation fallback if `flair.v0` is ever removed upstream). This task **formalizes and commits** them.
 
 **Files:**
-- Modify: `swane/config/config_enums.py` (`DeskullModality.NODIF`, `.VENOUS` values)
-- Modify (only if oracle requires it): `swane/nipype_pipeline/nodes/AntsPyNetBrainExtraction.py` (add `intracranial` trait + fill), `swane/nipype_pipeline/nodes/utils.py` (pass `intracranial=True` for `bet_surfaces` antspynet branch), `venous_mr_workflow.py` (no change if handled in utils)
-- Test: update `test_deskull_enums.py` to assert the real keys; add a node test for the intracranial fill if that path is added.
+- Modify: `swane/config/config_enums.py` (`NODIF`/`VENOUS` values + comment — already in tree)
+- Modify: `swane/nipype_pipeline/workflows/venous_mr_workflow.py` (NODE-5 comment — already in tree)
+- Test: `swane/tests/config/test_deskull_enums.py` (harden to assert the concrete values)
 
-> **Orchestrator note:** the exact `NODIF`/`VENOUS` keys and the intracranial operation are supplied by the orchestrator from Task 2's report before this task runs; they are not placeholders at execution time.
+- [ ] **Step 1: Review the working-tree diff**
 
-- [ ] **Step 1: Set the resolved modality keys**
+Run: `git diff swane/config/config_enums.py swane/nipype_pipeline/workflows/venous_mr_workflow.py`
+Confirm `NODIF = "bold"`, `VENOUS = "flair.v0"`, the NODE-5 comment, and that no intracranial trait/`get_deskull_node` change was introduced.
 
-Replace the sentinel values with the oracle-chosen antspynet keys, e.g.:
+- [ ] **Step 2: Harden the enum test**
+
+In `swane/tests/config/test_deskull_enums.py`, replace `test_oracle_decided_modalities_exist` with concrete assertions:
 
 ```python
-    NODIF = "<oracle key, e.g. bold>"
-    VENOUS = "<oracle key, e.g. t1>"
+def test_oracle_decided_modalities():
+    assert DeskullModality.NODIF.value == "bold"
+    assert DeskullModality.VENOUS.value == "flair.v0"
 ```
 
-Update `test_deskull_enums.py::test_oracle_decided_modalities_exist` to assert the concrete values.
+- [ ] **Step 3: Black + run tests**
 
-- [ ] **Step 2 (conditional): add the intracranial post-step**
-
-Only if Task 2 reports that no single modality covers the intracranial space: add an `intracranial = traits.Bool(False, usedefault=True)` input to `AntsPyNetBrainExtraction`, apply the exact morphological operation Task 2 validated after binarization, and in `get_deskull_node`'s ANTSPYNET branch set `deskull_node.inputs.intracranial = True` when `bet_surfaces` is True. Add a node test with a fake probability image asserting the filled mask is a superset of the plain mask.
-
-- [ ] **Step 3: Run tests**
-
-Run: `python -m pytest swane/tests/config/test_deskull_enums.py swane/tests/nipype_pipeline/nodes/test_antspynet_brain_extraction.py -v`
-Expected: PASS.
+Run:
+```bash
+/media/Dati/venv/bin/python -m black swane/config/config_enums.py \
+    swane/nipype_pipeline/workflows/venous_mr_workflow.py \
+    swane/tests/config/test_deskull_enums.py
+/media/Dati/venv/bin/python -m pytest swane/tests/config/test_deskull_enums.py \
+    swane/tests/nipype_pipeline/test_deskull_modality_wiring.py \
+    swane/tests/nipype_pipeline/nodes/test_deskull_abstraction.py -v
+```
+Expected: PASS. (Black may be absent in the SWANe venv; if so, `pip install black` in that venv or skip — the edits are comments/literals and Black-clean.)
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add -A
-git commit -m "feat: set oracle-decided nodif/venous deskull modalities"
+git add swane/config/config_enums.py \
+        swane/nipype_pipeline/workflows/venous_mr_workflow.py \
+        swane/tests/config/test_deskull_enums.py
+git commit -m "feat: set nodif=bold and venous=flair.v0 deskull modalities"
 ```
 
 ---
@@ -1155,9 +1316,30 @@ git commit -m "feat: set oracle-decided nodif/venous deskull modalities"
 - Create: `swane/tests/prerelease/` hook or a small utility for `preload_antspynet_models(modalities)`
 - Modify: `swane/tests/nipype_pipeline/matrix/snapshots/*` (regenerate)
 
-- [ ] **Step 1: Pre-cache helper**
+- [ ] **Step 1: Pre-cache helper (oracle-specified weights)**
 
-Add `preload_antspynet_models(modalities)` that, for each modality, runs `antspynet.brain_extraction` once on a tiny synthetic image (forcing the weight download), so the prerelease sweep never downloads mid-workflow. Call it from the prerelease setup before running workflows. Verify it is a no-op when weights already exist.
+The modalities MainWorkflow actually uses are `t1, flair, t2, bold, flair.v0`. Their weights + shared template (~39 MB total): `brainExtractionRobustT1`, `brainExtractionRobustFLAIR`, `brainExtractionRobustT2`, `brainExtractionRobustBOLD`, `brainExtractionFLAIR` (this is `flair.v0`), plus `S_template3`. Add a helper that fetches them by name (no inference needed; `get_pretrained_network` exits immediately if the file already exists, so it is offline/read-only safe):
+
+```python
+def preload_antspynet_models():
+    from antspynet.utilities import get_pretrained_network, get_antsxnet_data
+
+    for weight in (
+        "brainExtractionRobustT1",
+        "brainExtractionRobustFLAIR",
+        "brainExtractionRobustT2",
+        "brainExtractionRobustBOLD",
+        "brainExtractionFLAIR",  # flair.v0 -> VENOUS
+    ):
+        get_pretrained_network(weight)
+    get_antsxnet_data("S_template3")
+```
+
+Call it from the prerelease setup before running workflows. Weights cache under `~/.keras/ANTsXNet` (override with `antspynet.utilities.set_antsxnet_cache_directory`); downloads come from figshare.
+
+- [ ] **Step 1b: Guard the `flair.v0` risk**
+
+`flair.v0` is an upstream "previous-version" network; if a future antspynet drops it, the venous workflow raises `ValueError: Unknown modality type` at run time. Primary mitigation is the exact `antspynet==0.3.2` pin (Task 9). Add a belt-and-suspenders `@pytest.mark.heavy` test (real antspynet, opt-in via `--run-heavy`) asserting every `DeskullModality.value` is accepted by the installed antspynet — e.g. it appears in antspynet's known-modality list, or a tiny `brain_extraction` call does not raise `Unknown modality`. The `t2` + 3 mm-dilation fallback is already documented in `venous_mr_workflow.py`.
 
 - [ ] **Step 2: Convert leftover `strip` config usages, then regenerate matrix snapshots**
 
