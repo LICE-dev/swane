@@ -108,7 +108,9 @@ class ToolReferenceWindow(QDialog):
             QSizePolicy.Expanding,
         )
 
-        for idx, pkg in enumerate((Package.FSL, Package.FREESURFER, Package.NIPY, Package.OTHER)):
+        for idx, pkg in enumerate(
+            (Package.FSL, Package.FREESURFER, Package.NIPY, Package.OTHER)
+        ):
             tab = self._build_package_tab(pkg)
             self._tab_widget.addTab(tab, pkg.value.upper())
 
