@@ -7,7 +7,7 @@ from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
 
-from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
+from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import AntsN4BiasFieldCorrection
 from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
@@ -252,7 +252,7 @@ def linear_reg_workflow(
 
         if bias_field_correction:
             bias_correction = Node(
-                N4BiasFieldCorrection(), name="bias_correction", mem_gb=2
+                AntsN4BiasFieldCorrection(), name="bias_correction", mem_gb=2
             )
             if max_cpu != 0 and multicore_node_limit is not CoreLimit.NO_LIMIT:
                 bias_correction.inputs.num_threads = max_cpu

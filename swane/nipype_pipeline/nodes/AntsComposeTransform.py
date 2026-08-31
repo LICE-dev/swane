@@ -1,3 +1,4 @@
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 import os
 
 from nipype.interfaces.base import (
@@ -21,6 +22,7 @@ COMPOSE_PREFIX = "composed_"
 COMPOSE_SUFFIX = "comptx.nii.gz"
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class AntsComposeTransformInputSpec(BaseInterfaceInputSpec):
     transformlist = traits.List(
         File(exists=True),
@@ -40,10 +42,12 @@ class AntsComposeTransformInputSpec(BaseInterfaceInputSpec):
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class AntsComposeTransformOutputSpec(TraitedSpec):
     out_field = File(desc="the composed displacement field")
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class AntsComposeTransform(BaseInterface):
     """Flattens an ordered ANTs transform list into one displacement field.
 

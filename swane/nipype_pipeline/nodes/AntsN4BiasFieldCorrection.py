@@ -23,7 +23,7 @@ N4_DEFAULT_TOL = 1e-7
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
-class N4BiasFieldCorrectionInputSpec(BaseInterfaceInputSpec):
+class AntsN4BiasFieldCorrectionInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc="the input image")
     out_file = File(desc="the output unbiased image")
     skull_stripped = traits.Bool(
@@ -41,18 +41,19 @@ class N4BiasFieldCorrectionInputSpec(BaseInterfaceInputSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
-class N4BiasFieldCorrectionOutputSpec(TraitedSpec):
+class AntsN4BiasFieldCorrectionOutputSpec(TraitedSpec):
     out_file = File(desc="the output unbiased image")
 
 
-class N4BiasFieldCorrection(BaseInterface):
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
+class AntsN4BiasFieldCorrection(BaseInterface):
     """
     Apply N4 bias field correction algorithm via the antspyx library.
 
     """
 
-    input_spec = N4BiasFieldCorrectionInputSpec
-    output_spec = N4BiasFieldCorrectionOutputSpec
+    input_spec = AntsN4BiasFieldCorrectionInputSpec
+    output_spec = AntsN4BiasFieldCorrectionOutputSpec
 
     def _run_interface(self, runtime):
         import ants

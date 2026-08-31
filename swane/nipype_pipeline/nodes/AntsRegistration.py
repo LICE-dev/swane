@@ -1,3 +1,4 @@
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 import os
 
 from nipype.interfaces.base import (
@@ -32,6 +33,7 @@ TEST_RUN_AFF_ITERATIONS = (100, 100, 50, 10)
 TEST_RUN_REG_ITERATIONS = (10, 5, 0)
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class AntsRegistrationInputSpec(BaseInterfaceInputSpec):
     moving = File(exists=True, mandatory=True, desc="the moving image")
     fixed = File(exists=True, mandatory=True, desc="the reference image")
@@ -78,6 +80,7 @@ class AntsRegistrationInputSpec(BaseInterfaceInputSpec):
     )
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class AntsRegistrationOutputSpec(TraitedSpec):
     fwd_transforms = traits.List(
         File(exists=True), desc="ordered moving->fixed transforms (ANTs order)"
@@ -97,6 +100,7 @@ class AntsRegistrationOutputSpec(TraitedSpec):
     inverse_warp_field = File(desc="inverse warp component (nonlinear only)")
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class AntsRegistration(BaseInterface):
     """Registers a moving image to a fixed image with the antspyx library.
 
