@@ -161,6 +161,57 @@ class TestAntsApplyTransformsInversion:
             node.run()
 
 
+class TestAntsApplyTransformsTimeSeries:
+    """A 4D moving image (e.g. a whole fMRI run) needs antspyx's imagetype=3;
+    the default imagetype=0 raises "Set imagetype 3 to transform time series
+    images." (discovered by the ANTs-default resting-state prerelease smoke)."""
+
+    def test_3d_moving_forwards_scalar_imagetype(
+        self, workspace, make_nifti, spy_apply
+    ):
+        node = AntsApplyTransforms()
+        node.inputs.input_image = make_nifti("in.nii.gz", shape=(6, 6, 6))
+        node.inputs.reference_image = make_nifti("ref.nii.gz", shape=(6, 6, 6))
+        node.inputs.transformlist = []
+        node.run()
+        assert spy_apply["imagetype"] == 0
+
+    def test_4d_moving_forwards_time_series_imagetype(
+        self, workspace, make_nifti, spy_apply
+    ):
+        node = AntsApplyTransforms()
+        node.inputs.input_image = make_nifti(
+            "in.nii.gz", shape=(6, 6, 6, 5), zooms=(3.0, 3.0, 3.0, 2.5)
+        )
+        node.inputs.reference_image = make_nifti("ref.nii.gz", shape=(8, 8, 8))
+        node.inputs.transformlist = []
+        node.run()
+        assert spy_apply["imagetype"] == 3
+
+    def test_4d_result_keeps_reference_grid_and_moving_tr(
+        self, workspace, make_nifti, spy_apply
+    ):
+        """The resampled time series lands on the reference's spatial grid but
+        keeps the original moving image's TR/temporal units: the reference (a
+        static volume) has no repetition time of its own to borrow."""
+        affine = np.diag([2.0, 2.0, 2.0, 1.0])
+        node = AntsApplyTransforms()
+        node.inputs.input_image = make_nifti(
+            "in.nii.gz", shape=(6, 6, 6, 5), zooms=(3.0, 3.0, 3.0, 2.5)
+        )
+        node.inputs.reference_image = make_nifti(
+            "ref.nii.gz", shape=(8, 8, 8), zooms=(2.0, 2.0, 2.0), affine=affine
+        )
+        node.inputs.transformlist = []
+        node.run()
+        out = nib.load(node._list_outputs()["out_file"])
+        assert out.shape == (8, 8, 8, 5)
+        zooms = out.header.get_zooms()
+        assert zooms[:3] == pytest.approx((2.0, 2.0, 2.0))
+        assert zooms[3] == pytest.approx(2.5)
+        assert np.allclose(out.affine, affine, atol=1e-4)
+
+
 @pytest.mark.heavy
 class TestAntsApplyTransformsRealRun:
     """Round-trips a real registration through the node; opt-in via --run-heavy."""
