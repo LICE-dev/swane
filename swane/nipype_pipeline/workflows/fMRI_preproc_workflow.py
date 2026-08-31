@@ -2,7 +2,6 @@ from nipype import Node, IdentityInterface, Merge
 from nipype.interfaces.fsl import (
     ImageMaths,
     MCFLIRT,
-    BET,
     SUSAN,
 )
 from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
@@ -15,9 +14,16 @@ from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
 from configparser import SectionProxy
-from swane.config.config_enums import SliceTiming, RegistrationEngine, CoreLimit
+from swane.config.config_enums import (
+    SliceTiming,
+    RegistrationEngine,
+    CoreLimit,
+    DeskullModality,
+)
 from swane.nipype_pipeline.nodes.utils import (
+    get_deskull_node,
     get_registration_node,
+    resolve_deskull_engine,
     resolve_registration_engine,
 )
 
@@ -213,11 +219,19 @@ def fMRI_preproc_workflow(
         slice_time_corrected_node, slice_time_corrected_field, meanfunc, "in_file"
     )
 
-    # NODE 10: Strip the skull from the mean functional to generate a mask
-    meanfuncmask = Node(BET(), name="%s_meanfuncmask" % name)
-    meanfuncmask.inputs.mask = True
-    meanfuncmask.inputs.no_output = True
-    meanfuncmask.inputs.frac = 0.3
+    # NODE 10: Strip the skull from the mean functional to generate a mask.
+    # EPI avoids the FreeSurfer Synth tools (mirroring the SynthMorph exclusion
+    # below), so a configured SYNTHSTRIP engine folds to the default ANTSPYNET.
+    meanfuncmask = get_deskull_node(
+        name="%s_meanfuncmask" % name,
+        deskull_engine=resolve_deskull_engine(synth_config, allow_synthstrip=False),
+        deskull_modality=DeskullModality.BOLD,
+        mask=True,
+        bet_thr=0.3,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
+    )
     workflow.connect(meanfunc, "out_file", meanfuncmask, "in_file")
 
     # NODE 11: Mask the functional runs with the extracted mask
