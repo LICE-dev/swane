@@ -48,25 +48,44 @@ class AntsPyNetBrainExtraction(BaseInterface):
     input_spec = AntsPyNetBrainExtractionInputSpec
     output_spec = AntsPyNetBrainExtractionOutputSpec
 
+    THREAD_ENV_VARS = (
+        ITK_THREADS_VAR,
+        "TF_NUM_INTRAOP_THREADS",
+        "TF_NUM_INTEROP_THREADS",
+        "OMP_NUM_THREADS",
+    )
+
     def _run_interface(self, runtime):
         import ants
         import antspynet
+        from ants.core.ants_image import ANTsImage
 
         out_file = self._gen_outfilename()
         img = ants.image_read(self.inputs.in_file, pixeltype="float")
 
-        previous_threads = os.environ.get(ITK_THREADS_VAR)
+        saved = {v: os.environ.get(v) for v in self.THREAD_ENV_VARS}
         if isdefined(self.inputs.num_threads):
-            os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
+            for v in self.THREAD_ENV_VARS:
+                os.environ[v] = str(self.inputs.num_threads)
         try:
             prob = antspynet.brain_extraction(img, modality=self.inputs.modality)
         finally:
-            if previous_threads is None:
-                os.environ.pop(ITK_THREADS_VAR, None)
-            else:
-                os.environ[ITK_THREADS_VAR] = previous_threads
+            for v, prev in saved.items():
+                if prev is None:
+                    os.environ.pop(v, None)
+                else:
+                    os.environ[v] = prev
+
+        if not isinstance(prob, ANTsImage):
+            raise TypeError(
+                "antspynet.brain_extraction returned %s, not a probability "
+                "ANTsImage; modality %r is unsupported by this node"
+                % (type(prob).__name__, self.inputs.modality)
+            )
 
         mask = prob.new_image_like((prob.numpy() >= 0.5).astype("float32"))
+        # Drop detached false positives (orbital/nasal); some models emit them.
+        mask = ants.iMath(mask, "GetLargestComponent")
 
         if isdefined(self.inputs.mask_file):
             ants.image_write(mask, abspath(self.inputs.mask_file))
