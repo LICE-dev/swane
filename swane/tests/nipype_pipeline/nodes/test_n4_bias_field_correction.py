@@ -20,7 +20,7 @@ import nibabel as nib
 import pytest
 from nipype.interfaces.base import isdefined
 
-from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import (
+from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import (
     AntsN4BiasFieldCorrection,
     N4_DEFAULT_TOL,
 )
