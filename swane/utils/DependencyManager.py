@@ -31,6 +31,7 @@ class Dependence:
         state: DependenceStatus,
         label: str,
         state2: DependenceStatus = DependenceStatus.MISSING,
+        detected_version: str = None,
     ):
         """
         Parameters
@@ -41,18 +42,22 @@ class Dependence:
             A string to inform the user about the depence status
         state2: DependenceStatus
             A value describing a subdependence status
+        detected_version: str
+            Raw version already discovered while checking the dependency.
         """
 
         self.state: DependenceStatus = state
         self.state2 = DependenceStatus.MISSING
         self.label = None
-        self.update(state, label, state2)
+        self.detected_version = None
+        self.update(state, label, state2, detected_version)
 
     def update(
         self,
         state: DependenceStatus,
         label: str,
         state2: DependenceStatus = DependenceStatus.MISSING,
+        detected_version: str = None,
     ):
         """
         Parameters
@@ -63,16 +68,20 @@ class Dependence:
             A string to inform the user about the depence status
         state2: DependenceStatus
             A value in DependenceStatus describing a subdependence status
+        detected_version: str
+            Raw dependency version associated with this state.
         """
 
         if state in DependenceStatus:
             self.state = state
             self.label = label
             self.state2 = state2
+            self.detected_version = detected_version
         else:
             self.state = DependenceStatus.MISSING
             self.state2 = DependenceStatus.MISSING
             self.label = strings.check_dep_generic_error
+            self.detected_version = None
 
 
 class DependencyManager:
@@ -162,14 +171,18 @@ class DependencyManager:
             DependencyManager.SYNTH_FREESURFER_VERSION
         )
 
-    @staticmethod
-    def is_antspyx() -> bool:
+    def is_antspyx(self=None) -> bool:
         """
         Returns
         -------
         True if the antspyx package is importable (even if outdated).
 
         """
+        # Instance callers already paid the import/version-check cost in
+        # ``__init__``. Keep class-level calls working for prerelease capability
+        # probes, but do not repeat the check during normal GUI startup.
+        if self is not None:
+            return self.antspyx.state != DependenceStatus.MISSING
         return DependencyManager.check_antspyx().state != DependenceStatus.MISSING
 
     @staticmethod
@@ -323,10 +336,13 @@ class DependencyManager:
                 DependenceStatus.WARNING,
                 strings.check_dep_fsl_wrong_version
                 % (fsl_version_lic, DependencyManager.MIN_FSL_VERSION),
+                detected_version=fsl_version,
             )
 
         return Dependence(
-            DependenceStatus.DETECTED, strings.check_dep_fsl_found % fsl_version_lic
+            DependenceStatus.DETECTED,
+            strings.check_dep_fsl_found % fsl_version_lic,
+            detected_version=fsl_version,
         )
 
     @staticmethod
@@ -355,11 +371,13 @@ class DependencyManager:
                 DependenceStatus.WARNING,
                 strings.check_dep_antspyx_wrong_version
                 % (antspyx_version_lic, DependencyManager.MIN_ANTSPYX_VERSION),
+                detected_version=antspyx_version,
             )
 
         return Dependence(
             DependenceStatus.DETECTED,
             strings.check_dep_antspyx_found % antspyx_version_lic,
+            detected_version=antspyx_version,
         )
 
     @staticmethod
@@ -431,6 +449,7 @@ class DependencyManager:
                 DependenceStatus.WARNING,
                 strings.check_dep_fs_outdated_version
                 % (fs_ver, DependencyManager.MIN_FREESURFER_VERSION),
+                detected_version=freesurfer_version,
             )
 
         # tcsh shell installed
@@ -439,6 +458,7 @@ class DependencyManager:
                 DependenceStatus.WARNING,
                 strings.check_dep_fs_no_tcsh % fs_ver,
                 DependenceStatus.MISSING,
+                detected_version=freesurfer_version,
             )
 
         # FS matlab runtime
@@ -487,4 +507,5 @@ class DependencyManager:
             fs_dep,
             error_string,
             matlab_dep,
+            detected_version=freesurfer_version,
         )

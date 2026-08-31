@@ -16,6 +16,24 @@ def test_is_antspyx_returns_bool():
     assert isinstance(DependencyManager.is_antspyx(), bool)
 
 
+def test_instance_is_antspyx_reuses_cached_status(monkeypatch):
+    from swane.utils.DependencyManager import (
+        Dependence,
+        DependenceStatus,
+        DependencyManager,
+    )
+
+    manager = DependencyManager.__new__(DependencyManager)
+    manager.antspyx = Dependence(DependenceStatus.DETECTED, "detected")
+    monkeypatch.setattr(
+        DependencyManager,
+        "check_antspyx",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected dependency check")),
+    )
+
+    assert manager.is_antspyx() is True
+
+
 def test_ants_ram_requirement_positive():
     from swane.utils.ResourceManager import ResourceManager
 
