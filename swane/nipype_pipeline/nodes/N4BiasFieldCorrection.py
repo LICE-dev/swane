@@ -98,7 +98,7 @@ class N4BiasFieldCorrection(BaseInterface):
         # --- Apply full resolution bias fied ---
         log_bias_field = corrector.GetLogBiasFieldAsImage(img)
         corrected = img / sitk.Exp(log_bias_field)
-        
+
         # save output
         sitk.WriteImage(corrected, out_file)
 
