@@ -166,15 +166,10 @@ class DependencyManager:
         """
         Returns
         -------
-        True if the antspyx package is importable.
+        True if the antspyx package is importable (even if outdated).
 
         """
-        try:
-            import ants  # noqa: F401
-
-            return True
-        except Exception:
-            return False
+        return DependencyManager.check_antspyx().state != DependenceStatus.MISSING
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
