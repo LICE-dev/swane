@@ -608,6 +608,10 @@ PASSES = (
             "pet_ai": "false",
         },
     ),
+    # Phase 3 lifted dti_preproc's FSL pin (it now follows registration_engine,
+    # like the structural family), so this axis is pinned explicitly here to
+    # keep this pass's documented FSL-baseline behaviour rather than silently
+    # riding the (ANTS) default -- see structural_fsl/structural_ants.
     PassSpec(
         name="dti_classic",
         description=(
@@ -617,6 +621,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
             "cuda": "false",
             "old_eddy_correct": "true",
             "tractography": "false",
@@ -626,7 +631,11 @@ PASSES = (
     # The CPU tractography baseline: modern eddy + BEDPOSTX + corticospinal
     # ProbTrackX, all on the CPU. It runs on every host that has the XTRACT
     # protocols, so the CPU path of that chain is always exercised. The GPU
-    # variant below is the opt-in extra, gated by an actual GPU.
+    # variant below is the opt-in extra, gated by an actual GPU. Pinned FSL
+    # (see dti_classic above); dti_tractography_ants below is its explicit ANTS
+    # twin, exercising Phase 3's externalized probtrackx transforms (ROIs
+    # warped MNI->ref->diff, diffusion-space probtrackx, diff->ref result warp)
+    # end to end through antspyx.
     PassSpec(
         name="dti_tractography",
         description=(
@@ -636,6 +645,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
             "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
@@ -655,7 +665,31 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
             "cuda": "true",
+            "old_eddy_correct": "false",
+            "tractography": "true",
+            "multicore_node_limit": "SOFT_CAP",
+        },
+    ),
+    # The explicit ANTS twin of dti_tractography (Phase 3): the externalized
+    # tractography path -- ROI MNI->ref->diff pre-warps, probtrackx run natively
+    # in diffusion space (no xfm/inv_xfm), summed density warped diff->ref --
+    # forced through antspyx instead of FLIRT/FNIRT, mirroring structural_ants.
+    # Gated in _PASS_REQUIREMENTS: without antspyx it would downgrade to FSL and
+    # exactly duplicate dti_tractography, so it is skipped instead.
+    PassSpec(
+        name="dti_tractography_ants",
+        description=(
+            "The ANTS backend twin of dti_tractography: externalized "
+            "probtrackx transforms exercised end to end through antspyx "
+            "instead of FLIRT/FNIRT."
+        ),
+        inputs=(DIL.T13D, DIL.DTI),
+        values={
+            "freesurfer_step": "DISABLED",
+            "registration_engine": "ANTS",
+            "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
             "multicore_node_limit": "SOFT_CAP",
@@ -683,6 +717,12 @@ PASSES = (
             "multicore_node_limit": "SOFT_CAP",
         },
     ),
+    # Phase 3 lifted fMRI_preproc/task/resting_state's FSL pin (func->ref, and
+    # the resting func->ref->mni concat, now follow registration_engine), so
+    # this axis is pinned explicitly here to keep this pass's documented
+    # FSL-baseline behaviour rather than silently riding the (ANTS) default --
+    # see structural_fsl/structural_ants. fmri_task_and_rest_ants below is its
+    # explicit ANTS twin.
     PassSpec(
         name="fmri_task_and_rest",
         description=(
@@ -692,6 +732,34 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
+            "cuda": "false",
+            "fmri0_block_design": "RARA",
+            "fmri1_block_design": "RARB",
+            "fmri0_slice_timing": "UNKNOWN",
+            "fmri1_slice_timing": "INTERLEAVED",
+            "aroma": "true",
+            "melodic_dim": "0",
+        },
+    ),
+    # The explicit ANTS twin of fmri_task_and_rest (Phase 3): func->ref (task
+    # cluster applies, resting zstats apply) and the resting func->ref->mni
+    # AROMA-branch concatenation (a stacked AntsApplyTransforms transformlist,
+    # no ConvertWarp) forced through antspyx instead of FLIRT/FNIRT, mirroring
+    # structural_ants. Gated in _PASS_REQUIREMENTS: without antspyx it would
+    # downgrade to FSL and exactly duplicate fmri_task_and_rest, so it is
+    # skipped instead.
+    PassSpec(
+        name="fmri_task_and_rest_ants",
+        description=(
+            "The ANTS backend twin of fmri_task_and_rest: EPI func->ref "
+            "registration and the resting func->ref->mni concat exercised end "
+            "to end through antspyx instead of FLIRT/FNIRT."
+        ),
+        inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
+        values={
+            "freesurfer_step": "DISABLED",
+            "registration_engine": "ANTS",
             "cuda": "false",
             "fmri0_block_design": "RARA",
             "fmri1_block_design": "RARB",
@@ -710,6 +778,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
             "cuda": "false",
             "fmri0_block_design": "RARA",
             "fmri1_block_design": "RARB",
@@ -882,6 +951,12 @@ _PASS_REQUIREMENTS = {
     # first ungated value), turning this pass into an undetected duplicate of
     # structural_fsl; gate it so it is skipped with a clear reason instead.
     "structural_ants": ("antspyx",),
+    # Phase 3 ANTS twins of the EPI/diffusion baselines, same reasoning as
+    # structural_ants: without antspyx the engine axis would silently
+    # downgrade ANTS->FSL, exactly duplicating fmri_task_and_rest /
+    # dti_tractography, so they are skipped with a clear reason instead.
+    "fmri_task_and_rest_ants": ("antspyx",),
+    "dti_tractography_ants": ("antspyx",),
     "structural_synthstrip": ("synth_strip",),
     "structural_synthmorph": ("synth_morph",),
     "func_map_synthmorph": ("synth_morph",),
