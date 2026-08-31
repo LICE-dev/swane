@@ -10,7 +10,7 @@ from swane.utils.qt_compat import QThreadPool
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux
-from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX
+from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX, ANTSPYX
 from swane.utils.license_consent import version_with_license
 
 
@@ -81,6 +81,8 @@ class DependencyManager:
     """
 
     MIN_FSL_VERSION = "6.0.6"
+    # Kept in sync with the antspyx pin in setup.py.
+    MIN_ANTSPYX_VERSION = "0.6.3"
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"
@@ -93,6 +95,7 @@ class DependencyManager:
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
         self.fsl = DependencyManager.check_fsl()
+        self.antspyx = DependencyManager.check_antspyx()
         self.freesurfer = DependencyManager.check_freesurfer()
         self.graphviz = DependencyManager.check_graphviz()
 
@@ -158,6 +161,16 @@ class DependencyManager:
         return found_version >= version.parse(
             DependencyManager.SYNTH_FREESURFER_VERSION
         )
+
+    @staticmethod
+    def is_antspyx() -> bool:
+        """
+        Returns
+        -------
+        True if the antspyx package is importable (even if outdated).
+
+        """
+        return DependencyManager.check_antspyx().state != DependenceStatus.MISSING
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -314,6 +327,39 @@ class DependencyManager:
 
         return Dependence(
             DependenceStatus.DETECTED, strings.check_dep_fsl_found % fsl_version_lic
+        )
+
+    @staticmethod
+    def check_antspyx() -> Dependence:
+        """
+        Returns
+        -------
+        A Dependence object with antspyx information.
+        """
+        try:
+            import ants
+
+            antspyx_version = str(ants.__version__)
+        except Exception:
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_antspyx_error)
+
+        try:
+            found_version = version.parse(antspyx_version)
+        except:
+            found_version = version.parse("0")
+
+        antspyx_version_lic = version_with_license(ANTSPYX, antspyx_version)
+
+        if found_version < version.parse(DependencyManager.MIN_ANTSPYX_VERSION):
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_antspyx_wrong_version
+                % (antspyx_version_lic, DependencyManager.MIN_ANTSPYX_VERSION),
+            )
+
+        return Dependence(
+            DependenceStatus.DETECTED,
+            strings.check_dep_antspyx_found % antspyx_version_lic,
         )
 
     @staticmethod

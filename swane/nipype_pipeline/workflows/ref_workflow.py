@@ -2,7 +2,7 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
-from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
+from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import AntsN4BiasFieldCorrection
 from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
 from swane.nipype_pipeline.nodes.utils import get_deskull_node
 from configparser import SectionProxy
@@ -125,13 +125,13 @@ def ref_workflow(
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
 
     ref_bias_correction = Node(
-        N4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2
+        AntsN4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2
     )
     ref_bias_correction.inputs.out_file = "ref.nii.gz"
     if max_cpu != 0 and multicore_node_limit is not CoreLimit.NO_LIMIT:
         ref_bias_correction.inputs.num_threads = max_cpu
     if test_run:
-        # SimpleITK default is [50, 50, 50, 50] per resolution level.
+        # antspyx default is [50, 50, 50, 50] per resolution level.
         ref_bias_correction.inputs.max_iterations = [30, 20, 10, 5]
     workflow.connect(ref_reScale, "out_file", ref_bias_correction, "in_file")
     workflow.connect(ref_deskull, "mask_file", ref_bias_correction, "mask_file")

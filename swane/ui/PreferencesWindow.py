@@ -371,18 +371,39 @@ class PreferencesWindow(QDialog):
         # no need return false because combo should neve be completely disabled for subsection dep
         if self.preferences[category][key].input_type == InputTypes.ENUM:
             for enum_key in self.preferences[category][key].option_dependency:
-                dep_check = getattr(
-                    self.dependency_manager,
-                    self.preferences[category][key].option_dependency[enum_key][0],
-                    None,
-                )
-                if dep_check is not None and callable(dep_check) and not dep_check():
-                    tooltip = self.preferences[category][key].option_dependency[
-                        enum_key
-                    ][1]
+                ok, tooltip = self.check_option_dependency(category, key, enum_key)
+                if not ok:
                     self.inputs[x].disable_combo_option(enum_key, False, tooltip)
 
         return True
+
+    def check_option_dependency(
+        self, category: Enum, key: str, option: Enum
+    ) -> tuple[bool, str]:
+        """
+        Check whether a single combo option's external dependency is satisfied.
+
+        Parameters
+        ----------
+        category: Enum
+            The category of the preference to be tested.
+        key: str
+            The name of the preference to be tested.
+        option: Enum
+            The specific combo option (enum member) to be tested.
+
+        Return
+        ----------
+        A tuple: (True, "") if the option has no dependency or it is satisfied,
+        otherwise (False, fail_tooltip).
+        """
+        option_dependency = self.preferences[category][key].option_dependency
+        if option not in option_dependency:
+            return True, ""
+        dep_check = getattr(self.dependency_manager, option_dependency[option][0], None)
+        if dep_check is not None and callable(dep_check) and not dep_check():
+            return False, option_dependency[option][1]
+        return True, ""
 
     def validation_field_changed(self, checked, my_cat: str, my_key: str):
         validation_holder = my_key + self.my_config.VALIDATION_SUFFIX
@@ -514,7 +535,11 @@ class PreferencesWindow(QDialog):
         if not option:
             self.inputs[my_x].enable()
         else:
-            self.inputs[my_x].disable_combo_option(option, True, "")
+            # The pref_requirement check above passed, but this option may
+            # still be gated by its own option_dependency (e.g. a missing
+            # external package): don't blindly re-enable it in that case.
+            ok, tooltip = self.check_option_dependency(my_cat, my_key, option)
+            self.inputs[my_x].disable_combo_option(option, ok, tooltip)
 
     def save_preferences(self):
         """

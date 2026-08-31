@@ -10,8 +10,9 @@ from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_w
 from swane.nipype_pipeline.nodes.utils import (
     get_registration_node,
     apply_registration_node,
+    resolve_registration_engine,
 )
-from swane.config.config_enums import SliceTiming
+from swane.config.config_enums import SliceTiming, RegistrationEngine, CoreLimit
 from ica_aroma_py.services.ICA_AROMA_nodes import (
     FeatureTimeSeries,
     FeatureFrequency,
@@ -27,7 +28,10 @@ def fMRI_resting_state_workflow(
     name: str,
     dicom_dir: str,
     config: SectionProxy,
+    synth_config: SectionProxy,
     base_dir: str = "/",
+    max_cpu: int = 0,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -41,8 +45,18 @@ def fMRI_resting_state_workflow(
         The directory path of the DICOM files.
     config: SectionProxy
         workflow settings.
+    synth_config: SectionProxy
+        The Synth-tools configuration section used to resolve the registration
+        engine. EPI avoids SynthMorph, so SYNTH falls back to FSL; the resolved
+        engine drives the shared func->ref registration, the ref->atlas
+        registration and every apply below.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        Per-subject CPU budget passed to the registration nodes. The default is 0.
+    multicore_node_limit : CoreLimit, optional
+        How the registration nodes' thread usage is capped/accounted. The
+        default is ``CoreLimit.SOFT_CAP``.
     test_run : bool, optional
         If True, speed up the ref-to-atlas registration for prerelease test
         runs at the cost of accuracy. melodic_dim is never touched: the
@@ -76,6 +90,14 @@ def fMRI_resting_state_workflow(
     melodic_dim = config.getint_safe("melodic_dim")
     melodic_thr = config.getfloat_safe("melodic_thr")
 
+    # The EPI registration engine, resolved once for the shared func->ref
+    # registration built by fMRI_preproc_workflow, the ref->atlas registration
+    # and every apply below. EPI avoids SynthMorph (see spec 1), so SYNTH falls
+    # back to FSL.
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    if engine == RegistrationEngine.SYNTH:
+        engine = RegistrationEngine.FSL
+
     workflow = fMRI_preproc_workflow(
         name=name,
         dicom_dir=dicom_dir,
@@ -85,7 +107,10 @@ def fMRI_resting_state_workflow(
         hpcutoff=100,
         del_start_vols=del_start_vols,
         del_end_vols=del_end_vols,
+        synth_config=synth_config,
         base_dir=base_dir,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
         test_run=test_run,
     )
 
@@ -104,7 +129,6 @@ def fMRI_resting_state_workflow(
     meanfuncmask = workflow.get_node("%s_meanfuncmask" % name)
     motion_correct = workflow.get_node("%s_motion_correct" % name)
     dilatemask = workflow.get_node("%s_dilatemask" % name)
-    flirt_2_ref = workflow.get_node("%s_2_ref_flirt" % name)
     highpass = workflow.get_node(
         "%s_highpass" % name
     )  # this is the final preprocessing file
@@ -162,12 +186,11 @@ def fMRI_resting_state_workflow(
             os.environ["FSLDIR"], "data", "standard", "MNI152_T1_2mm_brain.nii.gz"
         )
 
-        # Stick to FSL intentionally avoiding synth for reproducibility reason
         reg_2_mni = get_registration_node(
             name="ref_2_mni",
             name_prefix=name,
             name_suffix="to atlas",
-            use_synth=False,
+            engine=engine,
             workflow=workflow,
             moving=[inputnode, "reference_brain"],
             reference=mni2,
@@ -176,28 +199,56 @@ def fMRI_resting_state_workflow(
             flirt_cost="corratio",
             flirt_search=90,
             test_run=test_run,
+            max_cpu=max_cpu,
+            multicore_node_limit=multicore_node_limit,
+            limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
         )
 
-        # Combine func-to-ref linear matrix + ref-to-mni nonlinear warp into
-        # single warp field, no premat on ApplyWarp.
-        convert_warp = Node(ConvertWarp(), name="func_2_mni_warp")
-        convert_warp.long_name = "func to atlas warp combination"
-        convert_warp.inputs.reference = mni2
-        workflow.connect(flirt_2_ref, "out_matrix_file", convert_warp, "premat")
-        workflow.connect(
-            reg_2_mni.out_registered_node, reg_2_mni.warp, convert_warp, "warp1"
-        )
+        if engine == RegistrationEngine.ANTS:
+            # func -> mni in one shot: transformlist = [ref->mni fwd, func->ref
+            # fwd]. That is output->input order -- ANTs applies a transform list
+            # right-to-left, so the func->ref affine acts on the moving image
+            # first, exactly as the FSL ConvertWarp premat=func->ref +
+            # warp1=ref->mni composition does. No ConvertWarp on this branch:
+            # apply_registration_node stacks both registrations' transform lists
+            # (and their which_to_invert flags) into the single apply.
+            apply_warp = apply_registration_node(
+                name="func2mni",
+                engine=RegistrationEngine.ANTS,
+                workflow=workflow,
+                warp=None,
+                moving=[feature_spatial_prep, "out_file"],
+                reference=mni2,
+                non_linear=True,
+                registration_stack=[reg_2_mni, workflow.reg_2_ref],
+            )
+        else:
+            # Combine func-to-ref linear matrix + ref-to-mni nonlinear warp into
+            # single warp field, no premat on ApplyWarp. The premat now reads the
+            # func->ref wrapper's single-file view, which on this branch is the
+            # very FLIRT out_matrix_file it used to read by node name.
+            convert_warp = Node(ConvertWarp(), name="func_2_mni_warp")
+            convert_warp.long_name = "func to atlas warp combination"
+            convert_warp.inputs.reference = mni2
+            workflow.connect(
+                workflow.reg_2_ref.out_registered_node,
+                workflow.reg_2_ref.warp,
+                convert_warp,
+                "premat",
+            )
+            workflow.connect(
+                reg_2_mni.out_registered_node, reg_2_mni.warp, convert_warp, "warp1"
+            )
 
-        # Stick to FSL intentionally avoiding synth for reproducibility reason
-        apply_warp = apply_registration_node(
-            name="func2mni",
-            use_synth=False,
-            workflow=workflow,
-            warp=[convert_warp, "out_file"],
-            moving=[feature_spatial_prep, "out_file"],
-            reference=mni2,
-            non_linear=True,
-        )
+            apply_warp = apply_registration_node(
+                name="func2mni",
+                engine=engine,
+                workflow=workflow,
+                warp=[convert_warp, "out_file"],
+                moving=[feature_spatial_prep, "out_file"],
+                reference=mni2,
+                non_linear=True,
+            )
 
         feature_spatial = Node(FeatureSpatial(), name="feature_spatial")
         feature_spatial.inputs.mask_csf = aroma_mask_csf
@@ -270,9 +321,14 @@ def fMRI_resting_state_workflow(
 
     zstats_2_ref = apply_registration_node(
         name="zstats",
-        use_synth=False,
+        engine=engine,
         workflow=workflow,
-        warp=[flirt_2_ref, "out_matrix_file"],
+        # The func->ref transform comes from the wrapper fMRI_preproc exposes:
+        # on ANTs registration= feeds the whole ordered transform list plus its
+        # which_to_invert flags (wire_transforms), while the FSL/Synth branches
+        # keep reading the single-file .mat view.
+        warp=[workflow.reg_2_ref.out_registered_node, workflow.reg_2_ref.warp],
+        registration=workflow.reg_2_ref,
         moving=[melodic_output, "thresh_zstat_files"],
         reference=[inputnode, "reference_brain"],
         out_file=[melodic_output, ("thresh_zstat_files", registered_file_name)],

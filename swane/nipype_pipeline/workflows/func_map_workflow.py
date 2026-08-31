@@ -18,6 +18,7 @@ from swane.config.config_enums import BetweenModFlirtCost, FreesurferStep, CoreL
 from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     get_registration_node,
+    resolve_registration_engine,
 )
 
 
@@ -107,6 +108,8 @@ def func_map_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
+
     # Input Node
     inputnode = Node(
         IdentityInterface(
@@ -173,7 +176,7 @@ def func_map_workflow(
         name="%s_2_ref" % name,
         name_prefix=name,
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         moving=[reorient, "out_file"],
         moving_brain=[reorient, "out_file"],
@@ -191,9 +194,10 @@ def func_map_workflow(
         name="%s_smooth_2_ref_flirt" % name,
         name_prefix="Smoothed %s" % name,
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        registration=reg_wrap,
         moving=[smooth, "out_file"],
         reference=[inputnode, "reference"],
         non_linear=False,
@@ -276,7 +280,7 @@ def func_map_workflow(
             name="%s_2_sym_warp" % name,
             name_prefix=name,
             name_suffix="to symmetric atlas",
-            use_synth=synth_config.getboolean_safe("morph"),
+            engine=engine,
             workflow=workflow,
             warp=[inputnode, "ref_2_sym_warp"],
             moving=[smooth_2_ref, "out_file"],
@@ -331,7 +335,7 @@ def func_map_workflow(
             name="%s_ai_2_ref" % name,
             name_prefix="AI",
             name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
+            engine=engine,
             workflow=workflow,
             warp=[inputnode, "ref_2_sym_invwarp"],
             moving=[ai_threshold, "out_file"],

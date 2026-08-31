@@ -1,13 +1,12 @@
-# workflow snapshot: seeg_ct / tuned_threshold_kernel
+# workflow snapshot: seeg_ct / fsl_backend
 #
-#   electrode_threshold = 2500
-#   erode_kernel_size = 8
+#   registration_engine = FSL
 #
 # nodes=13 edges=16
 
 - electrodes_weight_bin [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    op_string = '-thr 2500.0000000000 -bin -mul -1 -add 1'
+    op_string = '-thr 2000.0000000000 -bin -mul -1 -add 1'
     output_type = 'NIFTI_GZ'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
@@ -18,7 +17,7 @@
 - ref_brain_erode [ErodeImage] cmd=fslmaths mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     kernel_shape = 'box'
-    kernel_size = 8.0
+    kernel_size = 5.0
     minimum_filter = False
     output_type = 'NIFTI_GZ'
 - seeg_ct_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
@@ -26,7 +25,6 @@
     dof = 6
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     interp = 'trilinear'
-    out_matrix_file = 'seegct2ref.mat'
     output_type = 'NIFTI_GZ'
     searchr_x = [-90, 90]
     searchr_y = [-90, 90]
@@ -62,12 +60,12 @@
     direction = 'below'
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-    thresh = 2500.0
+    thresh = 2000.0
 - seeg_no_electrodes_thr_ref [Threshold] cmd=fslmaths mem_gb=0.2 n_procs=1
     direction = 'above'
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-    thresh = 2500.0
+    thresh = 2000.0
 # connections
 electrodes_weight_bin.out_file -> seeg_ct_2_ref_flirt.in_weight
 inputnode.brain_mask -> ref_brain_dilate.in_file

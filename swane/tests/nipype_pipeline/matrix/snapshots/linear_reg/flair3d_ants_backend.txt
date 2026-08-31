@@ -1,0 +1,92 @@
+# workflow snapshot: linear_reg / flair3d_ants_backend
+#
+#   bias_field_correction = True
+#   config = FLAIR3D
+#   is_partial_coverage = False
+#   is_volumetric = True
+#   limit_synth_cores = false
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
+#   registration_engine = ANTS
+#   synth_morph = false
+#   synth_strip = false
+#
+# nodes=13 edges=26
+
+- betted_name [Function] mem_gb=0.2 n_procs=1
+    function_str = "def get_betted_name(basename):\n    return 'r-%s_brain.nii.gz' % basename"
+- bias_correction [AntsN4BiasFieldCorrection] mem_gb=2 n_procs=4
+    num_threads = 4
+    skull_stripped = False
+- corrected_deskull [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- deskulled_flair3d_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+- flair3d_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+- flair3d_antsreg [AntsRegistration] mem_gb=5 n_procs=4
+    aff_metric = 'mattes'
+    num_threads = 4
+    out_prefix = 'ants_reg_'
+    syn_metric = 'mattes'
+    transform_type = 'Rigid'
+- flair3d_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'flair3d'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- flair3d_deskull_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    frac = 0.5
+    mask = True
+    output_type = 'NIFTI_GZ'
+    robust = True
+    threshold = False
+- flair3d_reorient [ForceOrient] mem_gb=0.2 n_procs=1
+- flair3d_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- unbetted_name [Function] mem_gb=0.2 n_procs=1
+    function_str = "def get_unbetted_name(basename):\n    return 'r-%s.nii.gz' % basename"
+# connections
+betted_name.out_file -> corrected_deskull.out_file
+betted_name.out_file -> deskulled_flair3d_ants_apply.out_file
+bias_correction.out_file -> corrected_deskull.in_file
+bias_correction.out_file -> outputnode.registered_file
+corrected_deskull.out_file -> outputnode.registered_file_brain
+deskulled_flair3d_ants_apply.out_file -> bias_correction.mask_file
+deskulled_flair3d_ants_apply.out_file -> corrected_deskull.mask_file
+deskulled_flair3d_ants_apply.out_file -> outputnode.uncorrected_registered_file_brain
+flair3d_ants_apply.out_file -> bias_correction.in_file
+flair3d_ants_apply.out_file -> outputnode.uncorrected_registered_file
+flair3d_antsreg.fwd_transforms -> deskulled_flair3d_ants_apply.transformlist
+flair3d_antsreg.fwd_transforms -> flair3d_ants_apply.transformlist
+flair3d_antsreg.fwd_transforms -> outputnode.out_matrix_file
+flair3d_antsreg.fwd_which_to_invert -> deskulled_flair3d_ants_apply.which_to_invert
+flair3d_antsreg.fwd_which_to_invert -> flair3d_ants_apply.which_to_invert
+flair3d_conv.converted_files -> flair3d_reorient.in_file
+flair3d_deskull_bet.out_file -> deskulled_flair3d_ants_apply.input_image
+flair3d_deskull_bet.out_file -> flair3d_antsreg.moving
+flair3d_reorient.out_file -> flair3d_robustfov.in_file
+flair3d_robustfov.out_roi -> flair3d_ants_apply.input_image
+flair3d_robustfov.out_roi -> flair3d_deskull_bet.in_file
+inputnode.output_name -> betted_name.basename
+inputnode.output_name -> unbetted_name.basename
+inputnode.reference -> deskulled_flair3d_ants_apply.reference_image
+inputnode.reference -> flair3d_ants_apply.reference_image
+inputnode.reference_brain -> flair3d_antsreg.fixed
+unbetted_name.out_file -> bias_correction.out_file
+unbetted_name.out_file -> flair3d_ants_apply.out_file

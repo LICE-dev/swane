@@ -15,6 +15,7 @@ from swane.nipype_pipeline.nodes.utils import get_deskull_node
 from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     get_registration_node,
+    resolve_registration_engine,
 )
 from swane.config.config_enums import CoreLimit
 
@@ -76,6 +77,10 @@ def venous_mr_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # Not yet ported to the ANTs transform-list format: keep this workflow on
+    # its prior backend (FSL/SynthMorph), so the ANTs default falls back to FSL.
+    engine = resolve_registration_engine(synth_config, allow_ants=False)
 
     # Input Node
     inputnode = Node(
@@ -177,7 +182,7 @@ def venous_mr_workflow(
         name="anat_2_ref",
         name_prefix="anatomic phase",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         moving=[veins_check, "out_file_anat"],
         moving_brain=[veins_check, "out_file_anat"],
@@ -194,7 +199,7 @@ def venous_mr_workflow(
         name_prefix="venous phase",
         name_suffix="to reference",
         name="veins_2_ref",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[anat_2_ref.out_registered_node, anat_2_ref.warp],
         moving=[veins_inskull_mask, "out_file"],

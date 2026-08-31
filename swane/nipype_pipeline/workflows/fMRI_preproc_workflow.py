@@ -14,8 +14,12 @@ from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
 from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
-from swane.config.config_enums import SliceTiming
-from swane.nipype_pipeline.nodes.utils import get_registration_node
+from configparser import SectionProxy
+from swane.config.config_enums import SliceTiming, RegistrationEngine, CoreLimit
+from swane.nipype_pipeline.nodes.utils import (
+    get_registration_node,
+    resolve_registration_engine,
+)
 
 
 def fMRI_preproc_workflow(
@@ -27,7 +31,10 @@ def fMRI_preproc_workflow(
     del_start_vols: int,
     del_end_vols: int,
     hpcutoff: int,
+    synth_config: SectionProxy,
     base_dir: str = "/",
+    max_cpu: int = 0,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -51,8 +58,17 @@ def fMRI_preproc_workflow(
         Volumes to be removed at sequence end
     hpcutoff: int
         cutoff for highpass filtering
+    synth_config: SectionProxy
+        The Synth-tools configuration section used to resolve the registration
+        engine (func->ref follows the configured engine, falling back
+        SYNTH->FSL; see the func->ref block below).
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        Per-subject CPU budget passed to the registration node. The default is 0.
+    multicore_node_limit : CoreLimit, optional
+        How the registration node's thread usage is capped/accounted. The
+        default is ``CoreLimit.SOFT_CAP``.
     test_run : bool, optional
         If True, cut MCFLIRT motion-correction search levels and switch to
         trilinear interpolation to speed up prerelease test runs at the cost
@@ -73,7 +89,17 @@ def fMRI_preproc_workflow(
     Returns
     -------
     workflow : CustomWorkflow
-        The fMRI workflow.
+        The fMRI workflow. The func->ref registration is attached as
+        ``workflow.reg_2_ref`` (a
+        :class:`~swane.nipype_pipeline.nodes.utils.RegistrationNodeWrapper`) so
+        the ``fMRI_task``/``fMRI_resting_state`` consumers built on this same
+        workflow object can apply it backend-agnostically via
+        ``registration=workflow.reg_2_ref`` instead of a hardcoded node-name
+        lookup. Attaching the wrapper as an attribute was chosen over a
+        ``reg_outputnode`` ``IdentityInterface``: consumers extend this exact
+        ``CustomWorkflow`` instance, so the wrapper's ``(node, field)``
+        references stay valid, and setting a plain instance attribute on
+        ``CustomWorkflow`` is safe (no ``__slots__``/``__setattr__`` override).
 
     """
 
@@ -357,13 +383,18 @@ def fMRI_preproc_workflow(
     # workflow.connect(genSpec, "hpstring", highpass, "op_string")
     workflow.connect(intnorm, "out_file", highpass, "in_file")
 
-    # NODE 27: Coregister the mean functional image to the structural image
-    # Stick to FSL intentionally avoiding synth for reproducibility reason
-    flirt_2_ref = get_registration_node(
+    # NODE 27: Coregister the mean functional image to the structural image.
+    # Follow the configured engine; EPI avoids SynthMorph (see spec §1), so
+    # SYNTH falls back to FSL.
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    if engine == RegistrationEngine.SYNTH:
+        engine = RegistrationEngine.FSL
+
+    reg_2_ref = get_registration_node(
         name="%s_2_ref" % name,
         name_prefix=name,
         name_suffix="to reference space",
-        use_synth=False,
+        engine=engine,
         workflow=workflow,
         moving=[meanfunc2, "out_file"],
         reference=[inputnode, "reference_brain"],
@@ -373,6 +404,12 @@ def fMRI_preproc_workflow(
         flirt_cost="corratio",
         flirt_search=90,
         test_run=test_run,
+        max_cpu=max_cpu,
+        multicore_node_limit=multicore_node_limit,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
+    # Expose the func->ref registration to the task/resting consumers that
+    # extend this same workflow object (see the Returns note above).
+    workflow.reg_2_ref = reg_2_ref
 
     return workflow

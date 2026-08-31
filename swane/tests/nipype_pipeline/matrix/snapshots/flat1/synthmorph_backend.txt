@@ -1,5 +1,6 @@
 # workflow snapshot: flat1 / synthmorph_backend
 #
+#   registration_engine = SYNTH
 #   synth_morph = true
 #
 # nodes=30 edges=44

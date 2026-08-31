@@ -1,0 +1,38 @@
+# workflow snapshot: nonlinear_reg / ants_backend
+#
+#   limit_synth_cores = false
+#   max_cpu = 4
+#   multicore_node_limit = SOFT_CAP
+#   registration_engine = ANTS
+#   synth_morph = false
+#
+# nodes=6 edges=10
+
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- sym_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+- sym_antsreg [AntsRegistration] mem_gb=5 n_procs=4
+    aff_metric = 'mattes'
+    num_threads = 4
+    out_prefix = 'ants_reg_'
+    syn_metric = 'mattes'
+    transform_type = 'SyN'
+- sym_fwd_compose [AntsComposeTransform] mem_gb=0.2 n_procs=1
+- sym_inv_compose [AntsComposeTransform] mem_gb=0.2 n_procs=1
+# connections
+inputnode.atlas -> sym_ants_apply.reference_image
+inputnode.atlas -> sym_antsreg.fixed
+inputnode.atlas -> sym_fwd_compose.reference_image
+inputnode.in_file -> sym_ants_apply.input_image
+inputnode.in_file -> sym_antsreg.moving
+inputnode.in_file -> sym_inv_compose.reference_image
+sym_ants_apply.out_file -> outputnode.warped_file
+sym_antsreg.fwd_transforms -> sym_ants_apply.transformlist
+sym_antsreg.fwd_transforms -> sym_fwd_compose.transformlist
+sym_antsreg.fwd_which_to_invert -> sym_ants_apply.which_to_invert
+sym_antsreg.fwd_which_to_invert -> sym_fwd_compose.which_to_invert
+sym_antsreg.inv_transforms -> sym_inv_compose.transformlist
+sym_antsreg.inv_which_to_invert -> sym_inv_compose.which_to_invert
+sym_fwd_compose.out_field -> outputnode.fieldcoeff_file
+sym_inv_compose.out_field -> outputnode.inverse_warp

@@ -30,6 +30,8 @@ from typing import Any
 
 from nipype.interfaces.base import isdefined
 
+from swane.config.preference_list import XTRACT_DATA_DIR
+
 
 def _abs(path: Any) -> str:
     return os.path.abspath(str(path)).replace("\\", "/").rstrip("/")
@@ -54,6 +56,13 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
         add(swane_supplement.__path__[0], "<SUPPLEMENT>")
     except Exception:
         pass
+    # XTRACT_DATA_DIR resolves under $FSLDIR to "Human" (FSL < 6.0.7) or
+    # "HUMAN" (FSL >= 6.0.7) depending on the installed FSL version, so the
+    # committed goldens must not encode either case — collapse both to one
+    # token so the snapshot is identical across FSL versions/boxes. Registered
+    # before <FSLDIR> so the longest-prefix-first sort picks the nested,
+    # more specific root first.
+    add(XTRACT_DATA_DIR, "<XTRACT_DATA>")
     add(os.environ.get("FSLDIR"), "<FSLDIR>")
     # nipype stamps SUBJECTS_DIR onto every FreeSurfer node; its value is
     # machine-specific (and, in the test session, a throwaway directory).
@@ -182,8 +191,18 @@ def _render_cmd(cmd: str, repl: list[tuple[str, str]]) -> str:
     resolved to an absolute path — e.g. the ``dcm2niix`` binary bundled in
     ``site-packages`` — is reduced to its stem so the value neither leaks the
     install location nor differs by the Windows ``.exe`` suffix.
+
+    ``CustomEddy`` resolves its GPU variant to ``eddy_cuda`` when that binary
+    is on ``PATH``, falling back to the bare ``eddy`` otherwise — a machine
+    difference (whether the box has the ``eddy_cuda`` symlink) unrelated to
+    the workflow's own settings, which are already captured by the node's
+    ``use_cuda`` input and the "cuda = true" config header. Canonicalise both
+    variants to ``eddy`` so the golden is identical on GPU and non-GPU boxes;
+    this is narrowly scoped to the one known GPU-variant command name.
     """
     text = _normalise(cmd, repl)
+    if text == "eddy_cuda":
+        return "eddy"
     if "/" in text:
         base = text.rsplit("/", 1)[-1]
         if base.endswith(".exe"):

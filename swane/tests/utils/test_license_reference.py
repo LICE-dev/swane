@@ -4,7 +4,7 @@ from swane.utils import LicenseReference as LR
 
 def test_registry_has_all_tools():
     assert set(LR.LICENSES) == set(LR.TOOL_IDS)
-    assert set(LR.TOOL_IDS) == {"fsl", "freesurfer", "slicer", "dcm2niix"}
+    assert set(LR.TOOL_IDS) == {"fsl", "freesurfer", "slicer", "dcm2niix", "antspyx"}
 
 
 def test_each_tool_has_url_and_bundled_file():
@@ -83,3 +83,28 @@ def test_dcm2niix_candidates_missing_package(monkeypatch):
 
     monkeypatch.setattr(im, "distribution", _raise)
     assert LR.LICENSES["dcm2niix"].installed_path_candidates({}) == []
+
+
+def test_antspyx_candidates_from_pip_dist_info(monkeypatch):
+    import importlib.metadata as im
+
+    license_entry = _FakeEntry(
+        ("antspyx-0.6.3.dist-info", "licenses", "LICENSE"), "LICENSE"
+    )
+    code_entry = _FakeEntry(("ants", "__init__.py"), "__init__.py")
+    monkeypatch.setattr(
+        im, "distribution", lambda name: _FakeDist([code_entry, license_entry])
+    )
+
+    candidates = LR.LICENSES["antspyx"].installed_path_candidates({})
+    assert candidates == ["/abs/antspyx-0.6.3.dist-info/licenses/LICENSE"]
+
+
+def test_antspyx_candidates_missing_package(monkeypatch):
+    import importlib.metadata as im
+
+    def _raise(name):
+        raise im.PackageNotFoundError(name)
+
+    monkeypatch.setattr(im, "distribution", _raise)
+    assert LR.LICENSES["antspyx"].installed_path_candidates({}) == []

@@ -32,6 +32,7 @@ from swane.config.config_enums import (
     CoreLimit,
     FreesurferStep,
     GlobalPrefCategoryList,
+    RegistrationEngine,
     SliceTiming,
     VeinDetectionMode,
 )
@@ -116,13 +117,17 @@ AXES = (
         values=("false", "true"),
         gates={"true": "synth_strip"},
     ),
+    # The registration backend is an ENUM, not the old boolean ``morph`` key
+    # Group A removed. FSL (FLIRT/FNIRT) is always available; SYNTH (SynthMorph)
+    # and ANTS (antspyx) are each gated on their own dependency + RAM floor, so
+    # a host missing one still exercises the others.
     Axis(
-        name="synth_morph",
+        name="registration_engine",
         scope=GLOBAL,
         section=GlobalPrefCategoryList.SYNTH,
-        option="morph",
-        values=("false", "true"),
-        gates={"true": "synth_morph"},
+        option="engine",
+        values=_enum_values(RegistrationEngine, "FSL", "SYNTH", "ANTS"),
+        gates={"SYNTH": "synth_morph", "ANTS": "antspyx"},
     ),
     Axis(
         name="synth_reconall",
@@ -389,7 +394,44 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "hippo_amyg_labels": "false",
             "synth_strip": "false",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
+            "synth_reconall": "false",
+            "cuda": "false",
+            "multicore_node_limit": "SOFT_CAP",
+            "ref_bet_bias_correction": "false",
+            "ref_bet_thr": "0.3",
+            "flat1": "true",
+            "venous_mr_shape": "single_series",
+            "vein_detection_mode": "KURTOSIS",
+            "venous_mr_bet_thr": "0.4",
+            "electrode_threshold": "2000",
+            "erode_kernel_size": "5",
+        },
+    ),
+    # The ANTS counterpart of structural_fsl: the same structural family and the
+    # same settings, differing only in the registration backend. ANTS is the
+    # default engine, so many other passes run it implicitly by omitting the
+    # axis; this pass forces it by name so the ANTS backend is a covered,
+    # reviewable A/B pair against structural_fsl rather than riding on the
+    # default. Phase 2 lifted the FLAT1/mni1 nonlinear pin and the seeg_ct CT
+    # pin, so with flat1="true" and DIL.SEEG_CT loaded this pass now exercises
+    # the ANTS *nonlinear* registration (composed boundary field into FLAT1)
+    # and the ANTS seeg_ct cross-modality registration end to end, in addition
+    # to the ANTS *linear* registrations it already covered.
+    PassSpec(
+        name="structural_ants",
+        description=(
+            "The whole structural family on the ANTs (antspyx) backend: the "
+            "explicit ANTS twin of structural_fsl, forcing the linear and "
+            "nonlinear registrations (FLAT1) and the seeg_ct cross-modality "
+            "registration through antspyx instead of FLIRT/FNIRT."
+        ),
+        inputs=_STRUCT + (DIL.VENOUS_MR, DIL.SEEG_CT),
+        values={
+            "freesurfer_step": "DISABLED",
+            "hippo_amyg_labels": "false",
+            "synth_strip": "false",
+            "registration_engine": "ANTS",
             "synth_reconall": "false",
             "cuda": "false",
             "multicore_node_limit": "SOFT_CAP",
@@ -418,7 +460,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "false",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
             "cuda": "false",
             "multicore_node_limit": "HARD_CAP",
             "ref_bet_bias_correction": "true",
@@ -441,7 +483,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
             "cuda": "false",
         },
     ),
@@ -457,7 +499,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "true",
+            "registration_engine": "SYNTH",
             "cuda": "false",
             # flat1 pulls in the nonlinear subject->MNI (mni1) path, so
             # SynthMorph is exercised on a nonlinear registration too, not only
@@ -475,19 +517,36 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "false",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
             "cuda": "false",
             "venous_ct_contrasts": "2",
             "skull_threshold": "-1",
             "multicore_node_limit": "SOFT_CAP",
         },
     ),
+    # The ANTS counterpart of venous_ct_slicer: before Phase 2, venous_ct's
+    # registration was FSL-pinned regardless of ``registration_engine``, so
+    # leaving that axis unset here was harmless. Phase 2 routed venous_ct
+    # through the engine-following abstraction (ANTS by default), which made
+    # the unset axis silently ride the raw config default with NO capability
+    # check at all (build_plan only gates/downgrades axes a pass explicitly
+    # sets). Setting it explicitly puts it back under that gate: on a host
+    # without antspyx it downgrades to FSL (recorded in item.downgrades)
+    # instead of riding an unchecked default -- unlike structural_ants, a
+    # downgrade here does not need a _PASS_REQUIREMENTS skip, since this pass
+    # is not just an ANTS pin: it is also the only one exercising
+    # venous_ct_contrasts=1 / skull_threshold=1500.
     PassSpec(
         name="venous_ct_fixed_threshold",
-        description="Venous CT with a single contrast phase and a fixed skull threshold.",
+        description=(
+            "Venous CT with a single contrast phase and a fixed skull "
+            "threshold, forcing the ANTs backend -- the explicit ANTS twin "
+            "of venous_ct_slicer's FSL registration."
+        ),
         inputs=(DIL.T13D, DIL.VENOUS_CT),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "ANTS",
             "cuda": "false",
             "venous_ct_contrasts": "1",
             "skull_threshold": "1500",
@@ -505,7 +564,7 @@ PASSES = (
         values={
             "freesurfer_step": "SYNTHSEG",
             "synth_strip": "false",
-            "synth_morph": "false",
+            "registration_engine": "FSL",
             "cuda": "false",
             "asl_ai": "false",
             "pet_ai": "false",
@@ -543,12 +602,16 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "true",
+            "registration_engine": "SYNTH",
             "cuda": "false",
             "asl_ai": "false",
             "pet_ai": "false",
         },
     ),
+    # Phase 3 lifted dti_preproc's FSL pin (it now follows registration_engine,
+    # like the structural family), so this axis is pinned explicitly here to
+    # keep this pass's documented FSL-baseline behaviour rather than silently
+    # riding the (ANTS) default -- see structural_fsl/structural_ants.
     PassSpec(
         name="dti_classic",
         description=(
@@ -558,6 +621,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
             "cuda": "false",
             "old_eddy_correct": "true",
             "tractography": "false",
@@ -567,7 +631,11 @@ PASSES = (
     # The CPU tractography baseline: modern eddy + BEDPOSTX + corticospinal
     # ProbTrackX, all on the CPU. It runs on every host that has the XTRACT
     # protocols, so the CPU path of that chain is always exercised. The GPU
-    # variant below is the opt-in extra, gated by an actual GPU.
+    # variant below is the opt-in extra, gated by an actual GPU. Pinned FSL
+    # (see dti_classic above); dti_tractography_ants below is its explicit ANTS
+    # twin, exercising Phase 3's externalized probtrackx transforms (ROIs
+    # warped MNI->ref->diff, diffusion-space probtrackx, diff->ref result warp)
+    # end to end through antspyx.
     PassSpec(
         name="dti_tractography",
         description=(
@@ -577,6 +645,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
             "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
@@ -596,7 +665,31 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
             "cuda": "true",
+            "old_eddy_correct": "false",
+            "tractography": "true",
+            "multicore_node_limit": "SOFT_CAP",
+        },
+    ),
+    # The explicit ANTS twin of dti_tractography (Phase 3): the externalized
+    # tractography path -- ROI MNI->ref->diff pre-warps, probtrackx run natively
+    # in diffusion space (no xfm/inv_xfm), summed density warped diff->ref --
+    # forced through antspyx instead of FLIRT/FNIRT, mirroring structural_ants.
+    # Gated in _PASS_REQUIREMENTS: without antspyx it would downgrade to FSL and
+    # exactly duplicate dti_tractography, so it is skipped instead.
+    PassSpec(
+        name="dti_tractography_ants",
+        description=(
+            "The ANTS backend twin of dti_tractography: externalized "
+            "probtrackx transforms exercised end to end through antspyx "
+            "instead of FLIRT/FNIRT."
+        ),
+        inputs=(DIL.T13D, DIL.DTI),
+        values={
+            "freesurfer_step": "DISABLED",
+            "registration_engine": "ANTS",
+            "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
             "multicore_node_limit": "SOFT_CAP",
@@ -617,13 +710,19 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "true",
+            "registration_engine": "SYNTH",
             "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
             "multicore_node_limit": "SOFT_CAP",
         },
     ),
+    # Phase 3 lifted fMRI_preproc/task/resting_state's FSL pin (func->ref, and
+    # the resting func->ref->mni concat, now follow registration_engine), so
+    # this axis is pinned explicitly here to keep this pass's documented
+    # FSL-baseline behaviour rather than silently riding the (ANTS) default --
+    # see structural_fsl/structural_ants. fmri_task_and_rest_ants below is its
+    # explicit ANTS twin.
     PassSpec(
         name="fmri_task_and_rest",
         description=(
@@ -633,6 +732,34 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
+            "cuda": "false",
+            "fmri0_block_design": "RARA",
+            "fmri1_block_design": "RARB",
+            "fmri0_slice_timing": "UNKNOWN",
+            "fmri1_slice_timing": "INTERLEAVED",
+            "aroma": "true",
+            "melodic_dim": "0",
+        },
+    ),
+    # The explicit ANTS twin of fmri_task_and_rest (Phase 3): func->ref (task
+    # cluster applies, resting zstats apply) and the resting func->ref->mni
+    # AROMA-branch concatenation (a stacked AntsApplyTransforms transformlist,
+    # no ConvertWarp) forced through antspyx instead of FLIRT/FNIRT, mirroring
+    # structural_ants. Gated in _PASS_REQUIREMENTS: without antspyx it would
+    # downgrade to FSL and exactly duplicate fmri_task_and_rest, so it is
+    # skipped instead.
+    PassSpec(
+        name="fmri_task_and_rest_ants",
+        description=(
+            "The ANTS backend twin of fmri_task_and_rest: EPI func->ref "
+            "registration and the resting func->ref->mni concat exercised end "
+            "to end through antspyx instead of FLIRT/FNIRT."
+        ),
+        inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
+        values={
+            "freesurfer_step": "DISABLED",
+            "registration_engine": "ANTS",
             "cuda": "false",
             "fmri0_block_design": "RARA",
             "fmri1_block_design": "RARB",
@@ -651,6 +778,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
             "freesurfer_step": "DISABLED",
+            "registration_engine": "FSL",
             "cuda": "false",
             "fmri0_block_design": "RARA",
             "fmri1_block_design": "RARB",
@@ -671,7 +799,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "synth_strip": "true",
-            "synth_morph": "true",
+            "registration_engine": "SYNTH",
             "cuda": "false",
             "venous_mr_shape": "single_series",
             "vein_detection_mode": "SD",
@@ -819,6 +947,16 @@ def build_plan(caps, with_reconall: bool = False, only=None) -> list:
 #: Passes that only make sense when a given capability is present. Public so the
 #: plan-integrity test can grant every gating capability to its "capable host".
 _PASS_REQUIREMENTS = {
+    # Without antspyx the engine axis would silently downgrade ANTS->FSL (the
+    # first ungated value), turning this pass into an undetected duplicate of
+    # structural_fsl; gate it so it is skipped with a clear reason instead.
+    "structural_ants": ("antspyx",),
+    # Phase 3 ANTS twins of the EPI/diffusion baselines, same reasoning as
+    # structural_ants: without antspyx the engine axis would silently
+    # downgrade ANTS->FSL, exactly duplicating fmri_task_and_rest /
+    # dti_tractography, so they are skipped with a clear reason instead.
+    "fmri_task_and_rest_ants": ("antspyx",),
+    "dti_tractography_ants": ("antspyx",),
     "structural_synthstrip": ("synth_strip",),
     "structural_synthmorph": ("synth_morph",),
     "func_map_synthmorph": ("synth_morph",),

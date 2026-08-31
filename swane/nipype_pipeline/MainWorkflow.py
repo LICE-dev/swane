@@ -861,8 +861,11 @@ class MainWorkflow(CustomWorkflow):
             DIL.VENOUS_CT.value.workflow_name,
             venous_ct_dir=venous_ct_dir,
             config=self.subject_config[DIL.VENOUS_CT],
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             venous2_ct_dir=venous2_ct_dir,
             slicer_path=self.global_config.get_slicer_path(),
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.venous_ct.long_name = "Venous CT analysis"
@@ -941,6 +944,10 @@ class MainWorkflow(CustomWorkflow):
             DIL.SEEG_CT.value.workflow_name,
             seeg_ct_dir=seeg_ct_dir,
             config=self.subject_config[DIL.SEEG_CT],
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
+            test_run=self.test_run,
         )
         self.seeg_ct_dir.long_name = "SEEG CT analysis"
 
@@ -1052,15 +1059,33 @@ class MainWorkflow(CustomWorkflow):
                     )
                     self.connect(
                         self.dti_preproc,
-                        "outputnode.diff2ref_mat",
+                        "outputnode.nodif_brain",
                         tract_workflow,
-                        "inputnode.diff2ref_mat",
+                        "inputnode.nodif_brain",
                     )
                     self.connect(
                         self.dti_preproc,
-                        "outputnode.ref2diff_mat",
+                        "outputnode.diff2ref_transforms",
                         tract_workflow,
-                        "inputnode.ref2diff_mat",
+                        "inputnode.diff2ref_transforms",
+                    )
+                    self.connect(
+                        self.dti_preproc,
+                        "outputnode.diff2ref_which_to_invert",
+                        tract_workflow,
+                        "inputnode.diff2ref_which_to_invert",
+                    )
+                    self.connect(
+                        self.dti_preproc,
+                        "outputnode.ref2diff_transforms",
+                        tract_workflow,
+                        "inputnode.ref2diff_transforms",
+                    )
+                    self.connect(
+                        self.dti_preproc,
+                        "outputnode.ref2diff_which_to_invert",
+                        tract_workflow,
+                        "inputnode.ref2diff_which_to_invert",
                     )
                     self.connect(
                         self.mni1,
@@ -1099,6 +1124,9 @@ class MainWorkflow(CustomWorkflow):
                 dicom_dir=dicom_dir,
                 config=self.subject_config[DIL["FMRI_%d" % y]],
                 base_dir=self.base_dir,
+                synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                max_cpu=self.max_cpu,
+                multicore_node_limit=self.multicore_node_limit,
                 test_run=self.test_run,
             )
             self.fMRI.long_name = "Task fMRI analysis - %d" % y
@@ -1142,6 +1170,9 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=dicom_dir,
             config=self.subject_config[DIL.FMRI_RS],
             base_dir=self.base_dir,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.fMRI_resting_state.long_name = "Resting state fMRI analysis"

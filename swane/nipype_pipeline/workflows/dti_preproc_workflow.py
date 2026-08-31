@@ -4,9 +4,8 @@ from nipype.interfaces.fsl import (
     BEDPOSTX5,
 )
 from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
-from nipype.interfaces.freesurfer.utils import LTAConvert
 from nipype.pipeline.engine import Node
-from swane.config.config_enums import CoreLimit
+from swane.config.config_enums import CoreLimit, RegistrationEngine
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -16,6 +15,7 @@ from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,
+    resolve_registration_engine,
 )
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
@@ -81,14 +81,35 @@ def dti_preproc_workflow(
         Samples from the distribution on phi.
     thsamples : path
         Samples from the distribution on theta.
-    diff2ref_mat : path
-        Linear registration matrix from diffusion to T13D reference space.
-    ref2diff_mat : path
-        Linear registration inverse matrix from T13D reference to diffusion space.
+    diff2ref_transforms : list
+        Ordered transform list registering diffusion -> T13D reference space
+        (the abstraction's forward view; an FSL .mat or an ANTs transform list
+        depending on the engine).
+    diff2ref_which_to_invert : list or None
+        Per-transform invert flags paired with ``diff2ref_transforms`` for
+        ``AntsApplyTransforms``; ``None`` on FSL/Synth (they never invert on
+        apply).
+    ref2diff_transforms : list
+        Ordered transform list registering T13D reference -> diffusion space
+        (the abstraction's inverse view).
+    ref2diff_which_to_invert : list or None
+        Per-transform invert flags paired with ``ref2diff_transforms``;
+        ``None`` on FSL/Synth.
+    nodif_brain : path
+        Betted b0 image in diffusion space (used as the probtrackx seed
+        reference).
 
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # Follow the configured engine (ANTs by default). SynthMorph is avoided for
+    # the diffusion registration (non-deterministic, and its diff<->ref outputs
+    # are now emitted as the ANTs transform-list view, not an FSL .mat), so
+    # SYNTH falls back to FSL as it does for the EPI/CT registrations.
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    if engine == RegistrationEngine.SYNTH:
+        engine = RegistrationEngine.FSL
 
     # Input Node
     inputnode = Node(
@@ -104,8 +125,11 @@ def dti_preproc_workflow(
                 "fsamples",
                 "phsamples",
                 "thsamples",
-                "diff2ref_mat",
-                "ref2diff_mat",
+                "diff2ref_transforms",
+                "diff2ref_which_to_invert",
+                "ref2diff_transforms",
+                "ref2diff_which_to_invert",
+                "nodif_brain",
             ]
         ),
         name="outputnode",
@@ -211,7 +235,7 @@ def dti_preproc_workflow(
         name="dif2ref",
         name_prefix="DTI",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         moving=[nodif, "out_file"],
         moving_brain=[b0_deskull, "out_file"],
@@ -226,35 +250,37 @@ def dti_preproc_workflow(
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
-    # Output mat must be fsl format to be used directly in probtrackx
-    if synth_config.getboolean_safe("morph"):
-        dif2ref_xfm = Node(LTAConvert(), name="dif2ref_xfm")
-        dif2ref_xfm.long_name = "Matrix conversion"
-        dif2ref_xfm.inputs.out_fsl = "dif2ref.mat"
+    # Emit the diff<->ref transform in the backend-neutral transform-list view
+    # (forward: diff -> ref; inverse: ref -> diff). Tractography (Session E)
+    # stacks these uniformly across engines; probtrackx no longer needs an FSL
+    # .mat, so the SYNTH LTAConvert bridge is gone. On FSL/Synth the
+    # which_to_invert sources are None (those backends never invert on apply),
+    # so those fields are left unconnected (None) for the consumer to handle.
+    fwd_node, fwd_field = dif2ref.fwd_transforms[0]
+    workflow.connect(fwd_node, fwd_field, outputnode, "diff2ref_transforms")
+    inv_node, inv_field = dif2ref.inv_transforms[0]
+    workflow.connect(inv_node, inv_field, outputnode, "ref2diff_transforms")
+    if dif2ref.fwd_which_to_invert is not None:
         workflow.connect(
-            dif2ref.out_registered_node, dif2ref.warp, dif2ref_xfm, "in_lta"
+            dif2ref.fwd_which_to_invert[0],
+            dif2ref.fwd_which_to_invert[1],
+            outputnode,
+            "diff2ref_which_to_invert",
         )
-
-        ref2dif_xfm = Node(LTAConvert(), name="ref2dif_xfm")
-        ref2dif_xfm.long_name = "Inverse matrix conversion"
-        ref2dif_xfm.inputs.out_fsl = "ref2dif.mat"
-        workflow.connect(dif2ref.inv_warp_node, dif2ref.inv_warp, ref2dif_xfm, "in_lta")
-
-        workflow.connect(dif2ref_xfm, "out_fsl", outputnode, "diff2ref_mat")
-        workflow.connect(ref2dif_xfm, "out_fsl", outputnode, "ref2diff_mat")
-    else:
+    if dif2ref.inv_which_to_invert is not None:
         workflow.connect(
-            dif2ref.out_registered_node, dif2ref.warp, outputnode, "diff2ref_mat"
+            dif2ref.inv_which_to_invert[0],
+            dif2ref.inv_which_to_invert[1],
+            outputnode,
+            "ref2diff_which_to_invert",
         )
-        workflow.connect(
-            dif2ref.inv_warp_node, dif2ref.inv_warp, outputnode, "ref2diff_mat"
-        )
+    workflow.connect(b0_deskull, "out_file", outputnode, "nodif_brain")
 
     fa_2_ref = apply_registration_node(
         name="fa_2_ref",
         name_prefix="FA",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[dif2ref.out_registered_node, dif2ref.warp],
         moving=[dtifit, "FA"],
