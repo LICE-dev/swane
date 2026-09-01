@@ -5,12 +5,8 @@
 #   tract = cst
 #   xtract_data = present
 #
-# nodes=27 edges=51
+# nodes=19 edges=33
 
-- exclude_2_diff_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
-    interpolator = 'nearestNeighbor'
-- exclude_2_diff_cst_rh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
-    interpolator = 'nearestNeighbor'
 - exclude_2_ref_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
     input_image = '<XTRACT_DATA>/cst_l/exclude.nii.gz'
     interpolator = 'nearestNeighbor'
@@ -53,10 +49,6 @@
     wayorder = False
 - random_seed [RandomSeedGenerator] mem_gb=0.2 n_procs=1
     seeds_n = 5
-- seed_2_diff_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
-    interpolator = 'nearestNeighbor'
-- seed_2_diff_cst_rh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
-    interpolator = 'nearestNeighbor'
 - seed_2_ref_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
     input_image = '<XTRACT_DATA>/cst_l/seed.nii.gz'
     interpolator = 'nearestNeighbor'
@@ -75,16 +67,6 @@
     out_file = 'r-cst_lh.nii.gz'
 - sumTrack_cst_rh [SumMultiTracks] mem_gb=0.2 n_procs=1
     out_file = 'r-cst_rh.nii.gz'
-- sum_2_ref_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
-    interpolator = 'linear'
-    out_file = 'r-cst_lh.nii.gz'
-- sum_2_ref_cst_rh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
-    interpolator = 'linear'
-    out_file = 'r-cst_rh.nii.gz'
-- targets_2_diff_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
-    interpolator = 'nearestNeighbor'
-- targets_2_diff_cst_rh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
-    interpolator = 'nearestNeighbor'
 - targets_2_ref_cst_lh_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
     input_image = '<XTRACT_DATA>/cst_l/target.nii.gz'
     interpolator = 'nearestNeighbor'
@@ -100,16 +82,12 @@
     no_flatten = False
     ravel_inputs = False
 # connections
-exclude_2_diff_cst_lh_ants_apply.out_file -> probtrackx_cst_lh.avoid_mp
-exclude_2_diff_cst_rh_ants_apply.out_file -> probtrackx_cst_rh.avoid_mp
-exclude_2_ref_cst_lh_ants_apply.out_file -> exclude_2_diff_cst_lh_ants_apply.input_image
+exclude_2_ref_cst_lh_ants_apply.out_file -> probtrackx_cst_lh.avoid_mp
 exclude_2_ref_cst_lh_transformlist.out -> exclude_2_ref_cst_lh_ants_apply.transformlist
-exclude_2_ref_cst_rh_ants_apply.out_file -> exclude_2_diff_cst_rh_ants_apply.input_image
+exclude_2_ref_cst_rh_ants_apply.out_file -> probtrackx_cst_rh.avoid_mp
 exclude_2_ref_cst_rh_transformlist.out -> exclude_2_ref_cst_rh_ants_apply.transformlist
-inputnode.diff2ref_transforms -> sum_2_ref_cst_lh_ants_apply.transformlist
-inputnode.diff2ref_transforms -> sum_2_ref_cst_rh_ants_apply.transformlist
-inputnode.diff2ref_which_to_invert -> sum_2_ref_cst_lh_ants_apply.which_to_invert
-inputnode.diff2ref_which_to_invert -> sum_2_ref_cst_rh_ants_apply.which_to_invert
+inputnode.diff2ref_mat -> probtrackx_cst_lh.inv_xfm
+inputnode.diff2ref_mat -> probtrackx_cst_rh.inv_xfm
 inputnode.fsamples -> probtrackx_cst_lh.fsamples
 inputnode.fsamples -> probtrackx_cst_rh.fsamples
 inputnode.mask -> probtrackx_cst_lh.mask
@@ -121,34 +99,16 @@ inputnode.mni2ref_warp -> seed_2_ref_cst_lh_transformlist.in1
 inputnode.mni2ref_warp -> seed_2_ref_cst_rh_transformlist.in1
 inputnode.mni2ref_warp -> targets_2_ref_cst_lh_transformlist.in1
 inputnode.mni2ref_warp -> targets_2_ref_cst_rh_transformlist.in1
-inputnode.nodif_brain -> exclude_2_diff_cst_lh_ants_apply.reference_image
-inputnode.nodif_brain -> exclude_2_diff_cst_rh_ants_apply.reference_image
-inputnode.nodif_brain -> probtrackx_cst_lh.seed_ref
-inputnode.nodif_brain -> probtrackx_cst_rh.seed_ref
-inputnode.nodif_brain -> seed_2_diff_cst_lh_ants_apply.reference_image
-inputnode.nodif_brain -> seed_2_diff_cst_rh_ants_apply.reference_image
-inputnode.nodif_brain -> targets_2_diff_cst_lh_ants_apply.reference_image
-inputnode.nodif_brain -> targets_2_diff_cst_rh_ants_apply.reference_image
 inputnode.phsamples -> probtrackx_cst_lh.phsamples
 inputnode.phsamples -> probtrackx_cst_rh.phsamples
-inputnode.ref2diff_transforms -> exclude_2_diff_cst_lh_ants_apply.transformlist
-inputnode.ref2diff_transforms -> exclude_2_diff_cst_rh_ants_apply.transformlist
-inputnode.ref2diff_transforms -> seed_2_diff_cst_lh_ants_apply.transformlist
-inputnode.ref2diff_transforms -> seed_2_diff_cst_rh_ants_apply.transformlist
-inputnode.ref2diff_transforms -> targets_2_diff_cst_lh_ants_apply.transformlist
-inputnode.ref2diff_transforms -> targets_2_diff_cst_rh_ants_apply.transformlist
-inputnode.ref2diff_which_to_invert -> exclude_2_diff_cst_lh_ants_apply.which_to_invert
-inputnode.ref2diff_which_to_invert -> exclude_2_diff_cst_rh_ants_apply.which_to_invert
-inputnode.ref2diff_which_to_invert -> seed_2_diff_cst_lh_ants_apply.which_to_invert
-inputnode.ref2diff_which_to_invert -> seed_2_diff_cst_rh_ants_apply.which_to_invert
-inputnode.ref2diff_which_to_invert -> targets_2_diff_cst_lh_ants_apply.which_to_invert
-inputnode.ref2diff_which_to_invert -> targets_2_diff_cst_rh_ants_apply.which_to_invert
+inputnode.ref2diff_mat -> probtrackx_cst_lh.xfm
+inputnode.ref2diff_mat -> probtrackx_cst_rh.xfm
 inputnode.reference_brain -> exclude_2_ref_cst_lh_ants_apply.reference_image
 inputnode.reference_brain -> exclude_2_ref_cst_rh_ants_apply.reference_image
+inputnode.reference_brain -> probtrackx_cst_lh.seed_ref
+inputnode.reference_brain -> probtrackx_cst_rh.seed_ref
 inputnode.reference_brain -> seed_2_ref_cst_lh_ants_apply.reference_image
 inputnode.reference_brain -> seed_2_ref_cst_rh_ants_apply.reference_image
-inputnode.reference_brain -> sum_2_ref_cst_lh_ants_apply.reference_image
-inputnode.reference_brain -> sum_2_ref_cst_rh_ants_apply.reference_image
 inputnode.reference_brain -> targets_2_ref_cst_lh_ants_apply.reference_image
 inputnode.reference_brain -> targets_2_ref_cst_rh_ants_apply.reference_image
 inputnode.thsamples -> probtrackx_cst_lh.thsamples
@@ -159,21 +119,15 @@ probtrackx_cst_rh.fdt_paths -> sumTrack_cst_rh.path_files
 probtrackx_cst_rh.way_total -> sumTrack_cst_rh.waytotal_files
 random_seed.seeds -> probtrackx_cst_lh.random_seed
 random_seed.seeds -> probtrackx_cst_rh.random_seed
-seed_2_diff_cst_lh_ants_apply.out_file -> probtrackx_cst_lh.seed
-seed_2_diff_cst_rh_ants_apply.out_file -> probtrackx_cst_rh.seed
-seed_2_ref_cst_lh_ants_apply.out_file -> seed_2_diff_cst_lh_ants_apply.input_image
+seed_2_ref_cst_lh_ants_apply.out_file -> probtrackx_cst_lh.seed
 seed_2_ref_cst_lh_transformlist.out -> seed_2_ref_cst_lh_ants_apply.transformlist
-seed_2_ref_cst_rh_ants_apply.out_file -> seed_2_diff_cst_rh_ants_apply.input_image
+seed_2_ref_cst_rh_ants_apply.out_file -> probtrackx_cst_rh.seed
 seed_2_ref_cst_rh_transformlist.out -> seed_2_ref_cst_rh_ants_apply.transformlist
-sumTrack_cst_lh.out_file -> sum_2_ref_cst_lh_ants_apply.input_image
+sumTrack_cst_lh.out_file -> outputnode.fdt_paths_lh
 sumTrack_cst_lh.waytotal_sum -> outputnode.waytotal_lh
-sumTrack_cst_rh.out_file -> sum_2_ref_cst_rh_ants_apply.input_image
+sumTrack_cst_rh.out_file -> outputnode.fdt_paths_rh
 sumTrack_cst_rh.waytotal_sum -> outputnode.waytotal_rh
-sum_2_ref_cst_lh_ants_apply.out_file -> outputnode.fdt_paths_lh
-sum_2_ref_cst_rh_ants_apply.out_file -> outputnode.fdt_paths_rh
-targets_2_diff_cst_lh_ants_apply.out_file -> probtrackx_cst_lh.waypoints
-targets_2_diff_cst_rh_ants_apply.out_file -> probtrackx_cst_rh.waypoints
-targets_2_ref_cst_lh_ants_apply.out_file -> targets_2_diff_cst_lh_ants_apply.input_image
+targets_2_ref_cst_lh_ants_apply.out_file -> probtrackx_cst_lh.waypoints
 targets_2_ref_cst_lh_transformlist.out -> targets_2_ref_cst_lh_ants_apply.transformlist
-targets_2_ref_cst_rh_ants_apply.out_file -> targets_2_diff_cst_rh_ants_apply.input_image
+targets_2_ref_cst_rh_ants_apply.out_file -> probtrackx_cst_rh.waypoints
 targets_2_ref_cst_rh_transformlist.out -> targets_2_ref_cst_rh_ants_apply.transformlist
