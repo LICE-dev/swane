@@ -217,29 +217,50 @@ class TestAntsApplyTransformsRealRun:
     """Round-trips a real registration through the node; opt-in via --run-heavy."""
 
     def test_inverse_round_trip_recovers_the_moving_image(self, workspace, make_nifti):
+        import ants
+
         from swane.nipype_pipeline.nodes.AntsRegistration import AntsRegistration
 
-        fixed_data = np.zeros((24, 24, 24), dtype=np.float32)
-        fixed_data[6:18, 6:18, 6:18] = 1.0
-        moving_data = np.zeros((24, 24, 24), dtype=np.float32)
-        moving_data[10:22, 4:16, 6:18] = 1.0
-        fixed = make_nifti("f.nii.gz", data=fixed_data)
-        moving = make_nifti("m.nii.gz", data=moving_data)
+        # antspyx's affine stage samples points randomly each iteration
+        # (aff_random_sampling_rate) and AntsRegistration exposes no seed input,
+        # so this real registration flips pass/fail run to run unless pinned
+        # deterministic for the duration of this test. seed_value=123 is
+        # antspyx's own default and was confirmed to clear the corr>0.9 bar.
+        previous_deterministic = ants.config._deterministic
+        previous_seed = ants.config._random_seed
+        threads_var = "ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"
+        previous_threads = os.environ.get(threads_var)
+        ants.config.set_ants_deterministic(True, seed_value=123)
+        try:
+            fixed_data = np.zeros((24, 24, 24), dtype=np.float32)
+            fixed_data[6:18, 6:18, 6:18] = 1.0
+            moving_data = np.zeros((24, 24, 24), dtype=np.float32)
+            moving_data[10:22, 4:16, 6:18] = 1.0
+            fixed = make_nifti("f.nii.gz", data=fixed_data)
+            moving = make_nifti("m.nii.gz", data=moving_data)
 
-        reg = AntsRegistration()
-        reg.inputs.fixed = fixed
-        reg.inputs.moving = moving
-        reg.inputs.transform_type = "Affine"
-        reg.run()
-        reg_out = reg._list_outputs()
+            reg = AntsRegistration()
+            reg.inputs.fixed = fixed
+            reg.inputs.moving = moving
+            reg.inputs.transform_type = "Affine"
+            reg.run()
+            reg_out = reg._list_outputs()
 
-        apply_node = AntsApplyTransforms()
-        apply_node.inputs.input_image = fixed
-        apply_node.inputs.reference_image = moving
-        apply_node.inputs.transformlist = reg_out["inv_transforms"]
-        apply_node.inputs.which_to_invert = reg_out["inv_which_to_invert"]
-        apply_node.inputs.out_file = "back.nii.gz"
-        apply_node.run()
+            apply_node = AntsApplyTransforms()
+            apply_node.inputs.input_image = fixed
+            apply_node.inputs.reference_image = moving
+            apply_node.inputs.transformlist = reg_out["inv_transforms"]
+            apply_node.inputs.which_to_invert = reg_out["inv_which_to_invert"]
+            apply_node.inputs.out_file = "back.nii.gz"
+            apply_node.run()
 
-        back = nib.load(apply_node._list_outputs()["out_file"]).get_fdata()
-        assert np.corrcoef(back.ravel(), moving_data.ravel())[0, 1] > 0.9
+            back = nib.load(apply_node._list_outputs()["out_file"]).get_fdata()
+            assert np.corrcoef(back.ravel(), moving_data.ravel())[0, 1] > 0.9
+        finally:
+            ants.config.set_ants_deterministic(
+                previous_deterministic, seed_value=previous_seed
+            )
+            if previous_threads is None:
+                os.environ.pop(threads_var, None)
+            else:
+                os.environ[threads_var] = previous_threads

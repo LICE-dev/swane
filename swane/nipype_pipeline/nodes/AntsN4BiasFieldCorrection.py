@@ -65,12 +65,15 @@ class AntsN4BiasFieldCorrection(BaseInterface):
 
         # --- MASK LOGIC ---
         if isdefined(self.inputs.mask_file):
-            # If a mask is provided, use it (binarize in case it isn't already)
+            # If a mask is provided, use it (binarize in case it isn't already).
+            # Cast back to float: antspyx's N4 correction is markedly weaker when
+            # given an unsigned-char mask (the boolean comparison's dtype) than a
+            # float mask with the same 0/1 values.
             mask = ants.image_read(self.inputs.mask_file)
-            mask = mask > 0
+            mask = (mask > 0).clone("float")
         elif self.inputs.skull_stripped:
             # Otherwise, if the input sequence is skull stripped, assume brain for every non 0 voxel
-            mask = img > 0
+            mask = (img > 0).clone("float")
         else:
             # In other cases use automatic Otsu thresholding
             mask = ants.otsu_segmentation(img, k=1)
