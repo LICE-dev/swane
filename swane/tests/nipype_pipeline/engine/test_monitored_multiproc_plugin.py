@@ -17,7 +17,9 @@ graph/node, for all three budgets (CPU threads, RAM, GPU slots), without
 spinning up nipype's real process pools or building an actual workflow.
 """
 
-from multiprocessing import Queue
+from concurrent.futures import Future
+from concurrent.futures.process import BrokenProcessPool
+from multiprocessing import Event, Queue
 
 import pytest
 
@@ -139,3 +141,33 @@ class TestPrerunCheckSignalsInsufficientResources:
         plugin._prerun_check(graph)  # must not raise
 
         assert queue.empty()
+
+
+def test_broken_process_pool_callback_reports_node_and_wakes_workflow(make_plugin):
+    """A native worker crash must become observable outside the callback.
+
+    ``Future.result()`` raises in Nipype's done-callback. Without SWANe's
+    interception, concurrent.futures only logs that exception and Nipype keeps
+    polling forever.
+    """
+    plugin, queue = make_plugin()
+    workflow_stop_event = Event()
+    plugin.workflow_stop_event = workflow_stop_event
+
+    taskid = 17
+    node_name = "prerelease_wf.ref_bias_correction"
+    future = Future()
+    plugin._task_obj[taskid] = future
+    plugin._task_nodes[taskid] = node_name
+    plugin._future_taskids[future] = taskid
+    future.set_exception(BrokenProcessPool("worker terminated abruptly"))
+
+    plugin._async_callback(future)
+
+    report = queue.get(timeout=5)
+    assert report.signal_type == WorkflowSignals.NODE_ERROR
+    assert report.node_name == node_name
+    assert "terminated abruptly" in report.info
+    assert workflow_stop_event.wait(timeout=5)
+    assert plugin._taskresult[taskid]["taskid"] == taskid
+    assert plugin._taskresult[taskid]["traceback"]

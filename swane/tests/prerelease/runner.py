@@ -20,10 +20,14 @@ from __future__ import annotations
 import json
 import os
 import queue as queue_mod
+import socket
 import time
 import traceback
+import uuid
 from dataclasses import asdict, dataclass, field
 from multiprocessing import Queue
+
+import psutil
 
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
 from swane.utils.DependencyManager import DependencyManager
@@ -33,6 +37,8 @@ from swane.tests.prerelease.subject import prepare_subject
 STATE_FILE = "prerelease_state.json"
 #: Per-pass result, written inside the pass folder.
 PASS_RESULT_FILE = "pass_result.json"
+#: Exclusive owner record for a work directory.
+LOCK_FILE = ".prerelease.lock"
 
 WORKFLOW_NAME = "prerelease_wf"
 
@@ -64,6 +70,136 @@ class PassResult:
         return asdict(self)
 
 
+class PrereleaseAlreadyRunningError(RuntimeError):
+    """Raised when another sweep owns the requested work directory."""
+
+
+class PrereleaseWorkDirLock:
+    """PID lock protecting a prerelease work directory.
+
+    The complete owner record is hard-linked into place, so contenders never
+    observe a half-written PID. A lock left behind by a crashed process is
+    removed on the next acquisition after PID and process creation time prove
+    that its owner no longer exists.
+    """
+
+    def __init__(self, work_dir: str):
+        self.work_dir = os.path.abspath(work_dir)
+        self.path = os.path.join(self.work_dir, LOCK_FILE)
+        process = psutil.Process(os.getpid())
+        self.owner = {
+            "pid": process.pid,
+            "process_create_time": process.create_time(),
+            "hostname": socket.gethostname(),
+            "acquired_at": time.time(),
+            "token": uuid.uuid4().hex,
+        }
+        self.acquired = False
+
+    def acquire(self):
+        os.makedirs(self.work_dir, exist_ok=True)
+        while True:
+            if self._try_create():
+                self.acquired = True
+                return self
+
+            owner = self._read_owner()
+            if owner is None:
+                raise PrereleaseAlreadyRunningError(
+                    "prerelease lock %s exists but has no valid owner record; "
+                    "verify that no sweep is running before removing it" % self.path
+                )
+            if self._owner_is_running(owner):
+                raise PrereleaseAlreadyRunningError(
+                    "another prerelease sweep is already using %s "
+                    "(PID %s on %s)"
+                    % (
+                        self.work_dir,
+                        owner.get("pid", "unknown"),
+                        owner.get("hostname", "unknown host"),
+                    )
+                )
+
+            try:
+                os.unlink(self.path)
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                raise PrereleaseAlreadyRunningError(
+                    "stale prerelease lock %s could not be removed: %s"
+                    % (self.path, error)
+                ) from error
+
+    def release(self):
+        if not self.acquired:
+            return
+        owner = self._read_owner()
+        if owner and owner.get("token") == self.owner["token"]:
+            try:
+                os.unlink(self.path)
+            except FileNotFoundError:
+                pass
+        self.acquired = False
+
+    def __enter__(self):
+        return self.acquire()
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.release()
+
+    def _try_create(self) -> bool:
+        candidate = "%s.%s.tmp" % (self.path, self.owner["token"])
+        try:
+            fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(self.owner, handle)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.link(candidate, self.path)
+            except FileExistsError:
+                return False
+            return True
+        finally:
+            try:
+                os.unlink(candidate)
+            except FileNotFoundError:
+                pass
+
+    def _read_owner(self) -> dict | None:
+        try:
+            with open(self.path, encoding="utf-8") as handle:
+                owner = json.load(handle)
+        except (OSError, ValueError, TypeError):
+            return None
+        return owner if isinstance(owner, dict) else None
+
+    @staticmethod
+    def _owner_is_running(owner: dict) -> bool:
+        if owner.get("hostname") != socket.gethostname():
+            # A shared work directory may be visible from another host; only
+            # that host can safely prove its PID stale.
+            return True
+        try:
+            pid = int(owner["pid"])
+            expected_create_time = float(owner["process_create_time"])
+            process = psutil.Process(pid)
+            if not process.is_running() or process.status() == psutil.STATUS_ZOMBIE:
+                return False
+            return abs(process.create_time() - expected_create_time) < 1.0
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+            psutil.NoSuchProcess,
+            psutil.ZombieProcess,
+        ):
+            return False
+        except psutil.AccessDenied:
+            # Failing closed is safer than deleting a live owner's lock.
+            return True
+
+
 def _drain(q: Queue, result: PassResult, verbose: bool) -> None:
     """Consume workflow signals until the process reports it has stopped."""
     while True:
@@ -87,6 +223,7 @@ def _drain(q: Queue, result: PassResult, verbose: bool) -> None:
                     "node": report.node_name,
                     "workflow": report.workflow_name,
                     "crash_file": report.crash_file,
+                    "info": report.info,
                 }
             )
             print("      ! FAILED %s" % report.node_name, flush=True)
@@ -178,15 +315,23 @@ def run_pass(
     signal_queue = Queue()
     process = WorkflowProcess(pass_item.name, workflow, signal_queue)
     process.start()
+    workflow_stopped = False
 
     try:
         while True:
             try:
                 _drain(signal_queue, result, verbose)
             except _Finished:
+                workflow_stopped = True
                 break
             if not process.is_alive():
-                # The process died without sending WORKFLOW_STOP.
+                # The queue feeder may finish just after the process itself.
+                # Give a final drain a chance to observe a legitimate stop.
+                process.join(timeout=0)
+                try:
+                    _drain(signal_queue, result, verbose)
+                except _Finished:
+                    workflow_stopped = True
                 break
             if timeout_seconds is not None and time.time() - started > timeout_seconds:
                 raise _TimedOut
@@ -219,9 +364,23 @@ def run_pass(
             process.join(timeout=10)
 
     result.seconds = time.time() - started
-    if result.node_errors:
+    if not workflow_stopped:
+        result.status = "error"
+        result.reason = (
+            "workflow process died without WORKFLOW_STOP (exit code %s)"
+            % process.exitcode
+        )
+    elif result.node_errors:
         result.status = "failed"
-        result.reason = "%d node(s) failed" % len(result.node_errors)
+        failed_nodes = []
+        for error in result.node_errors:
+            node_name = error.get("node") or "unknown node"
+            if node_name not in failed_nodes:
+                failed_nodes.append(node_name)
+        result.reason = "%d node(s) failed: %s" % (
+            len(result.node_errors),
+            ", ".join(failed_nodes[:5]),
+        )
     elif result.nodes_completed == 0:
         result.status = "failed"
         result.reason = "no node completed; see the pass log"
@@ -268,6 +427,7 @@ def run_sweep(
     test_run: bool = True,
     timeout_seconds: float | None = DEFAULT_TIMEOUT_SECONDS,
     on_pass_done=None,
+    _work_dir_lock=None,
 ) -> list:
     """Run every planned pass in order, persisting progress as it goes.
 
@@ -289,6 +449,29 @@ def run_sweep(
         Invoked with each :class:`PassResult` as soon as it is available, so a
         caller can report progress without waiting for the whole sweep.
     """
+    if _work_dir_lock is None:
+        with PrereleaseWorkDirLock(work_dir) as work_dir_lock:
+            return run_sweep(
+                plan,
+                exam,
+                work_dir,
+                cores=cores,
+                ram_gb=ram_gb,
+                slicer_path=slicer_path,
+                resume=resume,
+                verbose=verbose,
+                test_run=test_run,
+                timeout_seconds=timeout_seconds,
+                on_pass_done=on_pass_done,
+                _work_dir_lock=work_dir_lock,
+            )
+    if (
+        not isinstance(_work_dir_lock, PrereleaseWorkDirLock)
+        or not _work_dir_lock.acquired
+        or _work_dir_lock.work_dir != os.path.abspath(work_dir)
+    ):
+        raise ValueError("_work_dir_lock does not own this prerelease work directory")
+
     os.makedirs(work_dir, exist_ok=True)
     state = load_state(work_dir) if resume else {}
     results = []
