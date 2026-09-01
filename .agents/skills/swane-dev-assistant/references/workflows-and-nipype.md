@@ -63,7 +63,7 @@ When adding an analysis, trace this complete chain:
 
 ## Execution, reporting, and resources
 
-- Use node `mem_gb`, `n_procs`, GPU flags, and `NipypeRamEstimator` consistently with `MonitoredMultiProcPlugin`.
+- Use node `mem_gb`, `n_procs`, GPU flags, and `RamEstimator` consistently with `MonitoredMultiProcPlugin`.
 - Avoid unbounded concurrency. Respect global CPU/RAM/GPU preferences and `CoreLimit` behavior.
 - Account for both static memory declarations and input-dependent RAM estimators for image-size-sensitive nodes.
 - Preserve `WorkflowSignals`, `WorkflowReport` payloads, node status callbacks, and progress-tree identities when modifying monitored execution.

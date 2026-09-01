@@ -89,7 +89,7 @@ tool_reference_list = {
         ],
     ),
     # Diffusion / Tractography
-    "CustomEddy": ToolReference(
+    "Eddy": ToolReference(
         command="eddy",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/eddy/eddy.html",
@@ -116,7 +116,7 @@ tool_reference_list = {
             "Hernandez M, Guerrero GD, Cecilia JM, et al. Accelerating fibre orientation estimation from diffusion MRI using GPUs. PLoS One. 2013.",
         ],
     ),
-    "CustomProbTrackX2": ToolReference(
+    "ProbTrackX2": ToolReference(
         command="probtrackx",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/diffusion/probtrackx.html",
