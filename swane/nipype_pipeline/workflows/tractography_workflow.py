@@ -12,7 +12,6 @@ from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_
 from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     resolve_registration_engine,
-    RegistrationNodeWrapper,
 )
 
 SIDES = ["lh", "rh"]
@@ -27,12 +26,6 @@ def tractography_workflow(
 ) -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
-
-    The probtrackx transforms are externalized (uniformly for every engine):
-    each ROI is pre-warped into diffusion space (MNI -> reference -> diffusion),
-    probtrackx runs natively in diffusion space with an identity transform and
-    ``seed_ref`` = the diffusion b0 brain, and the summed density is warped back
-    diffusion -> reference space. No FSL ``.mat`` is handed to probtrackx.
 
     Parameters
     ----------
@@ -51,7 +44,7 @@ def tractography_workflow(
     Input Node Fields
     ----------
     mask: path
-        The diffusion-space brain mask.
+        The ref brain mask.
     fsamples : path
         Samples from the distribution of anysotropic volume fraction.
     phsamples : path
@@ -60,18 +53,10 @@ def tractography_workflow(
         Samples from the distribution on theta.
     reference_brain : path
         Betted T13D.
-    nodif_brain : path
-        Betted b0 image in diffusion space (probtrackx seed reference).
-    diff2ref_transforms : list
-        Ordered transform list registering diffusion -> T13D reference space.
-    diff2ref_which_to_invert : list or None
-        Per-transform invert flags paired with ``diff2ref_transforms``
-        (``None`` on FSL/Synth).
-    ref2diff_transforms : list
-        Ordered transform list registering T13D reference -> diffusion space.
-    ref2diff_which_to_invert : list or None
-        Per-transform invert flags paired with ``ref2diff_transforms``
-        (``None`` on FSL/Synth).
+    diff2ref_mat : path
+        Linear registration matrix from diffusion to T13D reference space.
+    ref2diff_mat : path
+        Linear registration inverse matrix from T13D reference to diffusion space.
     mni2ref_warp : path
         Nonlinear registration warp from MNI atlas to T13D reference space.
 
@@ -107,17 +92,7 @@ def tractography_workflow(
 
     workflow = CustomWorkflow(name="tract_" + name, base_dir=base_dir)
 
-    # The MNI -> reference applies consume mni2ref_warp, produced by the shared
-    # mni1 (nonlinear_reg) workflow, which follows the configured engine WITHOUT
-    # the SYNTH -> FSL fallback -- so they use this engine directly.
     engine = resolve_registration_engine(synth_config, allow_ants=True)
-    # The diff <-> ref applies consume dti_preproc's transform-list outputs,
-    # which follow the SYNTH -> FSL fallback (SynthMorph is not used for the
-    # diffusion registration). Keep this engine in step so the transform format
-    # matches what those applies receive.
-    diff_engine = engine
-    if diff_engine == RegistrationEngine.SYNTH:
-        diff_engine = RegistrationEngine.FSL
 
     inputnode = Node(
         IdentityInterface(
@@ -127,11 +102,8 @@ def tractography_workflow(
                 "phsamples",
                 "thsamples",
                 "reference_brain",
-                "nodif_brain",
-                "diff2ref_transforms",
-                "diff2ref_which_to_invert",
-                "ref2diff_transforms",
-                "ref2diff_which_to_invert",
+                "diff2ref_mat",
+                "ref2diff_mat",
                 "mni2ref_warp",
             ]
         ),
@@ -144,75 +116,6 @@ def tractography_workflow(
         ),
         name="outputnode",
     )
-
-    # Backend-neutral handles on the diff <-> ref transforms carried by the
-    # inputnode. On ANTs the applies go through the wrapper (registration=) so
-    # which_to_invert is forwarded; on FSL/Synth which_to_invert is None and the
-    # applies use the single-file transform view (warp=[inputnode, field]).
-    ref2diff = RegistrationNodeWrapper(
-        input_node=inputnode,
-        out_registered_node=inputnode,
-        warp="ref2diff_transforms",
-        inv_warp_node=inputnode,
-        inv_warp="ref2diff_transforms",
-        engine=diff_engine,
-        fwd_transforms=[(inputnode, "ref2diff_transforms")],
-        fwd_which_to_invert=(
-            (inputnode, "ref2diff_which_to_invert")
-            if diff_engine == RegistrationEngine.ANTS
-            else None
-        ),
-    )
-    diff2ref = RegistrationNodeWrapper(
-        input_node=inputnode,
-        out_registered_node=inputnode,
-        warp="diff2ref_transforms",
-        inv_warp_node=inputnode,
-        inv_warp="diff2ref_transforms",
-        engine=diff_engine,
-        fwd_transforms=[(inputnode, "diff2ref_transforms")],
-        fwd_which_to_invert=(
-            (inputnode, "diff2ref_which_to_invert")
-            if diff_engine == RegistrationEngine.ANTS
-            else None
-        ),
-    )
-
-    def apply_diff_transform(
-        node_name,
-        name_prefix,
-        name_suffix,
-        moving,
-        reference,
-        wrapper,
-        transform_field,
-        labelmap,
-        out_file=None,
-    ):
-        """Apply a diff <-> ref linear transform under ``diff_engine``.
-
-        ANTs uses the registration wrapper (``registration=``) so the
-        ``which_to_invert`` flags travel with the transform list; FSL/Synth use
-        the single-file transform view (``warp=[inputnode, transform_field]``).
-        """
-        kwargs = dict(
-            name=node_name,
-            name_prefix=name_prefix,
-            name_suffix=name_suffix,
-            engine=diff_engine,
-            workflow=workflow,
-            moving=moving,
-            reference=reference,
-            non_linear=False,
-            labelmap=labelmap,
-            out_file=out_file,
-            warp=None,
-        )
-        if diff_engine == RegistrationEngine.ANTS:
-            kwargs["registration"] = wrapper
-        else:
-            kwargs["warp"] = [inputnode, transform_field]
-        return apply_registration_node(**kwargs)
 
     is_cuda = config.getboolean_safe("cuda")
     if is_cuda:
@@ -259,12 +162,7 @@ def tractography_workflow(
         if len(target_files) == 0:
             return None
 
-        # Each ROI is externalized into diffusion space in two nearest-neighbour
-        # steps: MNI -> reference (mni2ref_warp, nonlinear) then reference ->
-        # diffusion (ref2diff, linear). probtrackx then runs natively in
-        # diffusion space with an identity transform.
-
-        # NODE 2a: Seed ROI MNI -> reference space (nonlinear)
+        # NODE 2: Seed ROI nonlinear transformation in T13D reference space
         seed_2_ref = apply_registration_node(
             name="seed_2_ref_%s_%s" % (name, side),
             name_prefix="seed mask",
@@ -277,19 +175,8 @@ def tractography_workflow(
             non_linear=True,
             labelmap=True,
         )
-        # NODE 2b: Seed ROI reference -> diffusion space (linear)
-        seed_2_diff = apply_diff_transform(
-            "seed_2_diff_%s_%s" % (name, side),
-            "seed mask",
-            "to diffusion",
-            [seed_2_ref, "out_file"],
-            [inputnode, "nodif_brain"],
-            ref2diff,
-            "ref2diff_transforms",
-            labelmap=True,
-        )
 
-        # NODE 4a: Target ROIs MNI -> reference space (nonlinear)
+        # NODE 4: Target ROIs nonlinear transformation in T13D reference space
         targets_2_ref = apply_registration_node(
             name="targets_2_ref_%s_%s" % (name, side),
             name_prefix="target mask",
@@ -307,19 +194,9 @@ def tractography_workflow(
             targets_2_ref.iterables = (moving_field, target_files)
         else:
             setattr(targets_2_ref.inputs, moving_field, target_files[0])
-        # NODE 4b: Target ROIs reference -> diffusion space (linear)
-        targets_2_diff = apply_diff_transform(
-            "targets_2_diff_%s_%s" % (name, side),
-            "target mask",
-            "to diffusion",
-            [targets_2_ref, "out_file"],
-            [inputnode, "nodif_brain"],
-            ref2diff,
-            "ref2diff_transforms",
-            labelmap=True,
-        )
 
-        # NODE 10: Tractography (runs natively in diffusion space)
+        # NODE 10: Tractography (runs in reference space; probtrackx bridges to
+        # diffusion internally via the FSL xfm/inv_xfm matrices)
         probtrackx = MapNode(
             CustomProbTrackX2(),
             name="probtrackx_%s_%s" % (name, side),
@@ -336,10 +213,12 @@ def tractography_workflow(
         probtrackx.inputs.opd = True
         workflow.connect(inputnode, "fsamples", probtrackx, "fsamples")
         workflow.connect(inputnode, "mask", probtrackx, "mask")
-        workflow.connect(inputnode, "nodif_brain", probtrackx, "seed_ref")
+        workflow.connect(inputnode, "reference_brain", probtrackx, "seed_ref")
         workflow.connect(inputnode, "phsamples", probtrackx, "phsamples")
         workflow.connect(inputnode, "thsamples", probtrackx, "thsamples")
-        workflow.connect(seed_2_diff, "out_file", probtrackx, "seed")
+        workflow.connect(inputnode, "ref2diff_mat", probtrackx, "xfm")
+        workflow.connect(inputnode, "diff2ref_mat", probtrackx, "inv_xfm")
+        workflow.connect(seed_2_ref, "out_file", probtrackx, "seed")
         workflow.connect(random_seed, "seeds", probtrackx, "random_seed")
 
         # Check the number of target ROIs
@@ -352,11 +231,11 @@ def tractography_workflow(
             )
             merge_targets.long_name = side + " targets ROI merging"
 
-            workflow.connect(targets_2_diff, "out_file", merge_targets, "target_files")
+            workflow.connect(targets_2_ref, "out_file", merge_targets, "target_files")
 
             workflow.connect(merge_targets, "out_file", probtrackx, "waypoints")
         else:
-            workflow.connect(targets_2_diff, "out_file", probtrackx, "waypoints")
+            workflow.connect(targets_2_ref, "out_file", probtrackx, "waypoints")
 
         # Check if inverted run is required in protocol
         if is_invert:
@@ -376,16 +255,21 @@ def tractography_workflow(
             probtrackx_inverted.inputs.use_gpu = is_cuda
             workflow.connect(inputnode, "fsamples", probtrackx_inverted, "fsamples")
             workflow.connect(inputnode, "mask", probtrackx_inverted, "mask")
-            workflow.connect(inputnode, "nodif_brain", probtrackx_inverted, "seed_ref")
+            workflow.connect(
+                inputnode, "reference_brain", probtrackx_inverted, "seed_ref"
+            )
             workflow.connect(inputnode, "phsamples", probtrackx_inverted, "phsamples")
             workflow.connect(inputnode, "thsamples", probtrackx_inverted, "thsamples")
-            workflow.connect(targets_2_diff, "out_file", probtrackx_inverted, "seed")
-            workflow.connect(seed_2_diff, "out_file", probtrackx_inverted, "waypoints")
+            workflow.connect(inputnode, "ref2diff_mat", probtrackx_inverted, "xfm")
+            workflow.connect(inputnode, "diff2ref_mat", probtrackx_inverted, "inv_xfm")
+            workflow.connect(targets_2_ref, "out_file", probtrackx_inverted, "seed")
+            workflow.connect(seed_2_ref, "out_file", probtrackx_inverted, "waypoints")
             workflow.connect(random_seed, "seeds", probtrackx_inverted, "random_seed")
 
         # Check for exclusion ROI in protocol
         if os.path.exists(exclude_file):
-            # NODE 6a: Exclusion ROI MNI -> reference space (nonlinear)
+            # NODE 6: Exclusion ROI nonlinear transformation in T13D reference space
+
             exclude_2_ref = apply_registration_node(
                 name="exclude_2_ref_%s_%s" % (name, side),
                 name_prefix="exclude mask",
@@ -398,27 +282,16 @@ def tractography_workflow(
                 non_linear=True,
                 labelmap=True,
             )
-            # NODE 6b: Exclusion ROI reference -> diffusion space (linear)
-            exclude_2_diff = apply_diff_transform(
-                "exclude_2_diff_%s_%s" % (name, side),
-                "exclude mask",
-                "to diffusion",
-                [exclude_2_ref, "out_file"],
-                [inputnode, "nodif_brain"],
-                ref2diff,
-                "ref2diff_transforms",
-                labelmap=True,
-            )
-            workflow.connect(exclude_2_diff, "out_file", probtrackx, "avoid_mp")
+            workflow.connect(exclude_2_ref, "out_file", probtrackx, "avoid_mp")
 
             if is_invert:
                 workflow.connect(
-                    exclude_2_diff, "out_file", probtrackx_inverted, "avoid_mp"
+                    exclude_2_ref, "out_file", probtrackx_inverted, "avoid_mp"
                 )
 
         # Check for stop ROI in protocol
         if os.path.exists(stop_file):
-            # NODE 8a: stop ROI MNI -> reference space (nonlinear)
+            # NODE 8: stop ROI nonlinear transformation in T13D reference space
             stop_2_ref = apply_registration_node(
                 name="stop_2_ref_%s_%s" % (name, side),
                 name_prefix="stop mask",
@@ -431,29 +304,14 @@ def tractography_workflow(
                 non_linear=True,
                 labelmap=True,
             )
-            # NODE 8b: stop ROI reference -> diffusion space (linear)
-            stop_2_diff = apply_diff_transform(
-                "stop_2_diff_%s_%s" % (name, side),
-                "stop mask",
-                "to diffusion",
-                [stop_2_ref, "out_file"],
-                [inputnode, "nodif_brain"],
-                ref2diff,
-                "ref2diff_transforms",
-                labelmap=True,
-            )
-            workflow.connect(stop_2_diff, "out_file", probtrackx, "stop_mask")
+            workflow.connect(stop_2_ref, "out_file", probtrackx, "stop_mask")
 
             if is_invert:
                 workflow.connect(
-                    stop_2_diff, "out_file", probtrackx_inverted, "stop_mask"
+                    stop_2_ref, "out_file", probtrackx_inverted, "stop_mask"
                 )
 
-        # NODE 14: Sum tractography and inverted tractography results. This runs
-        # in diffusion space (its inputs are diffusion-space fdt_paths). Its
-        # out_file name is kept as "r-<tract>_<side>.nii.gz" so the derived
-        # waytotal filename ("r-<tract>_<side>_waytotal") is unchanged; the
-        # final reference-space density is produced by sum_2_ref below.
+        # NODE 14: Sum tractography and inverted tractography results
         sum_multi_tracks = Node(SumMultiTracks(), name="sumTrack_%s_%s" % (name, side))
         sum_multi_tracks.long_name = side + " %s"
         sum_multi_tracks.inputs.out_file = "r-%s_%s.nii.gz" % (name, side)
@@ -482,22 +340,9 @@ def tractography_workflow(
                 probtrackx, "way_total", sum_multi_tracks, "waytotal_files"
             )
 
-        # NODE 15: Warp the summed density diffusion -> reference space. This is
-        # a probabilistic density (not a label map), so it uses linear
-        # interpolation. Preserves the sinked filename "r-<tract>_<side>.nii.gz".
-        sum_2_ref = apply_diff_transform(
-            "sum_2_ref_%s_%s" % (name, side),
-            "tract density",
-            "to reference",
-            [sum_multi_tracks, "out_file"],
-            [inputnode, "reference_brain"],
-            diff2ref,
-            "diff2ref_transforms",
-            labelmap=False,
-            out_file="r-%s_%s.nii.gz" % (name, side),
+        workflow.connect(
+            sum_multi_tracks, "out_file", outputnode, "fdt_paths_%s" % side
         )
-
-        workflow.connect(sum_2_ref, "out_file", outputnode, "fdt_paths_%s" % side)
         workflow.connect(
             sum_multi_tracks, "waytotal_sum", outputnode, "waytotal_%s" % side
         )

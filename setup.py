@@ -42,6 +42,7 @@ setup(
         "matplotlib==3.10.1",
         # todo: SET NIBABEL 5.2 as minimum to be more inclusive?
         "nibabel>=5.3.0,<6",
+        "nitransforms>=25.1.0",
         "dcm2niix>=1.0.20241211,<=1.0.20260724",
         "packaging",
         "PySide6_VerticalQTabWidget==0.0.3",
