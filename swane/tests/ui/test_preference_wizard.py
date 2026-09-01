@@ -14,6 +14,7 @@ from swane.config.config_enums import (
     FreesurferStep,
     GlobalPrefCategoryList,
     RegistrationEngine,
+    DeskullEngine,
 )
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
@@ -186,3 +187,87 @@ class TestPreferenceWizardRegistrationEngine:
         wizard._apply_settings_config()
 
         assert "morph" not in global_config[GlobalPrefCategoryList.SYNTH]
+
+
+class TestPreferenceWizardDeskullEngine:
+    """The wizard writes the ``deskull_engine`` preference instead of ``strip``.
+
+    antspynet is the general default (available whenever the antspynet package
+    is importable and RAM suffices) and does NOT require the advanced-models
+    opt-in. SynthStrip stays gated behind that opt-in, like SynthMorph/SynthSeg.
+    FSL BET is the fallback when neither is available/sufficient.
+    """
+
+    def _wizard(self, qtbot, global_config, dependency_manager, monkeypatch):
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
+        qtbot.addWidget(wizard)
+        monkeypatch.setattr(
+            global_config, "apply_resource_profile", lambda profile: None
+        )
+        return wizard
+
+    def test_antspynet_available_and_sufficient_ram_sets_antspynet(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        wizard = self._wizard(qtbot, global_config, dependency_manager, monkeypatch)
+        monkeypatch.setattr(dependency_manager, "is_antspynet", lambda: True)
+        global_config[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = "8"
+        wizard.user_prefs.use_advanced_models = False
+
+        wizard._apply_settings_config()
+
+        assert (
+            global_config.getenum_safe(GlobalPrefCategoryList.SYNTH, "deskull_engine")
+            == DeskullEngine.ANTSPYNET
+        )
+
+    def test_synthstrip_requires_advanced_models_opt_in_even_if_sufficient_ram(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        wizard = self._wizard(qtbot, global_config, dependency_manager, monkeypatch)
+        monkeypatch.setattr(dependency_manager, "is_antspynet", lambda: False)
+        monkeypatch.setattr(dependency_manager, "is_freesurfer_synth", lambda: True)
+        monkeypatch.setattr(
+            ResourceManager, "synth_strip_ram_requirements", staticmethod(lambda: 8)
+        )
+        global_config[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = "8"
+
+        wizard.user_prefs.use_advanced_models = False
+        wizard._apply_settings_config()
+        assert (
+            global_config.getenum_safe(GlobalPrefCategoryList.SYNTH, "deskull_engine")
+            == DeskullEngine.BET
+        )
+
+        wizard.user_prefs.use_advanced_models = True
+        wizard._apply_settings_config()
+        assert (
+            global_config.getenum_safe(GlobalPrefCategoryList.SYNTH, "deskull_engine")
+            == DeskullEngine.SYNTHSTRIP
+        )
+
+    def test_neither_available_falls_back_to_bet(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        wizard = self._wizard(qtbot, global_config, dependency_manager, monkeypatch)
+        monkeypatch.setattr(dependency_manager, "is_antspynet", lambda: False)
+        monkeypatch.setattr(dependency_manager, "is_freesurfer_synth", lambda: False)
+        wizard.user_prefs.use_advanced_models = True
+
+        wizard._apply_settings_config()
+
+        assert (
+            global_config.getenum_safe(GlobalPrefCategoryList.SYNTH, "deskull_engine")
+            == DeskullEngine.BET
+        )
+
+    def test_strip_key_is_never_written(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        wizard = self._wizard(qtbot, global_config, dependency_manager, monkeypatch)
+        monkeypatch.setattr(dependency_manager, "is_antspynet", lambda: True)
+        wizard.user_prefs.use_advanced_models = True
+
+        wizard._apply_settings_config()
+
+        assert "strip" not in global_config[GlobalPrefCategoryList.SYNTH]

@@ -2,6 +2,7 @@
 #
 #   bias_field_correction = True
 #   config = FLAIR3D
+#   deskull_engine = SYNTHSTRIP
 #   is_partial_coverage = False
 #   is_volumetric = True
 #   limit_synth_cores = true
@@ -9,7 +10,6 @@
 #   multicore_node_limit = SOFT_CAP
 #   registration_engine = SYNTH
 #   synth_morph = true
-#   synth_strip = true
 #
 # nodes=13 edges=24
 

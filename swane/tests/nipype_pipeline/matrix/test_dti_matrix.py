@@ -19,7 +19,7 @@ MNI templates at construction time.
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
+from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList, CoreLimit
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
@@ -55,9 +55,11 @@ def test_dti_matrix(
     section["tractography"] = _bool(tractography)
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     # dti is not yet ported to ANTs -> FSL (old morph default); morph kept
-    # only for the header echo.
+    # only for the header echo. The b0 deskull follows ``deskull_engine``,
+    # pinned to the application default (antspynet) rather than left implicit.
     synth["morph"] = "False"
     synth["engine"] = "FSL"
+    synth["deskull_engine"] = DeskullEngine.ANTSPYNET.name
 
     wf = dti_preproc_workflow(
         "dti",
@@ -74,7 +76,7 @@ def test_dti_matrix(
         "tractography": section["tractography"],
         "multicore_node_limit": multicore.name,
         "max_cpu": MAX_CPU,
-        "synth_strip": synth["strip"],
+        "deskull_engine": synth["deskull_engine"],
         "synth_morph": synth["morph"],
     }
     graph_snapshot(
@@ -102,6 +104,7 @@ def test_dti_matrix_test_run(
     # only for the header echo.
     synth["morph"] = "False"
     synth["engine"] = "FSL"
+    synth["deskull_engine"] = DeskullEngine.ANTSPYNET.name
 
     wf = dti_preproc_workflow(
         "dti",
@@ -119,7 +122,7 @@ def test_dti_matrix_test_run(
         "tractography": "true",
         "multicore_node_limit": CoreLimit.SOFT_CAP.name,
         "max_cpu": MAX_CPU,
-        "synth_strip": synth["strip"],
+        "deskull_engine": synth["deskull_engine"],
         "synth_morph": synth["morph"],
         "test_run": True,
     }
@@ -163,8 +166,9 @@ def _node_by_name(wf, name):
 
 
 def _node_by_prefix(wf, prefix):
-    # The deskull node name gets a "_bet"/"_synthstrip" suffix depending on the
-    # strip backend, which is orthogonal to the registration engine tested here.
+    # The deskull node name gets a "_bet"/"_synthstrip"/"_antspynet" suffix
+    # depending on the ``deskull_engine``, which is orthogonal to the
+    # registration engine tested here.
     return next(n for n in wf._graph.nodes() if n.name.startswith(prefix))
 
 

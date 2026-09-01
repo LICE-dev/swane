@@ -126,7 +126,9 @@ def fMRI_resting_state_workflow(
 
     # Get nodes for further connection
     getTR = workflow.get_node("%s_getTR" % name)
-    meanfuncmask = workflow.get_node("%s_meanfuncmask" % name)
+    # The deskull node name carries the resolved engine, so fMRI_preproc_workflow
+    # exposes the node itself (like ``reg_2_ref``) instead of a fixed name.
+    meanfuncmask = workflow.meanfuncmask
     motion_correct = workflow.get_node("%s_motion_correct" % name)
     dilatemask = workflow.get_node("%s_dilatemask" % name)
     highpass = workflow.get_node(

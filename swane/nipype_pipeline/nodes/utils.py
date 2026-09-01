@@ -12,13 +12,21 @@ from nipype.interfaces.fsl import (
     ApplyXFM,
 )
 
-from swane.config.config_enums import CoreLimit, RegistrationEngine
+from swane.config.config_enums import (
+    CoreLimit,
+    RegistrationEngine,
+    DeskullEngine,
+    DeskullModality,
+)
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.SynthMorphApply import SynthMorphApply
 from swane.nipype_pipeline.nodes.SynthStrip import SynthStrip
 from swane.nipype_pipeline.nodes.SynthMorphReg import SynthMorphReg
 from swane.nipype_pipeline.nodes.AntsRegistration import AntsRegistration
 from swane.nipype_pipeline.nodes.AntsApplyTransforms import AntsApplyTransforms
+from swane.nipype_pipeline.nodes.AntsPyNetBrainExtraction import (
+    AntsPyNetBrainExtraction,
+)
 from swane.nipype_pipeline.nodes.ram_estimators import *
 from swane.utils.ResourceManager import ResourceManager
 from nipype.utils.filemanip import fname_presuffix
@@ -54,6 +62,23 @@ def resolve_registration_engine(
     engine = synth_config.getenum_safe("engine")
     if not allow_ants and engine == RegistrationEngine.ANTS:
         return RegistrationEngine.FSL
+    return engine
+
+
+def resolve_deskull_engine(
+    synth_config, allow_synthstrip: bool = True
+) -> DeskullEngine:
+    """
+    Resolve the configured brain-extraction engine.
+
+    ``allow_synthstrip=False`` keeps a workflow that must avoid FreeSurfer Synth
+    tools (fMRI_preproc, mirroring its SynthMorph exclusion) off SYNTHSTRIP: when
+    the configured engine is SYNTHSTRIP it falls back to the default ANTSPYNET.
+    ANTSPYNET and BET are honoured either way.
+    """
+    engine = synth_config.getenum_safe("deskull_engine")
+    if not allow_synthstrip and engine == DeskullEngine.SYNTHSTRIP:
+        return DeskullEngine.ANTSPYNET
     return engine
 
 
@@ -100,6 +125,7 @@ def apply_tool_num_threads(
     threads: int,
     hard: bool,
     soft_env_vars: tuple[str, ...] = (),
+    max_cpu: int = 0,
 ) -> None:
     """
     Applies a CPU-bound tool's thread count.
@@ -118,8 +144,20 @@ def apply_tool_num_threads(
     actually drive its thread count (SynthStrip's ``OMP_NUM_THREADS``,
     SynthMorph's ``TF_NUM_*``), invisible to nipype.
 
+    ``max_cpu`` bounds the *nipype-aware* branch only. ``CoreLimit.NO_LIMIT``
+    makes ``get_tool_cpu_config`` answer ``cpu_count()`` with ``hard=False`` --
+    "use every core, keep nipype unaware". A tool with no soft env-var knob
+    cannot honour the second half: it lands here and would reserve
+    ``cpu_count()`` procs. Where that exceeds the cores the subject allocated,
+    ``MultiProc._prerun_check`` refuses the whole workflow ("Insufficient
+    resources available for job") before a single node runs, so the reservation
+    is clamped to the budget. A genuine hard cap is already within it, which
+    makes this a no-op there.
+
     """
     if hard or not soft_env_vars:
+        if max_cpu > 0:
+            threads = min(threads, max_cpu)
         node.inputs.num_threads = threads
         node.n_procs = threads
     else:
@@ -137,21 +175,47 @@ apply_synth_num_threads = apply_tool_num_threads
 
 def get_deskull_node(
     name: str,
-    use_synth: bool,
+    deskull_engine: DeskullEngine,
     mask: bool = False,
     bet_thr: float = None,
+    antspynet_thr: float = None,
     bet_bias_correction: bool = False,
     bet_robust: bool = False,
     bet_threshold: bool = False,
     bet_surfaces: bool = False,
     synth_exclude_csf: bool = False,
+    deskull_modality: DeskullModality = None,
     out_file: str = None,
     name_prefix: str = "",
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     limit_synth_cores: bool = False,
 ) -> Node:
-    if use_synth:
+    if deskull_engine == DeskullEngine.ANTSPYNET:
+        deskull_node = Node(
+            AntsPyNetBrainExtraction(),
+            name=name + "_antspynet",
+            mem_gb=ResourceManager.antspynet_ram_requirements(),
+        )
+        if deskull_modality is not None:
+            deskull_node.inputs.modality = deskull_modality.value
+        if antspynet_thr is not None:
+            deskull_node.inputs.threshold = antspynet_thr
+        if mask:
+            mask_name = "brain_mask.nii.gz"
+            if out_file:
+                mask_name = fname_presuffix(out_file, suffix="_brain", use_ext=True)
+            deskull_node.inputs.mask_file = mask_name
+        threads, hard = get_tool_cpu_config(
+            max_cpu, multicore_node_limit, limit_synth_cores
+        )
+        # antspynet/ITK take threads only through num_threads (a real, nipype-aware
+        # reservation), like the ANTs registration node -- no soft env-var path,
+        # hence the max_cpu bound (see apply_tool_num_threads).
+        apply_tool_num_threads(deskull_node, threads, hard, max_cpu=max_cpu)
+        if bet_surfaces:
+            deskull_node.inskull_out_name = "mask_file"
+    elif deskull_engine == DeskullEngine.SYNTHSTRIP:
         deskull_node = Node(SynthStrip(), name=name + "_synthstrip", mem_gb=5)
         if mask:
             mask_name = "brain_mask.nii.gz"
@@ -167,7 +231,7 @@ def get_deskull_node(
         )
         if bet_surfaces:
             deskull_node.inskull_out_name = "mask_file"
-    else:
+    else:  # DeskullEngine.BET
         deskull_node = Node(BET(), name=name + "_bet")
         deskull_node.inputs.mask = mask
         deskull_node.inputs.threshold = bet_threshold
@@ -398,7 +462,7 @@ def get_registration_node(
         threads, hard = get_tool_cpu_config(
             max_cpu, multicore_node_limit, limit_synth_cores
         )
-        apply_tool_num_threads(ants_reg, threads, hard)
+        apply_tool_num_threads(ants_reg, threads, hard, max_cpu=max_cpu)
 
         if type(moving_brain) == str:
             ants_reg.inputs.moving = moving_brain

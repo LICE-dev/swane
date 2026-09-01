@@ -2,6 +2,7 @@
 #
 #   bias_field_correction = True
 #   config = MDC
+#   deskull_engine = BET
 #   is_partial_coverage = False
 #   is_volumetric = True
 #   limit_synth_cores = false
@@ -9,7 +10,6 @@
 #   multicore_node_limit = SOFT_CAP
 #   registration_engine = FSL
 #   synth_morph = false
-#   synth_strip = false
 #
 # nodes=13 edges=26
 

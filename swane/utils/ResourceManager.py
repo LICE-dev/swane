@@ -20,6 +20,8 @@ class ResourceManager:
     #: Placeholder pending real antspyx memory profiling: started at the same
     #: magnitude as SYNTH_MORPH_RAM_REQUIREMENT (Phase 1 CP-A, to confirm).
     ANTS_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
+    #: antspynet brain extraction; fixed at 5 GB for now (revisit later).
+    ANTSPYNET_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
 
     #: In prerelease test_run mode ONLY, the SynthSeg (--fast, robust=False) and
     #: SynthMorph (steps=5) paths do genuinely less work and use less RAM, so
@@ -96,6 +98,10 @@ class ResourceManager:
     @staticmethod
     def ants_ram_requirements():
         return ResourceManager.ANTS_RAM_REQUIREMENT[get_os_type()]
+
+    @staticmethod
+    def antspynet_ram_requirements():
+        return ResourceManager.ANTSPYNET_RAM_REQUIREMENT[get_os_type()]
 
     @staticmethod
     def get_min_synth_ram_requirement():
