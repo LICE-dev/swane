@@ -78,8 +78,8 @@
 # connections
 dif2ref_flirt.out_matrix_file -> dif2ref_invwarp.in_file
 dif2ref_flirt.out_matrix_file -> fa_2_ref_apply_xfm.in_matrix_file
-dif2ref_flirt.out_matrix_file -> outputnode.diff2ref_transforms
-dif2ref_invwarp.out_file -> outputnode.ref2diff_transforms
+dif2ref_flirt.out_matrix_file -> outputnode.diff2ref_mat
+dif2ref_invwarp.out_file -> outputnode.ref2diff_mat
 dti_conv.bvals -> dti_dtifit.bvals
 dti_conv.bvals -> dti_eddy.in_bval
 dti_conv.bvals -> dti_eddy_files.bval
