@@ -386,7 +386,9 @@ check_dep_antspynet_error = (
     "antspynet not detected (<a href='https://github.com/antsx/antspynet#installation"
     "'>installation info</a>)"
 )
-check_dep_antspynet_no_version = "antspynet detected, but its version could not be determined"
+check_dep_antspynet_no_version = (
+    "antspynet detected, but its version could not be determined"
+)
 check_dep_antspynet_wrong_version = (
     "antspynet version outdated (found %s, required %s). Please "
     "<a href='https://github.com/antsx/antspynet#installation'>update</a>"
@@ -477,6 +479,7 @@ node_names["ForceOrient"] = "standard orientation"
 node_names["BET"] = "scalp removal"
 node_names["SegmentEndocranium"] = "scalp removal"
 node_names["SynthStrip"] = "scalp removal"
+node_names["AntsPyNetBrainExtraction"] = "scalp removal"
 node_names["SynthMorphReg"] = "registration"
 node_names["SynthSeg"] = "SynthSeg cortical parcellation"
 node_names["FLIRT"] = "linear registration"
@@ -520,7 +523,7 @@ node_names["FeatureTimeSeries"] = "Aroma - Time feature"
 node_names["FeatureFrequency"] = "Aroma - Frequency feature"
 node_names["AromaClassification"] = "Aroma - Noise classification"
 node_names["FilterRegressor"] = "Denoising"
-node_names["N4BiasFieldCorrection"] = "Bias Field Correction"
+node_names["AntsN4BiasFieldCorrection"] = "Bias Field Correction"
 node_names["ZIntNorm"] = "Intensity Normalization"
 
 license_consent_title = "Third-party tool licenses"

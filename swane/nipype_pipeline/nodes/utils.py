@@ -193,7 +193,9 @@ def get_deskull_node(
 ) -> Node:
     if deskull_engine == DeskullEngine.ANTSPYNET:
         deskull_node = Node(
-            AntsPyNetBrainExtraction(), name=name + "_antspynet", mem_gb=5
+            AntsPyNetBrainExtraction(),
+            name=name + "_antspynet",
+            mem_gb=ResourceManager.antspynet_ram_requirements(),
         )
         if deskull_modality is not None:
             deskull_node.inputs.modality = deskull_modality.value
