@@ -3,9 +3,10 @@
 
 This single builder backs several inputs (3D FLAIR, post-contrast MDC, coronal
 T2, 2D FLAIR). The graph is reshaped by the builder flags ``is_volumetric``,
-``is_partial_coverage`` and ``bias_field_correction`` and by the SynthStrip
-deskull step and the registration ``engine`` (FSL/SYNTH/ANTS), so each
-meaningful combination gets a golden snapshot under ``snapshots/linear_reg/``.
+``is_partial_coverage`` and ``bias_field_correction`` and by the brain-extraction
+``deskull_engine`` (BET/SYNTHSTRIP/ANTSPYNET) and the registration ``engine``
+(FSL/SYNTH/ANTS), so each meaningful combination gets a golden snapshot under
+``snapshots/linear_reg/``.
 MDC mirrors 3D FLAIR's flags exactly (see ``MainWorkflow.launch_mdc_analysis``)
 but reads its *own* preference section, which has a different default in
 practice — kept as a separate scenario built from ``DataInputList.MDC`` (not
@@ -18,12 +19,14 @@ assumed identical.
 CP-C audit: ``out_matrix_file`` has no transform-field consumer). The
 ``flair3d_ants_backend`` scenario below exercises that default explicitly;
 every other scenario pins FSL/SYNTH to keep isolated coverage of those
-backends too.
+backends too. The deskull engine follows the same rule: it is pinned per
+scenario, with ``flair3d_ants_backend`` carrying the full ANTs stack
+(antspynet deskull + antspyx registration, both application defaults).
 """
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
+from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList, CoreLimit
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
@@ -43,6 +46,7 @@ SCENARIOS = {
         partial=False,
         bias=True,
         engine="FSL",
+        deskull=DeskullEngine.BET,
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
     ),
@@ -51,6 +55,7 @@ SCENARIOS = {
         partial=False,
         bias=False,
         engine="FSL",
+        deskull=DeskullEngine.BET,
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
     ),
@@ -60,6 +65,7 @@ SCENARIOS = {
         partial=False,
         bias=True,
         engine="FSL",
+        deskull=DeskullEngine.BET,
         config_input=DataInputList.MDC,
         wf_name="mdc",
     ),
@@ -69,6 +75,7 @@ SCENARIOS = {
         partial=True,
         bias=False,
         engine="FSL",
+        deskull=DeskullEngine.BET,
         config_input=None,
         wf_name="t2_cor",
     ),
@@ -78,6 +85,7 @@ SCENARIOS = {
         partial=False,
         bias=False,
         engine="FSL",
+        deskull=DeskullEngine.BET,
         config_input=None,
         wf_name="flair2d",
     ),
@@ -87,6 +95,7 @@ SCENARIOS = {
         partial=False,
         bias=True,
         engine="SYNTH",
+        deskull=DeskullEngine.SYNTHSTRIP,
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
     ),
@@ -96,6 +105,7 @@ SCENARIOS = {
         partial=False,
         bias=True,
         engine="SYNTH",
+        deskull=DeskullEngine.SYNTHSTRIP,
         limit_cores=True,
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
@@ -108,6 +118,7 @@ SCENARIOS = {
         partial=False,
         bias=True,
         engine="ANTS",
+        deskull=DeskullEngine.ANTSPYNET,
         config_input=DataInputList.FLAIR3D,
         wf_name="flair3d",
     ),
@@ -120,9 +131,9 @@ def test_linear_reg_matrix(
 ):
     params = SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["strip"] = "true" if params["engine"] == "SYNTH" else "false"
+    synth["deskull_engine"] = params["deskull"].name
     # ``morph`` is gone; the registration backend is now the ``engine`` enum.
-    # Kept (mirroring ``strip``) only so the snapshot header echo stays
+    # Kept (mirroring the old ``strip``) only so the snapshot header echo stays
     # identical for the pre-existing FSL/SYNTH scenarios.
     synth["morph"] = "true" if params["engine"] == "SYNTH" else "false"
     synth["engine"] = params["engine"]
@@ -150,7 +161,7 @@ def test_linear_reg_matrix(
         "is_volumetric": params["volumetric"],
         "is_partial_coverage": params["partial"],
         "bias_field_correction": params["bias"],
-        "synth_strip": synth["strip"],
+        "deskull_engine": synth["deskull_engine"],
         "synth_morph": synth["morph"],
         "registration_engine": synth["engine"],
         "limit_synth_cores": synth["limit_cores"],
@@ -199,7 +210,7 @@ def test_linear_reg_matrix_test_run(
         "is_volumetric": True,
         "is_partial_coverage": False,
         "bias_field_correction": True,
-        "synth_strip": synth["strip"],
+        "deskull_engine": synth["deskull_engine"],
         "synth_morph": synth["morph"],
         "config": DataInputList.FLAIR3D.name,
         "test_run": True,

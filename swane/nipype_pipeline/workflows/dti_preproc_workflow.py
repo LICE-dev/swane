@@ -5,7 +5,7 @@ from nipype.interfaces.fsl import (
 )
 from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
 from nipype.pipeline.engine import Node
-from swane.config.config_enums import CoreLimit, RegistrationEngine
+from swane.config.config_enums import CoreLimit, RegistrationEngine, DeskullModality
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
@@ -16,6 +16,7 @@ from swane.nipype_pipeline.nodes.utils import (
     get_registration_node,
     apply_registration_node,
     resolve_registration_engine,
+    resolve_deskull_engine,
 )
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
@@ -28,6 +29,7 @@ def dti_preproc_workflow(
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
+    deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
@@ -49,6 +51,9 @@ def dti_preproc_workflow(
         workflow settings.
     synth_config: SectionProxy
         FreeSurfer Synth tools settings.
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the b0 deskull node. The
+        default is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
     multicore_node_limit: CORE_LIMIT, optional
@@ -162,7 +167,8 @@ def dti_preproc_workflow(
     b0_deskull = get_deskull_node(
         name="dti_deskull",
         name_prefix="DTI",
-        use_synth=synth_config.getboolean_safe("strip"),
+        deskull_engine=resolve_deskull_engine(synth_config),
+        deskull_modality=deskull_modality,
         mask=True,
         bet_thr=0.3,
         bet_robust=True,

@@ -2,14 +2,16 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.CropFov import CropFov
-from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import AntsN4BiasFieldCorrection
+from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import (
+    AntsN4BiasFieldCorrection,
+)
 from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
-from swane.nipype_pipeline.nodes.utils import get_deskull_node
+from swane.nipype_pipeline.nodes.utils import get_deskull_node, resolve_deskull_engine
 from configparser import SectionProxy
 from nipype.interfaces.fsl import RobustFOV, ApplyMask
 from nipype.interfaces.utility import IdentityInterface
 from nipype import Node
-from swane.config.config_enums import CoreLimit
+from swane.config.config_enums import CoreLimit, DeskullModality
 
 
 def ref_workflow(
@@ -18,6 +20,7 @@ def ref_workflow(
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
+    deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
@@ -37,6 +40,9 @@ def ref_workflow(
         Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the deskull node. The default
+        is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of Synth tools. The default is 0.
     multicore_node_limit : CoreLimit, optional
@@ -112,9 +118,11 @@ def ref_workflow(
     # NODE 5: Scalp removal
     ref_deskull = get_deskull_node(
         name="ref_deskull_biased",
-        use_synth=synth_config.getboolean_safe("strip"),
+        deskull_engine=resolve_deskull_engine(synth_config),
+        deskull_modality=deskull_modality,
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
+        antspynet_thr=config.getfloat_safe("antspynet_thr"),
         bet_robust=True,
         bet_bias_correction=config.getboolean_safe("bet_bias_correction"),
         synth_exclude_csf=True,

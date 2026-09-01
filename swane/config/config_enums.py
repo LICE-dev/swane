@@ -73,6 +73,23 @@ class RegistrationEngine(Enum):
     ANTS = "ANTs (antspyx)"
 
 
+class DeskullEngine(Enum):
+    ANTSPYNET = "ANTs (antspynet)"
+    SYNTHSTRIP = "FreeSurfer SynthStrip"
+    BET = "FSL BET"
+
+
+class DeskullModality(Enum):
+    T1 = "t1"
+    FLAIR = "flair"
+    T2 = "t2"
+    BOLD = "bold"
+    # Per-input antspynet networks; see the note at the deskull node in
+    # venous_mr_workflow for the VENOUS choice.
+    NODIF = "bold"
+    VENOUS = "flair.v0"
+
+
 class SliceTiming(Enum):
     UNKNOWN = "Unknown"
     UP = "Regular up"

@@ -1,3 +1,5 @@
+import importlib.metadata
+import importlib.util
 import os
 import subprocess
 import re
@@ -10,7 +12,7 @@ from swane.utils.qt_compat import QThreadPool
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux
-from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX, ANTSPYX
+from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX, ANTSPYX, ANTSPYNET
 from swane.utils.license_consent import version_with_license
 
 
@@ -92,6 +94,8 @@ class DependencyManager:
     MIN_FSL_VERSION = "6.0.6"
     # Kept in sync with the antspyx pin in setup.py.
     MIN_ANTSPYX_VERSION = "0.6.3"
+    # Kept in sync with the antspynet pin in setup.py.
+    MIN_ANTSPYNET_VERSION = "0.3.2"
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"
@@ -105,6 +109,7 @@ class DependencyManager:
         self.dcm2niix = DependencyManager.check_dcm2niix()
         self.fsl = DependencyManager.check_fsl()
         self.antspyx = DependencyManager.check_antspyx()
+        self.antspynet = DependencyManager.check_antspynet()
         self.freesurfer = DependencyManager.check_freesurfer()
         self.graphviz = DependencyManager.check_graphviz()
 
@@ -184,6 +189,16 @@ class DependencyManager:
         if self is not None:
             return self.antspyx.state != DependenceStatus.MISSING
         return DependencyManager.check_antspyx().state != DependenceStatus.MISSING
+
+    @staticmethod
+    def is_antspynet() -> bool:
+        """
+        Returns
+        -------
+        True if the antspynet package is importable (even if outdated).
+
+        """
+        return DependencyManager.check_antspynet().state != DependenceStatus.MISSING
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -378,6 +393,38 @@ class DependencyManager:
             DependenceStatus.DETECTED,
             strings.check_dep_antspyx_found % antspyx_version_lic,
             detected_version=antspyx_version,
+        )
+
+    @staticmethod
+    def check_antspynet() -> Dependence:
+        """
+        Returns
+        -------
+        A Dependence object with antspynet information. Presence is detected
+        without importing antspynet (which would load tensorflow) via
+        importlib.util.find_spec; the version is read from package metadata.
+        """
+        if importlib.util.find_spec("antspynet") is None:
+            return Dependence(
+                DependenceStatus.MISSING, strings.check_dep_antspynet_error
+            )
+        try:
+            antspynet_version = importlib.metadata.version("antspynet")
+        except Exception:
+            return Dependence(
+                DependenceStatus.WARNING, strings.check_dep_antspynet_no_version
+            )
+        found_version = version.parse(antspynet_version)
+        antspynet_version_lic = version_with_license(ANTSPYNET, antspynet_version)
+        if found_version < version.parse(DependencyManager.MIN_ANTSPYNET_VERSION):
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_antspynet_wrong_version
+                % (antspynet_version_lic, DependencyManager.MIN_ANTSPYNET_VERSION),
+            )
+        return Dependence(
+            DependenceStatus.DETECTED,
+            strings.check_dep_antspynet_found % antspynet_version_lic,
         )
 
     @staticmethod
