@@ -91,7 +91,7 @@ def test_dti_matrix(
 def test_dti_matrix_test_run(
     subject_config, global_config, make_input_dir, graph_snapshot
 ):
-    """test_run=True with tractography on: exercises CustomEddy niter=1 and
+    """test_run=True with tractography on: exercises Eddy niter=1 and
     BEDPOSTX5's cut MCMC parameters (n_fibres/n_jumps/burn_in/sample_every),
     both unvalidated end-to-end yet -- see prerelease/TODO.md.
     """
