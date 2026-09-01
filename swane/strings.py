@@ -180,6 +180,10 @@ subj_tab_wf_error_oom = "Process killed (possible Out of Memory). Try to reduce 
 subj_tab_wf_error_terminated = (
     "Process terminated. This can occur if user manually terminates a running process."
 )
+subj_tab_wf_error_broken_process_pool = (
+    "A workflow worker terminated abruptly, possibly because of a native crash or "
+    "an out-of-memory kill. The workflow was stopped."
+)
 subj_tab_tabtooltip_exec_disabled_series = (
     "A 3D T1w series is required to enable workflow execution"
 )

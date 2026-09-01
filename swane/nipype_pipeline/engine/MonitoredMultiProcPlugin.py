@@ -1,6 +1,9 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 import traceback
+from concurrent.futures.process import BrokenProcessPool
+from threading import Lock
+
 from nipype.interfaces.base import isdefined
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.patches.nipype_patches import swane_run_node
@@ -249,6 +252,10 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         # This method implement support for queue signaling
         if "queue" in plugin_args:
             self.queue = plugin_args["queue"]
+        self._task_nodes = {}
+        self._future_taskids = {}
+        self._broken_pool_reported = False
+        self._broken_pool_lock = Lock()
 
         super().__init__(plugin_args=plugin_args)
 
@@ -269,7 +276,14 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             raise RuntimeError("Insufficient resources available for job")
 
     def _report_crash(self, node, result=None):
-        # This class implements signaling for generic node error
+        # This class implements signaling for generic node error.
+        #
+        # A worker that dies by signal (native crash, OOM kill) reaches here
+        # through the normal Nipype crash path: _async_callback feeds the failed
+        # result (see _handle_broken_pool), Nipype's poll loop then calls this,
+        # and the "BrokenProcessPool" branch below tags the report accordingly.
+        # That keeps the crash file and the culprit node name attached to the
+        # NODE_ERROR instead of being reported blind from the callback thread.
 
         crash_file = super(MonitoredMultiProcPlugin, self)._report_crash(node, result)
         try:
@@ -284,6 +298,9 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 elif "Terminated" in line:
                     info = strings.subj_tab_wf_error_terminated
                     break
+                elif "BrokenProcessPool" in line:
+                    info = strings.subj_tab_wf_error_broken_process_pool
+                    break
             self.queue.put(
                 WorkflowReport(
                     long_name=node.fullname,
@@ -296,6 +313,95 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             traceback.print_exc()
 
         return crash_file
+
+    def _async_callback(self, future):
+        """Turn an abruptly terminated worker into a terminal task result.
+
+        Nipype 1.10 calls ``Future.result()`` from this done-callback.  When a
+        process dies by signal, that raises :class:`BrokenProcessPool` in the
+        callback thread; ``concurrent.futures`` logs and swallows callback
+        exceptions, so Nipype's polling loop otherwise waits forever for a
+        result that can never appear.
+        """
+        try:
+            return super(MonitoredMultiProcPlugin, self)._async_callback(future)
+        except BrokenProcessPool as error:
+            self._handle_broken_pool(error)
+
+    def _handle_broken_pool(self, error, unsubmitted_node=None):
+        """Turn an abruptly broken worker pool into terminal task results.
+
+        A :class:`~concurrent.futures.ProcessPoolExecutor` marks *every*
+        in-flight future :class:`BrokenProcessPool` the instant one worker dies
+        by signal, so the done-callback fires for each and there is no reliable
+        way to tell which node actually crashed. Rather than blame whichever
+        callback wins the race, feed a failed result for *all* in-flight tasks:
+        Nipype's polling loop then stops waiting (instead of hanging forever on
+        the futures whose own callback could not resolve a task id) and reports
+        each through the normal crash path in :meth:`_report_crash`, which keeps
+        the crash file and the node name attached to every NODE_ERROR. The full
+        set of in-flight nodes is reported as the suspects; the real culprit is
+        guaranteed to be among them.
+
+        Parameters
+        ----------
+        error : BrokenProcessPool
+            The exception observed on the broken pool.
+        unsubmitted_node : str, optional
+            Full name of a node whose submission just failed because the pool
+            was already dead. It never entered the task maps, so it cannot be
+            reported through :meth:`_report_crash`; when no task was in flight
+            to carry the failure, a standalone NODE_ERROR is emitted for it so
+            the pass is still recorded as failed instead of silently passing.
+        """
+        traceback_lines = traceback.format_exception(
+            type(error), error, error.__traceback__
+        )
+        with self._broken_pool_lock:
+            if self._broken_pool_reported:
+                return
+            self._broken_pool_reported = True
+
+            # Snapshot the in-flight tasks under the lock: the pool killed them
+            # all, so every one needs a terminal result or Nipype waits forever.
+            pending_taskids = sorted(set(self._future_taskids.values()))
+            node_names = [self._task_nodes.get(taskid) for taskid in pending_taskids]
+            node_names = [name for name in node_names if name]
+
+            for taskid in pending_taskids:
+                # No sentinel flag: let Nipype's poll loop route each result
+                # through _report_crash, which writes the crash file and emits a
+                # NODE_ERROR carrying it plus the broken-pool reason. setdefault
+                # keeps a result a task may have legitimately produced already.
+                self._taskresult.setdefault(
+                    taskid,
+                    {
+                        "taskid": taskid,
+                        "result": None,
+                        "traceback": traceback_lines,
+                    },
+                )
+
+        logger.critical(
+            "[MultiProc] Worker pool broke; in-flight node(s): %s: %s",
+            ", ".join(node_names) or (unsubmitted_node or "unknown node"),
+            error,
+        )
+
+        if not pending_taskids:
+            # Nothing was in flight to route through _report_crash (e.g. the
+            # pool was already dead when the next job tried to submit). Emit a
+            # standalone NODE_ERROR so the pass is still recorded as failed.
+            try:
+                self.queue.put(
+                    WorkflowReport(
+                        long_name=unsubmitted_node,
+                        signal_type=WorkflowSignals.NODE_ERROR,
+                        info=strings.subj_tab_wf_error_broken_process_pool,
+                    )
+                )
+            except Exception:
+                traceback.print_exc()
 
     def _submit_job(self, node, updatehash=False):
         # This class implements signaling for generic node start
@@ -327,14 +433,31 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         if getattr(node.interface, "terminal_output", "") == "stream":
             node.interface.terminal_output = "allatonce"
 
-        result_future = self.pool.submit(swane_run_node, node, updatehash, self._taskid)
-        result_future.add_done_callback(self._async_callback)
+        try:
+            result_future = self.pool.submit(
+                swane_run_node, node, updatehash, self._taskid
+            )
+        except BrokenProcessPool as error:
+            self._handle_broken_pool(error, unsubmitted_node=node.fullname)
+            raise
         self._task_obj[self._taskid] = result_future
+        self._task_nodes[self._taskid] = node.fullname
+        self._future_taskids[result_future] = self._taskid
+        # Register only after the task maps are populated: add_done_callback()
+        # invokes synchronously when the future has already completed.
+        result_future.add_done_callback(self._async_callback)
 
         logger.debug(
             "[MultiProc] Submitted task %s (taskid=%d).", node.fullname, self._taskid
         )
         return self._taskid
+
+    def _clear_task(self, taskid):
+        self._task_nodes.pop(taskid, None)
+        future = self._task_obj.get(taskid)
+        if future is not None:
+            self._future_taskids.pop(future, None)
+        return super(MonitoredMultiProcPlugin, self)._clear_task(taskid)
 
     def _submit_mapnode(self, jobid):
         # This class implements signaling for mapnode start

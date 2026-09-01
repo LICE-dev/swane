@@ -220,30 +220,40 @@ def main(argv=None) -> int:
         print("No pass can run on this host with these options.")
         return 2
 
-    from swane.tests.prerelease.runner import run_sweep
+    from swane.tests.prerelease.runner import (
+        PrereleaseAlreadyRunningError,
+        PrereleaseWorkDirLock,
+        run_sweep,
+    )
     from swane.tests.prerelease.subject import load_phantom
 
     if args.checks_only:
         results = _reload_results(work_dir, plan)
         phantom_root = None
     else:
-        print("Preparing the phantom exam (generated once, then cached)...")
-        exam = load_phantom(force=args.rebuild_phantom)
-        print("  %s" % exam.root)
-        print("")
-        phantom_root = exam.root
-        results = run_sweep(
-            plan,
-            exam,
-            work_dir,
-            cores=args.cores,
-            ram_gb=args.ram,
-            slicer_path=slicer_path,
-            resume=not args.no_resume,
-            verbose=args.verbose,
-            test_run=test_run,
-            timeout_seconds=args.timeout * 3600 if args.timeout > 0 else None,
-        )
+        try:
+            with PrereleaseWorkDirLock(work_dir) as work_dir_lock:
+                print("Preparing the phantom exam (generated once, then cached)...")
+                exam = load_phantom(force=args.rebuild_phantom)
+                print("  %s" % exam.root)
+                print("")
+                phantom_root = exam.root
+                results = run_sweep(
+                    plan,
+                    exam,
+                    work_dir,
+                    cores=args.cores,
+                    ram_gb=args.ram,
+                    slicer_path=slicer_path,
+                    resume=not args.no_resume,
+                    verbose=args.verbose,
+                    test_run=test_run,
+                    timeout_seconds=(args.timeout * 3600 if args.timeout > 0 else None),
+                    _work_dir_lock=work_dir_lock,
+                )
+        except PrereleaseAlreadyRunningError as error:
+            print("Cannot run: %s" % error)
+            return 2
 
     ground_truth = None
     if not args.no_ground_truth:

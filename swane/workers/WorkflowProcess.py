@@ -99,11 +99,11 @@ class WorkflowProcess(Process):
 
         except:
             traceback.print_exc()
+        finally:
+            # TODO implement nipype.utils.draw_gantt_chart.generate_gantt_chart but maybe it's bugged
 
-        # TODO implement nipype.utils.draw_gantt_chart.generate_gantt_chart but maybe it's bugged
-
-        # This event signal the workflow end. When called here is a finished run
-        self.stop_event.set()
+            # This event signals either normal completion or a terminal error.
+            self.stop_event.set()
 
     @staticmethod
     def kill_with_subprocess():
@@ -182,6 +182,9 @@ class WorkflowProcess(Process):
         # Wait for stop_event. It can be set from the workflow subthread (if workflow is executed till end) or from
         # the GUI to stop the execution
         self.stop_event.wait()
+        # Let a normally finishing thread leave its final ``set()`` call before
+        # deciding that an alive thread represents cancellation/fatal failure.
+        workflow_run_work.join(timeout=0.1)
 
         # Handler removal
         WorkflowProcess.remove_handlers(file_handler)
@@ -191,6 +194,10 @@ class WorkflowProcess(Process):
         # Signal workflow_stop to GUI and close queue
         self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_STOP))
         self.queue.close()
+        # Flush any pending NODE_ERROR (a broken pool reports through the normal
+        # crash path) and the WORKFLOW_STOP above before this process ends, so
+        # the parent cannot miss the terminal state.
+        self.queue.join_thread()
 
         # If the thread is alive at this point the stop_event was set from GUI, so the user asked to kill the process
         if workflow_run_work.is_alive():

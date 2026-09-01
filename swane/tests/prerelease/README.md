@@ -185,6 +185,11 @@ A full sweep takes hours. Progress is saved after every pass, so re-running the
 same command continues where it stopped. `--retry-failed` re-runs the passes
 that failed; `--no-resume` starts over.
 
+Only one sweep may use a work directory at a time. A second invocation exits
+with the PID of the current owner instead of sharing subject folders and
+`prerelease_state.json`. If a sweep is killed abruptly, the next invocation
+recognises the stale PID/creation-time record and removes the lock itself.
+
 ## Inspecting the outcome
 
 Everything lands in the work directory (default `~/test_swane/prerelease`):
