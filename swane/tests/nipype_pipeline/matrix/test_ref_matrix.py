@@ -1,17 +1,19 @@
 """Settings matrix for
 :func:`swane.nipype_pipeline.workflows.ref_workflow.ref_workflow` (T13D reference).
 
-Sweeps the scalp-removal backend (BET vs SynthStrip) and the BET tuning
-preferences (bias reduction, threshold) that branch the graph, recording one
-golden snapshot per scenario under ``snapshots/ref/``.
+Sweeps the brain-extraction backend (the ``deskull_engine`` enum: antspynet /
+SynthStrip / BET) and the BET tuning preferences (bias reduction, threshold)
+that branch the graph, recording one golden snapshot per scenario under
+``snapshots/ref/``.
 
-The bias/threshold preferences only affect the BET path, so they are varied
-with SynthStrip off; a single SynthStrip scenario covers the Synth backend.
+The bias/threshold preferences only affect the BET path, so they are varied on
+the BET engine; one scenario each covers the SynthStrip backend and the
+(default) antspynet backend.
 """
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
+from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList, CoreLimit
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
@@ -22,13 +24,16 @@ ref_workflow = import_workflow_or_skip(
 SUBDIR = "ref"
 MAX_CPU = 4
 
-# name -> (synth_strip, bet_bias_correction, bet_thr, limit_synth_cores)
+# name -> (deskull_engine, bet_bias_correction, bet_thr, limit_synth_cores)
 SCENARIOS = {
-    "bet_default": (False, False, "0.3", False),
-    "bet_bias_thr0": (False, True, "0", False),
-    "bet_thr_high": (False, False, "1", False),
-    "synthstrip": (True, False, "0.3", False),
-    "synthstrip_limit_cores": (True, False, "0.3", True),
+    "bet_default": (DeskullEngine.BET, False, "0.3", False),
+    "bet_bias_thr0": (DeskullEngine.BET, True, "0", False),
+    "bet_thr_high": (DeskullEngine.BET, False, "1", False),
+    "synthstrip": (DeskullEngine.SYNTHSTRIP, False, "0.3", False),
+    "synthstrip_limit_cores": (DeskullEngine.SYNTHSTRIP, False, "0.3", True),
+    # The default engine since the antspynet flip: the BET tuning preferences
+    # are inert here, so only the deskull node itself differs from bet_default.
+    "antspynet": (DeskullEngine.ANTSPYNET, False, "0.3", False),
 }
 
 
@@ -40,12 +45,12 @@ def _bool(value):
 def test_ref_matrix(
     scenario, subject_config, global_config, make_input_dir, graph_snapshot
 ):
-    synth_strip, bias, bet_thr, limit_synth_cores = SCENARIOS[scenario]
+    deskull_engine, bias, bet_thr, limit_synth_cores = SCENARIOS[scenario]
     section = subject_config[DataInputList.T13D]
     section["bet_bias_correction"] = _bool(bias)
     section["bet_thr"] = bet_thr
     synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["strip"] = _bool(synth_strip)
+    synth["deskull_engine"] = deskull_engine.name
     synth["limit_cores"] = _bool(limit_synth_cores)
 
     wf = ref_workflow(
@@ -58,7 +63,7 @@ def test_ref_matrix(
     )
 
     config_echo = {
-        "synth_strip": synth["strip"],
+        "deskull_engine": synth["deskull_engine"],
         "bet_bias_correction": section["bet_bias_correction"],
         "bet_thr": section["bet_thr"],
         "limit_synth_cores": synth["limit_cores"],
@@ -97,7 +102,7 @@ def test_ref_matrix_test_run(
     )
 
     config_echo = {
-        "synth_strip": synth["strip"],
+        "deskull_engine": synth["deskull_engine"],
         "bet_bias_correction": section["bet_bias_correction"],
         "bet_thr": section["bet_thr"],
         "test_run": True,

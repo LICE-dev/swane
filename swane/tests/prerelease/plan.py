@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from swane.config.config_enums import (
     BlockDesign,
     CoreLimit,
+    DeskullEngine,
     FreesurferStep,
     GlobalPrefCategoryList,
     RegistrationEngine,
@@ -109,13 +110,25 @@ AXES = (
         gates={"true": "freesurfer_matlab"},
         note="only meaningful together with RECONALL",
     ),
+    # The brain-extraction backend is an ENUM, not the old boolean ``strip``
+    # key: ANTSPYNET (the default) and SYNTHSTRIP are each gated on their own
+    # dependency + RAM floor, BET is always available and is therefore the
+    # fallback _safe_value lands on -- so it is listed last.
+    #
+    # Every pass pins this axis. Before the antspynet flip the default was BET,
+    # which needs nothing, so a pass leaving the axis unset was harmless; now
+    # the default is ANTSPYNET and an unset axis would ride it with NO
+    # capability check at all (build_plan only gates axes a pass explicitly
+    # sets), building antspynet nodes on a host without the package. Pinning it
+    # everywhere puts every pass back under the gate -- the same reasoning as
+    # venous_ct_slicer's registration_engine below.
     Axis(
-        name="synth_strip",
+        name="deskull_engine",
         scope=GLOBAL,
         section=GlobalPrefCategoryList.SYNTH,
-        option="strip",
-        values=("false", "true"),
-        gates={"true": "synth_strip"},
+        option="deskull_engine",
+        values=_enum_values(DeskullEngine, "ANTSPYNET", "SYNTHSTRIP", "BET"),
+        gates={"ANTSPYNET": "antspynet", "SYNTHSTRIP": "synth_strip"},
     ),
     # The registration backend is an ENUM, not the old boolean ``morph`` key
     # Group A removed. FSL (FLIRT/FNIRT) is always available; SYNTH (SynthMorph)
@@ -393,7 +406,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "hippo_amyg_labels": "false",
-            "synth_strip": "false",
+            "deskull_engine": "BET",
             "registration_engine": "FSL",
             "synth_reconall": "false",
             "cuda": "false",
@@ -430,7 +443,7 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "hippo_amyg_labels": "false",
-            "synth_strip": "false",
+            "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
             "synth_reconall": "false",
             "cuda": "false",
@@ -459,7 +472,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FLAIR3D, DIL.VENOUS_MR, DIL.SEEG_CT),
         values={
             "freesurfer_step": "DISABLED",
-            "synth_strip": "false",
+            "deskull_engine": "BET",
             "registration_engine": "FSL",
             "cuda": "false",
             "multicore_node_limit": "HARD_CAP",
@@ -482,7 +495,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FLAIR3D),
         values={
             "freesurfer_step": "DISABLED",
-            "synth_strip": "true",
+            "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "FSL",
             "cuda": "false",
         },
@@ -498,7 +511,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FLAIR3D),
         values={
             "freesurfer_step": "DISABLED",
-            "synth_strip": "true",
+            "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "SYNTH",
             "cuda": "false",
             # flat1 pulls in the nonlinear subject->MNI (mni1) path, so
@@ -516,7 +529,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.VENOUS_CT),
         values={
             "freesurfer_step": "DISABLED",
-            "synth_strip": "false",
+            "deskull_engine": "BET",
             "registration_engine": "FSL",
             "cuda": "false",
             "venous_ct_contrasts": "2",
@@ -546,6 +559,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.VENOUS_CT),
         values={
             "freesurfer_step": "DISABLED",
+            "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
             "cuda": "false",
             "venous_ct_contrasts": "1",
@@ -563,7 +577,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.ASL, DIL.PET),
         values={
             "freesurfer_step": "SYNTHSEG",
-            "synth_strip": "false",
+            "deskull_engine": "BET",
             "registration_engine": "FSL",
             "cuda": "false",
             "asl_ai": "false",
@@ -586,6 +600,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.ASL, DIL.PET),
         values={
             "freesurfer_step": "DISABLED",
+            "deskull_engine": "ANTSPYNET",
             "cuda": "false",
             "asl_ai": "true",
             "pet_ai": "true",
@@ -601,7 +616,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.ASL, DIL.PET),
         values={
             "freesurfer_step": "DISABLED",
-            "synth_strip": "true",
+            "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "SYNTH",
             "cuda": "false",
             "asl_ai": "false",
@@ -621,6 +636,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "deskull_engine": "ANTSPYNET",
             "registration_engine": "FSL",
             "cuda": "false",
             "old_eddy_correct": "true",
@@ -645,6 +661,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "deskull_engine": "BET",
             "registration_engine": "FSL",
             "cuda": "false",
             "old_eddy_correct": "false",
@@ -665,6 +682,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "deskull_engine": "BET",
             "registration_engine": "FSL",
             "cuda": "true",
             "old_eddy_correct": "false",
@@ -688,6 +706,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
+            "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
             "cuda": "false",
             "old_eddy_correct": "false",
@@ -709,7 +728,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
-            "synth_strip": "true",
+            "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "SYNTH",
             "cuda": "false",
             "old_eddy_correct": "false",
@@ -732,6 +751,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
             "freesurfer_step": "DISABLED",
+            "deskull_engine": "BET",
             "registration_engine": "FSL",
             "cuda": "false",
             "fmri0_block_design": "RARA",
@@ -759,6 +779,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
             "freesurfer_step": "DISABLED",
+            "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
             "cuda": "false",
             "fmri0_block_design": "RARA",
@@ -778,6 +799,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
             "freesurfer_step": "DISABLED",
+            "deskull_engine": "ANTSPYNET",
             "registration_engine": "FSL",
             "cuda": "false",
             "fmri0_block_design": "RARA",
@@ -798,7 +820,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.VENOUS_MR),
         values={
             "freesurfer_step": "DISABLED",
-            "synth_strip": "true",
+            "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "SYNTH",
             "cuda": "false",
             "venous_mr_shape": "single_series",
@@ -812,6 +834,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.ASL),
         values={
             "freesurfer_step": "AUTORECON_PIAL",
+            "deskull_engine": "ANTSPYNET",
             "cuda": "false",
             "asl_ai": "false",
         },
@@ -836,6 +859,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.ASL, DIL.PET),
         values={
             "freesurfer_step": "RECONALL",
+            "deskull_engine": "ANTSPYNET",
             "hippo_amyg_labels": "true",
             "synth_reconall": "false",
             "cuda": "false",
@@ -853,6 +877,7 @@ PASSES = (
         inputs=(DIL.T13D, DIL.ASL, DIL.PET),
         values={
             "freesurfer_step": "RECONALL",
+            "deskull_engine": "ANTSPYNET",
             "synth_reconall": "true",
             "cuda": "false",
             "asl_ai": "true",
