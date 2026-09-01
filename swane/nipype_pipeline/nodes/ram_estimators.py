@@ -1,6 +1,8 @@
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 from nipype.utils.ram_estimator import RamEstimator
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
 class FlirtRamEstimator(RamEstimator):
     """
     RAM estimator for FSL FLIRT with calibrated multipliers and overhead.
@@ -19,6 +21,7 @@ class FlirtRamEstimator(RamEstimator):
         )
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
 class FnirtRamEstimator(RamEstimator):
     """
     RAM estimator for FSL FNIRT.
@@ -37,6 +40,7 @@ class FnirtRamEstimator(RamEstimator):
         )
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
 class InvWarpRamEstimator(RamEstimator):
     """
     RAM estimator for FSL FNIRT.
@@ -55,6 +59,7 @@ class InvWarpRamEstimator(RamEstimator):
         )
 
 
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
 class FastRamEstimator(RamEstimator):
     """
     RAM estimator for FSL FNIRT.
