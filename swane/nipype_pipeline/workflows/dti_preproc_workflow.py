@@ -2,7 +2,6 @@ from nipype.interfaces.fsl import (
     EddyCorrect,
     DTIFit,
     BEDPOSTX5,
-    Eddy
 )
 from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
 from nipype.pipeline.engine import Node
@@ -11,6 +10,7 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
+from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
 from swane.nipype_pipeline.nodes.AffineToFSL import AffineToFSL
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
@@ -187,7 +187,7 @@ def dti_preproc_workflow(
         workflow.connect(conversion, "bvals", eddy_files, "bval")
 
         # NODE 4: Eddy current and motion artifact correction
-        eddy = Node(Eddy(), name="dti_eddy")
+        eddy = Node(CustomEddy(), name="dti_eddy")
         eddy.inputs.use_cuda = is_cuda
         eddy._mem_gb = 1
         if test_run:
@@ -205,7 +205,7 @@ def dti_preproc_workflow(
                 "OMP_NUM_THREADS": str(eddy_cpu),
                 "FSL_SKIP_GLOBAL": "1",
             }
-            # Keep this runtime workaround outside Eddy: the wrapper is
+            # Keep this runtime workaround outside CustomEddy: the wrapper is
             # temporary, while the Nipype hash bug applies to EddyInputSpec.
             from swane.patches.nipype_patches import apply_patches
 
