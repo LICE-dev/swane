@@ -174,6 +174,7 @@ def linear_reg_workflow(
     workflow.connect(inputnode, "output_name", unbetted_name, "basename")
 
     bet_thr = None if not config else config.getfloat_safe("bet_thr")
+    antspynet_thr = None if not config else config.getfloat_safe("antspynet_thr")
     bet_bias_correction = (
         False if not config else config.getboolean_safe("bet_bias_correction")
     )
@@ -192,6 +193,7 @@ def linear_reg_workflow(
             deskull_modality=deskull_modality,
             mask=True,
             bet_thr=bet_thr,
+            antspynet_thr=antspynet_thr,
             bet_robust=True,
             bet_bias_correction=bet_bias_correction,
             max_cpu=max_cpu,

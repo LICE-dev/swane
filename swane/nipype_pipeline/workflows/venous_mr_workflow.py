@@ -178,6 +178,7 @@ def venous_mr_workflow(
         deskull_modality=deskull_modality,
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
+        antspynet_thr=config.getfloat_safe("antspynet_thr"),
         bet_surfaces=True,
         max_cpu=max_cpu,
         multicore_node_limit=multicore_node_limit,
