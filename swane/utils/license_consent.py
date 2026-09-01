@@ -15,6 +15,7 @@ from swane.utils.LicenseReference import (
     SLICER,
     DCM2NIIX,
     ANTSPYX,
+    ANTSPYNET,
 )
 
 UNKNOWN_VERSION = "unknown"
@@ -181,6 +182,15 @@ def _antspyx_version():
         return None
 
 
+def _antspynet_version():
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("antspynet")
+    except Exception:
+        return None
+
+
 def _is_slicer_detected(config) -> bool:
     from swane.utils.DependencyManager import DependencyManager
 
@@ -205,13 +215,15 @@ def detected_tool_versions(dependency_manager, config) -> dict:
         versions[DCM2NIIX] = _norm(_dcm2niix_version())
     if dependency_manager.is_antspyx():
         versions[ANTSPYX] = _norm(_antspyx_version())
+    if dependency_manager.is_antspynet():
+        versions[ANTSPYNET] = _norm(_antspynet_version())
     return versions
 
 
 def tools_needing_consent(dependency_manager, config) -> list:
     """Detected tools whose accepted version differs from the detected version."""
     detected = detected_tool_versions(dependency_manager, config)
-    ordered = [FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX]
+    ordered = [FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET]
     needing = []
     for tool_id in ordered:
         if tool_id not in detected:

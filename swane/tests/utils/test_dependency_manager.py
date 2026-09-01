@@ -182,3 +182,36 @@ class TestToolChecksMocked:
         assert DependencyManager.is_freesurfer_synth() is True
         monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "7.0.0")
         assert DependencyManager.is_freesurfer_synth() is False
+
+    def test_is_antspynet_true_when_present(self, monkeypatch):
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.util.find_spec",
+            lambda name: object() if name == "antspynet" else None,
+        )
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.metadata.version",
+            lambda name: DependencyManager.MIN_ANTSPYNET_VERSION,
+        )
+        assert DependencyManager.is_antspynet() is True
+        assert DependencyManager.check_antspynet().state == DependenceStatus.DETECTED
+
+    def test_is_antspynet_false_when_absent(self, monkeypatch):
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.util.find_spec",
+            lambda name: None,
+        )
+        assert DependencyManager.is_antspynet() is False
+        assert DependencyManager.check_antspynet().state == DependenceStatus.MISSING
+
+    def test_check_antspynet_label_includes_license_link(self, monkeypatch):
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.util.find_spec",
+            lambda name: object() if name == "antspynet" else None,
+        )
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.metadata.version",
+            lambda name: DependencyManager.MIN_ANTSPYNET_VERSION,
+        )
+        dep = DependencyManager.check_antspynet()
+        assert dep.state == DependenceStatus.DETECTED
+        assert "href=" in dep.label

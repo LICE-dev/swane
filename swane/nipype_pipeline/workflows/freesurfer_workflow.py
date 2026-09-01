@@ -202,7 +202,9 @@ def freesurfer_workflow(
         synth_seg_threads, _ = get_synth_cpu_config(
             max_cpu, multicore_node_limit, synth_config.getboolean_safe("limit_cores")
         )
-        apply_synth_num_threads(synth_seg, synth_seg_threads, hard=True)
+        apply_synth_num_threads(
+            synth_seg, synth_seg_threads, hard=True, max_cpu=max_cpu
+        )
         synth_seg.inputs.out_file = "r-aparc_aseg.mgz"
         workflow.connect(inputnode, "reference", synth_seg, "in_file")
         workflow.connect(synth_seg, "out_file", outputnode, "vol_label_file")

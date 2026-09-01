@@ -14,7 +14,8 @@ FREESURFER = "freesurfer"
 SLICER = "slicer"
 DCM2NIIX = "dcm2niix"
 ANTSPYX = "antspyx"
-TOOL_IDS = (FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX)
+ANTSPYNET = "antspynet"
+TOOL_IDS = (FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET)
 
 _BUNDLED_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "licenses"
@@ -173,5 +174,18 @@ LICENSES = {
         is_html_online=False,
         installed_path_candidates=_antspyx_candidates,
         bundled_filename="antspyx.txt",
+    ),
+    # antspynet has no installed license candidates: it ships no LICENSE file
+    # inside its distribution, so this always falls back to the online/bundled
+    # copy. Note the downloaded pretrained model weights carry their own
+    # upstream terms, separate from the antspynet package's Apache-2.0 license.
+    ANTSPYNET: LicenseInfo(
+        tool_id=ANTSPYNET,
+        display_name="ANTsPyNet",
+        official_url="https://raw.githubusercontent.com/ANTsX/ANTsPyNet/main/LICENSE.md",
+        is_html_online=False,
+        installed_path_candidates=lambda context: [],
+        bundled_filename="antspynet_license.txt",
+        online_is_official=True,
     ),
 }

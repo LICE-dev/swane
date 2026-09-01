@@ -16,8 +16,9 @@ from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     get_registration_node,
     resolve_registration_engine,
+    resolve_deskull_engine,
 )
-from swane.config.config_enums import CoreLimit
+from swane.config.config_enums import CoreLimit, DeskullModality
 
 
 def venous_mr_workflow(
@@ -27,6 +28,7 @@ def venous_mr_workflow(
     synth_config: SectionProxy,
     venous2_mr_dir: str = None,
     base_dir: str = "/",
+    deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
     multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
@@ -49,6 +51,9 @@ def venous_mr_workflow(
         If veins phase is divided from anatomic phase, use this param to load the second DICOM files directory.
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the deskull node. The default
+        is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of Synth tools. The default is 0.
     multicore_node_limit : CoreLimit, optional
@@ -156,12 +161,24 @@ def venous_mr_workflow(
         workflow.connect(veins_merge, "out", veins_check, "in_files")
 
     # NODE 5: Scalp removal and in skull structures segmentation
+    #
+    # The mask is applied to the venous phase (NODE 6), so it must cover the
+    # whole intracranial space: a mask following the brain surface clips the
+    # superior sagittal sinus and the veins running against the inner skull
+    # table. Hence BET surfaces (inskull mask) and DeskullModality.VENOUS.
+    #
+    # VENOUS uses the antspynet "flair.v0" network, which needs no post-step.
+    # It is a previous-version network: if it is dropped from a future antspynet
+    # release, the second choice is "t2" plus a 3 mm dilation of the mask in
+    # physical space (not in voxels - venous phases are often anisotropic).
     deskull = get_deskull_node(
         name_prefix="anatomic phase",
         name="vein_mr_deskull",
-        use_synth=synth_config.getboolean_safe("strip"),
+        deskull_engine=resolve_deskull_engine(synth_config),
+        deskull_modality=deskull_modality,
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
+        antspynet_thr=config.getfloat_safe("antspynet_thr"),
         bet_surfaces=True,
         max_cpu=max_cpu,
         multicore_node_limit=multicore_node_limit,

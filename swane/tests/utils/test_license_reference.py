@@ -4,7 +4,14 @@ from swane.utils import LicenseReference as LR
 
 def test_registry_has_all_tools():
     assert set(LR.LICENSES) == set(LR.TOOL_IDS)
-    assert set(LR.TOOL_IDS) == {"fsl", "freesurfer", "slicer", "dcm2niix", "antspyx"}
+    assert set(LR.TOOL_IDS) == {
+        "fsl",
+        "freesurfer",
+        "slicer",
+        "dcm2niix",
+        "antspyx",
+        "antspynet",
+    }
 
 
 def test_each_tool_has_url_and_bundled_file():
@@ -108,3 +115,10 @@ def test_antspyx_candidates_missing_package(monkeypatch):
 
     monkeypatch.setattr(im, "distribution", _raise)
     assert LR.LICENSES["antspyx"].installed_path_candidates({}) == []
+
+
+def test_antspynet_in_tool_ids_and_has_bundled_license():
+    assert LR.ANTSPYNET == "antspynet"
+    assert LR.ANTSPYNET in LR.TOOL_IDS
+    info = LR.LICENSES[LR.ANTSPYNET]
+    assert os.path.exists(LR.bundled_license_path(info))

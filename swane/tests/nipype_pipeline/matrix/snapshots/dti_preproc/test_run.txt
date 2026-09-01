@@ -1,11 +1,11 @@
 # workflow snapshot: dti_preproc / test_run
 #
 #   cuda = false
+#   deskull_engine = ANTSPYNET
 #   max_cpu = 4
 #   multicore_node_limit = SOFT_CAP
 #   old_eddy_correct = false
 #   synth_morph = False
-#   synth_strip = False
 #   test_run = True
 #   tractography = true
 #
@@ -52,14 +52,12 @@
     single_file = False
     source_dir = '<TMP>/dicom'
     verbose = False
-- dti_deskull_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    frac = 0.3
-    mask = True
+- dti_deskull_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=4
+    mask_file = 'nodif_brain_brain.nii.gz'
+    modality = 't1'
+    num_threads = 4
     out_file = 'nodif_brain.nii.gz'
-    output_type = 'NIFTI_GZ'
-    robust = True
-    threshold = True
+    threshold = 0.5
 - dti_dtifit [DTIFit] cmd=dtifit mem_gb=0.2 n_procs=1
     base_name = 'dtifit_'
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
@@ -107,18 +105,18 @@ dti_conv.bvecs -> dti_bedpostx.bvecs
 dti_conv.bvecs -> dti_dtifit.bvecs
 dti_conv.bvecs -> dti_eddy.in_bvec
 dti_conv.converted_files -> dti_reOrient.in_file
-dti_deskull_bet.mask_file -> dti_bedpostx.mask
-dti_deskull_bet.mask_file -> dti_dtifit.mask
-dti_deskull_bet.mask_file -> dti_eddy.in_mask
-dti_deskull_bet.mask_file -> outputnode.nodiff_mask_file
-dti_deskull_bet.out_file -> dif2ref_flirt.in_file
-dti_deskull_bet.out_file -> outputnode.nodif_brain
+dti_deskull_antspynet.mask_file -> dti_bedpostx.mask
+dti_deskull_antspynet.mask_file -> dti_dtifit.mask
+dti_deskull_antspynet.mask_file -> dti_eddy.in_mask
+dti_deskull_antspynet.mask_file -> outputnode.nodiff_mask_file
+dti_deskull_antspynet.out_file -> dif2ref_flirt.in_file
+dti_deskull_antspynet.out_file -> outputnode.nodif_brain
 dti_dtifit.FA -> fa_2_ref_apply_xfm.in_file
 dti_eddy.out_corrected -> dti_bedpostx.dwi
 dti_eddy.out_corrected -> dti_dtifit.dwi
 dti_eddy_files.acqp -> dti_eddy.in_acqp
 dti_eddy_files.index -> dti_eddy.in_index
-dti_nodif.out_file -> dti_deskull_bet.in_file
+dti_nodif.out_file -> dti_deskull_antspynet.in_file
 dti_reOrient.out_file -> dti_eddy.in_file
 dti_reOrient.out_file -> dti_nodif.in_file
 fa_2_ref_apply_xfm.out_file -> outputnode.FA

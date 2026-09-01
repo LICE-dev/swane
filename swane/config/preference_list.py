@@ -85,6 +85,10 @@ WF_PREFERENCES[category]["bet_bias_correction"] = PreferenceEntry(
     label="Bias reduction for skull removal",
     tooltip="Increase time with better results",
     default="false",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
 )
 WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
@@ -92,6 +96,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.3,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 WF_PREFERENCES[category]["flat1"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -170,6 +189,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.5,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 
 category = DataInputList.MDC
@@ -183,6 +217,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.5,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 
 category = DataInputList.VENOUS_MR
@@ -193,6 +242,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.4,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 WF_PREFERENCES[category]["vein_detection_mode"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
@@ -519,7 +583,14 @@ GLOBAL_PREFERENCES[category]["last_swane_version"] = PreferenceEntry(
     hidden=True,
     default=__version__,
 )
-for _license_tool in ("fsl", "freesurfer", "slicer", "dcm2niix", "antspyx"):
+for _license_tool in (
+    "fsl",
+    "freesurfer",
+    "slicer",
+    "dcm2niix",
+    "antspyx",
+    "antspynet",
+):
     GLOBAL_PREFERENCES[category]["accepted_license_" + _license_tool] = PreferenceEntry(
         input_type=InputTypes.TEXT,
         label="Accepted license version for " + _license_tool,
@@ -625,19 +696,40 @@ GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
 )
 category = GlobalPrefCategoryList.SYNTH
 GLOBAL_PREFERENCES[category] = {}
-GLOBAL_PREFERENCES[category]["strip"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Use SynthStrip for brain extraction",
-    default=False,
-    dependency="is_freesurfer_synth",
-    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
-    pref_requirement={
-        GlobalPrefCategoryList.PERFORMANCE: [
-            ("ram_gb", ResourceManager.synth_strip_ram_requirements())
-        ]
+GLOBAL_PREFERENCES[category]["deskull_engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="Brain extraction engine",
+    value_enum=DeskullEngine,
+    default=DeskullEngine.ANTSPYNET,
+    option_dependency={
+        DeskullEngine.ANTSPYNET: [
+            "is_antspynet",
+            "antspynet brain extraction requires the antspynet package",
+        ],
+        DeskullEngine.SYNTHSTRIP: [
+            "is_freesurfer_synth",
+            "SynthStrip requires FreeSurfer 8.1.0",
+        ],
     },
-    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
-    % ResourceManager.synth_strip_ram_requirements(),
+    option_pref_requirement={
+        DeskullEngine.ANTSPYNET: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.antspynet_ram_requirements())
+            ]
+        },
+        DeskullEngine.SYNTHSTRIP: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.synth_strip_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        DeskullEngine.ANTSPYNET: "antspynet brain extraction requires at least %.1f GB RAM"
+        % ResourceManager.antspynet_ram_requirements(),
+        DeskullEngine.SYNTHSTRIP: "SynthStrip requires at least %.1f GB RAM"
+        % ResourceManager.synth_strip_ram_requirements(),
+    },
+    section=True,
 )
 GLOBAL_PREFERENCES[category]["engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
