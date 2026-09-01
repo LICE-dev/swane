@@ -107,6 +107,11 @@ def fMRI_preproc_workflow(
         references stay valid, and setting a plain instance attribute on
         ``CustomWorkflow`` is safe (no ``__slots__``/``__setattr__`` override).
 
+        The mean-functional brain-mask node is exposed the same way, as
+        ``workflow.meanfuncmask``: ``get_deskull_node`` appends the resolved
+        engine to the node name, so ``fMRI_resting_state_workflow`` cannot
+        look it up by a fixed name.
+
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
@@ -233,6 +238,11 @@ def fMRI_preproc_workflow(
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     workflow.connect(meanfunc, "out_file", meanfuncmask, "in_file")
+    # get_deskull_node suffixes the node name with the resolved engine
+    # ("_antspynet"/"_synthstrip"/"_bet"), so a consumer cannot find this node
+    # by name. Attach it like ``reg_2_ref`` above: fMRI_resting_state_workflow
+    # extends this exact workflow object and reads ``workflow.meanfuncmask``.
+    workflow.meanfuncmask = meanfuncmask
 
     # NODE 11: Mask the functional runs with the extracted mask
     maskfunc = Node(ImageMaths(), name="%s_maskfunc" % name)
