@@ -713,7 +713,9 @@ GLOBAL_PREFERENCES[category]["deskull_engine"] = PreferenceEntry(
     },
     option_pref_requirement={
         DeskullEngine.ANTSPYNET: {
-            GlobalPrefCategoryList.PERFORMANCE: [("ram_gb", 5.0)]
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.antspynet_ram_requirements())
+            ]
         },
         DeskullEngine.SYNTHSTRIP: {
             GlobalPrefCategoryList.PERFORMANCE: [
@@ -722,7 +724,8 @@ GLOBAL_PREFERENCES[category]["deskull_engine"] = PreferenceEntry(
         },
     },
     option_pref_requirement_fail_tooltip={
-        DeskullEngine.ANTSPYNET: "antspynet brain extraction requires at least 5.0 GB RAM",
+        DeskullEngine.ANTSPYNET: "antspynet brain extraction requires at least %.1f GB RAM"
+        % ResourceManager.antspynet_ram_requirements(),
         DeskullEngine.SYNTHSTRIP: "SynthStrip requires at least %.1f GB RAM"
         % ResourceManager.synth_strip_ram_requirements(),
     },
