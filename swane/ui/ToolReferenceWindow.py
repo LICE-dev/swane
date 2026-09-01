@@ -244,15 +244,13 @@ class ToolReferenceWindow(QDialog):
         # --- No results placeholder
         no_results = QLabel(strings.toolreference_no_results)
         no_results.setAlignment(Qt.AlignCenter)
-        no_results.setStyleSheet(
-            """
+        no_results.setStyleSheet("""
             QLabel {
                 font-size: 13px;
                 color: #777;
                 margin-top: 20px;
             }
-            """
-        )
+            """)
         no_results.setVisible(False)
 
         scroll_lay.addWidget(no_results)
@@ -389,8 +387,7 @@ class ToolReferenceWindow(QDialog):
         """
         card = QFrame()
         card.setObjectName("toolCard")
-        card.setStyleSheet(
-            """
+        card.setStyleSheet("""
             QFrame#toolCard {
                 background: #f9f9f9;
                 border: 1px solid #dddddd;
@@ -401,8 +398,7 @@ class ToolReferenceWindow(QDialog):
                 background: transparent;
                 border: none;
             }
-            """
-        )
+            """)
 
         lay = QVBoxLayout(card)
         lay.setContentsMargins(12, 10, 12, 12)
@@ -410,15 +406,13 @@ class ToolReferenceWindow(QDialog):
 
         # --- Command header
         cmd_label = QLabel(ref.command)
-        cmd_label.setStyleSheet(
-            """
+        cmd_label.setStyleSheet("""
             QLabel {
                 font-size: 16px;
                 font-weight: 600;
                 color: #111;
             }
-            """
-        )
+            """)
 
         lay.addWidget(cmd_label)
 
@@ -429,47 +423,41 @@ class ToolReferenceWindow(QDialog):
         url_label.setTextFormat(Qt.RichText)
         url_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         url_label.setOpenExternalLinks(True)
-        url_label.setStyleSheet(
-            """
+        url_label.setStyleSheet("""
             QLabel {
                 font-size: 14px;
                 font-weight: 600;
                 margin-top: 6px;
                 color: #555;
             }
-            """
-        )
+            """)
 
         lay.addWidget(url_label)
 
         # --- References section
         if ref.references:
             ref_title = QLabel(strings.toolreference_reference_label)
-            ref_title.setStyleSheet(
-                """
+            ref_title.setStyleSheet("""
                 QLabel {
                     font-size: 14px;
                     font-weight: 600;
                     margin-top: 6px;
                     color: #222;
                 }
-                """
-            )
+                """)
 
             lay.addWidget(ref_title)
 
             for i, reference in enumerate(ref.references, start=1):
                 reference_label = QLabel(f"{i}. {reference}")
                 reference_label.setWordWrap(True)
-                reference_label.setStyleSheet(
-                    """
+                reference_label.setStyleSheet("""
                     QLabel {
                         font-size: 12px;
                         margin-left: 12px;
                         color: #333;
                     }
-                    """
-                )
+                    """)
 
                 lay.addWidget(reference_label)
 
