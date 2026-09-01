@@ -7,6 +7,7 @@ cannot be faked without a real bundled Slicer.
 """
 
 import os
+import sys
 import types
 
 import swane.utils.DependencyManager as dm
@@ -100,9 +101,15 @@ class TestToolChecksMocked:
         assert DependencyManager.check_graphviz().state == DependenceStatus.DETECTED
 
     def test_check_dcm2niix(self, monkeypatch):
-        monkeypatch.setattr(dm.dcm2nii.Info, "version", lambda: None)
+        # check_dcm2niix() detects the dcm2niix pip package (the one the
+        # pipeline actually runs, via CustomDcm2niix), not whatever
+        # "dcm2niix" resolves to on PATH - so it is exercised by mocking the
+        # package import, not nipype's dcm2nii.Info.
+        monkeypatch.setitem(sys.modules, "dcm2niix", None)
         assert DependencyManager.check_dcm2niix().state == DependenceStatus.MISSING
-        monkeypatch.setattr(dm.dcm2nii.Info, "version", lambda: "1.0.20220720")
+
+        fake_dcm2niix = types.SimpleNamespace(__version__="1.0.20220720")
+        monkeypatch.setitem(sys.modules, "dcm2niix", fake_dcm2niix)
         assert DependencyManager.check_dcm2niix().state == DependenceStatus.DETECTED
 
     def test_check_fsl(self, monkeypatch):

@@ -174,10 +174,16 @@ def _freesurfer_version():
 
 
 def _dcm2niix_version():
-    from nipype.interfaces import dcm2nii
+    # The pipeline (CustomDcm2niix) always runs the binary bundled by the
+    # dcm2niix pip package, never whatever "dcm2niix" resolves to on PATH,
+    # so the license-relevant version is the package attribute - not
+    # nipype's CommandLine-based Info.version(), which targets PATH.
+    try:
+        import dcm2niix
 
-    value = dcm2nii.Info.version()
-    return None if value is None else str(value)
+        return str(dcm2niix.__version__)
+    except Exception:
+        return None
 
 
 def _antspyx_version():

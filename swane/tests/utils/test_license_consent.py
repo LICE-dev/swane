@@ -1,4 +1,5 @@
 import os
+import sys
 from types import SimpleNamespace
 
 from swane.utils import license_consent as lc
@@ -207,6 +208,32 @@ def test_undeterminable_version_uses_sentinel(monkeypatch):
     dm = _FakeDM(fs=False, dcm=False, antspyx=False, antspynet=False)
     cfg = _FakeConfig()
     assert lc.detected_tool_versions(dm, cfg) == {"fsl": lc.UNKNOWN_VERSION}
+
+
+def test_dcm2niix_version_reads_package_attribute(monkeypatch):
+    fake_dcm2niix = SimpleNamespace(__version__="1.0.20260724")
+    monkeypatch.setitem(sys.modules, "dcm2niix", fake_dcm2niix)
+    assert lc._dcm2niix_version() == "1.0.20260724"
+
+
+def test_dcm2niix_version_none_when_package_missing(monkeypatch):
+    monkeypatch.setitem(sys.modules, "dcm2niix", None)
+    assert lc._dcm2niix_version() is None
+
+
+def test_dcm2niix_version_does_not_spawn_subprocess(monkeypatch):
+    """The pipeline (CustomDcm2niix) runs the binary bundled by the pip
+    package, not whatever ``dcm2niix`` resolves to on PATH, so the version
+    used for license consent must come from the package attribute only -
+    never from nipype's CommandLine-based Info.version() (a subprocess
+    spawn that also targets the wrong, possibly absent, PATH binary).
+    """
+    fake_dcm2niix = SimpleNamespace(__version__="1.0.20260724")
+    monkeypatch.setitem(sys.modules, "dcm2niix", fake_dcm2niix)
+    if "nipype.interfaces" in sys.modules:
+        monkeypatch.delitem(sys.modules, "nipype.interfaces", raising=False)
+    monkeypatch.setitem(sys.modules, "nipype", None)
+    assert lc._dcm2niix_version() == "1.0.20260724"
 
 
 def test_detected_versions_reuse_dependency_check_results(monkeypatch):
