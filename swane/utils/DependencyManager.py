@@ -12,7 +12,7 @@ from swane.utils.qt_compat import QThreadPool
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux
-from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX, ANTSPYX
+from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX, ANTSPYX, ANTSPYNET
 from swane.utils.license_consent import version_with_license
 
 
@@ -397,15 +397,16 @@ class DependencyManager:
                 DependenceStatus.WARNING, strings.check_dep_antspynet_no_version
             )
         found_version = version.parse(antspynet_version)
+        antspynet_version_lic = version_with_license(ANTSPYNET, antspynet_version)
         if found_version < version.parse(DependencyManager.MIN_ANTSPYNET_VERSION):
             return Dependence(
                 DependenceStatus.WARNING,
                 strings.check_dep_antspynet_wrong_version
-                % (antspynet_version, DependencyManager.MIN_ANTSPYNET_VERSION),
+                % (antspynet_version_lic, DependencyManager.MIN_ANTSPYNET_VERSION),
             )
         return Dependence(
             DependenceStatus.DETECTED,
-            strings.check_dep_antspynet_found % antspynet_version,
+            strings.check_dep_antspynet_found % antspynet_version_lic,
         )
 
     @staticmethod
