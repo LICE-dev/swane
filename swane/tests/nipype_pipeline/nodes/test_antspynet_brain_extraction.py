@@ -136,6 +136,55 @@ def test_keeps_only_largest_component(tmp_path, monkeypatch):
     assert mask[1:5, 1:5, 1:5].sum() > 0
 
 
+def test_threshold_default_is_half(tmp_path, fake_antspynet):
+    # fake returns prob 0.6 in a block; default 0.5 keeps it as brain
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.mask_file = str(tmp_path / "mask.nii.gz")
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+    assert ants.image_read(str(tmp_path / "mask.nii.gz")).numpy().sum() > 0
+
+
+def test_threshold_is_applied(tmp_path, monkeypatch):
+    # Connected prob map: a high-confidence core (0.9) inside a lower blob
+    # (0.6). A higher threshold drops the 0.6 shell and keeps only the core,
+    # yielding a strictly smaller mask. Both regions are made large enough that
+    # the node's GetLargestComponent preserves them: on a tiny volume an empty
+    # (or below-min-size) mask is turned back into a full one.
+    def be(image, modality=None, **k):
+        arr = np.zeros(image.shape, dtype="float32")
+        arr[4:16, 4:16, 4:16] = 0.6  # outer blob (12^3)
+        arr[6:14, 6:14, 6:14] = 0.9  # high-confidence core (8^3)
+        return image.new_image_like(arr)
+
+    module = types.ModuleType("antspynet")
+    module.brain_extraction = be
+    monkeypatch.setitem(sys.modules, "antspynet", module)
+    big = np.zeros((20, 20, 20), dtype="float32")
+    big[4:16, 4:16, 4:16] = 100.0
+    in_file = str(tmp_path / "in.nii.gz")
+    ants.image_write(ants.from_numpy(big), in_file)
+
+    def run_at(threshold):
+        node = AntsPyNetBrainExtraction()
+        node.inputs.in_file = in_file
+        node.inputs.modality = "t1"
+        if threshold is not None:
+            node.inputs.threshold = threshold
+        node.inputs.mask_file = str(tmp_path / "mask.nii.gz")
+        node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+        node.run()
+        return ants.image_read(str(tmp_path / "mask.nii.gz")).numpy().sum()
+
+    low = run_at(None)  # default 0.5 -> whole 0.6 blob is brain
+    high = run_at(0.7)  # 0.6 < 0.7 -> only the 0.9 core survives
+    assert high < low
+    assert high == 8 * 8 * 8  # just the core
+
+
 @pytest.mark.heavy
 class TestRealAntsPyNetModalities:
     """Every ``DeskullModality`` must be a modality the installed antspynet knows.
