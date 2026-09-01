@@ -226,3 +226,46 @@ class TestRealAntsPyNetModalities:
                     modality.name,
                     modality.value,
                 )
+
+
+def test_empty_mask_raises_instead_of_filling(tmp_path, monkeypatch):
+    # antspynet returns a probability map that is uniformly below the threshold,
+    # so the binary mask is empty. The node must raise rather than let
+    # ants.iMath("GetLargestComponent") inflate the empty mask into a full-head
+    # "brain" (verified antspyx 0.6.3 behaviour).
+    def be(image, modality=None, **k):
+        return image.new_image_like(np.full(image.shape, 0.1, dtype="float32"))
+
+    module = types.ModuleType("antspynet")
+    module.brain_extraction = be
+    monkeypatch.setitem(sys.modules, "antspynet", module)
+
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    with pytest.raises(ValueError):
+        node.run()
+
+
+def test_non_positive_num_threads_does_not_export_zero(tmp_path, fake_antspynet):
+    # num_threads<=0 (the max_cpu=0 "auto" default) must NOT export
+    # OMP_NUM_THREADS=0, which is undefined for OpenMP.
+    seen = {}
+    real_be = sys.modules["antspynet"].brain_extraction
+
+    def spy(image, modality=None, **kwargs):
+        seen["omp"] = os.environ.get("OMP_NUM_THREADS")
+        return real_be(image, modality=modality, **kwargs)
+
+    sys.modules["antspynet"].brain_extraction = spy
+
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.num_threads = 0
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+    assert seen["omp"] != "0"
