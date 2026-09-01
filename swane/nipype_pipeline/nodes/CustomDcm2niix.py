@@ -18,14 +18,6 @@ DCM2NIIX_CMD = str(_dcm2niix_binary)
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.dcm2nii.Dcm2niixInputSpec)  -*-
 class CustomDcm2niixInputSpec(Dcm2niixInputSpec):
-    name_conflicts = traits.Enum(
-        2,
-        1,
-        0,
-        argstr="-w %d",
-        usedefault=True,
-        desc="write behavior for name conflicts - [0=skip duplicates, 1=overwrite, 2=add suffix]",
-    )
     expected_files = traits.Int(default_value=1, usedefault=True)
     request_dti = traits.Bool(default_value=False, usedefault=True)
 

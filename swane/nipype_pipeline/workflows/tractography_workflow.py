@@ -4,7 +4,6 @@ from nipype import Node, IdentityInterface, MapNode, JoinNode, Merge
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
-from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
 from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
 from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
 from swane.config.config_enums import RegistrationEngine
@@ -13,6 +12,7 @@ from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     resolve_registration_engine,
 )
+from nipype.interfaces.fsl import ProbTrackX2
 
 SIDES = ["lh", "rh"]
 
@@ -198,7 +198,7 @@ def tractography_workflow(
         # NODE 10: Tractography (runs in reference space; probtrackx bridges to
         # diffusion internally via the FSL xfm/inv_xfm matrices)
         probtrackx = MapNode(
-            CustomProbTrackX2(),
+            ProbTrackX2(),
             name="probtrackx_%s_%s" % (name, side),
             iterfield=["random_seed"],
         )
@@ -241,7 +241,7 @@ def tractography_workflow(
         if is_invert:
             # NODE 11: Inverted tractography
             probtrackx_inverted = MapNode(
-                CustomProbTrackX2(),
+                ProbTrackX2(),
                 name="probtrackx_inverted_%s_%s" % (name, side),
                 iterfield=["random_seed"],
             )

@@ -31,9 +31,7 @@ setup(
     license="MIT",
     install_requires=[
         "networkx==3.4.2",
-        "nipype==1.10.0",
-        # Forcing filelock version to avoid a bug in nipype 1.10.0
-        "filelock<3.19",
+        "nipype==1.12.0",
         "PySide6",
         "pydicom==3.0.1",
         "psutil==7.0.0",

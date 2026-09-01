@@ -1,7 +1,9 @@
-from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import NipypeRamEstimator
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
+from nipype.utils.ram_estimator import RamEstimator
 
 
-class FlirtRamEstimator(NipypeRamEstimator):
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class FlirtRamEstimator(RamEstimator):
     """
     RAM estimator for FSL FLIRT with calibrated multipliers and overhead.
     """
@@ -19,7 +21,8 @@ class FlirtRamEstimator(NipypeRamEstimator):
         )
 
 
-class FnirtRamEstimator(NipypeRamEstimator):
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class FnirtRamEstimator(RamEstimator):
     """
     RAM estimator for FSL FNIRT.
     Calibrated from empirical mem_peak_gb measurements.
@@ -37,7 +40,8 @@ class FnirtRamEstimator(NipypeRamEstimator):
         )
 
 
-class InvWarpRamEstimator(NipypeRamEstimator):
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class InvWarpRamEstimator(RamEstimator):
     """
     RAM estimator for FSL FNIRT.
     Calibrated from empirical mem_peak_gb measurements.
@@ -55,7 +59,8 @@ class InvWarpRamEstimator(NipypeRamEstimator):
         )
 
 
-class FastRamEstimator(NipypeRamEstimator):
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class FastRamEstimator(RamEstimator):
     """
     RAM estimator for FSL FNIRT.
     Calibrated from empirical mem_peak_gb measurements.

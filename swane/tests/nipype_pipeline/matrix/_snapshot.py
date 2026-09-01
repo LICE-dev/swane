@@ -192,17 +192,25 @@ def _render_cmd(cmd: str, repl: list[tuple[str, str]]) -> str:
     ``site-packages`` — is reduced to its stem so the value neither leaks the
     install location nor differs by the Windows ``.exe`` suffix.
 
-    ``CustomEddy`` resolves its GPU variant to ``eddy_cuda`` when that binary
+    ``Eddy`` resolves its GPU variant to ``eddy_cuda`` when that binary
     is on ``PATH``, falling back to the bare ``eddy`` otherwise — a machine
     difference (whether the box has the ``eddy_cuda`` symlink) unrelated to
     the workflow's own settings, which are already captured by the node's
     ``use_cuda`` input and the "cuda = true" config header. Canonicalise both
     variants to ``eddy`` so the golden is identical on GPU and non-GPU boxes;
     this is narrowly scoped to the one known GPU-variant command name.
+
+    Recent FSL renamed the ``cluster`` binary to ``fsl-cluster``; nipype 1.12
+    resolves ``Cluster._cmd`` to whichever is on ``PATH`` via ``which()``, so the
+    rendered command differs on old vs new boxes — another machine difference
+    unrelated to the workflow. Canonicalise both to ``fsl-cluster`` so the golden
+    is identical across FSL versions, mirroring the ``eddy`` handling above.
     """
     text = _normalise(cmd, repl)
     if text == "eddy_cuda":
         return "eddy"
+    if text == "cluster":
+        return "fsl-cluster"
     if "/" in text:
         base = text.rsplit("/", 1)[-1]
         if base.endswith(".exe"):
