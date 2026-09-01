@@ -85,6 +85,10 @@ WF_PREFERENCES[category]["bet_bias_correction"] = PreferenceEntry(
     label="Bias reduction for skull removal",
     tooltip="Increase time with better results",
     default="false",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
 )
 WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
@@ -92,6 +96,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.3,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 WF_PREFERENCES[category]["flat1"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -170,6 +189,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.5,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 
 category = DataInputList.MDC
@@ -183,6 +217,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.5,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 
 category = DataInputList.VENOUS_MR
@@ -193,6 +242,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.4,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 WF_PREFERENCES[category]["vein_detection_mode"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
