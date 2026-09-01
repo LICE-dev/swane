@@ -59,3 +59,27 @@ def test_get_deskull_node_dispatches_by_engine():
     )
     assert isinstance(b.interface, BET)
     assert b.name == "x_bet"
+
+
+def test_get_deskull_node_forwards_antspynet_threshold():
+    n = get_deskull_node(
+        name="x",
+        deskull_engine=DeskullEngine.ANTSPYNET,
+        deskull_modality=DeskullModality.T1,
+        mask=True,
+        antspynet_thr=0.6,
+    )
+    assert n.inputs.threshold == 0.6
+
+
+def test_get_deskull_node_antspynet_threshold_defaults_unset():
+    n = get_deskull_node(
+        name="x",
+        deskull_engine=DeskullEngine.ANTSPYNET,
+        deskull_modality=DeskullModality.T1,
+        mask=True,
+    )
+    # left unset -> node uses its own 0.5 default
+    from nipype.interfaces.base import isdefined
+
+    assert not isdefined(n.inputs.threshold) or n.inputs.threshold == 0.5

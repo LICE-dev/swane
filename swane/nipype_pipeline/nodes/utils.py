@@ -178,6 +178,7 @@ def get_deskull_node(
     deskull_engine: DeskullEngine,
     mask: bool = False,
     bet_thr: float = None,
+    antspynet_thr: float = None,
     bet_bias_correction: bool = False,
     bet_robust: bool = False,
     bet_threshold: bool = False,
@@ -196,6 +197,8 @@ def get_deskull_node(
         )
         if deskull_modality is not None:
             deskull_node.inputs.modality = deskull_modality.value
+        if antspynet_thr is not None:
+            deskull_node.inputs.threshold = antspynet_thr
         if mask:
             mask_name = "brain_mask.nii.gz"
             if out_file:

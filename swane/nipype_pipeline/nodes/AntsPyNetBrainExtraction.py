@@ -24,6 +24,11 @@ class AntsPyNetBrainExtractionInputSpec(BaseInterfaceInputSpec):
         mandatory=True,
         desc="antspynet brain_extraction modality key (e.g. t1, flair, t2, bold)",
     )
+    threshold = traits.Float(
+        0.5,
+        usedefault=True,
+        desc="probability threshold for binarizing the brain mask (0-1)",
+    )
     out_file = File(desc="the skull-stripped brain image")
     mask_file = File(desc="the binary brain mask")
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
@@ -41,8 +46,8 @@ class AntsPyNetBrainExtraction(BaseInterface):
     Skull-strip an image with antspynet deep-learning brain extraction.
 
     antspynet.brain_extraction returns a probability image in the input grid;
-    this node binarizes it at 0.5, writes the mask, and writes the input masked
-    by it as the brain image.
+    this node binarizes it at ``threshold`` (default 0.5), writes the mask, and
+    writes the input masked by it as the brain image.
     """
 
     input_spec = AntsPyNetBrainExtractionInputSpec
@@ -83,7 +88,9 @@ class AntsPyNetBrainExtraction(BaseInterface):
                 % (type(prob).__name__, self.inputs.modality)
             )
 
-        mask = prob.new_image_like((prob.numpy() >= 0.5).astype("float32"))
+        mask = prob.new_image_like(
+            (prob.numpy() >= self.inputs.threshold).astype("float32")
+        )
         # Drop detached false positives (orbital/nasal); some models emit them.
         mask = ants.iMath(mask, "GetLargestComponent")
 
