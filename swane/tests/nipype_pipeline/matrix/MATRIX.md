@@ -130,9 +130,9 @@ Overview of 77 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [cst_real_graph](snapshots/tractography/cst_real_graph.txt) | cuda=false; tract=cst; xtract_data=present | 21 / 39 | `applywarp`, `flirt`, `probtrackx2` | `use_gpu=False` |
-| [cst_real_graph_ants_backend](snapshots/tractography/cst_real_graph_ants_backend.txt) | cuda=false; registration_engine=ANTS; tract=cst; xtract_data=present | 27 / 51 | `probtrackx2` | `use_gpu=False` |
-| [cst_real_graph_test_run](snapshots/tractography/cst_real_graph_test_run.txt) | cuda=false; test_run=True; tract=cst; xtract_data=present | 21 / 39 | `applywarp`, `flirt`, `probtrackx2` | `use_gpu=False` |
+| [cst_real_graph](snapshots/tractography/cst_real_graph.txt) | cuda=false; tract=cst; xtract_data=present | 13 / 21 | `applywarp`, `probtrackx2` | `use_gpu=False` |
+| [cst_real_graph_ants_backend](snapshots/tractography/cst_real_graph_ants_backend.txt) | cuda=false; registration_engine=ANTS; tract=cst; xtract_data=present | 19 / 33 | `probtrackx2` | `use_gpu=False` |
+| [cst_real_graph_test_run](snapshots/tractography/cst_real_graph_test_run.txt) | cuda=false; test_run=True; tract=cst; xtract_data=present | 13 / 21 | `applywarp`, `probtrackx2` | `use_gpu=False` |
 
 ## venous_ct
 
