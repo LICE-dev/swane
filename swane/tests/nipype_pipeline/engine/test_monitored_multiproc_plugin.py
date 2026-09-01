@@ -19,7 +19,8 @@ spinning up nipype's real process pools or building an actual workflow.
 
 from concurrent.futures import Future
 from concurrent.futures.process import BrokenProcessPool
-from multiprocessing import Event, Queue
+from multiprocessing import Queue
+from types import SimpleNamespace
 
 import pytest
 
@@ -143,31 +144,110 @@ class TestPrerunCheckSignalsInsufficientResources:
         assert queue.empty()
 
 
-def test_broken_process_pool_callback_reports_node_and_wakes_workflow(make_plugin):
-    """A native worker crash must become observable outside the callback.
-
-    ``Future.result()`` raises in Nipype's done-callback. Without SWANe's
-    interception, concurrent.futures only logs that exception and Nipype keeps
-    polling forever.
-    """
-    plugin, queue = make_plugin()
-    workflow_stop_event = Event()
-    plugin.workflow_stop_event = workflow_stop_event
-
-    taskid = 17
-    node_name = "prerelease_wf.ref_bias_correction"
+def _register_task(plugin, taskid, node_name):
+    """Wire one in-flight task into the plugin's bookkeeping, as _submit_job does."""
     future = Future()
     plugin._task_obj[taskid] = future
     plugin._task_nodes[taskid] = node_name
     plugin._future_taskids[future] = taskid
+    return future
+
+
+def test_broken_process_pool_callback_feeds_every_in_flight_task(make_plugin):
+    """A native worker crash must become observable outside the callback.
+
+    ``Future.result()`` raises in Nipype's done-callback. Without SWANe's
+    interception, concurrent.futures only logs that exception and Nipype keeps
+    polling forever. Because the pool marks *all* in-flight futures broken at
+    once and there is no way to tell which node actually crashed, every pending
+    task must receive a terminal result -- otherwise the tasks whose own
+    callback cannot resolve a task id keep Nipype waiting for a result that can
+    never appear.
+    """
+    plugin, queue = make_plugin()
+
+    futures = {
+        taskid: _register_task(plugin, taskid, name)
+        for taskid, name in (
+            (17, "prerelease_wf.ref_bias_correction"),
+            (18, "prerelease_wf.innocent_neighbour"),
+            (19, "prerelease_wf.another_neighbour"),
+        )
+    }
+    # A single worker dies by signal; concurrent.futures then marks the whole
+    # pool broken, so any of the three callbacks may fire first.
+    crasher = futures[18]
+    crasher.set_exception(BrokenProcessPool("worker terminated abruptly"))
+
+    plugin._async_callback(crasher)
+
+    for taskid in (17, 18, 19):
+        result = plugin._taskresult[taskid]
+        assert result["taskid"] == taskid
+        assert result["traceback"]
+        # No sentinel flag: each result must flow through the normal crash path
+        # so its NODE_ERROR carries the crash file and the real node name.
+        assert "_swane_node_error_reported" not in result
+
+    # The callback itself does not emit NODE_ERROR (Nipype's poll loop does,
+    # via _report_crash) and no longer force-stops the workflow process.
+    assert queue.empty()
+
+
+def test_broken_process_pool_reports_each_in_flight_node_via_report_crash(
+    make_plugin, monkeypatch
+):
+    """The fed results route through _report_crash, tagging the broken-pool reason.
+
+    This is the emission path a real run takes: the poll loop reads each
+    terminal result and calls :meth:`_report_crash`. Here we drive that method
+    directly with the fed result to assert the NODE_ERROR names the node and
+    carries both the broken-pool ``info`` and the crash file Nipype wrote for
+    the abrupt failure.
+    """
+    # The parent _report_crash writes a real crash file from a full nipype Node;
+    # stub the writer so the test can use a lightweight node and still assert the
+    # crash file path is threaded onto the NODE_ERROR.
+    import nipype.pipeline.plugins.base as nipype_base
+
+    monkeypatch.setattr(
+        nipype_base, "report_crash", lambda node, traceback=None: "ref_crash.txt"
+    )
+
+    plugin, queue = make_plugin()
+    node_name = "prerelease_wf.ref_bias_correction"
+    future = _register_task(plugin, 17, node_name)
     future.set_exception(BrokenProcessPool("worker terminated abruptly"))
 
     plugin._async_callback(future)
 
+    node = SimpleNamespace(fullname=node_name)
+    crash_file = plugin._report_crash(node, result=plugin._taskresult[17])
+
+    assert crash_file == "ref_crash.txt"
     report = queue.get(timeout=5)
     assert report.signal_type == WorkflowSignals.NODE_ERROR
     assert report.node_name == node_name
     assert "terminated abruptly" in report.info
-    assert workflow_stop_event.wait(timeout=5)
-    assert plugin._taskresult[taskid]["taskid"] == taskid
-    assert plugin._taskresult[taskid]["traceback"]
+    assert report.crash_file == "ref_crash.txt"
+
+
+def test_broken_pool_on_submit_without_in_flight_tasks_still_reports_failure(
+    make_plugin,
+):
+    """A pool already dead at submit time has no in-flight task to carry the failure.
+
+    With nothing to route through _report_crash, a standalone NODE_ERROR must be
+    emitted so the pass is recorded as failed instead of silently passing.
+    """
+    plugin, queue = make_plugin()
+
+    plugin._handle_broken_pool(
+        BrokenProcessPool("pool already dead"),
+        unsubmitted_node="prerelease_wf.ref_bias_correction",
+    )
+
+    report = queue.get(timeout=5)
+    assert report.signal_type == WorkflowSignals.NODE_ERROR
+    assert report.node_name == "prerelease_wf.ref_bias_correction"
+    assert "terminated abruptly" in report.info
