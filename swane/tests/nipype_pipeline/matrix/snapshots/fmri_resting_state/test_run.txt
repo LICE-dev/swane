@@ -98,12 +98,11 @@
     op_string = '-Tmean'
     output_type = 'NIFTI_GZ'
     suffix = '_mean'
-- fmri_rs_meanfuncmask [BET] cmd=bet mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    frac = 0.3
-    mask = True
-    no_output = True
-    output_type = 'NIFTI_GZ'
+- fmri_rs_meanfuncmask_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=0
+    mask_file = 'brain_mask.nii.gz'
+    modality = 'bold'
+    num_threads = 0
+    threshold = 0.5
 - fmri_rs_medianval [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = [50.0]
 - fmri_rs_merge_tr_meanfunc3 [Merge] mem_gb=0.2 n_procs=1
@@ -238,13 +237,13 @@ fmri_rs_maskfunc.out_file -> fmri_rs_threshold.in_file
 fmri_rs_maskfunc2.out_file -> fmri_rs_meanfunc2.in_file
 fmri_rs_maskfunc2.out_file -> fmri_rs_smooth.in_file
 fmri_rs_maskfunc3.out_file -> fmri_rs_intnorm.in_file
-fmri_rs_meanfunc.out_file -> fmri_rs_meanfuncmask.in_file
+fmri_rs_meanfunc.out_file -> fmri_rs_meanfuncmask_antspynet.in_file
 fmri_rs_meanfunc2.out_file -> fmri_rs_2_ref_flirt.in_file
 fmri_rs_meanfunc2.out_file -> fmri_rs_mergenode.in1
 fmri_rs_meanfunc3.out_file -> fmri_rs_merge_tr_meanfunc3.in2
-fmri_rs_meanfuncmask.mask_file -> feature_spatial_prep.mask_file
-fmri_rs_meanfuncmask.mask_file -> fmri_rs_maskfunc.in_file2
-fmri_rs_meanfuncmask.mask_file -> preproc_melodic.mask
+fmri_rs_meanfuncmask_antspynet.mask_file -> feature_spatial_prep.mask_file
+fmri_rs_meanfuncmask_antspynet.mask_file -> fmri_rs_maskfunc.in_file2
+fmri_rs_meanfuncmask_antspynet.mask_file -> preproc_melodic.mask
 fmri_rs_medianval.('percentile_values', "def get_inorm_scale(percentile_values):\n    return '-mul %.10f' % (10000.0 / percentile_values[0])", ()) -> fmri_rs_intnorm.op_string
 fmri_rs_medianval.('percentile_values', 'def get_bt_thresh(percentile_values):\n    return 0.75 * percentile_values[0]', ()) -> fmri_rs_smooth.brightness_threshold
 fmri_rs_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]', ()) -> fmri_rs_mergenode.in2

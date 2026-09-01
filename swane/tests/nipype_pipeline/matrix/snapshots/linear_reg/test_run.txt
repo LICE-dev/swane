@@ -2,10 +2,10 @@
 #
 #   bias_field_correction = True
 #   config = FLAIR3D
+#   deskull_engine = ANTSPYNET
 #   is_partial_coverage = False
 #   is_volumetric = True
 #   synth_morph = False
-#   synth_strip = False
 #   test_run = True
 #
 # nodes=13 edges=26
@@ -42,13 +42,11 @@
     single_file = False
     source_dir = '<TMP>/dicom'
     verbose = False
-- flair3d_deskull_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    frac = 0.5
-    mask = True
-    output_type = 'NIFTI_GZ'
-    robust = True
-    threshold = False
+- flair3d_deskull_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=4
+    mask_file = 'brain_mask.nii.gz'
+    modality = 't1'
+    num_threads = 4
+    threshold = 0.5
 - flair3d_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'mutualinfo'
     dof = 6
@@ -78,14 +76,14 @@ deskulled_flair3d_apply_xfm.out_file -> outputnode.uncorrected_registered_file_b
 flair3d_apply_xfm.out_file -> bias_correction.in_file
 flair3d_apply_xfm.out_file -> outputnode.uncorrected_registered_file
 flair3d_conv.converted_files -> flair3d_reorient.in_file
-flair3d_deskull_bet.out_file -> deskulled_flair3d_apply_xfm.in_file
-flair3d_deskull_bet.out_file -> flair3d_flirt.in_file
+flair3d_deskull_antspynet.out_file -> deskulled_flair3d_apply_xfm.in_file
+flair3d_deskull_antspynet.out_file -> flair3d_flirt.in_file
 flair3d_flirt.out_matrix_file -> deskulled_flair3d_apply_xfm.in_matrix_file
 flair3d_flirt.out_matrix_file -> flair3d_apply_xfm.in_matrix_file
 flair3d_flirt.out_matrix_file -> outputnode.out_matrix_file
 flair3d_reorient.out_file -> flair3d_robustfov.in_file
 flair3d_robustfov.out_roi -> flair3d_apply_xfm.in_file
-flair3d_robustfov.out_roi -> flair3d_deskull_bet.in_file
+flair3d_robustfov.out_roi -> flair3d_deskull_antspynet.in_file
 inputnode.output_name -> betted_name.basename
 inputnode.output_name -> unbetted_name.basename
 inputnode.reference -> deskulled_flair3d_apply_xfm.reference

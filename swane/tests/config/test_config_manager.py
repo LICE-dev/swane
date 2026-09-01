@@ -120,12 +120,12 @@ class TestSafeGetters:
 
     def test_getboolean_safe_falls_back_to_bool_default(self, tmp_path):
         config = ConfigManager(global_base_folder=str(tmp_path))
-        # "strip" default is a Python bool (False), not the string "false":
+        # "reconall" default is a Python bool (False), not the string "false":
         # the fallback must handle it without raising.
         configparser.ConfigParser.set(
-            config, str(GlobalPrefCategoryList.SYNTH), "strip", "garbage"
+            config, str(GlobalPrefCategoryList.SYNTH), "reconall", "garbage"
         )
-        assert config.getboolean_safe(GlobalPrefCategoryList.SYNTH, "strip") is False
+        assert config.getboolean_safe(GlobalPrefCategoryList.SYNTH, "reconall") is False
 
     def test_getfloat_safe_falls_back_to_default(self, tmp_path):
         config = ConfigManager(global_base_folder=str(tmp_path))

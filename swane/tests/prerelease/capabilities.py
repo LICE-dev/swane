@@ -26,6 +26,11 @@ from swane.config.preference_list import XTRACT_DATA_DIR
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.ResourceManager import ResourceManager
 
+#: RAM the antspynet deskull node reserves (``get_deskull_node``'s ``mem_gb``).
+#: ResourceManager has no antspynet entry: the node uses a fixed figure, and so
+#: does the ANTSPYNET option gate in ``preference_list``.
+ANTSPYNET_RAM_GB = 5.0
+
 
 @dataclass(frozen=True)
 class Capability:
@@ -262,6 +267,39 @@ def _probe_antspyx(caps: Capabilities) -> None:
     )
 
 
+def _probe_antspynet(caps: Capabilities) -> None:
+    """The antspynet brain-extraction backend: the package plus its RAM floor.
+
+    Probed on its own, like antspyx: it is a plain Python package, not part of
+    the FreeSurfer Synth bundle. The floor is the fixed 5 GB the deskull node
+    reserves (``get_deskull_node`` sets ``mem_gb=5``), the same figure the
+    application uses to enable or grey out the ANTSPYNET engine option; it is
+    checked against the allocated budget, not total system memory, because that
+    is what the workflow will actually be allowed to use.
+    """
+    has_antspynet = DependencyManager.is_antspynet()
+    needed = ANTSPYNET_RAM_GB
+    if not has_antspynet:
+        caps.add(
+            "antspynet",
+            False,
+            "antspynet not importable; the ANTSPYNET deskull engine is dropped",
+        )
+        return
+    enough = caps.ram_gb >= needed
+    caps.add(
+        "antspynet",
+        enough,
+        (
+            "antspynet present, %.1f GB allocated >= %.1f GB required"
+            % (caps.ram_gb, needed)
+            if enough
+            else "antspynet present but needs %.1f GB, only %.1f GB allocated"
+            % (needed, caps.ram_gb)
+        ),
+    )
+
+
 def _probe_gpu(caps: Capabilities) -> None:
     try:
         is_cuda = ResourceManager.is_cuda()
@@ -396,6 +434,7 @@ def probe(
     _probe_ram_budget(caps)
     _probe_synth_ram(caps, test_run=test_run)
     _probe_antspyx(caps)
+    _probe_antspynet(caps)
     _probe_gpu(caps)
     _probe_xtract(caps)
     _probe_mni(caps)

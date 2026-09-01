@@ -2,10 +2,10 @@
 #
 #   bet_bias_correction = false
 #   bet_thr = 1.0
+#   deskull_engine = BET
 #   limit_synth_cores = false
 #   max_cpu = 4
 #   multicore_node_limit = SOFT_CAP
-#   synth_strip = false
 #
 # nodes=8 edges=12
 
