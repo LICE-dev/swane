@@ -124,6 +124,37 @@ def test_work_dir_lock_rejects_a_second_owner(tmp_path):
     assert not (tmp_path / runner.LOCK_FILE).exists()
 
 
+def test_work_dir_lock_retries_when_lock_vanishes_mid_acquire(tmp_path, monkeypatch):
+    """A lock released in the _try_create/_read_owner window is retried, not failed.
+
+    If the previous owner releases the lock just after this contender's
+    ``_try_create()`` loses the race but before it reads the owner record, the
+    file is gone. That must be read as "the slot is free now, retry", not as
+    "the lock exists but is corrupt" -- otherwise a benign completion overlap
+    fails a legitimate new sweep.
+    """
+    lock = runner.PrereleaseWorkDirLock(str(tmp_path))
+
+    real_try_create = lock._try_create
+    calls = {"n": 0}
+
+    def flaky_try_create():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Lose the race as if another owner held the lock; that owner then
+            # releases it, so no lock file exists when _read_owner() looks.
+            return False
+        return real_try_create()
+
+    monkeypatch.setattr(lock, "_try_create", flaky_try_create)
+
+    with lock:
+        assert (tmp_path / runner.LOCK_FILE).exists()
+
+    assert calls["n"] == 2
+    assert not (tmp_path / runner.LOCK_FILE).exists()
+
+
 def test_work_dir_lock_replaces_a_stale_pid(tmp_path):
     lock_path = tmp_path / runner.LOCK_FILE
     lock_path.write_text(

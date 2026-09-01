@@ -103,7 +103,13 @@ class PrereleaseWorkDirLock:
                 self.acquired = True
                 return self
 
-            owner = self._read_owner()
+            try:
+                owner = self._read_owner()
+            except FileNotFoundError:
+                # The lock vanished between _try_create() and here: its previous
+                # owner released it, so the directory is free now. Retry instead
+                # of mistaking the empty slot for a corrupt lock and failing.
+                continue
             if owner is None:
                 raise PrereleaseAlreadyRunningError(
                     "prerelease lock %s exists but has no valid owner record; "
@@ -133,7 +139,10 @@ class PrereleaseWorkDirLock:
     def release(self):
         if not self.acquired:
             return
-        owner = self._read_owner()
+        try:
+            owner = self._read_owner()
+        except FileNotFoundError:
+            owner = None
         if owner and owner.get("token") == self.owner["token"]:
             try:
                 os.unlink(self.path)
@@ -167,9 +176,18 @@ class PrereleaseWorkDirLock:
                 pass
 
     def _read_owner(self) -> dict | None:
+        """Return the owner record, or ``None`` if the lock is corrupt.
+
+        ``FileNotFoundError`` is deliberately propagated rather than folded into
+        the ``None`` result: a *missing* lock is not a *corrupt* one. The caller
+        retries acquisition when the lock vanished under it, and only fails on a
+        lock that exists but cannot be parsed.
+        """
         try:
             with open(self.path, encoding="utf-8") as handle:
                 owner = json.load(handle)
+        except FileNotFoundError:
+            raise
         except (OSError, ValueError, TypeError):
             return None
         return owner if isinstance(owner, dict) else None

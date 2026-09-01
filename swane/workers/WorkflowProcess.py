@@ -77,7 +77,6 @@ class WorkflowProcess(Process):
         plugin_args = {
             "mp_context": "fork",
             "queue": self.queue,
-            "workflow_stop_event": self.stop_event,
             "status_callback": swane_log_nodes_cb,
         }
         if self.workflow.max_cpu > 0:
@@ -195,8 +194,9 @@ class WorkflowProcess(Process):
         # Signal workflow_stop to GUI and close queue
         self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_STOP))
         self.queue.close()
-        # A broken pool intentionally kills this process below. Flush NODE_ERROR
-        # and WORKFLOW_STOP first so the parent cannot miss the terminal state.
+        # Flush any pending NODE_ERROR (a broken pool reports through the normal
+        # crash path) and the WORKFLOW_STOP above before this process ends, so
+        # the parent cannot miss the terminal state.
         self.queue.join_thread()
 
         # If the thread is alive at this point the stop_event was set from GUI, so the user asked to kill the process
