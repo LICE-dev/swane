@@ -192,7 +192,7 @@ def _render_cmd(cmd: str, repl: list[tuple[str, str]]) -> str:
     ``site-packages`` — is reduced to its stem so the value neither leaks the
     install location nor differs by the Windows ``.exe`` suffix.
 
-    ``CustomEddy`` resolves its GPU variant to ``eddy_cuda`` when that binary
+    ``Eddy`` resolves its GPU variant to ``eddy_cuda`` when that binary
     is on ``PATH``, falling back to the bare ``eddy`` otherwise — a machine
     difference (whether the box has the ``eddy_cuda`` symlink) unrelated to
     the workflow's own settings, which are already captured by the node's
