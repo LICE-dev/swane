@@ -136,6 +136,7 @@ This project includes subsection derived from other software, which licenses can
 
 #### Fixed
 
+- License consent preparation no longer repeats dependency detection on the GUI thread and keeps the interface responsive while license texts are resolved.
 - Changing the DTI CPU allocation no longer invalidates cached Eddy results.
 
 ### [0.2.1.1] - 2026-08-08

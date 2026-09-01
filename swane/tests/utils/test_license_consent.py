@@ -1,4 +1,7 @@
 import os
+import sys
+from types import SimpleNamespace
+
 from swane.utils import license_consent as lc
 from swane.utils import LicenseReference as LR
 
@@ -171,6 +174,20 @@ def test_unchanged_versions_need_no_consent(monkeypatch):
     assert lc.tools_needing_consent(dm, cfg) == []
 
 
+def test_tools_needing_consent_reuses_detected_snapshot(monkeypatch):
+    dm = _FakeDM()
+    cfg = _FakeConfig(accepted={"fsl": "6.0.6"})
+    monkeypatch.setattr(
+        lc,
+        "detected_tool_versions",
+        lambda *args: (_ for _ in ()).throw(AssertionError("unexpected re-detection")),
+    )
+
+    assert lc.tools_needing_consent(dm, cfg, {"fsl": "6.0.6", "antspyx": "0.6.3"}) == [
+        "antspyx"
+    ]
+
+
 def test_upgraded_tool_reprompts_only_that_tool(monkeypatch):
     _patch_versions(monkeypatch, fsl="6.0.7")
     dm = _FakeDM()
@@ -191,6 +208,62 @@ def test_undeterminable_version_uses_sentinel(monkeypatch):
     dm = _FakeDM(fs=False, dcm=False, antspyx=False, antspynet=False)
     cfg = _FakeConfig()
     assert lc.detected_tool_versions(dm, cfg) == {"fsl": lc.UNKNOWN_VERSION}
+
+
+def test_dcm2niix_version_reads_package_attribute(monkeypatch):
+    fake_dcm2niix = SimpleNamespace(__version__="1.0.20260724")
+    monkeypatch.setitem(sys.modules, "dcm2niix", fake_dcm2niix)
+    assert lc._dcm2niix_version() == "1.0.20260724"
+
+
+def test_dcm2niix_version_none_when_package_missing(monkeypatch):
+    monkeypatch.setitem(sys.modules, "dcm2niix", None)
+    assert lc._dcm2niix_version() is None
+
+
+def test_dcm2niix_version_does_not_spawn_subprocess(monkeypatch):
+    """The pipeline (CustomDcm2niix) runs the binary bundled by the pip
+    package, not whatever ``dcm2niix`` resolves to on PATH, so the version
+    used for license consent must come from the package attribute only -
+    never from nipype's CommandLine-based Info.version() (a subprocess
+    spawn that also targets the wrong, possibly absent, PATH binary).
+    """
+    fake_dcm2niix = SimpleNamespace(__version__="1.0.20260724")
+    monkeypatch.setitem(sys.modules, "dcm2niix", fake_dcm2niix)
+    if "nipype.interfaces" in sys.modules:
+        monkeypatch.delitem(sys.modules, "nipype.interfaces", raising=False)
+    monkeypatch.setitem(sys.modules, "nipype", None)
+    assert lc._dcm2niix_version() == "1.0.20260724"
+
+
+def test_detected_versions_reuse_dependency_check_results(monkeypatch):
+    dm = _FakeDM(dcm=False, antspynet=False)
+    dm.fsl = SimpleNamespace(detected_version="6.0.6")
+    dm.freesurfer = SimpleNamespace(detected_version="7.3.2")
+    dm.antspyx = SimpleNamespace(detected_version="0.6.3")
+    cfg = _FakeConfig()
+    monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
+    monkeypatch.setattr(
+        lc,
+        "_fsl_version",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected FSL check")),
+    )
+    monkeypatch.setattr(
+        lc,
+        "_freesurfer_version",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected FreeSurfer check")),
+    )
+    monkeypatch.setattr(
+        lc,
+        "_antspyx_version",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected ANTs check")),
+    )
+
+    assert lc.detected_tool_versions(dm, cfg) == {
+        "fsl": "6.0.6",
+        "freesurfer": "7.3.2",
+        "antspyx": "0.6.3",
+    }
 
 
 def test_antspynet_detected_is_offered(monkeypatch):
