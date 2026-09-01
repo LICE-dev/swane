@@ -30,7 +30,7 @@
     use_differences = [True, False]
     use_norm = True
     zintensity_threshold = 3.0
-- fmri_0_cluster_t3_1 [Cluster] cmd=cluster mem_gb=0.2 n_procs=1
+- fmri_0_cluster_t3_1 [Cluster] cmd=fsl-cluster mem_gb=0.2 n_procs=1
     connectivity = 26
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     find_min = False
@@ -46,7 +46,7 @@
     apply_xfm = True
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-- fmri_0_cluster_t5_1 [Cluster] cmd=cluster mem_gb=0.2 n_procs=1
+- fmri_0_cluster_t5_1 [Cluster] cmd=fsl-cluster mem_gb=0.2 n_procs=1
     connectivity = 26
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     find_min = False
@@ -62,7 +62,7 @@
     apply_xfm = True
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-- fmri_0_cluster_t7_1 [Cluster] cmd=cluster mem_gb=0.2 n_procs=1
+- fmri_0_cluster_t7_1 [Cluster] cmd=fsl-cluster mem_gb=0.2 n_procs=1
     connectivity = 26
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     find_min = False
