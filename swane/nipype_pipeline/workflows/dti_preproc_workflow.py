@@ -11,6 +11,7 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
 from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
+from swane.nipype_pipeline.nodes.AffineToFSL import AffineToFSL
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     get_registration_node,
@@ -86,20 +87,13 @@ def dti_preproc_workflow(
         Samples from the distribution on phi.
     thsamples : path
         Samples from the distribution on theta.
-    diff2ref_transforms : list
-        Ordered transform list registering diffusion -> T13D reference space
-        (the abstraction's forward view; an FSL .mat or an ANTs transform list
-        depending on the engine).
-    diff2ref_which_to_invert : list or None
-        Per-transform invert flags paired with ``diff2ref_transforms`` for
-        ``AntsApplyTransforms``; ``None`` on FSL/Synth (they never invert on
-        apply).
-    ref2diff_transforms : list
-        Ordered transform list registering T13D reference -> diffusion space
-        (the abstraction's inverse view).
-    ref2diff_which_to_invert : list or None
-        Per-transform invert flags paired with ``ref2diff_transforms``;
-        ``None`` on FSL/Synth.
+    diff2ref_mat : path
+        Diffusion -> T13D reference space affine, as an FSL matrix (FLIRT
+        ``.mat`` passthrough on FSL, converted via ``AffineToFSL`` on ANTs).
+    ref2diff_mat : path
+        T13D reference -> diffusion space affine, as an FSL matrix
+        (``ConvertXFM`` inverse passthrough on FSL, converted via
+        ``AffineToFSL`` on ANTs).
     nodif_brain : path
         Betted b0 image in diffusion space (used as the probtrackx seed
         reference).
@@ -130,10 +124,8 @@ def dti_preproc_workflow(
                 "fsamples",
                 "phsamples",
                 "thsamples",
-                "diff2ref_transforms",
-                "diff2ref_which_to_invert",
-                "ref2diff_transforms",
-                "ref2diff_which_to_invert",
+                "diff2ref_mat",
+                "ref2diff_mat",
                 "nodif_brain",
             ]
         ),
@@ -256,30 +248,26 @@ def dti_preproc_workflow(
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
-    # Emit the diff<->ref transform in the backend-neutral transform-list view
-    # (forward: diff -> ref; inverse: ref -> diff). Tractography (Session E)
-    # stacks these uniformly across engines; probtrackx no longer needs an FSL
-    # .mat, so the SYNTH LTAConvert bridge is gone. On FSL/Synth the
-    # which_to_invert sources are None (those backends never invert on apply),
-    # so those fields are left unconnected (None) for the consumer to handle.
-    fwd_node, fwd_field = dif2ref.fwd_transforms[0]
-    workflow.connect(fwd_node, fwd_field, outputnode, "diff2ref_transforms")
-    inv_node, inv_field = dif2ref.inv_transforms[0]
-    workflow.connect(inv_node, inv_field, outputnode, "ref2diff_transforms")
-    if dif2ref.fwd_which_to_invert is not None:
-        workflow.connect(
-            dif2ref.fwd_which_to_invert[0],
-            dif2ref.fwd_which_to_invert[1],
-            outputnode,
-            "diff2ref_which_to_invert",
-        )
-    if dif2ref.inv_which_to_invert is not None:
-        workflow.connect(
-            dif2ref.inv_which_to_invert[0],
-            dif2ref.inv_which_to_invert[1],
-            outputnode,
-            "ref2diff_which_to_invert",
-        )
+    # probtrackx consumes a single FSL .mat per transform slot. Emit the
+    # diff<->ref affine as FSL: on FSL the FLIRT .mat and its ConvertXFM inverse
+    # pass straight through; on ANTs the ITK affine is converted with
+    # nitransforms (AffineToFSL), which needs no FSL/FreeSurfer CLI. dif2ref is
+    # affine-only and SYNTH is downgraded to FSL above, so engine is FSL or ANTS.
+    if engine == RegistrationEngine.FSL:
+        fwd_node, fwd_field = dif2ref.fwd_transforms[0]
+        workflow.connect(fwd_node, fwd_field, outputnode, "diff2ref_mat")
+        inv_node, inv_field = dif2ref.inv_transforms[0]
+        workflow.connect(inv_node, inv_field, outputnode, "ref2diff_mat")
+    else:
+        dif2ref_to_fsl = Node(AffineToFSL(), name="dif2ref_to_fsl")
+        dif2ref_to_fsl.long_name = "DTI-to-reference affine FSL conversion"
+        dif2ref_to_fsl.inputs.in_fmt = "itk"
+        fwd_node, fwd_field = dif2ref.fwd_transforms[0]
+        workflow.connect(fwd_node, fwd_field, dif2ref_to_fsl, "in_transform")
+        workflow.connect(b0_deskull, "out_file", dif2ref_to_fsl, "source_file")
+        workflow.connect(inputnode, "reference_brain", dif2ref_to_fsl, "reference_file")
+        workflow.connect(dif2ref_to_fsl, "out_fsl", outputnode, "diff2ref_mat")
+        workflow.connect(dif2ref_to_fsl, "out_fsl_inverse", outputnode, "ref2diff_mat")
     workflow.connect(b0_deskull, "out_file", outputnode, "nodif_brain")
 
     fa_2_ref = apply_registration_node(
