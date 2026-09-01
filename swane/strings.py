@@ -536,6 +536,10 @@ license_consent_banner = (
 mainwindow_home_license_link = "license"
 license_consent_progress = "License {current} of {total}: {tool}"
 license_consent_preparing = "Preparing licenses..."
+license_consent_resolution_error = (
+    "SWANe could not prepare the third-party license texts. The application "
+    "will close; please restart it and report the problem if it persists."
+)
 license_consent_accept_button = "I ACCEPT"
 license_consent_scroll_hint = "Please scroll to the end of the license to continue."
 license_consent_source_online = (

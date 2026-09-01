@@ -7,6 +7,7 @@ def main():
     import psutil
     from swane import strings
     import swane_supplement
+    from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication, QMessageBox
     from PySide6.QtGui import QIcon, QPixmap
     from swane.ui.MainWindow import MainWindow
@@ -63,10 +64,16 @@ def main():
         try:
             widget = MainWindow(global_config)
             widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
-            if widget.run_license_consent_gate():
-                current_exit_code = app.exec()
-            else:
-                current_exit_code = 0
+
+            # Start the regular Qt event loop before running the modal license
+            # gate. This lets the already-visible main window paint and process
+            # events while license texts are resolved in the background.
+            def _run_license_consent_gate():
+                if not widget.run_license_consent_gate():
+                    app.exit(0)
+
+            QTimer.singleShot(0, _run_license_consent_gate)
+            current_exit_code = app.exec()
         finally:
             # At SWANe exit
             # Clearing last PID and create time to allow new SWANe instance launch

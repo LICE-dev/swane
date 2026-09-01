@@ -6,8 +6,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
-    QStackedWidget,
-    QWidget,
     QLabel,
     QPushButton,
     QTextBrowser,
@@ -22,6 +20,7 @@ class LicenseConsentWindow(QDialog):
     def __init__(self, resolved_licenses, parent=None):
         super().__init__(parent)
         self._licenses = list(resolved_licenses)
+        self._current_index = 0
         self.accepted_tool_ids = []
 
         self.setWindowTitle(strings.license_consent_title)
@@ -54,50 +53,27 @@ class LicenseConsentWindow(QDialog):
         self._progress.setFont(title_font)
         root.addWidget(self._progress)
 
-        self._stack = QStackedWidget()
-        self._browsers = []
-        for res in self._licenses:
-            page = QWidget()
-            lay = QVBoxLayout()
+        self._warning = QLabel("")
+        self._warning.setWordWrap(True)
+        self._warning.setStyleSheet("color: #b06000;")
+        root.addWidget(self._warning)
 
-            if res.show_source_warning and res.source is LicenseSource.ONLINE:
-                warn = QLabel(
-                    strings.license_consent_source_online.format(tool=res.display_name)
-                )
-                warn.setWordWrap(True)
-                warn.setStyleSheet("color: #b06000;")
-                lay.addWidget(warn)
-            elif res.show_source_warning and res.source is LicenseSource.BUNDLED:
-                warn = QLabel(
-                    strings.license_consent_source_bundled.format(tool=res.display_name)
-                )
-                warn.setWordWrap(True)
-                warn.setStyleSheet("color: #b06000;")
-                lay.addWidget(warn)
-
-            browser = QTextBrowser()
-            browser.setOpenExternalLinks(True)
-            self._style_license_browser(browser)
-            if res.is_html:
-                browser.setHtml(res.text)
-            else:
-                browser.setPlainText(res.text)
-            browser.verticalScrollBar().valueChanged.connect(self._maybe_enable_accept)
-            # A long document's layout may not be computed yet at the first
-            # showEvent, leaving the scrollbar maximum at 0 (which otherwise
-            # reads as "fits without scrolling"). Re-evaluate whenever the
-            # document's laid-out size changes so a long license cannot unlock
-            # the accept button prematurely.
-            browser.document().documentLayout().documentSizeChanged.connect(
-                self._maybe_enable_accept
-            )
-            lay.addWidget(browser)
-            self._browsers.append(browser)
-
-            page.setLayout(lay)
-            self._stack.addWidget(page)
-
-        root.addWidget(self._stack)
+        # Keep one document widget and load only the current license. Creating
+        # and laying out every document up front is especially expensive for
+        # the large FSL license on low-performance systems.
+        self._browser = QTextBrowser()
+        self._browser.setOpenExternalLinks(True)
+        self._style_license_browser(self._browser)
+        self._browser.verticalScrollBar().valueChanged.connect(
+            self._maybe_enable_accept
+        )
+        # A long document's layout may not be computed immediately, leaving the
+        # scrollbar maximum at 0. Re-evaluate whenever its laid-out size changes
+        # so a long license cannot unlock the accept button prematurely.
+        self._browser.document().documentLayout().documentSizeChanged.connect(
+            self._maybe_enable_accept
+        )
+        root.addWidget(self._browser)
 
         hint = QLabel(strings.license_consent_scroll_hint)
         hint.setStyleSheet("color: #666;")
@@ -145,10 +121,10 @@ class LicenseConsentWindow(QDialog):
         browser.setPalette(palette)
 
     def _current_browser(self):
-        return self._browsers[self._stack.currentIndex()]
+        return self._browser
 
     def _sync_page(self):
-        idx = self._stack.currentIndex()
+        idx = self._current_index
         self._progress.setText(
             strings.license_consent_progress.format(
                 current=idx + 1,
@@ -156,7 +132,30 @@ class LicenseConsentWindow(QDialog):
                 tool=self._licenses[idx].display_name,
             )
         )
-        self._maybe_enable_accept()
+        self._load_current_license()
+
+    def _load_current_license(self):
+        """Load and lay out only the currently displayed license."""
+        res = self._licenses[self._current_index]
+        warning_text = ""
+        if res.show_source_warning and res.source is LicenseSource.ONLINE:
+            warning_text = strings.license_consent_source_online.format(
+                tool=res.display_name
+            )
+        elif res.show_source_warning and res.source is LicenseSource.BUNDLED:
+            warning_text = strings.license_consent_source_bundled.format(
+                tool=res.display_name
+            )
+        self._warning.setText(warning_text)
+        self._warning.setVisible(bool(warning_text))
+
+        self._accept_btn.setEnabled(False)
+        if res.is_html:
+            self._browser.setHtml(res.text)
+        else:
+            self._browser.setPlainText(res.text)
+        self._browser.verticalScrollBar().setValue(0)
+        QTimer.singleShot(0, self._maybe_enable_accept)
 
     def _maybe_enable_accept(self, *args):
         bar = self._current_browser().verticalScrollBar()
@@ -164,9 +163,9 @@ class LicenseConsentWindow(QDialog):
         self._accept_btn.setEnabled(at_bottom)
 
     def _accept_current(self):
-        idx = self._stack.currentIndex()
+        idx = self._current_index
         if idx < len(self._licenses) - 1:
-            self._stack.setCurrentIndex(idx + 1)
+            self._current_index = idx + 1
             self._sync_page()
             return
         # Last page: atomic accept
