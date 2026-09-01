@@ -69,7 +69,11 @@ class AntsPyNetBrainExtraction(BaseInterface):
         img = ants.image_read(self.inputs.in_file, pixeltype="float")
 
         saved = {v: os.environ.get(v) for v in self.THREAD_ENV_VARS}
-        if isdefined(self.inputs.num_threads):
+        # Only export a positive thread count: num_threads<=0 means "auto/all
+        # cores" (the max_cpu=0 default), and exporting OMP_NUM_THREADS=0 is
+        # undefined for OpenMP -- leave the env untouched so each library uses
+        # its own default.
+        if isdefined(self.inputs.num_threads) and self.inputs.num_threads > 0:
             for v in self.THREAD_ENV_VARS:
                 os.environ[v] = str(self.inputs.num_threads)
         try:
@@ -91,6 +95,16 @@ class AntsPyNetBrainExtraction(BaseInterface):
         mask = prob.new_image_like(
             (prob.numpy() >= self.inputs.threshold).astype("float32")
         )
+        # An empty binary mask must fail loudly BEFORE GetLargestComponent:
+        # ants.iMath("GetLargestComponent") turns an all-zero image into a FULL
+        # one, which would silently pass the whole head off as "brain". This is
+        # reachable through the antspynet_thr preference (a threshold near 1) or
+        # a modality/image mismatch producing uniformly low probabilities.
+        if mask.numpy().sum() == 0:
+            raise ValueError(
+                "antspynet brain_extraction produced an empty mask at threshold "
+                "%s for modality %r" % (self.inputs.threshold, self.inputs.modality)
+            )
         # Drop detached false positives (orbital/nasal); some models emit them.
         mask = ants.iMath(mask, "GetLargestComponent")
 
