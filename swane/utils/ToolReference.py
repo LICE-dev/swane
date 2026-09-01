@@ -4,6 +4,7 @@ from enum import Enum
 class Package(Enum):
     FSL = "fsl"
     FREESURFER = "freesurfer"
+    ANTS = "ants"
     NIPY = "nipy"
     OTHER = "Other"
 
@@ -325,9 +326,10 @@ tool_reference_list = {
             "Rolfe S, Pieper S, Porto A, et al. SlicerMorph: An open and extensible platform to retrieve, visualize and analyze 3D morphology. Methods Ecol Evol. 2021."
         ],
     ),
-    "N4BiasFieldCorrection": ToolReference(
+    # ANTs (antspyx / antspynet)
+    "AntsN4BiasFieldCorrection": ToolReference(
         command="N4BiasFieldCorrection [antspyx]",
-        package=Package.OTHER,
+        package=Package.ANTS,
         url="https://antspyx.readthedocs.io/en/latest/utils.html#ants.n4_bias_field_correction",
         references=[
             "Tustison NJ, Avants BB, Cook PA, et al. N4ITK: improved N3 bias correction. IEEE Trans Med Imaging. 2010;29(6):1310-1320."
@@ -335,13 +337,21 @@ tool_reference_list = {
     ),
     "AntsRegistration": ToolReference(
         command="antsRegistration",
-        package=Package.OTHER,
+        package=Package.ANTS,
         url="https://antspyx.readthedocs.io/en/latest/registration.html#ants.registration",
         references=[
             "Avants BB, Epstein CL, Grossman M, Gee JC. Symmetric diffeomorphic image registration with cross-correlation: evaluating automated labeling of elderly and neurodegenerative brain. Med Image Anal. 2008;12(1):26-41.",
             "Klein A, Andersson J, Ardekani BA, et al. Evaluation of 14 nonlinear deformation algorithms applied to human brain MRI registration. Neuroimage. 2009;46(3):786-802.",
             "Murphy K, van Ginneken B, Reinhardt JM, et al. Evaluation of registration methods on thoracic CT: the EMPIRE10 challenge. IEEE Trans Med Imaging. 2011;30(11):1901-1920.",
             "Avants BB, Tustison NJ, Stauffer M, Song G, Wu B, Gee JC. A reproducible evaluation of ANTs similarity metric performance in brain image registration. Neuroimage. 2011;54(3):2033-2044.",
+        ],
+    ),
+    "AntsPyNetBrainExtraction": ToolReference(
+        command="brain_extraction [antspynet]",
+        package=Package.ANTS,
+        url="https://github.com/ANTsX/ANTsPyNet/blob/master/antspynet/utilities/brain_extraction.py",
+        references=[
+            "Tustison NJ, Cook PA, Holbrook AJ, et al. The ANTsX ecosystem for quantitative biological and medical imaging. Sci Rep. 2021;11:9068."
         ],
     ),
 }
