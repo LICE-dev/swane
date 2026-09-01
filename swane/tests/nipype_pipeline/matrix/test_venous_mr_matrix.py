@@ -3,12 +3,15 @@
 
 Covers the single 4D series (split in time) vs two separate phase series
 (converted + merged) topologies, the venous-phase ``vein_detection_mode`` enum,
-and the SynthStrip/SynthMorph backend. Snapshots under ``snapshots/venous_mr/``.
+the brain-extraction ``deskull_engine`` enum (BET / SynthStrip / the default
+antspynet) and the SynthMorph registration backend. Snapshots under
+``snapshots/venous_mr/``.
 """
 
 import pytest
 
 from swane.config.config_enums import (
+    DeskullEngine,
     GlobalPrefCategoryList,
     VeinDetectionMode,
     CoreLimit,
@@ -23,17 +26,39 @@ venous_mr_workflow = import_workflow_or_skip(
 SUBDIR = "venous_mr"
 MAX_CPU = 4
 
-# name -> (two_series, detection_mode, synth, limit_synth_cores)
+# name -> (two_series, detection_mode, deskull_engine, synth, limit_synth_cores)
 SCENARIOS = {
-    "single_series_sd": (False, VeinDetectionMode.SD, False, False),
-    "single_series_first": (False, VeinDetectionMode.FIRST, False, False),
-    "two_series": (True, VeinDetectionMode.SD, False, False),
-    "single_series_synth_backend": (False, VeinDetectionMode.SD, True, False),
+    "single_series_sd": (False, VeinDetectionMode.SD, DeskullEngine.BET, False, False),
+    "single_series_first": (
+        False,
+        VeinDetectionMode.FIRST,
+        DeskullEngine.BET,
+        False,
+        False,
+    ),
+    "two_series": (True, VeinDetectionMode.SD, DeskullEngine.BET, False, False),
+    "single_series_synth_backend": (
+        False,
+        VeinDetectionMode.SD,
+        DeskullEngine.SYNTHSTRIP,
+        True,
+        False,
+    ),
     "single_series_synth_backend_limit_cores": (
         False,
         VeinDetectionMode.SD,
+        DeskullEngine.SYNTHSTRIP,
         True,
         True,
+    ),
+    # The default engine since the antspynet flip, on the FSL registration
+    # backend: only the deskull node differs from single_series_sd.
+    "single_series_antspynet": (
+        False,
+        VeinDetectionMode.SD,
+        DeskullEngine.ANTSPYNET,
+        False,
+        False,
     ),
 }
 
@@ -42,11 +67,13 @@ SCENARIOS = {
 def test_venous_mr_matrix(
     scenario, subject_config, global_config, make_input_dir, graph_snapshot
 ):
-    two_series, detection_mode, synth_backend, limit_synth_cores = SCENARIOS[scenario]
+    two_series, detection_mode, deskull_engine, synth_backend, limit_synth_cores = (
+        SCENARIOS[scenario]
+    )
     section = subject_config[DataInputList.VENOUS_MR]
     section["vein_detection_mode"] = detection_mode.name
     synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["strip"] = "true" if synth_backend else "false"
+    synth["deskull_engine"] = deskull_engine.name
     synth["morph"] = "true" if synth_backend else "false"
     synth["engine"] = "SYNTH" if synth_backend else "FSL"
     synth["limit_cores"] = "true" if limit_synth_cores else "false"
@@ -65,7 +92,7 @@ def test_venous_mr_matrix(
     config_echo = {
         "two_series": two_series,
         "vein_detection_mode": detection_mode.name,
-        "synth_strip": synth["strip"],
+        "deskull_engine": synth["deskull_engine"],
         "synth_morph": synth["morph"],
         "limit_synth_cores": synth["limit_cores"],
         "max_cpu": MAX_CPU,
@@ -109,7 +136,7 @@ def test_venous_mr_matrix_test_run(
     config_echo = {
         "two_series": False,
         "vein_detection_mode": VeinDetectionMode.SD.name,
-        "synth_strip": synth["strip"],
+        "deskull_engine": synth["deskull_engine"],
         "synth_morph": synth["morph"],
         "test_run": True,
     }

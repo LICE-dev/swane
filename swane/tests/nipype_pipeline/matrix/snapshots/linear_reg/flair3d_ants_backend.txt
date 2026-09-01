@@ -2,6 +2,7 @@
 #
 #   bias_field_correction = True
 #   config = FLAIR3D
+#   deskull_engine = ANTSPYNET
 #   is_partial_coverage = False
 #   is_volumetric = True
 #   limit_synth_cores = false
@@ -9,7 +10,6 @@
 #   multicore_node_limit = SOFT_CAP
 #   registration_engine = ANTS
 #   synth_morph = false
-#   synth_strip = false
 #
 # nodes=13 edges=26
 
@@ -46,13 +46,10 @@
     single_file = False
     source_dir = '<TMP>/dicom'
     verbose = False
-- flair3d_deskull_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    frac = 0.5
-    mask = True
-    output_type = 'NIFTI_GZ'
-    robust = True
-    threshold = False
+- flair3d_deskull_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=4
+    mask_file = 'brain_mask.nii.gz'
+    modality = 't1'
+    num_threads = 4
 - flair3d_reorient [ForceOrient] mem_gb=0.2 n_procs=1
 - flair3d_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
@@ -78,11 +75,11 @@ flair3d_antsreg.fwd_transforms -> outputnode.out_matrix_file
 flair3d_antsreg.fwd_which_to_invert -> deskulled_flair3d_ants_apply.which_to_invert
 flair3d_antsreg.fwd_which_to_invert -> flair3d_ants_apply.which_to_invert
 flair3d_conv.converted_files -> flair3d_reorient.in_file
-flair3d_deskull_bet.out_file -> deskulled_flair3d_ants_apply.input_image
-flair3d_deskull_bet.out_file -> flair3d_antsreg.moving
+flair3d_deskull_antspynet.out_file -> deskulled_flair3d_ants_apply.input_image
+flair3d_deskull_antspynet.out_file -> flair3d_antsreg.moving
 flair3d_reorient.out_file -> flair3d_robustfov.in_file
 flair3d_robustfov.out_roi -> flair3d_ants_apply.input_image
-flair3d_robustfov.out_roi -> flair3d_deskull_bet.in_file
+flair3d_robustfov.out_roi -> flair3d_deskull_antspynet.in_file
 inputnode.output_name -> betted_name.basename
 inputnode.output_name -> unbetted_name.basename
 inputnode.reference -> deskulled_flair3d_ants_apply.reference_image

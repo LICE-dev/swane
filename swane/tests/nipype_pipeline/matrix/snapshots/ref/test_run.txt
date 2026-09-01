@@ -2,7 +2,7 @@
 #
 #   bet_bias_correction = false
 #   bet_thr = 0.3
-#   synth_strip = False
+#   deskull_engine = ANTSPYNET
 #   test_run = True
 #
 # nodes=8 edges=12
@@ -32,13 +32,10 @@
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'ref_brain.nii.gz'
     output_type = 'NIFTI_GZ'
-- ref_deskull_biased_bet [BET] cmd=bet mem_gb=0.2 n_procs=1
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    frac = 0.3
-    mask = True
-    output_type = 'NIFTI_GZ'
-    robust = True
-    threshold = False
+- ref_deskull_biased_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=4
+    mask_file = 'brain_mask.nii.gz'
+    modality = 't1'
+    num_threads = 4
 - ref_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - ref_reScale [CropFov] mem_gb=0.2 n_procs=1
     max_dim = 256
@@ -52,12 +49,12 @@ ref_bias_correction.out_file -> outputnode.reference
 ref_bias_correction.out_file -> ref_corrected_deskull.in_file
 ref_conv.converted_files -> ref_reOrient.in_file
 ref_corrected_deskull.out_file -> outputnode.reference_brain
-ref_deskull_biased_bet.mask_file -> outputnode.ref_mask
-ref_deskull_biased_bet.mask_file -> ref_bias_correction.mask_file
-ref_deskull_biased_bet.mask_file -> ref_corrected_deskull.mask_file
-ref_deskull_biased_bet.out_file -> outputnode.uncorrected_reference_brain
+ref_deskull_biased_antspynet.mask_file -> outputnode.ref_mask
+ref_deskull_biased_antspynet.mask_file -> ref_bias_correction.mask_file
+ref_deskull_biased_antspynet.mask_file -> ref_corrected_deskull.mask_file
+ref_deskull_biased_antspynet.out_file -> outputnode.uncorrected_reference_brain
 ref_reOrient.out_file -> ref_robustfov.in_file
 ref_reScale.out_file -> outputnode.uncorrected_reference
 ref_reScale.out_file -> ref_bias_correction.in_file
-ref_reScale.out_file -> ref_deskull_biased_bet.in_file
+ref_reScale.out_file -> ref_deskull_biased_antspynet.in_file
 ref_robustfov.out_roi -> ref_reScale.in_file

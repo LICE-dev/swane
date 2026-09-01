@@ -297,6 +297,7 @@ def run_sweep(
     print(
         "Running %d pass(es) sequentially in %s" % (len(runnable), work_dir), flush=True
     )
+    _preload_antspynet(runnable)
 
     for index, pass_item in enumerate(plan, start=1):
         previous = state.get(pass_item.name)
@@ -363,6 +364,25 @@ def run_sweep(
             on_pass_done(result)
 
     return results
+
+
+def _preload_antspynet(runnable: list) -> None:
+    """Fetch the antspynet weights before the first pass, if any pass needs them.
+
+    Left to the workflows the download happens inside a nipype worker, where
+    concurrent nodes race for the same file and a node waiting on the network
+    is indistinguishable from a node that hangs. A failure here is reported and
+    not fatal: the sweep then fails on the pass that actually needed the
+    weights, with that pass's own diagnostics.
+    """
+    if not any(p.values.get("deskull_engine") == "ANTSPYNET" for p in runnable):
+        return
+    from swane.tests.prerelease.antspynet_cache import preload_antspynet_models
+
+    try:
+        preload_antspynet_models()
+    except Exception as error:  # noqa: BLE001 - reported, never fatal here
+        print("  antspynet pre-cache failed (%s); continuing" % error, flush=True)
 
 
 def _reusable(previous: dict, pass_item) -> bool:

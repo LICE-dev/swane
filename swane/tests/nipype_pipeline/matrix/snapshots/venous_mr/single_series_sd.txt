@@ -1,10 +1,10 @@
 # workflow snapshot: venous_mr / single_series_sd
 #
+#   deskull_engine = BET
 #   limit_synth_cores = false
 #   max_cpu = 4
 #   multicore_node_limit = SOFT_CAP
 #   synth_morph = false
-#   synth_strip = false
 #   two_series = False
 #   vein_detection_mode = SD
 #

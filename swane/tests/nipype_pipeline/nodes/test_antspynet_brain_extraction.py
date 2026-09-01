@@ -110,7 +110,7 @@ def test_non_image_return_raises(tmp_path, monkeypatch):
         node.run()
 
 
-def test_keeps_only_largest_component(tmp_path):
+def test_keeps_only_largest_component(tmp_path, monkeypatch):
     # fake returns a prob map with a large blob and a small detached blob
     def be(image, modality=None, **k):
         arr = np.zeros(image.shape, dtype="float32")
@@ -120,9 +120,10 @@ def test_keeps_only_largest_component(tmp_path):
 
     module = types.ModuleType("antspynet")
     module.brain_extraction = be
-    import sys as _sys
-
-    _sys.modules["antspynet"] = module
+    # monkeypatch (not a bare sys.modules assignment): the fake must not stay
+    # installed for the rest of the session, or a later test importing the real
+    # antspynet gets this stub instead.
+    monkeypatch.setitem(sys.modules, "antspynet", module)
     in_file = _write_image(str(tmp_path / "in.nii.gz"))
     node = AntsPyNetBrainExtraction()
     node.inputs.in_file = in_file
@@ -133,3 +134,46 @@ def test_keeps_only_largest_component(tmp_path):
     mask = ants.image_read(str(tmp_path / "mask.nii.gz")).numpy()
     assert mask[0, 0, 0] == 0.0  # detached blob removed
     assert mask[1:5, 1:5, 1:5].sum() > 0
+
+
+@pytest.mark.heavy
+class TestRealAntsPyNetModalities:
+    """Every ``DeskullModality`` must be a modality the installed antspynet knows.
+
+    Belt and suspenders for the ``flair.v0`` risk: ``DeskullModality.VENOUS``
+    uses a *previous-version* upstream network, so an antspynet release that
+    drops it would only surface as ``ValueError: Unknown modality type.`` at run
+    time, deep inside the venous MR workflow. The primary mitigation is the
+    exact ``antspynet`` pin in ``setup.py``; this test fails loudly the moment
+    the installed package stops accepting one of the keys SWANe sends.
+
+    Real antspynet, real weights (downloaded once into ``~/.keras/ANTsXNet``),
+    so it is opt-in via ``--run-heavy``.
+    """
+
+    def test_every_modality_is_accepted(self):
+        antspynet = pytest.importorskip("antspynet")
+        from swane.config.config_enums import DeskullModality
+        from swane.tests.prerelease.antspynet_cache import preload_antspynet_models
+
+        preload_antspynet_models(verbose=False)
+
+        # A head-sized synthetic volume, not the 6^3 stub the mocked tests use:
+        # brain_extraction really resamples to its template here, and a
+        # degenerate input would fail for reasons unrelated to the modality key.
+        arr = np.zeros((96, 96, 96), dtype="float32")
+        arr[24:72, 24:72, 24:72] = 100.0
+        image = ants.from_numpy(arr, spacing=(2.0, 2.0, 2.0))
+        for modality in DeskullModality:
+            try:
+                antspynet.brain_extraction(image, modality=modality.value)
+            except ValueError as error:
+                # Only the modality key is under test here: any other
+                # ValueError (a shape/spacing complaint about this synthetic
+                # volume) still proves the key was recognised.
+                assert "Unknown modality" not in str(
+                    error
+                ), "installed antspynet does not know %s=%r" % (
+                    modality.name,
+                    modality.value,
+                )
