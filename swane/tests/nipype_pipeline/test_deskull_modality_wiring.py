@@ -131,3 +131,64 @@ def test_venous_mr_forwards_venous_modality(
         multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     assert _modality_of(wf, "vein_mr_deskull_antspynet") == DeskullModality.VENOUS.value
+
+
+def _threshold_of(wf, node_name):
+    return wf.get_node(node_name).inputs.threshold
+
+
+def test_ref_forwards_antspynet_threshold(
+    subject_config, global_config, make_input_dir
+):
+    synth = _antspynet_synth(global_config)
+    section = subject_config[DataInputList.T13D]
+    section["antspynet_thr"] = "0.6"
+    wf = ref_workflow(
+        "ref",
+        dicom_dir=make_input_dir(),
+        config=section,
+        synth_config=synth,
+        deskull_modality=DeskullModality.T1,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
+    )
+    assert _threshold_of(wf, "ref_deskull_biased_antspynet") == 0.6
+
+
+def test_linear_reg_forwards_antspynet_threshold(
+    subject_config, global_config, make_input_dir
+):
+    synth = _antspynet_synth(global_config)
+    section = subject_config[DataInputList.FLAIR3D]
+    section["antspynet_thr"] = "0.6"
+    wf = linear_reg_workflow(
+        "flair",
+        dicom_dir=make_input_dir(),
+        config=section,
+        synth_config=synth,
+        is_volumetric=True,
+        is_partial_coverage=False,
+        bias_field_correction=True,
+        deskull_modality=DeskullModality.FLAIR,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
+    )
+    assert _threshold_of(wf, "flair_deskull_antspynet") == 0.6
+
+
+def test_venous_mr_forwards_antspynet_threshold(
+    subject_config, global_config, make_input_dir
+):
+    synth = _antspynet_synth(global_config)
+    section = subject_config[DataInputList.VENOUS_MR]
+    section["antspynet_thr"] = "0.6"
+    wf = venous_mr_workflow(
+        "venous_mr",
+        venous_mr_dir=make_input_dir(),
+        config=section,
+        synth_config=synth,
+        deskull_modality=DeskullModality.VENOUS,
+        max_cpu=MAX_CPU,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
+    )
+    assert _threshold_of(wf, "vein_mr_deskull_antspynet") == 0.6

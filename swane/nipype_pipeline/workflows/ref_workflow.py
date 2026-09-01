@@ -122,6 +122,7 @@ def ref_workflow(
         deskull_modality=deskull_modality,
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
+        antspynet_thr=config.getfloat_safe("antspynet_thr"),
         bet_robust=True,
         bet_bias_correction=config.getboolean_safe("bet_bias_correction"),
         synth_exclude_csf=True,
