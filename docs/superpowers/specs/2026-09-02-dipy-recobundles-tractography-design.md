@@ -287,7 +287,7 @@ do not take a `multicore_node_limit` parameter at all.
 
 | Node | Parallelism source | `n_procs` | `use_cuda` |
 |---|---|---|---|
-| `DipyDenoise` (`mppca`, full) | none — serial in dipy | 1 | no |
+| `DipyDenoise` (`mppca`, full) | **our own slab pool** | `max_cpu` | no |
 | `DipyDenoise` (`nlmeans`, fast) | `num_threads` | `max_cpu` | no |
 | `DipyMotionCorrection` | **our own pool over volumes** | `max_cpu` | no |
 | `DipyTensorFit` (FA) | none needed — cheap | 1 | no |
@@ -380,6 +380,28 @@ exercise opposite regimes:
 They exercise different branches of the adaptive-lmax code, which is why both are
 needed: subj1 covers the lowest angular resolution SWANe accepts, subj2 a routine
 one. Neither is "the typical case" on its own.
+
+### `DipyDenoise` (mppca) slab parallelism
+
+`mppca` exposes no parallelism knob, and `pca_method` is already at its faster
+setting (`'eig'`; `'svd'` is only occasionally more accurate and slower), so the
+only remaining lever is to parallelise it ourselves.
+
+MP-PCA is **purely local**: each patch estimates its noise from its own
+`voxels x volumes` matrix, with no global dependency. The volume can therefore be
+split into slabs along z with a halo of `patch_radius`, processed in parallel and
+stitched. With that halo every interior patch is wholly contained in its slab, so
+the result is **exactly identical** to the serial run — not an approximation.
+
+That exactness is what makes it verifiable by the same oracle used for
+`DipyMotionCorrection`: slab-parallel versus serial, bit-for-bit, with
+`OMP_NUM_THREADS=1` pinned on both sides. The same three-layer structure applies:
+a fast unit test that slabs are stitched back in the right order, a test that the
+halo is at least `patch_radius`, and the heavy equivalence oracle.
+
+Motivation from measurement: 404 s on the 16-volume subject and over 15 minutes
+on the 65-volume one — the cost grows faster than linearly with volume count,
+precisely on the acquisitions where the dipy engine should perform best.
 
 ### `DipyMotionCorrection` equivalence
 
