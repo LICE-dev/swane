@@ -75,16 +75,15 @@ default `FSL_XTRACT` so existing users see no behaviour change, with
 | `atr` `str` `cbd` `cbp` `cbt` | active | greyed, "no RecoBundles atlas counterpart" |
 | `cingulum` (new) | greyed | active |
 | `tractography_threshold`, `track_procs` | active | greyed |
-| `denoise_level` (new, **shared**) | active | active |
+| `dwi_preproc_level` (new, **shared**) | active | active |
 | `seed_density`, `max_angle`, `step_size` (new) | greyed | active |
 
-#### `denoise_level` — an engine-independent quality control
+#### `dwi_preproc_level` — an engine-independent quality control
 
-A three-level enum, active on **both** engines, which each engine interprets:
+A two-level enum, active on **both** engines, which each engine interprets:
 
 | Level | FSL | dipy |
 |---|---|---|
-| `NONE` | no eddy correction at all | no denoising (motion correction still runs) |
 | `FAST` | `eddy_correct` | `nlmeans` + `estimate_sigma` |
 | `FULL` | `eddy` | `mppca` |
 
@@ -92,21 +91,30 @@ A three-level enum, active on **both** engines, which each engine interprets:
 parallelises, whereas `mppca` is single-core; the pair is therefore fast-vs-accurate
 in wall-clock terms, not only in algorithm.
 
-Note the semantic asymmetry, which the tooltip must state plainly: on FSL, `eddy`
-and `eddy_correct` are eddy-current/motion correction, not denoising; on dipy,
-denoising and motion correction are separate steps and motion correction is never
-skipped. `NONE` therefore genuinely disables eddy correction on FSL, which is
-scientifically inadvisable on clinical data — accepted deliberately, because SWANe
-is a research tool and the choice belongs to the user, with a warning tooltip.
+A `NONE` level was considered and **deliberately dropped**. It had no symmetric
+meaning: on dipy it would skip denoising while motion correction still ran, but on
+FSL it would disable eddy correction entirely, which is scientifically inadvisable
+on clinical data. Restricting the enum to two levels removes the asymmetry and
+makes every selectable configuration a sound one.
 
-This preference **absorbs `old_eddy_correct`**, removing one of the entries that
-would otherwise have been greyed on dipy and making the two screens more uniform.
+The name is `dwi_preproc_level`, not `denoise_level`, because the operation
+differs per engine: on FSL these are eddy-current/motion correction levels, on
+dipy they are denoising levels with motion correction always running alongside.
+The tooltip must state that mapping rather than leave it to be inferred.
+
+This preference **absorbs `old_eddy_correct`**, removing an entry that would
+otherwise have been greyed on dipy and making the two screens more uniform.
 
 **Compatibility**: `old_eddy_correct` is a persisted boolean and therefore a
-stable contract under `CLAUDE.md`. Replacing it with an enum requires a migration
-for existing subject configurations: `true` → `FAST`, `false` → `FULL` (the
-current default, since `false` means the full `eddy` runs today). The migration
-must be written and tested, not left to a silent default.
+stable contract under `CLAUDE.md`. The replacement is a 1:1 mapping that must be
+migrated explicitly, not left to a silent default:
+
+- `old_eddy_correct = true` → `dwi_preproc_level = FAST` (used `eddy_correct`)
+- `old_eddy_correct = false` → `dwi_preproc_level = FULL` (uses `eddy`, today's default)
+
+Without the migration, subjects configured for the fast path would silently move
+to full `eddy` — a much slower run, and different from the one that produced their
+existing results.
 
 ### 3. Bundle mapping (verified against the downloaded atlas)
 
@@ -144,7 +152,7 @@ no re-validation and the golden matrix snapshots do not churn.
 
 ```
 CustomDcm2niix -> ForceOrient -> ExtractVolumes(b0) -> get_deskull_node   [shared]
-  -> DipyDenoise (mppca, patch_radius=1)
+  -> DipyDenoise (mppca | nlmeans, per dwi_preproc_level)
   -> DipyMotionCorrection (dipy.align, + bvec rotation)
   -> DwiBiasCorrection (N4 on mean b0, field applied to all volumes)
   -> DipyTensorFit -> FA -> apply_registration_node -> outputnode.FA
