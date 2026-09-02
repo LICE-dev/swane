@@ -11,6 +11,7 @@ def test_registry_has_all_tools():
         "dcm2niix",
         "antspyx",
         "antspynet",
+        "dipy",
     }
 
 
