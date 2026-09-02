@@ -331,6 +331,19 @@ do not take a `multicore_node_limit` parameter at all.
 | `DipyRecoBundles` | `recognize(num_threads)` | `max_cpu` | no |
 | N4 on b0 | ITK `num_threads` (existing node) | `max_cpu` | no |
 
+**Every dipy node must pin its BLAS thread count.** numpy here is linked against
+scipy-openblas, which multithreads large decompositions on its own, invisibly to
+nipype. Measured: `mppca` runs at 100% CPU on the 16-volume subject (27x16
+matrices, below OpenBLAS's threshold) and at **340-360%** on the 65-volume one
+(125x65 matrices). A node declared `n_procs=1` that silently consumes 3.5 cores
+breaks the resource accounting the hard-cap direction requires, and the effect is
+*data-dependent*, so it cannot be reasoned about per node in the abstract.
+
+Each node therefore sets `OMP_NUM_THREADS`/`OPENBLAS_NUM_THREADS` explicitly to
+the count it declares to nipype, rather than inheriting library defaults. This
+applies to every numpy-heavy node — denoise, tensor fit, CSD fit, HMRF — not only
+the ones with an explicit parallelism parameter.
+
 **No dipy node declares `use_cuda`**: dipy core has no GPU path. GPU tracking
 lives in `dipy/GPUStreamlines` (`cuslines`), a separate non-PyPI package needing
 CUDA-toolkit compilation. This is the one asymmetry that cannot be closed against
@@ -459,9 +472,20 @@ That exactness is what makes it verifiable by the same oracle used for
 a fast unit test that slabs are stitched back in the right order, a test that the
 halo is at least `patch_radius`, and the heavy equivalence oracle.
 
-Motivation from measurement: 404 s on the 16-volume subject and over 15 minutes
-on the 65-volume one — the cost grows faster than linearly with volume count,
-precisely on the acquisitions where the dipy engine should perform best.
+Motivation from measurement: 404 s on the 16-volume subject and over 30 minutes
+on the 65-volume one — the cost grows faster than linearly with volume count.
+
+**Where the gain actually is.** `mppca` has no parallelism parameter, but it
+inherits OpenBLAS threading on the eigendecomposition, and that is
+data-dependent: measured at 100% CPU on the 16-volume subject and 340-360% on the
+65-volume one. So slab parallelism buys roughly 4x on low-direction data, where
+only one core is currently used, and very little on high-direction data, where
+OpenBLAS already saturates. An earlier draft of this section had the motivation
+backwards.
+
+It also makes `OMP_NUM_THREADS=1` per worker a **performance** requirement and not
+only a reproducibility one: four slab workers each spawning 3.5 BLAS threads on a
+4-core host would contend rather than scale.
 
 ### `DipyMotionCorrection` equivalence
 
@@ -605,6 +629,11 @@ and then disproved by measurement or by the user:
    tract, confirmed by its MNI coordinate extent.
 4. "Everything ran on one core" — **wrong**; `ps -o %cpu` reports a lifetime
    average, and tracking had been using all four cores via `nbr_threads=0`.
+5. "PFT will be heavier than deterministic tracking" — **wrong on both time and
+   memory**: 137 s and +0.03 GB against 625 s and a 7.0 GB peak. The peak came
+   from whole-brain seeding, not from the tracker.
+6. "`mppca` is single-core" — **only on small data**; it inherits OpenBLAS
+   threading and reaches 340-360% CPU on the 65-volume subject.
 
 Numbers entering this spec are measured. Those not yet measured are marked
 pending rather than rounded into certainties.
