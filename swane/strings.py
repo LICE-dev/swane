@@ -398,6 +398,16 @@ check_dep_antspynet_wrong_version = (
     "<a href='https://github.com/antsx/antspynet#installation'>update</a>"
 )
 check_dep_antspynet_found = "antspynet detected (%s)"
+check_dep_dipy_error = (
+    "dipy not detected (<a href='https://dipy.org/documentation/1.12.0./installation/"
+    "'>installation info</a>)"
+)
+check_dep_dipy_no_version = "dipy detected, but its version could not be determined"
+check_dep_dipy_wrong_version = (
+    "dipy version outdated (found %s, required %s). Please "
+    "<a href='https://dipy.org/documentation/1.12.0./installation/'>update</a>"
+)
+check_dep_dipy_found = "dipy detected (%s)"
 check_dep_fs_found = "FreeSurfer detected (%s)"
 check_dep_fs_error1 = (
     "FreeSurfer not detected (<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall"
@@ -529,6 +539,14 @@ node_names["AromaClassification"] = "Aroma - Noise classification"
 node_names["FilterRegressor"] = "Denoising"
 node_names["AntsN4BiasFieldCorrection"] = "Bias Field Correction"
 node_names["ZIntNorm"] = "Intensity Normalization"
+node_names["DipyDenoise"] = "diffusion denoising"
+node_names["DipyTensorFit"] = "diffusion tensor fitting"
+node_names["DipyTissueClassifier"] = "tissue classification"
+node_names["DwiBiasCorrection"] = "diffusion bias field correction"
+node_names["DipyMotionCorrection"] = "diffusion motion correction"
+node_names["DipyCsdFit"] = "constrained spherical deconvolution"
+node_names["DipyTracking"] = "probabilistic fiber tracking"
+node_names["DipyAtlasSLR"] = "atlas registration"
 
 license_consent_title = "Third-party tool licenses"
 license_consent_banner = (

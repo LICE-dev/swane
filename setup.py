@@ -51,6 +51,7 @@ setup(
         "antspyx==0.6.3",
         "antspynet==0.3.2",
         "tensorflow==2.21.0",
+        "dipy==1.12.0",
     ],
     python_requires=">=3.10",
     entry_points={"gui_scripts": ["swane = swane.__main__:main"]},

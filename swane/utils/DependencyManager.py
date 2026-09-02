@@ -12,7 +12,14 @@ from swane.utils.qt_compat import QThreadPool
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux
-from swane.utils.LicenseReference import FSL, FREESURFER, DCM2NIIX, ANTSPYX, ANTSPYNET
+from swane.utils.LicenseReference import (
+    FSL,
+    FREESURFER,
+    DCM2NIIX,
+    ANTSPYX,
+    ANTSPYNET,
+    DIPY,
+)
 from swane.utils.license_consent import version_with_license
 
 
@@ -96,6 +103,8 @@ class DependencyManager:
     MIN_ANTSPYX_VERSION = "0.6.3"
     # Kept in sync with the antspynet pin in setup.py.
     MIN_ANTSPYNET_VERSION = "0.3.2"
+    # Kept in sync with the dipy pin in setup.py.
+    MIN_DIPY_VERSION = "1.12.0"
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"
@@ -110,6 +119,7 @@ class DependencyManager:
         self.fsl = DependencyManager.check_fsl()
         self.antspyx = DependencyManager.check_antspyx()
         self.antspynet = DependencyManager.check_antspynet()
+        self.dipy = DependencyManager.check_dipy()
         self.freesurfer = DependencyManager.check_freesurfer()
         self.graphviz = DependencyManager.check_graphviz()
 
@@ -199,6 +209,16 @@ class DependencyManager:
 
         """
         return DependencyManager.check_antspynet().state != DependenceStatus.MISSING
+
+    @staticmethod
+    def is_dipy() -> bool:
+        """
+        Returns
+        -------
+        True if the dipy package is importable (even if outdated).
+
+        """
+        return DependencyManager.check_dipy().state != DependenceStatus.MISSING
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -425,6 +445,36 @@ class DependencyManager:
         return Dependence(
             DependenceStatus.DETECTED,
             strings.check_dep_antspynet_found % antspynet_version_lic,
+        )
+
+    @staticmethod
+    def check_dipy() -> Dependence:
+        """
+        Returns
+        -------
+        A Dependence object with dipy information. Presence is detected
+        without importing dipy via importlib.util.find_spec; the version is
+        read from package metadata.
+        """
+        if importlib.util.find_spec("dipy") is None:
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_dipy_error)
+        try:
+            dipy_version = importlib.metadata.version("dipy")
+        except Exception:
+            return Dependence(
+                DependenceStatus.WARNING, strings.check_dep_dipy_no_version
+            )
+        found_version = version.parse(dipy_version)
+        dipy_version_lic = version_with_license(DIPY, dipy_version)
+        if found_version < version.parse(DependencyManager.MIN_DIPY_VERSION):
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_dipy_wrong_version
+                % (dipy_version_lic, DependencyManager.MIN_DIPY_VERSION),
+            )
+        return Dependence(
+            DependenceStatus.DETECTED,
+            strings.check_dep_dipy_found % dipy_version_lic,
         )
 
     @staticmethod

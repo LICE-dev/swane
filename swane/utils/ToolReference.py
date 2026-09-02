@@ -6,6 +6,7 @@ class Package(Enum):
     FREESURFER = "freesurfer"
     ANTS = "ants"
     NIPY = "nipy"
+    DIPY = "dipy"
     OTHER = "Other"
 
 
@@ -134,6 +135,65 @@ tool_reference_list = {
             "Warrington S, Bryant K, Khrapitchev A, et al. XTRACT: Standardised protocols for automated tractography. NeuroImage. 2020.",
             "Warrington S, Thompson E, Bastiani M, et al. Concurrent mapping of brain ontogeny and phylogeny. Sci Adv. 2022.",
             "de Groot M, Vernooij MW, Klein S, et al. Improving alignment in tract-based spatial statistics. NeuroImage. 2013.",
+        ],
+    ),
+    "DipyDenoise": ToolReference(
+        command="nlmeans [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.denoise.html#module-dipy.denoise.nlmeans",
+        references=[
+            "Coupé P, Yger P, Prima S, et al. An optimized blockwise nonlocal means denoising filter for 3-D magnetic resonance images. IEEE Trans Med Imaging. 2008;27(4):425-441."
+        ],
+    ),
+    "DipyMotionCorrection": ToolReference(
+        command="motion_correction [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.align.html#dipy.align.motion_correction",
+        references=[],
+    ),
+    "DwiBiasCorrection": ToolReference(
+        command="N4BiasFieldCorrection [antspyx]",
+        package=Package.ANTS,
+        url="https://antspyx.readthedocs.io/en/latest/utils.html#ants.n4_bias_field_correction",
+        references=[
+            "Tustison NJ, Avants BB, Cook PA, et al. N4ITK: improved N3 bias correction. IEEE Trans Med Imaging. 2010;29(6):1310-1320."
+        ],
+    ),
+    "DipyTensorFit": ToolReference(
+        command="TensorModel [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.reconst.html#module-dipy.reconst.dti",
+        references=[],
+    ),
+    "DipyTissueClassifier": ToolReference(
+        command="TissueClassifierHMRF [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.segment.html#module-dipy.segment.tissue",
+        references=[],
+    ),
+    "DipyCsdFit": ToolReference(
+        command="ConstrainedSphericalDeconvModel [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.reconst.html#module-dipy.reconst.csdeconv",
+        references=[
+            "Tournier JD, Calamante F, Connelly A. Robust determination of the fibre orientation distribution in diffusion MRI: non-negativity constrained super-resolved spherical deconvolution. NeuroImage. 2007;35(4):1459-1472."
+        ],
+    ),
+    "DipyTracking": ToolReference(
+        command="pft_tracking [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.tracking.html#module-dipy.tracking.local_tracking",
+        references=[
+            "Girard G, Whittingstall K, Deriche R, Descoteaux M. Towards quantitative connectivity analysis: reducing tractography biases. NeuroImage. 2014;98:266-278."
+        ],
+    ),
+    "DipyAtlasSLR": ToolReference(
+        command="RecoBundles / whole-brain SLR [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/examples_built/segmentation/bundle_extraction.html",
+        references=[
+            "Garyfallidis E, Côté MA, Rheault F, et al. Recognition of white matter bundles using local and global streamline-based registration and clustering. NeuroImage. 2018;170:283-295.",
+            "Yeh FC, Panesar S, Fernandes D, et al. Population-averaged atlas of the macroscale human structural connectome and its network topology. NeuroImage. 2018;178:57-68.",
         ],
     ),
     # Registration

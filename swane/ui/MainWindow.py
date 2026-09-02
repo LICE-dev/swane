@@ -944,6 +944,8 @@ class MainWindow(QMainWindow):
 
         x = self.add_home_entry(self.dependency_manager.antspynet, x)
 
+        x = self.add_home_entry(self.dependency_manager.dipy, x)
+
         label_main_dep = QLabel(strings.mainwindow_home_label6)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
