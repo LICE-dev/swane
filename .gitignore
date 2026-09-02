@@ -74,3 +74,5 @@ venv
 /swane/.vscode
 /swane_supplement
 /myenv
+
+.superpower/
