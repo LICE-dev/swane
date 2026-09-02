@@ -23,7 +23,8 @@ global choice, FSL included.
   still uses FSL `RobustFOV` and `ApplyMask`. This change makes the *tractography
   path* FSL-free; it does not relax the global gate.
 - Windows support. See "Strategic implications" below.
-- Replacing or changing the existing FSL/XTRACT path in any way.
+- Replacing or restructuring the existing FSL/XTRACT path. One targeted
+  scientific fix to it *is* in scope: the rotated-bvec bug, section 12.
 
 ## Context: what the current pipeline does
 
@@ -91,6 +92,13 @@ label: "Fast denoising".
 `nlmeans` is the fast choice because it exposes `num_threads` and genuinely
 parallelises, whereas `mppca` is single-core; the pair is therefore fast-vs-accurate
 in wall-clock terms, not only in algorithm.
+
+**`mppca` requires an adaptive `patch_radius`**: the patch must contain more
+voxels than there are volumes. The rule is the smallest `r` with
+`(2r+1)^3 > n_volumes` — `r=1` (27 voxels) up to 26 volumes, `r=2` (125) up to
+124. A hardcoded `r=1` is correct for a 16-volume acquisition and **invalid** for
+a 65-volume one. This was found by running the two oracle subjects; it would not
+have surfaced with the low-direction subject alone.
 
 A third `NONE` level was considered and **deliberately dropped**. It had no
 symmetric meaning: on dipy it would skip denoising while motion correction still
@@ -311,13 +319,43 @@ This is required, not cosmetic: RecoBundles runs a whole-brain SLR against
 consisting of a single CST corridor would register arbitrarily, so even the CST
 would fail — not just AF and OR.
 
+### 12. Fixing the FSL rotated-bvec bug (in scope)
+
+FSL `eddy` produces `out_rotated_bvecs`, and nipype exposes it, but
+`dti_preproc_workflow` passes the original dcm2niix bvecs to both `dtifit`
+(line 228) and `bedpostx` (line 324). By the same Leemans & Jones 2009 argument
+that makes `reorient_bvecs` mandatory on the dipy branch, the current FSL branch
+carries a systematic bias in FA and tractography proportional to subject rotation.
+
+Found while designing the dipy branch and, by decision, **fixed as part of this
+work** since the same code is being touched.
+
+The fix: connect `eddy` → `out_rotated_bvecs` to `dtifit.bvecs` and
+`bedpostx.bvecs` in place of `conversion.bvecs`.
+
+Two constraints:
+
+- It applies **only to the full `eddy` path**. `EddyCorrect`, used when
+  `fast_dwi_preproc` is true, produces no rotated bvecs, so that path keeps the
+  original ones — there is nothing better available.
+- It **changes the output of the existing, validated FSL pipeline**. FA maps and
+  tractography will differ from previously produced results, by the amount of
+  subject rotation. The golden matrix snapshots change, and this is a scientific
+  correction rather than a refactor: it needs its own validation and a note in
+  the changelog, so that users understand why re-running an old subject no longer
+  reproduces the old numbers.
+
 ## Implementation phasing
 
 The work splits along the same seam as the two workflows, and phase 2 should not
 start before phase 1 has been looked at on real data:
 
+- **Phase 0** — the FSL rotated-bvec fix (section 12) and the
+  `old_eddy_correct` → `fast_dwi_preproc` rename. Both touch the existing path,
+  both change its snapshots, and both are far easier to review on their own than
+  mixed into a new engine.
 - **Phase 1** — engine preference and gating, dependency/licence plumbing, the
-  five new preprocessing/reconstruction/tracking nodes, `dipy_dti_preproc_workflow`,
+  new preprocessing/reconstruction/tracking nodes, `dipy_dti_preproc_workflow`,
   the `MainWorkflow` branch, and matrix snapshots. Deliverable: a global
   tractogram for both oracle subjects.
 - **Phase 2** — `DipyRecoBundles`, `dipy_bundle_workflow`, the fornix split, the
@@ -456,19 +494,6 @@ What remains open is a quantitative comparison against the FSL branch on real
 data. The user has chosen to proceed and measure afterwards. Recorded here as a
 bounded, accepted risk at the low-direction end, not as a general caveat and not
 as a resolved question.
-
-## Pre-existing issue found during design (out of scope)
-
-FSL `eddy` produces `out_rotated_bvecs`, and nipype exposes it, but
-`dti_preproc_workflow` passes the original dcm2niix bvecs to both `dtifit`
-(line 228) and `bedpostx` (line 324). By the same Leemans & Jones 2009 argument
-that makes `reorient_bvecs` mandatory on the dipy branch, the current FSL branch
-carries a systematic bias in FA and tractography proportional to subject
-rotation.
-
-This predates the present change and is **not fixed here**: it alters results
-already produced by the existing pipeline, so it warrants its own decision and
-its own validation rather than being folded into a new-engine change.
 
 ## Strategic implications
 
