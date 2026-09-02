@@ -75,46 +75,46 @@ default `FSL_XTRACT` so existing users see no behaviour change, with
 | `atr` `str` `cbd` `cbp` `cbt` | active | greyed, "no RecoBundles atlas counterpart" |
 | `cingulum` (new) | greyed | active |
 | `tractography_threshold`, `track_procs` | active | greyed |
-| `dwi_preproc_level` (new, **shared**) | active | active |
+| `fast_dwi_preproc` (new, **shared**) | active | active |
 | `seed_density`, `max_angle`, `step_size` (new) | greyed | active |
 
-#### `dwi_preproc_level` — an engine-independent quality control
+#### `fast_dwi_preproc` — an engine-independent quality control
 
-A two-level enum, active on **both** engines, which each engine interprets:
+A boolean, active on **both** engines, which each engine interprets. User-facing
+label: "Fast denoising".
 
-| Level | FSL | dipy |
+| Value | FSL | dipy |
 |---|---|---|
-| `FAST` | `eddy_correct` | `nlmeans` + `estimate_sigma` |
-| `FULL` | `eddy` | `mppca` |
+| `true` (fast) | `eddy_correct` | `nlmeans` + `estimate_sigma` |
+| `false` (full, default) | `eddy` | `mppca` |
 
 `nlmeans` is the fast choice because it exposes `num_threads` and genuinely
 parallelises, whereas `mppca` is single-core; the pair is therefore fast-vs-accurate
 in wall-clock terms, not only in algorithm.
 
-A `NONE` level was considered and **deliberately dropped**. It had no symmetric
-meaning: on dipy it would skip denoising while motion correction still ran, but on
-FSL it would disable eddy correction entirely, which is scientifically inadvisable
-on clinical data. Restricting the enum to two levels removes the asymmetry and
-makes every selectable configuration a sound one.
+A third `NONE` level was considered and **deliberately dropped**. It had no
+symmetric meaning: on dipy it would skip denoising while motion correction still
+ran, but on FSL it would disable eddy correction entirely, which is
+scientifically inadvisable on clinical data. With only two states left, a boolean
+is the right shape and no new enum is needed in `config_enums.py`.
 
-The name is `dwi_preproc_level`, not `denoise_level`, because the operation
-differs per engine: on FSL these are eddy-current/motion correction levels, on
-dipy they are denoising levels with motion correction always running alongside.
-The tooltip must state that mapping rather than leave it to be inferred.
+The key is named `fast_dwi_preproc` rather than `fast_denoising` because the
+operation differs per engine: on FSL it selects between eddy-current/motion
+correction algorithms, on dipy between denoising algorithms, with motion
+correction always running alongside. The label the user sees stays "Fast
+denoising"; the tooltip must state the per-engine mapping rather than leave it to
+be inferred.
 
 This preference **absorbs `old_eddy_correct`**, removing an entry that would
 otherwise have been greyed on dipy and making the two screens more uniform.
 
 **Compatibility**: `old_eddy_correct` is a persisted boolean and therefore a
-stable contract under `CLAUDE.md`. The replacement is a 1:1 mapping that must be
-migrated explicitly, not left to a silent default:
-
-- `old_eddy_correct = true` → `dwi_preproc_level = FAST` (used `eddy_correct`)
-- `old_eddy_correct = false` → `dwi_preproc_level = FULL` (uses `eddy`, today's default)
-
-Without the migration, subjects configured for the fast path would silently move
-to full `eddy` — a much slower run, and different from the one that produced their
-existing results.
+stable contract under `CLAUDE.md`. Because the replacement is also a boolean with
+the same polarity — `true` still means "the faster, cheaper path" — the migration
+is a **value-preserving rename**: copy `old_eddy_correct` to `fast_dwi_preproc`
+and drop the old key. No value conversion, and no risk of silently moving an
+existing subject from the fast path to full `eddy`. The rename must still be
+written and tested rather than left to a default.
 
 ### 3. Bundle mapping (verified against the downloaded atlas)
 
@@ -152,7 +152,7 @@ no re-validation and the golden matrix snapshots do not churn.
 
 ```
 CustomDcm2niix -> ForceOrient -> ExtractVolumes(b0) -> get_deskull_node   [shared]
-  -> DipyDenoise (mppca | nlmeans, per dwi_preproc_level)
+  -> DipyDenoise (mppca or nlmeans, per fast_dwi_preproc)
   -> DipyMotionCorrection (dipy.align, + bvec rotation)
   -> DwiBiasCorrection (N4 on mean b0, field applied to all volumes)
   -> DipyTensorFit -> FA -> apply_registration_node -> outputnode.FA
@@ -253,8 +253,8 @@ do not take a `multicore_node_limit` parameter at all.
 
 | Node | Parallelism source | `n_procs` | `use_cuda` |
 |---|---|---|---|
-| `DipyDenoise` (`mppca`, FULL) | none — serial in dipy | 1 | no |
-| `DipyDenoise` (`nlmeans`, FAST) | `num_threads` | `max_cpu` | no |
+| `DipyDenoise` (`mppca`, full) | none — serial in dipy | 1 | no |
+| `DipyDenoise` (`nlmeans`, fast) | `num_threads` | `max_cpu` | no |
 | `DipyMotionCorrection` | **our own pool over volumes** | `max_cpu` | no |
 | `DipyTensorFit` (FA) | none needed — cheap | 1 | no |
 | `DipyCsdFit` | `peaks_from_model(num_processes)` | `max_cpu` | no |
