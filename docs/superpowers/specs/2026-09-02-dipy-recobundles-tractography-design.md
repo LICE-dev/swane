@@ -311,10 +311,11 @@ exercise opposite regimes:
 | Directions | 15 | 64 |
 | DWI | 256×256×52 | 144×144×60 |
 | Voxel | 0.94×0.94×2.5 | 1.56×1.56×2.2 |
-| Resulting lmax | 4 (at the limit) | 6–8 (comfortable) |
+| Resulting lmax | 4 (supported floor) | 6–8 (comfortable) |
 
 They exercise different branches of the adaptive-lmax code, which is why both are
-needed.
+needed: subj1 covers the lowest angular resolution SWANe accepts, subj2 a routine
+one. Neither is "the typical case" on its own.
 
 ### `DipyMotionCorrection` equivalence
 
@@ -391,20 +392,32 @@ on both time and memory, so the numbers above are a floor, not an estimate.
 
 ## Accepted risk
 
-With ~15 directions, CSD lmax=4 is exactly determined: 15 coefficients for 15
-measurements. The global tractogram will be poor in crossing regions, precisely
-where bedpostx with `n_fibres=2` currently holds up, and RecoBundles can only
-recognise what the tractogram contains. The dipy branch may therefore be
-**scientifically inferior** to the FSL branch on typical clinical data while
-being perfectly correct as software.
+The risk is **confined to the bottom of the supported range**, and it should not
+be read as a general reservation about the dipy engine.
 
-PFT (probabilistic, anatomically constrained) was chosen partly to mitigate this:
-it samples the fODF instead of following its maximum, recovering branches that
-deterministic tracking systematically drops in crossings, and it matches the
+SWANe supports acquisitions down to 15 directions for inclusiveness, not because
+that is the expected input. At that floor, CSD lmax=4 is exactly determined — 15
+coefficients for 15 measurements — so the fODF has no regularisation headroom,
+crossing regions are poorly resolved, and RecoBundles can only recognise what the
+tractogram actually contains. On such data the dipy engine may reconstruct fewer
+or thinner bundles than bedpostx with `n_fibres=2`, which is a parsimonious
+Bayesian model built precisely for sparse angular sampling.
+
+From roughly 28 directions upward the picture changes: lmax=6 becomes comfortable,
+and there is no structural reason to expect the dipy engine to underperform. The
+two oracle subjects were chosen to straddle this boundary — 15 and 64 directions —
+so the difference between the two regimes is measured rather than assumed.
+
+Two design choices already mitigate the low end: the adaptive `sh_order_max`,
+which never fits more coefficients than the data supports, and PFT, which samples
+the fODF instead of following its maximum and so recovers branches that
+deterministic tracking systematically drops in crossings — matching the
 probabilistic nature of the existing FSL path.
 
-The user has explicitly accepted this risk and chosen to proceed and test
-afterwards. It is recorded here as an accepted risk, not a resolved question.
+What remains open is a quantitative comparison against the FSL branch on real
+data. The user has chosen to proceed and measure afterwards. Recorded here as a
+bounded, accepted risk at the low-direction end, not as a general caveat and not
+as a resolved question.
 
 ## Strategic implications
 
