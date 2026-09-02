@@ -15,6 +15,7 @@ from swane.config.config_enums import (
     GlobalPrefCategoryList,
     FreesurferStep,
     DeskullModality,
+    TractographyEngine,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -32,6 +33,9 @@ from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_mr_workflow import venous_mr_workflow
 from swane.nipype_pipeline.workflows.venous_ct_workflow import venous_ct_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
+from swane.nipype_pipeline.workflows.dipy_dti_preproc_workflow import (
+    dipy_dti_preproc_workflow,
+)
 from swane.nipype_pipeline.workflows.seeg_ct_workflow import seeg_ct_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import (
     tractography_workflow,
@@ -985,6 +989,13 @@ class MainWorkflow(CustomWorkflow):
         # DTI analysis
         dti_dir = self.subject_input_state_list.get_dicom_dir(DIL.DTI)
 
+        tractography_engine = self.global_config.getenum_safe(
+            GlobalPrefCategoryList.SYNTH, "tractography_engine"
+        )
+        if tractography_engine == TractographyEngine.DIPY_RECOBUNDLES:
+            self.launch_dipy_dti_analysis(dti_dir)
+            return
+
         self.dti_preproc = dti_preproc_workflow(
             name=DIL.DTI.value.workflow_name,
             dti_dir=dti_dir,
@@ -1097,6 +1108,49 @@ class MainWorkflow(CustomWorkflow):
                             result_name="fdt_paths_%s" % side,
                             sub_folder=os.path.join(self.Result_DIR, "dti"),
                         )
+
+    def launch_dipy_dti_analysis(self, dti_dir):
+        # dipy tractography engine: preprocessing to a global tractogram. New
+        # dipy nodes implement HARD_CAP only, so the factory takes no
+        # multicore_node_limit.
+        self.dti_preproc = dipy_dti_preproc_workflow(
+            name=DIL.DTI.value.workflow_name,
+            dti_dir=dti_dir,
+            config=self.subject_config[DIL.DTI],
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.NODIF,
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
+        )
+        self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
+        self.connect(
+            self.t1,
+            "outputnode.reference_brain",
+            self.dti_preproc,
+            "inputnode.reference_brain",
+        )
+        self.connect(
+            self.t1, "outputnode.reference", self.dti_preproc, "inputnode.reference"
+        )
+
+        self.dti_preproc.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="FA",
+            sub_folder=self.Result_DIR,
+        )
+
+        if self.is_tractography:
+            # Global tractogram outputs consumed by Phase 2's per-tract bundle
+            # workflow. Phase 1 sinks only these; the per-tract .trk result
+            # contract is wired by Phase 2.
+            for result_name in ("tractogram", "tractogram_atlas", "atlas2native"):
+                self.dti_preproc.sink_result(
+                    save_path=self.base_dir,
+                    result_node="outputnode",
+                    result_name=result_name,
+                    sub_folder=os.path.join(self.Result_DIR, "dti"),
+                )
 
     def launch_fMRI_task_analysis(self):
         # Check for Task FMRI sequences

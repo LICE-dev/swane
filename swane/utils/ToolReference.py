@@ -414,6 +414,12 @@ tool_reference_list = {
             "Tustison NJ, Cook PA, Holbrook AJ, et al. The ANTsX ecosystem for quantitative biological and medical imaging. Sci Rep. 2021;11:9068."
         ],
     ),
+    "AffineToRAS": ToolReference(
+        command="linear [nitransforms]",
+        package=Package.NIPY,
+        url="https://github.com/nipy/nitransforms",
+        references=[],
+    ),
 }
 
 # Update url finishing with #

@@ -52,6 +52,11 @@ setup(
         "antspynet==0.3.2",
         "tensorflow==2.21.0",
         "dipy==1.12.0",
+        # Now direct dependencies, no longer transitive: threadpoolctl pins the
+        # BLAS pool in DipyMotionCorrection, filelock serialises the HCP842 atlas
+        # fetch in DipyAtlasSLR.
+        "threadpoolctl==3.6.0",
+        "filelock==3.17.0",
     ],
     python_requires=">=3.10",
     entry_points={"gui_scripts": ["swane = swane.__main__:main"]},
