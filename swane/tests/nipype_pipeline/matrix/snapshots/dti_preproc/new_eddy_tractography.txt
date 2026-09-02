@@ -100,8 +100,6 @@ dti_conv.bvals -> dti_bedpostx.bvals
 dti_conv.bvals -> dti_dtifit.bvals
 dti_conv.bvals -> dti_eddy.in_bval
 dti_conv.bvals -> dti_eddy_files.bval
-dti_conv.bvecs -> dti_bedpostx.bvecs
-dti_conv.bvecs -> dti_dtifit.bvecs
 dti_conv.bvecs -> dti_eddy.in_bvec
 dti_conv.converted_files -> dti_reOrient.in_file
 dti_deskull_antspynet.mask_file -> dti_bedpostx.mask
@@ -113,6 +111,8 @@ dti_deskull_antspynet.out_file -> outputnode.nodif_brain
 dti_dtifit.FA -> fa_2_ref_apply_xfm.in_file
 dti_eddy.out_corrected -> dti_bedpostx.dwi
 dti_eddy.out_corrected -> dti_dtifit.dwi
+dti_eddy.out_rotated_bvecs -> dti_bedpostx.bvecs
+dti_eddy.out_rotated_bvecs -> dti_dtifit.bvecs
 dti_eddy_files.acqp -> dti_eddy.in_acqp
 dti_eddy_files.index -> dti_eddy.in_index
 dti_nodif.out_file -> dti_deskull_antspynet.in_file

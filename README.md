@@ -138,6 +138,11 @@ This project includes subsection derived from other software, which licenses can
 
 - License consent preparation no longer repeats dependency detection on the GUI thread and keeps the interface responsive while license texts are resolved.
 - Changing the DTI CPU allocation no longer invalidates cached Eddy results.
+- DTI: FSL `eddy`'s rotated b-vectors are now used for tensor fitting (dtifit)
+  and bedpostx. Previously the unrotated vectors were used; rotating the volumes
+  without reorienting the gradients biased FA, MD and tractography in proportion
+  to subject motion (Leemans & Jones 2009). Re-processing a subject will not
+  reproduce results from earlier versions.
 
 ### [0.2.1.1] - 2026-08-08
 
