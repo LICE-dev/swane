@@ -547,6 +547,7 @@ node_names["DipyMotionCorrection"] = "diffusion motion correction"
 node_names["DipyCsdFit"] = "constrained spherical deconvolution"
 node_names["DipyTracking"] = "probabilistic fiber tracking"
 node_names["DipyAtlasSLR"] = "atlas registration"
+node_names["AffineToRAS"] = "affine RAS conversion"
 
 license_consent_title = "Third-party tool licenses"
 license_consent_banner = (
