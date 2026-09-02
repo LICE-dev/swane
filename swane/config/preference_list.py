@@ -384,6 +384,12 @@ WF_PREFERENCES[category]["old_eddy_correct"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Use older but faster fsl eddy_correct",
     default="false",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.FSL_XTRACT)
+        ]
+    },
+    pref_requirement_fail_tooltip="dipy always uses nlmeans",
 )
 WF_PREFERENCES[category]["tractography"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -397,25 +403,98 @@ WF_PREFERENCES[category]["tractography_threshold"] = PreferenceEntry(
     default=0.0035,
     range=[0.0001, 1],
     decimals=4,
-    pref_requirement={DataInputList.DTI: [("tractography", True)]},
-    pref_requirement_fail_tooltip="Tractography disabled",
+    pref_requirement={
+        DataInputList.DTI: [("tractography", True)],
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.FSL_XTRACT)
+        ],
+    },
+    pref_requirement_fail_tooltip="Requires tractography enabled and the FSL tractography engine",
 )
 WF_PREFERENCES[category]["track_procs"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Parallel processes for each side tractography",
     default=5,
     range=[1, 10],
-    pref_requirement={DataInputList.DTI: [("tractography", True)]},
-    pref_requirement_fail_tooltip="Tractography disabled",
+    pref_requirement={
+        DataInputList.DTI: [("tractography", True)],
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.FSL_XTRACT)
+        ],
+    },
+    pref_requirement_fail_tooltip="Requires tractography enabled and the FSL tractography engine",
+)
+WF_PREFERENCES[category]["cingulum"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Cingulum",
+    default="false",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.DIPY_RECOBUNDLES)
+        ]
+    },
+    pref_requirement_fail_tooltip="Only used with the dipy tractography engine",
+)
+WF_PREFERENCES[category]["seed_density"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Seed density for tractography",
+    tooltip="Seeds placed per voxel dimension in the WM mask (density=2 means 8 seeds per voxel)",
+    default=2,
+    range=[1, 10],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.DIPY_RECOBUNDLES)
+        ]
+    },
+    pref_requirement_fail_tooltip="Only used with the dipy tractography engine",
+)
+WF_PREFERENCES[category]["max_angle"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Maximum tracking angle",
+    tooltip="Maximum allowed angle between consecutive tracking steps",
+    default=20.0,
+    range=[1, 90],
+    decimals=1,
+    suffix="°",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.DIPY_RECOBUNDLES)
+        ]
+    },
+    pref_requirement_fail_tooltip="Only used with the dipy tractography engine",
+)
+WF_PREFERENCES[category]["step_size"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Tracking step size",
+    tooltip="Step size (mm) used by the particle filtering tracker",
+    default=0.2,
+    range=[0.05, 2.0],
+    decimals=2,
+    suffix=" mm",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.DIPY_RECOBUNDLES)
+        ]
+    },
+    pref_requirement_fail_tooltip="Only used with the dipy tractography engine",
 )
 
 for tract in TRACTS.keys():
+    tract_pref_requirement = {DataInputList.DTI: [("tractography", True)]}
+    tract_pref_requirement_fail_tooltip = "Tractography disabled"
+    if tract in ("atr", "str", "cbd", "cbp", "cbt"):
+        tract_pref_requirement[GlobalPrefCategoryList.SYNTH] = [
+            ("tractography_engine", TractographyEngine.FSL_XTRACT)
+        ]
+        tract_pref_requirement_fail_tooltip = (
+            "Requires tractography enabled and no RecoBundles atlas counterpart"
+        )
     WF_PREFERENCES[category][tract] = PreferenceEntry(
         input_type=InputTypes.BOOLEAN,
         label=TRACTS[tract][0],
         default=TRACTS[tract][1],
-        pref_requirement={DataInputList.DTI: [("tractography", True)]},
-        pref_requirement_fail_tooltip="Tractography disabled",
+        pref_requirement=tract_pref_requirement,
+        pref_requirement_fail_tooltip=tract_pref_requirement_fail_tooltip,
     )
 
 for x in range(FMRI_NUM):
@@ -763,6 +842,19 @@ GLOBAL_PREFERENCES[category]["engine"] = PreferenceEntry(
         % ResourceManager.synth_morph_ram_requirements(),
         RegistrationEngine.ANTS: "ANTs registration requires at least %.1f GB RAM"
         % ResourceManager.ants_ram_requirements(),
+    },
+    section=True,
+)
+GLOBAL_PREFERENCES[category]["tractography_engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="Tractography engine",
+    value_enum=TractographyEngine,
+    default=TractographyEngine.DIPY_RECOBUNDLES,
+    option_dependency={
+        TractographyEngine.DIPY_RECOBUNDLES: [
+            "is_dipy",
+            "dipy tractography requires the dipy package",
+        ],
     },
     section=True,
 )

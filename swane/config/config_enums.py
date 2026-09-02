@@ -79,6 +79,11 @@ class DeskullEngine(Enum):
     BET = "FSL BET"
 
 
+class TractographyEngine(Enum):
+    FSL_XTRACT = "FSL (XTRACT/probtrackx2)"
+    DIPY_RECOBUNDLES = "dipy (CSD + RecoBundles)"
+
+
 class DeskullModality(Enum):
     T1 = "t1"
     FLAIR = "flair"
