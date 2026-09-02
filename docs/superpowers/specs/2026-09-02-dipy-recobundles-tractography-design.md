@@ -121,55 +121,38 @@ previous output.
 | `atr` `str` `cbd` `cbp` `cbt` | active | greyed, "no RecoBundles atlas counterpart" |
 | `cingulum` (new) | greyed | active |
 | `tractography_threshold`, `track_procs` | active | greyed |
-| `fast_dwi_preproc` (new, **shared**) | active | active |
+| `old_eddy_correct` | active | greyed, "dipy always uses nlmeans" |
 | `seed_density`, `max_angle`, `step_size` (new) | greyed | active |
 
-#### `fast_dwi_preproc` — an engine-independent quality control
+#### Denoising on dipy is always `nlmeans` + `estimate_sigma`
 
-A boolean, active on **both** engines, which each engine interprets. User-facing
-label: "Fast denoising".
+**Decided 2026-09-02, on the measurement in "subj2 — MP-PCA does not scale".**
+MP-PCA is not offered at all: it costs >54 minutes on a routine 64-direction
+acquisition, roughly 27x more core-time than on the 15-direction subject for the
+same data volume, and slab parallelism cannot rescue it because OpenBLAS already
+saturates the cores there. A denoiser that costs the better part of an hour on a
+routine acquisition is not defensible as either a default or an option.
 
-| Value | FSL | dipy |
-|---|---|---|
-| `true` (fast) | `eddy_correct` | `nlmeans` + `estimate_sigma` |
-| `false` (full, default) | `eddy` | `mppca` |
+The dipy branch therefore has **no denoising choice**: `nlmeans` with
+`estimate_sigma`, always. It exposes `num_threads` and genuinely parallelises.
 
-`nlmeans` is the fast choice because it exposes `num_threads` and genuinely
-parallelises, whereas `mppca` is single-core; the pair is therefore fast-vs-accurate
-in wall-clock terms, not only in algorithm.
+Consequences, all simplifications:
 
-**`mppca` requires an adaptive `patch_radius`**: the patch must contain more
-voxels than there are volumes. The rule is the smallest `r` with
-`(2r+1)^3 > n_volumes` — `r=1` (27 voxels) up to 26 volumes, `r=2` (125) up to
-124. A hardcoded `r=1` is correct for a 16-volume acquisition and **invalid** for
-a 65-volume one. This was found by running the two oracle subjects; it would not
-have surfaced with the low-direction subject alone.
+- `old_eddy_correct` **stays exactly as it is today** — an FSL-only preference
+  selecting `eddy_correct` over `eddy`. It is not renamed, not made shared, and
+  not given a dipy meaning. It is simply greyed on the dipy engine, like
+  `tractography_threshold`.
+- No new preference key is introduced, so there is no persistence question and
+  no migration discussion to have.
+- The adaptive `patch_radius` rule is **dropped**: it existed only to keep MP-PCA
+  valid as the volume count grew. `nlmeans` has no such constraint.
+- The MP-PCA slab-parallelism work — a hand-written pool and its bit-for-bit
+  equivalence oracle — is **dropped entirely**. `DipyMotionCorrection` remains
+  the only node needing that treatment.
 
-A third `NONE` level was considered and **deliberately dropped**. It had no
-symmetric meaning: on dipy it would skip denoising while motion correction still
-ran, but on FSL it would disable eddy correction entirely, which is
-scientifically inadvisable on clinical data. With only two states left, a boolean
-is the right shape and no new enum is needed in `config_enums.py`.
-
-The key is named `fast_dwi_preproc` rather than `fast_denoising` because the
-operation differs per engine: on FSL it selects between eddy-current/motion
-correction algorithms, on dipy between denoising algorithms, with motion
-correction always running alongside. The label the user sees stays "Fast
-denoising"; the tooltip must state the per-engine mapping rather than leave it to
-be inferred.
-
-This preference **absorbs `old_eddy_correct`**, removing an entry that would
-otherwise have been greyed on dipy and making the two screens more uniform.
-
-**Compatibility**: no migration code is needed, and writing one would be dead
-code. `old_eddy_correct` is a persisted key, but `force_pref_reset` (hidden,
-default `"true"`) discards the whole saved configuration whenever `__version__`
-changes — the old file is not read, so nothing could be carried across. The old
-key simply disappears with everything else, and `fast_dwi_preproc` starts at its
-default.
-
-An earlier draft of this spec specified a value-preserving rename. That was based
-on assuming SWANe preserved preferences across versions; it does not.
+An earlier draft made this a shared `fast_dwi_preproc` boolean spanning both
+engines, with MP-PCA as the dipy "full quality" arm. That arm was measured and
+found impractical, which removed the reason for the preference to exist.
 
 ### 3. Bundle mapping (verified against the downloaded atlas)
 
@@ -207,7 +190,7 @@ no re-validation and the golden matrix snapshots do not churn.
 
 ```
 CustomDcm2niix -> ForceOrient -> ExtractVolumes(b0) -> get_deskull_node   [shared]
-  -> DipyDenoise (mppca or nlmeans, per fast_dwi_preproc)
+  -> DipyDenoise (nlmeans + estimate_sigma)
   -> DipyMotionCorrection (dipy.align + reorient_bvecs)
   -> DwiBiasCorrection (N4 on mean b0, field applied to all volumes)
   -> DipyTensorFit -> FA -> apply_registration_node -> outputnode.FA
@@ -292,7 +275,7 @@ strictly better.
   through `NOTICE.md` and `ToolReference` citations (Garyfallidis 2017 for
   RecoBundles, Yeh 2018 for the atlas).
 - `ToolReference`: entries for the new dipy nodes, citing Tournier 2007 (CSD),
-  Veraart 2016 (MP-PCA), Girard 2014 (PFT), Garyfallidis 2017, Yeh 2018.
+  Coupé 2008 (nlmeans), Girard 2014 (PFT), Garyfallidis 2017, Yeh 2018.
 - `strings.py` `node_names`: readable labels for every new node.
 - **Atlas download is silent on first use** (revisited later). Node requirements:
   a file lock, because SWANe processes subjects in parallel and two workflows
@@ -334,8 +317,7 @@ do not take a `multicore_node_limit` parameter at all.
 
 | Node | Parallelism source | `n_procs` | `use_cuda` |
 |---|---|---|---|
-| `DipyDenoise` (`mppca`, full) | **our own slab pool** | `max_cpu` | no |
-| `DipyDenoise` (`nlmeans`, fast) | `num_threads` | `max_cpu` | no |
+| `DipyDenoise` (`nlmeans`) | `num_threads` | `max_cpu` | no |
 | `DipyMotionCorrection` | **our own pool over volumes** | `max_cpu` | no |
 | `DipyTensorFit` (FA) | none needed — cheap | 1 | no |
 | `DipyCsdFit` | `peaks_from_model(num_processes)` | `max_cpu` | no |
@@ -396,7 +378,7 @@ The fix: connect `eddy` → `out_rotated_bvecs` to `dtifit.bvecs` and
 Two constraints:
 
 - It applies **only to the full `eddy` path**. `EddyCorrect`, used when
-  `fast_dwi_preproc` is true, produces no rotated bvecs, so that path keeps the
+  `old_eddy_correct` is true, produces no rotated bvecs, so that path keeps the
   original ones — there is nothing better available.
 - It **changes the output of the existing, validated FSL pipeline**. FA maps and
   tractography will differ from previously produced results, by the amount of
@@ -410,11 +392,11 @@ Two constraints:
 The work splits along the same seam as the two workflows, and phase 2 should not
 start before phase 1 has been looked at on real data:
 
-- **Phase 0** — the FSL rotated-bvec fix (section 12) and the
-  `old_eddy_correct` → `fast_dwi_preproc` replacement. Both touch the existing
-  path, both change its snapshots, and both are far easier to review on their own
-  than mixed into a new engine. No migration code: see the compatibility note in
-  section 2.
+- **Phase 0** — the FSL rotated-bvec fix (section 12) alone. It touches the
+  existing path and changes its snapshots, and is far easier to review on its own
+  than mixed into a new engine. The `old_eddy_correct` → `fast_dwi_preproc`
+  replacement that this phase originally also carried was **cancelled** on
+  2026-09-02: see "Denoising on dipy is always nlmeans" in section 2.
 - **Phase 1** — engine preference and gating, dependency/licence plumbing, the
   new preprocessing/reconstruction/tracking nodes, `dipy_dti_preproc_workflow`,
   the `MainWorkflow` branch, and matrix snapshots. Deliverable: a global
@@ -438,7 +420,7 @@ For each phase, the deliverable is a ready-to-paste **orchestrator prompt**. Tha
 orchestrator splits its phase into independent executor tasks, writes their
 prompts, and assigns each a model. Model choice follows the nature of the work:
 **Opus 4.8** for anything needing real reasoning — scientific correctness, the
-equivalence oracles, adaptive `lmax`/`patch_radius` logic, RecoBundles
+equivalence oracles, adaptive `lmax` logic, RecoBundles
 integration, the phantom geometry — and **Sonnet 5** for well-specified
 mechanical work such as preference plumbing, licence and `strings.py` entries, or
 snapshot regeneration.
@@ -469,38 +451,16 @@ They exercise different branches of the adaptive-lmax code, which is why both ar
 needed: subj1 covers the lowest angular resolution SWANe accepts, subj2 a routine
 one. Neither is "the typical case" on its own.
 
-### `DipyDenoise` (mppca) slab parallelism
+### `DipyDenoise` (nlmeans)
 
-`mppca` exposes no parallelism knob, and `pca_method` is already at its faster
-setting (`'eig'`; `'svd'` is only occasionally more accurate and slower), so the
-only remaining lever is to parallelise it ourselves.
+No equivalence oracle is needed: `nlmeans` exposes `num_threads` and parallelises
+itself, so there is no hand-written pool to prove equivalent. This section
+previously specified a slab-parallel MP-PCA implementation and its bit-for-bit
+oracle; both were dropped with MP-PCA itself.
 
-MP-PCA is **purely local**: each patch estimates its noise from its own
-`voxels x volumes` matrix, with no global dependency. The volume can therefore be
-split into slabs along z with a halo of `patch_radius`, processed in parallel and
-stitched. With that halo every interior patch is wholly contained in its slab, so
-the result is **exactly identical** to the serial run — not an approximation.
-
-That exactness is what makes it verifiable by the same oracle used for
-`DipyMotionCorrection`: slab-parallel versus serial, bit-for-bit, with
-`OMP_NUM_THREADS=1` pinned on both sides. The same three-layer structure applies:
-a fast unit test that slabs are stitched back in the right order, a test that the
-halo is at least `patch_radius`, and the heavy equivalence oracle.
-
-Motivation from measurement: 404 s on the 16-volume subject and over 30 minutes
-on the 65-volume one — the cost grows faster than linearly with volume count.
-
-**Where the gain actually is.** `mppca` has no parallelism parameter, but it
-inherits OpenBLAS threading on the eigendecomposition, and that is
-data-dependent: measured at 100% CPU on the 16-volume subject and 340-360% on the
-65-volume one. So slab parallelism buys roughly 4x on low-direction data, where
-only one core is currently used, and very little on high-direction data, where
-OpenBLAS already saturates. An earlier draft of this section had the motivation
-backwards.
-
-It also makes `OMP_NUM_THREADS=1` per worker a **performance** requirement and not
-only a reproducibility one: four slab workers each spawning 3.5 BLAS threads on a
-4-core host would contend rather than scale.
+Coverage reduces to the ordinary node contract: `estimate_sigma` is called on the
+data actually passed to `nlmeans`, the output preserves shape, affine and volume
+count, and `OMP_NUM_THREADS` is pinned to the declared `n_procs`.
 
 ### `DipyMotionCorrection` equivalence
 
@@ -565,7 +525,7 @@ deterministic tracking, whole-brain seeding, synthetic gradients:
 | Step | Time | Cores |
 |---|---|---|
 | Brain mask | 21 s | 1 |
-| MP-PCA denoise | 423 s | 1 *(measured instantaneously)* |
+| MP-PCA denoise | 423 s | 1 *(historical: MP-PCA was later dropped)* |
 | `motion_correction` | 753 s | 1 *(pending confirmation)* |
 | CSD lmax=4 | 244 s | 1 *(pending confirmation)* |
 | `deterministic_tracking` | 625 s | **4** — `nbr_threads=0` means all threads |
@@ -606,7 +566,7 @@ seeding is *cheaper* than deterministic tracking with whole-brain seeding (137 s
 vs 625 s, +0.03 GB vs a 7.0 GB peak). The 7 GB came from seeding 667k voxels, not
 from the tracker.
 
-### subj2 — MP-PCA does not scale, and this is the open decision
+### subj2 — MP-PCA does not scale (this decided against MP-PCA)
 
 The 64-direction probe was **interrupted after 54 minutes still inside MP-PCA**,
 at 335% CPU. The two subjects carry near-identical data volumes (25.4M vs 29.9M
@@ -625,20 +585,20 @@ operations per patch becomes ~528k, and the direction count enters *twice* — i
 enlarges the matrix and forces a larger `patch_radius`, which enlarges the patch.
 Cost grows roughly with the cube of the direction count.
 
-**Open decision for the user.** A 64-direction acquisition is routine, not
-extreme. If denoising alone costs the better part of an hour, MP-PCA is hard to
-defend as the default full-quality path there. Slab parallelism does **not**
-rescue it: OpenBLAS already uses 3.35 of 4 cores, so the headroom is spent. The
-proposal on the table is to invert the `fast_dwi_preproc` default above a volume
-threshold — `nlmeans` (multithreaded, fast) as the default on rich acquisitions,
-MP-PCA available on request. This is a scientific call and is deliberately left to
-the user, with the measurement above as its basis.
+**Resolved, 2026-09-02: MP-PCA is dropped entirely.** A 64-direction
+acquisition is routine, not extreme, and denoising alone costing the better part
+of an hour cannot be defended as a default or offered as an option. Slab
+parallelism does **not** rescue it: OpenBLAS already uses 3.35 of 4 cores, so the
+headroom is spent, and the gain it would buy lands on low-direction data rather
+than on the case that actually hurts.
 
-It also weakens the case for slab-parallelising MP-PCA: that gain lands on
-low-direction data, where a single core is used, and not on the case that actually
-hurts.
+An intermediate proposal — keep both and invert the default above a volume
+threshold — was considered and rejected as carrying the cost of a preference, a
+threshold and a second code path for an arm nobody should pick. The dipy engine
+now always uses `nlmeans` + `estimate_sigma`; see section 2. This measurement is
+what decided it, so it is kept here rather than deleted with the feature.
 
-**Still pending**: the completed subj2 timings, and per-node isolated `_mem_gb`. PFT is heavier than deterministic
+**Still pending**: subj2 end-to-end timings with `nlmeans` in place of MP-PCA (the interrupted probe above never got past denoising), and per-node isolated `_mem_gb`. PFT is heavier than deterministic
 on both time and memory, so the numbers above are a floor, not an estimate.
 
 ## Accepted risk
