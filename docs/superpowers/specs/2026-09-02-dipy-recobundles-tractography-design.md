@@ -97,9 +97,21 @@ class TractographyEngine(Enum):
 ```
 
 Exposed as `GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["tractography_engine"]`,
-default `FSL_XTRACT` so existing users see no behaviour change, with
-`option_dependency` on a new `DependencyManager.is_dipy()` following the
-`is_antspynet` pattern.
+default **`DIPY_RECOBUNDLES`**, with `option_dependency` on a new
+`DependencyManager.is_dipy()` following the `is_antspynet` pattern.
+
+The dipy engine is the default for every install, existing ones included. That
+needs no migration code: `force_pref_reset` is a hidden global preference already
+defaulting to `"true"`, and when `__version__` differs from the stored
+`last_swane_version` the saved configuration is **not read at all** — defaults are
+loaded and written over it. Shipping this change under a new version therefore
+resets every configuration, and the new default simply applies.
+
+Two consequences follow from that and must be stated in the release notes rather
+than discovered: the 649 MB atlas will be fetched on the first DTI run of
+essentially every user, and DTI results change format from thresholded `.nii.gz`
+density maps to `.trk` bundles. Re-running an old subject will not reproduce its
+previous output.
 
 ### 2. Preference gating in the DTI section
 
@@ -149,13 +161,15 @@ be inferred.
 This preference **absorbs `old_eddy_correct`**, removing an entry that would
 otherwise have been greyed on dipy and making the two screens more uniform.
 
-**Compatibility**: `old_eddy_correct` is a persisted boolean and therefore a
-stable contract under `CLAUDE.md`. Because the replacement is also a boolean with
-the same polarity — `true` still means "the faster, cheaper path" — the migration
-is a **value-preserving rename**: copy `old_eddy_correct` to `fast_dwi_preproc`
-and drop the old key. No value conversion, and no risk of silently moving an
-existing subject from the fast path to full `eddy`. The rename must still be
-written and tested rather than left to a default.
+**Compatibility**: no migration code is needed, and writing one would be dead
+code. `old_eddy_correct` is a persisted key, but `force_pref_reset` (hidden,
+default `"true"`) discards the whole saved configuration whenever `__version__`
+changes — the old file is not read, so nothing could be carried across. The old
+key simply disappears with everything else, and `fast_dwi_preproc` starts at its
+default.
+
+An earlier draft of this spec specified a value-preserving rename. That was based
+on assuming SWANe preserved preferences across versions; it does not.
 
 ### 3. Bundle mapping (verified against the downloaded atlas)
 
@@ -397,9 +411,10 @@ The work splits along the same seam as the two workflows, and phase 2 should not
 start before phase 1 has been looked at on real data:
 
 - **Phase 0** — the FSL rotated-bvec fix (section 12) and the
-  `old_eddy_correct` → `fast_dwi_preproc` rename. Both touch the existing path,
-  both change its snapshots, and both are far easier to review on their own than
-  mixed into a new engine.
+  `old_eddy_correct` → `fast_dwi_preproc` replacement. Both touch the existing
+  path, both change its snapshots, and both are far easier to review on their own
+  than mixed into a new engine. No migration code: see the compatibility note in
+  section 2.
 - **Phase 1** — engine preference and gating, dependency/licence plumbing, the
   new preprocessing/reconstruction/tracking nodes, `dipy_dti_preproc_workflow`,
   the `MainWorkflow` branch, and matrix snapshots. Deliverable: a global
