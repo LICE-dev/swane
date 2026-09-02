@@ -153,7 +153,7 @@ no re-validation and the golden matrix snapshots do not churn.
 ```
 CustomDcm2niix -> ForceOrient -> ExtractVolumes(b0) -> get_deskull_node   [shared]
   -> DipyDenoise (mppca or nlmeans, per fast_dwi_preproc)
-  -> DipyMotionCorrection (dipy.align, + bvec rotation)
+  -> DipyMotionCorrection (dipy.align + reorient_bvecs)
   -> DwiBiasCorrection (N4 on mean b0, field applied to all volumes)
   -> DipyTensorFit -> FA -> apply_registration_node -> outputnode.FA
   -> DipyCsdFit (auto_response_ssst, adaptive sh_order_max)
@@ -351,11 +351,23 @@ Hand-parallelising this node requires proof of equivalence. Three layers:
    identifiable per-volume payloads *out of order*; assert volume *i* lands at
    position *i*. This is the likeliest and most silent parallelisation bug:
    scrambled volumes crash nothing, they just corrupt the tensor.
-2. **bvec rotation** — `register_dwi_series` uses `gtab` only for `b0s_mask` and
-   returns `(image, affine_array)`. **It never rotates the bvecs**; the caller
-   must. Forgetting this yields no crash, only wrong fibre orientations. Unit
-   test: apply a known rigid rotation, assert the rotated bvec matches the
-   analytic expectation, b0 rows stay `[0,0,0]`, norms preserved.
+2. **bvec reorientation** — `motion_correction` does not reorient the gradients
+   itself; it returns `(image, affine_array)` and leaves that to the caller. Use
+   dipy's official helper, `dipy.core.gradients.reorient_bvecs(gtab, affines)`,
+   not a hand-rolled rotation.
+
+   This is not optional. dipy's own docstring, citing Leemans & Jones 2009,
+   states that without reorientation the rotation of the volumes causes
+   "systematic bias in rotationally invariant measures, such as FA and MD, and
+   also characteristic biases in tractography".
+
+   **Indexing trap**: `reorient_bvecs` expects affines ordered as
+   `gtab.bvecs[~gtab.b0s_mask]` — the non-b0 volumes only — while
+   `motion_correction` returns an affine array covering *all* volumes including
+   b0s. The correct call passes `affines[..., ~gtab.b0s_mask]`. Passing the full
+   array silently misaligns every gradient. Unit test: apply a known rigid
+   rotation, assert the reoriented bvec matches the analytic expectation, that
+   b0 rows stay `[0,0,0]`, and that norms are preserved.
 3. **Serial-vs-parallel oracle** (`@pytest.mark.heavy`) — each volume is
    registered independently by a deterministic optimiser, so the two must agree
    **bit for bit**, provided BLAS thread counts match on both sides. Pin
@@ -444,6 +456,19 @@ What remains open is a quantitative comparison against the FSL branch on real
 data. The user has chosen to proceed and measure afterwards. Recorded here as a
 bounded, accepted risk at the low-direction end, not as a general caveat and not
 as a resolved question.
+
+## Pre-existing issue found during design (out of scope)
+
+FSL `eddy` produces `out_rotated_bvecs`, and nipype exposes it, but
+`dti_preproc_workflow` passes the original dcm2niix bvecs to both `dtifit`
+(line 228) and `bedpostx` (line 324). By the same Leemans & Jones 2009 argument
+that makes `reorient_bvecs` mandatory on the dipy branch, the current FSL branch
+carries a systematic bias in FA and tractography proportional to subject
+rotation.
+
+This predates the present change and is **not fixed here**: it alters results
+already produced by the existing pipeline, so it warrants its own decision and
+its own validation rather than being folded into a new-engine change.
 
 ## Strategic implications
 
