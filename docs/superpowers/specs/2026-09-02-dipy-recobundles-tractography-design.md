@@ -119,8 +119,14 @@ CustomDcm2niix -> ForceOrient -> ExtractVolumes(b0) -> get_deskull_node   [share
   -> DwiBiasCorrection (N4 on mean b0, field applied to all volumes)
   -> DipyTensorFit -> FA -> apply_registration_node -> outputnode.FA
   -> DipyCsdFit (auto_response_ssst, adaptive sh_order_max)
-  -> DipyTracking (pft_tracking, CmcStoppingCriterion) -> outputnode.tractogram
+  -> DipyTracking (pft_tracking, CmcStoppingCriterion)
+  -> DipyAtlasSLR (whole-brain SLR against the atlas, once)
 ```
+
+Phase 1 publishes three outputs consumed by phase 2: `outputnode.tractogram`
+(native/reference space), `outputnode.tractogram_atlas` (aligned to the atlas by
+the single SLR) and `outputnode.atlas2native` (the inverse transform used to
+bring recognised bundles back).
 
 Side branch: `DipyTissueClassifier` (HMRF on the T1 `reference_brain`) → 3 PVE
 maps → `apply_registration_node` ref→diff. The PVE maps serve **two** purposes:
@@ -211,8 +217,10 @@ do not take a `multicore_node_limit` parameter at all.
 |---|---|---|---|
 | `DipyDenoise` (mppca) | none — serial in dipy | 1 | no |
 | `DipyMotionCorrection` | **our own pool over volumes** | `max_cpu` | no |
+| `DipyTensorFit` (FA) | none needed — cheap | 1 | no |
 | `DipyCsdFit` | `peaks_from_model(num_processes)` | `max_cpu` | no |
 | `DipyTracking` | `pft_tracking(nbr_threads)` | `max_cpu` | no |
+| `DipyAtlasSLR` | none | 1 | no |
 | `DipyTissueClassifier` (HMRF) | none | 1 | no |
 | `DipyRecoBundles` | `recognize(num_threads)` | `max_cpu` | no |
 | N4 on b0 | ITK `num_threads` (existing node) | `max_cpu` | no |
@@ -237,6 +245,20 @@ This is required, not cosmetic: RecoBundles runs a whole-brain SLR against
 `whole_brain_MNI.trk` *before* recognising individual bundles. A tractogram
 consisting of a single CST corridor would register arbitrarily, so even the CST
 would fail — not just AF and OR.
+
+## Implementation phasing
+
+The work splits along the same seam as the two workflows, and phase 2 should not
+start before phase 1 has been looked at on real data:
+
+- **Phase 1** — engine preference and gating, dependency/licence plumbing, the
+  five new preprocessing/reconstruction/tracking nodes, `dipy_dti_preproc_workflow`,
+  the `MainWorkflow` branch, and matrix snapshots. Deliverable: a global
+  tractogram for both oracle subjects.
+- **Phase 2** — `DipyRecoBundles`, `dipy_bundle_workflow`, the fornix split, the
+  Slicer/SlicerDMRI branch, and the result contract.
+- **Phase 3** — phantom v9 and the prerelease sweep, which can only assert bundle
+  recovery once phase 2 exists.
 
 ## Validation
 
