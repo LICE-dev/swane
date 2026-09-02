@@ -396,6 +396,32 @@ start before phase 1 has been looked at on real data:
 - **Phase 3** — phantom v9 and the prerelease sweep, which can only assert bundle
   recovery once phase 2 exists.
 
+## How this gets executed
+
+The plan is delivered in the shape it is run in, not as a flat checklist:
+
+```
+global orchestrator  (holds this design and the cross-phase contracts)
+  └─ phase orchestrator      one session per phase
+       └─ executors          several per phase, each labelled Sonnet 5 or Opus 4.8
+```
+
+For each phase, the deliverable is a ready-to-paste **orchestrator prompt**. That
+orchestrator splits its phase into independent executor tasks, writes their
+prompts, and assigns each a model. Model choice follows the nature of the work:
+**Opus 4.8** for anything needing real reasoning — scientific correctness, the
+equivalence oracles, adaptive `lmax`/`patch_radius` logic, RecoBundles
+integration, the phantom geometry — and **Sonnet 5** for well-specified
+mechanical work such as preference plumbing, licence and `strings.py` entries, or
+snapshot regeneration.
+
+At the end of each phase the result is reported back to the global orchestrator,
+so every orchestrator prompt must close with a **report-back contract**: tests run
+and their actual output, contracts touched, deviations from the plan, numbers
+measured, and what was deliberately not done. A phase reported as "done" without
+that evidence cannot be verified, and under `CLAUDE.md` a change is not complete
+until its tests have been run *and reviewed for correctness*.
+
 ## Validation
 
 ### Oracles
