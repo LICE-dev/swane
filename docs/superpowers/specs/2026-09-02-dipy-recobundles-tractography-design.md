@@ -75,8 +75,38 @@ default `FSL_XTRACT` so existing users see no behaviour change, with
 | `atr` `str` `cbd` `cbp` `cbt` | active | greyed, "no RecoBundles atlas counterpart" |
 | `cingulum` (new) | greyed | active |
 | `tractography_threshold`, `track_procs` | active | greyed |
-| `old_eddy_correct` | active | greyed |
+| `denoise_level` (new, **shared**) | active | active |
 | `seed_density`, `max_angle`, `step_size` (new) | greyed | active |
+
+#### `denoise_level` — an engine-independent quality control
+
+A three-level enum, active on **both** engines, which each engine interprets:
+
+| Level | FSL | dipy |
+|---|---|---|
+| `NONE` | no eddy correction at all | no denoising (motion correction still runs) |
+| `FAST` | `eddy_correct` | `nlmeans` + `estimate_sigma` |
+| `FULL` | `eddy` | `mppca` |
+
+`nlmeans` is the fast choice because it exposes `num_threads` and genuinely
+parallelises, whereas `mppca` is single-core; the pair is therefore fast-vs-accurate
+in wall-clock terms, not only in algorithm.
+
+Note the semantic asymmetry, which the tooltip must state plainly: on FSL, `eddy`
+and `eddy_correct` are eddy-current/motion correction, not denoising; on dipy,
+denoising and motion correction are separate steps and motion correction is never
+skipped. `NONE` therefore genuinely disables eddy correction on FSL, which is
+scientifically inadvisable on clinical data — accepted deliberately, because SWANe
+is a research tool and the choice belongs to the user, with a warning tooltip.
+
+This preference **absorbs `old_eddy_correct`**, removing one of the entries that
+would otherwise have been greyed on dipy and making the two screens more uniform.
+
+**Compatibility**: `old_eddy_correct` is a persisted boolean and therefore a
+stable contract under `CLAUDE.md`. Replacing it with an enum requires a migration
+for existing subject configurations: `true` → `FAST`, `false` → `FULL` (the
+current default, since `false` means the full `eddy` runs today). The migration
+must be written and tested, not left to a silent default.
 
 ### 3. Bundle mapping (verified against the downloaded atlas)
 
@@ -215,7 +245,8 @@ do not take a `multicore_node_limit` parameter at all.
 
 | Node | Parallelism source | `n_procs` | `use_cuda` |
 |---|---|---|---|
-| `DipyDenoise` (mppca) | none — serial in dipy | 1 | no |
+| `DipyDenoise` (`mppca`, FULL) | none — serial in dipy | 1 | no |
+| `DipyDenoise` (`nlmeans`, FAST) | `num_threads` | `max_cpu` | no |
 | `DipyMotionCorrection` | **our own pool over volumes** | `max_cpu` | no |
 | `DipyTensorFit` (FA) | none needed — cheap | 1 | no |
 | `DipyCsdFit` | `peaks_from_model(num_processes)` | `max_cpu` | no |
