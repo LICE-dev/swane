@@ -583,8 +583,62 @@ arrives with dipy) rather than accumulating a Python list.
 Tracking offers no further parallel gain; `motion_correction` is the only genuine
 candidate for hand-parallelisation, 753 s → roughly 190 s on four cores.
 
-**Pending**: PFT timings on real gradients with WM seeding and `.trx` output, for
-both subjects, and per-node isolated `_mem_gb`. PFT is heavier than deterministic
+### subj1, real gradients, WM seeding, PFT
+
+| Step | Time | delta RSS |
+|---|---|---|
+| Brain mask | 16.5 s | +0.22 GB |
+| MP-PCA (`patch_radius=1`) | 404.4 s | +0.01 GB |
+| `motion_correction` (serial) | 663.7 s | +0.30 GB |
+| `reorient_bvecs` | 0.0 s | — |
+| CSD lmax=4 | 172.6 s | +0.32 GB |
+| HMRF -> PVE | 10.7 s | +0.04 GB |
+| **PFT, WM seeding** | **136.8 s** | +0.03 GB |
+| `.trx` save | 1.7 s | +0.10 GB |
+| **Total** | **1406 s (23.4 min)** | **peak 1.2 GB** |
+
+160,644 streamlines from 56,934 WM seeds; the WM mask is 8% of the 667,146 brain
+voxels. `motion_correction` alone is 47% of the total, which is why it is the
+parallelisation target.
+
+Note this corrects the earlier deterministic/whole-brain figures: PFT with WM
+seeding is *cheaper* than deterministic tracking with whole-brain seeding (137 s
+vs 625 s, +0.03 GB vs a 7.0 GB peak). The 7 GB came from seeding 667k voxels, not
+from the tracker.
+
+### subj2 — MP-PCA does not scale, and this is the open decision
+
+The 64-direction probe was **interrupted after 54 minutes still inside MP-PCA**,
+at 335% CPU. The two subjects carry near-identical data volumes (25.4M vs 29.9M
+voxel-volumes), yet:
+
+| | subj1 | subj2 |
+|---|---|---|
+| Per-patch matrix | 27x16 | 125x65 |
+| MP-PCA wall clock | 6.7 min | **>54 min** |
+| Cores used | 1 | 3.35 |
+| **Core-minutes** | **6.7** | **>180** |
+
+Roughly **27x more expensive in core-time for the same amount of data**. The
+mechanism: eigendecomposition cost grows as `min(m,n)^2 * max(m,n)`, so ~7k
+operations per patch becomes ~528k, and the direction count enters *twice* — it
+enlarges the matrix and forces a larger `patch_radius`, which enlarges the patch.
+Cost grows roughly with the cube of the direction count.
+
+**Open decision for the user.** A 64-direction acquisition is routine, not
+extreme. If denoising alone costs the better part of an hour, MP-PCA is hard to
+defend as the default full-quality path there. Slab parallelism does **not**
+rescue it: OpenBLAS already uses 3.35 of 4 cores, so the headroom is spent. The
+proposal on the table is to invert the `fast_dwi_preproc` default above a volume
+threshold — `nlmeans` (multithreaded, fast) as the default on rich acquisitions,
+MP-PCA available on request. This is a scientific call and is deliberately left to
+the user, with the measurement above as its basis.
+
+It also weakens the case for slab-parallelising MP-PCA: that gain lands on
+low-direction data, where a single core is used, and not on the case that actually
+hurts.
+
+**Still pending**: the completed subj2 timings, and per-node isolated `_mem_gb`. PFT is heavier than deterministic
 on both time and memory, so the numbers above are a floor, not an estimate.
 
 ## Accepted risk

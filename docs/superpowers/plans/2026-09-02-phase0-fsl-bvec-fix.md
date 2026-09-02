@@ -46,7 +46,36 @@ inherits the `subject_config`, `global_config` and `make_input_dir` fixtures fro
 **Files:**
 - Modify: `swane/config/preference_list.py:382-386`
 - Modify: `swane/nipype_pipeline/workflows/dti_preproc_workflow.py` (the `config.getboolean_safe("old_eddy_correct")` read)
+- Modify: `swane/tests/nipype_pipeline/test_deskull_modality_wiring.py:106` (the `section["old_eddy_correct"] = "false"` write)
+- Modify: `swane/tests/prerelease/plan.py` — the diffusion `Axis` (`name`/`option` at 286/289) and every `PassSpec.values` key referencing it (642, 667, 688, 712, 734)
 - Test: `swane/tests/config/test_preferences.py` (append; the file exists)
+
+**Amendment (orchestrator-verified): two extra consumers.** The live tree has
+six references to `old_eddy_correct`, not the four the table above originally
+listed. The two extra files must be updated in this task:
+
+1. `test_deskull_modality_wiring.py:106` — a plain preference write; change the
+   key string to `fast_dwi_preproc`.
+2. `swane/tests/prerelease/plan.py` — `Axis(name="old_eddy_correct",
+   option="old_eddy_correct", ...)`. The `option` **must** become
+   `fast_dwi_preproc`: it is the config key actually written, and
+   `getboolean_safe` swallows a missing key and returns the catalogue default,
+   so a stale `option` would silently collapse the prerelease diffusion axis
+   (both arms resolving to the default). Rename `Axis.name` to
+   `fast_dwi_preproc` **as well**, and rename the matching `PassSpec.values`
+   dict keys (642, 667, 688, 712, 734) in lockstep — `PassSpec.values` is keyed
+   by axis name and resolved via `AXES_BY_NAME[axis_name]` (plan.py:946-947), so
+   the three move together or the plan build raises `KeyError`. Polarity is
+   unchanged (`true` = fast), so the value strings stay as they are.
+
+   This rename does **not** invalidate existing `~/test_swane/prerelease` state:
+   stored state and subject directories are keyed by `PassSpec.name`
+   (`state[pass_item.name]`, `subject_dir = os.path.join(work_dir,
+   pass_item.name)`), not by axis name, which is only ever an in-memory lookup /
+   coverage-report key.
+
+After the rename, `grep -rn "old_eddy_correct" --include=*.py .` must return no
+hits except (optionally) the local variable in `dti_preproc_workflow.py`.
 
 **Interfaces:**
 - Consumes: nothing.
