@@ -245,7 +245,33 @@ strictly better.
   readable failure when offline rather than an opaque nipype traceback; and
   cleanup of a partial directory on retry.
 
-### 9. Concurrency and resources
+### 9. Nipype-derived disclaimers in the new nodes
+
+Every new node (`DipyDenoise`, `DipyMotionCorrection`, `DwiBiasCorrection`,
+`DipyTensorFit`, `DipyCsdFit`, `DipyTracking`, `DipyTissueClassifier`,
+`DipyAtlasSLR`, `DipyRecoBundles`) defines a custom Nipype interface and
+therefore extends Nipype classes. Each one must carry the established
+disclaimers, in the exact existing form:
+
+```python
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
+...
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
+```
+
+This applies even though the *computation* inside these nodes is dipy's and not
+Nipype's: the interface scaffolding is derived from Nipype, and `NOTICE.md`
+already records that dependency (Apache 2.0, © 2009-2016 Nipype developers). The
+disclaimers are kept when a node is rewritten against a new backend, never
+dropped because the body changed.
+
+`NOTICE.md` additionally needs the new third-party entries: dipy (BSD 3-clause)
+and the HCP842 atlas (CC BY 4.0, © Eleftherios Garyfallidis), the latter being
+the attribution route chosen instead of a license-acceptance entry.
+
+### 10. Concurrency and resources
 
 Per the project direction, `CoreLimit.NO_LIMIT` and `SOFT_CAP` are being removed:
 **new nodes implement HARD_CAP only**, and the new workflow factories therefore
@@ -272,7 +298,7 @@ the FSL branch, which does use the GPU for eddy, bedpostx and probtrackx.
 `_mem_gb` must be measured **per node in isolation**, because nipype runs each
 node in its own process. Chained measurements are not usable for this.
 
-### 10. Phantom
+### 11. Phantom
 
 `GENERATOR_VERSION` `"8"` → `"9"` (invalidates the cache; full regeneration for
 everyone). `dwi_directions` 6 → 30. In `tissue.py`, AF and OR corridors alongside
