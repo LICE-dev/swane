@@ -48,9 +48,14 @@ Each phase orchestrator prompt you write must:
 
 - name the spec and plan paths rather than restating them;
 - carry the Global Constraints block verbatim from the phase plan;
-- tell the orchestrator to use `superpowers:subagent-driven-development` (or
-  `superpowers:executing-plans`), `superpowers:test-driven-development` and
+- tell the orchestrator to use `superpowers:executing-plans`,
+  `superpowers:test-driven-development` and
   `superpowers:verification-before-completion`;
+- state explicitly that the phase orchestrator **does not spawn subagents and
+  does not implement**: like you, it produces ready-to-paste executor prompts,
+  each labelled Sonnet 5 or Opus 4.8, and hands them to the user, who runs each
+  in a fresh session and reports back. The fan-out is human-driven at every
+  level, so `superpowers:subagent-driven-development` does not apply here;
 - state which shared contracts its executors must not break;
 - end with a **report-back contract**: actual test output, contracts touched,
   deviations from the plan, numbers measured, and what was deliberately not done.
