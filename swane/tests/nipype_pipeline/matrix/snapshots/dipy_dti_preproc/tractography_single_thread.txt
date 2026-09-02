@@ -1,0 +1,131 @@
+# workflow snapshot: dipy_dti_preproc / tractography_single_thread
+#
+#   deskull_engine = ANTSPYNET
+#   max_cpu = 1
+#   tractography = true
+#   tractography_engine = DIPY_RECOBUNDLES
+#
+# nodes=20 edges=42
+
+- dif2ref_antsreg [AntsRegistration] mem_gb=5 n_procs=1
+    aff_metric = 'mattes'
+    num_threads = 1
+    out_prefix = 'ants_reg_'
+    syn_metric = 'mattes'
+    transform_type = 'Rigid'
+- dif2ref_to_ras [AffineToRAS] mem_gb=1 n_procs=1
+    in_fmt = 'itk'
+    out_file = 'diff2ref_ras.txt'
+- dipy_bias [DwiBiasCorrection] mem_gb=2 n_procs=1
+    num_threads = 1
+- dipy_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'dti'
+    output_dir = '.'
+    request_dti = True
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- dipy_csd [DipyCsdFit] mem_gb=6 n_procs=1
+    num_threads = 1
+- dipy_denoise [DipyDenoise] mem_gb=4 n_procs=1
+    num_threads = 1
+- dipy_deskull_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=1
+    mask_file = 'nodif_brain_brain.nii.gz'
+    modality = 'bold'
+    num_threads = 1
+    out_file = 'nodif_brain.nii.gz'
+    threshold = 0.5
+- dipy_motion [DipyMotionCorrection] mem_gb=4 n_procs=1
+    num_threads = 1
+    parallel = True
+- dipy_nodif [ExtractVolumes] mem_gb=0.2 n_procs=1
+    num_volumes = 1
+    out_file = 'nodif.nii.gz'
+    start_volume = 0
+- dipy_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
+- dipy_slr [DipyAtlasSLR] mem_gb=8 n_procs=1
+    atlas_dir = '<HOME>/.dipy'
+    num_threads = 1
+- dipy_tensorfit [DipyTensorFit] mem_gb=2 n_procs=1
+- dipy_tissue [DipyTissueClassifier] mem_gb=4 n_procs=1
+- dipy_tracking [DipyTracking] mem_gb=6 n_procs=1
+    max_angle = 20.0
+    num_threads = 1
+    random_seed = 1
+    seed_density = 2
+    step_size = 0.2
+- fa_2_ref_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+    out_file = 'r-FA.nii.gz'
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- pve_csf_2_diff_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+    out_file = 'r-pve_csf.nii.gz'
+- pve_gm_2_diff_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+    out_file = 'r-pve_gm.nii.gz'
+- pve_wm_2_diff_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
+    interpolator = 'linear'
+    out_file = 'r-pve_wm.nii.gz'
+# connections
+dif2ref_antsreg.fwd_transforms -> dif2ref_to_ras.in_transform
+dif2ref_antsreg.fwd_transforms -> fa_2_ref_ants_apply.transformlist
+dif2ref_antsreg.fwd_which_to_invert -> fa_2_ref_ants_apply.which_to_invert
+dif2ref_antsreg.inv_transforms -> pve_csf_2_diff_ants_apply.transformlist
+dif2ref_antsreg.inv_transforms -> pve_gm_2_diff_ants_apply.transformlist
+dif2ref_antsreg.inv_transforms -> pve_wm_2_diff_ants_apply.transformlist
+dif2ref_antsreg.inv_which_to_invert -> pve_csf_2_diff_ants_apply.which_to_invert
+dif2ref_antsreg.inv_which_to_invert -> pve_gm_2_diff_ants_apply.which_to_invert
+dif2ref_antsreg.inv_which_to_invert -> pve_wm_2_diff_ants_apply.which_to_invert
+dif2ref_to_ras.out_ras -> dipy_tracking.affine_diff2ref
+dipy_bias.out_file -> dipy_csd.in_file
+dipy_bias.out_file -> dipy_tensorfit.in_file
+dipy_conv.bvals -> dipy_denoise.bval
+dipy_conv.bvals -> dipy_motion.bval
+dipy_conv.bvecs -> dipy_denoise.bvec
+dipy_conv.bvecs -> dipy_motion.bvec
+dipy_conv.converted_files -> dipy_reOrient.in_file
+dipy_csd.shm_coeff -> dipy_tracking.shm_coeff
+dipy_denoise.out_file -> dipy_motion.in_file
+dipy_deskull_antspynet.mask_file -> dipy_csd.mask
+dipy_deskull_antspynet.mask_file -> dipy_tensorfit.mask
+dipy_deskull_antspynet.out_file -> dif2ref_antsreg.moving
+dipy_deskull_antspynet.out_file -> dif2ref_to_ras.source_file
+dipy_motion.out_bval -> dipy_bias.bval
+dipy_motion.out_bval -> dipy_csd.bval
+dipy_motion.out_bval -> dipy_tensorfit.bval
+dipy_motion.out_bvec -> dipy_csd.bvec
+dipy_motion.out_bvec -> dipy_tensorfit.bvec
+dipy_motion.out_file -> dipy_bias.in_file
+dipy_nodif.out_file -> dipy_deskull_antspynet.in_file
+dipy_nodif.out_file -> pve_csf_2_diff_ants_apply.reference_image
+dipy_nodif.out_file -> pve_gm_2_diff_ants_apply.reference_image
+dipy_nodif.out_file -> pve_wm_2_diff_ants_apply.reference_image
+dipy_reOrient.out_file -> dipy_denoise.in_file
+dipy_reOrient.out_file -> dipy_nodif.in_file
+dipy_slr.atlas2native -> outputnode.atlas2native
+dipy_slr.tractogram_atlas -> outputnode.tractogram_atlas
+dipy_tensorfit.fa -> fa_2_ref_ants_apply.input_image
+dipy_tissue.pve_csf -> pve_csf_2_diff_ants_apply.input_image
+dipy_tissue.pve_gm -> pve_gm_2_diff_ants_apply.input_image
+dipy_tissue.pve_wm -> pve_wm_2_diff_ants_apply.input_image
+dipy_tracking.tractogram -> dipy_slr.tractogram
+dipy_tracking.tractogram -> outputnode.tractogram
+fa_2_ref_ants_apply.out_file -> outputnode.FA
+inputnode.reference -> dipy_tracking.reference
+inputnode.reference -> fa_2_ref_ants_apply.reference_image
+inputnode.reference_brain -> dif2ref_antsreg.fixed
+inputnode.reference_brain -> dif2ref_to_ras.reference_file
+inputnode.reference_brain -> dipy_tissue.in_file
+pve_csf_2_diff_ants_apply.out_file -> dipy_tracking.pve_csf
+pve_gm_2_diff_ants_apply.out_file -> dipy_tracking.pve_gm
+pve_wm_2_diff_ants_apply.out_file -> dipy_tracking.pve_wm
