@@ -34,6 +34,14 @@
 | `swane/tests/nipype_pipeline/matrix/snapshots/dti_preproc/` | Golden snapshots | Regenerate |
 | `swane/tests/nipype_pipeline/workflows/test_dti_bvec_source.py` | New behavioural test | Create |
 | `swane/tests/config/test_preferences.py` | Preference catalogue tests | Modify |
+| `swane/tests/nipype_pipeline/test_deskull_modality_wiring.py` | Deskull wiring test | Modify: writes the preference |
+| `swane/tests/prerelease/plan.py` | Prerelease sweep definition | Modify: names the preference in its axis and scenarios |
+
+Find every consumer before editing, rather than trusting this table:
+
+```bash
+grep -rn "old_eddy_correct" --include=*.py --include=*.md swane/ | grep -v docs/superpowers
+```
 
 The new workflow test sits under `swane/tests/nipype_pipeline/workflows/`, which
 inherits the `subject_config`, `global_config` and `make_input_dir` fixtures from
@@ -311,6 +319,14 @@ vectors because it produces no rotated ones."
 **Interfaces:**
 - Consumes: `fast_dwi_preproc` from Task 1; the bvec wiring from Task 2.
 - Produces: refreshed golden snapshots that later phases must not disturb.
+
+**Why this task cannot be skipped or reordered.** Between Task 1 and this task the
+matrix suite is in a silently wrong state: `test_dti_matrix.py` still writes
+`old_eddy_correct`, a key that no longer exists, so the write lands nowhere and
+the `old_eddy_correct` scenario stops exercising the `eddy_correct` branch — it
+silently becomes a duplicate of the new-eddy scenario. Regenerating snapshots
+before completing this task would bake that mistake into the golden files. Do not
+run `SWANE_SNAPSHOT_UPDATE=1` until Step 1 below is done.
 
 - [ ] **Step 1: Rename the scenario and its preference write**
 
