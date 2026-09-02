@@ -26,6 +26,39 @@ global choice, FSL included.
 - Replacing or restructuring the existing FSL/XTRACT path. One targeted
   scientific fix to it *is* in scope: the rotated-bvec bug, section 12.
 
+## Data handling — nothing but conclusions is committed
+
+The oracles in this design run on **real subject data**. That data, and
+everything derived from it, stays outside the repository. Only conclusions —
+numbers, decisions, rationale, and the code they justify — are ever committed.
+
+Stays local, under `~/test_swane/dipy_test/`, never added to git:
+
+- the two real subjects (`dti.nii.gz`, `dti.bval`, `dti.bvec`, `t1.nii.gz`);
+- the 649 MB HCP842 atlas, fetched into a local `DIPY_HOME` rather than a shared
+  or repository path;
+- every intermediate artefact: `.npy` denoise caches, `.trx`/`.trk` tractograms,
+  PVE maps, probe scripts and their logs;
+- any per-subject oracle output, including screenshots or renderings.
+
+What may enter the repository:
+
+- aggregate timings, memory figures, streamline counts and direction counts;
+- the design decisions those measurements justify;
+- synthetic fixtures only — the phantom generator produces its own data and never
+  embeds anything subject-derived.
+
+This is not a precaution specific to this change: `CLAUDE.md` forbids adding real
+subject data, identifiers, private DICOM metadata, local subject paths, execution
+logs or generated results to source control, and requires synthetic or
+de-identified fixtures. Recorded explicitly here because this design leans on real
+data far more than previous ones, and because the temptation to commit "just the
+oracle output" is exactly how such data leaks.
+
+Practical check before any commit on this branch: `git diff --name-only` against
+the base should list source, tests and docs only — never a path under
+`test_swane`, and never a binary imaging format.
+
 ## Context: what the current pipeline does
 
 `dti_preproc_workflow` runs dcm2niix → `ForceOrient` → b0 extraction →
@@ -367,7 +400,8 @@ start before phase 1 has been looked at on real data:
 
 ### Oracles
 
-Two real subjects in `~/test_swane/dipy_test/` (local only, never committed) that
+Two real subjects in `~/test_swane/dipy_test/` (local only — see "Data handling"
+above; neither they nor anything derived from them is ever committed) that
 exercise opposite regimes:
 
 | | subj1 | subj2 |
