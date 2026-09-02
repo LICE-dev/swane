@@ -2,7 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Feed FSL `eddy`'s rotated b-vectors to `dtifit` and `bedpostx` instead of the unrotated dcm2niix ones, and replace the FSL-specific `old_eddy_correct` preference with the engine-independent `fast_dwi_preproc`.
+**Goal:** Feed FSL `eddy`'s rotated b-vectors to `dtifit` and `bedpostx` instead of the unrotated dcm2niix ones.
+
+**Status: COMPLETE (2026-09-02), uncommitted in the working tree.** Re-scoped
+mid-flight: Task 1 was cancelled (see below), leaving Tasks 2-4. Verified by the
+global orchestrator: 165 passed across `matrix`, `config` and the new
+behavioural test; the snapshot diff is 14 lines, all of them the bvec edge.
 
 **Architecture:** Two small, surgical changes inside `dti_preproc_workflow`, plus one preference rename. Both alter the output of the existing, validated FSL pipeline, so they are isolated in their own phase and their own golden snapshots, ahead of any dipy work.
 
@@ -28,12 +33,11 @@
 
 | File | Responsibility | Change |
 |---|---|---|
-| `swane/nipype_pipeline/workflows/dti_preproc_workflow.py` | DTI preprocessing graph | Modify: bvec source for `dtifit`/`bedpostx`; read `fast_dwi_preproc` |
-| `swane/config/preference_list.py` | Preference catalogue | Modify: replace `old_eddy_correct` with `fast_dwi_preproc` |
-| `swane/tests/nipype_pipeline/matrix/test_dti_matrix.py` | Golden graph snapshots | Modify: scenario key rename |
+| `swane/nipype_pipeline/workflows/dti_preproc_workflow.py` | DTI preprocessing graph | Modify: bvec source for `dtifit`/`bedpostx` |
+| `swane/tests/nipype_pipeline/matrix/test_dti_matrix.py` | Golden graph snapshots | *(unchanged — the scenario rename was cancelled with Task 1)* |
 | `swane/tests/nipype_pipeline/matrix/snapshots/dti_preproc/` | Golden snapshots | Regenerate |
 | `swane/tests/nipype_pipeline/workflows/test_dti_bvec_source.py` | New behavioural test | Create |
-| `swane/tests/config/test_preferences.py` | Preference catalogue tests | Modify |
+
 | `swane/tests/nipype_pipeline/test_deskull_modality_wiring.py` | Deskull wiring test | Modify: writes the preference |
 | `swane/tests/prerelease/plan.py` | Prerelease sweep definition | Modify: names the preference in its axis and scenarios |
 
@@ -49,117 +53,22 @@ inherits the `subject_config`, `global_config` and `make_input_dir` fixtures fro
 
 ---
 
-### Task 1: Replace `old_eddy_correct` with `fast_dwi_preproc`
+### Task 1 (CANCELLED): Replace `old_eddy_correct` with `fast_dwi_preproc`
 
-**Files:**
-- Modify: `swane/config/preference_list.py:382-386`
-- Modify: `swane/nipype_pipeline/workflows/dti_preproc_workflow.py` (the `config.getboolean_safe("old_eddy_correct")` read)
-- Modify: `swane/tests/nipype_pipeline/test_deskull_modality_wiring.py:106` (the `section["old_eddy_correct"] = "false"` write)
-- Modify: `swane/tests/prerelease/plan.py` — the diffusion `Axis` (`name`/`option` at 286/289) and every `PassSpec.values` key referencing it (642, 667, 688, 712, 734)
-- Test: `swane/tests/config/test_preferences.py` (append; the file exists)
+**Cancelled 2026-09-02 by the global orchestrator, before completion; any work
+already done was reverted.** MP-PCA was dropped from the dipy engine after it
+measured >54 minutes on a routine 64-direction acquisition, so dipy always uses
+`nlmeans` + `estimate_sigma` and has no denoising choice to share. That removed
+the reason for an engine-independent preference to exist.
 
-**Amendment (orchestrator-verified): two extra consumers.** The live tree has
-six references to `old_eddy_correct`, not the four the table above originally
-listed. The two extra files must be updated in this task:
+`old_eddy_correct` therefore stays exactly as it is: same key, same FSL-only
+meaning, greyed on the dipy engine. No new preference key, no persistence
+question, no migration discussion. See "Denoising on dipy is always `nlmeans` +
+`estimate_sigma`" in the spec's section 2.
 
-1. `test_deskull_modality_wiring.py:106` — a plain preference write; change the
-   key string to `fast_dwi_preproc`.
-2. `swane/tests/prerelease/plan.py` — `Axis(name="old_eddy_correct",
-   option="old_eddy_correct", ...)`. The `option` **must** become
-   `fast_dwi_preproc`: it is the config key actually written, and
-   `getboolean_safe` swallows a missing key and returns the catalogue default,
-   so a stale `option` would silently collapse the prerelease diffusion axis
-   (both arms resolving to the default). Rename `Axis.name` to
-   `fast_dwi_preproc` **as well**, and rename the matching `PassSpec.values`
-   dict keys (642, 667, 688, 712, 734) in lockstep — `PassSpec.values` is keyed
-   by axis name and resolved via `AXES_BY_NAME[axis_name]` (plan.py:946-947), so
-   the three move together or the plan build raises `KeyError`. Polarity is
-   unchanged (`true` = fast), so the value strings stay as they are.
-
-   This rename does **not** invalidate existing `~/test_swane/prerelease` state:
-   stored state and subject directories are keyed by `PassSpec.name`
-   (`state[pass_item.name]`, `subject_dir = os.path.join(work_dir,
-   pass_item.name)`), not by axis name, which is only ever an in-memory lookup /
-   coverage-report key.
-
-After the rename, `grep -rn "old_eddy_correct" --include=*.py .` must return no
-hits except (optionally) the local variable in `dti_preproc_workflow.py`.
-
-**Interfaces:**
-- Consumes: nothing.
-- Produces: preference key `fast_dwi_preproc` (boolean, default `"false"`), read by `dti_preproc_workflow` and, in later phases, by the dipy denoise node.
-
-**Context.** No migration code is needed and writing one would be dead code: `force_pref_reset` is a hidden global preference defaulting to `"true"`, and when `__version__` differs from the stored `last_swane_version` the saved configuration is never read — defaults are loaded and written over it. Verify this yourself in `ConfigManager.__init__` before concluding the task; do not add migration logic.
-
-Polarity is preserved: `true` still means the faster, cheaper path.
-
-- [ ] **Step 1: Write the failing test**
-
-Append to the existing `swane/tests/config/test_preferences.py`:
-
-```python
-def test_fast_dwi_preproc_replaces_old_eddy_correct():
-    from swane.config.preference_list import WF_PREFERENCES
-    from swane.utils.DataInputList import DataInputList
-
-    dti = WF_PREFERENCES[DataInputList.DTI]
-    assert "fast_dwi_preproc" in dti
-    assert "old_eddy_correct" not in dti
-    assert dti["fast_dwi_preproc"].default == "false"
-```
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-```bash
-/media/Dati/venv/bin/python -m pytest swane/tests/config/test_preferences.py::test_fast_dwi_preproc_replaces_old_eddy_correct -v
-```
-
-Expected: FAIL — `"fast_dwi_preproc" in dti` is False.
-
-- [ ] **Step 3: Replace the preference**
-
-In `preference_list.py`, replace the `old_eddy_correct` entry with:
-
-```python
-WF_PREFERENCES[category]["fast_dwi_preproc"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Fast denoising",
-    tooltip=(
-        "Faster, lower-quality DWI preprocessing. With the FSL engine this "
-        "selects eddy_correct instead of eddy; with the dipy engine it selects "
-        "nlmeans instead of MP-PCA, while motion correction always runs."
-    ),
-    default="false",
-)
-```
-
-In `dti_preproc_workflow.py`, change the read:
-
-```python
-    old_eddy_correct = config.getboolean_safe("fast_dwi_preproc")
-```
-
-Keep the local variable name `old_eddy_correct` for now — renaming it is a separate, purely cosmetic change and would enlarge this diff without changing behaviour. If you prefer to rename it, rename every use in the file in the same commit and re-run the full matrix suite.
-
-- [ ] **Step 4: Run the test to verify it passes**
-
-```bash
-/media/Dati/venv/bin/python -m pytest swane/tests/config/ -v
-```
-
-Expected: the new test passes and no existing config test regresses.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add swane/config/preference_list.py swane/nipype_pipeline/workflows/dti_preproc_workflow.py swane/tests/config/test_preferences.py
-git commit -m "feat: replace old_eddy_correct with engine-independent fast_dwi_preproc
-
-Same polarity and default; the label and tooltip describe the per-engine
-meaning. No migration code: force_pref_reset already discards the saved
-configuration on a version change."
-```
-
+The task body is removed rather than left struck through, because a detailed,
+plausible, *wrong* set of instructions is exactly the kind of thing a later
+executor follows by mistake.
 ---
 
 ### Task 2: `dtifit` and `bedpostx` consume eddy's rotated b-vectors
@@ -169,7 +78,7 @@ configuration on a version change."
 - Test: `swane/tests/nipype_pipeline/workflows/test_dti_bvec_source.py` (create)
 
 **Interfaces:**
-- Consumes: preference key `fast_dwi_preproc` from Task 1; `CustomEddy` output `out_rotated_bvecs` (verified present alongside `out_corrected`).
+- Consumes: the existing `old_eddy_correct` preference; `CustomEddy` output `out_rotated_bvecs` (verified present alongside `out_corrected`).
 - Produces: nothing new for later tasks; this is a graph-wiring change.
 
 **Context the implementer needs.** `dti_preproc_workflow` has two eddy branches. When `old_eddy_correct` is true it uses nipype's `EddyCorrect`, which produces **no** rotated bvecs; when false it uses `CustomEddy` (FSL `eddy`), which produces `out_rotated_bvecs`. Only the second branch can be fixed. The branch is already tracked by the local variable `eddy_output_name`, set to `"eddy_corrected"` in the old branch and `"out_corrected"` in the new one.
@@ -212,7 +121,7 @@ def _build(subject_config, global_config, make_input_dir, fast):
     )
     from swane.utils.DataInputList import DataInputList
 
-    subject_config[DataInputList.DTI]["fast_dwi_preproc"] = "true" if fast else "false"
+    subject_config[DataInputList.DTI]["old_eddy_correct"] = "true" if fast else "false"
     subject_config[DataInputList.DTI]["tractography"] = "true"
     subject_config[DataInputList.DTI]["cuda"] = "false"
     return dti_preproc_workflow(
@@ -317,7 +226,7 @@ vectors because it produces no rotated ones."
 - Regenerate: `swane/tests/nipype_pipeline/matrix/snapshots/dti_preproc/`
 
 **Interfaces:**
-- Consumes: `fast_dwi_preproc` from Task 1; the bvec wiring from Task 2.
+- Consumes: the bvec wiring from Task 2.
 - Produces: refreshed golden snapshots that later phases must not disturb.
 
 **Why this task cannot be skipped or reordered.** Between Task 1 and this task the
@@ -328,15 +237,12 @@ silently becomes a duplicate of the new-eddy scenario. Regenerating snapshots
 before completing this task would bake that mistake into the golden files. Do not
 run `SWANE_SNAPSHOT_UPDATE=1` until Step 1 below is done.
 
-- [ ] **Step 1: Rename the scenario and its preference write**
+- [x] **Step 1: ~~Rename the scenario and its preference write~~ — CANCELLED**
 
-In `test_dti_matrix.py`, rename the scenario key `"old_eddy_correct"` to `"fast_preproc"` in the `SCENARIOS` dict, keeping its tuple unchanged, and update the line inside `test_dti_matrix` that writes `subject_config[...]["old_eddy_correct"]` so it writes `"fast_dwi_preproc"`. Locate that write with:
-
-```bash
-grep -n "old_eddy" swane/tests/nipype_pipeline/matrix/test_dti_matrix.py
-```
-
-Update the module docstring's mention of the eddy backend axis to name the new preference.
+Cancelled with Task 1. `test_dti_matrix.py` is **not** modified: the
+`old_eddy_correct` scenario key and its preference write stay as they are. Go
+straight to Step 2, where the only expected failures are snapshot content
+changes from the bvec edge.
 
 - [ ] **Step 2: Run the matrix suite and confirm it fails on content, not on errors**
 
@@ -359,7 +265,7 @@ git diff --stat swane/tests/nipype_pipeline/matrix/snapshots/dti_preproc/
 git diff swane/tests/nipype_pipeline/matrix/snapshots/dti_preproc/ | head -80
 ```
 
-The only semantic change must be the bvec edge moving from `dti_conv` to `dti_eddy` in the full-eddy scenarios, plus the scenario rename. The `fast_preproc` scenario's snapshot must still show `dti_conv -> bvecs`. If anything else moved, a previous task overreached — investigate rather than accepting the regeneration.
+The only semantic change must be the bvec edge moving from `dti_conv` to `dti_eddy` in the full-eddy scenarios. There is no scenario rename. The `old_eddy_correct` scenario's snapshot must still show `dti_conv -> bvecs` and stay byte-identical. If anything else moved, a previous task overreached — investigate rather than accepting the regeneration.
 
 - [ ] **Step 5: Re-run the whole matrix suite and the report**
 
@@ -377,7 +283,7 @@ git add swane/tests/nipype_pipeline/matrix/
 git commit -m "test: regenerate DTI matrix snapshots for the rotated-bvec fix
 
 The bvec edge moves from dti_conv to dti_eddy on the full-eddy scenarios;
-the fast path keeps dti_conv. Scenario renamed to match fast_dwi_preproc."
+the fast path keeps dti_conv."
 ```
 
 ---
@@ -415,7 +321,7 @@ Report back to the global orchestrator with:
 - the exact output of `pytest swane/tests/nipype_pipeline/matrix` and of the new behavioural test;
 - the reviewed snapshot diff — state explicitly that the only semantic change is the bvec edge, or describe what else moved;
 - confirmation that `git diff --name-only` for this phase lists no path under `test_swane` and no binary imaging format;
-- whether the `fast_dwi_preproc` local variable in `dti_preproc_workflow` was renamed or deliberately left as `old_eddy_correct`;
+- whether the `old_eddy_correct` local variable in `dti_preproc_workflow` was renamed or deliberately left (it was left unchanged);
 - anything deliberately not done, and why.
 
 A phase reported as "done" without the test output cannot be verified.
