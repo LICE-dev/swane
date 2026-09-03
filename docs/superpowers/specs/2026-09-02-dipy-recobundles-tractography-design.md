@@ -670,11 +670,53 @@ threshold and a second code path for an arm nobody should pick. The dipy engine
 now always uses `nlmeans` + `estimate_sigma`; see section 2. This measurement is
 what decided it, so it is kept here rather than deleted with the feature.
 
-**Still pending**: subj2 end-to-end timings with `nlmeans` in place of MP-PCA (the
-interrupted probe above never got past denoising), and the subj2 leg of the
-per-node isolated `_mem_gb` sweep — the subj1 figures are measured and in place,
-subj2 is not. The realistic-path RecoBundles quality confirmation (see the
-caveat above) is also pending.
+### Task 11 final — isolated per-node `_mem_gb`, both subjects (2026-09-03)
+
+Both oracle subjects were run through the isolated per-node harness (each node in
+its own process, tree-peak RSS = parent + workers) with the **shipped** node code:
+brain-bbox-cropped `probabilistic_tracking`+CMC and **rigid-only** motion. subj2
+(64-dir, 144×144×60) reached the end for the first time. Reservations are the max
+across the two subjects, rounded to the nearest integer GB (min 1). The full
+regressor table (RAM vs T1 voxels, DWI 4D size, SH coeffs, streamline count, with
+provisional estimator slopes) is in `2026-09-03-phase1-dipy-node-ram-report.md`.
+
+| node | subj1 GB | subj2 GB | reserv | streamlines / regressor |
+|---|---|---|---|---|
+| DipyDenoise | 1.11 | 1.37 | 1 | DWI 4D samples |
+| DipyMotionCorrection | 7.11 | **8.44** | **8** | pool ceiling (4 workers) |
+| DwiBiasCorrection | 0.85 | 0.99 | 1 | |
+| DipyTensorFit | 0.89 | 1.16 | 1 | |
+| DipyCsdFit | 3.57 | 3.05 | 4 | DWI spatial voxels |
+| DipyTissueClassifier | 2.58 | 5.17 | 5 | T1 voxels (subj2 T1 is 2×) |
+| AffineToRAS | 0.11 | 0.11 | 1 | trivial |
+| DipyTracking (crop+stream) | 5.09 | 2.04 | 5 | streamlines (409k / 35k) |
+| DipyAtlasSLR | 4.75 | 0.98 | 5 | streamline count |
+
+subj1 tractogram 409,155 streamlines (15 dir), subj2 34,818 (64 dir), both at
+`seed_density=2`. Sequential per-node time (isolated): subj1 ≈ 35 min, subj2 ≈ 39
+min; the real workflow overlaps the T1 tissue branch with the diffusion stream.
+
+**Motion — rigid-only applied.** Dropping the trailing `affine` stage was validated
+on subj2 (64-dir, where eddy shows most): series correlation **0.9997**, max
+reoriented-bvec diff **0.0034** (subj1 was 0.9995 / 0.0044) — equivalent. The one
+localised divergence (a brain-edge voxel spike, larger on 64-dir data) is the eddy
+distortion the affine stage was partially correcting, now **left uncorrected — a
+declared asymmetry vs the FSL eddy path** (section 5). `DEFAULT_PIPELINE` is now
+`[center_of_mass, translation, rigid]`; the serial path was fixed to pass it
+explicitly and the serial-vs-parallel equivalence oracle re-passes bit-for-bit.
+Rigid-only saves ~30% of motion time but does **not** lower its RAM — the 8.44 GB
+is the 4-worker process pool, not the pipeline.
+
+**Motion parallelization.** dipy's `motion_correction` is serial over volumes;
+serial + `OPENBLAS_NUM_THREADS=4` measured **1.01 avg_cores** (BLAS does not engage
+`affine_registration`) at 0.91 GB, while our process pool gives **3.88 avg_cores**
+at 8.48 GB. The pool is what delivers multicore, at ~9× the RAM. Decision (user):
+keep the pool, reserve motion at 8 GB.
+
+**RAM floor.** `tractography_engine = DIPY_RECOBUNDLES` now carries an
+`option_pref_requirement` of **8 GB** on `ram_gb` (`ResourceManager.
+dipy_tractography_ram_requirements`), from the motion ceiling; macOS is unmeasured
+and carries the same 8 GB pending a macOS run.
 
 ## Accepted risk
 

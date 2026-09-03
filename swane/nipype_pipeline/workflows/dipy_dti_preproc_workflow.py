@@ -31,23 +31,26 @@ from swane.nipype_pipeline.nodes.utils import (
 )
 
 
-# Per-node memory reservations (GB). Task 11 replaces each with an isolated
-# tree-peak RSS measurement on the two oracle subjects. "tracking" is now
-# subj1-measured: the streaming DipyTracking node peaks at ~5 GB at
-# seed_density=2 on subj1 (623,794 streamlines; the tracker's own peak dominates,
-# and the streamed .trx write keeps it flat rather than the >6 GB spike of the
-# materialise-then-save path). The subj2 leg of the sweep is still pending, so
-# the other entries remain conservative construction-time guesses, NOT measured.
+# Per-node memory reservations (GB), integer-rounded from isolated tree-peak RSS
+# measurements on BOTH oracle subjects (subj1 15-dir 256x256x52 / subj2 64-dir
+# 144x144x60), taking the max across the two. Measured with the shipped node code
+# -- brain-bbox-cropped probabilistic+CMC tracking and rigid-only motion -- at
+# num_threads=4 for the parallel nodes. motion is the whole path's RAM ceiling at
+# 8 GB (subj2, 4-worker process pool). Each node's RAM tracks an input-size
+# regressor (T1 voxels for tissue, streamline count for slr/tracking, 4D size for
+# denoise/motion, spatial voxels x SH coeffs for csd); the full table lives in the
+# spec Measurements section and the dipy RAM report, groundwork for a future
+# per-node RAM estimator.
 _MEM_GB = {
-    "denoise": 4,
-    "motion": 4,
-    "bias": 2,
-    "tensorfit": 2,
-    "csd": 6,
-    "tissue": 4,
-    "ras": 1,
-    "tracking": 5,  # subj1-measured (streaming, density=2); subj2 pending
-    "slr": 8,
+    "denoise": 1,  # subj1 1.11 / subj2 1.37
+    "motion": 8,  # subj1 7.11 / subj2 8.44 -- 4-worker pool; the path ceiling
+    "bias": 1,  # subj1 0.85 / subj2 0.99
+    "tensorfit": 1,  # subj1 0.89 / subj2 1.16
+    "csd": 4,  # subj1 3.57 / subj2 3.05
+    "tissue": 5,  # subj1 2.58 / subj2 5.17 -- HMRF on the T1, scales with T1 voxels
+    "ras": 1,  # subj1 0.11 / subj2 0.11 (min 1 GB reservation)
+    "tracking": 5,  # subj1 5.09 / subj2 2.04 -- cropped; scales with streamlines + FOV
+    "slr": 5,  # subj1 4.75 / subj2 0.98 -- scales with streamline count
 }
 
 

@@ -23,6 +23,16 @@ Streamline length is bounded to the literature range ``MIN_LEN_MM`` .. ``MAX_LEN
 these are module constants rather than traits so the workflow graph and the golden
 matrix snapshots do not change.
 
+The SH and PVE volumes are cropped to the brain bounding box before tracking
+(``BBOX_PAD_VOXELS``, :func:`foreground_bbox_slices`, :func:`shift_affine_for_crop`).
+The full FOV is dominated by background -- on subj1 the brain fills <50% of
+256x256x52, so the uncropped SH volume alone is 4.15 GB in float64 and passing it
+whole to ``probabilistic_tracking`` peaks around 7 GB, over the 8 GB target (spec
+section 2, "crop"). Background voxels carry no fODF, no WM seed and no tissue for
+the CMC criterion, so the crop halves the voxel count at zero scientific cost: the
+affine is shifted by the crop offset, so tracking still runs in the original
+diffusion world frame and the streamlines are unchanged.
+
 Tracking runs in diffusion space (no DWI interpolation); each streamline is
 moved to reference space with the diffusion -> reference affine already produced
 by the registration -- there is no FSL ``.mat``. Rather than materialise the
@@ -72,6 +82,17 @@ MAX_LEN_MM = 250.0
 # The dipy/trx default is 10000.
 TRX_CHUNK_SIZE = 10000
 
+# The SH + PVE volumes are cropped to the brain bounding box (plus this padding,
+# in voxels) before tracking. The full FOV is dominated by background: on subj1
+# the brain fills <50% of 256x256x52, so the uncropped SH volume alone is
+# 256x256x52x15 float64 = 4.15 GB, and passing it whole to probabilistic_tracking
+# peaks around 7 GB -- over the 8 GB target (spec section 2, "crop"). Background
+# voxels carry no fODF, no WM seed and no tissue for the CMC criterion, so the
+# crop is a pure memory optimisation with no effect on the streamlines: the affine
+# is shifted by the crop offset (see shift_affine_for_crop) so tracking still runs
+# in the original diffusion world frame.
+BBOX_PAD_VOXELS = 2
+
 
 def wm_seed_mask(pve_wm, threshold=WM_PVE_SEED_THRESHOLD):
     """Boolean seed mask of WM-dominant voxels from the WM PVE map."""
@@ -88,6 +109,45 @@ def generate_wm_seeds(pve_wm, affine, density):
 
     mask = wm_seed_mask(pve_wm)
     return seeds_from_mask(mask, affine, density=int(density))
+
+
+def foreground_bbox_slices(masks, shape, pad=BBOX_PAD_VOXELS):
+    """Slices tightening ``shape`` to the union foreground of ``masks`` + ``pad``.
+
+    ``masks`` is an iterable of 3D arrays sharing ``shape[:3]``; a voxel is
+    foreground where any of them is non-zero. The returned per-axis slices span
+    the foreground bounding box grown by ``pad`` voxels and clipped to the volume
+    bounds. If nothing is foreground the full FOV is returned unchanged (a safe
+    no-op crop).
+    """
+    foreground = np.zeros(tuple(shape[:3]), dtype=bool)
+    for mask in masks:
+        foreground |= np.asarray(mask) != 0
+
+    if not foreground.any():
+        return tuple(slice(0, int(shape[axis])) for axis in range(3))
+
+    where = np.where(foreground)
+    slices = []
+    for axis in range(3):
+        lo = max(int(where[axis].min()) - pad, 0)
+        hi = min(int(where[axis].max()) + 1 + pad, int(shape[axis]))
+        slices.append(slice(lo, hi))
+    return tuple(slices)
+
+
+def shift_affine_for_crop(affine, slices):
+    """Affine for a cropped volume that preserves world coordinates.
+
+    Cropping moves the voxel origin to ``(slices[0].start, slices[1].start,
+    slices[2].start)``; shifting the translation by that offset makes the
+    cropped-space voxel ``(0, 0, 0)`` map to the same world point it did before
+    the crop, so seeds and streamlines stay in the original diffusion frame.
+    """
+    lo = np.array([sl.start for sl in slices], dtype=float)
+    shifted = np.array(affine, dtype=float)
+    shifted[:3, 3] = affine[:3, :3] @ lo + affine[:3, 3]
+    return shifted
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -188,14 +248,32 @@ class DipyTracking(BaseInterface):
         )
 
         shm_nii = nib.load(self.inputs.shm_coeff)
-        sh_data = shm_nii.get_fdata()
+        # Load via dataobj as float32 rather than get_fdata (float64): the full FOV
+        # SH volume is 256x256x52x15 = 4.15 GB in float64 on subj1, half that in
+        # float32, and dipy upcasts to float64 only the cropped array below.
+        sh_data = np.asarray(shm_nii.dataobj, dtype=np.float32)
         diff_affine = shm_nii.affine
-        # average voxel size drives the CMC step-length normalisation
+        # average voxel size drives the CMC step-length normalisation (crop-invariant)
         average_voxel_size = float(np.mean(shm_nii.header.get_zooms()[:3]))
 
-        pve_wm = nib.load(self.inputs.pve_wm).get_fdata()
-        pve_gm = nib.load(self.inputs.pve_gm).get_fdata()
-        pve_csf = nib.load(self.inputs.pve_csf).get_fdata()
+        pve_wm = np.asarray(nib.load(self.inputs.pve_wm).dataobj, dtype=np.float32)
+        pve_gm = np.asarray(nib.load(self.inputs.pve_gm).dataobj, dtype=np.float32)
+        pve_csf = np.asarray(nib.load(self.inputs.pve_csf).dataobj, dtype=np.float32)
+
+        # Crop SH + PVE to the brain bounding box so tracking never carries the
+        # background (>50% of the FOV on subj1) in RAM. Foreground is any voxel
+        # with fODF signal or any tissue; the affine is shifted so the cropped
+        # volume tracks in the original diffusion world frame (BBOX_PAD_VOXELS,
+        # foreground_bbox_slices, shift_affine_for_crop -- spec section 2 "crop").
+        sh_signal = np.any(sh_data != 0, axis=-1)
+        crop = foreground_bbox_slices(
+            (sh_signal, pve_wm, pve_gm, pve_csf), sh_data.shape[:3]
+        )
+        sh_data = np.ascontiguousarray(sh_data[crop])
+        pve_wm = np.ascontiguousarray(pve_wm[crop])
+        pve_gm = np.ascontiguousarray(pve_gm[crop])
+        pve_csf = np.ascontiguousarray(pve_csf[crop])
+        track_affine = shift_affine_for_crop(diff_affine, crop)
 
         seed_density = int(self.inputs.seed_density)
         max_angle = float(self.inputs.max_angle)
@@ -218,7 +296,7 @@ class DipyTracking(BaseInterface):
             for streamline in probabilistic_tracking(
                 seeds,
                 criterion,
-                diff_affine,
+                track_affine,
                 sh=sh_data,
                 min_len=MIN_LEN_MM,
                 max_len=MAX_LEN_MM,
@@ -240,7 +318,7 @@ class DipyTracking(BaseInterface):
         for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR):
             os.environ[var] = str(num_threads)
         try:
-            seeds = generate_wm_seeds(pve_wm, diff_affine, seed_density)
+            seeds = generate_wm_seeds(pve_wm, track_affine, seed_density)
             criterion = CmcStoppingCriterion.from_pve(
                 pve_wm,
                 pve_gm,

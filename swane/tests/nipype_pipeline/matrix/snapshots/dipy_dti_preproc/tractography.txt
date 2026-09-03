@@ -16,7 +16,7 @@
 - dif2ref_to_ras [AffineToRAS] mem_gb=1 n_procs=1
     in_fmt = 'itk'
     out_file = 'diff2ref_ras.txt'
-- dipy_bias [DwiBiasCorrection] mem_gb=2 n_procs=4
+- dipy_bias [DwiBiasCorrection] mem_gb=1 n_procs=4
     num_threads = 4
 - dipy_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
@@ -33,9 +33,9 @@
     single_file = False
     source_dir = '<TMP>/dicom'
     verbose = False
-- dipy_csd [DipyCsdFit] mem_gb=6 n_procs=4
+- dipy_csd [DipyCsdFit] mem_gb=4 n_procs=4
     num_threads = 4
-- dipy_denoise [DipyDenoise] mem_gb=4 n_procs=4
+- dipy_denoise [DipyDenoise] mem_gb=1 n_procs=4
     num_threads = 4
 - dipy_deskull_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=4
     mask_file = 'nodif_brain_brain.nii.gz'
@@ -43,7 +43,7 @@
     num_threads = 4
     out_file = 'nodif_brain.nii.gz'
     threshold = 0.5
-- dipy_motion [DipyMotionCorrection] mem_gb=4 n_procs=4
+- dipy_motion [DipyMotionCorrection] mem_gb=8 n_procs=4
     num_threads = 4
     parallel = True
 - dipy_nodif [ExtractVolumes] mem_gb=0.2 n_procs=1
@@ -51,11 +51,11 @@
     out_file = 'nodif.nii.gz'
     start_volume = 0
 - dipy_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
-- dipy_slr [DipyAtlasSLR] mem_gb=8 n_procs=1
+- dipy_slr [DipyAtlasSLR] mem_gb=5 n_procs=1
     atlas_dir = '<HOME>/.dipy'
     num_threads = 1
-- dipy_tensorfit [DipyTensorFit] mem_gb=2 n_procs=1
-- dipy_tissue [DipyTissueClassifier] mem_gb=4 n_procs=1
+- dipy_tensorfit [DipyTensorFit] mem_gb=1 n_procs=1
+- dipy_tissue [DipyTissueClassifier] mem_gb=5 n_procs=1
 - dipy_tracking [DipyTracking] mem_gb=5 n_procs=4
     max_angle = 20.0
     num_threads = 4

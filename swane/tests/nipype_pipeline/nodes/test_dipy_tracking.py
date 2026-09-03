@@ -24,7 +24,10 @@ from swane.nipype_pipeline.nodes.DipyTracking import (
     DipyTracking,
     wm_seed_mask,
     generate_wm_seeds,
+    foreground_bbox_slices,
+    shift_affine_for_crop,
     WM_PVE_SEED_THRESHOLD,
+    BBOX_PAD_VOXELS,
     MIN_LEN_MM,
     MAX_LEN_MM,
     OMP_THREADS_VAR,
@@ -112,6 +115,196 @@ def _configure(node, inputs, **overrides):
     for key, value in overrides.items():
         setattr(node.inputs, key, value)
     return node
+
+
+# --------------------------------------------------------------------------- #
+# Brain bounding-box crop before tracking (spec section 2 "crop").
+#
+# The committed node passed the full FOV SH volume to probabilistic_tracking:
+# 256x256x52x15 float64 = 4.15 GB just for that array on subj1, of which >50% is
+# background zeros. That full-FOV footprint (~7 GB tree peak) is what busts the
+# 8 GB target and hard-froze the measurement box. Cropping SH + PVE to the brain
+# bounding box (and shifting the affine so world coordinates are preserved) halves
+# the voxel count at zero scientific cost: background carries no fODF, no WM seed
+# and no tissue for the CMC criterion.
+# --------------------------------------------------------------------------- #
+class TestBrainBboxCrop:
+    def test_bbox_slices_tighten_to_foreground_with_pad(self):
+        # A 20x20x20 volume whose only signal is an inner 6x6x6 block.
+        mask = np.zeros((20, 20, 20), dtype=np.float32)
+        mask[7:13, 7:13, 7:13] = 1.0
+        slices = foreground_bbox_slices((mask,), mask.shape, pad=BBOX_PAD_VOXELS)
+        # foreground spans [7,13); with pad=2 the box is [5,15) on every axis.
+        assert slices == (slice(5, 15), slice(5, 15), slice(5, 15))
+        # and it is strictly smaller than the full FOV -> real memory saving
+        for axis, sl in enumerate(slices):
+            assert sl.stop - sl.start < mask.shape[axis]
+
+    def test_bbox_slices_union_multiple_masks(self):
+        a = np.zeros((10, 10, 10), dtype=np.float32)
+        b = np.zeros((10, 10, 10), dtype=np.float32)
+        a[1, 1, 1] = 1.0
+        b[6, 6, 6] = 1.0
+        slices = foreground_bbox_slices((a, b), a.shape, pad=0)
+        assert slices == (slice(1, 7), slice(1, 7), slice(1, 7))
+
+    def test_bbox_slices_clip_to_volume_bounds(self):
+        mask = np.zeros((8, 8, 8), dtype=np.float32)
+        mask[0, 0, 0] = 1.0
+        mask[7, 7, 7] = 1.0
+        # a generous pad must not run off either end of the array
+        slices = foreground_bbox_slices((mask,), mask.shape, pad=5)
+        assert slices == (slice(0, 8), slice(0, 8), slice(0, 8))
+
+    def test_bbox_slices_no_foreground_keeps_full_fov(self):
+        mask = np.zeros((6, 6, 6), dtype=np.float32)
+        slices = foreground_bbox_slices((mask,), mask.shape, pad=2)
+        assert slices == (slice(0, 6), slice(0, 6), slice(0, 6))
+
+    def test_shift_affine_preserves_world_coordinates(self):
+        # A non-trivial affine (anisotropic voxels + an offset origin).
+        affine = np.array(
+            [
+                [0.9, 0.0, 0.0, -10.0],
+                [0.0, 0.9, 0.0, -20.0],
+                [0.0, 0.0, 2.5, -30.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        slices = (slice(5, 15), slice(6, 16), slice(2, 40))
+        shifted = shift_affine_for_crop(affine, slices)
+        # the cropped-space voxel (0,0,0) must land on the same world point as the
+        # original-space voxel (5,6,2)
+        lo = np.array([5, 6, 2])
+        world_from_original = affine[:3, :3] @ lo + affine[:3, 3]
+        world_from_cropped = shifted[:3, 3]
+        assert np.allclose(world_from_cropped, world_from_original)
+        # the linear part (voxel sizes / orientation) is untouched
+        assert np.allclose(shifted[:3, :3], affine[:3, :3])
+
+    def test_node_crops_sh_before_tracking(
+        self, workspace, make_nifti, tmp_path, monkeypatch
+    ):
+        # Embed the tight fixture content inside a larger volume with a genuine
+        # zero-background border (all PVE and SH zero there), so the crop has
+        # something to remove -- unlike the base fixture, whose CSF fills the FOV.
+        pad = 4
+        wm0, gm0, csf0 = _pve_maps()
+        sh0 = _sh_field()
+
+        def _embed(arr):
+            if arr.ndim == 4:
+                out = np.zeros(
+                    (
+                        arr.shape[0] + 2 * pad,
+                        arr.shape[1] + 2 * pad,
+                        arr.shape[2] + 2 * pad,
+                        arr.shape[3],
+                    ),
+                    dtype=arr.dtype,
+                )
+                out[pad:-pad, pad:-pad, pad:-pad, :] = arr
+            else:
+                out = np.zeros(tuple(d + 2 * pad for d in arr.shape), dtype=arr.dtype)
+                out[pad:-pad, pad:-pad, pad:-pad] = arr
+            return out
+
+        affine = np.eye(4)
+        padded = {
+            "shm_coeff": make_nifti("psh.nii.gz", data=_embed(sh0), affine=affine),
+            "pve_wm": make_nifti("pwm.nii.gz", data=_embed(wm0), affine=affine),
+            "pve_gm": make_nifti("pgm.nii.gz", data=_embed(gm0), affine=affine),
+            "pve_csf": make_nifti("pcsf.nii.gz", data=_embed(csf0), affine=affine),
+            "reference": make_nifti(
+                "pref.nii.gz",
+                data=np.zeros(_embed(csf0).shape, dtype=np.float32),
+                affine=affine,
+            ),
+            "affine_diff2ref": str(tmp_path / "id.txt"),
+        }
+        np.savetxt(padded["affine_diff2ref"], np.eye(4))
+        full_shape = _embed(csf0).shape[:3]
+
+        seen = {}
+
+        def _capture(seed_positions, sc, affine_in, **kwargs):
+            seen["sh_spatial"] = tuple(np.asarray(kwargs["sh"]).shape[:3])
+            seen["affine"] = np.array(affine_in)
+            return [np.array([[6.0, 6.0, 6.0], [6.0, 6.0, 7.0]])]
+
+        import dipy.tracking.tracker as tracker
+
+        monkeypatch.setattr(tracker, "probabilistic_tracking", _capture)
+
+        node = _configure(DipyTracking(), padded, seed_density=1)
+        node.run()
+
+        # the SH handed to the tracker is cropped strictly smaller than the FOV
+        for axis in range(3):
+            assert seen["sh_spatial"][axis] < full_shape[axis]
+        # and the affine was shifted off identity by the crop offset
+        assert not np.allclose(seen["affine"], np.eye(4))
+
+    def test_crop_is_invariant_to_background_padding(
+        self, workspace, make_nifti, tracking_inputs
+    ):
+        """The crop must be scientifically a no-op: the same brain content placed
+        in two different zero-background FOVs (with the affine offset so its world
+        coordinates are unchanged) must yield identical streamlines, because the
+        crop recovers the same tracking problem in the same world frame from both.
+        Without the crop the tracker would see two different-sized grids and their
+        boundary behaviour would diverge."""
+        from dipy.io.streamline import load_tractogram
+
+        def _canonical(streamlines):
+            return sorted(tuple(np.round(s.ravel(), 2)) for s in streamlines)
+
+        wm0, gm0, csf0 = _pve_maps()
+        sh0 = _sh_field()
+
+        def _padded_inputs(pad, prefix):
+            def _embed(arr):
+                shape = tuple(d + 2 * pad for d in arr.shape[:3])
+                out = np.zeros(shape + arr.shape[3:], dtype=arr.dtype)
+                out[pad:-pad, pad:-pad, pad:-pad] = arr
+                return out
+
+            affine = np.eye(4)
+            affine[:3, 3] = -pad  # inner block (pad,pad,pad) -> world (0,0,0)
+            return {
+                "shm_coeff": make_nifti(
+                    prefix + "sh.nii.gz", data=_embed(sh0), affine=affine
+                ),
+                "pve_wm": make_nifti(
+                    prefix + "wm.nii.gz", data=_embed(wm0), affine=affine
+                ),
+                "pve_gm": make_nifti(
+                    prefix + "gm.nii.gz", data=_embed(gm0), affine=affine
+                ),
+                "pve_csf": make_nifti(
+                    prefix + "csf.nii.gz", data=_embed(csf0), affine=affine
+                ),
+                "reference": tracking_inputs["reference"],
+                "affine_diff2ref": tracking_inputs["affine_diff2ref"],
+            }
+
+        results = []
+        for pad, prefix, out in ((4, "a", "pa.trx"), (8, "b", "pb.trx")):
+            node = _configure(
+                DipyTracking(),
+                _padded_inputs(pad, prefix),
+                seed_density=1,
+                random_seed=1,
+                out_file=out,
+            )
+            node.run()
+            sft = load_tractogram(
+                node._list_outputs()["tractogram"], "same", bbox_valid_check=False
+            )
+            results.append(_canonical(sft.streamlines))
+
+        assert len(results[0]) > 0
+        assert results[0] == results[1]
 
 
 # --------------------------------------------------------------------------- #
