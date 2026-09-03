@@ -195,7 +195,7 @@ CustomDcm2niix -> ForceOrient -> ExtractVolumes(b0) -> get_deskull_node   [share
   -> DwiBiasCorrection (N4 on mean b0, field applied to all volumes)
   -> DipyTensorFit -> FA -> apply_registration_node -> outputnode.FA
   -> DipyCsdFit (auto_response_ssst, adaptive sh_order_max)
-  -> DipyTracking (pft_tracking, CmcStoppingCriterion)
+  -> DipyTracking (probabilistic_tracking, CmcStoppingCriterion)
   -> DipyAtlasSLR (whole-brain SLR against the atlas, once)
 ```
 
@@ -205,8 +205,20 @@ the single SLR) and `outputnode.atlas2native` (the inverse transform used to
 bring recognised bundles back).
 
 Side branch: `DipyTissueClassifier` (HMRF on the T1 `reference_brain`) → 3 PVE
-maps → `apply_registration_node` ref→diff. The PVE maps serve **two** purposes:
-the CMC stopping criterion and PFT's reinitialisation of implausible streamlines.
+maps → `apply_registration_node` ref→diff. The PVE maps feed the CMC stopping
+criterion (`CmcStoppingCriterion.from_pve`), which constrains where streamlines
+terminate.
+
+**Tracker: `probabilistic_tracking`, not `pft_tracking`.** The design originally
+specified particle-filtering tractography, but Task 11 measured it unusable on
+the 8 GB / 4-core target (see Measurements and Accepted risk): PFT's `sh=` path
+runs single-core (its OpenMP pool never engages) and precomputes a dense full-FOV
+PMF of `X·Y·Z·362·8` bytes = 9.19 GB on subj1. `probabilistic_tracking` keeps the
+same `CmcStoppingCriterion(PVE)` — so tracking stays probabilistic (it samples
+the fODF) and anatomically constrained — while being genuinely multi-core and
+~1.2 GB; the only capability lost is PFT's particle-filtering reinitialisation.
+Streamline length is bounded to 10..250 mm (literature; module constants, so the
+graph and golden snapshots are unchanged).
 
 Tracking runs in diffusion space (no DWI interpolation); streamlines are moved to
 reference space with `transform_streamlines` and the affine already produced by
@@ -321,7 +333,7 @@ do not take a `multicore_node_limit` parameter at all.
 | `DipyMotionCorrection` | **our own pool over volumes** | `max_cpu` | no |
 | `DipyTensorFit` (FA) | none needed — cheap | 1 | no |
 | `DipyCsdFit` | `peaks_from_model(num_processes)` | `max_cpu` | no |
-| `DipyTracking` | `pft_tracking(nbr_threads)` | `max_cpu` | no |
+| `DipyTracking` | `probabilistic_tracking(nbr_threads)` | `max_cpu` | no |
 | `DipyAtlasSLR` | none | 1 | no |
 | `DipyTissueClassifier` (HMRF) | none | 1 | no |
 | `DipyRecoBundles` | `recognize(num_threads)` | `max_cpu` | no |
@@ -566,6 +578,66 @@ seeding is *cheaper* than deterministic tracking with whole-brain seeding (137 s
 vs 625 s, +0.03 GB vs a 7.0 GB peak). The 7 GB came from seeding 667k voxels, not
 from the tracker.
 
+### subj1 — Task 11 isolated node run overturned PFT (tracker swap)
+
+The isolated per-node measurement mandated by Task 11 (each node run in its own
+process, tree-peak RSS = parent + workers) contradicted the figures above and
+forced the tracker change. Two facts about `pft_tracking(sh=)` came out:
+
+* **It is single-core.** An exhaustive thread bench (`nbr_threads` 1/4/8, all
+  `seed_buffer_fraction` values, `nbr_threads=0`, `OMP_NUM_THREADS` set at
+  process start) held `avg_cores = 1.0` throughout — the `sh=` path never engages
+  the OpenMP pool. So density=2 is ~88–100 min single-core on subj1.
+* **It precomputes a dense full-FOV PMF** — the fODF sampled over `default_sphere`
+  (362 vertices), float64, for every voxel of the passed SH volume:
+  `256·256·52·362·8` bytes = **9.19 GB** on subj1. The measured peak matched this
+  exactly and was independent of seed/thread count. (The earlier 1.2 GB PFT probe
+  was low only because it cropped the SH; the node passed the full FOV.)
+
+Both facts make PFT unusable on the 8 GB / 4-core target. `probabilistic_tracking`
+with the *same* `CmcStoppingCriterion(PVE)` has neither problem — the dense PMF is
+specific to PFT's `sh=` path — while keeping the anatomical CMC stop:
+
+| tracker + criterion (subj1, density=1) | wall | avg_cores | RAM |
+|---|---|---|---|
+| `pft_tracking` + CMC (old node) | 673 s | 1.0 | 7.87 GB (needs SH crop) |
+| `probabilistic_tracking` + CMC (new node) | 74.5 s | 2.62 | 1.17 GB |
+
+Multiprocessing PFT was rejected (each worker rebuilds the ~4.8 GB PMF → ~19 GB on
+four cores). At matched density=2, `probabilistic_tracking` + CMC recovers the
+CST/AF bundles at least as well as PFT (RecoBundles counts equal or higher on all
+four), so the swap is not a quality regression in the throwaway comparison —
+though that comparison carries its own caveat (below).
+
+### subj1 — tractogram save: materialise-then-save vs streaming
+
+`probabilistic_tracking` at density=2 yields **623,794 streamlines** (1.16M WM
+seeds). Two write paths were measured on subj1 (4 threads, real node code, tree-peak
+RSS; the tracker's own peak sits around 4.8–5.0 GB regardless of the write path):
+
+| write path | density | peak RSS |
+|---|---|---|
+| materialise `Streamlines()` → `StatefulTractogram` → `save_tractogram(.trx)` | 2 | **6.18 GB** |
+| stream generator → `TrxFile.from_lazy_tractogram(LazyTractogram)` → `.trx` | 1 | 1.82 GB |
+| stream generator → `TrxFile.from_lazy_tractogram(LazyTractogram)` → `.trx` | 2 | ~5 GB |
+
+The materialise path holds the whole set while the transform + `StatefulTractogram`
++ save each duplicate it — a spike that scales with streamline count and clears the
+~6 GB comfort threshold on an 8 GB box. **The node therefore streams**: each
+streamline is moved to reference space and handed straight to a memmap-backed
+`.trx` in chunks, so the write never holds the full set and the peak is bounded by
+the tracker itself, not by the tractogram size. No SH crop is needed
+(`probabilistic_tracking` has no full-FOV PMF). Streamline length is bounded to
+10–250 mm (`MIN_LEN_MM`/`MAX_LEN_MM`, module constants).
+
+**⚠️ Quality caveat.** The RecoBundles CST/AF comparison that backs "not a quality
+regression" was run on throwaway tractograms in diffusion space with approximate
+PVE (HMRF on the low-contrast b0, not the T1) and no diff→T1/MNI registration;
+default RecoBundles params recovered zero, so the loose params partly measure
+SLR-alignment quality, not tracker quality. The engineering case for the swap is
+conclusive; the quality confirmation on the realistic path (T1-HMRF PVE + ANTs
+diff→T1) is prepared but not yet run.
+
 ### subj2 — MP-PCA does not scale (this decided against MP-PCA)
 
 The 64-direction probe was **interrupted after 54 minutes still inside MP-PCA**,
@@ -598,8 +670,11 @@ threshold and a second code path for an arm nobody should pick. The dipy engine
 now always uses `nlmeans` + `estimate_sigma`; see section 2. This measurement is
 what decided it, so it is kept here rather than deleted with the feature.
 
-**Still pending**: subj2 end-to-end timings with `nlmeans` in place of MP-PCA (the interrupted probe above never got past denoising), and per-node isolated `_mem_gb`. PFT is heavier than deterministic
-on both time and memory, so the numbers above are a floor, not an estimate.
+**Still pending**: subj2 end-to-end timings with `nlmeans` in place of MP-PCA (the
+interrupted probe above never got past denoising), and the subj2 leg of the
+per-node isolated `_mem_gb` sweep — the subj1 figures are measured and in place,
+subj2 is not. The realistic-path RecoBundles quality confirmation (see the
+caveat above) is also pending.
 
 ## Accepted risk
 
@@ -620,10 +695,18 @@ two oracle subjects were chosen to straddle this boundary — 15 and 64 directio
 so the difference between the two regimes is measured rather than assumed.
 
 Two design choices already mitigate the low end: the adaptive `sh_order_max`,
-which never fits more coefficients than the data supports, and PFT, which samples
-the fODF instead of following its maximum and so recovers branches that
-deterministic tracking systematically drops in crossings — matching the
-probabilistic nature of the existing FSL path.
+which never fits more coefficients than the data supports, and probabilistic
+tracking (`probabilistic_tracking`), which samples the fODF instead of following
+its maximum and so recovers branches that deterministic tracking systematically
+drops in crossings — matching the probabilistic nature of the existing FSL path.
+This is the tracker that replaced PFT (see Measurements): the anatomical
+constraint is unchanged (the same `CmcStoppingCriterion`); what is given up is
+PFT's particle-filtering reinitialisation of implausible streamlines, which is a
+refinement on top of the same probabilistic sampling, not the probabilistic
+nature itself. Whether that loss is visible on real data is folded into the
+already-open quantitative comparison below — the tracker swap is an engineering
+decision (it makes the dipy path run at all on 8 GB / 4 cores), ratified by the
+user, with quality confirmation still pending.
 
 What remains open is a quantitative comparison against the FSL branch on real
 data. The user has chosen to proceed and measure afterwards. Recorded here as a
