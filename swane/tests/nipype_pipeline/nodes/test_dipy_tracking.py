@@ -25,6 +25,8 @@ from swane.nipype_pipeline.nodes.DipyTracking import (
     wm_seed_mask,
     generate_wm_seeds,
     WM_PVE_SEED_THRESHOLD,
+    MIN_LEN_MM,
+    MAX_LEN_MM,
     OMP_THREADS_VAR,
     OPENBLAS_THREADS_VAR,
 )
@@ -32,13 +34,16 @@ from swane.nipype_pipeline.nodes.DipyTracking import (
 
 # --------------------------------------------------------------------------- #
 # Synthetic fixture: a single coherent WM slab along z, CSF everywhere else,
-# GM caps at the slab ends. The fODF points along z, so PFT produces real
-# streamlines from the WM seeds.
+# GM caps at the slab ends. The fODF points along z, so probabilistic_tracking
+# produces real streamlines from the WM seeds. The slab is long enough (36 mm at
+# 1 mm isotropic) that valid streamlines clear the MIN_LEN_MM=10 filter, so the
+# tractogram is non-empty and the length-bound contract is exercisable.
 # --------------------------------------------------------------------------- #
-_SHAPE = (12, 12, 12)
+_SHAPE = (12, 12, 40)
 _WM_X = slice(4, 8)
 _WM_Y = slice(4, 8)
-_WM_Z = slice(1, 11)
+_WM_Z = slice(2, 38)
+_GM_CAPS = (0, 1, 38, 39)
 
 
 def _pve_maps():
@@ -47,7 +52,7 @@ def _pve_maps():
     csf = np.ones(_SHAPE, dtype=np.float32)
     wm[_WM_X, _WM_Y, _WM_Z] = 1.0
     csf[_WM_X, _WM_Y, _WM_Z] = 0.0
-    for z_cap in (0, 11):
+    for z_cap in _GM_CAPS:
         gm[_WM_X, _WM_Y, z_cap] = 1.0
         csf[_WM_X, _WM_Y, z_cap] = 0.0
     return wm, gm, csf
@@ -235,31 +240,62 @@ class TestReproducibility:
 
 
 # --------------------------------------------------------------------------- #
-# Thread pinning: OMP/OPENBLAS pinned to num_threads, nbr_threads follows it.
+# The literature-based length bounds (spec section 5) are enforced by the
+# tracker: no valid streamline is shorter than MIN_LEN_MM or longer than
+# MAX_LEN_MM. They ship as module constants (not traits) so the graph and the
+# golden matrix snapshots do not change.
+# --------------------------------------------------------------------------- #
+class TestLengthBounds:
+    def test_length_constants_are_the_literature_values(self):
+        assert MIN_LEN_MM == 10.0
+        assert MAX_LEN_MM == 250.0
+
+    def test_output_streamlines_respect_the_length_bounds(
+        self, workspace, tracking_inputs
+    ):
+        from dipy.io.streamline import load_tractogram
+        from dipy.tracking.utils import length
+
+        node = _configure(DipyTracking(), tracking_inputs, seed_density=2)
+        node.run()
+
+        sft = load_tractogram(
+            node._list_outputs()["tractogram"], "same", bbox_valid_check=False
+        )
+        assert len(sft.streamlines) > 0
+        lengths = np.array(list(length(sft.streamlines)))
+        # a small numerical tolerance: dipy measures the polyline length, which
+        # can dip a hair below the requested bound at the discretised step.
+        assert lengths.min() >= MIN_LEN_MM - 1.0
+        assert lengths.max() <= MAX_LEN_MM
+
+
+# --------------------------------------------------------------------------- #
+# Thread pinning: OMP/OPENBLAS pinned to num_threads, nbr_threads follows it,
+# and the length bounds are wired to probabilistic_tracking.
 # --------------------------------------------------------------------------- #
 class TestThreadPinning:
     def test_omp_pinned_and_nbr_threads_follows_num_threads(
         self, workspace, tracking_inputs, monkeypatch
     ):
-        import swane.nipype_pipeline.nodes.DipyTracking as mod
-
         monkeypatch.delenv(OMP_THREADS_VAR, raising=False)
         monkeypatch.delenv(OPENBLAS_THREADS_VAR, raising=False)
 
         seen = {}
-        real = mod.pft_tracking if hasattr(mod, "pft_tracking") else None
 
-        def _fake_pft(seed_positions, sc, affine, **kwargs):
+        def _fake_tracking(seed_positions, sc, affine, **kwargs):
             seen["omp"] = os.environ.get(OMP_THREADS_VAR)
             seen["openblas"] = os.environ.get(OPENBLAS_THREADS_VAR)
             seen["nbr_threads"] = kwargs.get("nbr_threads")
+            seen["min_len"] = kwargs.get("min_len")
+            seen["max_len"] = kwargs.get("max_len")
             # return a single short streamline so the node can finish
             return [np.array([[1.0, 1.0, 1.0], [1.0, 1.0, 2.0]])]
 
-        # the node imports pft_tracking lazily; patch the dipy source symbol
+        # the node imports probabilistic_tracking lazily; patch the dipy source
         import dipy.tracking.tracker as tracker
 
-        monkeypatch.setattr(tracker, "pft_tracking", _fake_pft)
+        monkeypatch.setattr(tracker, "probabilistic_tracking", _fake_tracking)
 
         node = _configure(
             DipyTracking(), tracking_inputs, num_threads=3, seed_density=1
@@ -269,5 +305,7 @@ class TestThreadPinning:
         assert seen["omp"] == "3"
         assert seen["openblas"] == "3"
         assert seen["nbr_threads"] == 3
+        assert seen["min_len"] == MIN_LEN_MM
+        assert seen["max_len"] == MAX_LEN_MM
         assert OMP_THREADS_VAR not in os.environ
         assert OPENBLAS_THREADS_VAR not in os.environ

@@ -1,21 +1,35 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 """
-Particle Filtering Tractography (PFT) in diffusion space.
+Probabilistic tractography with a continuous-map criterion, in diffusion space.
+
+The tracker is
+:func:`dipy.tracking.tracker.probabilistic_tracking` (it samples the fODF rather
+than following its maximum). It replaced particle-filtering tractography
+(``pft_tracking``), which was unusable on the 8 GB / 4-core target: ``pft_tracking``
+runs single-core (its OpenMP pool does not engage on the ``sh=`` path) and its
+dense full-FOV PMF precompute (X x Y x Z x 362 x 8 bytes = 9.19 GB on subj1)
+alone busts the memory budget. ``probabilistic_tracking`` keeps the *same*
+:class:`dipy.tracking.stopping_criterion.CmcStoppingCriterion`, so tracking stays
+probabilistic and anatomically constrained; only PFT's particle-filtering reinit
+is lost (spec section 5, "Accepted risk").
 
 Seeds are placed in the **white-matter PVE mask only**: whole-brain seeding was
 measured at a 7 GB peak and roughly 5x the runtime (spec Measurements), so the
 tractography seeds from the WM channel of the tissue classifier's partial-volume
-estimates and nowhere else. The Continuous Map Criterion
-(:class:`dipy.tracking.stopping_criterion.CmcStoppingCriterion`) is built from
-the three PVE maps and drives both stopping and PFT's reinitialisation of
-implausible streamlines.
+estimates and nowhere else. The Continuous Map Criterion is built from the three
+PVE maps and drives streamline stopping.
 
-Tracking runs in diffusion space (no DWI interpolation); the resulting
-streamlines are moved to reference space with
-:func:`dipy.tracking.streamline.transform_streamlines` and the diffusion ->
-reference affine already produced by the registration -- there is no FSL ``.mat``.
-The tractogram is written as a memory-mappable ``.trx`` rather than accumulated
-as a Python list.
+Streamline length is bounded to the literature range ``MIN_LEN_MM`` .. ``MAX_LEN_MM``;
+these are module constants rather than traits so the workflow graph and the golden
+matrix snapshots do not change.
+
+Tracking runs in diffusion space (no DWI interpolation); each streamline is
+moved to reference space with the diffusion -> reference affine already produced
+by the registration -- there is no FSL ``.mat``. Rather than materialise the
+whole tractogram (a >6 GB save spike at ``seed_density=2``, spec Measurements),
+the tracker's generator is streamed straight into a memory-mappable ``.trx`` via
+:meth:`trx.trx_file_memmap.TrxFile.from_lazy_tractogram`, so the peak RSS stays
+flat regardless of streamline count.
 
 The tracker's SH input is consumed in the descoteaux07 legacy basis, matching
 the basis ``DipyCsdFit`` writes.
@@ -45,6 +59,18 @@ OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
 # keeps seeds out of CSF and cortex, where they would only produce streamlines
 # to prune (spec Measurements).
 WM_PVE_SEED_THRESHOLD = 0.5
+
+# Streamline length bounds in mm (spec section 5, user's literature-based
+# choice). Kept as module constants, not traits/preferences, so the workflow
+# graph and the golden matrix snapshots do not change. These override dipy's
+# permissive defaults (min_len=2, max_len=500).
+MIN_LEN_MM = 10.0
+MAX_LEN_MM = 250.0
+
+# Streamlines are streamed to the .trx in chunks of this many so the peak RSS
+# stays flat regardless of how many the tracker produces (spec Measurements).
+# The dipy/trx default is 10000.
+TRX_CHUNK_SIZE = 10000
 
 
 def wm_seed_mask(pve_wm, threshold=WM_PVE_SEED_THRESHOLD):
@@ -139,9 +165,9 @@ class DipyTrackingOutputSpec(TraitedSpec):
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class DipyTracking(BaseInterface):
     """
-    Particle filtering tractography seeded from the WM PVE mask, with a
-    continuous-map stopping criterion built from the three PVE maps. Streamlines
-    are tracked in diffusion space and written to reference space as ``.trx``.
+    Probabilistic tractography seeded from the WM PVE mask, with a continuous-map
+    stopping criterion built from the three PVE maps. Streamlines are tracked in
+    diffusion space and written to reference space as ``.trx``.
 
     """
 
@@ -150,10 +176,10 @@ class DipyTracking(BaseInterface):
 
     def _run_interface(self, runtime):
         from dipy.tracking.stopping_criterion import CmcStoppingCriterion
-        from dipy.tracking.tracker import pft_tracking
-        from dipy.tracking.streamline import Streamlines, transform_streamlines
-        from dipy.io.stateful_tractogram import StatefulTractogram, Space
-        from dipy.io.streamline import save_tractogram
+        from dipy.tracking.tracker import probabilistic_tracking
+        from nibabel.affines import apply_affine
+        from nibabel.streamlines import LazyTractogram
+        from trx.trx_file_memmap import TrxFile, save as trx_save
 
         out_file = self._gen_outfilename()
 
@@ -176,9 +202,38 @@ class DipyTracking(BaseInterface):
         step_size = float(self.inputs.step_size)
         random_seed = int(self.inputs.random_seed)
 
+        # The diffusion->reference affine already produced by the registration;
+        # streamlines are moved to reference space one at a time in the streaming
+        # generator below, so no full set is ever transformed in place.
+        diff2ref = np.loadtxt(self.inputs.affine_diff2ref).reshape(4, 4)
+        reference_img = nib.load(self.inputs.reference)
+
+        def streamlines_ref():
+            # probabilistic_tracking yields streamlines in diffusion space; move
+            # each to reference space (apply_affine == transform_streamlines for
+            # one streamline) and hand it straight to the .trx writer, so the
+            # full set is never held in RAM (density=2 accumulates ~600k
+            # streamlines -> a >6 GB save spike on the materialise-then-save
+            # path; streaming keeps the peak flat, spec Measurements).
+            for streamline in probabilistic_tracking(
+                seeds,
+                criterion,
+                diff_affine,
+                sh=sh_data,
+                min_len=MIN_LEN_MM,
+                max_len=MAX_LEN_MM,
+                max_angle=max_angle,
+                step_size=step_size,
+                random_seed=random_seed,
+                nbr_threads=num_threads,
+                return_all=False,
+            ):
+                yield apply_affine(diff2ref, np.asarray(streamline, dtype=np.float32))
+
         # Pin the process-level thread environment to the declared count (both
-        # the tracker's OpenMP pool and any BLAS call), saving/restoring like
-        # the ITK variable in AntsN4BiasFieldCorrection.
+        # the tracker's OpenMP pool and any BLAS call), saving/restoring like the
+        # ITK variable in AntsN4BiasFieldCorrection. The generator only runs when
+        # from_lazy_tractogram consumes it, so the pin must wrap that call.
         previous = {
             var: os.environ.get(var) for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR)
         }
@@ -193,20 +248,16 @@ class DipyTracking(BaseInterface):
                 step_size=step_size,
                 average_voxel_size=average_voxel_size,
             )
-            tracking = pft_tracking(
-                seeds,
-                criterion,
-                diff_affine,
-                sh=sh_data,
-                max_angle=max_angle,
-                step_size=step_size,
-                random_seed=random_seed,
-                nbr_threads=num_threads,
-                return_all=False,
+            # The generator already yields reference-space (RASMM) coordinates,
+            # so affine_to_rasmm is the identity; reference_img anchors the
+            # tractogram's grid (affine + dimensions) exactly as a
+            # StatefulTractogram(..., Space.RASMM) would.
+            lazy = LazyTractogram(
+                streamlines=streamlines_ref, affine_to_rasmm=np.eye(4)
             )
-            # Streamlines() is dipy's contiguous ArraySequence, not a Python
-            # list of arrays: the tractogram is materialised memory-efficiently.
-            streamlines = Streamlines(tracking)
+            trx = TrxFile.from_lazy_tractogram(
+                lazy, reference_img, chunk_size=TRX_CHUNK_SIZE
+            )
         finally:
             for var, value in previous.items():
                 if value is None:
@@ -214,16 +265,7 @@ class DipyTracking(BaseInterface):
                 else:
                     os.environ[var] = value
 
-        # Move streamlines from diffusion to reference space with the affine
-        # already produced by the diffusion->reference registration.
-        diff2ref = np.loadtxt(self.inputs.affine_diff2ref).reshape(4, 4)
-        streamlines_ref = transform_streamlines(streamlines, diff2ref)
-
-        reference_img = nib.load(self.inputs.reference)
-        sft = StatefulTractogram(streamlines_ref, reference_img, Space.RASMM)
-        # bbox validity is not required here: streamlines may leave the reference
-        # grid, and the tractogram is consumed by SLR/RecoBundles in world space.
-        save_tractogram(sft, out_file, bbox_valid_check=False)
+        trx_save(trx, out_file)
 
         return runtime
 

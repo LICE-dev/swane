@@ -31,10 +31,13 @@ from swane.nipype_pipeline.nodes.utils import (
 )
 
 
-# Placeholder per-node memory reservations (GB). Task 11 replaces each with an
-# isolated ru_maxrss measurement on the two oracle subjects; until then these
-# are conservative construction-time guesses so the plugin's prerun check has a
-# figure to schedule against. They are NOT measured values.
+# Per-node memory reservations (GB). Task 11 replaces each with an isolated
+# tree-peak RSS measurement on the two oracle subjects. "tracking" is now
+# subj1-measured: the streaming DipyTracking node peaks at ~5 GB at
+# seed_density=2 on subj1 (623,794 streamlines; the tracker's own peak dominates,
+# and the streamed .trx write keeps it flat rather than the >6 GB spike of the
+# materialise-then-save path). The subj2 leg of the sweep is still pending, so
+# the other entries remain conservative construction-time guesses, NOT measured.
 _MEM_GB = {
     "denoise": 4,
     "motion": 4,
@@ -43,7 +46,7 @@ _MEM_GB = {
     "csd": 6,
     "tissue": 4,
     "ras": 1,
-    "tracking": 6,
+    "tracking": 5,  # subj1-measured (streaming, density=2); subj2 pending
     "slr": 8,
 }
 
@@ -68,9 +71,9 @@ def dipy_dti_preproc_workflow(
     b0 the diffusion stream is denoised (nlmeans), motion-corrected (with
     ``reorient_bvecs``), bias-corrected (a single N4 field on the mean b0) and
     tensor-fitted; the FA map is resampled into reference space. The fODF
-    (adaptive ``sh_order_max`` CSD) drives particle-filtering tractography seeded
-    from the white-matter PVE mask, and a single whole-brain SLR aligns the
-    resulting tractogram to the HCP842 atlas.
+    (adaptive ``sh_order_max`` CSD) drives probabilistic tractography (CMC
+    stopping criterion) seeded from the white-matter PVE mask, and a single
+    whole-brain SLR aligns the resulting tractogram to the HCP842 atlas.
 
     The dipy engine's own steps (denoise, motion, bias, CSD, tracking, SLR) are
     FSL-free by design (spec Goal). The two *abstracted* steps -- brain
@@ -340,7 +343,7 @@ def dipy_dti_preproc_workflow(
         workflow.connect(b0_deskull, "out_file", dif2ref_to_ras, "source_file")
         workflow.connect(inputnode, "reference_brain", dif2ref_to_ras, "reference_file")
 
-        # -- Particle-filtering tractography (WM seeds, CMC) ----------------- #
+        # -- Probabilistic tractography (WM seeds, CMC stop) ----------------- #
         tracking = Node(DipyTracking(), name="dipy_tracking")
         tracking._mem_gb = _MEM_GB["tracking"]
         tracking.inputs.num_threads = parallel_cpu

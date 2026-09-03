@@ -56,7 +56,7 @@
     num_threads = 1
 - dipy_tensorfit [DipyTensorFit] mem_gb=2 n_procs=1
 - dipy_tissue [DipyTissueClassifier] mem_gb=4 n_procs=1
-- dipy_tracking [DipyTracking] mem_gb=6 n_procs=4
+- dipy_tracking [DipyTracking] mem_gb=5 n_procs=4
     max_angle = 20.0
     num_threads = 4
     random_seed = 1
