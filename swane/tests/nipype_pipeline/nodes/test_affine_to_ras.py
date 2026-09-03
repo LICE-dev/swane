@@ -81,6 +81,37 @@ class TestAffineToRAS:
         emitted = np.loadtxt(out).reshape(4, 4)
         assert np.allclose(emitted, diff2ref, atol=1e-6)
 
+    def test_emits_diff_to_ref_ras_affine_from_fsl_mat(
+        self, workspace, registration_images, tmp_path
+    ):
+        """When the global engine is FSL the transform is a FLIRT ``.mat``, not
+        an ITK affine. nitransforms normalises both formats to the same internal
+        RAS convention, so the node must emit the identical diff -> ref RAS
+        affine with ``in_fmt='fsl'`` and no direction change. The FSL matrix is
+        produced here exactly as :class:`AffineToFSL` writes it in production
+        (the convention already trusted by the FSL/XTRACT probtrackx path)."""
+        from nitransforms import linear
+
+        reference, moving = registration_images
+
+        diff2ref = _rigid_ras(0.3, [5.0, -7.0, 3.0])
+        ref2diff = np.linalg.inv(diff2ref)
+
+        fsl_path = tmp_path / "flirt_diff2ref.mat"
+        linear.Affine(ref2diff, reference=nib.load(reference)).to_filename(
+            str(fsl_path), fmt="fsl", moving=nib.load(moving)
+        )
+
+        node = AffineToRAS()
+        node.inputs.in_transform = str(fsl_path)
+        node.inputs.in_fmt = "fsl"
+        node.inputs.source_file = moving
+        node.inputs.reference_file = reference
+        node.run()
+
+        emitted = np.loadtxt(node._list_outputs()["out_ras"]).reshape(4, 4)
+        assert np.allclose(emitted, diff2ref, atol=1e-6)
+
     def test_accepts_transform_list_and_uses_last(
         self, workspace, registration_images, tmp_path
     ):
