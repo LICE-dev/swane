@@ -718,6 +718,53 @@ keep the pool, reserve motion at 8 GB.
 dipy_tractography_ram_requirements`), from the motion ceiling; macOS is unmeasured
 and carries the same 8 GB pending a macOS run.
 
+### RecoBundles on the realistic tractogram — CST clean, arcuate weak
+
+Throwaway RecoBundles CST/AF extraction on the realistic subj2 (64-dir) tractogram
+(antspynet-T1 PVE + ANTs diff->T1, the whole-brain SLR to HCP842). Two findings for
+the Phase-2 bundle node:
+
+* **CST recovers cleanly with dipy's *default* `reduction_thr=10 / pruning_thr=5`**,
+  once `model_clust_thr` is a sensible ~2.5 (a coarse `model_clust_thr=5` over-
+  clusters the model and recovers zero -- that was a bad probe setting, not a
+  pipeline fault). Recovered CST matches the atlas model shape (bbox ~[55,78,138]
+  vs model [61,83,128], principal-axis variance fraction 0.95).
+* **The arcuate fasciculus is under-reconstructed.** AF recovers ~18 streamlines at
+  `reduction_thr=15` and 0 at the default 10; `max_angle` 20->30 does not help. The
+  cause is not extraction and not the tracking angle: the AF model *is* ~97%
+  matched within 15 mm of subject streamlines, but they sit ~11-14 mm from the
+  model (median AF_L 10.8 mm, AF_R 14.5 mm) versus CST's 8.2 mm -- just past the
+  default 10 mm. Two compounding reasons: the arcuate is genuinely sparse in the
+  tractogram (the hard temporal-stem crossing), and the whole-brain SLR is skewed
+  by the CST-dominated tractogram (it applies a ~1.29x scale because WM-seeded CMC
+  streamlines stop at the WM/GM boundary and so cover a narrower extent than the
+  atlas whole-brain), leaving the AF region a couple mm further off.
+
+* **subj1 (15-dir, lmax 4) recovers *zero* at the correct config** (both dipy-default
+  10/5 and 12/6, `model_clust_thr` 2.5) for all four bundles. The only non-zero subj1
+  recovery came from the loose 40/20 params and was noise (blobby, short) -- direct
+  confirmation of the low-direction Accepted risk: at the bottom of the supported
+  range the tractogram cannot support clean bundle recognition, whereas subj2 (64
+  dir) yields a clean CST.
+
+**Implications.** The Phase-2 RecoBundles node should use **per-bundle** thresholds
+(dipy-default reduction/pruning for CST; a looser reduction, ~15, for the arcuate)
+rather than one global setting, and `model_clust_thr` ~2.5. The arcuate remains a
+weak point of the dipy engine **even at 64 directions / lmax 8**, not only at the
+15-direction floor -- widen the "Accepted risk" accordingly for association tracts,
+and revisit whether a denser or arcuate-aware seeding recovers it.
+
+### FSL registration branch — end-to-end confirmed
+
+The abstracted diff<->reference registration honouring the FSL engine was run for
+real (not just the earlier nitransforms self-consistency check): the full workflow
+built and ran end-to-end with `RegistrationEngine.FSL` on subj2 (a real `FLIRT` +
+`ConvertXFM` inverse + `AffineToRAS` on the FLIRT `.mat`), 34.9 min on 4 cores. The
+FLIRT-derived diff->T1 affine is near-identity (det 1.000), the tractogram is
+spatially sensible (175,710 streamlines, 98.8% inside the T1 brain), and CST_L
+extracts where expected (matching the atlas model shape, comparable to the ANTs
+path). macOS is still unverified (no box available).
+
 ## Accepted risk
 
 The risk is **confined to the bottom of the supported range**, and it should not
