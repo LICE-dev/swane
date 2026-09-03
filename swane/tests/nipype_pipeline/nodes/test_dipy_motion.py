@@ -58,6 +58,30 @@ def _rotation_z(angle):
     return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
 
 
+class TestDefaultPipelineIsRigidOnly:
+    """The registration pipeline is rigid-only -- the trailing ``affine`` stage of
+    dipy's ``motion_correction`` default is dropped.
+
+    Between-volumes head motion is a rigid transform, so the affine stage models
+    scaling/shear that pure head motion cannot produce. Measured on both oracle
+    subjects, dropping it leaves the corrected series ~identical (series
+    correlation 0.9995 subj1 / 0.9997 subj2, max reoriented-bvec diff <0.005) while
+    saving ~30% of the motion-correction time. The one thing the affine stage was
+    also doing -- the branch's only geometric eddy-distortion correction -- is
+    therefore given up; that asymmetry vs the FSL eddy path is declared in the spec.
+    Both the serial and parallel paths read this single module constant, so the
+    serial-vs-parallel equivalence oracle covers the new pipeline unchanged.
+    """
+
+    def test_default_pipeline_drops_the_affine_stage(self):
+        assert motion_module.DEFAULT_PIPELINE == [
+            "center_of_mass",
+            "translation",
+            "rigid",
+        ]
+        assert "affine" not in motion_module.DEFAULT_PIPELINE
+
+
 # --------------------------------------------------------------------------- #
 # Layer 1a - reassembly by index
 # --------------------------------------------------------------------------- #

@@ -856,6 +856,17 @@ GLOBAL_PREFERENCES[category]["tractography_engine"] = PreferenceEntry(
             "dipy tractography requires the dipy package",
         ],
     },
+    option_pref_requirement={
+        TractographyEngine.DIPY_RECOBUNDLES: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.dipy_tractography_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        TractographyEngine.DIPY_RECOBUNDLES: "dipy tractography requires at least %.1f GB RAM"
+        % ResourceManager.dipy_tractography_ram_requirements(),
+    },
     section=True,
 )
 GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
