@@ -6,8 +6,9 @@ Task 9 owns): the pipeline nodes are present and connected in the spec-section-5
 order, the four boundary outputs Phase 2 depends on are advertised, seeding is
 restricted to the WM PVE mask, the three PVE maps reach the tracking node (which
 hosts both the seeding and the CMC stopping criterion), the reference image is
-wired into tracking, and -- the engine's defining property -- **no FSL interface
-appears anywhere in the graph** (registration and PVE resampling are ANTs).
+wired into tracking, and -- following spec section 1 -- the abstracted
+registration step honours the user's global engine choice (ANTs or FSL), which
+in turn drives the format the diff->ref affine is read from.
 """
 
 import pytest
@@ -16,6 +17,7 @@ from swane.config.config_enums import (
     GlobalPrefCategoryList,
     DeskullEngine,
     DeskullModality,
+    RegistrationEngine,
     TractographyEngine,
 )
 from swane.utils.DataInputList import DataInputList
@@ -56,22 +58,37 @@ MAX_CPU = 4
 
 
 @pytest.fixture
-def dipy_wf(subject_config, global_config, make_input_dir):
-    section = subject_config[DataInputList.DTI]
-    section["tractography"] = "true"
-    synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["tractography_engine"] = TractographyEngine.DIPY_RECOBUNDLES.name
-    # A non-FSL deskull engine keeps the shared head FSL-free; the registration
-    # is forced to ANTs by the factory regardless of the SYNTH engine.
-    synth["deskull_engine"] = DeskullEngine.ANTSPYNET.name
-    return dipy_dti_preproc_workflow(
-        "dti",
-        dti_dir=make_input_dir(),
-        config=section,
-        synth_config=synth,
-        deskull_modality=DeskullModality.NODIF,
-        max_cpu=MAX_CPU,
-    )
+def build_dipy_wf(subject_config, global_config, make_input_dir):
+    """Build the workflow with an optional registration engine / core budget.
+
+    A non-FSL deskull engine keeps the shared head FSL-free; the registration
+    engine follows the SYNTH ``engine`` preference (spec section 1), defaulting
+    to ANTs when unset.
+    """
+
+    def _build(engine=None, max_cpu=MAX_CPU):
+        section = subject_config[DataInputList.DTI]
+        section["tractography"] = "true"
+        synth = global_config[GlobalPrefCategoryList.SYNTH]
+        synth["tractography_engine"] = TractographyEngine.DIPY_RECOBUNDLES.name
+        synth["deskull_engine"] = DeskullEngine.ANTSPYNET.name
+        if engine is not None:
+            synth["engine"] = engine.name
+        return dipy_dti_preproc_workflow(
+            "dti",
+            dti_dir=make_input_dir(),
+            config=section,
+            synth_config=synth,
+            deskull_modality=DeskullModality.NODIF,
+            max_cpu=max_cpu,
+        )
+
+    return _build
+
+
+@pytest.fixture
+def dipy_wf(build_dipy_wf):
+    return build_dipy_wf()
 
 
 class TestNodePresence:
@@ -102,21 +119,70 @@ class TestNodePresence:
         assert {"FA", "tractogram", "tractogram_atlas", "atlas2native"} <= fields
 
 
-class TestNoFslInterface:
-    """The engine's defining property: FSL is not invoked anywhere."""
+class TestRegistrationEngine:
+    """The abstracted registration step follows the user's global engine choice
+    (spec section 1), which drives the interface built and the format the
+    diff->ref affine is read from. The dipy engine's own steps stay FSL-free;
+    it never uses AffineToFSL (its tracker consumes a plain RAS affine)."""
 
-    def test_no_fsl_interface_in_graph(self, dipy_wf):
-        for node in dipy_wf._graph.nodes():
-            assert not _iface_module(node).startswith(
-                "nipype.interfaces.fsl"
-            ), "%s (%s) is an FSL interface" % (node.name, _iface(node))
-
-    def test_registration_is_ants(self, dipy_wf):
-        ifaces = [_iface(n) for n in dipy_wf._graph.nodes()]
-        assert "AntsRegistration" in ifaces
-        assert "AntsApplyTransforms" in ifaces
+    @pytest.mark.parametrize(
+        "engine,reg_iface,ras_fmt",
+        [
+            (RegistrationEngine.ANTS, "AntsRegistration", "itk"),
+            (RegistrationEngine.FSL, "FLIRT", "fsl"),
+        ],
+        ids=["ants", "fsl"],
+    )
+    def test_registration_follows_global_engine(
+        self, build_dipy_wf, engine, reg_iface, ras_fmt
+    ):
+        wf = build_dipy_wf(engine=engine)
+        ifaces = {_iface(n) for n in wf._graph.nodes()}
+        assert reg_iface in ifaces
         assert "AffineToRAS" in ifaces
         assert "AffineToFSL" not in ifaces
+        ras = _node_by_name(wf, "dif2ref_to_ras")
+        assert ras.inputs.in_fmt == ras_fmt
+
+    def test_fsl_engine_uses_no_ants_registration(self, build_dipy_wf):
+        wf = build_dipy_wf(engine=RegistrationEngine.FSL)
+        ifaces = {_iface(n) for n in wf._graph.nodes()}
+        assert "AntsRegistration" not in ifaces
+
+
+class TestParallelCoreReservation:
+    """n_procs is left to nipype's num_threads-derived default: the nodes whose
+    interface exposes ``num_threads`` carry no explicit n_procs, yet must still
+    reserve the per-node core budget."""
+
+    @pytest.mark.parametrize(
+        "node_name",
+        ["dipy_denoise", "dipy_motion", "dipy_bias", "dipy_csd", "dipy_tracking"],
+    )
+    def test_num_threads_nodes_reserve_the_core_budget(self, dipy_wf, node_name):
+        node = _node_by_name(dipy_wf, node_name)
+        assert node.inputs.num_threads == MAX_CPU
+        assert node.n_procs == MAX_CPU
+
+    def test_slr_reserves_a_single_core(self, dipy_wf):
+        slr = _node_by_name(dipy_wf, "dipy_slr")
+        assert slr.inputs.num_threads == 1
+        assert slr.n_procs == 1
+
+
+class TestMaxCpuZeroClamp:
+    """max_cpu==0 means 'auto/all cores'; propagated raw it reads downstream as
+    'all cores', so it must reach the abstracted deskull and registration nodes
+    clamped to 1 (spec section 10 / the dipy nodes' parallel_cpu guard)."""
+
+    def test_deskull_and_registration_clamp_zero_to_one(self, build_dipy_wf):
+        wf = build_dipy_wf(max_cpu=0)
+        deskull = _node_by_prefix(wf, "dipy_deskull")
+        reg = _node_by_name(wf, "dif2ref_antsreg")
+        assert deskull.inputs.num_threads == 1
+        assert deskull.n_procs == 1
+        assert reg.inputs.num_threads == 1
+        assert reg.n_procs == 1
 
 
 class TestDwiChainOrder:

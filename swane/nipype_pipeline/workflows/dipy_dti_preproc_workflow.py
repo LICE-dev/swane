@@ -27,6 +27,7 @@ from swane.nipype_pipeline.nodes.utils import (
     get_registration_node,
     apply_registration_node,
     resolve_deskull_engine,
+    resolve_registration_engine,
 )
 
 
@@ -71,11 +72,15 @@ def dipy_dti_preproc_workflow(
     from the white-matter PVE mask, and a single whole-brain SLR aligns the
     resulting tractogram to the HCP842 atlas.
 
-    Diffusion <-> reference registration and PVE resampling use **ANTs**, never
-    FSL: this workflow invokes no FSL tool. The diffusion->reference affine the
-    tracker needs is produced as a plain 4x4 RAS text file by :class:`AffineToRAS`
-    (the ITK/LPS transform ANTs emits, inverted and expressed in RAS), not an FSL
-    ``.mat`` -- that was a probtrackx requirement the dipy tracker does not share.
+    The dipy engine's own steps (denoise, motion, bias, CSD, tracking, SLR) are
+    FSL-free by design (spec Goal). The two *abstracted* steps -- brain
+    extraction and diffusion<->reference registration -- keep honouring the
+    user's global engine choice, FSL included (spec section 1). The
+    diffusion->reference affine the tracker needs is produced as a plain 4x4 RAS
+    text file by :class:`AffineToRAS`, which handles both the ITK/LPS transform
+    ANTs emits and the FLIRT ``.mat`` FSL emits (either inverted and expressed in
+    RAS); it is never an FSL ``.mat`` on output -- that was a probtrackx
+    requirement the dipy tracker does not share.
 
     New dipy nodes implement HARD_CAP only, so this factory takes no
     ``multicore_node_limit`` parameter (spec section 10).
@@ -99,8 +104,9 @@ def dipy_dti_preproc_workflow(
         If greater than 0, the per-node core budget for the parallel dipy nodes.
         The default is 0.
     test_run : bool, optional
-        If True, cut the ANTs registration iteration schedules to speed up
-        prerelease test runs at the cost of accuracy. The default is False.
+        If True, cut the registration iteration schedules of the configured
+        engine to speed up prerelease test runs at the cost of accuracy. The
+        default is False.
 
     Input Node Fields
     ----------
@@ -131,13 +137,18 @@ def dipy_dti_preproc_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
-    # The registration and PVE resampling are ANTs, always: this workflow is
-    # FSL-free by design (spec Goal). The SYNTH engine preference is not consulted
-    # for the diffusion registration here.
-    engine = RegistrationEngine.ANTS
+    # Registration is an abstracted step: it follows the user's global engine
+    # choice, FSL included (spec section 1). SynthMorph is avoided for the
+    # diffusion registration (non-deterministic, and its diff<->ref outputs are
+    # emitted as the ANTs transform-list view, not an FSL .mat), so SYNTH falls
+    # back to FSL exactly as dti_preproc_workflow does.
+    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    if engine == RegistrationEngine.SYNTH:
+        engine = RegistrationEngine.FSL
 
-    # A per-node core budget for the parallel dipy nodes; every node still
-    # declares a real n_procs (HARD_CAP).
+    # A per-node core budget for the parallel dipy nodes; each sets num_threads,
+    # from which nipype derives a real n_procs reservation (HARD_CAP). max_cpu==0
+    # means "auto/all cores" upstream, so it must clamp to 1 here, never 0.
     parallel_cpu = max_cpu if max_cpu and max_cpu > 0 else 1
 
     # Input Node
@@ -187,7 +198,9 @@ def dipy_dti_preproc_workflow(
         bet_robust=True,
         bet_threshold=True,
         out_file="nodif_brain.nii.gz",
-        max_cpu=max_cpu,
+        # parallel_cpu, not raw max_cpu: under HARD_CAP the helper reserves
+        # exactly max_cpu cores, and max_cpu==0 ("auto") must land as 1, not 0.
+        max_cpu=parallel_cpu,
         multicore_node_limit=CoreLimit.HARD_CAP,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
@@ -198,8 +211,9 @@ def dipy_dti_preproc_workflow(
     # NODE 4: nlmeans denoising
     denoise = Node(DipyDenoise(), name="dipy_denoise")
     denoise._mem_gb = _MEM_GB["denoise"]
+    # n_procs is left to nipype's default, which returns interface.num_threads
+    # when set (as it is here) -- an explicit n_procs would duplicate that.
     denoise.inputs.num_threads = parallel_cpu
-    denoise.n_procs = parallel_cpu
     workflow.connect(reorient, "out_file", denoise, "in_file")
     workflow.connect(conversion, "bvals", denoise, "bval")
     workflow.connect(conversion, "bvecs", denoise, "bvec")
@@ -209,7 +223,6 @@ def dipy_dti_preproc_workflow(
     motion._mem_gb = _MEM_GB["motion"]
     motion.inputs.parallel = True
     motion.inputs.num_threads = parallel_cpu
-    motion.n_procs = parallel_cpu
     workflow.connect(denoise, "out_file", motion, "in_file")
     workflow.connect(conversion, "bvals", motion, "bval")
     workflow.connect(conversion, "bvecs", motion, "bvec")
@@ -218,7 +231,6 @@ def dipy_dti_preproc_workflow(
     bias = Node(DwiBiasCorrection(), name="dipy_bias")
     bias._mem_gb = _MEM_GB["bias"]
     bias.inputs.num_threads = parallel_cpu
-    bias.n_procs = parallel_cpu
     workflow.connect(motion, "out_file", bias, "in_file")
     workflow.connect(motion, "out_bval", bias, "bval")
 
@@ -231,7 +243,8 @@ def dipy_dti_preproc_workflow(
     workflow.connect(motion, "out_bvec", tensorfit, "bvec")
     workflow.connect(b0_deskull, "mask_file", tensorfit, "mask")
 
-    # NODE 8: b0 linear registration in reference space (ANTs, affine only)
+    # NODE 8: b0 linear registration in reference space (engine-neutral, affine
+    # only). ANTs: Rigid AntsRegistration; FSL: FLIRT (+ ConvertXFM inverse).
     dif2ref = get_registration_node(
         name="dif2ref",
         name_prefix="DTI",
@@ -246,19 +259,24 @@ def dipy_dti_preproc_workflow(
         non_linear=False,
         inverse=True,
         test_run=test_run,
-        max_cpu=max_cpu,
+        # parallel_cpu, not raw max_cpu: HARD_CAP reserves exactly this many
+        # cores and max_cpu==0 ("auto") must land as 1 (FSL FLIRT ignores it).
+        max_cpu=parallel_cpu,
         multicore_node_limit=CoreLimit.HARD_CAP,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
-    # FA -> reference space (forward, diff->ref)
+    # FA -> reference space (forward, diff->ref). Both transform views are
+    # passed: the ANTs apply consumes ``registration`` (its ordered list +
+    # which_to_invert), the FSL apply consumes ``warp`` (the FLIRT .mat); each
+    # engine ignores the other's (see apply_registration_node).
     fa_2_ref = apply_registration_node(
         name="fa_2_ref",
         name_prefix="FA",
         name_suffix="to reference",
         engine=engine,
         workflow=workflow,
-        warp=None,
+        warp=[dif2ref.out_registered_node, dif2ref.warp],
         registration=dif2ref,
         moving=[tensorfit, "fa"],
         reference=[inputnode, "reference"],
@@ -276,9 +294,11 @@ def dipy_dti_preproc_workflow(
         workflow.connect(inputnode, "reference_brain", tissue, "in_file")
 
         # Each PVE map is resampled ref->diff into the diffusion grid (the b0),
-        # so the CMC criterion and the seed mask live in tracking space. The
-        # inverse apply forwards which_to_invert (mandatory for a linear
-        # inverse, see wire_transforms).
+        # so the CMC criterion and the seed mask live in tracking space. Both
+        # inverse transform views are passed: the ANTs apply consumes
+        # ``registration`` with ``inverse=True`` (forwarding which_to_invert,
+        # mandatory for a linear inverse -- see wire_transforms); the FSL apply
+        # consumes ``warp``, the pre-inverted ref->diff ConvertXFM .mat.
         pve_applies = {}
         for tissue_field in ("pve_wm", "pve_gm", "pve_csf"):
             pve_applies[tissue_field] = apply_registration_node(
@@ -287,7 +307,7 @@ def dipy_dti_preproc_workflow(
                 name_suffix="to diffusion",
                 engine=engine,
                 workflow=workflow,
-                warp=None,
+                warp=[dif2ref.inv_warp_node, dif2ref.inv_warp],
                 registration=dif2ref,
                 inverse=True,
                 moving=[tissue, tissue_field],
@@ -300,18 +320,21 @@ def dipy_dti_preproc_workflow(
         csd = Node(DipyCsdFit(), name="dipy_csd")
         csd._mem_gb = _MEM_GB["csd"]
         csd.inputs.num_threads = parallel_cpu
-        csd.n_procs = parallel_cpu
         workflow.connect(bias, "out_file", csd, "in_file")
         workflow.connect(motion, "out_bval", csd, "bval")
         workflow.connect(motion, "out_bvec", csd, "bvec")
         workflow.connect(b0_deskull, "mask_file", csd, "mask")
 
-        # -- diff->ref affine as a 4x4 RAS text file (ANTs ITK -> RAS) ------- #
+        # -- diff->ref affine as a 4x4 RAS text file --------------------------- #
+        # The forward transform is the ANTs ITK affine or the FLIRT .mat,
+        # depending on the engine; AffineToRAS reads whichever via nitransforms.
         dif2ref_to_ras = Node(AffineToRAS(), name="dif2ref_to_ras")
         dif2ref_to_ras.long_name = "DTI-to-reference affine RAS conversion"
         dif2ref_to_ras._mem_gb = _MEM_GB["ras"]
         dif2ref_to_ras.n_procs = 1
-        dif2ref_to_ras.inputs.in_fmt = "itk"
+        dif2ref_to_ras.inputs.in_fmt = (
+            "fsl" if engine == RegistrationEngine.FSL else "itk"
+        )
         fwd_node, fwd_field = dif2ref.fwd_transforms[0]
         workflow.connect(fwd_node, fwd_field, dif2ref_to_ras, "in_transform")
         workflow.connect(b0_deskull, "out_file", dif2ref_to_ras, "source_file")
@@ -321,7 +344,6 @@ def dipy_dti_preproc_workflow(
         tracking = Node(DipyTracking(), name="dipy_tracking")
         tracking._mem_gb = _MEM_GB["tracking"]
         tracking.inputs.num_threads = parallel_cpu
-        tracking.n_procs = parallel_cpu
         tracking.inputs.seed_density = config.getint_safe("seed_density")
         tracking.inputs.max_angle = config.getfloat_safe("max_angle")
         tracking.inputs.step_size = config.getfloat_safe("step_size")
@@ -338,7 +360,7 @@ def dipy_dti_preproc_workflow(
         # -- Whole-brain SLR against the HCP842 atlas (once) ----------------- #
         atlas_slr = Node(DipyAtlasSLR(), name="dipy_slr")
         atlas_slr._mem_gb = _MEM_GB["slr"]
-        atlas_slr.n_procs = 1
+        # num_threads=1 already makes nipype's derived n_procs == 1.
         atlas_slr.inputs.num_threads = 1
         atlas_slr.inputs.atlas_dir = os.path.join(os.path.expanduser("~"), ".dipy")
         workflow.connect(tracking, "tractogram", atlas_slr, "tractogram")

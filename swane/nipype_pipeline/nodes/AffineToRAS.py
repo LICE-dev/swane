@@ -19,10 +19,15 @@ class AffineToRASInputSpec(BaseInterfaceInputSpec):
         traits.List(File(exists=True)),
         mandatory=True,
         desc="diff->ref registration transform to convert (ITK affine for ANTs, "
-        "LTA for FreeSurfer); a list is treated as an affine-only ordered list",
+        "FLIRT .mat for FSL, LTA for FreeSurfer); a list is treated as an "
+        "affine-only ordered list",
     )
     in_fmt = traits.Enum(
-        "itk", "fs", usedefault=True, desc="source transform format for nitransforms"
+        "itk",
+        "fs",
+        "fsl",
+        usedefault=True,
+        desc="source transform format for nitransforms",
     )
     source_file = File(
         exists=True, mandatory=True, desc="registration moving image (b0/nodif brain)"
@@ -49,13 +54,15 @@ class AffineToRAS(BaseInterface):
     :func:`dipy.tracking.streamline.transform_streamlines` moves streamlines
     between world spaces in RASMM, so it needs the plain diffusion-RAS ->
     reference-RAS affine, not an FSL ``.mat`` (voxel/scaled-mm) nor the ITK/LPS
-    transform ANTs emits. nitransforms represents a loaded affine internally in
-    RAS; for a diff->ref registration built with ``moving=diffusion`` and
-    ``reference=T1``, its ``matrix`` maps reference-RAS -> moving-RAS (the
-    resampling direction), so the diffusion-RAS -> reference-RAS affine the
-    tracker consumes is its inverse. This node performs that conversion without
-    depending on FSL or FreeSurfer command-line tools, mirroring
-    :class:`~swane.nipype_pipeline.nodes.AffineToFSL.AffineToFSL`.
+    transform ANTs emits. Whichever engine the user picked produced the diff->ref
+    transform -- an ITK affine from ANTs or a FLIRT ``.mat`` from FSL --
+    nitransforms loads it into the same internal RAS representation, so a single
+    direction rule covers both: for a diff->ref registration built with
+    ``moving=diffusion`` and ``reference=T1``, ``matrix`` maps reference-RAS ->
+    moving-RAS (the resampling direction), and the diffusion-RAS ->
+    reference-RAS affine the tracker consumes is its inverse. This node performs
+    that conversion without depending on FSL or FreeSurfer command-line tools,
+    mirroring :class:`~swane.nipype_pipeline.nodes.AffineToFSL.AffineToFSL`.
     """
 
     input_spec = AffineToRASInputSpec
