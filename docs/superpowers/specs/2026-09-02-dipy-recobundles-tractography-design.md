@@ -742,17 +742,27 @@ the Phase-2 bundle node:
 
 * **subj1 (15-dir, lmax 4) recovers *zero* at the correct config** (both dipy-default
   10/5 and 12/6, `model_clust_thr` 2.5) for all four bundles. The only non-zero subj1
-  recovery came from the loose 40/20 params and was noise (blobby, short) -- direct
-  confirmation of the low-direction Accepted risk: at the bottom of the supported
-  range the tractogram cannot support clean bundle recognition, whereas subj2 (64
-  dir) yields a clean CST.
+  recovery came from the loose 40/20 params and was noise (blobby, short). This is
+  **not** proof of an inherent low-direction limit: FSL/XTRACT reconstructs subj1's
+  arcuate cleanly at the same 15 directions, so the data *do* support the bundle --
+  the current dipy tractography does not yet recover it. It is a dipy-pipeline
+  problem to diagnose and fix in Phase 2, amplified at the low-direction floor, not
+  an accepted property of 15-direction data.
 
-**Implications.** The Phase-2 RecoBundles node should use **per-bundle** thresholds
+**Implications -- the arcuate is a Phase-2 fix objective, not an accepted limit.**
+FSL/XTRACT reconstructs the arcuate well on *both* oracle subjects, subj1 at 15
+directions included, so the under-reconstruction is a fault of the current dipy
+tractography, not of the data or the direction count -- it must be diagnosed and
+solved in Phase 2, not written off. Candidate causes, from the measurements above:
+the CST-dominated whole-brain SLR is skewed (~1.29x scale) and pushes the AF region
+a couple mm past RecoBundles' default reduction distance; the WM-seeded CMC
+tractogram is genuinely sparse across the temporal-stem crossing; and a single
+global threshold is wrong. Phase-2 directions: **per-bundle** thresholds
 (dipy-default reduction/pruning for CST; a looser reduction, ~15, for the arcuate)
-rather than one global setting, and `model_clust_thr` ~2.5. The arcuate remains a
-weak point of the dipy engine **even at 64 directions / lmax 8**, not only at the
-15-direction floor -- widen the "Accepted risk" accordingly for association tracts,
-and revisit whether a denser or arcuate-aware seeding recovers it.
+with `model_clust_thr` ~2.5; a **bundle-specific or better-scaled SLR** in place of
+the CST-dominated whole-brain one; and **denser or arcuate-aware seeding** across
+the temporal stem. The Phase-1 tractogram exists and is correct; recovering the
+arcuate from it is Phase-2 work.
 
 ### FSL registration branch — end-to-end confirmed
 
@@ -797,10 +807,18 @@ already-open quantitative comparison below — the tracker swap is an engineerin
 decision (it makes the dipy path run at all on 8 GB / 4 cores), ratified by the
 user, with quality confirmation still pending.
 
-What remains open is a quantitative comparison against the FSL branch on real
-data. The user has chosen to proceed and measure afterwards. Recorded here as a
-bounded, accepted risk at the low-direction end, not as a general caveat and not
-as a resolved question.
+What remains open is a quantitative comparison against the FSL branch on a GPU
+box (deferred here for lack of one). But the low-direction result is now partly
+measured, and it revises this framing: FSL reconstructs subj1's arcuate cleanly at
+15 directions, so the arcuate's absence from the dipy tractogram is **not** an
+inherent property of sparse data to be accepted -- it is a dipy-pipeline
+shortcoming to be fixed in Phase 2 (see "RecoBundles on the realistic tractogram"
+above). What genuinely remains an accepted risk is narrower: at the 15-direction
+floor CSD lmax=4 is exactly determined and offers no regularisation headroom, so
+crossings are less well resolved than a richer acquisition allows. The engine
+works and produces a clean CST on both subjects; recovering association tracts
+like the arcuate on sparse data is a Phase-2 optimisation target, not a resolved
+limitation.
 
 ## Strategic implications
 
