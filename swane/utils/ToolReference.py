@@ -137,6 +137,12 @@ tool_reference_list = {
             "de Groot M, Vernooij MW, Klein S, et al. Improving alignment in tract-based spatial statistics. NeuroImage. 2013.",
         ],
     ),
+    "DwiCrop": ToolReference(
+        command="median_otsu [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.segment.html#dipy.segment.mask.median_otsu",
+        references=[],
+    ),
     "DipyDenoise": ToolReference(
         command="nlmeans [dipy]",
         package=Package.DIPY,

@@ -4,11 +4,12 @@
 These are graph-shape checks (independent of the golden byte snapshots, which
 Task 9 owns): the pipeline nodes are present and connected in the spec-section-5
 order, the four boundary outputs Phase 2 depends on are advertised, seeding is
-restricted to the WM PVE mask, the three PVE maps reach the tracking node (which
-hosts both the seeding and the CMC stopping criterion), the reference image is
-wired into tracking, and -- following spec section 1 -- the abstracted
-registration step honours the user's global engine choice (ANTs or FSL), which
-in turn drives the format the diff->ref affine is read from.
+restricted to the WM PVE mask, the WM PVE map reaches the tracking node's seed
+mask while the diffusion-space FA (not the reference-space copy) reaches its
+FA-threshold stopping criterion, the reference image is wired into tracking,
+and -- following spec section 1 -- the abstracted registration step honours
+the user's global engine choice (ANTs or FSL), which in turn drives the format
+the diff->ref affine is read from.
 """
 
 import pytest
@@ -97,6 +98,7 @@ class TestNodePresence:
         for expected in (
             "dipy_conv",
             "dipy_reOrient",
+            "dipy_crop",
             "dipy_nodif",
             "dipy_denoise",
             "dipy_motion",
@@ -197,7 +199,12 @@ class TestDwiChainOrder:
         tensorfit = _node_by_name(dipy_wf, "dipy_tensorfit")
         deskull = _node_by_prefix(dipy_wf, "dipy_deskull")
 
-        assert (reorient, "out_file", "in_file") in _incoming(dipy_wf, denoise)
+        # The 4D series is cropped upfront (median_otsu bbox on the mean of all
+        # volumes); denoise and the b0 extraction read the cropped output, not the
+        # raw reorient output. The crop needs no bvals (mean over every volume).
+        crop = _node_by_name(dipy_wf, "dipy_crop")
+        assert (reorient, "out_file", "in_file") in _incoming(dipy_wf, crop)
+        assert (crop, "out_file", "in_file") in _incoming(dipy_wf, denoise)
         assert (conv, "bvals", "bval") in _incoming(dipy_wf, denoise)
         assert (denoise, "out_file", "in_file") in _incoming(dipy_wf, motion)
         assert (motion, "out_file", "in_file") in _incoming(dipy_wf, bias)
@@ -216,23 +223,33 @@ class TestDwiChainOrder:
 
 
 class TestTissueBranchAndTracking:
-    def test_pve_maps_resampled_ref_to_diff_and_reach_tracking(self, dipy_wf):
+    def test_pve_wm_resampled_ref_to_diff_and_reaches_tracking(self, dipy_wf):
         tissue = _node_by_name(dipy_wf, "dipy_tissue")
+        tracking = _node_by_name(dipy_wf, "dipy_tracking")
+        apply_node = _node_by_name(dipy_wf, "pve_wm_2_diff_ants_apply")
+
+        # tissue classifier PVE -> ref->diff ANTs resample
+        assert (tissue, "pve_wm", "input_image") in _incoming(dipy_wf, apply_node)
+        # resampled PVE -> tracking (the seed mask)
+        assert (apply_node, "out_file", "pve_wm") in _incoming(dipy_wf, tracking)
+
+    def test_no_pve_gm_or_pve_csf_apply_nodes(self, dipy_wf):
+        """The CMC stopping criterion (and the pve_gm/pve_csf apply nodes it
+        alone consumed) is gone; only the WM PVE apply node remains."""
+        names = {n.name for n in dipy_wf._graph.nodes()}
+        assert "pve_gm_2_diff_ants_apply" not in names
+        assert "pve_csf_2_diff_ants_apply" not in names
+
+    def test_diffusion_space_fa_reaches_tracking_not_reference_space_fa(self, dipy_wf):
+        """The FA-threshold stopping criterion needs FA on the diffusion grid
+        (tensorfit's direct output), not the ``fa_2_ref``-resampled
+        reference-space copy the FA boundary output uses."""
+        tensorfit = _node_by_name(dipy_wf, "dipy_tensorfit")
         tracking = _node_by_name(dipy_wf, "dipy_tracking")
         track_inc = _incoming(dipy_wf, tracking)
 
-        for tissue_field, apply_name, track_field in (
-            ("pve_wm", "pve_wm_2_diff_ants_apply", "pve_wm"),
-            ("pve_gm", "pve_gm_2_diff_ants_apply", "pve_gm"),
-            ("pve_csf", "pve_csf_2_diff_ants_apply", "pve_csf"),
-        ):
-            apply_node = _node_by_name(dipy_wf, apply_name)
-            # tissue classifier PVE -> ref->diff ANTs resample
-            assert (tissue, tissue_field, "input_image") in _incoming(
-                dipy_wf, apply_node
-            )
-            # resampled PVE -> tracking (seeding for WM, CMC for all three)
-            assert (apply_node, "out_file", track_field) in track_inc
+        assert (tensorfit, "fa", "fa") in track_inc
+        assert not any(src.name == "fa_2_ref_ants_apply" for src, _, _ in track_inc)
 
     def test_tissue_classifier_runs_on_reference_brain(self, dipy_wf):
         tissue = _node_by_name(dipy_wf, "dipy_tissue")

@@ -14,6 +14,7 @@ from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
 from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
 from swane.nipype_pipeline.nodes.AffineToRAS import AffineToRAS
+from swane.nipype_pipeline.nodes.DwiCrop import DwiCrop
 from swane.nipype_pipeline.nodes.DipyDenoise import DipyDenoise
 from swane.nipype_pipeline.nodes.DipyMotionCorrection import DipyMotionCorrection
 from swane.nipype_pipeline.nodes.DwiBiasCorrection import DwiBiasCorrection
@@ -34,16 +35,20 @@ from swane.nipype_pipeline.nodes.utils import (
 # Per-node memory reservations (GB), integer-rounded from isolated tree-peak RSS
 # measurements on BOTH oracle subjects (subj1 15-dir 256x256x52 / subj2 64-dir
 # 144x144x60), taking the max across the two. Measured with the shipped node code
-# -- brain-bbox-cropped probabilistic+CMC tracking and rigid-only motion -- at
-# num_threads=4 for the parallel nodes. motion is the whole path's RAM ceiling at
-# 8 GB (subj2, 4-worker process pool). Each node's RAM tracks an input-size
-# regressor (T1 voxels for tissue, streamline count for slr/tracking, 4D size for
-# denoise/motion, spatial voxels x SH coeffs for csd); the full table lives in the
-# spec Measurements section and the dipy RAM report, groundwork for a future
-# per-node RAM estimator.
+# -- brain-bbox-cropped probabilistic tracking and rigid-only motion -- at
+# num_threads=4 for the parallel nodes. motion still carries the 8 GB reservation
+# (which sets the dipy engine's RAM floor), but that is now a conservative figure,
+# not the live ceiling: the Phase-1bis float32 buffers (C2.3) dropped motion's
+# measured peak to ~3.7 GB, so the true ceiling is tissue/tracking at ~5 GB.
+# Re-deriving the RAM floor from the lower ceiling is a deliberate resource-contract
+# change left as a follow-up. Each node's RAM tracks an input-size regressor (T1
+# voxels for tissue, streamline count for slr/tracking, 4D size for denoise/motion,
+# spatial voxels x SH coeffs for csd); the full table lives in the spec Measurements
+# section and the dipy RAM report, groundwork for a future per-node RAM estimator.
 _MEM_GB = {
+    "crop": 1,  # provisional, aligned with denoise; isolated per-node RSS TBD
     "denoise": 1,  # subj1 1.11 / subj2 1.37
-    "motion": 8,  # subj1 7.11 / subj2 8.44 -- 4-worker pool; the path ceiling
+    "motion": 8,  # conservative floor-setting reservation; float32 (C2.3) cut the measured peak to ~3.7 GB (was 7.11/8.44 float64)
     "bias": 1,  # subj1 0.85 / subj2 0.99
     "tensorfit": 1,  # subj1 0.89 / subj2 1.16
     "csd": 4,  # subj1 3.57 / subj2 3.05
@@ -73,10 +78,12 @@ def dipy_dti_preproc_workflow(
     validated FSL path and its golden snapshots do not churn. From the deskulled
     b0 the diffusion stream is denoised (nlmeans), motion-corrected (with
     ``reorient_bvecs``), bias-corrected (a single N4 field on the mean b0) and
-    tensor-fitted; the FA map is resampled into reference space. The fODF
-    (adaptive ``sh_order_max`` CSD) drives probabilistic tractography (CMC
-    stopping criterion) seeded from the white-matter PVE mask, and a single
-    whole-brain SLR aligns the resulting tractogram to the HCP842 atlas.
+    tensor-fitted; the FA map is resampled into reference space (and, in
+    diffusion space, drives tracking's own stopping criterion). The fODF
+    (adaptive ``sh_order_max`` CSD) drives probabilistic tractography
+    (FA-threshold stopping) seeded from the white-matter PVE mask, and a
+    single whole-brain SLR aligns the resulting tractogram to the HCP842
+    atlas.
 
     The dipy engine's own steps (denoise, motion, bias, CSD, tracking, SLR) are
     FSL-free by design (spec Goal). The two *abstracted* steps -- brain
@@ -185,13 +192,28 @@ def dipy_dti_preproc_workflow(
     reorient = Node(ForceOrient(), name="dipy_reOrient")
     workflow.connect(conversion, "converted_files", reorient, "in_file")
 
+    # NODE 1c: Upfront brain bounding-box crop of the 4D series (median_otsu mask
+    # on the mean of all volumes -- the motion envelope, since this runs before
+    # motion correction), so every downstream node works on the brain sub-box
+    # instead of the empty FOV margin (spec section "C1"). bvals/bvecs are
+    # crop-invariant and are not needed here; they keep flowing from conversion to
+    # the consumers. The affine is shifted (shift_affine_for_crop) so world
+    # coordinates survive the crop. median_otsu is single-threaded scipy work, so
+    # num_threads (and the derived n_procs) is 1 -- honest HARD_CAP accounting,
+    # not a parallel reservation.
+    crop = Node(DwiCrop(), name="dipy_crop")
+    crop._mem_gb = _MEM_GB["crop"]
+    crop.inputs.num_threads = 1
+    crop.inputs.out_file = "crop_dti.nii.gz"
+    workflow.connect(reorient, "out_file", crop, "in_file")
+
     # NODE 2: b0 image extraction
     nodif = Node(ExtractVolumes(), name="dipy_nodif")
     nodif.long_name = "b0 extraction"
     nodif.inputs.start_volume = 0
     nodif.inputs.num_volumes = 1
     nodif.inputs.out_file = "nodif.nii.gz"
-    workflow.connect(reorient, "out_file", nodif, "in_file")
+    workflow.connect(crop, "out_file", nodif, "in_file")
 
     # NODE 3: Scalp removal from b0 image
     b0_deskull = get_deskull_node(
@@ -220,7 +242,7 @@ def dipy_dti_preproc_workflow(
     # n_procs is left to nipype's default, which returns interface.num_threads
     # when set (as it is here) -- an explicit n_procs would duplicate that.
     denoise.inputs.num_threads = parallel_cpu
-    workflow.connect(reorient, "out_file", denoise, "in_file")
+    workflow.connect(crop, "out_file", denoise, "in_file")
     workflow.connect(conversion, "bvals", denoise, "bval")
     workflow.connect(conversion, "bvecs", denoise, "bvec")
 
@@ -299,28 +321,26 @@ def dipy_dti_preproc_workflow(
         tissue.n_procs = 1
         workflow.connect(inputnode, "reference_brain", tissue, "in_file")
 
-        # Each PVE map is resampled ref->diff into the diffusion grid (the b0),
-        # so the CMC criterion and the seed mask live in tracking space. Both
-        # inverse transform views are passed: the ANTs apply consumes
-        # ``registration`` with ``inverse=True`` (forwarding which_to_invert,
-        # mandatory for a linear inverse -- see wire_transforms); the FSL apply
-        # consumes ``warp``, the pre-inverted ref->diff ConvertXFM .mat.
-        pve_applies = {}
-        for tissue_field in ("pve_wm", "pve_gm", "pve_csf"):
-            pve_applies[tissue_field] = apply_registration_node(
-                name="%s_2_diff" % tissue_field,
-                name_prefix="PVE",
-                name_suffix="to diffusion",
-                engine=engine,
-                workflow=workflow,
-                warp=[dif2ref.inv_warp_node, dif2ref.inv_warp],
-                registration=dif2ref,
-                inverse=True,
-                moving=[tissue, tissue_field],
-                reference=[nodif, "out_file"],
-                out_file="r-%s.nii.gz" % tissue_field,
-                non_linear=False,
-            )
+        # The WM PVE map is resampled ref->diff into the diffusion grid (the
+        # b0), so the seed mask lives in tracking space. Both inverse
+        # transform views are passed: the ANTs apply consumes ``registration``
+        # with ``inverse=True`` (forwarding which_to_invert, mandatory for a
+        # linear inverse -- see wire_transforms); the FSL apply consumes
+        # ``warp``, the pre-inverted ref->diff ConvertXFM .mat.
+        pve_wm_2_diff = apply_registration_node(
+            name="pve_wm_2_diff",
+            name_prefix="PVE",
+            name_suffix="to diffusion",
+            engine=engine,
+            workflow=workflow,
+            warp=[dif2ref.inv_warp_node, dif2ref.inv_warp],
+            registration=dif2ref,
+            inverse=True,
+            moving=[tissue, "pve_wm"],
+            reference=[nodif, "out_file"],
+            out_file="r-pve_wm.nii.gz",
+            non_linear=False,
+        )
 
         # -- CSD fODF -------------------------------------------------------- #
         csd = Node(DipyCsdFit(), name="dipy_csd")
@@ -346,7 +366,7 @@ def dipy_dti_preproc_workflow(
         workflow.connect(b0_deskull, "out_file", dif2ref_to_ras, "source_file")
         workflow.connect(inputnode, "reference_brain", dif2ref_to_ras, "reference_file")
 
-        # -- Probabilistic tractography (WM seeds, CMC stop) ----------------- #
+        # -- Probabilistic tractography (WM seeds, FA stop) ------------------ #
         tracking = Node(DipyTracking(), name="dipy_tracking")
         tracking._mem_gb = _MEM_GB["tracking"]
         tracking.inputs.num_threads = parallel_cpu
@@ -354,9 +374,16 @@ def dipy_dti_preproc_workflow(
         tracking.inputs.max_angle = config.getfloat_safe("max_angle")
         tracking.inputs.step_size = config.getfloat_safe("step_size")
         workflow.connect(csd, "shm_coeff", tracking, "shm_coeff")
-        workflow.connect(pve_applies["pve_wm"], "out_file", tracking, "pve_wm")
-        workflow.connect(pve_applies["pve_gm"], "out_file", tracking, "pve_gm")
-        workflow.connect(pve_applies["pve_csf"], "out_file", tracking, "pve_csf")
+        workflow.connect(pve_wm_2_diff, "out_file", tracking, "pve_wm")
+        # tensorfit's FA is already in diffusion space (the same grid as
+        # shm_coeff/nodif_brain) -- not fa_2_ref's reference-space copy -- so
+        # the stopping criterion needs no further resampling.
+        workflow.connect(tensorfit, "fa", tracking, "fa")
+        # nodif_brain is on the exact nodif grid: reorient -> denoise -> motion
+        # -> bias -> csd each re-stamp the original affine/header unchanged
+        # (voxelwise ops / resample-back-onto-input-grid), so the crop bbox it
+        # drives lines up with shm_coeff without any further resampling.
+        workflow.connect(b0_deskull, "out_file", tracking, "nodif_brain")
         # A StatefulTractogram needs the reference image (affine + dimensions),
         # not just the diff->ref affine.
         workflow.connect(inputnode, "reference", tracking, "reference")
