@@ -102,7 +102,7 @@ class TestReassemblyByIndex:
         ref = np.zeros(shape, dtype=np.float64)
         affine = np.eye(4)
 
-        def mock_register(index, mov, mov_aff, static, static_aff, pipeline):
+        def mock_register(index, mov, mov_aff, pipeline):
             # Later indices return sooner -> completion order is reversed.
             time.sleep((n_vols - index) * 0.01)
             return (
@@ -124,6 +124,275 @@ class TestReassemblyByIndex:
         for i in range(n_vols):
             assert np.all(xformed[..., i] == i), f"volume {i} misplaced"
             assert np.all(affines[..., i] == i), f"affine {i} misplaced"
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1a-ter - volume buffers are float32, affine buffers stay float64 (C2.3)
+# --------------------------------------------------------------------------- #
+class TestBufferDtypes:
+    """The large per-volume buffers are float32; the 4x4 affine buffers stay
+    float64.
+
+    Halving the volume-buffer dtype halves their RAM (they are the full 4D
+    series, the node's memory ceiling) while costing only float32 rounding of
+    the resampled intensities. The affine arrays are 4x4 per volume — their
+    memory is negligible and precision there propagates to every voxel, so they
+    must remain float64.
+    """
+
+    def test_register_moving_volumes_returns_float32_volumes_float64_affines(self):
+        """``_register_moving_volumes`` stores volumes float32, affines float64."""
+        n_vols = 4
+        shape = (5, 6, 4)
+        moving = np.random.default_rng(0).random(shape + (n_vols,))
+        static = np.random.default_rng(1).random(shape)
+        affine = np.eye(4)
+
+        def mock_register(index, mov, mov_aff, pipeline):
+            # A value that is NOT exactly representable in float32, so a float32
+            # buffer is observable as a rounding difference, not just a dtype tag.
+            return (
+                index,
+                np.full(shape, 0.123456789012345, dtype=np.float64),
+                np.full((4, 4), float(index), dtype=np.float64),
+            )
+
+        xformed, affines = _register_moving_volumes(
+            moving,
+            static,
+            affine,
+            pipeline=motion_module.DEFAULT_PIPELINE,
+            num_threads=1,
+            register_fn=mock_register,
+            use_processes=False,
+        )
+
+        assert xformed.dtype == np.float32, "volume buffer must be float32"
+        assert affines.dtype == np.float64, "affine buffer must stay float64"
+
+    def test_parallel_output_is_float32_volumes_float64_affine_array(
+        self, workspace, monkeypatch
+    ):
+        """``_parallel_motion_correction`` emits float32 volume data and a
+        float64 affine array.
+
+        The registration itself is left untouched (mocked here): only the
+        assembled output buffers change dtype. A single b0 keeps the b0-averaging
+        branch out of the way so the test stays fast and deterministic.
+        """
+        from dipy.core.gradients import gradient_table
+
+        shape = (6, 6, 4)
+        n_dirs = 3
+        rng = np.random.default_rng(2)
+        data = rng.random(shape + (n_dirs + 1,))
+        affine = np.eye(4)
+        img = nib.Nifti1Image(data, affine)
+        bvals = np.array([0.0, 1000.0, 1000.0, 1000.0])
+        bvecs = np.array(
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        )
+        gtab = gradient_table(bvals, bvecs=bvecs)
+
+        def fake_register_moving_volumes(
+            moving_data, static, aff, pipeline, num_threads, **kwargs
+        ):
+            n = moving_data.shape[-1]
+            xf = np.zeros(moving_data.shape, dtype=np.float32)
+            affs = np.zeros((4, 4, n), dtype=np.float64)
+            for i in range(n):
+                affs[..., i] = np.eye(4)
+            return xf, affs
+
+        monkeypatch.setattr(
+            motion_module, "_register_moving_volumes", fake_register_moving_volumes
+        )
+
+        registered_img, affine_array = _parallel_motion_correction(img, gtab, 1)
+
+        assert affine_array.dtype == np.float64, "affine array must stay float64"
+        assert (
+            np.asanyarray(registered_img.dataobj).dtype == np.float32
+        ), "assembled volume data must be float32"
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1a-quater - per-platform pool start method (C2.1, revised 2026-09-05)
+# --------------------------------------------------------------------------- #
+class TestPoolContext:
+    """The pool start method is platform-conditional (user decision 2026-09-05):
+    fork on Linux (fastest, no per-worker re-import), spawn on Windows (fork
+    unavailable) and macOS (fork is unsafe there).
+
+    This is safe only because BLAS is pinned in the pool INITIALIZER (and
+    threadpool_limits(1) wraps each registration), not via parent-environment
+    inheritance — so every start method leaves workers correctly pinned.
+    """
+
+    def test_linux_uses_fork(self):
+        assert motion_module._pool_context("linux").get_start_method() == "fork"
+
+    def test_windows_uses_spawn(self):
+        assert motion_module._pool_context("win32").get_start_method() == "spawn"
+
+    def test_macos_uses_spawn(self):
+        assert motion_module._pool_context("darwin").get_start_method() == "spawn"
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1a-bis - BLAS pinning in the worker initializer, not at import (C2.1)
+# --------------------------------------------------------------------------- #
+
+
+def _worker_return_env():
+    """Callable run inside a pool worker — returns its own os.environ snapshot."""
+    import os
+
+    return dict(os.environ)
+
+
+def _worker_check_static_global():
+    """Callable run inside a pool worker — checks for the static global."""
+    import swane.nipype_pipeline.nodes.DipyMotionCorrection as mod
+
+    return {
+        "has_static": hasattr(mod, "_worker_static") and mod._worker_static is not None,
+        "has_static_affine": hasattr(mod, "_worker_static_affine")
+        and mod._worker_static_affine is not None,
+    }
+
+
+class TestBlasWorkerInitializer:
+    """BLAS pinning must happen inside each worker via the pool initializer, not
+    at module import time.
+
+    Under ``spawn`` (the only context, per the user's 2026-09-04 decision) each
+    worker re-imports the module and starts from library defaults. A pin applied
+    at import in the parent is silently lost. The initializer is the only
+    correct placement.
+
+    Two assertions:
+
+    1. Importing the module does NOT set ``OPENBLAS_NUM_THREADS`` in the parent
+       process (import-safe).
+    2. A worker spawned by the pool's initializer DOES have
+       ``OPENBLAS_NUM_THREADS == "1"`` in its environment.
+    """
+
+    def test_import_does_not_pin_blas_in_parent(self):
+        """Importing DipyMotionCorrection must not touch the parent environment.
+
+        If the module pins BLAS at import time, the parent's
+        ``os.environ["OPENBLAS_NUM_THREADS"]`` would be set — and that pin
+        would be silently absent in spawn workers that re-import.
+        """
+        # Ensure the variable is absent before the import.
+        old = os.environ.pop(OPENBLAS_THREADS_VAR, None)
+        old_omp = os.environ.pop(OMP_THREADS_VAR, None)
+        try:
+            # Force a re-import by removing the module from sys.modules.
+            import importlib
+            import sys
+
+            mod_name = "swane.nipype_pipeline.nodes.DipyMotionCorrection"
+            saved = sys.modules.pop(mod_name, None)
+            try:
+                importlib.import_module(mod_name)
+                # After import, the vars must still be absent.
+                assert OPENBLAS_THREADS_VAR not in os.environ, (
+                    "importing DipyMotionCorrection sets OPENBLAS_NUM_THREADS "
+                    "in the parent — the pin must be in the worker initializer"
+                )
+                assert OMP_THREADS_VAR not in os.environ, (
+                    "importing DipyMotionCorrection sets OMP_NUM_THREADS "
+                    "in the parent — the pin must be in the worker initializer"
+                )
+            finally:
+                if saved is not None:
+                    sys.modules[mod_name] = saved
+        finally:
+            if old is not None:
+                os.environ[OPENBLAS_THREADS_VAR] = old
+            if old_omp is not None:
+                os.environ[OMP_THREADS_VAR] = old_omp
+
+    def test_pool_worker_has_blas_pinned_by_initializer(self):
+        """A worker in the motion-correction pool must have BLAS pinned to 1.
+
+        The pool must use an ``initializer`` that sets
+        ``OPENBLAS_NUM_THREADS=1`` and ``OMP_NUM_THREADS=1`` in each worker
+        before any registration runs. This test submits a trivial job that
+        returns the worker's ``os.environ`` and asserts the pin is present.
+
+        Against the current code (no initializer, no spawn context) this test
+        MUST FAIL — proving the test actually catches the defect.
+        """
+        import multiprocessing
+        from concurrent.futures import ProcessPoolExecutor
+
+        # The module must expose an initializer for the pool. If it does not,
+        # the test fails — which is the pre-implementation expected result.
+        assert hasattr(motion_module, "_worker_initializer"), (
+            "DipyMotionCorrection must expose _worker_initializer for the "
+            "spawn-context pool; the current code lacks it"
+        )
+
+        ctx = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(
+            max_workers=1,
+            mp_context=ctx,
+            initializer=motion_module._worker_initializer,
+            initargs=(1,),
+        ) as pool:
+            env = pool.submit(_worker_return_env).result()
+
+        assert env.get(OPENBLAS_THREADS_VAR) == "1", (
+            f"worker OPENBLAS_NUM_THREADS is {env.get(OPENBLAS_THREADS_VAR)!r}, "
+            "expected '1' — the initializer must pin it"
+        )
+        assert env.get(OMP_THREADS_VAR) == "1", (
+            f"worker OMP_NUM_THREADS is {env.get(OMP_THREADS_VAR)!r}, "
+            "expected '1' — the initializer must pin it"
+        )
+
+    def test_pool_worker_receives_static_via_initializer(self):
+        """The static reference must be hoisted into initargs, not shipped per job.
+
+        After the initializer runs, the worker must have the static reference
+        accessible via a module-level global (set by the initializer), so it
+        does not need to be pickled and sent with every volume submission.
+
+        Against the current code (static shipped per job) this test MUST FAIL.
+        """
+        import multiprocessing
+        from concurrent.futures import ProcessPoolExecutor
+
+        assert hasattr(
+            motion_module, "_worker_initializer"
+        ), "DipyMotionCorrection must expose _worker_initializer"
+
+        # Create a small synthetic static reference.
+        static = np.ones((5, 5, 3), dtype=np.float64)
+        static_affine = np.eye(4)
+
+        ctx = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(
+            max_workers=1,
+            mp_context=ctx,
+            initializer=motion_module._worker_initializer,
+            initargs=(1, static, static_affine),
+        ) as pool:
+            # Submit a function that checks the worker global.
+            result = pool.submit(_worker_check_static_global).result()
+
+        assert result["has_static"] is True, (
+            "worker does not have _worker_static set — the initializer "
+            "must hoist the static reference into the worker global"
+        )
+        assert result["has_static_affine"] is True, (
+            "worker does not have _worker_static_affine set — the initializer "
+            "must hoist the static affine into the worker global"
+        )
 
 
 # --------------------------------------------------------------------------- #

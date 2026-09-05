@@ -26,8 +26,10 @@ and is what makes the serial/parallel oracle exact. The single serial process
 uses ``num_threads`` BLAS threads for the same footprint.
 """
 
+import multiprocessing
 import os
 import shutil
+import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from os.path import abspath, basename
 
@@ -66,20 +68,92 @@ OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
 # stay bit-for-bit equivalent.
 DEFAULT_PIPELINE = ["center_of_mass", "translation", "rigid"]
 
+# Module-level globals populated by ``_worker_initializer`` in each worker.
+# Under ``spawn`` (Windows/macOS) each worker re-imports the module from scratch,
+# so these start as ``None``; under ``fork`` (Linux) they are inherited from the
+# parent, which also leaves them ``None``. Either way only the initializer sets
+# them, and the parent process never does — the module is import-safe.
+_worker_static = None
+_worker_static_affine = None
 
-def _register_one_volume(index, moving, moving_affine, static, static_affine, pipeline):
+
+def _pool_context(platform=None):
+    """Return the multiprocessing start-method context for this platform.
+
+    User decision (2026-09-05), superseding the earlier spawn-everywhere choice:
+
+    * **Linux → fork** — workers inherit the parent, so dipy is not re-imported
+      per worker; this is the fastest start method and avoids the ~33% wall-clock
+      penalty spawn pays on this path.
+    * **Windows → spawn** — fork is unavailable on Windows.
+    * **macOS → spawn** — fork is unsafe on macOS (Python's own default is spawn
+      since 3.8 because the system frameworks, Accelerate/Objective-C included,
+      are not fork-safe), and there is no macOS box to validate a faster
+      ``forkserver``, so spawn is the safe, tested choice.
+
+    This platform-conditional choice is safe because BLAS is pinned in the pool
+    ``initializer`` (and ``threadpool_limits(1)`` wraps each registration), never
+    via parent-environment inheritance. The initializer runs under every start
+    method, so no worker is ever left unpinned — which defuses the
+    fork-inherits/spawn-doesn't trap that had motivated the earlier uniform-spawn
+    decision.
+    """
+    platform = platform or sys.platform
+    if platform.startswith("linux"):
+        return multiprocessing.get_context("fork")
+    return multiprocessing.get_context("spawn")
+
+
+def _worker_initializer(blas_threads, static=None, static_affine=None):
+    """Pool initializer: pin BLAS threads and hoist the static reference.
+
+    Under ``spawn`` each worker re-imports the module and starts from library
+    defaults, so a pin applied at import in the parent is silently lost; under
+    ``fork`` a worker would inherit whatever the parent had set (``num_threads``,
+    not 1). Pinning here — in the initializer, which runs under every start
+    method — is therefore the one placement correct on all platforms.
+
+    Parameters
+    ----------
+    blas_threads : int
+        Number of BLAS threads per worker (1 for the parallel path, so each
+        worker is single-threaded and the footprint stays at ``n_procs × 1``).
+    static : ndarray or None
+        The 3D static reference volume, shared by every job. Hoisted here so
+        it travels once per worker (via ``initargs``) instead of once per
+        volume in the per-job payload.
+    static_affine : ndarray or None
+        The 4×4 affine for the static reference.
+    """
+    global _worker_static, _worker_static_affine
+    threads_str = str(max(1, int(blas_threads)))
+    os.environ[OMP_THREADS_VAR] = threads_str
+    os.environ[OPENBLAS_THREADS_VAR] = threads_str
+    if static is not None:
+        _worker_static = static
+    if static_affine is not None:
+        _worker_static_affine = static_affine
+
+
+def _register_one_volume(index, moving, moving_affine, pipeline):
     """Register one moving volume to the static reference (BLAS pinned to 1).
 
     Returns ``(index, transformed_volume, reg_affine)``. The index travels with
     the payload so the driver can reassemble results by volume position no
     matter what order the workers finish in.
+
+    The static reference and its affine are read from the module-level globals
+    ``_worker_static`` and ``_worker_static_affine``, set by
+    ``_worker_initializer`` in each worker. This avoids pickling and shipping the
+    (identical) static volume with every single job (a real saving under spawn,
+    where every payload is pickled; free under fork, where it is inherited).
     """
     with threadpool_limits(limits=1):
         transformed, reg_affine = affine_registration(
             moving,
-            static,
+            _worker_static,
             moving_affine=moving_affine,
-            static_affine=static_affine,
+            static_affine=_worker_static_affine,
             pipeline=pipeline,
         )
     return index, transformed, reg_affine
@@ -99,22 +173,55 @@ def _register_moving_volumes(
     Results are placed strictly by the index returned with each payload, so a
     worker finishing out of order can never scramble the series. ``register_fn``
     and ``use_processes`` are injection points for the reassembly unit test.
+
+    The start method is chosen per platform by ``_pool_context`` (fork on Linux,
+    spawn on Windows/macOS; user decision 2026-09-05). The pool is built **once**
+    with ``_worker_initializer`` as the initializer: it pins
+    ``OMP_NUM_THREADS``/``OPENBLAS_NUM_THREADS`` to 1 in each worker — required on
+    every start method, since spawn inherits no environment pins and fork would
+    otherwise inherit the parent's ``num_threads`` — and hoists the static
+    reference into a module-level global so it travels once per worker instead of
+    once per volume. Building the pool once matters most under spawn, where each
+    worker re-imports dipy (seconds); under fork there is no re-import, so it is
+    simply harmless.
     """
     register_fn = register_fn or _register_one_volume
     n_vols = moving_data.shape[-1]
-    xformed = np.zeros(moving_data.shape)
+    # Volume buffer float32 (C2.3): it holds the full stack of resampled 3D
+    # volumes and is the node's memory ceiling, so halving its dtype halves that
+    # RAM. The affine buffer stays float64 — it is 4x4 per volume (negligible
+    # memory) and its precision propagates to every voxel.
+    xformed = np.zeros(moving_data.shape, dtype=np.float32)
     affines = np.zeros((4, 4, n_vols))
 
-    executor_cls = ProcessPoolExecutor if use_processes else ThreadPoolExecutor
     max_workers = max(1, int(num_threads))
-    with executor_cls(max_workers=max_workers) as executor:
+
+    if use_processes:
+        # fork on Linux, spawn on Windows/macOS (user decision 2026-09-05)
+        ctx = _pool_context()
+        executor_cls = ProcessPoolExecutor
+        executor_kwargs = dict(
+            max_workers=max_workers,
+            mp_context=ctx,
+            initializer=_worker_initializer,
+            initargs=(1, static, affine),
+        )
+    else:
+        # Thread pool for the reassembly unit test (no spawn overhead).
+        executor_cls = ThreadPoolExecutor
+        executor_kwargs = dict(max_workers=max_workers)
+        # For the thread path, set the module globals directly so
+        # _register_one_volume can read them.
+        global _worker_static, _worker_static_affine
+        _worker_static = static
+        _worker_static_affine = affine
+
+    with executor_cls(**executor_kwargs) as executor:
         futures = [
             executor.submit(
                 register_fn,
                 index,
                 moving_data[..., index],
-                affine,
-                static,
                 affine,
                 pipeline,
             )
@@ -173,11 +280,14 @@ def _parallel_motion_correction(img, gtab, num_threads):
         moving_data, static, affine, DEFAULT_PIPELINE, num_threads
     )
 
+    # Affine array stays float64 (see _register_moving_volumes); the assembled
+    # volume buffer is float32 (C2.3) — the transformed b0s and moving volumes
+    # are downcast on assignment into it.
     affine_array = np.zeros((4, 4, data.shape[-1]))
     affine_array[..., b0s_mask] = b0_affines
     affine_array[..., ~b0s_mask] = moving_affines
 
-    data_array = np.zeros(data.shape)
+    data_array = np.zeros(data.shape, dtype=np.float32)
     data_array[..., b0s_mask] = trans_b0
     data_array[..., ~b0s_mask] = xformed
 
@@ -258,9 +368,14 @@ class DipyMotionCorrection(BaseInterface):
                 else:
                     os.environ[var] = val
 
-        # Save the motion-corrected 4D image, preserving the input dtype.
+        # Save the motion-corrected 4D image, preserving the input dtype. The
+        # volume data is read back at float32 precision (C2.3): the parallel path
+        # already assembles its output in a float32 buffer, and reading the serial
+        # path's float64 image at float32 here keeps the serial reference and the
+        # parallel path bit-for-bit equal (the oracle contract) while avoiding a
+        # transient full-4D float64 copy at save time.
         registered_img = nib.Nifti1Image(
-            registered_img.get_fdata().astype(img.get_data_dtype()),
+            registered_img.get_fdata(dtype=np.float32).astype(img.get_data_dtype()),
             img.affine,
             img.header,
         )
