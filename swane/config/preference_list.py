@@ -438,7 +438,7 @@ WF_PREFERENCES[category]["cingulum"] = PreferenceEntry(
 WF_PREFERENCES[category]["seed_density"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Seed density for tractography",
-    tooltip="Seeds placed per voxel dimension in the WM mask (density=2 means 8 seeds per voxel)",
+    tooltip="Seeds placed along one axis per voxel in the WM mask (density=2 means ~1.5 seeds per voxel)",
     default=2,
     range=[1, 10],
     pref_requirement={

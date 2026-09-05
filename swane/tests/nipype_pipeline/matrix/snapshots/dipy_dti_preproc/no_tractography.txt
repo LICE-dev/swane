@@ -5,7 +5,7 @@
 #   tractography = false
 #   tractography_engine = DIPY_RECOBUNDLES
 #
-# nodes=12 edges=17
+# nodes=13 edges=18
 
 - dif2ref_antsreg [AntsRegistration] mem_gb=5 n_procs=4
     aff_metric = 'mattes'
@@ -30,6 +30,9 @@
     single_file = False
     source_dir = '<TMP>/dicom'
     verbose = False
+- dipy_crop [DwiCrop] mem_gb=1 n_procs=1
+    num_threads = 1
+    out_file = 'crop_dti.nii.gz'
 - dipy_denoise [DipyDenoise] mem_gb=1 n_procs=4
     num_threads = 4
 - dipy_deskull_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=4
@@ -61,6 +64,8 @@ dipy_conv.bvals -> dipy_motion.bval
 dipy_conv.bvecs -> dipy_denoise.bvec
 dipy_conv.bvecs -> dipy_motion.bvec
 dipy_conv.converted_files -> dipy_reOrient.in_file
+dipy_crop.out_file -> dipy_denoise.in_file
+dipy_crop.out_file -> dipy_nodif.in_file
 dipy_denoise.out_file -> dipy_motion.in_file
 dipy_deskull_antspynet.mask_file -> dipy_tensorfit.mask
 dipy_deskull_antspynet.out_file -> dif2ref_antsreg.moving
@@ -69,8 +74,7 @@ dipy_motion.out_bval -> dipy_tensorfit.bval
 dipy_motion.out_bvec -> dipy_tensorfit.bvec
 dipy_motion.out_file -> dipy_bias.in_file
 dipy_nodif.out_file -> dipy_deskull_antspynet.in_file
-dipy_reOrient.out_file -> dipy_denoise.in_file
-dipy_reOrient.out_file -> dipy_nodif.in_file
+dipy_reOrient.out_file -> dipy_crop.in_file
 dipy_tensorfit.fa -> fa_2_ref_ants_apply.input_image
 fa_2_ref_ants_apply.out_file -> outputnode.FA
 inputnode.reference -> fa_2_ref_ants_apply.reference_image

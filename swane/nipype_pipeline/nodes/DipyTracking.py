@@ -1,6 +1,7 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 """
-Probabilistic tractography with a continuous-map criterion, in diffusion space.
+Probabilistic tractography with an FA-threshold stopping criterion, in
+diffusion space.
 
 The tracker is
 :func:`dipy.tracking.tracker.probabilistic_tracking` (it samples the fODF rather
@@ -8,30 +9,45 @@ than following its maximum). It replaced particle-filtering tractography
 (``pft_tracking``), which was unusable on the 8 GB / 4-core target: ``pft_tracking``
 runs single-core (its OpenMP pool does not engage on the ``sh=`` path) and its
 dense full-FOV PMF precompute (X x Y x Z x 362 x 8 bytes = 9.19 GB on subj1)
-alone busts the memory budget. ``probabilistic_tracking`` keeps the *same*
-:class:`dipy.tracking.stopping_criterion.CmcStoppingCriterion`, so tracking stays
-probabilistic and anatomically constrained; only PFT's particle-filtering reinit
-is lost (spec section 5, "Accepted risk").
+alone busts the memory budget (spec section 5, "Accepted risk").
+
+Streamlines stop on :class:`dipy.tracking.stopping_criterion.ThresholdStoppingCriterion`
+over the FA map (``FA_STOP_THRESHOLD``), not the Continuous Map Criterion the
+Phase 1 path used: the seed/stop probe (2026-09-04) found the CMC criterion
+under-reconstructed the arcuate fasciculus, and FA-thresholding at 0.20 recovers
+it without degrading other bundles (spec section "C3"). The three-way PVE split
+(WM/GM/CSF) is no longer consumed for stopping; only the WM channel survives, for
+seeding.
 
 Seeds are placed in the **white-matter PVE mask only**: whole-brain seeding was
 measured at a 7 GB peak and roughly 5x the runtime (spec Measurements), so the
 tractography seeds from the WM channel of the tissue classifier's partial-volume
-estimates and nowhere else. The Continuous Map Criterion is built from the three
-PVE maps and drives streamline stopping.
+estimates and nowhere else.
+
+``seed_buffer_fraction`` is passed to ``probabilistic_tracking`` so seeds are
+streamed to the tracker in chunks rather than materialised all at once, which
+mitigates the memory spike ``seed_density=2`` otherwise causes (spec
+Measurements, ``SEED_BUFFER_FRACTION``).
 
 Streamline length is bounded to the literature range ``MIN_LEN_MM`` .. ``MAX_LEN_MM``;
 these are module constants rather than traits so the workflow graph and the golden
 matrix snapshots do not change.
 
-The SH and PVE volumes are cropped to the brain bounding box before tracking
+The SH, WM PVE and FA volumes are cropped to the brain bounding box before tracking
 (``BBOX_PAD_VOXELS``, :func:`foreground_bbox_slices`, :func:`shift_affine_for_crop`).
-The full FOV is dominated by background -- on subj1 the brain fills <50% of
-256x256x52, so the uncropped SH volume alone is 4.15 GB in float64 and passing it
-whole to ``probabilistic_tracking`` peaks around 7 GB, over the 8 GB target (spec
-section 2, "crop"). Background voxels carry no fODF, no WM seed and no tissue for
-the CMC criterion, so the crop halves the voxel count at zero scientific cost: the
-affine is shifted by the crop offset, so tracking still runs in the original
-diffusion world frame and the streamlines are unchanged.
+The bbox is derived from ``nodif_brain`` -- the skull-stripped b0 that
+``dti_preproc_workflow``'s own deskull node produces on the same diffusion grid --
+and from nothing else: not the PVE/FA maps (registration-apply/tensor-fit outputs
+that can extend past the true brain edge), and not the shm, whose ``DipyCsdFit``
+output carries the int16/NaN-scaled DWI header, so its voxels read non-zero across
+the whole FOV and would degenerate the bbox to a no-op crop. The full FOV is
+dominated by background -- on subj1 the brain fills <50% of 256x256x52, so the
+uncropped SH volume alone is 4.15 GB in float64 and passing it whole to
+``probabilistic_tracking`` peaks around 7 GB, over the 8 GB target (spec section 2,
+"crop"). Background voxels carry no fODF, no WM seed and no FA signal, so the crop
+halves the voxel count at zero scientific cost: the affine is shifted by the crop
+offset, so tracking still runs in the original diffusion world frame and the
+streamlines are unchanged.
 
 Tracking runs in diffusion space (no DWI interpolation); each streamline is
 moved to reference space with the diffusion -> reference affine already produced
@@ -70,6 +86,19 @@ OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
 # to prune (spec Measurements).
 WM_PVE_SEED_THRESHOLD = 0.5
 
+# Streamlines stop where FA drops below this value. Replaces the Continuous Map
+# Criterion (spec section "C3"): the seed/stop probe (2026-09-04) swept the FA
+# range and found 0.20 recovers the arcuate fasciculus that CMC under-tracked,
+# without degrading the CST on the control subject.
+FA_STOP_THRESHOLD = 0.20
+
+# Fraction of the seed pool `probabilistic_tracking` buffers per streaming chunk
+# (dipy 1.12 default 1.0, i.e. no streaming). Lowered so seeds are consumed in
+# chunks rather than all at once, mitigating the memory spike seed_density=2
+# otherwise causes (spec Measurements). 0.7 rather than the literature-adjacent
+# 0.1 floor: user decision, 2026-09-05.
+SEED_BUFFER_FRACTION = 0.7
+
 # Streamline length bounds in mm (spec section 5, user's literature-based
 # choice). Kept as module constants, not traits/preferences, so the workflow
 # graph and the golden matrix snapshots do not change. These override dipy's
@@ -82,15 +111,20 @@ MAX_LEN_MM = 250.0
 # The dipy/trx default is 10000.
 TRX_CHUNK_SIZE = 10000
 
-# The SH + PVE volumes are cropped to the brain bounding box (plus this padding,
-# in voxels) before tracking. The full FOV is dominated by background: on subj1
-# the brain fills <50% of 256x256x52, so the uncropped SH volume alone is
-# 256x256x52x15 float64 = 4.15 GB, and passing it whole to probabilistic_tracking
-# peaks around 7 GB -- over the 8 GB target (spec section 2, "crop"). Background
-# voxels carry no fODF, no WM seed and no tissue for the CMC criterion, so the
-# crop is a pure memory optimisation with no effect on the streamlines: the affine
-# is shifted by the crop offset (see shift_affine_for_crop) so tracking still runs
-# in the original diffusion world frame.
+# The SH + WM PVE + FA volumes are cropped to the brain bounding box (plus this
+# padding, in voxels) before tracking. The bbox comes from nodif_brain (the
+# skull-stripped b0 from dti_preproc's own deskull node) only -- not the PVE/FA
+# maps, which are registration-apply/tensor-fit outputs that can extend past the
+# true brain edge, and not the shm, whose int16/NaN-scaled DWI header reads
+# non-zero across the whole FOV and would degenerate the bbox to a no-op crop.
+# The full FOV is dominated by background: on subj1 the brain fills <50% of
+# 256x256x52, so the uncropped SH volume alone is 256x256x52x15 float64 = 4.15
+# GB, and passing it whole to probabilistic_tracking peaks around 7 GB -- over
+# the 8 GB target (spec section 2, "crop"). Background voxels carry no fODF, no
+# WM seed and no FA signal, so the crop is a pure memory optimisation with no
+# effect on the streamlines: the affine is shifted by the crop offset (see
+# shift_affine_for_crop) so tracking still runs in the original diffusion world
+# frame.
 BBOX_PAD_VOXELS = 2
 
 
@@ -104,11 +138,19 @@ def generate_wm_seeds(pve_wm, affine, density):
 
     Wraps :func:`dipy.tracking.utils.seeds_from_mask` over
     :func:`wm_seed_mask`, so seeding is restricted to white matter.
+    ``density`` is placed along a single axis, ``(density, 1, 1)``, rather
+    than dipy's cubic ``(density,) * 3`` default: seed_density=2 combined with
+    FA-thresholded stopping (``FA_STOP_THRESHOLD``) produces markedly more
+    streamlines than under CMC, and the cubic 8 seeds/voxel that
+    seed_density=2 implies strained the 8 GB target on real subject data. The
+    single-axis form matches the density validated by the seed/stop probe
+    (2026-09-04) and keeps the preference monotonic without going cubic (user
+    decision, 2026-09-05).
     """
     from dipy.tracking.utils import seeds_from_mask
 
     mask = wm_seed_mask(pve_wm)
-    return seeds_from_mask(mask, affine, density=int(density))
+    return seeds_from_mask(mask, affine, density=(int(density), 1, 1))
 
 
 def foreground_bbox_slices(masks, shape, pad=BBOX_PAD_VOXELS):
@@ -162,17 +204,20 @@ class DipyTrackingInputSpec(BaseInterfaceInputSpec):
         exists=True,
         mandatory=True,
         desc="white-matter partial volume estimate (diffusion space) -- the "
-        "seed mask and the CMC WM channel",
+        "seed mask",
     )
-    pve_gm = File(
+    fa = File(
         exists=True,
         mandatory=True,
-        desc="gray-matter partial volume estimate (diffusion space)",
+        desc="fractional anisotropy map (diffusion space) -- drives the "
+        "ThresholdStoppingCriterion",
     )
-    pve_csf = File(
+    nodif_brain = File(
         exists=True,
         mandatory=True,
-        desc="CSF partial volume estimate (diffusion space)",
+        desc="skull-stripped b0 (diffusion space), from dti_preproc's own "
+        "deskull node -- its nonzero voxels define the brain bounding box "
+        "the crop follows",
     )
     reference = File(
         exists=True,
@@ -190,7 +235,8 @@ class DipyTrackingInputSpec(BaseInterfaceInputSpec):
         high=10,
         value=2,
         usedefault=True,
-        desc="seeds per voxel dimension inside the WM mask (2 -> 8 seeds/voxel)",
+        desc="seeds per voxel placed along a single axis inside the WM mask "
+        "-- (density, 1, 1), not cubic (2 -> ~1.5 seeds/voxel)",
     )
     max_angle = traits.Range(
         low=1.0,
@@ -225,9 +271,9 @@ class DipyTrackingOutputSpec(TraitedSpec):
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class DipyTracking(BaseInterface):
     """
-    Probabilistic tractography seeded from the WM PVE mask, with a continuous-map
-    stopping criterion built from the three PVE maps. Streamlines are tracked in
-    diffusion space and written to reference space as ``.trx``.
+    Probabilistic tractography seeded from the WM PVE mask, with an
+    FA-threshold stopping criterion. Streamlines are tracked in diffusion
+    space and written to reference space as ``.trx``.
 
     """
 
@@ -235,7 +281,7 @@ class DipyTracking(BaseInterface):
     output_spec = DipyTrackingOutputSpec
 
     def _run_interface(self, runtime):
-        from dipy.tracking.stopping_criterion import CmcStoppingCriterion
+        from dipy.tracking.stopping_criterion import ThresholdStoppingCriterion
         from dipy.tracking.tracker import probabilistic_tracking
         from nibabel.affines import apply_affine
         from nibabel.streamlines import LazyTractogram
@@ -253,26 +299,31 @@ class DipyTracking(BaseInterface):
         # float32, and dipy upcasts to float64 only the cropped array below.
         sh_data = np.asarray(shm_nii.dataobj, dtype=np.float32)
         diff_affine = shm_nii.affine
-        # average voxel size drives the CMC step-length normalisation (crop-invariant)
-        average_voxel_size = float(np.mean(shm_nii.header.get_zooms()[:3]))
 
         pve_wm = np.asarray(nib.load(self.inputs.pve_wm).dataobj, dtype=np.float32)
-        pve_gm = np.asarray(nib.load(self.inputs.pve_gm).dataobj, dtype=np.float32)
-        pve_csf = np.asarray(nib.load(self.inputs.pve_csf).dataobj, dtype=np.float32)
-
-        # Crop SH + PVE to the brain bounding box so tracking never carries the
-        # background (>50% of the FOV on subj1) in RAM. Foreground is any voxel
-        # with fODF signal or any tissue; the affine is shifted so the cropped
-        # volume tracks in the original diffusion world frame (BBOX_PAD_VOXELS,
-        # foreground_bbox_slices, shift_affine_for_crop -- spec section 2 "crop").
-        sh_signal = np.any(sh_data != 0, axis=-1)
-        crop = foreground_bbox_slices(
-            (sh_signal, pve_wm, pve_gm, pve_csf), sh_data.shape[:3]
+        fa_data = np.asarray(nib.load(self.inputs.fa).dataobj, dtype=np.float32)
+        nodif_brain = np.asarray(
+            nib.load(self.inputs.nodif_brain).dataobj, dtype=np.float32
         )
+
+        # Crop SH + WM PVE + FA to the brain bounding box so tracking never
+        # carries the background (>50% of the FOV on subj1) in RAM. The crop
+        # is derived from nodif_brain -- dti_preproc's own skull-stripped b0,
+        # on the same diffusion grid -- and from nothing else. Not from the
+        # PVE/FA maps: they are registration-apply/tensor-fit outputs that may
+        # extend brain-adjacent signal past the true brain edge. Not from the
+        # shm foreground: DipyCsdFit saves the shm with the int16/NaN-scaled
+        # DWI header, so sh_data reads non-zero across the whole FOV, which
+        # would degenerate the bbox to a no-op crop. Outside the brain there
+        # are no seeds and no FA signal, so the nodif_brain-only bbox is
+        # scientifically identical; the affine is shifted so the cropped
+        # volume tracks in the original diffusion world frame
+        # (BBOX_PAD_VOXELS, foreground_bbox_slices, shift_affine_for_crop --
+        # spec section 2 "crop").
+        crop = foreground_bbox_slices((nodif_brain,), sh_data.shape[:3])
         sh_data = np.ascontiguousarray(sh_data[crop])
         pve_wm = np.ascontiguousarray(pve_wm[crop])
-        pve_gm = np.ascontiguousarray(pve_gm[crop])
-        pve_csf = np.ascontiguousarray(pve_csf[crop])
+        fa_data = np.ascontiguousarray(fa_data[crop])
         track_affine = shift_affine_for_crop(diff_affine, crop)
 
         seed_density = int(self.inputs.seed_density)
@@ -304,6 +355,7 @@ class DipyTracking(BaseInterface):
                 step_size=step_size,
                 random_seed=random_seed,
                 nbr_threads=num_threads,
+                seed_buffer_fraction=SEED_BUFFER_FRACTION,
                 return_all=False,
             ):
                 yield apply_affine(diff2ref, np.asarray(streamline, dtype=np.float32))
@@ -319,13 +371,7 @@ class DipyTracking(BaseInterface):
             os.environ[var] = str(num_threads)
         try:
             seeds = generate_wm_seeds(pve_wm, track_affine, seed_density)
-            criterion = CmcStoppingCriterion.from_pve(
-                pve_wm,
-                pve_gm,
-                pve_csf,
-                step_size=step_size,
-                average_voxel_size=average_voxel_size,
-            )
+            criterion = ThresholdStoppingCriterion(fa_data, FA_STOP_THRESHOLD)
             # The generator already yields reference-space (RASMM) coordinates,
             # so affine_to_rasmm is the identity; reference_img anchors the
             # tractogram's grid (affine + dimensions) exactly as a
