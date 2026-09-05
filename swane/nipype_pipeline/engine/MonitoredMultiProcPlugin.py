@@ -40,6 +40,10 @@ import math
 import os
 from nipype.utils.ram_estimator import RamEstimator
 
+# The `from swane.patches.nipype_patches import swane_run_node` above applies
+# SWANe's nipype patches on import, including the default RamEstimator.negotiate
+# consumed by _negotiate_ram; a node's estimator may provide its own override.
+
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.pipeline.plugins.multiproc.MultiProcPlugin)  -*-
 class MonitoredMultiProcPlugin(MultiProcPlugin):
@@ -305,6 +309,68 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
 
         return super(MonitoredMultiProcPlugin, self)._task_finished_cb(jobid, cached)
 
+    def _negotiate_ram(self, node):
+        """Apply the bidirectional RAM plan for a node carrying an estimator.
+
+        This extends the one-way reservation that ``Node.mem_gb_runtime``
+        performs (``ram_estimator(inputs) -> mem_gb``). Where that property only
+        reserves RAM, this negotiates a full :class:`RamPlan` against the
+        workflow RAM budget (``self.memory_gb``), applies the plan's
+        quality-neutral tuned parameters to the node, and records the
+        reservation, the CPU count and the debug trace on the node so the
+        scheduler and the node report stay consistent.
+
+        The negotiation runs here, at scheduling time, because tuning that
+        depends on actual input size can only run once the node's inputs are
+        real files on disk — the same point at which ``mem_gb_runtime`` runs.
+        Setting ``_ram_estimated = True`` makes the subsequent
+        ``mem_gb_runtime`` read return the negotiated reservation instead of
+        re-invoking the one-way estimator.
+
+        Fail-safe: any error leaves the node's static ``_mem_gb`` and inputs
+        untouched (empty tuning) and marks the node estimated, so a broken
+        estimate falls back to the static reservation rather than failing the
+        workflow (or re-running the broken estimator via ``mem_gb_runtime``).
+        The MapNode-inheritance path in :meth:`_submit_mapnode` already copies
+        the estimator onto each subnode, so each subnode is negotiated here in
+        turn.
+        """
+        estimator = getattr(node, "ram_estimator", None)
+        if not isinstance(estimator, RamEstimator):
+            return
+        if getattr(node, "_ram_estimated", False):
+            return
+
+        try:
+            # Resolve upstream inputs first, exactly as mem_gb_runtime does.
+            node._get_inputs()
+            plan = estimator.negotiate(node.inputs, self.memory_gb)
+
+            traits = node.inputs.traits()
+            for key, value in (plan.tuned_params or {}).items():
+                if key == "environ" and isinstance(value, dict):
+                    if hasattr(node.inputs, "environ"):
+                        node.inputs.environ.update(value)
+                elif key in traits:
+                    setattr(node.inputs, key, value)
+
+            node._mem_gb = plan.mem_gb
+            node.ram_estimator_str = plan.debug_str
+            if plan.n_procs is not None:
+                node.n_procs = plan.n_procs
+            node._ram_estimated = True
+        except Exception:
+            # Fail safe: keep the node's static _mem_gb, apply no tuning, and
+            # do not let mem_gb_runtime re-run the (broken) estimator.
+            node._ram_estimated = True
+            logger.warning(
+                "[MultiProc] RAM negotiation failed for %s; falling back to "
+                "static mem_gb=%.2f.\n%s",
+                node.fullname,
+                node.mem_gb,
+                traceback.format_exc(),
+            )
+
     def _send_procs_to_workers(self, updatehash=False, graph=None):
         """
         Sends jobs to workers when system resources are available.
@@ -392,6 +458,12 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                     submit = self._submit_mapnode(jobid)
                     if not submit:
                         continue
+
+            # Bidirectional RAM negotiation: tune quality-neutral params and
+            # set the reservation before reading mem_gb_runtime below. No-op for
+            # nodes without an estimator; back-compatible for one-way (FSL)
+            # estimators (negotiate wraps __call__ with empty tuning).
+            self._negotiate_ram(self.procs[jobid])
 
             # Check requirements of this job
             next_job_gb = min(self.procs[jobid].mem_gb_runtime, self.memory_gb)
