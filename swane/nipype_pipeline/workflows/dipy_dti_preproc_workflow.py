@@ -25,6 +25,7 @@ from swane.nipype_pipeline.nodes.DipyTracking import DipyTracking
 from swane.nipype_pipeline.nodes.DipyAtlasSLR import DipyAtlasSLR
 from swane.nipype_pipeline.nodes.ram_estimators import (
     DipyMotionRamEstimator,
+    DipyTrackingRamEstimator,
 )
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
@@ -44,10 +45,11 @@ from swane.nipype_pipeline.nodes.utils import (
 # 4D size for denoise, spatial voxels x SH coeffs for csd); the full table lives
 # in the spec Measurements section and the dipy RAM report.
 #
-# motion is deliberately absent: it is the first node whose reservation is
-# negotiated at scheduling time by a tunable estimator (DipyMotionRamEstimator),
-# which prices the parent 4D buffers and the pool workers separately and walks
-# the worker count down to fit the RAM budget.
+# motion and tracking are deliberately absent: their reservations are negotiated
+# at scheduling time by tunable estimators. DipyMotionRamEstimator prices the
+# parent 4D buffers and the pool workers separately and walks the worker count
+# down; DipyTrackingRamEstimator prices the incompressible full-FOV working set
+# and walks seed_buffer_fraction (then trx_chunk_size) down to fit the RAM budget.
 #
 # Correction (measured 2026-09-06, same isolated tree-peak method, num_threads=4):
 # the Phase-1bis float32 buffers (C2.3) did NOT drop motion's peak to ~3.7 GB as
@@ -64,7 +66,6 @@ _MEM_GB = {
     "csd": 4,  # subj1 3.57 / subj2 3.05
     "tissue": 5,  # subj1 2.58 / subj2 5.17 -- HMRF on the T1, scales with T1 voxels
     "ras": 1,  # subj1 0.11 / subj2 0.11 (min 1 GB reservation)
-    "tracking": 5,  # subj1 5.09 / subj2 2.04 -- cropped; scales with streamlines + FOV
     "slr": 5,  # subj1 4.75 / subj2 0.98 -- scales with streamline count
 }
 
@@ -385,7 +386,14 @@ def dipy_dti_preproc_workflow(
 
         # -- Probabilistic tractography (WM seeds, FA stop) ------------------ #
         tracking = Node(DipyTracking(), name="dipy_tracking")
-        tracking._mem_gb = _MEM_GB["tracking"]
+        # RAM is negotiated at scheduling time, when the real inputs are on disk:
+        # the peak is dominated by the incompressible full-FOV working set, while
+        # seed_buffer_fraction and trx_chunk_size are quality-neutral levers the
+        # estimator walks down until the estimate fits the workflow RAM budget.
+        # The static value below is only the fail-safe used when the negotiation
+        # cannot run (see MonitoredMultiProcPlugin._negotiate_ram).
+        tracking._mem_gb = DipyTrackingRamEstimator.STATIC_FALLBACK_GB
+        tracking.ram_estimator = DipyTrackingRamEstimator()
         tracking.inputs.num_threads = parallel_cpu
         tracking.inputs.seed_density = config.getint_safe("seed_density")
         tracking.inputs.max_angle = config.getfloat_safe("max_angle")

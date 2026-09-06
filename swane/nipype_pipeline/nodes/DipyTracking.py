@@ -260,6 +260,31 @@ class DipyTrackingInputSpec(BaseInterfaceInputSpec):
     num_threads = traits.Int(
         nohash=True, desc="OpenMP/BLAS thread count and tracker nbr_threads"
     )
+    # Quality-neutral RAM levers walked by DipyTrackingRamEstimator at scheduling
+    # time (spec "Component 4"): the schedule-time negotiator shrinks these to fit
+    # the RAM budget. The output is bit-for-bit identical at any rung (proven by
+    # the tuned-vs-untuned heavy equivalence test), so -- like num_threads -- they
+    # are nohash: the negotiator mutates them and they must not invalidate the
+    # node cache. Their defaults are the module constants (the fail-safe values
+    # used if the negotiation cannot run).
+    seed_buffer_fraction = traits.Range(
+        low=0.3,
+        high=1.0,
+        value=SEED_BUFFER_FRACTION,
+        usedefault=True,
+        nohash=True,
+        desc="fraction of the seed pool probabilistic_tracking buffers per "
+        "streaming chunk -- the RAM negotiator walks it over [0.3, 1.0]",
+    )
+    trx_chunk_size = traits.Range(
+        low=1000,
+        high=10000,
+        value=TRX_CHUNK_SIZE,
+        usedefault=True,
+        nohash=True,
+        desc="streamlines streamed to the .trx per chunk -- the RAM negotiator "
+        "walks it down toward 1000 under budget pressure",
+    )
     out_file = File(desc="the output tractogram (.trx, reference space)")
 
 
@@ -330,6 +355,10 @@ class DipyTracking(BaseInterface):
         max_angle = float(self.inputs.max_angle)
         step_size = float(self.inputs.step_size)
         random_seed = int(self.inputs.random_seed)
+        # Quality-neutral RAM levers (tuned by DipyTrackingRamEstimator at
+        # scheduling time; default to the module constants when untuned).
+        seed_buffer_fraction = float(self.inputs.seed_buffer_fraction)
+        trx_chunk_size = int(self.inputs.trx_chunk_size)
 
         # The diffusion->reference affine already produced by the registration;
         # streamlines are moved to reference space one at a time in the streaming
@@ -355,7 +384,7 @@ class DipyTracking(BaseInterface):
                 step_size=step_size,
                 random_seed=random_seed,
                 nbr_threads=num_threads,
-                seed_buffer_fraction=SEED_BUFFER_FRACTION,
+                seed_buffer_fraction=seed_buffer_fraction,
                 return_all=False,
             ):
                 yield apply_affine(diff2ref, np.asarray(streamline, dtype=np.float32))
@@ -380,7 +409,7 @@ class DipyTracking(BaseInterface):
                 streamlines=streamlines_ref, affine_to_rasmm=np.eye(4)
             )
             trx = TrxFile.from_lazy_tractogram(
-                lazy, reference_img, chunk_size=TRX_CHUNK_SIZE
+                lazy, reference_img, chunk_size=trx_chunk_size
             )
         finally:
             for var, value in previous.items():
