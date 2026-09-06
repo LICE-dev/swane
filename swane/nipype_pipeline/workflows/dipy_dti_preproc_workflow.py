@@ -23,6 +23,9 @@ from swane.nipype_pipeline.nodes.DipyCsdFit import DipyCsdFit
 from swane.nipype_pipeline.nodes.DipyTissueClassifier import DipyTissueClassifier
 from swane.nipype_pipeline.nodes.DipyTracking import DipyTracking
 from swane.nipype_pipeline.nodes.DipyAtlasSLR import DipyAtlasSLR
+from swane.nipype_pipeline.nodes.ram_estimators import (
+    DipyMotionRamEstimator,
+)
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     get_registration_node,
@@ -36,19 +39,26 @@ from swane.nipype_pipeline.nodes.utils import (
 # measurements on BOTH oracle subjects (subj1 15-dir 256x256x52 / subj2 64-dir
 # 144x144x60), taking the max across the two. Measured with the shipped node code
 # -- brain-bbox-cropped probabilistic tracking and rigid-only motion -- at
-# num_threads=4 for the parallel nodes. motion still carries the 8 GB reservation
-# (which sets the dipy engine's RAM floor), but that is now a conservative figure,
-# not the live ceiling: the Phase-1bis float32 buffers (C2.3) dropped motion's
-# measured peak to ~3.7 GB, so the true ceiling is tissue/tracking at ~5 GB.
-# Re-deriving the RAM floor from the lower ceiling is a deliberate resource-contract
-# change left as a follow-up. Each node's RAM tracks an input-size regressor (T1
-# voxels for tissue, streamline count for slr/tracking, 4D size for denoise/motion,
-# spatial voxels x SH coeffs for csd); the full table lives in the spec Measurements
-# section and the dipy RAM report, groundwork for a future per-node RAM estimator.
+# num_threads=4 for the parallel nodes. Each remaining node's RAM tracks an
+# input-size regressor (T1 voxels for tissue, streamline count for slr/tracking,
+# 4D size for denoise, spatial voxels x SH coeffs for csd); the full table lives
+# in the spec Measurements section and the dipy RAM report.
+#
+# motion is deliberately absent: it is the first node whose reservation is
+# negotiated at scheduling time by a tunable estimator (DipyMotionRamEstimator),
+# which prices the parent 4D buffers and the pool workers separately and walks
+# the worker count down to fit the RAM budget.
+#
+# Correction (measured 2026-09-06, same isolated tree-peak method, num_threads=4):
+# the Phase-1bis float32 buffers (C2.3) did NOT drop motion's peak to ~3.7 GB as
+# recorded earlier -- that figure is a single-worker/parent-side number. The
+# 4-worker tree peak went 7.11 -> 6.68 GB (subj1) and 8.44 -> 8.06 GB (subj2),
+# a ~5% saving, because the float32 buffers sit in the parent while the pool
+# workers dominate the peak. The dipy engine's RAM floor is re-derived jointly
+# at the end of Phase 2 from each estimator's bottom rung.
 _MEM_GB = {
     "crop": 1,  # provisional, aligned with denoise; isolated per-node RSS TBD
     "denoise": 1,  # subj1 1.11 / subj2 1.37
-    "motion": 8,  # conservative floor-setting reservation; float32 (C2.3) cut the measured peak to ~3.7 GB (was 7.11/8.44 float64)
     "bias": 1,  # subj1 0.85 / subj2 0.99
     "tensorfit": 1,  # subj1 0.89 / subj2 1.16
     "csd": 4,  # subj1 3.57 / subj2 3.05
@@ -248,7 +258,14 @@ def dipy_dti_preproc_workflow(
 
     # NODE 5: motion correction + reorient_bvecs (parallel over volumes)
     motion = Node(DipyMotionCorrection(), name="dipy_motion")
-    motion._mem_gb = _MEM_GB["motion"]
+    # RAM is negotiated at scheduling time, when the real input is on disk: the
+    # driver holds the whole 4D series (voxels x volumes) while each pool worker
+    # adds its own 3D share, so the estimator prices both terms and walks the
+    # worker count down until the estimate fits the workflow RAM budget. The
+    # static value below is only the fail-safe used when the negotiation cannot
+    # run (see MonitoredMultiProcPlugin._negotiate_ram).
+    motion._mem_gb = DipyMotionRamEstimator.STATIC_FALLBACK_GB
+    motion.ram_estimator = DipyMotionRamEstimator()
     motion.inputs.parallel = True
     motion.inputs.num_threads = parallel_cpu
     workflow.connect(denoise, "out_file", motion, "in_file")

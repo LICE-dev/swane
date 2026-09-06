@@ -1,10 +1,18 @@
 # SWANe workflow settings matrix
 
-Overview of 77 construction scenarios across 14 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
+Overview of 80 construction scenarios across 15 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
 > Generated from the golden snapshots by `python swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
-[dti_preproc](#dti-preproc) · [flat1](#flat1) · [fmri_preproc](#fmri-preproc) · [fmri_resting_state](#fmri-resting-state) · [fmri_task](#fmri-task) · [freesurfer](#freesurfer) · [func_map](#func-map) · [linear_reg](#linear-reg) · [nonlinear_reg](#nonlinear-reg) · [ref](#ref) · [seeg_ct](#seeg-ct) · [tractography](#tractography) · [venous_ct](#venous-ct) · [venous_mr](#venous-mr)
+[dipy_dti_preproc](#dipy-dti-preproc) · [dti_preproc](#dti-preproc) · [flat1](#flat1) · [fmri_preproc](#fmri-preproc) · [fmri_resting_state](#fmri-resting-state) · [fmri_task](#fmri-task) · [freesurfer](#freesurfer) · [func_map](#func-map) · [linear_reg](#linear-reg) · [nonlinear_reg](#nonlinear-reg) · [ref](#ref) · [seeg_ct](#seeg-ct) · [tractography](#tractography) · [venous_ct](#venous-ct) · [venous_mr](#venous-mr)
+
+## dipy_dti_preproc
+
+| scenario | settings | nodes/edges | commands | GPU |
+|----------|----------|-------------|----------|-----|
+| [no_tractography](snapshots/dipy_dti_preproc/no_tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=false; tractography_engine=DIPY_RECOBUNDLES | 13 / 18 | `dcm2niix` | — |
+| [tractography](snapshots/dipy_dti_preproc/tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 19 / 37 | `dcm2niix` | — |
+| [tractography_single_thread](snapshots/dipy_dti_preproc/tractography_single_thread.txt) | deskull_engine=ANTSPYNET; max_cpu=1; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 19 / 37 | `dcm2niix` | — |
 
 ## dti_preproc
 
@@ -50,9 +58,9 @@ Overview of 77 construction scenarios across 14 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [single_contrast_rara](snapshots/fmri_task/single_contrast_rara.txt) | block_design=RARA; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 42 / 86 | `cluster`, `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fslmaths`, `mcflirt`, `smoothest`, `susan` | — |
-| [test_run](snapshots/fmri_task/test_run.txt) | block_design=RARA; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30; test_run=True | 42 / 86 | `cluster`, `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fslmaths`, `mcflirt`, `smoothest`, `susan` | — |
-| [two_contrasts_rarb](snapshots/fmri_task/two_contrasts_rarb.txt) | block_design=RARB; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 50 / 116 | `cluster`, `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fslmaths`, `mcflirt`, `smoothest`, `susan` | — |
+| [single_contrast_rara](snapshots/fmri_task/single_contrast_rara.txt) | block_design=RARA; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 42 / 86 | `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fsl-cluster`, `fslmaths`, `mcflirt`, `smoothest`, `susan` | — |
+| [test_run](snapshots/fmri_task/test_run.txt) | block_design=RARA; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30; test_run=True | 42 / 86 | `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fsl-cluster`, `fslmaths`, `mcflirt`, `smoothest`, `susan` | — |
+| [two_contrasts_rarb](snapshots/fmri_task/two_contrasts_rarb.txt) | block_design=RARB; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 50 / 116 | `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fsl-cluster`, `fslmaths`, `mcflirt`, `smoothest`, `susan` | — |
 
 ## freesurfer
 

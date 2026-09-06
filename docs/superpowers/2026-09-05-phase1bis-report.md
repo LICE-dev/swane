@@ -27,7 +27,7 @@ the C3 revisions). Baselines: `docs/superpowers/2026-09-04-phase1-report.md`.
 | **C1** — upfront 4D `median_otsu` crop | ✅ | New node `DwiCrop` (mask from the **mean of all volumes** = motion envelope, since the crop precedes motion correction). Shape subj1 −50.6% (256²×52→167×194×52), subj2 −46.9%. World-coord equivalence (full-FOV vs cropped, same seed): 0.00 mm subj1 / 7.6e-6 mm subj2. `autocrop` not used (deprecated in dipy 1.11, gone 1.13) — bbox via `foreground_bbox_slices` + `shift_affine_for_crop`. |
 | **C2.1** — process context | ✅ (revised) | **fork on Linux, spawn on Windows/macOS** (revised 2026-09-05 from "spawn everywhere"): fork avoids the per-worker dipy re-import; spawn where fork is unavailable/unsafe. Safe because BLAS is pinned in the pool **initializer** (+ `threadpool_limits(1)`), not by env inheritance, so every start method leaves workers pinned. Pool built once and reused; static reference hoisted via `initargs`. |
 | **C2.2** — IPC | ✅ | Static hoisted (once/worker vs once/volume). `shared_memory` for the moving volumes **measured and rejected** (4.6 s slower; total IPC ~1.4% of a 460 s run) — per-job copy kept. |
-| **C2.3** — dtype | ✅ | Volume buffers float32 (`xformed`, `data_array`); affine buffers stay float64. Measured peak dropped to ~3.7 GB (from 7.11/8.44 float64). float64-vs-float32: max_abs 6.1e-5, max_rel 5.96e-8 (= float32 eps); saved int16 differs by ±1 in 0.033 % of voxels — scientifically identical. Oracle bit-for-bit preserved via a single output cast. |
+| **C2.3** — dtype | ✅ | Volume buffers float32 (`xformed`, `data_array`); affine buffers stay float64. Measured peak dropped to ~3.7 GB (from 7.11/8.44 float64). **Corrected 2026-09-06 (E2a campaign):** that ~3.7 GB is a *single-worker* figure, not the production one. Re-measured with the same isolated tree-peak method at `num_threads=4`, float32 moved the peak 7.11 -> 6.68 GB (subj1) and 8.44 -> 8.06 GB (subj2) -- about 5 %, not 55 %: the float32 buffers sit in the parent process, while the pool workers dominate the peak. The dtype equivalence figures in this row are unaffected. float64-vs-float32: max_abs 6.1e-5, max_rel 5.96e-8 (= float32 eps); saved int16 differs by ±1 in 0.033 % of voxels — scientifically identical. Oracle bit-for-bit preserved via a single output cast. |
 | **C2.4** — b0 registration mask | ❌ rejected | On production-consistent **cropped** data the b0 mask is 0.93× (7 % slower) and shifts the transform 0.45; the earlier "1.26× faster" was a full-FOV artifact (78 % background), which the C1 crop already removes. No node change. |
 | **C3** — FA stopping, density, seed buffer | ✅ (subj1) | `CmcStoppingCriterion` → `ThresholdStoppingCriterion(FA, 0.20)` (source: seed/stop probe 2026-09-04); FA is the diffusion-space `DipyTensorFit` output, not the ref-registered copy. seeding stays WM-PVE ≥ 0.5. **Dead nodes removed**: `pve_gm_2_diff`/`pve_csf_2_diff` apply nodes and the `pve_gm`/`pve_csf` tracking inputs (`DipyTissueClassifier` stays — it makes `pve_wm`). subj1 real run: 297,813 streamlines — an **exact match** to the probe's validated `Bp_fa020_d15` arm (AF_L 2→361 @ reduction 15; CMC baseline AF_L=2), peak 5.37 GB, ~17 min. |
 | **C5** — deskull by `median_otsu` | ❌ rejected | User ran the oracle: ANTs/antspynet remains superior to dipy `median_otsu`. Incumbent stays; the dipy path gains no `median_otsu` deskull option. |
@@ -58,10 +58,15 @@ the C3 revisions). Baselines: `docs/superpowers/2026-09-04-phase1-report.md`.
 - **`(N,1,1)` seed density is validated only at N=2.** It scales ~linearly, so high
   `seed_density` (up to the preference max 10) can still exceed 8 GB. Only 2 is
   proven safe on the 8 GB floor.
-- **RAM floor is now conservative.** float32 (C2.3) cut motion's measured peak to
-  ~3.7 GB, so the path ceiling is tissue/tracking (~5 GB), not motion's 8 GB
-  reservation. Re-deriving the 8 GB `option_pref_requirement` floor is a deliberate
-  resource-contract change left as a follow-up; the reservation was kept unchanged.
+- **RAM floor is now conservative** -- but less so than recorded here.
+  **Corrected 2026-09-06 (E2a campaign):** float32 (C2.3) did *not* cut motion's
+  peak to ~3.7 GB at the production worker count; at `num_threads=4` the measured
+  tree peak is 6.68 GB (subj1) / 8.06 GB (subj2), so **motion remains the path
+  ceiling**, not tissue/tracking (~5 GB). The ~3.7 GB figure is motion at a single
+  worker. Re-deriving the 8 GB `option_pref_requirement` floor stays a deliberate
+  resource-contract change; motion's static reservation has since been replaced by
+  `DipyMotionRamEstimator` (E2a), which negotiates the worker count against the
+  budget, and the floor is settled jointly at the end of Phase 2.
 - **`_mem_gb["DwiCrop"]` is provisional** (=1, aligned with denoise); isolated
   per-node RSS measurement still owed.
 - **macOS never validated** (no box). Under the C2.1 revision macOS uses spawn (like
