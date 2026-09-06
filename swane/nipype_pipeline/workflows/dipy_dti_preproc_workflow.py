@@ -25,6 +25,7 @@ from swane.nipype_pipeline.nodes.DipyTracking import DipyTracking
 from swane.nipype_pipeline.nodes.DipyAtlasSLR import DipyAtlasSLR
 from swane.nipype_pipeline.nodes.ram_estimators import (
     DipyMotionRamEstimator,
+    DipyTissueRamEstimator,
     DipyTrackingRamEstimator,
 )
 from swane.nipype_pipeline.nodes.utils import (
@@ -41,15 +42,18 @@ from swane.nipype_pipeline.nodes.utils import (
 # 144x144x60), taking the max across the two. Measured with the shipped node code
 # -- brain-bbox-cropped probabilistic tracking and rigid-only motion -- at
 # num_threads=4 for the parallel nodes. Each remaining node's RAM tracks an
-# input-size regressor (T1 voxels for tissue, streamline count for slr/tracking,
-# 4D size for denoise, spatial voxels x SH coeffs for csd); the full table lives
-# in the spec Measurements section and the dipy RAM report.
+# input-size regressor (streamline count for slr, 4D size for denoise, spatial
+# voxels x SH coeffs for csd); the full table lives in the spec Measurements
+# section and the dipy RAM report.
 #
-# motion and tracking are deliberately absent: their reservations are negotiated
-# at scheduling time by tunable estimators. DipyMotionRamEstimator prices the
-# parent 4D buffers and the pool workers separately and walks the worker count
-# down; DipyTrackingRamEstimator prices the incompressible full-FOV working set
-# and walks seed_buffer_fraction (then trx_chunk_size) down to fit the RAM budget.
+# motion, tracking and tissue are deliberately absent: their reservations are set
+# at scheduling time by estimators. DipyMotionRamEstimator prices the parent 4D
+# buffers and the pool workers separately and walks the worker count down;
+# DipyTrackingRamEstimator prices the incompressible full-FOV working set and
+# walks seed_buffer_fraction (then trx_chunk_size) down to fit the RAM budget.
+# DipyTissueRamEstimator is classic (one-way): the HMRF peak is linear in T1
+# voxels and the node pins OMP=1 with no thread lever (measured thread-invariant,
+# 2026-09-06), so it reserves RAM from the voxel count and tunes nothing.
 #
 # Correction (measured 2026-09-06, same isolated tree-peak method, num_threads=4):
 # the Phase-1bis float32 buffers (C2.3) did NOT drop motion's peak to ~3.7 GB as
@@ -64,7 +68,6 @@ _MEM_GB = {
     "bias": 1,  # subj1 0.85 / subj2 0.99
     "tensorfit": 1,  # subj1 0.89 / subj2 1.16
     "csd": 4,  # subj1 3.57 / subj2 3.05
-    "tissue": 5,  # subj1 2.58 / subj2 5.17 -- HMRF on the T1, scales with T1 voxels
     "ras": 1,  # subj1 0.11 / subj2 0.11 (min 1 GB reservation)
     "slr": 5,  # subj1 4.75 / subj2 0.98 -- scales with streamline count
 }
@@ -335,7 +338,14 @@ def dipy_dti_preproc_workflow(
     if is_tractography:
         # -- Tissue side branch: HMRF on the T1 reference_brain -> 3 PVE maps -- #
         tissue = Node(DipyTissueClassifier(), name="dipy_tissue")
-        tissue._mem_gb = _MEM_GB["tissue"]
+        # RAM is reserved at scheduling time from the T1 voxel count: HMRF peak
+        # is linear in voxels. The estimator is classic (one-way) -- the node
+        # pins OMP=1 internally and has no thread lever, so there is nothing to
+        # tune (measured thread-invariant on both oracle T1 brains, 2026-09-06).
+        # The static value below is only the fail-safe used when the negotiation
+        # cannot run (see MonitoredMultiProcPlugin._negotiate_ram).
+        tissue._mem_gb = DipyTissueRamEstimator.STATIC_FALLBACK_GB
+        tissue.ram_estimator = DipyTissueRamEstimator()
         tissue.n_procs = 1
         workflow.connect(inputnode, "reference_brain", tissue, "in_file")
 
