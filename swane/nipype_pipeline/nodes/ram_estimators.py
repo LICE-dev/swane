@@ -616,3 +616,279 @@ class DipyTissueRamEstimator(RamEstimator):
             min_gb=self.MIN_GB,
             max_gb=None,
         )
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class DipyCsdRamEstimator(RamEstimator):
+    """
+    Tunable RAM estimator for :class:`DipyCsdFit`, with the
+    ``peaks_from_model`` worker count as its quality-neutral lever.
+
+    Two regimes, not one curve
+    --------------------------
+    dipy's ``peaks_from_model`` has two structurally different branches, and the
+    estimator models them separately because their memory profiles differ in
+    kind, not degree:
+
+    * **Serial** (``num_processes == 1``) allocates a single full-volume set of
+      output arrays: ``gfa``, ``qa``, ``peak_dirs``, ``peak_values``,
+      ``peak_indices`` and ``shm_coeff``.
+    * **Parallel** (``num_processes > 1``) splits the series into ``P**2``
+      chunks and holds **three** full-volume equivalents at once: every chunk
+      result returned by ``pool.map`` is alive in the parent simultaneously,
+      each is copied into an ``np.memmap``, and those are read back with
+      ``np.array``. That triple is independent of ``P``.
+    * Each of the ``P`` concurrent workers additionally holds its own chunk's
+      arrays (``voxels / P**2`` each), so the aggregate worker term is
+      ``voxels / P`` -- it *shrinks* as ``P`` grows -- plus one ``spawn``
+      interpreter per worker (dipy forces the spawn start method here, so a
+      worker is a fresh interpreter with numpy/dipy imported, not a fork).
+
+    So::
+
+        per_voxel = PEAK_BYTES_PER_VOXEL + SH_BYTES_PER_COEFF * n_coeff
+        data_gb   = DATA_BYTES_PER_VOXEL_VOLUME * voxels * volumes / 2**30
+
+        serial   = OVERHEAD + data_gb + SERIAL_COPIES   * per_voxel * voxels
+        parallel = OVERHEAD + data_gb + PARALLEL_COPIES * per_voxel * voxels
+                                      + per_voxel * voxels / P
+                                      + P * SPAWN_GB_PER_WORKER
+
+    The voxel count of the input sequence is therefore the primary regressor --
+    it drives both the 4D buffer (with the volume count) and every per-voxel
+    output array -- and the SH coefficient count is the secondary one, itself
+    derived from the acquisition's direction count.
+
+    Why the ladder scans instead of halving
+    ---------------------------------------
+    The consequence of the above is that RAM **need not be monotone in P**:
+    inside the parallel branch the parent term is constant while the worker term
+    falls as ``1/P`` and the spawn term grows linearly, so above a volume
+    threshold 4 -> 2 *raises* the estimate. (At the oracle sizes the spawn term
+    still dominates and the measured curve is monotone -- subj2 at
+    1/2/4 workers: 1.32 / 2.44 / 2.74 GB -- so this is a model property, not an
+    observed one; the scanning ladder is correct either way.) A halving ladder
+    would therefore not be guaranteed to converge downwards. The real cliff is
+    ``P == 1``, which switches to the serial branch and drops two of the three
+    full-volume copies. :meth:`negotiate` evaluates every rung from the declared
+    count down to 1 and returns the largest one that fits, with the serial rung
+    as the floor.
+
+    Tuning
+    ------
+    Lowering the worker count is quality-neutral: dipy chunks strictly by voxel
+    index and reassembles by the same index, each worker runs the identical
+    serial per-voxel fit, and BLAS is pinned to one thread per worker whatever
+    their number (:class:`DipyCsdFit` sets ``OMP_NUM_THREADS`` before the pool
+    starts, and spawn workers inherit the environment). The written
+    ``shm_coeff`` is therefore bit-for-bit identical at any rung -- only wall
+    time changes. (dipy's ``qa`` array is *not* rung-invariant, because each
+    chunk normalises by its own ``global_max``; the node does not save it.)
+
+    Calibration
+    -----------
+    Per the RAM design's estimation philosophy these constants are a deliberate
+    **over-estimate**, not a fitted curve. ``PEAK_BYTES_PER_VOXEL`` and
+    ``SH_BYTES_PER_COEFF`` are read off the dipy allocations exactly
+    (``npeaks=1`` as the node pins it: ``gfa`` 8 + ``qa`` 8 + ``peak_dirs`` 24 +
+    ``peak_values`` 8 + ``peak_indices`` 4 = 52 B, plus 8 B per SH coefficient),
+    and the copy multiplicities are counted from the dipy source.
+
+    Six isolated tree-peak runs on the two oracle subjects (2026-09-06) then
+    checked the bound rather than fitted it. Solving the model on subj2's three
+    worker counts gives ``OVERHEAD ~ 0.24 GB``, ``SPAWN ~ 0.21 GB/worker`` and
+    an *effective* ``PARALLEL_COPIES ~ 1.96``: dipy allocates three full-volume
+    copies but the memmap-backed one is only partly resident at the peak. The
+    constants below keep the source-counted 3 and round the rest up, so every
+    measured point is covered with margin -- subj1 4 workers 2.44 -> 3.68 GB
+    (1.51x), subj2 4 workers 2.74 -> 3.71 (1.35x), subj2 2 workers 2.44 -> 3.32
+    (1.36x), subj2 serial 1.32 -> 1.63 (1.24x). That is the same family of
+    margin as the motion (1.21-1.86x) and tissue (1.11-1.14x) estimators. See
+    the E2d note under ``docs/superpowers/``.
+    """
+
+    #: Bytes per (voxel x volume) for the 4D series. ``get_fdata()`` yields
+    #: float64 (8 B); the remainder covers the mask read and the reshape/save
+    #: slack. Calibrated up from the oracle probes.
+    DATA_BYTES_PER_VOXEL_VOLUME = 10
+
+    #: Per-voxel bytes of the non-SH output arrays at the node's pinned
+    #: ``npeaks=1``: gfa 8 + qa 8 + peak_dirs 24 + peak_values 8 +
+    #: peak_indices 4. Read off the dipy allocations, not fitted.
+    PEAK_BYTES_PER_VOXEL = 52
+
+    #: Bytes per SH coefficient per voxel (``shm_coeff`` is float64).
+    SH_BYTES_PER_COEFF = 8
+
+    #: Full-volume copies alive at once on the serial branch.
+    SERIAL_COPIES = 1
+
+    #: Full-volume copies alive at once on the parallel branch: the pooled
+    #: chunk results, the memmaps they are written into, and the arrays they
+    #: are read back as.
+    PARALLEL_COPIES = 3
+
+    #: A spawned worker is a fresh interpreter with numpy/dipy imported.
+    SPAWN_GB_PER_WORKER = 0.25
+
+    #: Fixed parent overhead (interpreter, numpy/dipy/nibabel).
+    OVERHEAD_GB = 0.4
+
+    #: No CSD fit fits in less than this, whatever the input.
+    MIN_GB = 0.5
+
+    #: Static reservation the workflow declares on the node. It is only read
+    #: when the negotiation cannot run at all (see
+    #: ``MonitoredMultiProcPlugin._negotiate_ram``), which for this estimator
+    #: means the input header or the bval file could not be read -- a state in
+    #: which the node itself cannot run either. It holds the estimate at the
+    #: declared rung for a representative DWI (about 3.7 GB on either oracle
+    #: shape), rounded up; the dipy engine's RAM floor is settled jointly at the
+    #: end of Phase 2 and may revise it.
+    STATIC_FALLBACK_GB = 4.0
+
+    def __init__(self):
+        # max_gb is deliberately None: clamping the estimate down would make the
+        # node under-reserve and silently co-schedule with other heavy work,
+        # which is the exact failure this estimator exists to prevent. Deciding
+        # that a node cannot fit is the scheduler's job, not the estimator's.
+        super().__init__(
+            input_multipliers={},
+            overhead_gb=self.OVERHEAD_GB,
+            min_gb=self.MIN_GB,
+            max_gb=None,
+        )
+
+    @staticmethod
+    def _shape(inputs):
+        """Return ``(spatial_voxels, volumes)`` from the input header alone."""
+        img = nib.load(inputs.in_file)
+        shape = img.header.get_data_shape()
+        voxels = int(math.prod(shape[:3]))
+        volumes = int(shape[3]) if len(shape) > 3 else 1
+        return voxels, volumes
+
+    @staticmethod
+    def _n_coeff(inputs):
+        """SH coefficient count the node will fit, from the acquisition.
+
+        Reuses the node's own helpers on a gradient table built from the same
+        bval/bvec files the node reads, so the estimator and the node can never
+        disagree on the adaptive ``sh_order_max``.
+        """
+        from dipy.core.gradients import gradient_table
+        from dipy.io.gradients import read_bvals_bvecs
+        from swane.nipype_pipeline.nodes.DipyCsdFit import (
+            n_directions_from_gtab,
+            sh_order_for_directions,
+        )
+
+        bvals, bvecs = read_bvals_bvecs(inputs.bval, inputs.bvec)
+        gtab = gradient_table(bvals, bvecs=bvecs)
+        sh_order = sh_order_for_directions(n_directions_from_gtab(gtab))
+        return (sh_order + 1) * (sh_order + 2) // 2
+
+    @staticmethod
+    def _declared_workers(inputs):
+        """The pool size the workflow asked for (the ladder's top rung)."""
+        if isdefined(getattr(inputs, "num_threads", None)):
+            return max(1, int(inputs.num_threads))
+        return 1
+
+    def per_voxel_bytes(self, n_coeff):
+        """Bytes one full-volume copy of the output arrays costs per voxel."""
+        return self.PEAK_BYTES_PER_VOXEL + self.SH_BYTES_PER_COEFF * int(n_coeff)
+
+    def estimate_gb(self, voxels, volumes, n_coeff, procs):
+        """Peak RSS of the whole process tree at ``procs`` workers."""
+        procs = max(1, int(procs))
+        per_voxel = self.per_voxel_bytes(n_coeff) / 1024**3
+        data_gb = self.DATA_BYTES_PER_VOXEL_VOLUME * voxels * volumes / 1024**3
+
+        if procs == 1:
+            total = self.OVERHEAD_GB + data_gb + self.SERIAL_COPIES * per_voxel * voxels
+        else:
+            total = (
+                self.OVERHEAD_GB
+                + data_gb
+                + self.PARALLEL_COPIES * per_voxel * voxels
+                + per_voxel * voxels / procs
+                + procs * self.SPAWN_GB_PER_WORKER
+            )
+        return float(self.clamp(total, self.min_gb, None))
+
+    def bottom_rung_gb(self, voxels, volumes, n_coeff):
+        """The estimate at the bottom of the ladder (the serial branch)."""
+        return self.estimate_gb(voxels, volumes, n_coeff, 1)
+
+    def best_procs_for_budget(self, voxels, volumes, n_coeff, ram_budget_gb, declared):
+        """The largest worker count whose estimate fits ``ram_budget_gb``.
+
+        The estimate is not monotone in ``P``, so this scans every rung from
+        ``declared`` down to 1 rather than closing the form or halving: a budget
+        can admit ``P=4`` and refuse ``P=2``, and stopping at the first failure
+        on the way down would discard a rung that fits. Returns 1 (the serial
+        branch) when nothing fits -- the caller reports that as an exhausted
+        ladder.
+        """
+        declared = max(1, int(declared))
+        for procs in range(declared, 0, -1):
+            if self.estimate_gb(voxels, volumes, n_coeff, procs) <= ram_budget_gb:
+                return procs
+        return 1
+
+    def __call__(self, inputs):
+        """One-way estimate at the declared (untuned) worker count."""
+        voxels, volumes = self._shape(inputs)
+        n_coeff = self._n_coeff(inputs)
+        procs = self._declared_workers(inputs)
+        mem_gb = self.estimate_gb(voxels, volumes, n_coeff, procs)
+        return mem_gb, (
+            "voxels=%d, volumes=%d, coeff=%d, workers=%d (untuned), "
+            "estimated RAM=%.2f GB" % (voxels, volumes, n_coeff, procs, mem_gb)
+        )
+
+    def negotiate(self, inputs, ram_budget_gb):
+        """Reserve RAM and tune the worker count to the budget.
+
+        Returns the largest worker count that fits. When even the serial rung
+        exceeds the budget it is returned anyway, and said so in the debug
+        trace: the generation-time RAM gate is what guarantees a permitted host
+        can run the bottom rung, so refusing here would turn a tight fit into a
+        dead workflow instead of a slow one.
+        """
+        from swane.patches.nipype_patches import RamPlan
+
+        voxels, volumes = self._shape(inputs)
+        n_coeff = self._n_coeff(inputs)
+        declared = self._declared_workers(inputs)
+
+        chosen = self.best_procs_for_budget(
+            voxels, volumes, n_coeff, ram_budget_gb, declared
+        )
+        mem_gb = self.estimate_gb(voxels, volumes, n_coeff, chosen)
+        exhausted = mem_gb > ram_budget_gb
+
+        debug = (
+            "voxels=%d, volumes=%d, coeff=%d, workers %d -> %d, budget=%.2f GB, "
+            "estimated RAM=%.2f GB (%s branch)"
+            % (
+                voxels,
+                volumes,
+                n_coeff,
+                declared,
+                chosen,
+                ram_budget_gb,
+                mem_gb,
+                "serial" if chosen == 1 else "parallel",
+            )
+        )
+        if exhausted:
+            debug += " (ladder exhausted: serial rung still exceeds the budget)"
+
+        return RamPlan(
+            mem_gb=mem_gb,
+            tuned_params={"num_threads": chosen},
+            n_procs=chosen,
+            debug_str=debug,
+        )

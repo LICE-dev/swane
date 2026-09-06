@@ -150,6 +150,16 @@ class DipyCsdFit(BaseInterface):
                 mask=mask_data,
                 sh_order_max=sh_order,
                 return_sh=True,
+                # dipy defaults to npeaks=5 and allocates, for every voxel of
+                # the volume, peak_dirs (5,3) f64 + peak_values (5) f64 +
+                # peak_indices (5) i32 + qa (5) f64 = 228 B/voxel -- and the
+                # parallel path holds three full-volume copies of those (the
+                # pooled chunk results, the memmaps they are written into, and
+                # the arrays they are read back as). This node saves only
+                # shm_coeff, which is np.dot(odf, invB) and does not depend on
+                # npeaks; peak_directions is called without it, so a higher
+                # npeaks buys no speed either. Pinning it to 1 is free RAM.
+                npeaks=1,
                 parallel=num_procs > 1,
                 num_processes=num_procs,
             )

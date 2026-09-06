@@ -36,7 +36,7 @@
 - dipy_crop [DwiCrop] mem_gb=1 n_procs=1
     num_threads = 1
     out_file = 'crop_dti.nii.gz'
-- dipy_csd [DipyCsdFit] mem_gb=4 n_procs=1
+- dipy_csd [DipyCsdFit] mem_gb=4.0 n_procs=1
     num_threads = 1
 - dipy_denoise [DipyDenoise] mem_gb=1 n_procs=1
     num_threads = 1
