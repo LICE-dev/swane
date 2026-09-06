@@ -192,3 +192,108 @@ class TestDipyCsdFitThreadPinning:
         # env restored to its (absent) prior state
         assert OMP_THREADS_VAR not in os.environ
         assert OPENBLAS_THREADS_VAR not in os.environ
+
+
+class TestDipyCsdFitNpeaks:
+    """``npeaks`` is pinned to 1 because the node never saves the peaks.
+
+    dipy's ``peaks_from_model`` defaults to ``npeaks=5`` and allocates, for
+    every voxel of the volume, ``peak_dirs (5,3) f64`` + ``peak_values (5) f64``
+    + ``peak_indices (5) i32`` + ``qa (5) f64`` = 228 B/voxel -- and the parallel
+    path holds three full-volume copies of those (the pooled chunk results, the
+    memmaps they are written into, and the arrays they are read back as). The
+    node writes only ``shm_coeff``, which comes from ``np.dot(odf, invB)`` and is
+    independent of ``npeaks``; ``peak_directions`` is called without it, so a
+    higher ``npeaks`` buys no speed either. Pinning it to 1 is therefore free
+    RAM, and these tests hold both halves of that claim.
+    """
+
+    def test_node_asks_dipy_for_a_single_peak(self, workspace, make_nifti, monkeypatch):
+        import dipy.direction as direction_module
+        import dipy.reconst.csdeconv as csd_module
+
+        n_dirs, n_b0 = 30, 1
+        gtab, bvals, bvecs = _gtab(n_directions=n_dirs, n_b0=n_b0)
+        bval, bvec = _gtab_files(workspace, bvals, bvecs)
+        shape = (4, 4, 4)
+        data = np.ones(shape + (n_dirs + n_b0,), dtype=np.float32) * 100
+        in_file = make_nifti("dwi.nii.gz", data=data)
+        mask_file = make_nifti("mask.nii.gz", data=np.ones(shape, dtype=np.float32))
+
+        seen = {}
+
+        def _fake_response(gt, dt, **kwargs):
+            return (np.array([0.0015, 0.0003, 0.0003]), 100.0), 0.2
+
+        def _fake_peaks(model, dt, sphere, **kwargs):
+            seen["npeaks"] = kwargs.get("npeaks")
+
+            class _PAM:
+                pass
+
+            pam = _PAM()
+            n_coeff = _coeff_count(kwargs.get("sh_order_max"))
+            pam.shm_coeff = np.zeros(dt.shape[:-1] + (n_coeff,), dtype=np.float32)
+            return pam
+
+        monkeypatch.setattr(csd_module, "auto_response_ssst", _fake_response)
+        monkeypatch.setattr(direction_module, "peaks_from_model", _fake_peaks)
+
+        node = DipyCsdFit()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.mask = mask_file
+        node.run()
+
+        assert seen["npeaks"] == 1
+
+    def test_shm_coeff_is_bitwise_identical_to_the_dipy_default(
+        self, workspace, make_nifti, monkeypatch
+    ):
+        """The saved output does not change when ``npeaks`` does.
+
+        Runs the node twice on the same tiny volume through the real dipy path
+        -- once as shipped (``npeaks=1``) and once with ``peaks_from_model``
+        wrapped to force dipy's default ``npeaks=5`` -- and requires the two
+        written SH-coefficient images to agree bit for bit. Comparing node
+        against node keeps ``npeaks`` the only variable: the gradient table,
+        the response fit and the NIfTI write path are shared.
+        """
+        from dipy.sims.voxel import single_tensor
+        import dipy.direction as direction_module
+
+        n_dirs, n_b0 = 30, 2
+        gtab, bvals, bvecs = _gtab(n_directions=n_dirs, n_b0=n_b0)
+        bval, bvec = _gtab_files(workspace, bvals, bvecs)
+
+        sig = single_tensor(gtab, S0=100.0, evals=np.array([0.0015, 0.0003, 0.0003]))
+        shape = (4, 4, 4)
+        rng = np.random.default_rng(7)
+        data = np.tile(sig, shape + (1,)) * rng.uniform(0.8, 1.2, shape + (1,))
+        in_file = make_nifti("dwi.nii.gz", data=data.astype(np.float32))
+        mask_file = make_nifti("mask.nii.gz", data=np.ones(shape, dtype=np.float32))
+
+        def _run(out_name):
+            node = DipyCsdFit()
+            node.inputs.in_file = in_file
+            node.inputs.bval = bval
+            node.inputs.bvec = bvec
+            node.inputs.mask = mask_file
+            node.inputs.out_file = out_name
+            node.run()
+            return nib.load(node._list_outputs()["shm_coeff"]).get_fdata()
+
+        shipped = _run("shipped.nii.gz")
+
+        real_peaks = direction_module.peaks_from_model
+
+        def _five_peaks(*args, **kwargs):
+            assert kwargs["npeaks"] == 1  # the node asked for the tuned value
+            kwargs["npeaks"] = 5  # dipy's default, the only thing changed
+            return real_peaks(*args, **kwargs)
+
+        monkeypatch.setattr(direction_module, "peaks_from_model", _five_peaks)
+        dipy_default = _run("dipy_default.nii.gz")
+
+        assert np.array_equal(shipped, dipy_default)

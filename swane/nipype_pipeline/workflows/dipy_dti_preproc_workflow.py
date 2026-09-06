@@ -24,6 +24,7 @@ from swane.nipype_pipeline.nodes.DipyTissueClassifier import DipyTissueClassifie
 from swane.nipype_pipeline.nodes.DipyTracking import DipyTracking
 from swane.nipype_pipeline.nodes.DipyAtlasSLR import DipyAtlasSLR
 from swane.nipype_pipeline.nodes.ram_estimators import (
+    DipyCsdRamEstimator,
     DipyMotionRamEstimator,
     DipyTissueRamEstimator,
     DipyTrackingRamEstimator,
@@ -42,18 +43,21 @@ from swane.nipype_pipeline.nodes.utils import (
 # 144x144x60), taking the max across the two. Measured with the shipped node code
 # -- brain-bbox-cropped probabilistic tracking and rigid-only motion -- at
 # num_threads=4 for the parallel nodes. Each remaining node's RAM tracks an
-# input-size regressor (streamline count for slr, 4D size for denoise, spatial
-# voxels x SH coeffs for csd); the full table lives in the spec Measurements
-# section and the dipy RAM report.
+# input-size regressor (streamline count for slr, 4D size for denoise and bias);
+# the full table lives in the spec Measurements section and the dipy RAM report.
 #
-# motion, tracking and tissue are deliberately absent: their reservations are set
-# at scheduling time by estimators. DipyMotionRamEstimator prices the parent 4D
-# buffers and the pool workers separately and walks the worker count down;
-# DipyTrackingRamEstimator prices the incompressible full-FOV working set and
-# walks seed_buffer_fraction (then trx_chunk_size) down to fit the RAM budget.
-# DipyTissueRamEstimator is classic (one-way): the HMRF peak is linear in T1
-# voxels and the node pins OMP=1 with no thread lever (measured thread-invariant,
-# 2026-09-06), so it reserves RAM from the voxel count and tunes nothing.
+# motion, tracking, tissue and csd are deliberately absent: their reservations
+# are set at scheduling time by estimators. DipyMotionRamEstimator prices the
+# parent 4D buffers and the pool workers separately and walks the worker count
+# down; DipyTrackingRamEstimator prices the incompressible full-FOV working set
+# and walks seed_buffer_fraction (then trx_chunk_size) down to fit the RAM
+# budget. DipyTissueRamEstimator is classic (one-way): the HMRF peak is linear
+# in T1 voxels and the node pins OMP=1 with no thread lever (measured
+# thread-invariant, 2026-09-06), so it reserves RAM from the voxel count and
+# tunes nothing. DipyCsdRamEstimator models peaks_from_model's two branches --
+# the parallel one holds three full-volume copies of the per-voxel output arrays
+# against the serial one's single copy -- and scans the worker count down to the
+# serial rung.
 #
 # Correction (measured 2026-09-06, same isolated tree-peak method, num_threads=4):
 # the Phase-1bis float32 buffers (C2.3) did NOT drop motion's peak to ~3.7 GB as
@@ -67,7 +71,6 @@ _MEM_GB = {
     "denoise": 1,  # subj1 1.11 / subj2 1.37
     "bias": 1,  # subj1 0.85 / subj2 0.99
     "tensorfit": 1,  # subj1 0.89 / subj2 1.16
-    "csd": 4,  # subj1 3.57 / subj2 3.05
     "ras": 1,  # subj1 0.11 / subj2 0.11 (min 1 GB reservation)
     "slr": 5,  # subj1 4.75 / subj2 0.98 -- scales with streamline count
 }
@@ -372,7 +375,17 @@ def dipy_dti_preproc_workflow(
 
         # -- CSD fODF -------------------------------------------------------- #
         csd = Node(DipyCsdFit(), name="dipy_csd")
-        csd._mem_gb = _MEM_GB["csd"]
+        # RAM is negotiated at scheduling time from the real input: the estimate
+        # is driven by the input sequence's voxel count (which sizes both the 4D
+        # buffer and every per-voxel output array) and the adaptive SH order, and
+        # dipy's peaks_from_model has two structurally different branches --
+        # parallel holds three full-volume copies of those arrays, serial holds
+        # one -- so the estimator scans the worker count down to the serial rung
+        # rather than halving. The static value below is only the fail-safe used
+        # when the negotiation cannot run (see
+        # MonitoredMultiProcPlugin._negotiate_ram).
+        csd._mem_gb = DipyCsdRamEstimator.STATIC_FALLBACK_GB
+        csd.ram_estimator = DipyCsdRamEstimator()
         csd.inputs.num_threads = parallel_cpu
         workflow.connect(bias, "out_file", csd, "in_file")
         workflow.connect(motion, "out_bval", csd, "bval")
