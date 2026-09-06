@@ -29,6 +29,7 @@ from swane.nipype_pipeline.nodes.DipyTracking import (
     WM_PVE_SEED_THRESHOLD,
     FA_STOP_THRESHOLD,
     SEED_BUFFER_FRACTION,
+    TRX_CHUNK_SIZE,
     BBOX_PAD_VOXELS,
     MIN_LEN_MM,
     MAX_LEN_MM,
@@ -702,3 +703,92 @@ class TestThreadPinning:
         assert seen["max_len"] == MAX_LEN_MM
         assert OMP_THREADS_VAR not in os.environ
         assert OPENBLAS_THREADS_VAR not in os.environ
+
+
+# --------------------------------------------------------------------------- #
+# E2b: seed_buffer_fraction and trx_chunk_size become tunable *traits* so the
+# schedule-time RAM negotiator (DipyTrackingRamEstimator) can walk them down to
+# fit the RAM budget. They are quality-neutral (output bit-identical at any
+# rung, proven by the heavy equivalence test) and therefore nohash, exactly as
+# num_threads is: the negotiator mutates them at scheduling time and they must
+# not invalidate the node's cache. The module constants stay as the defaults.
+# --------------------------------------------------------------------------- #
+class TestTunableRamTraits:
+    def test_seed_buffer_fraction_is_a_nohash_trait_defaulting_to_the_constant(self):
+        node = DipyTracking()
+        assert node.inputs.seed_buffer_fraction == SEED_BUFFER_FRACTION
+        assert node.inputs.trait("seed_buffer_fraction").nohash
+
+    def test_seed_buffer_fraction_range_is_the_negotiated_span(self):
+        """The ladder walks the fraction over [0.3, 1.0] (user decision,
+        2026-09-06): supersede up to dipy's 1.0 when budget allows, down to a
+        0.3 floor under pressure."""
+        node = DipyTracking()
+        for bad in (0.29, 1.01):
+            with pytest.raises(Exception):
+                node.inputs.seed_buffer_fraction = bad
+        for good in (0.3, 0.7, 1.0):
+            node.inputs.seed_buffer_fraction = good
+            assert node.inputs.seed_buffer_fraction == good
+
+    def test_trx_chunk_size_is_a_nohash_trait_defaulting_to_the_constant(self):
+        node = DipyTracking()
+        assert node.inputs.trx_chunk_size == TRX_CHUNK_SIZE
+        assert node.inputs.trait("trx_chunk_size").nohash
+
+    def test_trx_chunk_size_range_floors_at_1000(self):
+        node = DipyTracking()
+        for bad in (999, 10001):
+            with pytest.raises(Exception):
+                node.inputs.trx_chunk_size = bad
+        for good in (1000, 5000, 10000):
+            node.inputs.trx_chunk_size = good
+            assert node.inputs.trx_chunk_size == good
+
+    def test_run_reads_the_tuned_values_not_the_module_constants(
+        self, workspace, tracking_inputs, monkeypatch
+    ):
+        """_run_interface must pass the *trait* values to the dipy calls, so a
+        negotiated tuning actually takes effect. Setting values that differ
+        from the module constants and asserting they reach the tracker and the
+        .trx writer is what proves the constants are no longer load-bearing."""
+        seen = {}
+
+        def _capture_track(seed_positions, sc, affine, **kwargs):
+            seen["seed_buffer_fraction"] = kwargs.get("seed_buffer_fraction")
+            return [np.array([[1.0, 1.0, 1.0], [1.0, 1.0, 2.0]])]
+
+        import dipy.tracking.tracker as tracker
+
+        monkeypatch.setattr(tracker, "probabilistic_tracking", _capture_track)
+
+        import trx.trx_file_memmap as trx_mod
+
+        real_from_lazy = trx_mod.TrxFile.from_lazy_tractogram
+
+        def _capture_chunk(obj, reference, *args, **kwargs):
+            seen["chunk_size"] = kwargs.get("chunk_size")
+            return real_from_lazy(obj, reference, *args, **kwargs)
+
+        monkeypatch.setattr(
+            trx_mod.TrxFile,
+            "from_lazy_tractogram",
+            staticmethod(_capture_chunk),
+        )
+
+        tuned_fraction = 0.4
+        tuned_chunk = 2000
+        assert tuned_fraction != SEED_BUFFER_FRACTION
+        assert tuned_chunk != TRX_CHUNK_SIZE
+
+        node = _configure(
+            DipyTracking(),
+            tracking_inputs,
+            seed_density=1,
+            seed_buffer_fraction=tuned_fraction,
+            trx_chunk_size=tuned_chunk,
+        )
+        node.run()
+
+        assert seen["seed_buffer_fraction"] == tuned_fraction
+        assert seen["chunk_size"] == tuned_chunk
