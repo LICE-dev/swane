@@ -80,9 +80,10 @@ a segmentation.
   local FSL 6.x `xtract_data/HUMAN` directory.
 - The current pipeline is **probabilistic** (bedpostx estimates distributions on
   phi/theta; probtrackx2 samples them).
-- Slicer here has no SlicerDMRI extension, so `.trk` is not natively loadable —
-  but SWANe already installs Slicer extensions non-interactively via
-  `DependencyManager.SLICER_MODULES` and `slicer_script_module_install.py`.
+- Slicer here has no SlicerDMRI extension, so `.trk` is not natively loadable.
+  (SWANe does install Slicer extensions non-interactively via
+  `DependencyManager.SLICER_MODULES` and `slicer_script_module_install.py`, but
+  §7 sidesteps the question by writing `.vtp`, which Slicer reads natively.)
 
 ## Decisions
 
@@ -110,7 +111,7 @@ resets every configuration, and the new default simply applies.
 Two consequences follow from that and must be stated in the release notes rather
 than discovered: the 649 MB atlas will be fetched on the first DTI run of
 essentially every user, and DTI results change format from thresholded `.nii.gz`
-density maps to `.trk` bundles. Re-running an old subject will not reproduce its
+density maps to `.vtp` bundles. Re-running an old subject will not reproduce its
 previous output.
 
 ### 2. Preference gating in the DTI section
@@ -262,17 +263,22 @@ Results in `<Result_DIR>/dti/`:
 | Engine | Per tract and side |
 |---|---|
 | FSL | `r-<tract>_<side>.nii.gz` + `r-<tract>_<side>_waytotal` *(unchanged)* |
-| dipy | `r-<tract>_<side>.trk` |
+| dipy | `r-<tract>_<side>.vtp` |
 
-`SlicerDMRI` is added to `DependencyManager.SLICER_MODULES`, reusing the existing
-non-interactive installer. `main_tract` gains a branch: `.trk` present → load as
-fiber bundles and skip thresholding entirely; `.nii.gz` present → current
+Both formats are written **in the reference space**. The dipy bundles are VTK
+PolyData (`.vtp`), which 3D Slicer reads natively as a model, so **no Slicer
+extension is involved**: `DependencyManager.SLICER_MODULES` is left untouched
+(no `SlicerDMRI`). `main_tract` gains a branch: `.vtp` present → load as a fiber
+bundle model and skip thresholding entirely; `.nii.gz` present → current
 behaviour, unchanged.
 
-An earlier draft proposed a hand-written VTK PolyData writer, because dipy's
-`save_vtk_streamlines` is a tripwire requiring `fury`/VTK (~100 MB). That was
-**withdrawn**: SWANe already had the extension-install mechanism, which is
-strictly better.
+An earlier draft wrote `.trk` and added `SlicerDMRI` to `SLICER_MODULES` to read
+it. That was **withdrawn** (user decision, 2026-09-07): a natively readable
+format removes the extension dependency altogether. Writing side: dipy's
+`save_tractogram` accepts `.vtp`, but that path goes through
+`dipy.io.vtk`, whose `fury` (>=0.10.0, <1.0.0) is an `optional_package` — the
+producer task must either add `fury` to `setup.py` or write the PolyData with
+`vtk` directly (`vtk` is already present transitively).
 
 ### 8. Dependencies, atlas, licensing
 
@@ -414,7 +420,7 @@ start before phase 1 has been looked at on real data:
   the `MainWorkflow` branch, and matrix snapshots. Deliverable: a global
   tractogram for both oracle subjects.
 - **Phase 2** — `DipyRecoBundles`, `dipy_bundle_workflow`, the fornix split, the
-  Slicer/SlicerDMRI branch, and the result contract.
+  Slicer branch, and the result contract.
 - **Phase 3** — phantom v9 and the prerelease sweep, which can only assert bundle
   recovery once phase 2 exists.
 

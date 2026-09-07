@@ -1166,15 +1166,64 @@ def tract_model(
     slicer.mrmlScene.RemoveNode(tract_node)
 
 
+def tract_bundle(dti_dir: str, tract: dict, side: str):
+    """
+    Load a single dipy fiber bundle as a 3D model.
+
+    The dipy tractography engine writes each recognized bundle as VTK PolyData
+    (``r-<tract>_<side>.vtp``), a format 3D Slicer reads natively as a model,
+    already resampled in the reference space — so the file is loaded as-is,
+    with no transform and no thresholding. This is the counterpart of
+    :func:`tract_model`, which handles the FSL probabilistic maps.
+
+    Parameters
+    ----------
+    dti_dir : str
+        Directory containing DTI tractography outputs.
+
+    tract : dict
+        Dictionary describing the tract with the following keys:
+            - 'name' (str): tract name (e.g. 'cst', 'af')
+            - 'color' (list): RGB color in range [0-1]
+
+    side : str
+        Hemisphere side identifier:
+            - 'lh' for left hemisphere
+            - 'rh' for right hemisphere
+
+    Returns
+    -------
+    None
+    """
+    bundle_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.vtp")
+    if not os.path.exists(bundle_file):
+        print(f"SLICERLOADER: Bundle file not found: {bundle_file}")
+        return
+
+    print(f"SLICERLOADER: Loading tract bundle '{tract['name']}' ({side.upper()})")
+
+    model_node = slicer.util.loadModel(bundle_file)
+    model_node.SetName(f"{tract['name']}_{side}")
+    model_node.CreateDefaultDisplayNodes()
+
+    display_node = model_node.GetDisplayNode()
+    display_node.SetColor(*tract["color"])
+    # Show the bundle cross-section in the slice views too, like the
+    # segmentations built from the FSL maps.
+    display_node.SetVisibility2D(True)
+
+
 def main_tract(dti_dir: str, scene_dir: str, dti_threshold: float = 0.0035):
     """
     Create DTI tractography segmentations and export them as 3D models.
 
-    For each hemisphere (LH, RH), this function:
-    - Creates a segmentation node
-    - Loads tract probability maps
-    - Thresholds them to generate segments
-    - Saves the resulting segmentation to disk
+    For each hemisphere (LH, RH) and each tract, this function branches on the
+    result format:
+    - ``r-<tract>_<side>.vtp`` (dipy): loaded as a fiber bundle model, in the
+      reference space, with no thresholding.
+    - ``r-<tract>_<side>.nii.gz`` (FSL): loaded as a probability map,
+      thresholded into a segment of a per-hemisphere segmentation node, which
+      is then saved to disk.
 
     Parameters
     ----------
@@ -1204,13 +1253,26 @@ def main_tract(dti_dir: str, scene_dir: str, dti_threshold: float = 0.0035):
     print("SLICERLOADER: Creating DTI tract 3D models (this may take a few minutes)")
 
     for side in sides:
+        # Branch per tract on the result format: dipy writes a .vtp bundle,
+        # FSL a .nii.gz probability map. Only the latter needs a segmentation.
+        volume_tracts = []
+        for tract in tracts:
+            if os.path.exists(os.path.join(dti_dir, f"r-{tract['name']}_{side}.vtp")):
+                tract_bundle(dti_dir=dti_dir, tract=tract, side=side)
+            else:
+                volume_tracts.append(tract)
+
+        # Every tract of this hemisphere came from dipy: nothing to threshold.
+        if not volume_tracts:
+            continue
+
         # Create a segmentation node for the current hemisphere
         segmentation_node = slicer.mrmlScene.AddNewNodeByClass(
             "vtkMRMLSegmentationNode", f"tracts_{side}"
         )
         segmentation_node.CreateDefaultDisplayNodes()
 
-        for tract in tracts:
+        for tract in volume_tracts:
             tract_model(
                 segmentation_node=segmentation_node,
                 dti_dir=dti_dir,
