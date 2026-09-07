@@ -4,15 +4,15 @@ Fornix lateralisation: the atlas's ``fx`` special case (spec section 3).
 
 Every other bilateral tract the HCP842 atlas ships already carries separate
 ``<NAME>_L``/``<NAME>_R`` model files, so :class:`~swane.nipype_pipeline.nodes.
-DipyRecoBundles.DipyRecoBundles` recognises each side with its own call. The
-fornix is the one exception: the atlas ships both sides combined in a single
+DipyRecoBundles.DipyRecoBundlesRecognize` recognises each side with its own call.
+The fornix is the one exception: the atlas ships both sides combined in a single
 ``F_L_R.trk``.
 
 This module lateralises that one model bundle -- **once, on the atlas's own
 file**, not per subject -- by the sign of x, producing ``F_L.trk``/``F_R.trk``
 cached beside it in the atlas's ``bundles`` directory. Every subject's fornix
 recognition then reuses those two files exactly like any other named atlas
-bundle: ``DipyRecoBundles`` needs no fornix-specific code at all, and the
+bundle: ``DipyRecoBundlesRecognize`` needs no fornix-specific code at all, and the
 lateralisation cost (a plain array split, not a re-registration) is paid at
 most once per shared atlas directory, never once per subject.
 
@@ -24,7 +24,7 @@ tractogram, transform or diffusion-space data is ever involved: the fornix
 split is purely a one-time preparation of the shared atlas resource, so there
 is no "wrong subject space" for it to run in by construction. ``load_tractogram``
 converts to RASMM on load (mirroring the explicit ``to_rasmm()`` calls already
-used by :class:`DipyRecoBundles.DipyRecoBundles`/``DipyAtlasSLR``), so the split
+used by :class:`DipyRecoBundles.DipyRecoBundlesRecognize`/``DipyAtlasSLR``), so the split
 reads true anatomical world coordinates rather than a file's raw voxel storage
 order.
 
@@ -195,7 +195,7 @@ class DipyFornixSplitOutputSpec(TraitedSpec):
     atlas_dir = Directory(
         desc="the same atlas_dir, passed through once F_L.trk/F_R.trk exist "
         "-- a bundle workflow depends on this output to order two ordinary "
-        "DipyRecoBundles recognitions (model_bundle_name='F_L'/'F_R') after it"
+        "DipyRecoBundlesRecognize recognitions (model_bundle_name='F_L'/'F_R') after it"
     )
 
 
@@ -206,7 +206,7 @@ class DipyFornixSplit(BaseInterface):
     exist, splitting the shipped ``F_L_R.trk`` by sign of x the first time any
     subject needs it (see module docstring). Downstream, the fornix is
     recognised exactly like any other bilateral tract: two ordinary
-    ``DipyRecoBundles`` nodes with ``model_bundle_name='F_L'``/``'F_R'``,
+    ``DipyRecoBundlesRecognize`` nodes with ``model_bundle_name='F_L'``/``'F_R'``,
     depending on this node's ``atlas_dir`` output to run after it.
 
     """
