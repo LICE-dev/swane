@@ -132,6 +132,51 @@ class TestDwiBiasCorrectionScientificContract:
         assert np.allclose(calls["image"], vols[2], atol=1e-5)
 
 
+class TestDwiBiasCorrectionOutputDtype:
+    """The bias-divided volumes are a float computation; saving them back
+    through the raw DWI's int16 header quantizes the correction. The node must
+    write float32 on disk (the field is already saved as float)."""
+
+    def _make_int16_dwi(self, tmp_path, data):
+        img = nib.Nifti1Image(np.asarray(data).astype(np.int16), np.eye(4))
+        img.header.set_data_dtype(np.int16)
+        path = str(tmp_path / "raw_int16_dwi.nii.gz")
+        nib.save(img, path)
+        return path
+
+    def test_output_is_float32_even_from_int16_source_header(
+        self, workspace, make_nifti, monkeypatch
+    ):
+        rng = np.random.default_rng(5)
+        shape = (5, 5, 5)
+        data = np.stack(
+            [(rng.random(shape) * 300 + 100).astype(np.int16) for _ in range(3)],
+            axis=-1,
+        )
+        in_file = self._make_int16_dwi(workspace, data)
+        bval = _make_bval(workspace, [0, 1000, 1000])
+
+        # Non-uniform field so the corrected values are genuinely non-integer.
+        field = (rng.random(shape).astype(np.float32) * 0.5 + 0.75)
+        calls = {}
+        _install_n4_spy(monkeypatch, field, calls)
+
+        node = DwiBiasCorrection()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.run()
+
+        outputs = node._list_outputs()
+        out_img = nib.load(outputs["out_file"])
+        assert out_img.header.get_data_dtype() == np.dtype(np.float32)
+
+        # The division survives on disk (int16 would have quantized it).
+        expected = data.astype(np.float32) / field[..., np.newaxis]
+        assert np.allclose(
+            out_img.get_fdata(dtype=np.float32), expected, atol=1e-4
+        )
+
+
 class TestDwiBiasCorrectionThreadPinning:
     def test_omp_openblas_itk_pinned_during_run_then_restored(
         self, workspace, make_nifti, monkeypatch

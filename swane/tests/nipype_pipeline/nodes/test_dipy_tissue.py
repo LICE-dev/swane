@@ -81,6 +81,38 @@ class TestDipyTissueClassifierContract:
             assert os.path.exists(path)
 
 
+class TestDipyTissueClassifierKeepsFloat64:
+    """Unlike denoise/tensor/CSD, this node must NOT load float32: dipy's HMRF
+    is a typed-double Cython kernel (segment/mrf.pyx) that rejects float32 with
+    'Buffer dtype mismatch, expected double'. This guards that dipy constraint
+    so a future float32 sweep does not silently break the classifier."""
+
+    def test_data_passed_to_classify_is_float64(
+        self, workspace, make_nifti, monkeypatch
+    ):
+        import dipy.segment.tissue as tissue_module
+
+        image, _ = _three_tissue_phantom(shape=(8, 8, 8))
+        in_file = make_nifti("t1.nii.gz", data=image)
+
+        seen = {}
+        real_classify = tissue_module.TissueClassifierHMRF.classify
+
+        def _spy_classify(self, image_arg, *args, **kwargs):
+            seen["dtype"] = np.asarray(image_arg).dtype
+            return real_classify(self, image_arg, *args, **kwargs)
+
+        monkeypatch.setattr(
+            tissue_module.TissueClassifierHMRF, "classify", _spy_classify
+        )
+
+        node = DipyTissueClassifier()
+        node.inputs.in_file = in_file
+        node.run()
+
+        assert seen["dtype"] == np.dtype(np.float64)
+
+
 class TestDipyTissueClassifierThreadPinning:
     def test_omp_pinned_to_one_during_classify_then_restored(
         self, workspace, make_nifti, monkeypatch

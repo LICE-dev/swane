@@ -69,6 +69,11 @@ class DipyTissueClassifier(BaseInterface):
         from dipy.segment import tissue
 
         in_nii = nib.load(self.inputs.in_file)
+        # Kept float64 (NOT float32 like the other dipy nodes): dipy's HMRF
+        # classifier is a typed-double Cython kernel (segment/mrf.pyx) that
+        # rejects float32 with "Buffer dtype mismatch, expected 'double'". So
+        # unlike denoise/tensor/CSD this node cannot load float32 -- a dipy
+        # constraint, confirmed 2026-09-07.
         data = in_nii.get_fdata()
 
         previous_omp = os.environ.get(OMP_THREADS_VAR)

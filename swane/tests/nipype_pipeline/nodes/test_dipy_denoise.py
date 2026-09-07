@@ -93,6 +93,96 @@ class TestDipyDenoisePreservesGeometry:
         assert np.allclose(out_img.affine, affine)
 
 
+class TestDipyDenoiseOutputDtype:
+    """The nlmeans output is a float computation; saving it back through the
+    raw DWI's int16-with-scaling header quantizes every voxel. The node must
+    write float32 on disk so the correction survives losslessly."""
+
+    def _make_int16_dwi(self, tmp_path, data):
+        """Write ``data`` as an int16-on-disk 4D NIfTI (like a raw dcm2niix DWI)."""
+        img = nib.Nifti1Image(np.asarray(data).astype(np.int16), np.eye(4))
+        img.header.set_data_dtype(np.int16)
+        path = str(tmp_path / "raw_int16_dwi.nii.gz")
+        nib.save(img, path)
+        return path
+
+    def test_output_is_float32_even_from_int16_source_header(
+        self, workspace, make_nifti
+    ):
+        rng = np.random.default_rng(3)
+        data = (rng.random((6, 6, 6, 4)) * 200 + 50).astype(np.int16)
+        in_file = self._make_int16_dwi(workspace, data)
+        bval, bvec = _make_bval_bvec(workspace, n=4)
+
+        node = DipyDenoise()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.run()
+
+        out_img = nib.load(node._list_outputs()["out_file"])
+        assert out_img.header.get_data_dtype() == np.dtype(np.float32)
+
+    def test_float_correction_round_trips_losslessly(self, workspace, make_nifti):
+        """A float value that int16 rounding would destroy survives on disk."""
+        import dipy.denoise.nlmeans as nlmeans_module
+
+        rng = np.random.default_rng(4)
+        data = (rng.random((5, 5, 5, 3)) * 100).astype(np.int16)
+        in_file = self._make_int16_dwi(workspace, data)
+        bval, bvec = _make_bval_bvec(workspace, n=3)
+
+        # Force a known non-integer denoised result so int16 quantization would
+        # be observable as a rounding error, not merely a dtype tag.
+        forced = (data.astype(np.float32) + 0.3333)
+
+        def _fake_nlmeans(arr, sigma, **kwargs):
+            return forced
+
+        import unittest.mock as mock
+
+        with mock.patch.object(nlmeans_module, "nlmeans", _fake_nlmeans):
+            node = DipyDenoise()
+            node.inputs.in_file = in_file
+            node.inputs.bval = bval
+            node.inputs.bvec = bvec
+            node.run()
+
+        out = nib.load(node._list_outputs()["out_file"]).get_fdata(dtype=np.float32)
+        assert np.allclose(out, forced, atol=1e-5)
+
+
+class TestDipyDenoiseLoadsFloat32:
+    """The node saves float32, and dipy's nlmeans computes in the input dtype,
+    so loading the DWI as float32 (rather than get_fdata's float64 default)
+    halves the working set with no precision the float32 output would keep."""
+
+    def test_array_passed_to_nlmeans_is_float32(
+        self, workspace, make_nifti, monkeypatch
+    ):
+        import dipy.denoise.nlmeans as nlmeans_module
+
+        data = np.random.rand(5, 5, 5, 3).astype(np.float32)
+        in_file = make_nifti("dwi.nii.gz", data=data)
+        bval, bvec = _make_bval_bvec(workspace, n=3)
+
+        seen = {}
+
+        def _spy(arr, sigma, **kwargs):
+            seen["dtype"] = arr.dtype
+            return arr
+
+        monkeypatch.setattr(nlmeans_module, "nlmeans", _spy)
+
+        node = DipyDenoise()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.run()
+
+        assert seen["dtype"] == np.dtype(np.float32)
+
+
 class TestDipyDenoiseThreadPinning:
     def test_omp_and_openblas_threads_pinned_during_run_then_restored(
         self, workspace, make_nifti, monkeypatch

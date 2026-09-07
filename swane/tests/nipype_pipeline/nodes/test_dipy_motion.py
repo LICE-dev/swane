@@ -495,6 +495,67 @@ class TestBvecReorientation:
             assert np.isclose(np.linalg.norm(out_bvec[i]), 1.0, atol=1e-6)
 
 
+class TestMotionOutputDtype:
+    """The registered volumes are a float computation; casting them back to the
+    raw DWI's int16 dtype quantizes every correction. The node must write
+    float32 on disk (bit-for-bit serial/parallel is unaffected: both paths save
+    the same float32 buffer)."""
+
+    def _make_int16_dwi(self, workspace, data):
+        img = nib.Nifti1Image(np.asarray(data).astype(np.int16), np.eye(4))
+        img.header.set_data_dtype(np.int16)
+        in_file = os.path.join(str(workspace), "raw_int16_dwi.nii.gz")
+        nib.save(img, in_file)
+        return in_file
+
+    def test_output_is_float32_even_from_int16_source_header(
+        self, workspace, monkeypatch
+    ):
+        # Five volumes (a non-square bvec table so FSL orientation is
+        # unambiguous): one b0 plus four unit diffusion directions.
+        bvals = [0, 1000, 1000, 1000, 1000]
+        bvecs = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [1.0, 1.0, 0.0],
+            ]
+        )
+        bvecs[1:] /= np.linalg.norm(bvecs[1:], axis=1, keepdims=True)
+        n_vols = len(bvals)
+        shape = (4, 4, 3)
+        rng = np.random.default_rng(7)
+        data = (rng.random(shape + (n_vols,)) * 300 + 100).astype(np.int16)
+        in_file = self._make_int16_dwi(workspace, data)
+        bval_path, bvec_path = _write_bval_bvec(workspace, bvals, bvecs)
+
+        # A known non-integer registered result: int16 would round it away.
+        registered = data.astype(np.float32) + 0.4
+        affine_array = np.tile(np.eye(4)[..., np.newaxis], (1, 1, n_vols))
+
+        def fake_motion(img, gtab_in, *args, **kwargs):
+            return nib.Nifti1Image(registered, np.eye(4)), affine_array
+
+        monkeypatch.setattr(motion_module, "_serial_motion_correction", fake_motion)
+
+        node = DipyMotionCorrection()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval_path
+        node.inputs.bvec = bvec_path
+        node.inputs.num_threads = 1
+        node.inputs.parallel = False
+        result = node.run()
+
+        out_img = nib.load(result.outputs.out_file)
+        assert out_img.header.get_data_dtype() == np.dtype(np.float32)
+        # The float correction survived (int16 rounding would show as ~0.4 err).
+        assert np.allclose(
+            out_img.get_fdata(dtype=np.float32), registered, atol=1e-4
+        )
+
+
 def rotation_to_affine(rotation):
     """Embed a 3x3 rotation into a 4x4 affine with zero translation."""
     aff = np.eye(4)

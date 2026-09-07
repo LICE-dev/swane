@@ -32,6 +32,41 @@ def _single_shell_gtab_files(tmp_path, n_directions=6):
     return str(bval_path), str(bvec_path), bvals, bvecs
 
 
+class TestDipyTensorFitLoadsFloat32:
+    """dipy's TensorModel upcasts to float64 internally, so loading the DWI as
+    float32 (rather than get_fdata's float64 default) is FA-lossless (~1e-7)
+    while halving the input buffer's RAM."""
+
+    def test_data_passed_to_fit_is_float32(self, workspace, make_nifti, monkeypatch):
+        from dipy.reconst import dti
+
+        shape = (5, 5, 5)
+        bval, bvec, bvals, _ = _single_shell_gtab_files(workspace)
+        data = (np.random.default_rng(1).random(shape + (len(bvals),)) * 100).astype(
+            np.float32
+        )
+        in_file = make_nifti("dwi.nii.gz", data=data)
+        mask_file = make_nifti("mask.nii.gz", data=np.ones(shape, dtype=np.float32))
+
+        seen = {}
+        real_fit = dti.TensorModel.fit
+
+        def _spy_fit(self, data_arg, **kwargs):
+            seen["dtype"] = np.asarray(data_arg).dtype
+            return real_fit(self, data_arg, **kwargs)
+
+        monkeypatch.setattr(dti.TensorModel, "fit", _spy_fit)
+
+        node = DipyTensorFit()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.mask = mask_file
+        node.run()
+
+        assert seen["dtype"] == np.dtype(np.float32)
+
+
 class TestDipyTensorFitContract:
     def test_fa_has_correct_shape_and_is_finite(self, workspace, make_nifti):
         shape = (6, 6, 6)

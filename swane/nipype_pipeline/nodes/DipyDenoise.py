@@ -11,6 +11,7 @@ for why MP-PCA is not.
 import os
 from os.path import abspath
 
+import numpy as np
 import nibabel as nib
 from nipype.interfaces.base import (
     traits,
@@ -60,7 +61,11 @@ class DipyDenoise(BaseInterface):
         out_file = self._gen_outfilename()
 
         in_nii = nib.load(self.inputs.in_file)
-        data = in_nii.get_fdata()
+        # Load float32 rather than get_fdata's float64 default: dipy's nlmeans
+        # computes in the input dtype, so float32 halves the working set and
+        # cuts wall time, with no precision the float32 output would keep (user
+        # decision, 2026-09-07 -- all dipy nodes load float32).
+        data = in_nii.get_fdata(dtype=np.float32)
 
         # bval/bvec carry no information nlmeans/estimate_sigma need; they are
         # accepted so this node's inputs line up with the other DWI
@@ -91,7 +96,17 @@ class DipyDenoise(BaseInterface):
                 else:
                     os.environ[var] = previous
 
-        nib.save(nib.Nifti1Image(denoised, in_nii.affine, in_nii.header), out_file)
+        # The nlmeans output is a float computation. The raw dcm2niix DWI this
+        # chain inherits its header from is int16, so reusing that header's
+        # on-disk dtype would quantize every denoised voxel back to integers
+        # (measured round-trip error up to ~0.1, ~76-99% of voxels altered).
+        # Write float32 instead -- lossless for the correction -- keeping the
+        # affine/orientation/zooms from the source header unchanged.
+        out_img = nib.Nifti1Image(
+            denoised.astype(np.float32), in_nii.affine, in_nii.header
+        )
+        out_img.header.set_data_dtype(np.float32)
+        nib.save(out_img, out_file)
 
         return runtime
 

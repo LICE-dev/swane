@@ -68,6 +68,24 @@ from swane.nipype_pipeline.nodes.utils import (
 # a ~5% saving, because the float32 buffers sit in the parent while the pool
 # workers dominate the peak. The dipy engine's RAM floor is re-derived jointly
 # at the end of Phase 2 from each estimator's bottom rung.
+#
+# E9 + float32-load (measured 2026-09-07, same isolated tree-peak method).
+# Two related 2026-09-07 changes: (1) denoise/motion/bias now WRITE float32 on
+# disk (fixing the int16-with-scaling precision loss), and (2) denoise/tensor/csd
+# now LOAD float32 (get_fdata(dtype=float32)) rather than the float64 default
+# (user decision -- computing/saving float64 only to approximate at save is
+# wasted RAM/time). The write change is peak-neutral (nodes held float64 in
+# memory regardless of the on-disk dtype); the load change LOWERS these peaks:
+# denoise 0.62 -> 0.40, tensorfit 0.64 -> 0.45, csd 0.56 -> 0.45 GB (subj2, -20
+# to -36%). So these 1 GB reservations stay comfortably conservative and are
+# left unchanged. The one estimator constant that moves is
+# DipyCsdRamEstimator.DATA_BYTES_PER_VOXEL_VOLUME (10 -> 8: float32 resident
+# input, was float64). motion's estimator (32 B/voxel x vol) stays conservative
+# (float32 save buffer replaces the old int16 one, adding no peak; motion still
+# loads float64 -- dipy's motion_correction controls that, and float32 on the
+# parallel path alone would break the serial-vs-parallel oracle). tissue stays
+# float64 (dipy's HMRF Cython kernel requires 'double'). So the dipy engine's
+# working set -- hence the floor input -- does not rise; it falls slightly.
 _MEM_GB = {
     "crop": 1,  # provisional, aligned with denoise; isolated per-node RSS TBD
     "denoise": 1,  # subj1 1.11 / subj2 1.37
