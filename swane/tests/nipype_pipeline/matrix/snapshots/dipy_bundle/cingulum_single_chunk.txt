@@ -1,0 +1,45 @@
+# workflow snapshot: dipy_bundle / cingulum_single_chunk
+#
+#   n_chunks = 1
+#   num_threads = 4
+#   tract = cingulum
+#
+# nodes=8 edges=10
+
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- recognize_lh [DipyRecoBundlesRecognize] mem_gb=0.2 n_procs=4
+    model_bundle_name = 'C_L'
+    model_clust_thr = 2.5
+    num_threads = 4
+    pruning_thr = 5.0
+    reduction_thr = 10.0
+    slr = True
+- recognize_rh [DipyRecoBundlesRecognize] mem_gb=0.2 n_procs=4
+    model_bundle_name = 'C_R'
+    model_clust_thr = 2.5
+    num_threads = 4
+    pruning_thr = 5.0
+    reduction_thr = 10.0
+    slr = True
+- to_ref_lh [DipyBundlesToRef] mem_gb=0.2 n_procs=1
+    out_name = 'r-cingulum_lh'
+- to_ref_rh [DipyBundlesToRef] mem_gb=0.2 n_procs=1
+    out_name = 'r-cingulum_rh'
+- union_lh [DipyBundleUnion] mem_gb=0.2 n_procs=1
+- union_rh [DipyBundleUnion] mem_gb=0.2 n_procs=1
+# connections
+inputnode.('recobundles_builds', 'def _first(items):\n    return items[0]', ()) -> recognize_lh.recobundles_pickle
+inputnode.('recobundles_builds', 'def _first(items):\n    return items[0]', ()) -> recognize_rh.recobundles_pickle
+inputnode.('recobundles_chunks', 'def _first(items):\n    return items[0]', ()) -> recognize_lh.tractogram_chunk
+inputnode.('recobundles_chunks', 'def _first(items):\n    return items[0]', ()) -> recognize_rh.tractogram_chunk
+inputnode.atlas2native -> to_ref_lh.atlas2native
+inputnode.atlas2native -> to_ref_rh.atlas2native
+inputnode.atlas_dir -> recognize_lh.atlas_dir
+inputnode.atlas_dir -> recognize_rh.atlas_dir
+recognize_lh.recognized_bundle -> union_lh.recognized_bundles
+recognize_rh.recognized_bundle -> union_rh.recognized_bundles
+to_ref_lh.bundle_vtp -> outputnode.bundle_lh
+to_ref_rh.bundle_vtp -> outputnode.bundle_rh
+union_lh.bundle -> to_ref_lh.bundle
+union_rh.bundle -> to_ref_rh.bundle

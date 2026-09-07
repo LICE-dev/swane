@@ -5,7 +5,7 @@
 #   tractography = true
 #   tractography_engine = DIPY_RECOBUNDLES
 #
-# nodes=19 edges=37
+# nodes=21 edges=41
 
 - dif2ref_antsreg [AntsRegistration] mem_gb=5 n_procs=1
     aff_metric = 'mattes'
@@ -18,6 +18,8 @@
     out_file = 'diff2ref_ras.txt'
 - dipy_bias [DwiBiasCorrection] mem_gb=1 n_procs=1
     num_threads = 1
+- dipy_chunker [DipyTractogramChunker] mem_gb=2 n_procs=1
+    n_chunks = 1
 - dipy_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
     bids_format = False
     compress = 'y'
@@ -54,6 +56,8 @@
     out_file = 'nodif.nii.gz'
     start_volume = 0
 - dipy_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
+- dipy_recobundles_build [DipyRecoBundlesBuild] mapnode(iterfield=tractogram_chunk) mem_gb=8.0 n_procs=1
+    num_threads = 1
 - dipy_slr [DipyAtlasSLR] mem_gb=5 n_procs=1
     atlas_dir = '<HOME>/.dipy'
     num_threads = 1
@@ -84,6 +88,8 @@ dif2ref_antsreg.inv_which_to_invert -> pve_wm_2_diff_ants_apply.which_to_invert
 dif2ref_to_ras.out_ras -> dipy_tracking.affine_diff2ref
 dipy_bias.out_file -> dipy_csd.in_file
 dipy_bias.out_file -> dipy_tensorfit.in_file
+dipy_chunker.chunks -> dipy_recobundles_build.tractogram_chunk
+dipy_chunker.chunks -> outputnode.recobundles_chunks
 dipy_conv.bvals -> dipy_denoise.bval
 dipy_conv.bvals -> dipy_motion.bval
 dipy_conv.bvecs -> dipy_denoise.bvec
@@ -107,7 +113,9 @@ dipy_motion.out_file -> dipy_bias.in_file
 dipy_nodif.out_file -> dipy_deskull_antspynet.in_file
 dipy_nodif.out_file -> pve_wm_2_diff_ants_apply.reference_image
 dipy_reOrient.out_file -> dipy_crop.in_file
+dipy_recobundles_build.recobundles_pickle -> outputnode.recobundles_builds
 dipy_slr.atlas2native -> outputnode.atlas2native
+dipy_slr.tractogram_atlas -> dipy_chunker.tractogram_atlas
 dipy_slr.tractogram_atlas -> outputnode.tractogram_atlas
 dipy_tensorfit.fa -> dipy_tracking.fa
 dipy_tensorfit.fa -> fa_2_ref_ants_apply.input_image
