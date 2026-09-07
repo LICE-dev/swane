@@ -1,13 +1,15 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 """
-RecoBundles recognition of a single named atlas bundle in a subject tractogram.
+RecoBundles bundle recognition, split into a shared **build** and a per-tract
+**recognise** (user design 2026-09-07).
 
-Phase 1 (:class:`~swane.nipype_pipeline.nodes.DipyAtlasSLR.DipyAtlasSLR`) already
-aligned the whole subject tractogram to the HCP842 atlas once, so this node
-consumes ``tractogram_atlas`` and runs dipy's :class:`RecoBundles` for the one
-model bundle named by ``model_bundle_name`` (spec section 6), producing the
-recognised streamlines in atlas space as a ``.trx`` file. Bringing the bundle
-back to reference space is the bundle workflow's job, not this node's.
+The cost of RecoBundles is entirely in :class:`RecoBundles.__init__`: it runs a
+QuickBundlesX clustering of the whole (sub-)tractogram. ``recognize`` itself is
+cheap -- it works on the cached cluster centroids and a reduced neighbourhood.
+So the expensive clustering is built **once** per (sub-)tractogram
+(:class:`DipyRecoBundlesBuild`) and every tract merely reloads it and recognises
+its own model bundle (:class:`DipyRecoBundlesRecognize`), giving per-tract
+completion reports without repeating the clustering.
 
 The model bundle is addressed by its **explicit filename**
 (``<atlas>/bundles/<name>.trk``), never by globbing the ``bundles`` directory:
@@ -18,27 +20,40 @@ correct ``IFOF_R.trk``, and a glob could pick the wrong one (spec section 3).
 recognition parameters (their defaults chosen later during the AF/CST recovery
 work); they are exposed as inputs and never tuned for RAM.
 
-Memory. The peak of RecoBundles is loading and clustering the whole tractogram
-once in :class:`RecoBundles`; ``recognize`` itself is cheap (it works on cluster
-centroids and a reduced neighbourhood). Two levers bound that peak:
+Lightweight build -> recognise handoff
+--------------------------------------
+The build and recognise run in different nodes/processes, so the built object
+must be handed over on disk. The naive route -- pickling the whole
+:class:`RecoBundles` -- would re-serialise the entire clustered tractogram
+(``self.streamlines``), duplicating on disk (and re-materialising in RAM) the
+streamlines that already live in the chunk ``.trx`` the build read. Instead the
+build pickles only what ``recognize`` cannot recompute cheaply: the QBx
+``cluster_map`` (centroids + per-cluster indices) and the **post-clustering RNG
+state** (see below). The recognise node reloads the same ``.trx`` streamlines
+and reconstructs ``RecoBundles(streamlines, cluster_map=...)``, which skips the
+clustering entirely. Measured on a ~0.5 MB tractogram the pickle drops from
+~530 KB (whole object) to ~18 KB, and the streamlines are stored once, not
+twice -- the disk/RAM minimisation the user asked for.
 
-* ``num_threads`` pins the OpenMP/BLAS pool for the local SLR;
-* ``chunk_size`` switches to a memmapped **chunk-and-union** path: the tractogram
-  is read in chunks of that many streamlines (never materialised whole),
-  recognised chunk by chunk, and the recognised streamlines are unioned. This is
-  only *scientifically* valid with the local SLR off -- each chunk would otherwise
-  compute a different local SLR and the union would not equal the whole-tractogram
-  result -- so setting ``chunk_size`` **implies** the local SLR is disabled and
-  the ``slr`` input is ignored. The whole-brain SLR done once in Phase 1 already
-  provides global alignment; the per-recognition local SLR (``slr=True``, the
-  single-pass default) is a finer, bundle-specific refinement, so chunking trades
-  that refinement for RAM.
+**Why the RNG state is carried.** A single in-process build advances its RNG
+during clustering, and ``recognize`` (specifically the local SLR and the pruning
+QBx) consumes the RNG from that advanced state. Reconstructing with an injected
+``cluster_map`` does *not* re-run the clustering, so a freshly seeded RNG would
+sit at the pre-clustering state and ``recognize`` would diverge. Pickling and
+restoring the RNG the build ended with makes a reloaded recognition **bit-for-bit
+identical** to an in-process one.
+
+Note this injects the *genuine* ``cluster_map`` the build computed, which is not
+the same as injecting a home-made subsample into a fresh build (that would defeat
+RecoBundles' internal subsampling); the build itself is always a plain
+``RecoBundles(streamlines)`` with no injected clustering.
 
 Carries a **static** conservative ``_mem_gb`` placeholder; the tunable estimator
-that replaces it is a separate task.
+that replaces it is a separate task (E3B, deferred).
 """
 
 import os
+import pickle
 from os.path import abspath, basename
 
 import numpy as np
@@ -100,8 +115,99 @@ def bundle_path(atlas_dir, model_bundle_name):
     )
 
 
-def _recognize(
-    streamlines,
+def _pin_threads(num_threads):
+    """Set OMP/OpenBLAS thread vars, returning their previous values to restore.
+
+    numpy here is linked against scipy-openblas, which otherwise multithreads
+    large decompositions on its own -- invisible to nipype's resource
+    accounting. Every dipy node pins these to the count it declares (spec
+    section 10).
+    """
+    previous = {
+        var: os.environ.get(var) for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR)
+    }
+    for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR):
+        os.environ[var] = str(num_threads)
+    return previous
+
+
+def _restore_threads(previous):
+    """Restore the thread env vars saved by :func:`_pin_threads`."""
+    for var, value in previous.items():
+        if value is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = value
+
+
+def _build_recobundles(streamlines):
+    """Build ``RecoBundles(streamlines)`` with the module clustering constants.
+
+    A plain build -- no injected ``cluster_map`` -- so RecoBundles' internal
+    QuickBundlesX subsampling is used as designed. Seeded for reproducibility.
+    """
+    from dipy.segment.bundles import RecoBundles
+
+    return RecoBundles(
+        streamlines,
+        clust_thr=CLUST_THR,
+        nb_pts=NB_PTS,
+        rng=np.random.default_rng(RECOBUNDLES_RNG_SEED),
+        verbose=False,
+    )
+
+
+def dump_build(rb, path):
+    """Pickle only the reusable part of a built :class:`RecoBundles` to ``path``.
+
+    Stores the QBx ``cluster_map`` (with its ``refdata`` streamlines *stripped*,
+    so the streamlines are not dragged into the pickle) and the post-clustering
+    RNG state. The streamlines themselves stay in the input ``.trx`` that
+    :class:`DipyRecoBundlesRecognize` reloads. See the module docstring.
+    """
+    cluster_map = rb.cluster_map
+    saved_refdata = cluster_map.refdata
+    cluster_map.refdata = None
+    try:
+        with open(path, "wb") as fh:
+            pickle.dump(
+                {"cluster_map": cluster_map, "rng": rb.rng},
+                fh,
+                protocol=pickle.HIGHEST_PROTOCOL,
+            )
+    finally:
+        # Leave the in-memory object untouched for any later use in-process.
+        cluster_map.refdata = saved_refdata
+
+
+def load_build(streamlines, path):
+    """Reconstruct a built :class:`RecoBundles` from ``streamlines`` + ``path``.
+
+    Injects the pickled ``cluster_map`` so the expensive clustering is skipped,
+    and restores the pickled post-clustering RNG state so a subsequent
+    ``recognize`` reproduces an in-process build bit-for-bit.
+    """
+    from dipy.segment.bundles import RecoBundles
+
+    with open(path, "rb") as fh:
+        stored = pickle.load(fh)
+
+    rb = RecoBundles(
+        streamlines,
+        cluster_map=stored["cluster_map"],
+        clust_thr=CLUST_THR,
+        nb_pts=NB_PTS,
+        rng=stored["rng"],
+        verbose=False,
+    )
+    # ``__init__`` already sets ``self.rng`` to the injected generator, but make
+    # the contract explicit: recognition resumes from the build's RNG state.
+    rb.rng = stored["rng"]
+    return rb
+
+
+def _run_recognize(
+    rb,
     model_bundle,
     *,
     model_clust_thr,
@@ -110,21 +216,11 @@ def _recognize(
     slr,
     num_threads,
 ):
-    """Run one dipy RecoBundles recognition and return the recognised streamlines.
+    """Run one ``RecoBundles.recognize`` and return the recognised streamlines.
 
-    A thin wrapper over :class:`dipy.segment.bundles.RecoBundles` (seeded for
-    reproducibility) so the thread-pinning test can spy the OpenMP environment at
-    the exact call site.
+    A thin wrapper over :meth:`dipy.segment.bundles.RecoBundles.recognize` so the
+    thread-pinning test can spy the OpenMP environment at the exact call site.
     """
-    from dipy.segment.bundles import RecoBundles
-
-    rb = RecoBundles(
-        streamlines,
-        clust_thr=CLUST_THR,
-        nb_pts=NB_PTS,
-        rng=np.random.default_rng(RECOBUNDLES_RNG_SEED),
-        verbose=False,
-    )
     recognized, _ = rb.recognize(
         model_bundle,
         model_clust_thr,
@@ -137,11 +233,90 @@ def _recognize(
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
-class DipyRecoBundlesInputSpec(BaseInterfaceInputSpec):
-    tractogram_atlas = File(
+class DipyRecoBundlesBuildInputSpec(BaseInterfaceInputSpec):
+    tractogram_chunk = File(
         exists=True,
         mandatory=True,
-        desc="the subject whole-brain tractogram aligned to the atlas (.trx)",
+        desc="one (sub-)tractogram in atlas space (.trx) to build RecoBundles on",
+    )
+    num_threads = traits.Int(
+        nohash=True, desc="OpenMP/BLAS thread count for the QuickBundlesX clustering"
+    )
+    out_pickle = File(desc="the lightweight built-RecoBundles pickle output")
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
+class DipyRecoBundlesBuildOutputSpec(TraitedSpec):
+    recobundles_pickle = File(
+        desc="lightweight pickle of the QBx cluster_map + RNG state; the "
+        "streamlines are NOT stored here (they stay in tractogram_chunk)"
+    )
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
+class DipyRecoBundlesBuild(BaseInterface):
+    """
+    Builds dipy's :class:`RecoBundles` on one atlas-space (sub-)tractogram --
+    the expensive whole-tractogram QuickBundlesX clustering -- and saves it as a
+    **lightweight** pickle (cluster map + RNG state only, never the streamlines)
+    for one or more :class:`DipyRecoBundlesRecognize` nodes to reload. Runs once
+    per (sub-)tractogram and is shared across every tract.
+
+    """
+
+    input_spec = DipyRecoBundlesBuildInputSpec
+    output_spec = DipyRecoBundlesBuildOutputSpec
+
+    # Static conservative placeholder; replaced by the tunable RAM estimator in a
+    # later task (E3B, deferred).
+    _mem_gb = STATIC_MEM_GB
+
+    def _run_interface(self, runtime):
+        from dipy.io.streamline import load_tractogram
+
+        num_threads = (
+            int(self.inputs.num_threads) if isdefined(self.inputs.num_threads) else 1
+        )
+        out_pickle = self._gen_outfilename()
+
+        previous = _pin_threads(num_threads)
+        try:
+            subject_sft = load_tractogram(
+                self.inputs.tractogram_chunk, "same", bbox_valid_check=False
+            )
+            subject_sft.to_rasmm()
+            rb = _build_recobundles(subject_sft.streamlines)
+        finally:
+            _restore_threads(previous)
+
+        dump_build(rb, out_pickle)
+        return runtime
+
+    def _gen_outfilename(self):
+        out_file = self.inputs.out_pickle
+        if not isdefined(out_file):
+            base = _strip_tractogram_ext(basename(self.inputs.tractogram_chunk))
+            out_file = f"recobundles_{base}.pkl"
+        return abspath(out_file)
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs["recobundles_pickle"] = self._gen_outfilename()
+        return outputs
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
+class DipyRecoBundlesRecognizeInputSpec(BaseInterfaceInputSpec):
+    recobundles_pickle = File(
+        exists=True,
+        mandatory=True,
+        desc="lightweight built-RecoBundles pickle from DipyRecoBundlesBuild",
+    )
+    tractogram_chunk = File(
+        exists=True,
+        mandatory=True,
+        desc="the same (sub-)tractogram (.trx) the build was made on -- its "
+        "streamlines are reloaded here (they are not stored in the pickle)",
     )
     atlas_dir = Directory(
         mandatory=True,
@@ -175,21 +350,15 @@ class DipyRecoBundlesInputSpec(BaseInterfaceInputSpec):
     slr = traits.Bool(
         True,
         usedefault=True,
-        desc="run RecoBundles' local (per-bundle) SLR in single-pass mode; "
-        "ignored (forced off) when chunk_size is set, since a union of per-chunk "
-        "SLRs is invalid",
-    )
-    chunk_size = traits.Int(
-        nohash=True,
-        desc="if set (>0 and < number of streamlines), recognise the tractogram "
-        "in memmapped chunks of this many streamlines and union the results (a "
-        "RAM lever); this disables the local SLR automatically",
+        desc="run RecoBundles' local (per-bundle) SLR in single-pass mode; the "
+        "bundle workflow forces this off when the build came from a chunked "
+        "split, since a union of per-chunk local SLRs is not valid",
     )
     out_bundle = File(desc="the recognised bundle output (.trx)")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
-class DipyRecoBundlesOutputSpec(TraitedSpec):
+class DipyRecoBundlesRecognizeOutputSpec(TraitedSpec):
     recognized_bundle = File(
         desc="the recognised bundle in atlas space (.trx); empty-but-valid when "
         "the model shape is absent from the tractogram"
@@ -197,22 +366,24 @@ class DipyRecoBundlesOutputSpec(TraitedSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyRecoBundles(BaseInterface):
+class DipyRecoBundlesRecognize(BaseInterface):
     """
-    Recognises a single named HCP842 atlas bundle inside the atlas-aligned
-    subject tractogram with dipy's RecoBundles, writing the recognised
-    streamlines (atlas space) to a ``.trx`` file. The model bundle is addressed
-    by explicit filename; an optional memmapped chunk-and-union path bounds the
-    memory of a very large tractogram.
+    Recognises one named HCP842 atlas bundle inside an atlas-space
+    (sub-)tractogram by reloading a :class:`DipyRecoBundlesBuild` pickle (plus
+    the same ``.trx`` streamlines) and running dipy's ``recognize`` for the model
+    bundle addressed by explicit filename. Writes the recognised streamlines
+    (atlas space) to a ``.trx`` file; bringing the bundle back to reference space
+    is :class:`~swane.nipype_pipeline.nodes.DipyBundlesToRef.DipyBundlesToRef`'s
+    job.
 
     """
 
-    input_spec = DipyRecoBundlesInputSpec
-    output_spec = DipyRecoBundlesOutputSpec
+    input_spec = DipyRecoBundlesRecognizeInputSpec
+    output_spec = DipyRecoBundlesRecognizeOutputSpec
 
-    # Static conservative placeholder; replaced by the tunable RAM estimator in a
-    # later task.
-    _mem_gb = STATIC_MEM_GB
+    # Recognition is cheap (centroids + a reduced neighbourhood); a small static
+    # placeholder is fine until the tunable estimator work.
+    _mem_gb = 2.0
 
     def _run_interface(self, runtime):
         from dipy.io.streamline import load_tractogram, save_tractogram
@@ -220,9 +391,6 @@ class DipyRecoBundles(BaseInterface):
 
         num_threads = (
             int(self.inputs.num_threads) if isdefined(self.inputs.num_threads) else 1
-        )
-        chunk_size = (
-            int(self.inputs.chunk_size) if isdefined(self.inputs.chunk_size) else 0
         )
 
         model_file = bundle_path(self.inputs.atlas_dir, self.inputs.model_bundle_name)
@@ -240,100 +408,34 @@ class DipyRecoBundles(BaseInterface):
         model_sft.to_rasmm()
         model_bundle = model_sft.streamlines
 
-        previous = {
-            var: os.environ.get(var) for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR)
-        }
-        for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR):
-            os.environ[var] = str(num_threads)
+        previous = _pin_threads(num_threads)
         try:
-            if chunk_size > 0:
-                recognized = self._recognize_in_chunks(
-                    model_bundle, chunk_size, num_threads
-                )
-            else:
-                recognized = self._recognize_single_pass(
-                    load_tractogram, model_bundle, num_threads
-                )
+            subject_sft = load_tractogram(
+                self.inputs.tractogram_chunk, "same", bbox_valid_check=False
+            )
+            subject_sft.to_rasmm()
+            rb = load_build(subject_sft.streamlines, self.inputs.recobundles_pickle)
+            recognized = _run_recognize(
+                rb,
+                model_bundle,
+                model_clust_thr=float(self.inputs.model_clust_thr),
+                reduction_thr=float(self.inputs.reduction_thr),
+                pruning_thr=float(self.inputs.pruning_thr),
+                slr=bool(self.inputs.slr),
+                num_threads=num_threads,
+            )
         finally:
-            for var, value in previous.items():
-                if value is None:
-                    os.environ.pop(var, None)
-                else:
-                    os.environ[var] = value
+            _restore_threads(previous)
 
         recognized_sft = StatefulTractogram.from_sft(recognized, model_sft)
         save_tractogram(recognized_sft, out_bundle, bbox_valid_check=False)
 
         return runtime
 
-    def _recognize_single_pass(self, load_tractogram, model_bundle, num_threads):
-        """Recognise on the whole tractogram loaded into memory (exact path)."""
-        subject_sft = load_tractogram(
-            self.inputs.tractogram_atlas, "same", bbox_valid_check=False
-        )
-        subject_sft.to_rasmm()
-        return _recognize(
-            subject_sft.streamlines,
-            model_bundle,
-            model_clust_thr=float(self.inputs.model_clust_thr),
-            reduction_thr=float(self.inputs.reduction_thr),
-            pruning_thr=float(self.inputs.pruning_thr),
-            slr=bool(self.inputs.slr),
-            num_threads=num_threads,
-        )
-
-    def _recognize_in_chunks(self, model_bundle, chunk_size, num_threads):
-        """Recognise chunk by chunk over a memmapped ``.trx`` and union results.
-
-        The tractogram is never materialised whole: ``TrxFile.select`` points at
-        the same memmaps, and only the current chunk's streamlines are pulled
-        into memory (``copy_safe``) for recognition. Recognition runs with
-        ``slr=False`` (enforced upstream), so unioning the per-chunk recognitions
-        approximates the whole-tractogram result within clustering tolerance.
-        """
-        from trx.trx_file_memmap import load as trx_load
-
-        model_clust_thr = float(self.inputs.model_clust_thr)
-        reduction_thr = float(self.inputs.reduction_thr)
-        pruning_thr = float(self.inputs.pruning_thr)
-
-        union = []
-        trx = trx_load(self.inputs.tractogram_atlas)
-        try:
-            n = len(trx)
-            for start in range(0, n, chunk_size):
-                indices = np.arange(start, min(start + chunk_size, n))
-                sub = trx.select(indices, copy_safe=True)
-                try:
-                    sub_sft = sub.to_sft()
-                    sub_sft.to_rasmm()
-                    recognized = _recognize(
-                        sub_sft.streamlines,
-                        model_bundle,
-                        model_clust_thr=model_clust_thr,
-                        reduction_thr=reduction_thr,
-                        pruning_thr=pruning_thr,
-                        slr=False,
-                        num_threads=num_threads,
-                    )
-                    union.extend(list(recognized))
-                finally:
-                    sub.close()
-        finally:
-            trx.close()
-
-        from dipy.tracking.streamline import Streamlines
-
-        return Streamlines(union)
-
     def _gen_outfilename(self):
         out_file = self.inputs.out_bundle
         if not isdefined(out_file):
-            base = basename(self.inputs.tractogram_atlas)
-            for ext in (".trx", ".trk", ".tck"):
-                if base.endswith(ext):
-                    base = base[: -len(ext)]
-                    break
+            base = _strip_tractogram_ext(basename(self.inputs.tractogram_chunk))
             name = str(self.inputs.model_bundle_name)
             out_file = f"recognized_{name}_{base}.trx"
         return abspath(out_file)
@@ -342,3 +444,11 @@ class DipyRecoBundles(BaseInterface):
         outputs = self.output_spec().get()
         outputs["recognized_bundle"] = self._gen_outfilename()
         return outputs
+
+
+def _strip_tractogram_ext(base):
+    """Drop a trailing ``.trx``/``.trk``/``.tck`` extension from ``base``."""
+    for ext in (".trx", ".trk", ".tck"):
+        if base.endswith(ext):
+            return base[: -len(ext)]
+    return base

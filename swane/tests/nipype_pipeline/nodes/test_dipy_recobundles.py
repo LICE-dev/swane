@@ -1,34 +1,57 @@
-"""Unit tests for
-:class:`swane.nipype_pipeline.nodes.DipyRecoBundles.DipyRecoBundles`.
+"""Unit tests for the RecoBundles bundle nodes.
 
-RecoBundles recognises a named atlas bundle inside the subject tractogram that
-Phase 1 already aligned to the atlas (``tractogram_atlas``). The load-bearing
-behaviours exercised here:
+Phase 1 aligned the whole subject tractogram to the HCP842 atlas once
+(``tractogram_atlas``). Phase 2's RecoBundles cost -- the whole-tractogram
+QuickBundlesX clustering -- is the ``RecoBundles.__init__`` build, while
+``recognize`` is cheap. So the work is split across four nodes (spec section 6,
+user design 2026-09-07):
+
+* :class:`~swane.nipype_pipeline.nodes.DipyRecoBundles.DipyRecoBundlesBuild`
+  builds ``RecoBundles(streamlines)`` on one (sub-)tractogram and saves a
+  **lightweight** pickle -- only the QBx ``cluster_map`` and the post-clustering
+  RNG state, never the streamlines (they already live in the input ``.trx``);
+* :class:`~swane.nipype_pipeline.nodes.DipyRecoBundles.DipyRecoBundlesRecognize`
+  reloads that pickle *plus* the same ``.trx`` streamlines, reconstructs the
+  built object and runs ``recognize`` for one explicitly named model bundle,
+  producing the recognised streamlines in atlas space as a ``.trx``;
+* :class:`~swane.nipype_pipeline.nodes.DipyTractogramChunker.DipyTractogramChunker`
+  splits the tractogram into 1..N **representative** sub-tractograms;
+* :class:`~swane.nipype_pipeline.nodes.DipyBundleUnion.DipyBundleUnion`
+  concatenates N per-chunk recognitions back into one bundle;
+* :class:`~swane.nipype_pipeline.nodes.DipyBundlesToRef.DipyBundlesToRef`
+  transforms a recognised bundle to reference space and writes a ``.vtp``.
+
+The load-bearing behaviours exercised here:
 
 * the model bundle is addressed by its **explicit filename**, never by a glob --
   so an atlas directory holding both ``IFOF_R.trk`` and the misspelled duplicate
   ``IF0F_R.trk`` resolves to ``IFOF_R.trk`` and never the misspelling;
-* the node produces a valid ``.trx`` output: non-empty when the subject contains
-  the model shape, empty-but-valid when it does not;
-* recognition is reproducible across two runs at a fixed seed;
-* the memmapped **chunk-and-union** path (a RAM lever) approximates the
-  single-pass result, and disables the (invalid) local SLR automatically.
-
-The chunk-and-union union is only *scientifically* valid with ``slr=False``
-(each chunk would otherwise compute a different local SLR), so the tests assert
-that union count is *close to* the single-pass count, never bit-equality.
+* a **pickled build reloaded** in a separate node recognises **bit-identically**
+  to an in-process build (the RNG state carried in the pickle is what makes this
+  exact -- a fresh-seeded RNG would diverge);
+* the build pickle is **lightweight**: it does not carry the streamlines, so it
+  is far smaller than the tractogram it was built from (minimises disk and RAM,
+  per the user's 2026-09-07 note);
+* the chunker partitions the tractogram exactly once into non-contiguous
+  (representative) chunks; the union conserves counts; and the to-ref node writes
+  a reference-space ``.vtp`` via ``vtk`` (never ``fury``, which is not installed).
 """
 
 import os
+import pickle
 
 import numpy as np
 import pytest
 
 from swane.nipype_pipeline.nodes.DipyRecoBundles import (
-    DipyRecoBundles,
+    DipyRecoBundlesBuild,
+    DipyRecoBundlesRecognize,
     bundle_path,
     BUNDLES_SUBDIR,
     OMP_THREADS_VAR,
+    CLUST_THR,
+    NB_PTS,
+    RECOBUNDLES_RNG_SEED,
 )
 
 
@@ -125,10 +148,40 @@ def _subject_without_ifof(tmp_path, name="subject_noise.trx"):
     return str(path)
 
 
-def _n_streamlines(trx_path):
+def _load_streamlines(trx_path):
     from dipy.io.streamline import load_tractogram
 
-    return len(load_tractogram(trx_path, "same", bbox_valid_check=False).streamlines)
+    return load_tractogram(trx_path, "same", bbox_valid_check=False).streamlines
+
+
+def _n_streamlines(trx_path):
+    return len(_load_streamlines(trx_path))
+
+
+# --------------------------------------------------------------------------- #
+# Build + recognise helpers (the split monolith replacement).
+# --------------------------------------------------------------------------- #
+def _build(chunk_path, out_pickle, num_threads=1):
+    node = DipyRecoBundlesBuild()
+    node.inputs.tractogram_chunk = chunk_path
+    node.inputs.num_threads = num_threads
+    node.inputs.out_pickle = out_pickle
+    node.run()
+    return node._list_outputs()["recobundles_pickle"]
+
+
+def _recognize(pickle_path, chunk_path, atlas_dir, model, out_bundle, **extra):
+    node = DipyRecoBundlesRecognize()
+    node.inputs.recobundles_pickle = pickle_path
+    node.inputs.tractogram_chunk = chunk_path
+    node.inputs.atlas_dir = atlas_dir
+    node.inputs.model_bundle_name = model
+    node.inputs.num_threads = 1
+    node.inputs.out_bundle = out_bundle
+    for k, v in extra.items():
+        setattr(node.inputs, k, v)
+    node.run()
+    return node._list_outputs()["recognized_bundle"]
 
 
 # --------------------------------------------------------------------------- #
@@ -154,22 +207,13 @@ class TestExplicitBundleAddressing:
         """The subject contains only the IFOF_R shape. Addressing ``IFOF_R``
         recognises streamlines; had the node globbed and picked ``IF0F_R.trk``
         (a different, absent shape) the result would be empty."""
-        from dipy.io.streamline import load_tractogram
-
         subject = _subject_with_ifof(tmp_path)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+        out = _recognize(pkl, subject, atlas_dir, "IFOF_R", str(tmp_path / "rec.trx"))
 
-        node = DipyRecoBundles()
-        node.inputs.tractogram_atlas = subject
-        node.inputs.atlas_dir = atlas_dir
-        node.inputs.model_bundle_name = "IFOF_R"
-        node.inputs.num_threads = 1
-        node.run()
-
-        out = node._list_outputs()["recognized_bundle"]
         assert os.path.exists(out)
         assert out.endswith(".trx")
-        recognized = load_tractogram(out, "same", bbox_valid_check=False)
-        assert len(recognized.streamlines) > 0
+        assert _n_streamlines(out) > 0
 
 
 # --------------------------------------------------------------------------- #
@@ -177,126 +221,324 @@ class TestExplicitBundleAddressing:
 # --------------------------------------------------------------------------- #
 class TestOutputContract:
     def test_empty_but_valid_when_shape_absent(self, workspace, atlas_dir, tmp_path):
-        from dipy.io.streamline import load_tractogram
-
         subject = _subject_without_ifof(tmp_path)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+        out = _recognize(pkl, subject, atlas_dir, "IFOF_R", str(tmp_path / "rec.trx"))
 
-        node = DipyRecoBundles()
-        node.inputs.tractogram_atlas = subject
-        node.inputs.atlas_dir = atlas_dir
-        node.inputs.model_bundle_name = "IFOF_R"
-        node.inputs.num_threads = 1
-        node.run()
-
-        out = node._list_outputs()["recognized_bundle"]
         assert os.path.exists(out)
         # A valid, loadable, empty tractogram -- not a crash, not a missing file.
-        recognized = load_tractogram(out, "same", bbox_valid_check=False)
-        assert len(recognized.streamlines) == 0
+        assert _n_streamlines(out) == 0
 
     def test_reproducible_across_two_runs(self, workspace, atlas_dir, tmp_path):
-        from dipy.io.streamline import load_tractogram
-
         subject = _subject_with_ifof(tmp_path)
         counts = []
         for i in range(2):
-            node = DipyRecoBundles()
-            node.inputs.tractogram_atlas = subject
-            node.inputs.atlas_dir = atlas_dir
-            node.inputs.model_bundle_name = "IFOF_R"
-            node.inputs.num_threads = 1
-            node.inputs.out_bundle = f"rec_{i}.trx"
-            node.run()
-            out = node._list_outputs()["recognized_bundle"]
-            counts.append(
-                len(load_tractogram(out, "same", bbox_valid_check=False).streamlines)
+            pkl = _build(subject, str(tmp_path / f"build_{i}.pkl"))
+            out = _recognize(
+                pkl, subject, atlas_dir, "IFOF_R", str(tmp_path / f"rec_{i}.trx")
             )
+            counts.append(_n_streamlines(out))
         assert counts[0] == counts[1] > 0
 
 
 # --------------------------------------------------------------------------- #
-# Chunk-and-union RAM lever.
+# The lightweight build -> recognise handoff (user's 2026-09-07 note): the
+# pickle carries the QBx clustering + RNG state, never the streamlines, and a
+# reloaded build recognises bit-identically to an in-process one.
 # --------------------------------------------------------------------------- #
-class TestChunkAndUnion:
-    def test_chunked_union_approximates_single_pass(
+class TestBuildRecognizeHandoff:
+    def _in_process_recognition(self, subject, atlas_dir, out_bundle, slr):
+        """A single-process ``RecoBundles(streamlines).recognize(...)`` written
+        to ``.trx`` exactly the way the recognise node writes it, so the two are
+        directly comparable."""
+        from dipy.io.streamline import load_tractogram, save_tractogram
+        from dipy.io.stateful_tractogram import StatefulTractogram
+        from dipy.segment.bundles import RecoBundles
+
+        subject_sft = load_tractogram(subject, "same", bbox_valid_check=False)
+        subject_sft.to_rasmm()
+        model_sft = load_tractogram(
+            bundle_path(atlas_dir, "IFOF_R"), "same", bbox_valid_check=False
+        )
+        model_sft.to_rasmm()
+
+        rb = RecoBundles(
+            subject_sft.streamlines,
+            clust_thr=CLUST_THR,
+            nb_pts=NB_PTS,
+            rng=np.random.default_rng(RECOBUNDLES_RNG_SEED),
+            verbose=False,
+        )
+        recognized, _ = rb.recognize(
+            model_sft.streamlines,
+            2.5,
+            reduction_thr=10.0,
+            pruning_thr=5.0,
+            slr=slr,
+            num_threads=1,
+        )
+        sft = StatefulTractogram.from_sft(recognized, model_sft)
+        save_tractogram(sft, out_bundle, bbox_valid_check=False)
+        return out_bundle
+
+    def test_reloaded_build_recognizes_bit_identically_to_in_process(
         self, workspace, atlas_dir, tmp_path
     ):
-        from dipy.io.streamline import load_tractogram
-
+        """The whole point of splitting build from recognise: a build pickled in
+        one process and reloaded in another must recognise *exactly* what a
+        single in-process ``RecoBundles`` build would -- same streamline
+        trajectories, same count. This holds only because the pickle carries the
+        post-clustering RNG state; the local SLR (``slr=True``) consumes the RNG,
+        so a fresh seed would diverge."""
         subject = _subject_with_ifof(tmp_path)
 
-        def _recognized_count(**extra):
-            node = DipyRecoBundles()
-            node.inputs.tractogram_atlas = subject
-            node.inputs.atlas_dir = atlas_dir
-            node.inputs.model_bundle_name = "IFOF_R"
-            node.inputs.num_threads = 1
-            for k, v in extra.items():
-                setattr(node.inputs, k, v)
-            node.run()
-            out = node._list_outputs()["recognized_bundle"]
-            return len(load_tractogram(out, "same", bbox_valid_check=False).streamlines)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+        node_out = _recognize(
+            pkl, subject, atlas_dir, "IFOF_R", str(tmp_path / "node.trx"), slr=True
+        )
+        ref_out = self._in_process_recognition(
+            subject, atlas_dir, str(tmp_path / "ref.trx"), slr=True
+        )
 
-        single = _recognized_count(slr=False)
-        chunked = _recognized_count(slr=False, chunk_size=200)
+        node_sl = _load_streamlines(node_out)
+        ref_sl = _load_streamlines(ref_out)
+        assert len(node_sl) == len(ref_sl) > 0
+        assert all(np.array_equal(a, b) for a, b in zip(node_sl, ref_sl))
 
-        assert single > 0 and chunked > 0
-        # Same order of magnitude -- clustering-boundary shifts move a few
-        # streamlines, but not the bulk of the bundle.
-        assert abs(chunked - single) <= 0.2 * single
-
-    def test_chunk_size_at_or_above_total_behaves_like_single_pass(
+    def test_pickle_is_lightweight_not_the_streamlines(
         self, workspace, atlas_dir, tmp_path
     ):
-        from dipy.io.streamline import load_tractogram
-
+        """The pickle stores the QBx clustering + RNG only, never the
+        streamlines (they stay in the input ``.trx``), so it must be far smaller
+        than the tractogram it was built from -- the disk/RAM minimisation the
+        user asked for."""
         subject = _subject_with_ifof(tmp_path)
-        n = _n_streamlines(subject)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
 
-        node = DipyRecoBundles()
-        node.inputs.tractogram_atlas = subject
-        node.inputs.atlas_dir = atlas_dir
-        node.inputs.model_bundle_name = "IFOF_R"
-        node.inputs.num_threads = 1
-        node.inputs.slr = False
-        node.inputs.chunk_size = n + 100  # >= total -> single chunk
-        node.run()
-        out = node._list_outputs()["recognized_bundle"]
-        assert len(load_tractogram(out, "same", bbox_valid_check=False).streamlines) > 0
+        pickle_bytes = os.path.getsize(pkl)
+        trx_bytes = os.path.getsize(subject)
+        assert pickle_bytes < 0.25 * trx_bytes, (
+            f"build pickle {pickle_bytes} B is not lightweight vs the tractogram "
+            f"{trx_bytes} B -- it probably carries the streamlines"
+        )
 
-    def test_chunking_disables_local_slr_automatically(
+        # And prove it structurally: the stored object holds the cluster map and
+        # an RNG, and does not embed a RecoBundles/Streamlines payload.
+        with open(pkl, "rb") as fh:
+            stored = pickle.load(fh)
+        assert set(stored) == {"cluster_map", "rng"}
+        assert isinstance(stored["rng"], np.random.Generator)
+
+
+# --------------------------------------------------------------------------- #
+# Thread pinning, mirroring DipyAtlasSLR.
+# --------------------------------------------------------------------------- #
+class TestThreadPinning:
+    def test_omp_pinned_during_recognition(
         self, workspace, atlas_dir, tmp_path, monkeypatch
     ):
-        """Setting ``chunk_size`` is the only lever the caller sets; the node
-        forces the local SLR off (a union of per-chunk SLRs is invalid) even when
-        ``slr`` is left at its default ``True`` -- and never raises for it."""
         import swane.nipype_pipeline.nodes.DipyRecoBundles as mod
-        from dipy.io.streamline import load_tractogram
 
-        subject = _subject_with_ifof(tmp_path)
-
-        seen_slr = []
-        real = mod._recognize
+        monkeypatch.delenv(OMP_THREADS_VAR, raising=False)
+        seen = {}
+        real = mod._run_recognize
 
         def _spy(*args, **kwargs):
-            seen_slr.append(kwargs["slr"])
+            seen["omp"] = os.environ.get(OMP_THREADS_VAR)
             return real(*args, **kwargs)
 
-        monkeypatch.setattr(mod, "_recognize", _spy)
+        monkeypatch.setattr(mod, "_run_recognize", _spy)
 
-        node = DipyRecoBundles()
-        node.inputs.tractogram_atlas = subject
+        subject = _subject_with_ifof(tmp_path)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+
+        node = DipyRecoBundlesRecognize()
+        node.inputs.recobundles_pickle = pkl
+        node.inputs.tractogram_chunk = subject
         node.inputs.atlas_dir = atlas_dir
         node.inputs.model_bundle_name = "IFOF_R"
-        node.inputs.num_threads = 1
-        node.inputs.slr = True  # left at default; chunking overrides it
-        node.inputs.chunk_size = 200
-        node.run()  # must not raise
+        node.inputs.num_threads = 2
+        node.run()
 
-        assert seen_slr, "recognition was never invoked"
-        assert all(v is False for v in seen_slr)
-        out = node._list_outputs()["recognized_bundle"]
-        assert len(load_tractogram(out, "same", bbox_valid_check=False).streamlines) > 0
+        assert seen["omp"] == "2"
+        assert OMP_THREADS_VAR not in os.environ
+
+
+# --------------------------------------------------------------------------- #
+# DipyTractogramChunker: representative 1..N split.
+# --------------------------------------------------------------------------- #
+def _indexed_streamlines(n, tmp_path, name="indexed.trx"):
+    """A tractogram of ``n`` streamlines whose i-th streamline is tagged by a
+    constant x == i, so a chunk's original indices are recoverable."""
+    from dipy.tracking.streamline import Streamlines
+
+    lines = []
+    for i in range(n):
+        line = np.zeros((10, 3), dtype=np.float32)
+        line[:, 0] = float(i)  # x encodes the original index
+        line[:, 2] = np.linspace(0, 20, 10)  # non-degenerate geometry
+        lines.append(line)
+    path = tmp_path / name
+    _save(Streamlines(lines), str(path))
+    return str(path)
+
+
+def _chunk(tractogram, n_chunks, tmp_path):
+    from swane.nipype_pipeline.nodes.DipyTractogramChunker import DipyTractogramChunker
+
+    node = DipyTractogramChunker()
+    node.inputs.tractogram_atlas = tractogram
+    node.inputs.n_chunks = n_chunks
+    node.inputs.out_prefix = str(tmp_path / "chunk")
+    node.run()
+    return node._list_outputs()["chunks"]
+
+
+class TestTractogramChunker:
+    def test_single_chunk_returns_the_whole_tractogram(self, workspace, tmp_path):
+        tractogram = _indexed_streamlines(50, tmp_path)
+        chunks = _chunk(tractogram, 1, tmp_path)
+        assert len(chunks) == 1
+        assert _n_streamlines(chunks[0]) == 50
+
+    def test_n_chunks_partition_exactly_once(self, workspace, tmp_path):
+        n, N = 47, 4
+        tractogram = _indexed_streamlines(n, tmp_path)
+        chunks = _chunk(tractogram, N, tmp_path)
+
+        assert len(chunks) == N
+        # Every streamline appears in exactly one chunk -- counts sum, and the
+        # union of recovered original indices is the full set with no repeats.
+        assert sum(_n_streamlines(c) for c in chunks) == n
+        seen = []
+        for c in chunks:
+            for sl in _load_streamlines(c):
+                seen.append(int(round(sl[0, 0])))
+        assert sorted(seen) == list(range(n))
+
+    def test_each_chunk_is_representative_not_contiguous(self, workspace, tmp_path):
+        n, N = 47, 4
+        tractogram = _indexed_streamlines(n, tmp_path)
+        chunks = _chunk(tractogram, N, tmp_path)
+
+        for c, chunk in enumerate(chunks):
+            idx = sorted(int(round(sl[0, 0])) for sl in _load_streamlines(chunk))
+            # A strided partition: chunk c holds indices c, c+N, c+2N, ...
+            assert idx == list(range(c, n, N))
+            # ... which is emphatically not a contiguous block.
+            assert idx != list(range(idx[0], idx[0] + len(idx)))
+
+
+# --------------------------------------------------------------------------- #
+# DipyBundleUnion: concatenate N per-chunk recognitions.
+# --------------------------------------------------------------------------- #
+def _union(recognized_bundles, tmp_path, name="union.trx"):
+    from swane.nipype_pipeline.nodes.DipyBundleUnion import DipyBundleUnion
+
+    node = DipyBundleUnion()
+    node.inputs.recognized_bundles = list(recognized_bundles)
+    node.inputs.out_bundle = str(tmp_path / name)
+    node.run()
+    return node._list_outputs()["bundle"]
+
+
+class TestBundleUnion:
+    def test_passthrough_at_n_equals_one(self, workspace, tmp_path):
+        one = _indexed_streamlines(12, tmp_path, name="one.trx")
+        out = _union([one], tmp_path)
+        assert _n_streamlines(out) == 12
+
+    def test_count_conserved_over_partials(self, workspace, tmp_path):
+        a = _indexed_streamlines(12, tmp_path, name="a.trx")
+        b = _indexed_streamlines(20, tmp_path, name="b.trx")
+        c = _indexed_streamlines(7, tmp_path, name="c.trx")
+        out = _union([a, b, c], tmp_path)
+        assert _n_streamlines(out) == 12 + 20 + 7
+
+
+# --------------------------------------------------------------------------- #
+# DipyBundlesToRef: atlas-space bundle -> reference-space .vtp via vtk.
+# --------------------------------------------------------------------------- #
+def _to_ref(bundle, atlas2native, out_name, tmp_path):
+    from swane.nipype_pipeline.nodes.DipyBundlesToRef import DipyBundlesToRef
+
+    node = DipyBundlesToRef()
+    node.inputs.bundle = bundle
+    node.inputs.atlas2native = atlas2native
+    node.inputs.out_name = out_name
+    node.inputs.out_vtp = str(tmp_path / (out_name + ".vtp"))
+    node.run()
+    return node._list_outputs()["bundle_vtp"]
+
+
+def _read_vtp_points(path):
+    from vtkmodules.vtkIOXML import vtkXMLPolyDataReader
+    from vtkmodules.util.numpy_support import vtk_to_numpy
+
+    reader = vtkXMLPolyDataReader()
+    reader.SetFileName(path)
+    reader.Update()
+    pd = reader.GetOutput()
+    return pd, vtk_to_numpy(pd.GetPoints().GetData())
+
+
+class TestBundlesToRef:
+    def _write_atlas2native(self, tmp_path, matrix):
+        path = str(tmp_path / "atlas2native.txt")
+        np.savetxt(path, matrix)
+        return path
+
+    def test_writes_reference_space_vtp_via_vtk(self, workspace, tmp_path):
+        # A known atlas->native transform: translate x by +100, scale nothing.
+        matrix = np.eye(4)
+        matrix[0, 3] = 100.0
+        atlas2native = self._write_atlas2native(tmp_path, matrix)
+
+        bundle = _indexed_streamlines(5, tmp_path, name="bundle.trx")
+        atlas_pts = np.vstack([np.asarray(sl) for sl in _load_streamlines(bundle)])
+
+        out = _to_ref(bundle, atlas2native, "r-af_lh", tmp_path)
+        assert out.endswith(".vtp")
+        assert os.path.exists(out)
+
+        pd, ref_pts = _read_vtp_points(out)
+        assert pd.GetNumberOfLines() == 5
+        # Points landed in reference space: x shifted by +100, y/z unchanged.
+        expected = atlas_pts.copy()
+        expected[:, 0] += 100.0
+        assert np.allclose(
+            np.sort(ref_pts, axis=0), np.sort(expected, axis=0), atol=1e-3
+        )
+
+    def test_written_without_fury(self, workspace, tmp_path, monkeypatch):
+        """``fury`` is not installed; the node must write PolyData with ``vtk``
+        directly. Poison the import so any accidental ``fury`` use fails loudly."""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def _no_fury(name, *args, **kwargs):
+            if name == "fury" or name.startswith("fury."):
+                raise ImportError("fury must not be used to write .vtp")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _no_fury)
+
+        atlas2native = self._write_atlas2native(tmp_path, np.eye(4))
+        bundle = _indexed_streamlines(3, tmp_path, name="bundle.trx")
+        out = _to_ref(bundle, atlas2native, "r-cst_rh", tmp_path)
+        assert os.path.exists(out)
+
+    def test_empty_bundle_writes_valid_empty_vtp(self, workspace, tmp_path):
+        from dipy.tracking.streamline import Streamlines
+
+        empty = tmp_path / "empty.trx"
+        _save(Streamlines([]), str(empty))
+        atlas2native = self._write_atlas2native(tmp_path, np.eye(4))
+
+        out = _to_ref(str(empty), atlas2native, "r-af_rh", tmp_path)
+        pd, _ = _read_vtp_points(out)
+        assert pd.GetNumberOfLines() == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -494,34 +736,3 @@ class TestDipyFornixSplitNode:
         assert out["atlas_dir"] == atlas_dir
         assert os.path.exists(bundle_path(atlas_dir, FORNIX_LEFT_NAME))
         assert os.path.exists(bundle_path(atlas_dir, FORNIX_RIGHT_NAME))
-
-
-# --------------------------------------------------------------------------- #
-# Thread pinning, mirroring DipyAtlasSLR.
-# --------------------------------------------------------------------------- #
-class TestThreadPinning:
-    def test_omp_pinned_during_recognition(
-        self, workspace, atlas_dir, tmp_path, monkeypatch
-    ):
-        import swane.nipype_pipeline.nodes.DipyRecoBundles as mod
-
-        monkeypatch.delenv(OMP_THREADS_VAR, raising=False)
-        seen = {}
-        real = mod._recognize
-
-        def _spy(*args, **kwargs):
-            seen["omp"] = os.environ.get(OMP_THREADS_VAR)
-            return real(*args, **kwargs)
-
-        monkeypatch.setattr(mod, "_recognize", _spy)
-
-        subject = _subject_with_ifof(tmp_path)
-        node = DipyRecoBundles()
-        node.inputs.tractogram_atlas = subject
-        node.inputs.atlas_dir = atlas_dir
-        node.inputs.model_bundle_name = "IFOF_R"
-        node.inputs.num_threads = 2
-        node.run()
-
-        assert seen["omp"] == "2"
-        assert OMP_THREADS_VAR not in os.environ
