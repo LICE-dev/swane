@@ -300,6 +300,203 @@ class TestChunkAndUnion:
 
 
 # --------------------------------------------------------------------------- #
+# Fornix split (spec section 3's "fx" special case).
+#
+# The atlas ships the fornix as one side-combined model file, ``F_L_R.trk``.
+# Unlike every other bilateral tract (which already has separate ``<NAME>_L``/
+# ``<NAME>_R`` atlas files), the fornix has to be lateralised by hand -- once,
+# on the atlas's own model bundle, in the atlas's own RASMM world space, the
+# same space every other atlas model bundle already lives in (e.g. spec
+# section 3's verified ``AST_L`` spans x[-56,-8]: negative x is left). The
+# result is cached as ``F_L.trk``/``F_R.trk`` beside the atlas's other bundle
+# files so every subsequent fornix recognition -- for every subject -- reuses
+# them exactly like any other named atlas bundle, with no special-casing left
+# in ``DipyRecoBundles`` itself.
+#
+# This is valid only for a genuinely paired structure shipped as one combined
+# file; a commissure (e.g. ``AC``) has no left/right identity and the split is
+# refused for it.
+# --------------------------------------------------------------------------- #
+def _save_fornix_combined(atlas_dir, n=40, x_left=-25.0, x_right=25.0, seed=5):
+    """Write a synthetic ``F_L_R.trk`` (atlas RASMM space) with ``n`` streamlines
+    on each side of x=0."""
+    from swane.nipype_pipeline.nodes.DipyFornixSplit import FORNIX_COMBINED_NAME
+
+    rng = np.random.default_rng(seed)
+    left = _bundle(rng, n, [x_left, 0, 0], [0, 0, 1], 2)
+    right = _bundle(rng, n, [x_right, 0, 0], [0, 1, 0], 2)
+    path = bundle_path(atlas_dir, FORNIX_COMBINED_NAME)
+    _save(_streamlines(left, right), path)
+    return path
+
+
+class TestSplitBySignX:
+    """The pure sign-of-x split, independent of file caching."""
+
+    def test_splits_by_sign_of_x_conserving_count(self):
+        from swane.nipype_pipeline.nodes.DipyFornixSplit import (
+            split_by_sign_x,
+            FORNIX_COMBINED_NAME,
+        )
+
+        rng = np.random.default_rng(1)
+        left = _bundle(rng, 37, [-30, 0, 0], [0, 0, 1], 3)
+        right = _bundle(rng, 41, [25, 0, 0], [0, 1, 0], 3)
+        streamlines = _streamlines(left, right)
+
+        lh_idx, rh_idx = split_by_sign_x(streamlines, FORNIX_COMBINED_NAME)
+
+        assert len(lh_idx) + len(rh_idx) == len(streamlines)
+        assert len(lh_idx) == 37
+        assert len(rh_idx) == 41
+        assert all(np.mean(streamlines[i][:, 0]) < 0 for i in lh_idx)
+        assert all(np.mean(streamlines[i][:, 0]) >= 0 for i in rh_idx)
+
+    def test_zero_mean_x_goes_to_the_right(self):
+        from swane.nipype_pipeline.nodes.DipyFornixSplit import (
+            split_by_sign_x,
+            FORNIX_COMBINED_NAME,
+        )
+
+        streamlines = [np.zeros((10, 3), dtype=np.float32)]
+        lh_idx, rh_idx = split_by_sign_x(streamlines, FORNIX_COMBINED_NAME)
+        assert list(lh_idx) == []
+        assert list(rh_idx) == [0]
+
+    def test_refuses_a_commissure(self):
+        from swane.nipype_pipeline.nodes.DipyFornixSplit import (
+            split_by_sign_x,
+            FornixSplitRefusedError,
+        )
+
+        streamlines = [np.zeros((5, 3), dtype=np.float32)]
+        with pytest.raises(FornixSplitRefusedError):
+            split_by_sign_x(streamlines, "AC")
+
+
+class TestEnsureFornixLateralized:
+    """The cached, create-once-per-atlas behaviour."""
+
+    def test_creates_lateralized_files_once(self, tmp_path):
+        from swane.nipype_pipeline.nodes.DipyFornixSplit import (
+            ensure_fornix_lateralized,
+        )
+        from dipy.io.streamline import load_tractogram
+
+        atlas_dir = str(tmp_path / "atlas")
+        _save_fornix_combined(atlas_dir, n=40)
+
+        path_lh, path_rh = ensure_fornix_lateralized(atlas_dir)
+
+        assert os.path.exists(path_lh)
+        assert os.path.exists(path_rh)
+        lh = load_tractogram(path_lh, "same", bbox_valid_check=False)
+        rh = load_tractogram(path_rh, "same", bbox_valid_check=False)
+        assert len(lh.streamlines) == 40
+        assert len(rh.streamlines) == 40
+
+    def test_second_call_reuses_existing_files_without_recreating(self, tmp_path):
+        from swane.nipype_pipeline.nodes.DipyFornixSplit import (
+            ensure_fornix_lateralized,
+        )
+
+        atlas_dir = str(tmp_path / "atlas")
+        _save_fornix_combined(atlas_dir, n=10)
+
+        path_lh, path_rh = ensure_fornix_lateralized(atlas_dir)
+        mtime_lh = os.path.getmtime(path_lh)
+        mtime_rh = os.path.getmtime(path_rh)
+
+        path_lh_2, path_rh_2 = ensure_fornix_lateralized(atlas_dir)
+
+        assert (path_lh_2, path_rh_2) == (path_lh, path_rh)
+        assert os.path.getmtime(path_lh_2) == mtime_lh
+        assert os.path.getmtime(path_rh_2) == mtime_rh
+
+    def test_missing_combined_bundle_raises(self, tmp_path):
+        from swane.nipype_pipeline.nodes.DipyFornixSplit import (
+            ensure_fornix_lateralized,
+        )
+
+        atlas_dir = str(tmp_path / "empty_atlas")
+        os.makedirs(atlas_dir, exist_ok=True)
+        with pytest.raises(FileNotFoundError):
+            ensure_fornix_lateralized(atlas_dir)
+
+    def test_split_uses_world_rasmm_space_not_raw_voxel_storage(self, tmp_path):
+        """The atlas's left/right convention is defined in RASMM world space
+        (spec section 3's verified ``AST_L`` x[-56,-8]). A fixture whose voxel
+        storage disagrees in sign with world space -- voxel x>0 maps to world
+        x<0 and vice versa -- proves the split reads world/RASMM coordinates,
+        never raw voxel indices: getting this space wrong would silently swap
+        every streamline to the wrong side."""
+        import nibabel as nib
+        from dipy.io.stateful_tractogram import StatefulTractogram, Space
+        from dipy.io.streamline import save_tractogram, load_tractogram
+        from swane.nipype_pipeline.nodes.DipyFornixSplit import (
+            ensure_fornix_lateralized,
+            FORNIX_COMBINED_NAME,
+        )
+
+        # world = affine @ voxel; x is flipped and offset.
+        affine = np.array(
+            [
+                [-1, 0, 0, 90],
+                [0, 1, 0, -126],
+                [0, 0, 1, -72],
+                [0, 0, 0, 1],
+            ],
+            dtype=float,
+        )
+        ref = nib.Nifti1Image(np.zeros((181, 217, 181), dtype=np.float32), affine)
+
+        rng = np.random.default_rng(9)
+        # voxel x=110 -> world x=-20 (world-left); voxel x=70 -> world x=+20
+        # (world-right). Raw voxel-index sign would say the opposite.
+        left_world = _bundle(rng, 22, [110, 100, 90], [0, 0, 1], 2)
+        right_world = _bundle(rng, 26, [70, 100, 90], [0, 0, 1], 2)
+        streamlines = _streamlines(left_world, right_world)
+
+        sft = StatefulTractogram(streamlines, ref, Space.VOX)
+        atlas_dir = str(tmp_path / "atlas")
+        path = bundle_path(atlas_dir, FORNIX_COMBINED_NAME)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        save_tractogram(sft, path, bbox_valid_check=False)
+
+        path_lh, path_rh = ensure_fornix_lateralized(atlas_dir)
+
+        lh = load_tractogram(path_lh, "same", bbox_valid_check=False)
+        rh = load_tractogram(path_rh, "same", bbox_valid_check=False)
+        assert len(lh.streamlines) == 22
+        assert len(rh.streamlines) == 26
+
+
+class TestDipyFornixSplitNode:
+    """The thin Nipype node wrapping :func:`ensure_fornix_lateralized`, so a
+    bundle workflow can depend on it before running two ordinary
+    ``DipyRecoBundles`` recognitions (``F_L``/``F_R``) for the fornix."""
+
+    def test_node_ensures_files_and_passes_atlas_dir_through(self, workspace, tmp_path):
+        from swane.nipype_pipeline.nodes.DipyFornixSplit import (
+            DipyFornixSplit,
+            FORNIX_LEFT_NAME,
+            FORNIX_RIGHT_NAME,
+        )
+
+        atlas_dir = str(tmp_path / "atlas")
+        _save_fornix_combined(atlas_dir, n=15)
+
+        node = DipyFornixSplit()
+        node.inputs.atlas_dir = atlas_dir
+        node.run()
+
+        out = node._list_outputs()
+        assert out["atlas_dir"] == atlas_dir
+        assert os.path.exists(bundle_path(atlas_dir, FORNIX_LEFT_NAME))
+        assert os.path.exists(bundle_path(atlas_dir, FORNIX_RIGHT_NAME))
+
+
+# --------------------------------------------------------------------------- #
 # Thread pinning, mirroring DipyAtlasSLR.
 # --------------------------------------------------------------------------- #
 class TestThreadPinning:
