@@ -81,6 +81,26 @@ class TestFormatNodeName:
         node.long_name = "  padded  "
         assert CustomWorkflow.format_node_name(node) == "Padded"
 
+    def test_dipy_recobundles_and_fornix_have_registered_labels(self):
+        """The RecoBundles build/recognise and fornix-split nodes are registered.
+
+        Without an entry in ``strings.node_names`` these would fall back to the
+        raw, internal node name (e.g. "Build") in the progress UI.
+        """
+        from swane.nipype_pipeline.nodes.DipyRecoBundles import (
+            DipyRecoBundlesBuild,
+            DipyRecoBundlesRecognize,
+        )
+        from swane.nipype_pipeline.nodes.DipyFornixSplit import DipyFornixSplit
+
+        build = Node(DipyRecoBundlesBuild(), name="build")
+        recognize = Node(DipyRecoBundlesRecognize(), name="recognize")
+        fornix = Node(DipyFornixSplit(), name="fornix")
+
+        assert CustomWorkflow.format_node_name(build) != "Build"
+        assert CustomWorkflow.format_node_name(recognize) != "Recognize"
+        assert CustomWorkflow.format_node_name(fornix) != "Fornix"
+
 
 class TestNodeArrays:
     """Introspection helpers that expose the workflow's nodes/interfaces."""

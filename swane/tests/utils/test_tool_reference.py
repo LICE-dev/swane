@@ -53,3 +53,34 @@ def test_antspynet_brain_extraction_is_registered():
     assert isinstance(ref, ToolReference)
     assert ref.package == Package.ANTS
     assert ref.references
+
+
+def test_dipy_recobundles_build_cites_recobundles_and_atlas():
+    # DipyRecoBundlesBuild runs the RecoBundles clustering on the HCP842 atlas
+    # streamline space, so it carries both the RecoBundles method paper
+    # (Garyfallidis 2018, not the earlier 2017 preprint) and the atlas paper
+    # (Yeh 2018), same as DipyAtlasSLR.
+    ref = get_command_info("DipyRecoBundlesBuild")
+    assert isinstance(ref, ToolReference)
+    assert ref.package == Package.DIPY
+    assert any(
+        "Garyfallidis" in reference and "2018" in reference
+        for reference in ref.references
+    )
+    assert not any("2017" in reference for reference in ref.references)
+    assert any(
+        "Yeh" in reference and "2018" in reference for reference in ref.references
+    )
+
+
+def test_dipy_recobundles_recognize_cites_recobundles_and_atlas():
+    ref = get_command_info("DipyRecoBundlesRecognize")
+    assert isinstance(ref, ToolReference)
+    assert ref.package == Package.DIPY
+    assert any(
+        "Garyfallidis" in reference and "2018" in reference
+        for reference in ref.references
+    )
+    assert any(
+        "Yeh" in reference and "2018" in reference for reference in ref.references
+    )
