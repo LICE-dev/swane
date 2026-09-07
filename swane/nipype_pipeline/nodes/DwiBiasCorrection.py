@@ -135,7 +135,15 @@ class DwiBiasCorrection(BaseInterface):
         safe_field = np.where(field > 0, field, 1.0).astype(np.float32)
         corrected = (data / safe_field[..., np.newaxis]).astype(np.float32)
 
-        nib.save(nib.Nifti1Image(corrected, in_nii.affine, in_nii.header), out_file)
+        # The bias-divided volumes are a float computation. The raw dcm2niix DWI
+        # this chain inherits its header from is int16, so reusing that header's
+        # on-disk dtype would quantize every corrected voxel back to integers.
+        # Write float32 instead -- lossless for the division -- keeping the
+        # affine/orientation/zooms from the source header unchanged. (The bias
+        # field is already saved as float32: it carries no int16 source header.)
+        out_img = nib.Nifti1Image(corrected, in_nii.affine, in_nii.header)
+        out_img.header.set_data_dtype(np.float32)
+        nib.save(out_img, out_file)
         nib.save(nib.Nifti1Image(field, in_nii.affine), field_file)
 
         return runtime

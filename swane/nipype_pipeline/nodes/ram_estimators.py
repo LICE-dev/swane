@@ -707,10 +707,20 @@ class DipyCsdRamEstimator(RamEstimator):
     the E2d note under ``docs/superpowers/``.
     """
 
-    #: Bytes per (voxel x volume) for the 4D series. ``get_fdata()`` yields
-    #: float64 (8 B); the remainder covers the mask read and the reshape/save
-    #: slack. Calibrated up from the oracle probes.
-    DATA_BYTES_PER_VOXEL_VOLUME = 10
+    #: Bytes per (voxel x volume) for the 4D series. The node now loads the DWI
+    #: as **float32** (``get_fdata(dtype=np.float32)``, user decision 2026-09-07),
+    #: so the input buffer is 4 B/element resident (was 8 B under the old float64
+    #: get_fdata) plus a same-size raw copy during the load: 4 (resident at the
+    #: peaks_from_model peak) up to 4 + 4 = 8 (load transient) B, rounded to 8.
+    #: This *supersedes* the interim int16->float32 value (10 -> 12) that assumed
+    #: a float64 load; the float32 load lowers the real data term, so 8 is both
+    #: accurate and conservative. Measured 2026-09-07: float32 load dropped CSD's
+    #: serial peak by exactly the 4 B/(voxel x volume) this reflects (subj2 65-vol
+    #: crop ~30 M voxel x vol: 0.556 -> 0.446 GB, -0.11 GB vs -0.12 predicted).
+    #: The dominant term is the per-voxel output-array copies (float64 SH,
+    #: unchanged), so the estimate stays conservative at both the serial and the
+    #: 4-worker rungs.
+    DATA_BYTES_PER_VOXEL_VOLUME = 8
 
     #: Per-voxel bytes of the non-SH output arrays at the node's pinned
     #: ``npeaks=1``: gfa 8 + qa 8 + peak_dirs 24 + peak_values 8 +

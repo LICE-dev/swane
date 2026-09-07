@@ -186,6 +186,25 @@ class TestNode:
         cropped_data = np.asarray(cropped_nii.dataobj)
         assert cropped_data[..., 0].sum() >= data[..., 0].sum() - 1e-1
 
+    def test_node_preserves_int16_source_dtype_lossless_crop(self, workspace):
+        """A crop is a lossless spatial subset -- no float computation -- so it
+        must keep the raw DWI's on-disk dtype (int16), NOT inflate to float32
+        the way the float-computing DWI nodes (denoise/motion/bias) do. Casting
+        the crop to float32 would double its RAM for no precision gain."""
+        data, affine = _brain_4d()
+        img = nib.Nifti1Image(data.astype(np.int16), affine)
+        img.header.set_data_dtype(np.int16)
+        in_file = os.path.join(str(workspace), "raw_int16_dwi.nii.gz")
+        nib.save(img, in_file)
+
+        node = DwiCrop()
+        node.inputs.in_file = in_file
+        node.inputs.out_file = "crop_dwi.nii.gz"
+        node.run()
+
+        out = nib.load(node._list_outputs()["out_file"])
+        assert out.header.get_data_dtype() == np.dtype(np.int16)
+
     def test_node_pins_blas_threads_and_restores_environment(
         self, workspace, make_nifti, monkeypatch
     ):

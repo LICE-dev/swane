@@ -131,6 +131,43 @@ class TestDipyCsdFitContract:
         assert np.all(np.isfinite(shm))
 
 
+class TestDipyCsdFitLoadsFloat32:
+    """dipy's CSD upcasts to float64 internally, so loading the DWI as float32
+    (rather than get_fdata's float64 default) is shm_coeff-lossless (~1e-8)
+    while halving the input buffer's RAM."""
+
+    def test_data_passed_to_csd_is_float32(self, workspace, make_nifti, monkeypatch):
+        import dipy.reconst.csdeconv as csd_module
+        from dipy.sims.voxel import single_tensor
+
+        n_dirs, n_b0 = 30, 2
+        gtab, bvals, bvecs = _gtab(n_directions=n_dirs, n_b0=n_b0)
+        bval, bvec = _gtab_files(workspace, bvals, bvecs)
+        shape = (4, 4, 4)
+        sig = single_tensor(gtab, S0=100.0, evals=np.array([0.0015, 0.0003, 0.0003]))
+        data = np.tile(sig, shape + (1,)).astype(np.float32)
+        in_file = make_nifti("dwi.nii.gz", data=data)
+        mask_file = make_nifti("mask.nii.gz", data=np.ones(shape, dtype=np.float32))
+
+        seen = {}
+        real_response = csd_module.auto_response_ssst
+
+        def _spy_response(gtab_arg, data_arg, **kwargs):
+            seen["dtype"] = np.asarray(data_arg).dtype
+            return real_response(gtab_arg, data_arg, **kwargs)
+
+        monkeypatch.setattr(csd_module, "auto_response_ssst", _spy_response)
+
+        node = DipyCsdFit()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.mask = mask_file
+        node.run()
+
+        assert seen["dtype"] == np.dtype(np.float32)
+
+
 class TestDipyCsdFitThreadPinning:
     """BLAS pinned to 1 per worker; parallelism comes from ``num_processes``."""
 

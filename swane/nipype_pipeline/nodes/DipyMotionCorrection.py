@@ -368,18 +368,21 @@ class DipyMotionCorrection(BaseInterface):
                 else:
                     os.environ[var] = val
 
-        # Save the motion-corrected 4D image, preserving the input dtype. The
-        # volume data is read back at float32 precision (C2.3): the parallel path
-        # already assembles its output in a float32 buffer, and reading the serial
-        # path's float64 image at float32 here keeps the serial reference and the
-        # parallel path bit-for-bit equal (the oracle contract) while avoiding a
-        # transient full-4D float64 copy at save time.
-        registered_img = nib.Nifti1Image(
-            registered_img.get_fdata(dtype=np.float32).astype(img.get_data_dtype()),
+        # Save the motion-corrected 4D image as float32. The registered volumes
+        # are a float computation; casting them back to the raw dcm2niix DWI's
+        # int16 on-disk dtype (inherited via ``img.header``) would quantize every
+        # correction. Reading the data at float32 keeps the serial reference and
+        # the parallel path bit-for-bit equal (the oracle contract) -- the
+        # parallel path already assembles into a float32 buffer -- and writing
+        # float32 on disk makes that correction lossless. The affine/orientation/
+        # zooms from the source header are preserved; only the data dtype changes.
+        out_img = nib.Nifti1Image(
+            registered_img.get_fdata(dtype=np.float32),
             img.affine,
             img.header,
         )
-        nib.save(registered_img, self._gen_outfilename("out_file", "moco_"))
+        out_img.header.set_data_dtype(np.float32)
+        nib.save(out_img, self._gen_outfilename("out_file", "moco_"))
 
         # Reorient the gradients. THE INDEXING TRAP: motion_correction returns
         # affines for *all* volumes, while reorient_bvecs expects only the

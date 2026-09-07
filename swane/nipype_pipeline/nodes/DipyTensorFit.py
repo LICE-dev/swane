@@ -57,7 +57,11 @@ class DipyTensorFit(BaseInterface):
         out_fa = self._gen_outfilename()
 
         in_nii = nib.load(self.inputs.in_file)
-        data = in_nii.get_fdata()
+        # Load float32 rather than get_fdata's float64 default: dipy's
+        # TensorModel upcasts to float64 internally, so FA is unchanged (~1e-7)
+        # while the input buffer's RAM is halved (user decision, 2026-09-07 --
+        # all dipy nodes load float32).
+        data = in_nii.get_fdata(dtype=np.float32)
         mask_data = nib.load(self.inputs.mask).get_fdata().astype(bool)
         bvals, bvecs = read_bvals_bvecs(self.inputs.bval, self.inputs.bvec)
         gtab = gradient_table(bvals, bvecs=bvecs)
