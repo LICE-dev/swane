@@ -202,6 +202,24 @@ tool_reference_list = {
             "Yeh FC, Panesar S, Fernandes D, et al. Population-averaged atlas of the macroscale human structural connectome and its network topology. NeuroImage. 2018;178:57-68.",
         ],
     ),
+    "DipyRecoBundlesBuild": ToolReference(
+        command="RecoBundles [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.segment.html#dipy.segment.bundles.RecoBundles",
+        references=[
+            "Garyfallidis E, Côté MA, Rheault F, et al. Recognition of white matter bundles using local and global streamline-based registration and clustering. NeuroImage. 2018;170:283-295.",
+            "Yeh FC, Panesar S, Fernandes D, et al. Population-averaged atlas of the macroscale human structural connectome and its network topology. NeuroImage. 2018;178:57-68.",
+        ],
+    ),
+    "DipyRecoBundlesRecognize": ToolReference(
+        command="RecoBundles.recognize [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.segment.html#dipy.segment.bundles.RecoBundles.recognize",
+        references=[
+            "Garyfallidis E, Côté MA, Rheault F, et al. Recognition of white matter bundles using local and global streamline-based registration and clustering. NeuroImage. 2018;170:283-295.",
+            "Yeh FC, Panesar S, Fernandes D, et al. Population-averaged atlas of the macroscale human structural connectome and its network topology. NeuroImage. 2018;178:57-68.",
+        ],
+    ),
     # Registration
     "FLIRT": ToolReference(
         command="flirt",
