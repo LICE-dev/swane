@@ -51,6 +51,10 @@ def _node_by_name(wf, name):
     return next(n for n in wf._graph.nodes() if n.name == name)
 
 
+def _nodes_by_iface(wf, iface_name):
+    return [n for n in wf._graph.nodes() if _iface(n) == iface_name]
+
+
 def _node_by_prefix(wf, prefix):
     return next(n for n in wf._graph.nodes() if n.name.startswith(prefix))
 
@@ -67,9 +71,9 @@ def build_dipy_wf(subject_config, global_config, make_input_dir):
     to ANTs when unset.
     """
 
-    def _build(engine=None, max_cpu=MAX_CPU):
+    def _build(engine=None, max_cpu=MAX_CPU, tractography=True):
         section = subject_config[DataInputList.DTI]
-        section["tractography"] = "true"
+        section["tractography"] = "true" if tractography else "false"
         synth = global_config[GlobalPrefCategoryList.SYNTH]
         synth["tractography_engine"] = TractographyEngine.DIPY_RECOBUNDLES.name
         synth["deskull_engine"] = DeskullEngine.ANTSPYNET.name
@@ -298,6 +302,59 @@ class TestAtlasSlrOnceAndBoundaryOutputs:
     def test_only_one_slr_node(self, dipy_wf):
         slr_nodes = [n for n in dipy_wf._graph.nodes() if _iface(n) == "DipyAtlasSLR"]
         assert len(slr_nodes) == 1
+
+
+class TestSharedRecoBundlesBuild:
+    """The RecoBundles build (clustering) is hoisted into preproc and shared:
+    after the single whole-brain SLR, a chunker splits the atlas-space tractogram
+    into 1..N representative sub-tractograms, and a build MapNode clusters each
+    once. The pickled builds and their chunks are published additively for the
+    per-tract bundle workflows to recognise from (Phase-1's outputs unchanged)."""
+
+    def test_chunker_after_slr(self, dipy_wf):
+        chunker = _node_by_name(dipy_wf, "dipy_chunker")
+        slr = _node_by_name(dipy_wf, "dipy_slr")
+        assert _iface(chunker) == "DipyTractogramChunker"
+        assert (slr, "tractogram_atlas", "tractogram_atlas") in _incoming(
+            dipy_wf, chunker
+        )
+
+    def test_build_is_a_mapnode_over_chunks(self, dipy_wf):
+        build = _node_by_name(dipy_wf, "dipy_recobundles_build")
+        assert _iface(build) == "DipyRecoBundlesBuild"
+        assert getattr(build, "iterfield", None) == ["tractogram_chunk"]
+        assert (
+            _node_by_name(dipy_wf, "dipy_chunker"),
+            "chunks",
+            "tractogram_chunk",
+        ) in _incoming(dipy_wf, build)
+
+    def test_only_one_slr_chunker_and_build(self, dipy_wf):
+        assert len(_nodes_by_iface(dipy_wf, "DipyAtlasSLR")) == 1
+        assert len(_nodes_by_iface(dipy_wf, "DipyTractogramChunker")) == 1
+        assert len(_nodes_by_iface(dipy_wf, "DipyRecoBundlesBuild")) == 1
+
+    def test_builds_and_chunks_reach_outputnode(self, dipy_wf):
+        outputnode = _node_by_name(dipy_wf, "outputnode")
+        build = _node_by_name(dipy_wf, "dipy_recobundles_build")
+        chunker = _node_by_name(dipy_wf, "dipy_chunker")
+        inc = _incoming(dipy_wf, outputnode)
+        assert (build, "recobundles_pickle", "recobundles_builds") in inc
+        assert (chunker, "chunks", "recobundles_chunks") in inc
+
+    def test_outputnode_advertises_the_shared_build_fields(self, dipy_wf):
+        outputnode = _node_by_name(dipy_wf, "outputnode")
+        fields = set(outputnode.interface._fields)
+        assert {"recobundles_builds", "recobundles_chunks"} <= fields
+        # Phase-1's four boundary outputs are unchanged (additive-only).
+        assert {"FA", "tractogram", "tractogram_atlas", "atlas2native"} <= fields
+
+    def test_gated_off_when_tractography_disabled(self, build_dipy_wf):
+        wf = build_dipy_wf(tractography=False)
+        names = {n.name for n in wf._graph.nodes()}
+        assert "dipy_chunker" not in names
+        assert "dipy_recobundles_build" not in names
+        assert "dipy_slr" not in names
 
 
 class TestRasAffineWiring:
