@@ -249,6 +249,13 @@ class TestChunkedBuild:
                 "tractogram_chunk",
             }
 
+    def test_refine_forced_off_when_chunked(self, af_chunked):
+        """refine registers the model to the subject's own first-pass bundle, so
+        like the per-bundle local SLR it cannot be unioned across chunks."""
+        for side in ("lh", "rh"):
+            recog = af_chunked.get_node("recognize_%s" % side)
+            assert recog.inputs.refine is False
+
     def test_slr_forced_off_when_chunked(self, af_chunked):
         for recog in _nodes_by_iface(af_chunked, "DipyRecoBundlesRecognize"):
             assert recog.inputs.slr is False
@@ -272,3 +279,49 @@ class TestUnmappedTract:
     @pytest.mark.parametrize("tract", ["atr", "str", "cbd", "cbp", "cbt", "ac"])
     def test_unmapped_tract_returns_none(self, tract):
         assert dipy_bundle_workflow(tract, n_chunks=1) is None
+
+
+# --------------------------------------------------------------------------- #
+# The recognition parameters reach the recognise nodes, identically per side.
+# --------------------------------------------------------------------------- #
+class TestRecognitionParametersAreApplied:
+    def test_default_configuration_on_an_unlisted_tract(self):
+        wf = dipy_bundle_workflow("ilf", n_chunks=1, num_threads=4)
+        for side in ("lh", "rh"):
+            recog = wf.get_node("recognize_%s" % side)
+            assert recog.inputs.model_clust_thr == 2.5
+            assert recog.inputs.reduction_thr == 15.0
+            assert recog.inputs.pruning_thr == 5.0
+            assert recog.inputs.refine is True
+            assert recog.inputs.r_reduction_thr == 12.0
+            assert recog.inputs.r_pruning_thr == 4.0
+
+    @pytest.mark.parametrize(
+        "tract",
+        ["af", "ar", "cst", "fa", "ifo", "ilf", "mdlf", "or", "uf", "vof", "fx"],
+    )
+    def test_both_sides_of_every_tract_share_one_configuration(self, tract):
+        """Left and right are the same structure and are routinely compared, so
+        they must never be recognised with different parameters."""
+        wf = dipy_bundle_workflow(tract, n_chunks=1, num_threads=4)
+        traits = (
+            "model_clust_thr",
+            "reduction_thr",
+            "pruning_thr",
+            "refine",
+            "r_reduction_thr",
+            "r_pruning_thr",
+        )
+        left = wf.get_node("recognize_lh").inputs
+        right = wf.get_node("recognize_rh").inputs
+        for trait in traits:
+            assert getattr(left, trait) == getattr(right, trait), trait
+
+    def test_overridden_tract_applies_to_both_sides(self):
+        wf = dipy_bundle_workflow("or", n_chunks=1, num_threads=4)
+        for side in ("lh", "rh"):
+            recog = wf.get_node("recognize_%s" % side)
+            assert (recog.inputs.r_reduction_thr, recog.inputs.r_pruning_thr) == (
+                14.0,
+                6.0,
+            )
