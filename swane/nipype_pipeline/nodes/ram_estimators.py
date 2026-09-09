@@ -313,9 +313,9 @@ class DipyTrackingRamEstimator(RamEstimator):
     ``shm_coeff`` FOV. Because the node crops to the brain internally, the peak
     tracks the cropped-brain voxel count; pricing the full FOV would both
     over-reserve when the FOV carries wide background margins and *under*-reserve
-    when a tight FOV still holds the whole brain. ``seeds`` is the WM-dominant
-    voxel count of the ``pve_wm`` mask times ``seed_density`` (user decision,
-    2026-09-06), which is what the buffer lever scales.
+    when a tight FOV still holds the whole brain. ``seeds`` is the seed count the node
+    places -- ``seed_density`` per ``REFERENCE_VOXEL_MM3`` of the ``pve_wm``
+    mask's volume -- which is what the buffer lever scales.
 
     Tuning
     ------
@@ -403,14 +403,17 @@ class DipyTrackingRamEstimator(RamEstimator):
 
     @staticmethod
     def _seed_count(inputs):
-        """WM-dominant voxels in ``pve_wm`` times ``seed_density`` -- the seed
-        pool the buffer lever scales. Reads the mask (user decision,
-        2026-09-06), never the SH data."""
-        from swane.nipype_pipeline.nodes.DipyTracking import wm_seed_mask
+        """The seed pool the buffer lever scales, from the same volume density
+        the node seeds at. Reads the mask, never the SH data."""
+        from swane.nipype_pipeline.nodes.DipyTracking import (
+            seed_count_for_volume,
+            wm_seed_mask,
+        )
 
         density = int(inputs.seed_density) if isdefined(inputs.seed_density) else 2
-        pve = nib.load(inputs.pve_wm).get_fdata()
-        return int(wm_seed_mask(pve).sum()) * density
+        pve_nii = nib.load(inputs.pve_wm)
+        mask = wm_seed_mask(pve_nii.get_fdata())
+        return seed_count_for_volume(mask, pve_nii.affine, density)
 
     @staticmethod
     def _declared_chunk(inputs):

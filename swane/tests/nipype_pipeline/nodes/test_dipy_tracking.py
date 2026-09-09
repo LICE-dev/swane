@@ -27,7 +27,11 @@ from swane.nipype_pipeline.nodes.DipyTracking import (
     foreground_bbox_slices,
     shift_affine_for_crop,
     WM_PVE_SEED_THRESHOLD,
-    FA_STOP_THRESHOLD,
+    FA_STOP_PERCENTILE,
+    FA_STOP_FLOOR,
+    REFERENCE_VOXEL_MM3,
+    fa_stop_threshold,
+    seed_count_for_volume,
     SEED_BUFFER_FRACTION,
     TRX_CHUNK_SIZE,
     BBOX_PAD_VOXELS,
@@ -72,12 +76,16 @@ def _nodif_brain_from_pve(wm, gm, csf):
 
 
 def _fa_field(wm):
-    """Synthetic FA map for the ThresholdStoppingCriterion: above
-    FA_STOP_THRESHOLD inside the WM slab, zero everywhere else (GM caps and
-    background CSF), so tracking still terminates at the slab boundary the
-    way the CMC-era WM/GM/CSF split used to."""
+    """Synthetic FA map for the ThresholdStoppingCriterion: high inside the WM
+    slab, zero everywhere else (GM caps and background CSF), so tracking
+    terminates at the slab boundary the way the CMC-era WM/GM/CSF split used to.
+
+    The slab is not perfectly uniform: FA ramps mildly across it, so a
+    percentile of the seed mask's own FA is a meaningful quantity rather than
+    the single constant a flat slab would collapse to."""
     fa = np.zeros(_SHAPE, dtype=np.float32)
-    fa[wm > 0] = 0.8
+    ramp = np.linspace(0.80, 0.90, _SHAPE[0], dtype=np.float32)
+    fa[wm > 0] = np.broadcast_to(ramp[:, None, None], _SHAPE)[wm > 0]
     return fa
 
 
@@ -437,8 +445,42 @@ class TestTrackingTraitContract:
 # seed_density=2 memory spike (spec Measurements).
 # --------------------------------------------------------------------------- #
 class TestFaStopping:
-    def test_fa_threshold_constant_is_the_probe_value(self):
-        assert FA_STOP_THRESHOLD == 0.20
+    def test_threshold_is_a_percentile_of_the_seed_mask_fa(self):
+        fa = np.linspace(0.0, 1.0, 1000, dtype=np.float32).reshape(10, 10, 10)
+        mask = np.ones_like(fa, dtype=bool)
+        assert fa_stop_threshold(fa, mask) == pytest.approx(
+            float(np.percentile(fa, FA_STOP_PERCENTILE))
+        )
+
+    def test_threshold_reads_only_the_seed_mask(self):
+        """Cortex and CSF sit far below white matter; including them would drag
+        the percentile down, so the threshold is taken inside the mask only."""
+        fa = np.zeros((10, 10, 10), dtype=np.float32)
+        mask = np.zeros_like(fa, dtype=bool)
+        mask[:5] = True
+        fa[:5] = np.linspace(0.3, 0.7, 500, dtype=np.float32).reshape(5, 10, 10)
+        assert fa_stop_threshold(fa, mask) == pytest.approx(
+            float(np.percentile(fa[mask], FA_STOP_PERCENTILE))
+        )
+
+    def test_threshold_follows_a_globally_lower_fa_distribution(self):
+        """Halving every FA halves the threshold: the same share of white
+        matter is clipped whatever the acquisition's overall anisotropy."""
+        fa = np.linspace(0.4, 0.9, 1000, dtype=np.float32).reshape(10, 10, 10)
+        mask = np.ones_like(fa, dtype=bool)
+        assert fa_stop_threshold(fa * 0.5, mask) == pytest.approx(
+            0.5 * fa_stop_threshold(fa, mask), rel=1e-5
+        )
+
+    def test_floor_bounds_the_threshold_from_below(self):
+        fa = np.full((10, 10, 10), 0.01, dtype=np.float32)
+        mask = np.ones_like(fa, dtype=bool)
+        assert fa_stop_threshold(fa, mask) == FA_STOP_FLOOR
+
+    def test_empty_seed_mask_falls_back_to_the_floor(self):
+        fa = np.full((10, 10, 10), 0.5, dtype=np.float32)
+        mask = np.zeros_like(fa, dtype=bool)
+        assert fa_stop_threshold(fa, mask) == FA_STOP_FLOOR
 
     def test_seed_buffer_fraction_constant(self):
         assert SEED_BUFFER_FRACTION == 0.7
@@ -498,7 +540,10 @@ class TestFaStopping:
         node = _configure(DipyTracking(), tracking_inputs, seed_density=2)
         node.run()
 
-        assert captured["threshold"] == 0.20
+        wm_for_threshold, _, _ = _pve_maps()
+        assert captured["threshold"] == pytest.approx(
+            fa_stop_threshold(_fa_field(wm_for_threshold), wm_seed_mask(wm_for_threshold))
+        )
         wm, _, _ = _pve_maps()
         # tracking_inputs' nodif_brain is nonzero everywhere (comment at the
         # padded-crop test above), so the crop is a no-op here and the
@@ -534,27 +579,38 @@ class TestWmSeeding:
             vox = np.round(inv[:3, :3] @ seed + inv[:3, 3]).astype(int)
             assert wm[tuple(vox)] >= WM_PVE_SEED_THRESHOLD
 
-    def test_density_maps_to_single_axis_not_cubic(self, monkeypatch):
-        """seed_density=N maps to dipy's (N, 1, 1) density -- N seeds along one
-        axis, not the cubic (N, N, N) dipy default -- so the preference's
-        density=2 default produces ~1.5 seeds/voxel rather than 8. User
-        decision, 2026-09-05: cubic density=2 combined with FA-stop produced
-        far more seeds/streamlines than the validated seed/stop probe arms and
-        strained the 8 GB target on real subj1 data."""
-        seen = {}
+    def test_seed_count_follows_the_mask_volume_not_its_voxel_count(self):
+        """The same white-matter volume gets the same number of seeds whatever
+        the voxel size: a voxel eight times larger holds an eighth as many
+        mask voxels and is seeded eight times as densely."""
+        mask = np.ones((10, 10, 10), dtype=bool)
+        fine = seed_count_for_volume(mask, np.diag([1.0, 1.0, 1.0, 1.0]), 2)
+        coarse_mask = np.ones((5, 5, 5), dtype=bool)
+        coarse = seed_count_for_volume(coarse_mask, np.diag([2.0, 2.0, 2.0, 1.0]), 2)
+        assert fine == coarse
 
-        def _capture(mask, affine, density=None):
-            seen["density"] = density
-            return np.zeros((0, 3))
+    def test_seed_count_is_density_per_reference_voxel_volume(self):
+        mask = np.ones((10, 10, 10), dtype=bool)
+        affine = np.diag([1.0, 1.0, 1.0, 1.0])
+        assert seed_count_for_volume(mask, affine, 2) == round(
+            2 * mask.sum() * 1.0 / REFERENCE_VOXEL_MM3
+        )
 
-        import dipy.tracking.utils as tracking_utils
+    def test_seed_count_uses_the_world_voxel_volume_of_an_oblique_affine(self):
+        mask = np.ones((10, 10, 10), dtype=bool)
+        affine = np.eye(4)
+        affine[:3, :3] = np.array([[0.0, 2.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 3.0]])
+        # |det| = 6 mm3 per voxel, whatever the axis permutation and signs
+        assert seed_count_for_volume(mask, affine, 1) == round(
+            mask.sum() * 6.0 / REFERENCE_VOXEL_MM3
+        )
 
-        monkeypatch.setattr(tracking_utils, "seeds_from_mask", _capture)
-
+    def test_seed_placement_is_reproducible_for_a_fixed_random_seed(self):
         wm, _, _ = _pve_maps()
-        generate_wm_seeds(wm, np.eye(4), density=2)
-
-        assert seen["density"] == (2, 1, 1)
+        a = generate_wm_seeds(wm, np.eye(4), density=2, random_seed=1)
+        b = generate_wm_seeds(wm, np.eye(4), density=2, random_seed=1)
+        assert np.array_equal(a, b)
+        assert not np.array_equal(a, generate_wm_seeds(wm, np.eye(4), 2, random_seed=2))
 
 
 # --------------------------------------------------------------------------- #
