@@ -57,6 +57,7 @@ setup(
         # fetch in DipyAtlasSLR.
         "threadpoolctl==3.6.0",
         "filelock==3.17.0",
+        "vtk",
     ],
     python_requires=">=3.10",
     entry_points={"gui_scripts": ["swane = swane.__main__:main"]},
