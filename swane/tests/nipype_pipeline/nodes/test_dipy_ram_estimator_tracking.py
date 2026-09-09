@@ -19,7 +19,8 @@ Both are bit-for-bit quality-neutral at any rung (the heavy tuned-vs-untuned tes
 proves it); only wall time / peak RSS changes. The parent term is priced from the
 ``nodif_brain`` foreground bounding box -- the same crop the node applies, which is
 what the peak tracks -- while the seed count, which sizes the buffer lever, is read
-from the WM PVE mask.
+from the WM PVE mask at the same volume density the node seeds at, so a coarse
+acquisition is priced for the larger seed pool it gets.
 
 These tests are deliberately **coefficient-agnostic**: every expected budget is
 derived from the estimator's own model, so they keep their meaning if the
@@ -31,7 +32,12 @@ import nibabel as nib
 import pytest
 from nipype.pipeline.engine import Node
 
-from swane.nipype_pipeline.nodes.DipyTracking import DipyTracking, wm_seed_mask
+from swane.nipype_pipeline.nodes.DipyTracking import (
+    DipyTracking,
+    wm_seed_mask,
+    seed_count_for_volume,
+    REFERENCE_VOXEL_MM3,
+)
 from swane.nipype_pipeline.nodes.ram_estimators import DipyTrackingRamEstimator
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
     MonitoredMultiProcPlugin,
@@ -101,12 +107,38 @@ class TestModel:
         assert est.estimate_gb(100_000, 200_000, 0.9, 5000) > base
         assert est.estimate_gb(100_000, 200_000, 0.5, 9000) > base
 
-    def test_seed_count_reads_wm_voxels_times_density(self, tmp_path):
+    def test_seed_count_is_the_volume_density_the_node_seeds_at(self, tmp_path):
         est = DipyTrackingRamEstimator()
         inputs = _inputs(tmp_path, seed_density=3)
-        expected = int(wm_seed_mask(nib.load(inputs.pve_wm).get_fdata()).sum()) * 3
+        pve = nib.load(inputs.pve_wm)
+        expected = seed_count_for_volume(
+            wm_seed_mask(pve.get_fdata()), pve.affine, 3
+        )
         assert est._seed_count(inputs) == expected
-        assert expected == WM_VOXELS * 3
+        # the fixture's affine is 1 mm3 per voxel, so the masked volume in mm3
+        # is the WM voxel count
+        assert expected == round(WM_VOXELS * 3 / REFERENCE_VOXEL_MM3)
+
+    def test_seed_count_grows_with_the_voxel_size(self, tmp_path):
+        """A coarser grid holding the same white matter is seeded just as
+        densely per mm3, so the pool the buffer lever scales does not shrink --
+        the estimator must price that, not the voxel count."""
+        est = DipyTrackingRamEstimator()
+        inputs = _inputs(tmp_path, seed_density=2)
+        fine = est._seed_count(inputs)
+
+        pve = nib.load(inputs.pve_wm)
+        coarse_path = str(tmp_path / "pve_coarse.nii.gz")
+        nib.save(
+            nib.Nifti1Image(
+                pve.get_fdata().astype(np.float32), np.diag([2.0, 2.0, 2.0, 1.0])
+            ),
+            coarse_path,
+        )
+        inputs.pve_wm = coarse_path
+        # eight times the voxel volume, eight times the seeds -- up to the
+        # rounding of a fractional seed count
+        assert est._seed_count(inputs) == pytest.approx(8 * fine, rel=1e-3)
 
     def test_bottom_rung_is_min_buffer_and_min_chunk(self):
         est = DipyTrackingRamEstimator()

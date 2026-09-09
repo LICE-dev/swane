@@ -12,12 +12,11 @@ dense full-FOV PMF precompute (X x Y x Z x 362 x 8 bytes = 9.19 GB on subj1)
 alone busts the memory budget (spec section 5, "Accepted risk").
 
 Streamlines stop on :class:`dipy.tracking.stopping_criterion.ThresholdStoppingCriterion`
-over the FA map (``FA_STOP_THRESHOLD``), not the Continuous Map Criterion the
-Phase 1 path used: the seed/stop probe (2026-09-04) found the CMC criterion
-under-reconstructed the arcuate fasciculus, and FA-thresholding at 0.20 recovers
-it without degrading other bundles (spec section "C3"). The three-way PVE split
-(WM/GM/CSF) is no longer consumed for stopping; only the WM channel survives, for
-seeding.
+over the FA map, not the Continuous Map Criterion the Phase 1 path used. The
+threshold is not a fixed value but a percentile of the subject's own FA inside
+the seed mask (``FA_STOP_PERCENTILE``, floored at ``FA_STOP_FLOOR``). The
+three-way PVE split (WM/GM/CSF) is no longer consumed for stopping; only the WM
+channel survives, for seeding.
 
 Seeds are placed in the **white-matter PVE mask only**: whole-brain seeding was
 measured at a 7 GB peak and roughly 5x the runtime (spec Measurements), so the
@@ -86,11 +85,20 @@ OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
 # to prune (spec Measurements).
 WM_PVE_SEED_THRESHOLD = 0.5
 
-# Streamlines stop where FA drops below this value. Replaces the Continuous Map
-# Criterion (spec section "C3"): the seed/stop probe (2026-09-04) swept the FA
-# range and found 0.20 recovers the arcuate fasciculus that CMC under-tracked,
-# without degrading the CST on the control subject.
-FA_STOP_THRESHOLD = 0.20
+# Streamlines stop where FA drops below this percentile of the subject's own FA
+# inside the seed mask, floored at FA_STOP_FLOOR. White-matter FA varies with
+# field strength, voxel size and preprocessing, so a fixed threshold clips a
+# different share of white matter on every acquisition; a percentile clips the
+# same share on all of them. The floor keeps a globally low-FA volume from
+# dropping the threshold into noise.
+FA_STOP_PERCENTILE = 10.0
+FA_STOP_FLOOR = 0.10
+
+# Seed density is expressed per this much white-matter volume, so the seed count
+# follows the volume of the seed mask rather than its voxel count and does not
+# change with the acquisition's voxel size. 2.2 mm3 is the volume at which
+# seed_density keeps its per-voxel meaning.
+REFERENCE_VOXEL_MM3 = 2.2
 
 # Fraction of the seed pool `probabilistic_tracking` buffers per streaming chunk
 # (dipy 1.12 default 1.0, i.e. no streaming). Lowered so seeds are consumed in
@@ -133,24 +141,53 @@ def wm_seed_mask(pve_wm, threshold=WM_PVE_SEED_THRESHOLD):
     return np.asarray(pve_wm) >= threshold
 
 
-def generate_wm_seeds(pve_wm, affine, density):
-    """World-space seed positions placed evenly inside the WM PVE mask.
+def seed_count_for_volume(mask, affine, density):
+    """Seeds to place: ``density`` per ``REFERENCE_VOXEL_MM3`` of masked volume.
 
-    Wraps :func:`dipy.tracking.utils.seeds_from_mask` over
-    :func:`wm_seed_mask`, so seeding is restricted to white matter.
-    ``density`` is placed along a single axis, ``(density, 1, 1)``, rather
-    than dipy's cubic ``(density,) * 3`` default: seed_density=2 combined with
-    FA-thresholded stopping (``FA_STOP_THRESHOLD``) produces markedly more
-    streamlines than under CMC, and the cubic 8 seeds/voxel that
-    seed_density=2 implies strained the 8 GB target on real subject data. The
-    single-axis form matches the density validated by the seed/stop probe
-    (2026-09-04) and keeps the preference monotonic without going cubic (user
-    decision, 2026-09-05).
+    One voxel's world-space volume is the absolute determinant of the affine's
+    direction matrix, so this needs no zooms and holds for an oblique grid.
     """
-    from dipy.tracking.utils import seeds_from_mask
+    voxel_mm3 = abs(float(np.linalg.det(np.asarray(affine, dtype=float)[:3, :3])))
+    volume_mm3 = float(np.count_nonzero(mask)) * voxel_mm3
+    return max(1, int(round(float(density) * volume_mm3 / REFERENCE_VOXEL_MM3)))
+
+
+def generate_wm_seeds(pve_wm, affine, density, random_seed=1):
+    """World-space seed positions placed at random inside the WM PVE mask.
+
+    Wraps :func:`dipy.tracking.utils.random_seeds_from_mask` over
+    :func:`wm_seed_mask`, so seeding is restricted to white matter, with a
+    **total** seed count taken from the mask's volume
+    (:func:`seed_count_for_volume`) rather than a per-voxel density: a per-voxel
+    density can only take the values ``prod(d_i) / prod(zoom_i)``, so no integer
+    choice of ``d_i`` holds the seeds per unit volume constant across
+    acquisitions. Random placement also decorrelates the seeds from the voxel
+    lattice; ``random_seed`` keeps the placement reproducible.
+    """
+    from dipy.tracking.utils import random_seeds_from_mask
 
     mask = wm_seed_mask(pve_wm)
-    return seeds_from_mask(mask, affine, density=(int(density), 1, 1))
+    return random_seeds_from_mask(
+        mask,
+        affine,
+        seeds_count=seed_count_for_volume(mask, affine, density),
+        seed_count_per_voxel=False,
+        random_seed=int(random_seed),
+    )
+
+
+def fa_stop_threshold(
+    fa, seed_mask, percentile=FA_STOP_PERCENTILE, floor=FA_STOP_FLOOR
+):
+    """The stopping FA for this subject: a percentile of its own seed-mask FA.
+
+    Taken inside the seed mask, so the distribution is white matter's and not
+    diluted by cortex and CSF. Returns ``floor`` for an empty mask.
+    """
+    values = np.asarray(fa)[np.asarray(seed_mask, dtype=bool)]
+    if values.size == 0:
+        return float(floor)
+    return max(float(floor), float(np.percentile(values, float(percentile))))
 
 
 def foreground_bbox_slices(masks, shape, pad=BBOX_PAD_VOXELS):
@@ -235,8 +272,8 @@ class DipyTrackingInputSpec(BaseInterfaceInputSpec):
         high=10,
         value=2,
         usedefault=True,
-        desc="seeds per voxel placed along a single axis inside the WM mask "
-        "-- (density, 1, 1), not cubic (2 -> ~1.5 seeds/voxel)",
+        desc="seeds placed inside the WM mask per REFERENCE_VOXEL_MM3 of its "
+        "volume -- a volume density, not a per-voxel count",
     )
     max_angle = traits.Range(
         low=1.0,
@@ -399,8 +436,14 @@ class DipyTracking(BaseInterface):
         for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR):
             os.environ[var] = str(num_threads)
         try:
-            seeds = generate_wm_seeds(pve_wm, track_affine, seed_density)
-            criterion = ThresholdStoppingCriterion(fa_data, FA_STOP_THRESHOLD)
+            seeds = generate_wm_seeds(
+                pve_wm, track_affine, seed_density, random_seed=random_seed
+            )
+            # Threshold and seeds both come from the cropped volume, so they see
+            # the same seed mask.
+            criterion = ThresholdStoppingCriterion(
+                fa_data, fa_stop_threshold(fa_data, wm_seed_mask(pve_wm))
+            )
             # The generator already yields reference-space (RASMM) coordinates,
             # so affine_to_rasmm is the identity; reference_img anchors the
             # tractogram's grid (affine + dimensions) exactly as a

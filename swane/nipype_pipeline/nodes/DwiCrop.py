@@ -53,6 +53,18 @@ project convention gives the generous, pad-controlled, world-preserving crop thi
 node needs; :func:`foreground_bbox_slices` at ``pad=0`` coincides with dipy's own
 ``bounding_box``, so the crop convention is dipy's, not a divergent one.
 
+**On-disk dtype.** A crop transforms no voxel value, so the source's on-disk
+dtype is kept -- but only when it can actually represent the data. ``dataobj``
+yields *scaled* values (``raw * scl_slope + scl_inter``), and dcm2niix writes a
+scaling whenever the acquisition's dynamic range exceeds the integer type.
+Casting those scaled values back to the source integer dtype then overflows and
+wraps around, silently destroying the series; nibabel recomputes the scaling on
+save, so the slope cannot be carried through either (verified against nibabel
+5.4.2). When the source carries a scaling the crop is therefore written as
+float32, exactly as DipyDenoise / DipyMotionCorrection / DwiBiasCorrection
+downstream already do. Unscaled sources keep their dtype, so the common int16
+case still pays no size penalty.
+
 The b-values and b-vectors are invariant to a spatial crop -- gradient
 directions and b-values do not change under a translation -- so they are not an
 input here and continue to flow downstream unchanged from the conversion node.
@@ -106,6 +118,21 @@ NUMPASS = 4
 # little more background, never a boundary anything downstream depends on.
 DILATE_ITERATIONS = 2
 CROP_PAD_VOXELS = 8
+
+
+def lossless_out_dtype(in_nii):
+    """The dtype the cropped series can be written in without losing data.
+
+    ``dataobj`` yields scaled values; they round-trip through the source dtype
+    only when the source carries no ``scl_slope``/``scl_inter``. With a scaling
+    present the cast overflows (int16 wraps at 32767) and nibabel drops the
+    slope on save, so float32 is the only faithful option.
+    """
+    slope = getattr(in_nii.dataobj, "slope", 1.0)
+    inter = getattr(in_nii.dataobj, "inter", 0.0)
+    if slope in (None, 1.0) and inter in (None, 0.0):
+        return in_nii.get_data_dtype()
+    return np.dtype(np.float32)
 
 
 def crop_4d_median_otsu(
@@ -207,12 +234,15 @@ class DwiCrop(BaseInterface):
                 else:
                     os.environ[var] = previous
 
-        # Preserve the input dtype and header (voxel sizes/orientation are
-        # unchanged by a crop); the shifted affine replaces the header's, and
-        # nibabel recomputes the dimensions from the cropped shape on save.
+        # Preserve the header (voxel sizes/orientation are unchanged by a crop);
+        # the shifted affine replaces the header's, and nibabel recomputes the
+        # dimensions from the cropped shape on save. The dtype is the source's
+        # only when the source is unscaled -- see lossless_out_dtype.
+        out_dtype = lossless_out_dtype(in_nii)
         out_nii = nib.Nifti1Image(
-            cropped.astype(in_nii.get_data_dtype()), cropped_affine, in_nii.header
+            cropped.astype(out_dtype), cropped_affine, in_nii.header
         )
+        out_nii.header.set_data_dtype(out_dtype)
         nib.save(out_nii, out_file)
 
         return runtime

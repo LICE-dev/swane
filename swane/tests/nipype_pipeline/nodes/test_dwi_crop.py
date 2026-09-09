@@ -205,6 +205,44 @@ class TestNode:
         out = nib.load(node._list_outputs()["out_file"])
         assert out.header.get_data_dtype() == np.dtype(np.int16)
 
+    def test_node_writes_float32_when_source_carries_a_scaling(self, workspace):
+        """dataobj yields scaled values (raw * scl_slope + scl_inter). dcm2niix
+        writes a scaling whenever the acquisition's dynamic range exceeds the
+        integer type, and casting those scaled values back to int16 wraps around
+        at 32767, silently destroying the series. nibabel recomputes the scaling
+        on save, so the slope cannot be carried through either -- the crop must
+        therefore fall back to float32 and reproduce the scaled values exactly.
+        """
+        data, affine = _brain_4d()
+        # A brain whose *scaled* intensity (100 * 3600 = 360000) is an order of
+        # magnitude past int16, exactly like a real dcm2niix DWI with a slope.
+        slope = 3600.0
+        raw = (data / 1.0).astype(np.int16)
+        img = nib.Nifti1Image(raw, affine)
+        img.header.set_data_dtype(np.int16)
+        img.header.set_slope_inter(slope, 0.0)
+        in_file = os.path.join(str(workspace), "scaled_int16_dwi.nii.gz")
+        nib.save(img, in_file)
+
+        source = np.asarray(nib.load(in_file).dataobj, dtype=np.float32)
+        assert source.max() > np.iinfo(np.int16).max
+
+        node = DwiCrop()
+        node.inputs.in_file = in_file
+        node.inputs.out_file = "crop_dwi.nii.gz"
+        node.run()
+
+        out = nib.load(node._list_outputs()["out_file"])
+        assert out.header.get_data_dtype() == np.dtype(np.float32)
+
+        cropped = np.asarray(out.dataobj, dtype=np.float32)
+        expected, _ = crop_4d_median_otsu(source, affine)
+        # value-for-value identical to the scaled source subset: no wraparound,
+        # no sign flip, no quantisation.
+        assert cropped.shape == expected.shape
+        assert np.allclose(cropped, expected, rtol=1e-6)
+        assert cropped.min() >= 0.0
+
     def test_node_pins_blas_threads_and_restores_environment(
         self, workspace, make_nifti, monkeypatch
     ):
