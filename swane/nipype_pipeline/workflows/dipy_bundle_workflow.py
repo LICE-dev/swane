@@ -37,7 +37,10 @@ New dipy nodes implement HARD_CAP only, so this factory takes no
 from nipype import Node, MapNode, IdentityInterface
 
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.DipyRecoBundles import DipyRecoBundlesRecognize
+from swane.nipype_pipeline.nodes.DipyRecoBundles import (
+    DipyRecoBundlesRecognize,
+    recognition_params,
+)
 from swane.nipype_pipeline.nodes.DipyBundleUnion import DipyBundleUnion
 from swane.nipype_pipeline.nodes.DipyBundlesToRef import DipyBundlesToRef
 from swane.nipype_pipeline.nodes.DipyFornixSplit import DipyFornixSplit
@@ -214,6 +217,19 @@ def dipy_bundle_workflow(
         recognize.inputs.model_bundle_name = model_bundle_name
         recognize.inputs.num_threads = num_threads
         recognize.inputs.slr = slr
+
+        # The recognition parameters for this tract (both sides share them).
+        # A chunked build forces the refine pass off for the same reason it
+        # forces the per-bundle local SLR off -- refine registers the model to
+        # the subject's own first-pass bundle, and a union of per-chunk
+        # registrations is not a valid one. The shipped thresholds assume both
+        # are on, so a chunked path must re-derive them rather than inherit
+        # these.
+        params = recognition_params(model_bundle_name)
+        if chunked:
+            params["refine"] = False
+        for trait, value in params.items():
+            setattr(recognize.inputs, trait, value)
         workflow.connect(
             atlas_dir_source[0], atlas_dir_source[1], recognize, "atlas_dir"
         )
