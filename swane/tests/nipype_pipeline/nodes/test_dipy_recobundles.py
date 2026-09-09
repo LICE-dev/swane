@@ -47,11 +47,17 @@ from swane.nipype_pipeline.nodes.DipyRecoBundles import (
     DipyRecoBundlesBuild,
     DipyRecoBundlesRecognize,
     bundle_path,
+    recognition_params,
     BUNDLES_SUBDIR,
     OMP_THREADS_VAR,
     CLUST_THR,
     NB_PTS,
     RECOBUNDLES_RNG_SEED,
+    RECOGNITION_DEFAULTS,
+    RECOGNITION_OVERRIDES,
+    tract_of,
+    REFINE_SLR_X0,
+    REFINE_SLR_BOUNDS,
 )
 
 
@@ -271,12 +277,27 @@ class TestBuildRecognizeHandoff:
         )
         recognized, _ = rb.recognize(
             model_sft.streamlines,
-            2.5,
-            reduction_thr=10.0,
-            pruning_thr=5.0,
+            RECOGNITION_DEFAULTS["model_clust_thr"],
+            reduction_thr=RECOGNITION_DEFAULTS["reduction_thr"],
+            pruning_thr=RECOGNITION_DEFAULTS["pruning_thr"],
             slr=slr,
             num_threads=1,
         )
+        # The shipped node refines by default, and refine consumes the RNG too,
+        # so the reference must run the whole shipped path -- which makes this a
+        # stronger contract than recognise alone: the pickled post-clustering RNG
+        # state has to survive BOTH passes for the outputs to match bit for bit.
+        if RECOGNITION_DEFAULTS["refine"] and len(recognized) >= 2:
+            recognized, _ = rb.refine(
+                model_sft.streamlines,
+                recognized,
+                RECOGNITION_DEFAULTS["model_clust_thr"],
+                reduction_thr=RECOGNITION_DEFAULTS["r_reduction_thr"],
+                pruning_thr=RECOGNITION_DEFAULTS["r_pruning_thr"],
+                slr=True,
+                slr_x0=REFINE_SLR_X0,
+                slr_bounds=REFINE_SLR_BOUNDS,
+            )
         sft = StatefulTractogram.from_sft(recognized, model_sft)
         save_tractogram(sft, out_bundle, bbox_valid_check=False)
         return out_bundle
@@ -736,3 +757,160 @@ class TestDipyFornixSplitNode:
         assert out["atlas_dir"] == atlas_dir
         assert os.path.exists(bundle_path(atlas_dir, FORNIX_LEFT_NAME))
         assert os.path.exists(bundle_path(atlas_dir, FORNIX_RIGHT_NAME))
+
+
+# --------------------------------------------------------------------------- #
+# Recognition parameters.
+# --------------------------------------------------------------------------- #
+class TestRecognitionParameters:
+    def test_unlisted_tract_gets_the_default_configuration(self):
+        params = recognition_params("ILF_L")
+        assert params["model_clust_thr"] == 2.5
+        assert params["reduction_thr"] == 15.0
+        assert params["pruning_thr"] == 5.0
+        assert params["refine"] is True
+        assert params["r_reduction_thr"] == 12.0
+        assert params["r_pruning_thr"] == 4.0
+
+    @pytest.mark.parametrize("name", ["AF_L", "AF_R", "OR_L", "OR_R", "F_L", "F_R"])
+    def test_tract_of_strips_the_side_suffix(self, name):
+        assert tract_of(name) == name.rsplit("_", 1)[0]
+
+    @pytest.mark.parametrize(
+        "tract, sides",
+        [("OR", ("OR_L", "OR_R")), ("F", ("F_L", "F_R")), ("CST", ("CST_L", "CST_R"))],
+    )
+    def test_both_sides_of_an_overridden_tract_get_identical_parameters(
+        self, tract, sides
+    ):
+        """Overrides are keyed by tract, never by bundle: the two sides of one
+        tract must never be recognised with different parameters, or any
+        left-right difference in the result is partly our own doing."""
+        left, right = (recognition_params(name) for name in sides)
+        assert left == right
+        assert left != RECOGNITION_DEFAULTS
+
+    def test_every_tract_has_identical_parameters_on_both_sides(self):
+        from swane.nipype_pipeline.workflows.dipy_bundle_workflow import (
+            DIPY_TRACT_ATLAS,
+            SIDES,
+            _SIDE_SUFFIX,
+        )
+
+        for base in DIPY_TRACT_ATLAS.values():
+            params = [
+                recognition_params("%s_%s" % (base, _SIDE_SUFFIX[side]))
+                for side in SIDES
+            ]
+            assert params[0] == params[1], base
+
+    def test_result_is_a_copy_not_the_shared_table(self):
+        """Callers mutate the returned dict (the workflow does); the module
+        table must not drift."""
+        params = recognition_params("ILF_L")
+        params["reduction_thr"] = 999.0
+        assert RECOGNITION_DEFAULTS["reduction_thr"] == 15.0
+        assert recognition_params("ILF_L")["reduction_thr"] == 15.0
+
+    def test_every_override_names_a_real_atlas_tract(self):
+        """A typo in the override table would silently ship the defaults."""
+        from swane.nipype_pipeline.workflows.dipy_bundle_workflow import (
+            DIPY_TRACT_ATLAS,
+        )
+
+        assert set(RECOGNITION_OVERRIDES) <= set(DIPY_TRACT_ATLAS.values())
+
+    def test_node_defaults_match_the_default_table(self):
+        """The node must be usable standalone at the shipped configuration."""
+        node = DipyRecoBundlesRecognize()
+        for trait, value in RECOGNITION_DEFAULTS.items():
+            assert getattr(node.inputs, trait) == value
+
+
+class TestRefinePass:
+    """dipy's auto-calibration pass rebuilds the search space from the bundle
+    recognised in this subject instead of the atlas model."""
+
+    def test_refine_runs_after_recognize_when_enabled(
+        self, workspace, atlas_dir, tmp_path, monkeypatch
+    ):
+        subject = _subject_with_ifof(tmp_path)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+
+        calls = []
+        from dipy.segment.bundles import RecoBundles
+
+        original = RecoBundles.refine
+
+        def spy(self, model_bundle, pruned_streamlines, model_clust_thr, **kwargs):
+            calls.append(
+                (
+                    model_clust_thr,
+                    kwargs.get("reduction_thr"),
+                    kwargs.get("pruning_thr"),
+                )
+            )
+            return original(
+                self, model_bundle, pruned_streamlines, model_clust_thr, **kwargs
+            )
+
+        monkeypatch.setattr(RecoBundles, "refine", spy)
+        _recognize(
+            pkl,
+            subject,
+            atlas_dir,
+            "IFOF_R",
+            str(tmp_path / "out.trx"),
+            refine=True,
+            r_reduction_thr=12.0,
+            r_pruning_thr=4.0,
+        )
+        assert calls == [(2.5, 12.0, 4.0)]
+
+    def test_refine_is_skipped_when_disabled(
+        self, workspace, atlas_dir, tmp_path, monkeypatch
+    ):
+        subject = _subject_with_ifof(tmp_path)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+
+        from dipy.segment.bundles import RecoBundles
+
+        def boom(self, *args, **kwargs):
+            raise AssertionError("refine must not run when refine=False")
+
+        monkeypatch.setattr(RecoBundles, "refine", boom)
+        out = _recognize(
+            pkl,
+            subject,
+            atlas_dir,
+            "IFOF_R",
+            str(tmp_path / "out.trx"),
+            refine=False,
+        )
+        assert os.path.exists(out)
+
+    def test_refine_is_skipped_on_an_empty_first_pass(
+        self, workspace, atlas_dir, tmp_path, monkeypatch
+    ):
+        """dipy's refine clusters the first-pass bundle, which is meaningless
+        with nothing (or one streamline) recognised."""
+        subject = _subject_without_ifof(tmp_path)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+
+        from dipy.segment.bundles import RecoBundles
+
+        def boom(self, *args, **kwargs):
+            raise AssertionError("refine must not run on an empty first pass")
+
+        monkeypatch.setattr(RecoBundles, "refine", boom)
+        out = _recognize(
+            pkl,
+            subject,
+            atlas_dir,
+            "IFOF_R",
+            str(tmp_path / "out.trx"),
+            refine=True,
+            reduction_thr=1.0,
+            pruning_thr=1.0,
+        )
+        assert _n_streamlines(out) <= 1
