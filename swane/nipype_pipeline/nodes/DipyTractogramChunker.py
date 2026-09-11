@@ -31,7 +31,6 @@ from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     TraitedSpec,
     File,
-    OutputMultiPath,
     isdefined,
 )
 
@@ -61,7 +60,13 @@ class DipyTractogramChunkerInputSpec(BaseInterfaceInputSpec):
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
 class DipyTractogramChunkerOutputSpec(TraitedSpec):
-    chunks = OutputMultiPath(
+    # A plain List, not OutputMultiPath: OutputMultiPath/OutputMultiObject
+    # unwraps a length-1 list to a bare string on read (see
+    # nipype.interfaces.base.traits_extension.OutputMultiObject.get), which
+    # would silently turn "chunks" into a bare path string whenever n_chunks
+    # == 1 (the default) -- breaking every downstream connection that expects
+    # a list, e.g. dipy_bundle_workflow's ("recobundles_chunks", _first).
+    chunks = traits.List(
         File(exists=True),
         desc="the 1..N representative sub-tractograms (.trx); the input itself "
         "when n_chunks == 1",
