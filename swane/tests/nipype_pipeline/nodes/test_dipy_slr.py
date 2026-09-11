@@ -22,7 +22,6 @@ from swane.nipype_pipeline.nodes.DipyAtlasSLR import (
     DipyAtlasSLR,
     atlas_wholebrain_path,
     WHOLE_BRAIN_FILENAME,
-    OMP_THREADS_VAR,
 )
 
 
@@ -178,29 +177,36 @@ class TestSlrOutputs:
 
 
 class TestSlrThreadPinning:
-    def test_omp_pinned_to_num_threads(
-        self, workspace, atlas_dir, subject_tractogram, monkeypatch
+    def test_registrations_built_with_num_threads(
+        self, workspace, atlas_dir, subject_tractogram
     ):
-        import swane.nipype_pipeline.nodes.DipyAtlasSLR as mod
+        # dipy's progressive_slr does not forward num_threads to the
+        # StreamlineLinearRegistration instances it builds, so the SLR wraps
+        # their construction to inject the node's thread count. Spy on the
+        # constructor and confirm every registration built during the run
+        # received it, and that the wrapper restores the original constructor.
+        from dipy.align import streamlinear
 
-        monkeypatch.delenv(OMP_THREADS_VAR, raising=False)
-        seen = {}
-        real = mod._run_whole_brain_slr
+        seen = []
+        original_init = streamlinear.StreamlineLinearRegistration.__init__
 
-        def _spy(static, moving, num_threads):
-            seen["omp"] = os.environ.get(OMP_THREADS_VAR)
-            seen["num_threads"] = num_threads
-            return real(static, moving, num_threads)
+        def _spy_init(self, *args, **kwargs):
+            seen.append(kwargs.get("num_threads"))
+            return original_init(self, *args, **kwargs)
 
-        monkeypatch.setattr(mod, "_run_whole_brain_slr", _spy)
+        streamlinear.StreamlineLinearRegistration.__init__ = _spy_init
+        try:
+            tract_path, _ = subject_tractogram
+            node = DipyAtlasSLR()
+            node.inputs.tractogram = tract_path
+            node.inputs.atlas_dir = atlas_dir
+            node.inputs.num_threads = 2
+            node.run()
 
-        tract_path, _ = subject_tractogram
-        node = DipyAtlasSLR()
-        node.inputs.tractogram = tract_path
-        node.inputs.atlas_dir = atlas_dir
-        node.inputs.num_threads = 2
-        node.run()
-
-        assert seen["omp"] == "2"
-        assert seen["num_threads"] == 2
-        assert OMP_THREADS_VAR not in os.environ
+            # every registration built during the SLR got the node's thread count
+            assert seen
+            assert all(nt == 2 for nt in seen)
+            # the constructor the wrapper saw is restored once the run is over
+            assert streamlinear.StreamlineLinearRegistration.__init__ is _spy_init
+        finally:
+            streamlinear.StreamlineLinearRegistration.__init__ = original_init
