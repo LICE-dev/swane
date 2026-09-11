@@ -449,6 +449,32 @@ class TestTractogramChunker:
             # ... which is emphatically not a contiguous block.
             assert idx != list(range(idx[0], idx[0] + len(idx)))
 
+    def test_single_chunk_output_stays_a_list_through_the_node_trait(
+        self, workspace, tmp_path
+    ):
+        """``_list_outputs`` alone (used by ``_chunk`` above) bypasses nipype's
+        output trait, which is where a real workflow connection actually reads
+        ``chunks`` from. ``OutputMultiPath`` unwraps a length-1 list to a bare
+        string on read (nipype.interfaces.base.traits_extension.OutputMultiObject.get),
+        so a downstream ``("chunks", _first)`` connection transform (see
+        dipy_bundle_workflow) would index into that string's characters instead
+        of the one-element list, e.g. picking off the leading ``"/"``."""
+        from nipype import Node
+        from swane.nipype_pipeline.nodes.DipyTractogramChunker import (
+            DipyTractogramChunker,
+        )
+
+        tractogram = _indexed_streamlines(5, tmp_path)
+        node = Node(
+            DipyTractogramChunker(), name="dipy_chunker", base_dir=str(tmp_path)
+        )
+        node.inputs.tractogram_atlas = tractogram
+        node.inputs.n_chunks = 1
+        result = node.run()
+
+        assert isinstance(result.outputs.chunks, list)
+        assert result.outputs.chunks == [tractogram]
+
 
 # --------------------------------------------------------------------------- #
 # DipyBundleUnion: concatenate N per-chunk recognitions.
