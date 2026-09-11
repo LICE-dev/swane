@@ -35,8 +35,7 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
-OMP_THREADS_VAR = "OMP_NUM_THREADS"
-OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
+from swane.patches.dipy_patches import dipy_slr_num_threads
 
 # Layout of the fetched atlas, matching dipy's fetcher. The whole-brain
 # tractogram is addressed by this explicit name -- never by a glob over the
@@ -163,7 +162,12 @@ def _run_whole_brain_slr(static, moving, num_threads):
     """
     from dipy.align.streamlinear import whole_brain_slr
 
-    moved, matrix, _, _ = whole_brain_slr(static, moving, num_threads=num_threads)
+    with dipy_slr_num_threads(num_threads):
+        moved, matrix, _, _ = whole_brain_slr(
+            static,
+            moving,
+            num_threads=num_threads,
+        )
     return moved, matrix
 
 
@@ -218,28 +222,16 @@ class DipyAtlasSLR(BaseInterface):
             "out_atlas2native", "atlas2native_", ".txt"
         )
 
-        previous = {
-            var: os.environ.get(var) for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR)
-        }
-        for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR):
-            os.environ[var] = str(num_threads)
-        try:
-            subject_sft = load_tractogram(
-                self.inputs.tractogram, "same", bbox_valid_check=False
-            )
-            subject_sft.to_rasmm()
-            atlas_sft = load_tractogram(wholebrain, "same", bbox_valid_check=False)
-            atlas_sft.to_rasmm()
+        subject_sft = load_tractogram(
+            self.inputs.tractogram, "same", bbox_valid_check=False
+        )
+        subject_sft.to_rasmm()
+        atlas_sft = load_tractogram(wholebrain, "same", bbox_valid_check=False)
+        atlas_sft.to_rasmm()
 
-            moved, native2atlas = _run_whole_brain_slr(
-                atlas_sft.streamlines, subject_sft.streamlines, num_threads
-            )
-        finally:
-            for var, value in previous.items():
-                if value is None:
-                    os.environ.pop(var, None)
-                else:
-                    os.environ[var] = value
+        moved, native2atlas = _run_whole_brain_slr(
+            atlas_sft.streamlines, subject_sft.streamlines, num_threads
+        )
 
         atlas2native = np.linalg.inv(native2atlas)
         np.savetxt(out_atlas2native, atlas2native)
