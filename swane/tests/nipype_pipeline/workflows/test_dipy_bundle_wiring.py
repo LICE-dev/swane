@@ -8,9 +8,9 @@ it only *recognises* one atlas model bundle from a pre-built pickle, unions the
 per-chunk partials, and transforms the result back to reference space as ``.vtp``.
 
 These are graph-shape checks (independent of the golden byte snapshots): the
-per-side recognise -> union -> to-ref chain, the ``slr`` flag following whether
-the build came from a chunked split (single chunk -> ``slr=True``; chunked ->
-``slr=False`` with a recognise MapNode over the builds), the tract->atlas model
+per-side recognise -> union -> to-ref chain, the recognition parameters staying
+the same for any number of chunks (a single chunk recognises with a plain Node,
+a chunked build with a MapNode over the builds), the tract->atlas model
 mapping (``af``->``AF_L``/``AF_R``, ``fx``->``F_L``/``F_R``, ``cingulum``->
 ``C_L``/``C_R``), the fornix split ordered before the fornix recognitions, and the
 ``r-<tract>_<side>.vtp`` result names on ``outputnode.bundle_lh``/``bundle_rh``.
@@ -249,16 +249,15 @@ class TestChunkedBuild:
                 "tractogram_chunk",
             }
 
-    def test_refine_forced_off_when_chunked(self, af_chunked):
-        """refine registers the model to the subject's own first-pass bundle, so
-        like the per-bundle local SLR it cannot be unioned across chunks."""
+    def test_refine_stays_on_when_chunked(self, af_chunked):
+        """The recognition parameters do not depend on the number of chunks."""
         for side in ("lh", "rh"):
             recog = af_chunked.get_node("recognize_%s" % side)
-            assert recog.inputs.refine is False
+            assert recog.inputs.refine is True
 
-    def test_slr_forced_off_when_chunked(self, af_chunked):
+    def test_slr_stays_on_when_chunked(self, af_chunked):
         for recog in _nodes_by_iface(af_chunked, "DipyRecoBundlesRecognize"):
-            assert recog.inputs.slr is False
+            assert recog.inputs.slr is True
 
     def test_mapnode_consumes_the_whole_build_and_chunk_lists(self, af_chunked):
         inputnode = _node_by_name(af_chunked, "inputnode")
