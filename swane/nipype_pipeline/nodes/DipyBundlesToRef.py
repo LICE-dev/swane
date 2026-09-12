@@ -14,6 +14,13 @@ The PolyData is written with ``vtk`` **directly**. dipy's ``save_tractogram``
 can emit ``.vtp`` too, but only through ``dipy.io.vtk``, whose ``fury`` backend
 is an optional package that SWANe does not install; ``vtk`` itself is already
 present transitively, so this node uses it and never imports ``fury``.
+
+A generic ``.vtk``/``.vtp`` model file carries no coordinate-system metadata,
+and both dipy's own vtk writer (``dipy.io.vtk.save_vtk_streamlines``) and 3D
+Slicer's generic model reader treat such files as LPS. The points this node
+writes are therefore converted from the RASMM world space
+``transform_streamlines`` works in to LPS (``x, y`` negated) right before
+they reach ``vtk``.
 """
 
 import os
@@ -31,9 +38,15 @@ from nipype.interfaces.base import (
 
 VTP_EXTENSION = ".vtp"
 
+# RAS millimetre -> LPS millimetre: negate the first two (x, y) coordinates,
+# the convention plain VTK model files (and 3D Slicer's generic model reader)
+# assume.
+RAS_TO_LPS = np.diag([-1.0, -1.0, 1.0])
+
 
 def write_streamlines_vtp(streamlines, path):
-    """Write ``streamlines`` (an iterable of Nx3 arrays) as VTK PolyData lines.
+    """Write ``streamlines`` (an iterable of Nx3 RASMM arrays) as VTK PolyData
+    lines in LPS millimetres.
 
     Uses ``vtk`` directly (no ``fury``): one polyline cell per streamline, all
     points in a single ``vtkPoints`` array. An empty bundle writes a valid,
@@ -48,7 +61,7 @@ def write_streamlines_vtp(streamlines, path):
     blocks = []
     offset = 0
     for streamline in streamlines:
-        arr = np.asarray(streamline, dtype=np.float32)
+        arr = np.asarray(streamline, dtype=np.float32) @ RAS_TO_LPS.T.astype(np.float32)
         n = len(arr)
         if n == 0:
             continue
@@ -107,7 +120,8 @@ class DipyBundlesToRef(BaseInterface):
     """
     Transforms a recognised atlas-space bundle into reference space with the
     Phase-1 ``atlas2native`` transform and writes it as a ``.vtp`` (VTK PolyData,
-    via ``vtk`` directly -- never ``fury``), the format 3D Slicer reads natively.
+    via ``vtk`` directly -- never ``fury``, LPS millimetres), the format 3D
+    Slicer reads natively.
 
     """
 

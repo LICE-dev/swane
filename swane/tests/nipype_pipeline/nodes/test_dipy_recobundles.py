@@ -550,11 +550,31 @@ class TestBundlesToRef:
 
         pd, ref_pts = _read_vtp_points(out)
         assert pd.GetNumberOfLines() == 5
-        # Points landed in reference space: x shifted by +100, y/z unchanged.
+        # Points landed in reference space (x shifted by +100, y/z unchanged),
+        # then converted from RASMM to the LPS millimetres a plain VTK model
+        # file carries (x, y negated).
         expected = atlas_pts.copy()
         expected[:, 0] += 100.0
+        expected[:, 0] *= -1
+        expected[:, 1] *= -1
         assert np.allclose(
             np.sort(ref_pts, axis=0), np.sort(expected, axis=0), atol=1e-3
+        )
+
+    def test_written_points_are_lps(self, workspace, tmp_path):
+        atlas2native = self._write_atlas2native(tmp_path, np.eye(4))
+        bundle = _indexed_streamlines(3, tmp_path, name="bundle.trx")
+        atlas_pts = np.vstack([np.asarray(sl) for sl in _load_streamlines(bundle)])
+
+        out = _to_ref(bundle, atlas2native, "r-cst_lh", tmp_path)
+        _, ras_lps_pts = _read_vtp_points(out)
+
+        # x, y negated (RAS -> LPS), z unchanged.
+        recovered_rasmm = ras_lps_pts.copy()
+        recovered_rasmm[:, 0] *= -1
+        recovered_rasmm[:, 1] *= -1
+        assert np.allclose(
+            np.sort(recovered_rasmm, axis=0), np.sort(atlas_pts, axis=0), atol=1e-3
         )
 
     def test_written_without_fury(self, workspace, tmp_path, monkeypatch):
