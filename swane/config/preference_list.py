@@ -388,7 +388,8 @@ WF_PREFERENCES[category]["old_eddy_correct"] = PreferenceEntry(
         GlobalPrefCategoryList.SYNTH: [
             ("tractography_engine", TractographyEngine.FSL_XTRACT)
         ]
-    }
+    },
+    pref_requirement_fail_tooltip="dipy always uses nlmeans",
 )
 WF_PREFERENCES[category]["tractography"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
