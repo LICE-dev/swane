@@ -128,8 +128,6 @@ class DipyBundlesToRef(BaseInterface):
     input_spec = DipyBundlesToRefInputSpec
     output_spec = DipyBundlesToRefOutputSpec
 
-    _mem_gb = 1.0
-
     def _run_interface(self, runtime):
         from dipy.io.streamline import load_tractogram
         from dipy.tracking.streamline import transform_streamlines

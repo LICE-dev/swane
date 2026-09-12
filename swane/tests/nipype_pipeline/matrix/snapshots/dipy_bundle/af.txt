@@ -27,12 +27,12 @@
     reduction_thr = 15.0
     refine = True
     slr = True
-- to_ref_lh [DipyBundlesToRef] mem_gb=0.2 n_procs=1
+- to_ref_lh [DipyBundlesToRef] mem_gb=1.0 n_procs=1
     out_name = 'r-af_lh'
-- to_ref_rh [DipyBundlesToRef] mem_gb=0.2 n_procs=1
+- to_ref_rh [DipyBundlesToRef] mem_gb=1.0 n_procs=1
     out_name = 'r-af_rh'
-- union_lh [DipyBundleUnion] mem_gb=0.2 n_procs=1
-- union_rh [DipyBundleUnion] mem_gb=0.2 n_procs=1
+- union_lh [DipyBundleUnion] mem_gb=1.0 n_procs=1
+- union_rh [DipyBundleUnion] mem_gb=1.0 n_procs=1
 # connections
 inputnode.atlas2native -> to_ref_lh.atlas2native
 inputnode.atlas2native -> to_ref_rh.atlas2native

@@ -5,7 +5,7 @@
 #
 # nodes=9 edges=13
 
-- fornix_split [DipyFornixSplit] mem_gb=0.2 n_procs=1
+- fornix_split [DipyFornixSplit] mem_gb=0.5 n_procs=1
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - recognize_lh [DipyRecoBundlesRecognize] mapnode(iterfield=recobundles_pickle,tractogram_chunk) mem_gb=6.0 n_procs=4
@@ -28,12 +28,12 @@
     reduction_thr = 15.0
     refine = True
     slr = True
-- to_ref_lh [DipyBundlesToRef] mem_gb=0.2 n_procs=1
+- to_ref_lh [DipyBundlesToRef] mem_gb=1.0 n_procs=1
     out_name = 'r-fx_lh'
-- to_ref_rh [DipyBundlesToRef] mem_gb=0.2 n_procs=1
+- to_ref_rh [DipyBundlesToRef] mem_gb=1.0 n_procs=1
     out_name = 'r-fx_rh'
-- union_lh [DipyBundleUnion] mem_gb=0.2 n_procs=1
-- union_rh [DipyBundleUnion] mem_gb=0.2 n_procs=1
+- union_lh [DipyBundleUnion] mem_gb=1.0 n_procs=1
+- union_rh [DipyBundleUnion] mem_gb=1.0 n_procs=1
 # connections
 fornix_split.atlas_dir -> recognize_lh.atlas_dir
 fornix_split.atlas_dir -> recognize_rh.atlas_dir

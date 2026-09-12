@@ -45,6 +45,20 @@ from swane.nipype_pipeline.nodes.DipyBundlesToRef import DipyBundlesToRef
 from swane.nipype_pipeline.nodes.DipyFornixSplit import DipyFornixSplit
 from swane.nipype_pipeline.nodes.ram_estimators import RecoBundlesRamEstimator
 
+# Fixed per-node memory reservations (GB), no estimator: all three nodes work
+# on one recognised tract's streamlines (a small subset of the whole-brain
+# tractogram RecoBundles selects from), never the whole tractogram, so their
+# RAM does not scale with subject size the way the preproc nodes' does.
+# Isolated tree-peak RSS on a real recognised bundle measured 0.15-0.2 GB for
+# union/to_ref; both are rounded up to a 1 GB floor (RAM audit, 2026-09-12).
+_MEM_GB = {
+    "union": 1.0,
+    "to_ref": 1.0,
+    # fornix_split runs once per shared atlas directory, on the atlas's own
+    # fixed-size F_L_R.trk (no subject data at all); measured 0.17 GB.
+    "fornix_split": 0.5,
+}
+
 # lh/rh -> the atlas's left/right model-file suffix.
 SIDES = ["lh", "rh"]
 _SIDE_SUFFIX = {"lh": "L", "rh": "R"}
@@ -151,6 +165,7 @@ def dipy_bundle_workflow(
     is_fornix = name == _FORNIX_TRACT
     if is_fornix:
         fornix_split = Node(DipyFornixSplit(), name="fornix_split")
+        fornix_split._mem_gb = _MEM_GB["fornix_split"]
         workflow.connect(inputnode, "atlas_dir", fornix_split, "atlas_dir")
         atlas_dir_source = (fornix_split, "atlas_dir")
     else:
@@ -195,11 +210,13 @@ def dipy_bundle_workflow(
         # Union the per-chunk partials (a pass-through for a single chunk); the
         # recognise MapNode emits the list the union's InputMultiPath consumes.
         union = Node(DipyBundleUnion(), name="union_%s" % side)
+        union._mem_gb = _MEM_GB["union"]
         workflow.connect(recognize, "recognized_bundle", union, "recognized_bundles")
 
         # Transform the recognised (atlas-space) bundle back to reference space
         # and write the .vtp result contract.
         to_ref = Node(DipyBundlesToRef(), name="to_ref_%s" % side)
+        to_ref._mem_gb = _MEM_GB["to_ref"]
         to_ref.inputs.out_name = "r-%s_%s" % (name, side)
         workflow.connect(union, "bundle", to_ref, "bundle")
         workflow.connect(inputnode, "atlas2native", to_ref, "atlas2native")

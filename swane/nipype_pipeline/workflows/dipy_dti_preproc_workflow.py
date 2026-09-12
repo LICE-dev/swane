@@ -26,8 +26,10 @@ from swane.nipype_pipeline.nodes.DipyAtlasSLR import DipyAtlasSLR
 from swane.nipype_pipeline.nodes.DipyTractogramChunker import DipyTractogramChunker
 from swane.nipype_pipeline.nodes.DipyRecoBundles import DipyRecoBundlesBuild
 from swane.nipype_pipeline.nodes.ram_estimators import (
+    DipyCropRamEstimator,
     DipyCsdRamEstimator,
     DipyMotionRamEstimator,
+    DipySlrRamEstimator,
     DipyTissueRamEstimator,
     DipyTrackingRamEstimator,
     RecoBundlesRamEstimator,
@@ -87,13 +89,21 @@ from swane.nipype_pipeline.nodes.utils import (
 # parallel path alone would break the serial-vs-parallel oracle). tissue stays
 # float64 (dipy's HMRF Cython kernel requires 'double'). So the dipy engine's
 # working set -- hence the floor input -- does not rise; it falls slightly.
+#
+# RAM audit (2026-09-12, isolated tree-peak RSS on three real subject DWIs):
+# crop and slr are now sized by DipyCropRamEstimator/DipySlrRamEstimator (both
+# one-way, no lever) instead of a fixed literal -- crop was an unmeasured
+# placeholder, and slr's old fixed 5 GB (from an earlier, lower-seed-density
+# calibration) undershot the current pipeline's real peak by up to ~4 GB. The
+# denoise/tensorfit reservations below were also under the measured peak on at
+# least one subject (still fixed-value nodes; same voxel x volume regressor
+# family as motion/csd, but with too little RAM headroom for it to be worth
+# promoting them to an estimator yet) and are rounded up 1 -> 2 GB.
 _MEM_GB = {
-    "crop": 1,  # provisional, aligned with denoise; isolated per-node RSS TBD
-    "denoise": 1,  # subj1 1.11 / subj2 1.37
+    "denoise": 2,  # subj1 1.11 / subj2 1.37 -- 1 GB under-reserved both; rounded up
     "bias": 1,  # subj1 0.85 / subj2 0.99
-    "tensorfit": 1,  # subj1 0.89 / subj2 1.16
+    "tensorfit": 2,  # subj1 0.89 / subj2 1.16 -- 1 GB under-reserved subj2; rounded up
     "ras": 1,  # subj1 0.11 / subj2 0.11 (min 1 GB reservation)
-    "slr": 5,  # subj1 4.75 / subj2 0.98 -- scales with streamline count
 }
 
 
@@ -252,7 +262,11 @@ def dipy_dti_preproc_workflow(
     # num_threads (and the derived n_procs) is 1 -- honest HARD_CAP accounting,
     # not a parallel reservation.
     crop = Node(DwiCrop(), name="dipy_crop")
-    crop._mem_gb = _MEM_GB["crop"]
+    # RAM is reserved at scheduling time from the 4D series' voxel x volume
+    # count (one-way: median_otsu/numpy here are single-threaded, no lever).
+    # The static value is only the negotiation-failed fail-safe.
+    crop._mem_gb = DipyCropRamEstimator.STATIC_FALLBACK_GB
+    crop.ram_estimator = DipyCropRamEstimator()
     crop.inputs.num_threads = 1
     crop.inputs.out_file = "crop_dti.nii.gz"
     workflow.connect(reorient, "out_file", crop, "in_file")
@@ -473,7 +487,12 @@ def dipy_dti_preproc_workflow(
 
         # -- Whole-brain SLR against the HCP842 atlas (once) ----------------- #
         atlas_slr = Node(DipyAtlasSLR(), name="dipy_slr")
-        atlas_slr._mem_gb = _MEM_GB["slr"]
+        # RAM is reserved at scheduling time from the subject tractogram's
+        # point count (one-way: no quality-neutral lever, see
+        # DipySlrRamEstimator). The static value is only the
+        # negotiation-failed fail-safe.
+        atlas_slr._mem_gb = DipySlrRamEstimator.STATIC_FALLBACK_GB
+        atlas_slr.ram_estimator = DipySlrRamEstimator()
         # num_threads=1 already makes nipype's derived n_procs == 1.
         atlas_slr.inputs.num_threads = 1
         atlas_slr.inputs.atlas_dir = os.path.join(os.path.expanduser("~"), ".dipy")
