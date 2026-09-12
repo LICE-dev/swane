@@ -387,6 +387,115 @@ class TestThreadPinning:
         assert OMP_THREADS_VAR not in os.environ
 
 
+class TestThreadLimiting:
+    """The OpenMP/OpenBLAS env vars set by ``_pin_threads`` only take effect if
+    nothing has touched those runtimes yet in the current process; once
+    something has, ``threadpool_limits`` is the only mechanism that still caps
+    the thread count. dipy 1.12's ``RecoBundles.refine`` never exposes
+    ``num_threads`` at all, so its local SLR needs the ``dipy_reco_bundles_num_threads``
+    patch on top."""
+
+    def test_threadpool_limits_used_for_build(self, tmp_path, monkeypatch):
+        import swane.nipype_pipeline.nodes.DipyRecoBundles as mod
+
+        seen = []
+        real_limits = mod.threadpool_limits
+
+        def _spy(*args, **kwargs):
+            seen.append(kwargs.get("limits", args[0] if args else None))
+            return real_limits(*args, **kwargs)
+
+        monkeypatch.setattr(mod, "threadpool_limits", _spy)
+
+        subject = _subject_with_ifof(tmp_path)
+        _build(subject, str(tmp_path / "build.pkl"), num_threads=3)
+
+        assert seen == [3]
+
+    def test_threadpool_limits_used_for_recognize(
+        self, workspace, atlas_dir, tmp_path, monkeypatch
+    ):
+        import swane.nipype_pipeline.nodes.DipyRecoBundles as mod
+
+        subject = _subject_with_ifof(tmp_path)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+
+        seen = []
+        real_limits = mod.threadpool_limits
+
+        def _spy(*args, **kwargs):
+            seen.append(kwargs.get("limits", args[0] if args else None))
+            return real_limits(*args, **kwargs)
+
+        monkeypatch.setattr(mod, "threadpool_limits", _spy)
+
+        node = DipyRecoBundlesRecognize()
+        node.inputs.recobundles_pickle = pkl
+        node.inputs.tractogram_chunk = subject
+        node.inputs.atlas_dir = atlas_dir
+        node.inputs.model_bundle_name = "IFOF_R"
+        node.inputs.num_threads = 4
+        node.run()
+
+        assert seen == [4]
+
+    def test_refine_slr_pinned_via_dipy_patch(
+        self, workspace, atlas_dir, tmp_path, monkeypatch
+    ):
+        import swane.nipype_pipeline.nodes.DipyRecoBundles as mod
+
+        seen = []
+        real_patch = mod.dipy_reco_bundles_num_threads
+
+        def _spy(num_threads):
+            seen.append(num_threads)
+            return real_patch(num_threads)
+
+        monkeypatch.setattr(mod, "dipy_reco_bundles_num_threads", _spy)
+
+        subject = _subject_with_ifof(tmp_path)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+
+        node = DipyRecoBundlesRecognize()
+        node.inputs.recobundles_pickle = pkl
+        node.inputs.tractogram_chunk = subject
+        node.inputs.atlas_dir = atlas_dir
+        node.inputs.model_bundle_name = "IFOF_R"
+        node.inputs.num_threads = 3
+        node.inputs.refine = True
+        node.run()
+
+        assert seen == [3]
+
+    def test_refine_slr_patch_not_applied_when_refine_disabled(
+        self, workspace, atlas_dir, tmp_path, monkeypatch
+    ):
+        import swane.nipype_pipeline.nodes.DipyRecoBundles as mod
+
+        seen = []
+        real_patch = mod.dipy_reco_bundles_num_threads
+
+        def _spy(num_threads):
+            seen.append(num_threads)
+            return real_patch(num_threads)
+
+        monkeypatch.setattr(mod, "dipy_reco_bundles_num_threads", _spy)
+
+        subject = _subject_with_ifof(tmp_path)
+        pkl = _build(subject, str(tmp_path / "build.pkl"))
+
+        node = DipyRecoBundlesRecognize()
+        node.inputs.recobundles_pickle = pkl
+        node.inputs.tractogram_chunk = subject
+        node.inputs.atlas_dir = atlas_dir
+        node.inputs.model_bundle_name = "IFOF_R"
+        node.inputs.num_threads = 1
+        node.inputs.refine = False
+        node.run()
+
+        assert seen == []
+
+
 # --------------------------------------------------------------------------- #
 # The written bundle carries the subject's own streamline geometry.
 # --------------------------------------------------------------------------- #

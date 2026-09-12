@@ -41,3 +41,31 @@ def dipy_slr_num_threads(num_threads):
         yield
     finally:
         streamlinear.StreamlineLinearRegistration.__init__ = original_init
+
+
+@contextmanager
+def dipy_reco_bundles_num_threads(num_threads):
+    """
+    Force every ``RecoBundles._register_neighb_to_model`` call made while the
+    context is active to use exactly ``num_threads`` OpenMP threads, restoring
+    dipy's original method on exit.
+
+    This is useful because in DIPY 1.12 ``RecoBundles.refine()`` does not
+    expose ``num_threads`` and does not pass it to
+    ``_register_neighb_to_model()``.
+    """
+    from dipy.segment import bundles
+
+    original_register_neighb_to_model = bundles.RecoBundles._register_neighb_to_model
+
+    def patched_method(self, *args, **kwargs):
+        kwargs["num_threads"] = num_threads
+        return original_register_neighb_to_model(self, *args, **kwargs)
+
+    bundles.RecoBundles._register_neighb_to_model = patched_method
+    try:
+        yield
+    finally:
+        bundles.RecoBundles._register_neighb_to_model = (
+            original_register_neighb_to_model
+        )

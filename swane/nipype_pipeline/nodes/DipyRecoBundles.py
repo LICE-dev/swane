@@ -59,6 +59,7 @@ import pickle
 from os.path import abspath, basename
 
 import numpy as np
+from threadpoolctl import threadpool_limits
 from nipype.interfaces.base import (
     traits,
     BaseInterface,
@@ -72,6 +73,7 @@ from nipype.interfaces.base import (
 # Reuse the atlas layout constants so the bundles path stays a single source of
 # truth with the whole-brain SLR node.
 from swane.nipype_pipeline.nodes.DipyAtlasSLR import ATLAS_SUBDIR, ATLAS_NAME
+from swane.patches.dipy_patches import dipy_reco_bundles_num_threads
 
 OMP_THREADS_VAR = "OMP_NUM_THREADS"
 OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
@@ -402,7 +404,8 @@ class DipyRecoBundlesBuild(BaseInterface):
                 self.inputs.tractogram_chunk, "same", bbox_valid_check=False
             )
             subject_sft.to_rasmm()
-            rb = _build_recobundles(subject_sft.streamlines)
+            with threadpool_limits(limits=num_threads):
+                rb = _build_recobundles(subject_sft.streamlines)
         finally:
             _restore_threads(previous)
 
@@ -550,32 +553,34 @@ class DipyRecoBundlesRecognize(BaseInterface):
                 self.inputs.tractogram_chunk, "same", bbox_valid_check=False
             )
             subject_sft.to_rasmm()
-            rb = load_build(subject_sft.streamlines, self.inputs.recobundles_pickle)
-            recognized, labels = _run_recognize(
-                rb,
-                model_bundle,
-                model_clust_thr=float(self.inputs.model_clust_thr),
-                reduction_thr=float(self.inputs.reduction_thr),
-                pruning_thr=float(self.inputs.pruning_thr),
-                slr=bool(self.inputs.slr),
-                num_threads=num_threads,
-            )
-            # The auto-calibration pass, skipped when there is nothing to
-            # calibrate on: dipy clusters the first-pass bundle, which is not
-            # meaningful for a single streamline (and the bundles that recover
-            # that little are a reported gap, not something refine can fix).
-            if (
-                bool(self.inputs.refine)
-                and len(recognized) >= MIN_STREAMLINES_FOR_REFINE
-            ):
-                recognized, labels = _run_refine(
+            with threadpool_limits(limits=num_threads):
+                rb = load_build(subject_sft.streamlines, self.inputs.recobundles_pickle)
+                recognized, labels = _run_recognize(
                     rb,
                     model_bundle,
-                    recognized,
                     model_clust_thr=float(self.inputs.model_clust_thr),
-                    r_reduction_thr=float(self.inputs.r_reduction_thr),
-                    r_pruning_thr=float(self.inputs.r_pruning_thr),
+                    reduction_thr=float(self.inputs.reduction_thr),
+                    pruning_thr=float(self.inputs.pruning_thr),
+                    slr=bool(self.inputs.slr),
+                    num_threads=num_threads,
                 )
+                # The auto-calibration pass, skipped when there is nothing to
+                # calibrate on: dipy clusters the first-pass bundle, which is not
+                # meaningful for a single streamline (and the bundles that recover
+                # that little are a reported gap, not something refine can fix).
+                if (
+                    bool(self.inputs.refine)
+                    and len(recognized) >= MIN_STREAMLINES_FOR_REFINE
+                ):
+                    with dipy_reco_bundles_num_threads(num_threads):
+                        recognized, labels = _run_refine(
+                            rb,
+                            model_bundle,
+                            recognized,
+                            model_clust_thr=float(self.inputs.model_clust_thr),
+                            r_reduction_thr=float(self.inputs.r_reduction_thr),
+                            r_pruning_thr=float(self.inputs.r_pruning_thr),
+                        )
         finally:
             _restore_threads(previous)
 
