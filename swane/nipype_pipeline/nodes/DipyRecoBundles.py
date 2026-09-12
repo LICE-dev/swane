@@ -103,9 +103,9 @@ NB_PTS = 20
 # two are the same anatomical structure, and comparing hemispheres is a normal
 # use of the result, which side-dependent parameters would bias by construction.
 #
-# VALID FOR n_chunks == 1 ONLY. A chunked build forces both the per-bundle local
-# SLR and the refine pass off (neither can be unioned across chunks), and these
-# values assume both are on: a chunked path must re-derive them, not inherit them.
+# Applied unchanged for any n_chunks: the per-bundle local SLR and the refine
+# pass run on every chunk, and the bundle is written from the streamline indices
+# they select, so the per-chunk partials concatenate without further correction.
 RECOGNITION_DEFAULTS = {
     "model_clust_thr": 2.5,
     "reduction_thr": 15.0,
@@ -295,12 +295,14 @@ def _run_recognize(
     slr,
     num_threads,
 ):
-    """Run one ``RecoBundles.recognize`` and return the recognised streamlines.
+    """Run one ``RecoBundles.recognize``.
 
-    A thin wrapper over :meth:`dipy.segment.bundles.RecoBundles.recognize` so the
-    thread-pinning test can spy the OpenMP environment at the exact call site.
+    Returns the recognised streamlines together with their indices in the input
+    tractogram. A thin wrapper over
+    :meth:`dipy.segment.bundles.RecoBundles.recognize` so the thread-pinning test
+    can spy the OpenMP environment at the exact call site.
     """
-    recognized, _ = rb.recognize(
+    recognized, labels = rb.recognize(
         model_bundle,
         model_clust_thr,
         reduction_thr=reduction_thr,
@@ -308,7 +310,7 @@ def _run_recognize(
         slr=slr,
         num_threads=num_threads,
     )
-    return recognized
+    return recognized, np.asarray(labels, dtype=int)
 
 
 def _run_refine(
@@ -322,13 +324,16 @@ def _run_refine(
 ):
     """Run dipy's auto-calibration pass over a first-pass recognition.
 
+    Returns the refined streamlines together with their indices in the input
+    tractogram.
+
     ``refine`` builds its search space from ``recognized`` -- the bundle found in
     *this* subject -- rather than from the population-average atlas model, which
     is what makes it "auto-calibrated" (Chandio 2020). A thin wrapper so the
     spying test can observe the exact call site, mirroring
     :func:`_run_recognize`.
     """
-    refined, _ = rb.refine(
+    refined, labels = rb.refine(
         model_bundle,
         recognized,
         model_clust_thr,
@@ -338,7 +343,7 @@ def _run_refine(
         slr_x0=REFINE_SLR_X0,
         slr_bounds=REFINE_SLR_BOUNDS,
     )
-    return refined
+    return refined, np.asarray(labels, dtype=int)
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -462,8 +467,7 @@ class DipyRecoBundlesRecognizeInputSpec(BaseInterfaceInputSpec):
         usedefault=True,
         desc="scientific: run dipy's auto-calibration (refine) pass after the "
         "first recognition -- it rebuilds the search space from the subject's "
-        "own first-pass bundle instead of the atlas model. The bundle workflow "
-        "forces this off for a chunked build, like slr",
+        "own first-pass bundle instead of the atlas model",
     )
     r_reduction_thr = traits.Float(
         RECOGNITION_DEFAULTS["r_reduction_thr"],
@@ -478,9 +482,8 @@ class DipyRecoBundlesRecognizeInputSpec(BaseInterfaceInputSpec):
     slr = traits.Bool(
         True,
         usedefault=True,
-        desc="run RecoBundles' local (per-bundle) SLR in single-pass mode; the "
-        "bundle workflow forces this off when the build came from a chunked "
-        "split, since a union of per-chunk local SLRs is not valid",
+        desc="run RecoBundles' local (per-bundle) SLR in single-pass mode, used "
+        "to select the bundle streamlines; it does not move the written output",
     )
     out_bundle = File(desc="the recognised bundle output (.trx)")
 
@@ -500,9 +503,10 @@ class DipyRecoBundlesRecognize(BaseInterface):
     (sub-)tractogram by reloading a :class:`DipyRecoBundlesBuild` pickle (plus
     the same ``.trx`` streamlines) and running dipy's ``recognize`` for the model
     bundle addressed by explicit filename. Writes the recognised streamlines
-    (atlas space) to a ``.trx`` file; bringing the bundle back to reference space
-    is :class:`~swane.nipype_pipeline.nodes.DipyBundlesToRef.DipyBundlesToRef`'s
-    job.
+    (atlas space) to a ``.trx`` file; the written streamlines are the subject's
+    own, not the copies the local SLR moves into the model frame. Bringing the
+    bundle back to reference space is
+    :class:`~swane.nipype_pipeline.nodes.DipyBundlesToRef.DipyBundlesToRef`'s job.
 
     """
 
@@ -516,6 +520,7 @@ class DipyRecoBundlesRecognize(BaseInterface):
     def _run_interface(self, runtime):
         from dipy.io.streamline import load_tractogram, save_tractogram
         from dipy.io.stateful_tractogram import StatefulTractogram
+        from dipy.tracking.streamline import Streamlines
 
         num_threads = (
             int(self.inputs.num_threads) if isdefined(self.inputs.num_threads) else 1
@@ -543,7 +548,7 @@ class DipyRecoBundlesRecognize(BaseInterface):
             )
             subject_sft.to_rasmm()
             rb = load_build(subject_sft.streamlines, self.inputs.recobundles_pickle)
-            recognized = _run_recognize(
+            recognized, labels = _run_recognize(
                 rb,
                 model_bundle,
                 model_clust_thr=float(self.inputs.model_clust_thr),
@@ -560,7 +565,7 @@ class DipyRecoBundlesRecognize(BaseInterface):
                 bool(self.inputs.refine)
                 and len(recognized) >= MIN_STREAMLINES_FOR_REFINE
             ):
-                recognized = _run_refine(
+                recognized, labels = _run_refine(
                     rb,
                     model_bundle,
                     recognized,
@@ -571,7 +576,11 @@ class DipyRecoBundlesRecognize(BaseInterface):
         finally:
             _restore_threads(previous)
 
-        recognized_sft = StatefulTractogram.from_sft(recognized, model_sft)
+        # The bundle is written as the subject streamlines the recognition
+        # selected, copied into a new sequence, rather than as the copies the
+        # local SLR moved into the model frame.
+        bundle = Streamlines(subject_sft.streamlines[i] for i in labels)
+        recognized_sft = StatefulTractogram.from_sft(bundle, model_sft)
         save_tractogram(recognized_sft, out_bundle, bbox_valid_check=False)
 
         return runtime

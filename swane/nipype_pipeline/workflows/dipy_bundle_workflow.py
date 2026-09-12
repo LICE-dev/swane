@@ -16,13 +16,11 @@ Per side (``lh``/``rh`` -> the atlas's ``_L``/``_R`` convention) the chain is:
 ``outputnode.bundle_lh``/``bundle_rh`` (``.vtp``, reference space).
 
 * **Single chunk** (the default): one recognise :class:`nipype.Node` reads the
-  single build pickle and its ``.trx`` chunk (element 0 of the shared lists) and
-  runs with ``slr=True`` -- the per-bundle local SLR is valid on a whole
-  tractogram. :class:`DipyBundleUnion` is a pass-through of the one partial.
+  single build pickle and its ``.trx`` chunk (element 0 of the shared lists).
+  :class:`DipyBundleUnion` is a pass-through of the one partial.
 * **Chunked build** (``n_chunks > 1``): a recognise :class:`nipype.MapNode`
-  iterates the build pickles and their chunks in lockstep, and ``slr`` is forced
-  **off** -- a union of per-chunk local SLRs is not a valid registration.
-  :class:`DipyBundleUnion` concatenates the N partials.
+  iterates the build pickles and their chunks in lockstep, with the same
+  recognition parameters. :class:`DipyBundleUnion` concatenates the N partials.
 
 The fornix is the one tract the atlas ships side-combined (``F_L_R.trk``); a
 :class:`~swane.nipype_pipeline.nodes.DipyFornixSplit.DipyFornixSplit` lateralises
@@ -105,8 +103,8 @@ def dipy_bundle_workflow(
     n_chunks : int, optional
         The number of representative sub-tractograms the shared build was split
         into (the length of ``recobundles_builds``/``recobundles_chunks``). 1
-        (the default) recognises with a single Node and ``slr=True``; more than 1
-        recognises with a MapNode over the builds and ``slr=False``.
+        (the default) recognises with a single Node; more than 1 recognises with
+        a MapNode over the builds.
     num_threads : int, optional
         OpenMP/BLAS thread count the recognise nodes declare (HARD_CAP). The
         default is 1.
@@ -163,11 +161,7 @@ def dipy_bundle_workflow(
         name="outputnode",
     )
 
-    # A chunked build's per-chunk local SLRs cannot be unioned into one valid
-    # registration, so recognition runs with slr off; a single (whole) chunk
-    # keeps the per-bundle local SLR on.
     chunked = n_chunks > 1
-    slr = not chunked
 
     # The fornix is the one tract the atlas ships side-combined: split it once
     # (on the shared atlas) and take atlas_dir from the split's passthrough so
@@ -216,18 +210,10 @@ def dipy_bundle_workflow(
 
         recognize.inputs.model_bundle_name = model_bundle_name
         recognize.inputs.num_threads = num_threads
-        recognize.inputs.slr = slr
 
-        # The recognition parameters for this tract (both sides share them).
-        # A chunked build forces the refine pass off for the same reason it
-        # forces the per-bundle local SLR off -- refine registers the model to
-        # the subject's own first-pass bundle, and a union of per-chunk
-        # registrations is not a valid one. The shipped thresholds assume both
-        # are on, so a chunked path must re-derive them rather than inherit
-        # these.
+        # The recognition parameters for this tract (both sides share them), the
+        # same for any number of chunks.
         params = recognition_params(model_bundle_name)
-        if chunked:
-            params["refine"] = False
         for trait, value in params.items():
             setattr(recognize.inputs, trait, value)
         workflow.connect(

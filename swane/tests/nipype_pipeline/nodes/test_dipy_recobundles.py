@@ -260,6 +260,7 @@ class TestBuildRecognizeHandoff:
         from dipy.io.streamline import load_tractogram, save_tractogram
         from dipy.io.stateful_tractogram import StatefulTractogram
         from dipy.segment.bundles import RecoBundles
+        from dipy.tracking.streamline import Streamlines
 
         subject_sft = load_tractogram(subject, "same", bbox_valid_check=False)
         subject_sft.to_rasmm()
@@ -275,7 +276,7 @@ class TestBuildRecognizeHandoff:
             rng=np.random.default_rng(RECOBUNDLES_RNG_SEED),
             verbose=False,
         )
-        recognized, _ = rb.recognize(
+        recognized, labels = rb.recognize(
             model_sft.streamlines,
             RECOGNITION_DEFAULTS["model_clust_thr"],
             reduction_thr=RECOGNITION_DEFAULTS["reduction_thr"],
@@ -288,7 +289,7 @@ class TestBuildRecognizeHandoff:
         # stronger contract than recognise alone: the pickled post-clustering RNG
         # state has to survive BOTH passes for the outputs to match bit for bit.
         if RECOGNITION_DEFAULTS["refine"] and len(recognized) >= 2:
-            recognized, _ = rb.refine(
+            recognized, labels = rb.refine(
                 model_sft.streamlines,
                 recognized,
                 RECOGNITION_DEFAULTS["model_clust_thr"],
@@ -298,7 +299,8 @@ class TestBuildRecognizeHandoff:
                 slr_x0=REFINE_SLR_X0,
                 slr_bounds=REFINE_SLR_BOUNDS,
             )
-        sft = StatefulTractogram.from_sft(recognized, model_sft)
+        bundle = Streamlines(subject_sft.streamlines[i] for i in labels)
+        sft = StatefulTractogram.from_sft(bundle, model_sft)
         save_tractogram(sft, out_bundle, bbox_valid_check=False)
         return out_bundle
 
@@ -383,6 +385,57 @@ class TestThreadPinning:
 
         assert seen["omp"] == "2"
         assert OMP_THREADS_VAR not in os.environ
+
+
+# --------------------------------------------------------------------------- #
+# The written bundle carries the subject's own streamline geometry.
+# --------------------------------------------------------------------------- #
+def _streamline_key(streamline):
+    return np.asarray(streamline, dtype=np.float32).tobytes()
+
+
+class TestWrittenBundleGeometry:
+    """RecoBundles returns its selection already moved into the model frame by
+    the per-bundle local SLR; the node writes the selected subject streamlines
+    instead, so every written streamline occurs verbatim in the input."""
+
+    def test_written_streamlines_occur_verbatim_in_the_input(
+        self, atlas_dir, tmp_path
+    ):
+        subject = _subject_with_ifof(tmp_path)
+        pickle_path = _build(subject, str(tmp_path / "build.pkl"))
+        out = _recognize(
+            pickle_path,
+            subject,
+            atlas_dir,
+            "IFOF_R",
+            str(tmp_path / "bundle.trx"),
+            slr=True,
+            refine=False,
+        )
+        written = _load_streamlines(out)
+        assert len(written) > 0
+        source = {_streamline_key(s) for s in _load_streamlines(subject)}
+        missing = [s for s in written if _streamline_key(s) not in source]
+        assert not missing, "%d written streamlines are not input streamlines" % len(
+            missing
+        )
+
+    def test_holds_with_the_refine_pass_too(self, atlas_dir, tmp_path):
+        subject = _subject_with_ifof(tmp_path, name="subject_refine.trx")
+        pickle_path = _build(subject, str(tmp_path / "build_refine.pkl"))
+        out = _recognize(
+            pickle_path,
+            subject,
+            atlas_dir,
+            "IFOF_R",
+            str(tmp_path / "bundle_refine.trx"),
+            slr=True,
+            refine=True,
+        )
+        written = _load_streamlines(out)
+        source = {_streamline_key(s) for s in _load_streamlines(subject)}
+        assert all(_streamline_key(s) in source for s in written)
 
 
 # --------------------------------------------------------------------------- #
