@@ -174,7 +174,7 @@ def recognition_params(model_bundle_name):
 # Conservative static reservation, used only as the build node's
 # negotiation-failed fail-safe (RecoBundlesRamEstimator reserves from the chunk's
 # point count at scheduling time).
-STATIC_MEM_GB = 8.0
+STATIC_MEM_GB = 6.0
 
 
 def bundle_path(atlas_dir, model_bundle_name):

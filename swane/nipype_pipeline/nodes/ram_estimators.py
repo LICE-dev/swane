@@ -962,7 +962,7 @@ class RecoBundlesRamEstimator(RamEstimator):
     #: Static reservation used only when the negotiation cannot run (see
     #: ``MonitoredMultiProcPlugin._negotiate_ram``) -- e.g. the ``.trx`` header
     #: could not be read, a state in which the node cannot run either.
-    STATIC_FALLBACK_GB = 8.0
+    STATIC_FALLBACK_GB = 6.0
 
     def __init__(self):
         # max_gb is deliberately None: clamping the estimate down would make the

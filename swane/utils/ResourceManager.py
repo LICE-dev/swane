@@ -23,11 +23,12 @@ class ResourceManager:
     #: antspynet brain extraction; fixed at 5 GB for now (revisit later).
     ANTSPYNET_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
     #: dipy/RecoBundles tractography engine floor. Set from the measured per-node
-    #: tree-peak RSS of the dipy_dti_preproc_workflow on both oracle subjects: the
-    #: DipyMotionCorrection process pool is the ceiling at ~8.4 GB (subj2 64-dir,
-    #: 4 workers), rounded to 8. Measured on linux only; macOS is unverified, so it
-    #: carries the same 8 GB pending a macOS measurement. See the dipy RAM report.
-    DIPY_TRACTOGRAPHY_RAM_REQUIREMENT = {"mac": 8, "linux": 8, "other": 8}
+    #: Minimum RAM to select the dipy tractography engine. It covers every dipy
+    #: node's negotiated bottom rung so the workflow can run; the heavier nodes
+    #: (motion, tracking) tune their parallelism/levers down to fit it, while the
+    #: one-way tissue classifier (no lever, linear in T1 voxels) is the binding
+    #: floor. See the dipy RAM report.
+    DIPY_TRACTOGRAPHY_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6}
 
     #: In prerelease test_run mode ONLY, the SynthSeg (--fast, robust=False) and
     #: SynthMorph (steps=5) paths do genuinely less work and use less RAM, so
