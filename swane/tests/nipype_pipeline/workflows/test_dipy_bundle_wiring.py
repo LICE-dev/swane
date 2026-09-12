@@ -8,12 +8,13 @@ it only *recognises* one atlas model bundle from a pre-built pickle, unions the
 per-chunk partials, and transforms the result back to reference space as ``.vtp``.
 
 These are graph-shape checks (independent of the golden byte snapshots): the
-per-side recognise -> union -> to-ref chain, the recognition parameters staying
-the same for any number of chunks (a single chunk recognises with a plain Node,
-a chunked build with a MapNode over the builds), the tract->atlas model
-mapping (``af``->``AF_L``/``AF_R``, ``fx``->``F_L``/``F_R``, ``cingulum``->
-``C_L``/``C_R``), the fornix split ordered before the fornix recognitions, and the
-``r-<tract>_<side>.vtp`` result names on ``outputnode.bundle_lh``/``bundle_rh``.
+per-side recognise -> union -> to-ref chain, the recognise node always being a
+MapNode over the shared builds/chunks (their runtime list length is chosen by the
+preproc chunker's RAM estimator), the recognition parameters staying identical
+per side, the tract->atlas model mapping (``af``->``AF_L``/``AF_R``,
+``fx``->``F_L``/``F_R``, ``cingulum``->``C_L``/``C_R``), the fornix split ordered
+before the fornix recognitions, and the ``r-<tract>_<side>.vtp`` result names on
+``outputnode.bundle_lh``/``bundle_rh``.
 """
 
 import pytest
@@ -45,27 +46,13 @@ def _node_by_name(wf, name):
     return next(n for n in wf._graph.nodes() if n.name == name)
 
 
-def _src_field_name(src_field):
-    """The source field of a connection, whether plain or an inline-transform.
-
-    A single-chunk connection picks element 0 of a list via an inline function,
-    so nipype stores the source endpoint as ``(field, func_source, args)``; a
-    MapNode connection carries the whole list, so it is the plain field name.
-    """
-    return src_field[0] if isinstance(src_field, tuple) else src_field
-
-
-def _is_indexed(src_field):
-    return isinstance(src_field, tuple)
-
-
 # --------------------------------------------------------------------------- #
-# af: a plain bilateral tract, single chunk (the default).
+# af: a plain bilateral tract.
 # --------------------------------------------------------------------------- #
-class TestBilateralSingleChunk:
+class TestBilateral:
     @pytest.fixture
     def af_wf(self):
-        return dipy_bundle_workflow("af", n_chunks=1, num_threads=4)
+        return dipy_bundle_workflow("af", num_threads=4)
 
     def test_inputnode_fields(self, af_wf):
         inputnode = _node_by_name(af_wf, "inputnode")
@@ -94,11 +81,21 @@ class TestBilateralSingleChunk:
         assert len(_nodes_by_iface(af_wf, "DipyBundleUnion")) == 2
         assert len(_nodes_by_iface(af_wf, "DipyBundlesToRef")) == 2
 
-    def test_recognize_is_a_plain_node_with_slr_on(self, af_wf):
-        for recog in _nodes_by_iface(af_wf, "DipyRecoBundlesRecognize"):
-            # single chunk -> a plain Node, not a MapNode
-            assert not getattr(recog, "iterfield", None)
+    def test_recognize_is_a_mapnode_over_builds_and_chunks_with_slr_on(self, af_wf):
+        recogs = _nodes_by_iface(af_wf, "DipyRecoBundlesRecognize")
+        assert len(recogs) == 2
+        for recog in recogs:
+            assert set(getattr(recog, "iterfield", [])) == {
+                "recobundles_pickle",
+                "tractogram_chunk",
+            }
             assert recog.inputs.slr is True
+
+    def test_recognize_carries_the_recobundles_ram_estimator(self, af_wf):
+        from swane.nipype_pipeline.nodes.ram_estimators import RecoBundlesRamEstimator
+
+        for recog in _nodes_by_iface(af_wf, "DipyRecoBundlesRecognize"):
+            assert isinstance(recog.ram_estimator, RecoBundlesRamEstimator)
 
     def test_side_model_mapping(self, af_wf):
         names = {
@@ -110,7 +107,7 @@ class TestBilateralSingleChunk:
     def test_no_fornix_split_node(self, af_wf):
         assert _nodes_by_iface(af_wf, "DipyFornixSplit") == []
 
-    def test_recognize_consumes_first_build_and_chunk_and_inputnode_atlas_dir(
+    def test_recognize_consumes_whole_build_and_chunk_lists_and_inputnode_atlas_dir(
         self, af_wf
     ):
         inputnode = _node_by_name(af_wf, "inputnode")
@@ -122,19 +119,14 @@ class TestBilateralSingleChunk:
             assert len(pickle_edges) == 1
             assert len(chunk_edges) == 1
             assert len(atlas_edges) == 1
-            (src, sf, _) = pickle_edges[0]
-            assert src is inputnode
-            assert _src_field_name(sf) == "recobundles_builds"
-            # single chunk -> picks element 0 of the list
-            assert _is_indexed(sf)
-            (src, sf, _) = chunk_edges[0]
-            assert src is inputnode
-            assert _src_field_name(sf) == "recobundles_chunks"
-            assert _is_indexed(sf)
+            # the whole list reaches the MapNode iterfields, not an indexed element
+            src, sf, _ = pickle_edges[0]
+            assert src is inputnode and sf == "recobundles_builds"
+            src, sf, _ = chunk_edges[0]
+            assert src is inputnode and sf == "recobundles_chunks"
             # non-fornix: atlas_dir straight from inputnode
-            (src, sf, _) = atlas_edges[0]
-            assert src is inputnode
-            assert _src_field_name(sf) == "atlas_dir"
+            src, sf, _ = atlas_edges[0]
+            assert src is inputnode and sf == "atlas_dir"
 
     def test_recognize_union_toref_outputnode_chain(self, af_wf):
         outputnode = _node_by_name(af_wf, "outputnode")
@@ -158,12 +150,10 @@ class TestBilateralSingleChunk:
                 if (union, "bundle", "bundle") in _incoming(af_wf, t)
             )
             assert to_ref.inputs.out_name == "r-af_%s" % side
-            # to_ref.atlas2native comes from inputnode
             inputnode = _node_by_name(af_wf, "inputnode")
             assert (inputnode, "atlas2native", "atlas2native") in _incoming(
                 af_wf, to_ref
             )
-            # to_ref -> outputnode.bundle_<side>
             assert (to_ref, "bundle_vtp", "bundle_%s" % side) in _incoming(
                 af_wf, outputnode
             )
@@ -175,7 +165,7 @@ class TestBilateralSingleChunk:
 class TestFornix:
     @pytest.fixture
     def fx_wf(self):
-        return dipy_bundle_workflow("fx", n_chunks=1, num_threads=4)
+        return dipy_bundle_workflow("fx", num_threads=4)
 
     def test_fornix_split_present(self, fx_wf):
         assert len(_nodes_by_iface(fx_wf, "DipyFornixSplit")) == 1
@@ -193,14 +183,12 @@ class TestFornix:
         inputnode."""
         split = _nodes_by_iface(fx_wf, "DipyFornixSplit")[0]
         inputnode = _node_by_name(fx_wf, "inputnode")
-        # the split takes atlas_dir from inputnode
         assert (inputnode, "atlas_dir", "atlas_dir") in _incoming(fx_wf, split)
         for recog in _nodes_by_iface(fx_wf, "DipyRecoBundlesRecognize"):
             atlas_edges = [c for c in _incoming(fx_wf, recog) if c[2] == "atlas_dir"]
             assert len(atlas_edges) == 1
-            (src, sf, _) = atlas_edges[0]
-            assert src is split
-            assert _src_field_name(sf) == "atlas_dir"
+            src, sf, _ = atlas_edges[0]
+            assert src is split and sf == "atlas_dir"
 
     def test_result_names(self, fx_wf):
         names = {t.inputs.out_name for t in _nodes_by_iface(fx_wf, "DipyBundlesToRef")}
@@ -213,7 +201,7 @@ class TestFornix:
 class TestCingulum:
     @pytest.fixture
     def cing_wf(self):
-        return dipy_bundle_workflow("cingulum", n_chunks=1, num_threads=4)
+        return dipy_bundle_workflow("cingulum", num_threads=4)
 
     def test_model_mapping(self, cing_wf):
         names = {
@@ -233,42 +221,15 @@ class TestCingulum:
 
 
 # --------------------------------------------------------------------------- #
-# chunked build: a recognise MapNode over the builds, slr forced off.
+# The recognition parameters do not depend on the number of chunks.
 # --------------------------------------------------------------------------- #
-class TestChunkedBuild:
-    @pytest.fixture
-    def af_chunked(self):
-        return dipy_bundle_workflow("af", n_chunks=3, num_threads=4)
-
-    def test_recognize_is_a_mapnode_over_builds_and_chunks(self, af_chunked):
-        recogs = _nodes_by_iface(af_chunked, "DipyRecoBundlesRecognize")
-        assert len(recogs) == 2  # still one per side
-        for recog in recogs:
-            assert set(getattr(recog, "iterfield", [])) == {
-                "recobundles_pickle",
-                "tractogram_chunk",
-            }
-
-    def test_refine_stays_on_when_chunked(self, af_chunked):
-        """The recognition parameters do not depend on the number of chunks."""
+class TestRecognitionParametersDoNotDependOnChunking:
+    def test_refine_and_slr_stay_on(self):
+        wf = dipy_bundle_workflow("af", num_threads=4)
         for side in ("lh", "rh"):
-            recog = af_chunked.get_node("recognize_%s" % side)
+            recog = wf.get_node("recognize_%s" % side)
             assert recog.inputs.refine is True
-
-    def test_slr_stays_on_when_chunked(self, af_chunked):
-        for recog in _nodes_by_iface(af_chunked, "DipyRecoBundlesRecognize"):
             assert recog.inputs.slr is True
-
-    def test_mapnode_consumes_the_whole_build_and_chunk_lists(self, af_chunked):
-        inputnode = _node_by_name(af_chunked, "inputnode")
-        for recog in _nodes_by_iface(af_chunked, "DipyRecoBundlesRecognize"):
-            inc = _incoming(af_chunked, recog)
-            (src, sf, _) = next(c for c in inc if c[2] == "recobundles_pickle")
-            assert src is inputnode
-            assert sf == "recobundles_builds"  # whole list, not indexed
-            (src, sf, _) = next(c for c in inc if c[2] == "tractogram_chunk")
-            assert src is inputnode
-            assert sf == "recobundles_chunks"
 
 
 # --------------------------------------------------------------------------- #
@@ -277,7 +238,7 @@ class TestChunkedBuild:
 class TestUnmappedTract:
     @pytest.mark.parametrize("tract", ["atr", "str", "cbd", "cbp", "cbt", "ac"])
     def test_unmapped_tract_returns_none(self, tract):
-        assert dipy_bundle_workflow(tract, n_chunks=1) is None
+        assert dipy_bundle_workflow(tract) is None
 
 
 # --------------------------------------------------------------------------- #
@@ -285,7 +246,7 @@ class TestUnmappedTract:
 # --------------------------------------------------------------------------- #
 class TestRecognitionParametersAreApplied:
     def test_default_configuration_on_an_unlisted_tract(self):
-        wf = dipy_bundle_workflow("ilf", n_chunks=1, num_threads=4)
+        wf = dipy_bundle_workflow("ilf", num_threads=4)
         for side in ("lh", "rh"):
             recog = wf.get_node("recognize_%s" % side)
             assert recog.inputs.model_clust_thr == 2.5
@@ -302,7 +263,7 @@ class TestRecognitionParametersAreApplied:
     def test_both_sides_of_every_tract_share_one_configuration(self, tract):
         """Left and right are the same structure and are routinely compared, so
         they must never be recognised with different parameters."""
-        wf = dipy_bundle_workflow(tract, n_chunks=1, num_threads=4)
+        wf = dipy_bundle_workflow(tract, num_threads=4)
         traits = (
             "model_clust_thr",
             "reduction_thr",
@@ -317,7 +278,7 @@ class TestRecognitionParametersAreApplied:
             assert getattr(left, trait) == getattr(right, trait), trait
 
     def test_overridden_tract_applies_to_both_sides(self):
-        wf = dipy_bundle_workflow("or", n_chunks=1, num_threads=4)
+        wf = dipy_bundle_workflow("or", num_threads=4)
         for side in ("lh", "rh"):
             recog = wf.get_node("recognize_%s" % side)
             assert (recog.inputs.r_reduction_thr, recog.inputs.r_pruning_thr) == (

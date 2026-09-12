@@ -48,8 +48,10 @@ the same as injecting a home-made subsample into a fresh build (that would defea
 RecoBundles' internal subsampling); the build itself is always a plain
 ``RecoBundles(streamlines)`` with no injected clustering.
 
-Carries a **static** conservative ``_mem_gb`` placeholder; the tunable estimator
-that replaces it is a separate task (E3B, deferred).
+RAM is reserved at scheduling time by
+:class:`~swane.nipype_pipeline.nodes.ram_estimators.RecoBundlesRamEstimator`
+(linear in the chunk's point count); the static ``_mem_gb`` is only the
+negotiation-failed fail-safe.
 """
 
 import os
@@ -169,8 +171,9 @@ def recognition_params(model_bundle_name):
     return params
 
 
-# Conservative static placeholder (~ the Phase-1bis figure) until the tunable
-# RAM estimator replaces it.
+# Conservative static reservation, used only as the build node's
+# negotiation-failed fail-safe (RecoBundlesRamEstimator reserves from the chunk's
+# point count at scheduling time).
 STATIC_MEM_GB = 8.0
 
 
@@ -513,8 +516,8 @@ class DipyRecoBundlesRecognize(BaseInterface):
     input_spec = DipyRecoBundlesRecognizeInputSpec
     output_spec = DipyRecoBundlesRecognizeOutputSpec
 
-    # Recognition is cheap (centroids + a reduced neighbourhood); a small static
-    # placeholder is fine until the tunable estimator work.
+    # Standalone static reservation; in the bundle workflow RAM is reserved from
+    # the chunk's point count by RecoBundlesRamEstimator at scheduling time.
     _mem_gb = 2.0
 
     def _run_interface(self, runtime):

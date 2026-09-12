@@ -334,6 +334,19 @@ class TestSharedRecoBundlesBuild:
         assert len(_nodes_by_iface(dipy_wf, "DipyTractogramChunker")) == 1
         assert len(_nodes_by_iface(dipy_wf, "DipyRecoBundlesBuild")) == 1
 
+    def test_chunker_and_build_carry_ram_estimators(self, dipy_wf):
+        """The chunker chooses n_chunks from the RAM budget and the build prices
+        each chunk from its point count -- both via RecoBundles estimators."""
+        from swane.nipype_pipeline.nodes.ram_estimators import (
+            DipyRecoBundlesChunkerRamEstimator,
+            RecoBundlesRamEstimator,
+        )
+
+        chunker = _node_by_name(dipy_wf, "dipy_chunker")
+        build = _node_by_name(dipy_wf, "dipy_recobundles_build")
+        assert isinstance(chunker.ram_estimator, DipyRecoBundlesChunkerRamEstimator)
+        assert isinstance(build.ram_estimator, RecoBundlesRamEstimator)
+
     def test_builds_and_chunks_reach_outputnode(self, dipy_wf):
         outputnode = _node_by_name(dipy_wf, "outputnode")
         build = _node_by_name(dipy_wf, "dipy_recobundles_build")

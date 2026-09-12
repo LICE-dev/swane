@@ -35,7 +35,6 @@ from swane.nipype_pipeline.workflows.venous_ct_workflow import venous_ct_workflo
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
 from swane.nipype_pipeline.workflows.dipy_dti_preproc_workflow import (
     dipy_dti_preproc_workflow,
-    DEFAULT_N_CHUNKS,
 )
 from swane.nipype_pipeline.workflows.dipy_bundle_workflow import (
     dipy_bundle_workflow,
@@ -1166,7 +1165,6 @@ class MainWorkflow(CustomWorkflow):
                 shared build, and sink its two reference-space .vtp results."""
                 bundle_workflow = dipy_bundle_workflow(
                     name=tract,
-                    n_chunks=DEFAULT_N_CHUNKS,
                     num_threads=num_threads,
                 )
                 if bundle_workflow is None:

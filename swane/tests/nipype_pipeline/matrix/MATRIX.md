@@ -1,18 +1,26 @@
 # SWANe workflow settings matrix
 
-Overview of 80 construction scenarios across 15 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
+Overview of 83 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
 > Generated from the golden snapshots by `python swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
-[dipy_dti_preproc](#dipy-dti-preproc) · [dti_preproc](#dti-preproc) · [flat1](#flat1) · [fmri_preproc](#fmri-preproc) · [fmri_resting_state](#fmri-resting-state) · [fmri_task](#fmri-task) · [freesurfer](#freesurfer) · [func_map](#func-map) · [linear_reg](#linear-reg) · [nonlinear_reg](#nonlinear-reg) · [ref](#ref) · [seeg_ct](#seeg-ct) · [tractography](#tractography) · [venous_ct](#venous-ct) · [venous_mr](#venous-mr)
+[dipy_bundle](#dipy-bundle) · [dipy_dti_preproc](#dipy-dti-preproc) · [dti_preproc](#dti-preproc) · [flat1](#flat1) · [fmri_preproc](#fmri-preproc) · [fmri_resting_state](#fmri-resting-state) · [fmri_task](#fmri-task) · [freesurfer](#freesurfer) · [func_map](#func-map) · [linear_reg](#linear-reg) · [nonlinear_reg](#nonlinear-reg) · [ref](#ref) · [seeg_ct](#seeg-ct) · [tractography](#tractography) · [venous_ct](#venous-ct) · [venous_mr](#venous-mr)
+
+## dipy_bundle
+
+| scenario | settings | nodes/edges | commands | GPU |
+|----------|----------|-------------|----------|-----|
+| [af](snapshots/dipy_bundle/af.txt) | num_threads=4; tract=af | 8 / 10 | — | — |
+| [cingulum](snapshots/dipy_bundle/cingulum.txt) | num_threads=4; tract=cingulum | 8 / 10 | — | — |
+| [fornix](snapshots/dipy_bundle/fornix.txt) | num_threads=4; tract=fx | 9 / 13 | — | — |
 
 ## dipy_dti_preproc
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
 | [no_tractography](snapshots/dipy_dti_preproc/no_tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=false; tractography_engine=DIPY_RECOBUNDLES | 13 / 18 | `dcm2niix` | — |
-| [tractography](snapshots/dipy_dti_preproc/tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 19 / 37 | `dcm2niix` | — |
-| [tractography_single_thread](snapshots/dipy_dti_preproc/tractography_single_thread.txt) | deskull_engine=ANTSPYNET; max_cpu=1; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 19 / 37 | `dcm2niix` | — |
+| [tractography](snapshots/dipy_dti_preproc/tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 21 / 41 | `dcm2niix` | — |
+| [tractography_single_thread](snapshots/dipy_dti_preproc/tractography_single_thread.txt) | deskull_engine=ANTSPYNET; max_cpu=1; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 21 / 41 | `dcm2niix` | — |
 
 ## dti_preproc
 

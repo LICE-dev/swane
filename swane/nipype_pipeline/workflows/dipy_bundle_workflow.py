@@ -15,12 +15,13 @@ Per side (``lh``/``rh`` -> the atlas's ``_L``/``_R`` convention) the chain is:
 ``DipyRecoBundlesRecognize`` -> ``DipyBundleUnion`` -> ``DipyBundlesToRef`` ->
 ``outputnode.bundle_lh``/``bundle_rh`` (``.vtp``, reference space).
 
-* **Single chunk** (the default): one recognise :class:`nipype.Node` reads the
-  single build pickle and its ``.trx`` chunk (element 0 of the shared lists).
-  :class:`DipyBundleUnion` is a pass-through of the one partial.
-* **Chunked build** (``n_chunks > 1``): a recognise :class:`nipype.MapNode`
-  iterates the build pickles and their chunks in lockstep, with the same
-  recognition parameters. :class:`DipyBundleUnion` concatenates the N partials.
+The recognise node is always a :class:`nipype.MapNode` over the shared build
+pickles and their ``.trx`` chunks, iterated in lockstep with the same
+recognition parameters. The number of chunks is decided at scheduling time by
+the preproc chunker's RAM estimator, so the shared ``recobundles_builds`` /
+``recobundles_chunks`` lists have a runtime length the MapNode fans out over: a
+single chunk yields a one-element MapNode, a chunked build an N-element one.
+:class:`DipyBundleUnion` concatenates the partials (a pass-through for one).
 
 The fornix is the one tract the atlas ships side-combined (``F_L_R.trk``); a
 :class:`~swane.nipype_pipeline.nodes.DipyFornixSplit.DipyFornixSplit` lateralises
@@ -42,6 +43,7 @@ from swane.nipype_pipeline.nodes.DipyRecoBundles import (
 from swane.nipype_pipeline.nodes.DipyBundleUnion import DipyBundleUnion
 from swane.nipype_pipeline.nodes.DipyBundlesToRef import DipyBundlesToRef
 from swane.nipype_pipeline.nodes.DipyFornixSplit import DipyFornixSplit
+from swane.nipype_pipeline.nodes.ram_estimators import RecoBundlesRamEstimator
 
 # lh/rh -> the atlas's left/right model-file suffix.
 SIDES = ["lh", "rh"]
@@ -74,21 +76,8 @@ DIPY_TRACT_ATLAS = {
 _FORNIX_TRACT = "fx"
 
 
-# Return element 0 of a list -- the single build/chunk of an unchunked run.
-# Used as an inline connection transform so a single recognise Node consumes the
-# one-element ``recobundles_builds``/``recobundles_chunks`` lists the preproc
-# always publishes (the chunker and build MapNode emit lists even for
-# ``n_chunks == 1``). Kept docstring-free so its captured source stays a stable
-# one-liner in the golden connection snapshots (a docstring would be dumped
-# verbatim on every edge, unlike a comment, which the snapshot's AST round-trip
-# drops).
-def _first(items):
-    return items[0]
-
-
 def dipy_bundle_workflow(
     name: str,
-    n_chunks: int = 1,
     num_threads: int = 1,
     base_dir: str = "/",
 ) -> CustomWorkflow:
@@ -100,11 +89,6 @@ def dipy_bundle_workflow(
     name : str
         The SWANe tract key (e.g. ``"af"``, ``"fx"``, ``"cingulum"``). A tract
         with no HCP842 atlas counterpart returns ``None`` (no bundle workflow).
-    n_chunks : int, optional
-        The number of representative sub-tractograms the shared build was split
-        into (the length of ``recobundles_builds``/``recobundles_chunks``). 1
-        (the default) recognises with a single Node; more than 1 recognises with
-        a MapNode over the builds.
     num_threads : int, optional
         OpenMP/BLAS thread count the recognise nodes declare (HARD_CAP). The
         default is 1.
@@ -161,8 +145,6 @@ def dipy_bundle_workflow(
         name="outputnode",
     )
 
-    chunked = n_chunks > 1
-
     # The fornix is the one tract the atlas ships side-combined: split it once
     # (on the shared atlas) and take atlas_dir from the split's passthrough so
     # the two fornix recognitions run only after F_L.trk/F_R.trk exist.
@@ -177,36 +159,26 @@ def dipy_bundle_workflow(
     for side in SIDES:
         model_bundle_name = "%s_%s" % (atlas_base, _SIDE_SUFFIX[side])
 
-        if chunked:
-            # A MapNode over the shared build pickles and their chunks, iterated
-            # in lockstep (nipype zips multiple iterfields by index).
-            recognize = MapNode(
-                DipyRecoBundlesRecognize(),
-                name="recognize_%s" % side,
-                iterfield=["recobundles_pickle", "tractogram_chunk"],
-            )
-            workflow.connect(
-                inputnode, "recobundles_builds", recognize, "recobundles_pickle"
-            )
-            workflow.connect(
-                inputnode, "recobundles_chunks", recognize, "tractogram_chunk"
-            )
-        else:
-            # A single recognise Node reads the one build/chunk (element 0 of the
-            # one-element shared lists the preproc always publishes).
-            recognize = Node(DipyRecoBundlesRecognize(), name="recognize_%s" % side)
-            workflow.connect(
-                inputnode,
-                ("recobundles_builds", _first),
-                recognize,
-                "recobundles_pickle",
-            )
-            workflow.connect(
-                inputnode,
-                ("recobundles_chunks", _first),
-                recognize,
-                "tractogram_chunk",
-            )
+        # Always a MapNode over the shared build pickles and their chunks,
+        # iterated in lockstep (nipype zips multiple iterfields by index). The
+        # list length is a runtime property (the preproc chunker chooses the
+        # chunk count from the RAM budget), so the MapNode fans out over however
+        # many chunks exist -- one element for an unsplit build, N for a split.
+        recognize = MapNode(
+            DipyRecoBundlesRecognize(),
+            name="recognize_%s" % side,
+            iterfield=["recobundles_pickle", "tractogram_chunk"],
+        )
+        # RAM is reserved at scheduling time from each chunk's point count; the
+        # MapNode propagates the estimator to every mapped subnode, so each is
+        # priced from its own chunk. The static value is only the
+        # negotiation-failed fail-safe.
+        recognize._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
+        recognize.ram_estimator = RecoBundlesRamEstimator()
+        workflow.connect(
+            inputnode, "recobundles_builds", recognize, "recobundles_pickle"
+        )
+        workflow.connect(inputnode, "recobundles_chunks", recognize, "tractogram_chunk")
 
         recognize.inputs.model_bundle_name = model_bundle_name
         recognize.inputs.num_threads = num_threads
@@ -220,9 +192,8 @@ def dipy_bundle_workflow(
             atlas_dir_source[0], atlas_dir_source[1], recognize, "atlas_dir"
         )
 
-        # Union the per-chunk partials (pass-through for a single chunk). A single
-        # recognise Node's scalar output coerces to a one-element list on the
-        # union's InputMultiPath; a MapNode already emits the list.
+        # Union the per-chunk partials (a pass-through for a single chunk); the
+        # recognise MapNode emits the list the union's InputMultiPath consumes.
         union = Node(DipyBundleUnion(), name="union_%s" % side)
         workflow.connect(recognize, "recognized_bundle", union, "recognized_bundles")
 

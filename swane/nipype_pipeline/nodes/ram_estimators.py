@@ -905,3 +905,179 @@ class DipyCsdRamEstimator(RamEstimator):
             n_procs=chosen,
             debug_str=debug,
         )
+
+
+def _trx_counts(path):
+    """Return ``(n_points, n_streamlines)`` from a ``.trx`` header alone.
+
+    Reads the memory-mapped header (``NB_VERTICES``/``NB_STREAMLINES``) without
+    materialising the streamline arrays.
+    """
+    from trx.trx_file_memmap import load as trx_load
+
+    trx = trx_load(str(path))
+    try:
+        return int(trx.header["NB_VERTICES"]), int(trx.header["NB_STREAMLINES"])
+    finally:
+        trx.close()
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class RecoBundlesRamEstimator(RamEstimator):
+    """
+    RAM estimator for the RecoBundles build and recognise nodes.
+
+    Model
+    -----
+    The peak tracks the total point count of the ``tractogram_chunk`` the node
+    loads::
+
+        mem_gb = OVERHEAD_GB + BYTES_PER_POINT * n_points / 2**30
+
+    The point count is read from the ``.trx`` header, never by loading the
+    streamlines. It is a one-way estimator (no quality-neutral lever): it
+    reserves RAM and inherits the default :meth:`negotiate` (empty tuning).
+
+    Chunk-sizing
+    ------------
+    :meth:`min_chunks_for_budget` inverts the model to the smallest number of
+    equal-point chunks whose per-chunk estimate fits a RAM budget, capped by
+    :attr:`MIN_STREAMLINES_PER_CHUNK`. It is what the chunker's estimator calls
+    to choose ``n_chunks`` (see :class:`DipyRecoBundlesChunkerRamEstimator`).
+    """
+
+    #: Bytes per streamline point of the loaded chunk. Conservative bound.
+    BYTES_PER_POINT = 40
+
+    #: Fixed overhead (interpreter, numpy/dipy/trx/nibabel).
+    OVERHEAD_GB = 0.5
+
+    #: No build/recognise fits in less than this, whatever the input.
+    MIN_GB = 0.5
+
+    #: The smallest streamline count a forced split may leave in one chunk; it
+    #: caps ``n_chunks`` at ``n_streamlines // MIN_STREAMLINES_PER_CHUNK``.
+    MIN_STREAMLINES_PER_CHUNK = 100_000
+
+    #: Static reservation used only when the negotiation cannot run (see
+    #: ``MonitoredMultiProcPlugin._negotiate_ram``) -- e.g. the ``.trx`` header
+    #: could not be read, a state in which the node cannot run either.
+    STATIC_FALLBACK_GB = 8.0
+
+    def __init__(self):
+        # max_gb is deliberately None: clamping the estimate down would make the
+        # node under-reserve and silently co-schedule with other heavy work.
+        super().__init__(
+            input_multipliers={},
+            overhead_gb=self.OVERHEAD_GB,
+            min_gb=self.MIN_GB,
+            max_gb=None,
+        )
+
+    def estimate_gb(self, n_points):
+        """Reservation for a node loading ``n_points`` streamline points."""
+        total = self.OVERHEAD_GB + self.BYTES_PER_POINT * int(n_points) / 1024**3
+        return float(self.clamp(total, self.min_gb, None))
+
+    def max_chunks(self, n_streamlines):
+        """The largest ``n_chunks`` the streamline floor permits."""
+        return max(1, int(n_streamlines) // self.MIN_STREAMLINES_PER_CHUNK)
+
+    def min_chunks_for_budget(self, total_points, n_streamlines, ram_budget_gb):
+        """The smallest ``n_chunks`` whose per-chunk estimate fits the budget.
+
+        Solves ``OVERHEAD_GB + BYTES_PER_POINT * total_points / n <= budget`` for
+        ``n``, clamped to ``[1, max_chunks(n_streamlines)]``. When even
+        ``max_chunks`` does not fit, ``max_chunks`` is returned (the caller
+        reports it as an exhausted split).
+        """
+        cap = self.max_chunks(n_streamlines)
+        headroom = ram_budget_gb - self.OVERHEAD_GB
+        if headroom <= 0:
+            return cap
+        chunk_gb = self.BYTES_PER_POINT * int(total_points) / 1024**3
+        n = math.ceil(chunk_gb / headroom)
+        return max(1, min(cap, int(n)))
+
+    def __call__(self, inputs):
+        """One-way estimate from the node's ``tractogram_chunk`` point count."""
+        n_points, n_streamlines = _trx_counts(inputs.tractogram_chunk)
+        mem_gb = self.estimate_gb(n_points)
+        return mem_gb, (
+            "points=%d, streamlines=%d, estimated RAM=%.2f GB"
+            % (n_points, n_streamlines, mem_gb)
+        )
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class DipyRecoBundlesChunkerRamEstimator(RamEstimator):
+    """
+    RAM estimator for :class:`DipyTractogramChunker` that also decides
+    ``n_chunks``.
+
+    The chunker itself is a whole-tractogram load + strided write, so it
+    reserves from the whole tractogram's point count. Its :meth:`negotiate`
+    additionally chooses ``n_chunks`` so that each downstream RecoBundles chunk
+    fits the RAM budget, using :class:`RecoBundlesRamEstimator`'s model, and
+    injects it as the tuned ``n_chunks`` parameter (applied to the node before
+    it runs).
+    """
+
+    def __init__(self):
+        self._downstream = RecoBundlesRamEstimator()
+        super().__init__(
+            input_multipliers={},
+            overhead_gb=RecoBundlesRamEstimator.OVERHEAD_GB,
+            min_gb=RecoBundlesRamEstimator.MIN_GB,
+            max_gb=None,
+        )
+
+    def estimate_gb(self, n_points):
+        """The chunker's own reservation (whole-tractogram load + write)."""
+        return self._downstream.estimate_gb(n_points)
+
+    def __call__(self, inputs):
+        """One-way estimate from the whole tractogram's point count."""
+        n_points, n_streamlines = _trx_counts(inputs.tractogram_atlas)
+        mem_gb = self.estimate_gb(n_points)
+        return mem_gb, (
+            "points=%d, streamlines=%d, estimated RAM=%.2f GB"
+            % (n_points, n_streamlines, mem_gb)
+        )
+
+    def negotiate(self, inputs, ram_budget_gb):
+        """Reserve the chunker's RAM and choose ``n_chunks`` for the budget."""
+        from swane.patches.nipype_patches import RamPlan
+
+        n_points, n_streamlines = _trx_counts(inputs.tractogram_atlas)
+        n_chunks = self._downstream.min_chunks_for_budget(
+            n_points, n_streamlines, ram_budget_gb
+        )
+        mem_gb = self.estimate_gb(n_points)
+        per_chunk_gb = self._downstream.estimate_gb(n_points / n_chunks)
+        exhausted = (
+            n_chunks == self._downstream.max_chunks(n_streamlines)
+            and per_chunk_gb > ram_budget_gb
+        )
+
+        debug = (
+            "points=%d, streamlines=%d, budget=%.2f GB, n_chunks -> %d, "
+            "downstream RAM/chunk=%.2f GB, chunker RAM=%.2f GB"
+            % (
+                n_points,
+                n_streamlines,
+                ram_budget_gb,
+                n_chunks,
+                per_chunk_gb,
+                mem_gb,
+            )
+        )
+        if exhausted:
+            debug += " (split exhausted: chunk still exceeds the budget)"
+
+        return RamPlan(
+            mem_gb=mem_gb,
+            tuned_params={"n_chunks": n_chunks},
+            n_procs=None,
+            debug_str=debug,
+        )
