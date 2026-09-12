@@ -30,6 +30,8 @@ from swane.nipype_pipeline.nodes.ram_estimators import (
     DipyMotionRamEstimator,
     DipyTissueRamEstimator,
     DipyTrackingRamEstimator,
+    RecoBundlesRamEstimator,
+    DipyRecoBundlesChunkerRamEstimator,
 )
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
@@ -38,7 +40,6 @@ from swane.nipype_pipeline.nodes.utils import (
     resolve_deskull_engine,
     resolve_registration_engine,
 )
-
 
 # Per-node memory reservations (GB), integer-rounded from isolated tree-peak RSS
 # measurements on BOTH oracle subjects (subj1 15-dir 256x256x52 / subj2 64-dir
@@ -93,15 +94,7 @@ _MEM_GB = {
     "tensorfit": 1,  # subj1 0.89 / subj2 1.16
     "ras": 1,  # subj1 0.11 / subj2 0.11 (min 1 GB reservation)
     "slr": 5,  # subj1 4.75 / subj2 0.98 -- scales with streamline count
-    "chunker": 2,  # a streamline re-slice + write, comparable to tractogram size
 }
-
-# Number of representative sub-tractograms the shared RecoBundles build is split
-# into. The maximum useful value for a given streamline count is a RAM-estimator
-# decision deferred to E3B (the RecoBundles build estimator), so it is a single
-# constant here -- 1 (no split, the whole tractogram is one chunk) -- shared with
-# the per-tract bundle workflow so both sides agree on how many builds exist.
-DEFAULT_N_CHUNKS = 1
 
 
 def dipy_dti_preproc_workflow(
@@ -498,10 +491,14 @@ def dipy_dti_preproc_workflow(
         # RAM is bounded; the build is a MapNode over those chunks. Both the
         # pickled builds and the chunk .trx are published: the recognise node
         # reloads the chunk streamlines (they are not stored in the pickle).
+        # n_chunks is chosen at scheduling time by the chunker's estimator from
+        # the real tractogram's point count and the RAM budget, so each
+        # downstream RecoBundles chunk fits; the static value is only the
+        # negotiation-failed fail-safe.
         chunker = Node(DipyTractogramChunker(), name="dipy_chunker")
-        chunker._mem_gb = _MEM_GB["chunker"]
+        chunker._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
+        chunker.ram_estimator = DipyRecoBundlesChunkerRamEstimator()
         chunker.n_procs = 1
-        chunker.inputs.n_chunks = DEFAULT_N_CHUNKS
         workflow.connect(atlas_slr, "tractogram_atlas", chunker, "tractogram_atlas")
 
         recobundles_build = MapNode(
@@ -509,12 +506,14 @@ def dipy_dti_preproc_workflow(
             name="dipy_recobundles_build",
             iterfield=["tractogram_chunk"],
         )
-        # The build is the RAM-heavy whole-tractogram clustering: carry the
-        # node's static conservative placeholder until the deferred RecoBundles
-        # RAM estimator (E3B) prices it. A MapNode propagates _mem_gb to each
-        # per-chunk mapped node. num_threads pins the clustering's OMP/BLAS;
-        # nipype derives n_procs from it (HARD_CAP).
-        recobundles_build._mem_gb = DipyRecoBundlesBuild._mem_gb
+        # The build is a whole-(sub-)tractogram clustering: RAM is reserved at
+        # scheduling time from each chunk's point count (linear in points). A
+        # MapNode propagates the estimator to each per-chunk mapped node, so each
+        # is priced from its own chunk. The static value is only the
+        # negotiation-failed fail-safe. num_threads pins the clustering's
+        # OMP/BLAS; nipype derives n_procs from it (HARD_CAP).
+        recobundles_build._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
+        recobundles_build.ram_estimator = RecoBundlesRamEstimator()
         recobundles_build.inputs.num_threads = parallel_cpu
         workflow.connect(chunker, "chunks", recobundles_build, "tractogram_chunk")
         workflow.connect(

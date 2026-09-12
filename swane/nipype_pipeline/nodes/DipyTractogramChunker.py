@@ -17,8 +17,11 @@ chunk) while spreading each chunk across the whole ordering. ``n_chunks == 1``
 (the default) is a pass-through: the single "chunk" is the input tractogram
 itself, so no copy is written and the streamlines are stored only once.
 
-The maximum useful ``n_chunks`` for a given streamline count is a RAM-estimator
-decision (E3B, deferred); this node simply honours the ``n_chunks`` it is given.
+``n_chunks`` is chosen at scheduling time by
+:class:`~swane.nipype_pipeline.nodes.ram_estimators.
+DipyRecoBundlesChunkerRamEstimator` from the tractogram's point count and the
+RAM budget, so each downstream RecoBundles chunk fits; this node simply honours
+the ``n_chunks`` it is given.
 """
 
 import os
@@ -64,8 +67,8 @@ class DipyTractogramChunkerOutputSpec(TraitedSpec):
     # unwraps a length-1 list to a bare string on read (see
     # nipype.interfaces.base.traits_extension.OutputMultiObject.get), which
     # would silently turn "chunks" into a bare path string whenever n_chunks
-    # == 1 (the default) -- breaking every downstream connection that expects
-    # a list, e.g. dipy_bundle_workflow's ("recobundles_chunks", _first).
+    # == 1 -- so dipy_bundle_workflow's recognise MapNode would iterate over a
+    # path string's characters instead of the one-element chunk list.
     chunks = traits.List(
         File(exists=True),
         desc="the 1..N representative sub-tractograms (.trx); the input itself "

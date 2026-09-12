@@ -399,9 +399,7 @@ class TestWrittenBundleGeometry:
     the per-bundle local SLR; the node writes the selected subject streamlines
     instead, so every written streamline occurs verbatim in the input."""
 
-    def test_written_streamlines_occur_verbatim_in_the_input(
-        self, atlas_dir, tmp_path
-    ):
+    def test_written_streamlines_occur_verbatim_in_the_input(self, atlas_dir, tmp_path):
         subject = _subject_with_ifof(tmp_path)
         pickle_path = _build(subject, str(tmp_path / "build.pkl"))
         out = _recognize(
@@ -509,9 +507,9 @@ class TestTractogramChunker:
         output trait, which is where a real workflow connection actually reads
         ``chunks`` from. ``OutputMultiPath`` unwraps a length-1 list to a bare
         string on read (nipype.interfaces.base.traits_extension.OutputMultiObject.get),
-        so a downstream ``("chunks", _first)`` connection transform (see
-        dipy_bundle_workflow) would index into that string's characters instead
-        of the one-element list, e.g. picking off the leading ``"/"``."""
+        so the downstream recognise MapNode (see dipy_bundle_workflow) would
+        iterate over that string's characters instead of the one-element list,
+        e.g. mapping over the leading ``"/"``."""
         from nipype import Node
         from swane.nipype_pipeline.nodes.DipyTractogramChunker import (
             DipyTractogramChunker,

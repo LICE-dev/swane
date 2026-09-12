@@ -1,6 +1,5 @@
-# workflow snapshot: dipy_bundle / fornix_single_chunk
+# workflow snapshot: dipy_bundle / fornix
 #
-#   n_chunks = 1
 #   num_threads = 4
 #   tract = fx
 #
@@ -9,7 +8,7 @@
 - fornix_split [DipyFornixSplit] mem_gb=0.2 n_procs=1
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
-- recognize_lh [DipyRecoBundlesRecognize] mem_gb=0.2 n_procs=4
+- recognize_lh [DipyRecoBundlesRecognize] mapnode(iterfield=recobundles_pickle,tractogram_chunk) mem_gb=8.0 n_procs=4
     model_bundle_name = 'F_L'
     model_clust_thr = 2.5
     num_threads = 4
@@ -19,7 +18,7 @@
     reduction_thr = 15.0
     refine = True
     slr = True
-- recognize_rh [DipyRecoBundlesRecognize] mem_gb=0.2 n_procs=4
+- recognize_rh [DipyRecoBundlesRecognize] mapnode(iterfield=recobundles_pickle,tractogram_chunk) mem_gb=8.0 n_procs=4
     model_bundle_name = 'F_R'
     model_clust_thr = 2.5
     num_threads = 4
@@ -38,13 +37,13 @@
 # connections
 fornix_split.atlas_dir -> recognize_lh.atlas_dir
 fornix_split.atlas_dir -> recognize_rh.atlas_dir
-inputnode.('recobundles_builds', 'def _first(items):\n    return items[0]', ()) -> recognize_lh.recobundles_pickle
-inputnode.('recobundles_builds', 'def _first(items):\n    return items[0]', ()) -> recognize_rh.recobundles_pickle
-inputnode.('recobundles_chunks', 'def _first(items):\n    return items[0]', ()) -> recognize_lh.tractogram_chunk
-inputnode.('recobundles_chunks', 'def _first(items):\n    return items[0]', ()) -> recognize_rh.tractogram_chunk
 inputnode.atlas2native -> to_ref_lh.atlas2native
 inputnode.atlas2native -> to_ref_rh.atlas2native
 inputnode.atlas_dir -> fornix_split.atlas_dir
+inputnode.recobundles_builds -> recognize_lh.recobundles_pickle
+inputnode.recobundles_builds -> recognize_rh.recobundles_pickle
+inputnode.recobundles_chunks -> recognize_lh.tractogram_chunk
+inputnode.recobundles_chunks -> recognize_rh.tractogram_chunk
 recognize_lh.recognized_bundle -> union_lh.recognized_bundles
 recognize_rh.recognized_bundle -> union_rh.recognized_bundles
 to_ref_lh.bundle_vtp -> outputnode.bundle_lh
