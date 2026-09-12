@@ -59,8 +59,6 @@ class DipyBundleUnion(BaseInterface):
     input_spec = DipyBundleUnionInputSpec
     output_spec = DipyBundleUnionOutputSpec
 
-    _mem_gb = 2.0
-
     def _run_interface(self, runtime):
         partials = list(self.inputs.recognized_bundles)
 

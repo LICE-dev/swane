@@ -6,6 +6,8 @@ import nibabel as nib
 from nipype.interfaces.base import isdefined
 from nipype.utils.ram_estimator import RamEstimator
 
+from swane.utils.ResourceManager import ResourceManager
+
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
 class FlirtRamEstimator(RamEstimator):
@@ -79,6 +81,78 @@ class FastRamEstimator(RamEstimator):
             overhead_gb=0.3,
             min_gb=1,
             max_gb=8,
+        )
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class DipyCropRamEstimator(RamEstimator):
+    """
+    RAM estimator for :class:`DwiCrop` -- one-way, no quality-neutral lever.
+
+    Model
+    -----
+    The node loads the whole 4D series as float32 and holds it alongside the
+    mean-volume mask and the cropped copy, so the peak tracks the input's
+    voxel x volume count, the same regressor family as
+    :class:`DipyMotionRamEstimator`/:class:`DipyCsdRamEstimator`::
+
+        mem_gb = OVERHEAD_GB + BYTES_PER_VOXEL_VOLUME * voxels * volumes / 2**30
+
+    ``median_otsu``'s thread count is not a lever here (numpy/scipy single-
+    threaded work; ``num_threads`` only pins the OMP/OpenBLAS env vars), so
+    this estimator is one-way like :class:`DipyTissueRamEstimator`.
+
+    Calibration
+    -----------
+    Isolated tree-peak RSS on three real subject DWIs (voxel x volume,
+    measured GB): 54.5M -> 0.53, 80.9M -> 1.15, 167.7M -> 2.43. A least-
+    squares fit gives ~17.4 B/(voxel x volume); the constant below rounds
+    that up to 20, covering every measured point with a 1.4-2.5x margin.
+    """
+
+    #: Bytes per (voxel x volume) of the 4D series. Fit ~17.4 B, rounded up.
+    BYTES_PER_VOXEL_VOLUME = 20
+
+    #: Fixed overhead (interpreter, numpy/dipy/nibabel).
+    OVERHEAD_GB = 0.3
+
+    #: No crop fits in less than this, whatever the input.
+    MIN_GB = 0.5
+
+    #: Static reservation the workflow declares on the node. Read only when
+    #: the negotiation cannot run at all (see
+    #: ``MonitoredMultiProcPlugin._negotiate_ram``). A conservative
+    #: representative peak, rounded up from the largest measured subject.
+    STATIC_FALLBACK_GB = 3.5
+
+    def __init__(self):
+        super().__init__(
+            input_multipliers={},
+            overhead_gb=self.OVERHEAD_GB,
+            min_gb=self.MIN_GB,
+            max_gb=None,
+        )
+
+    @staticmethod
+    def _shape(inputs):
+        """Return ``(spatial_voxels, volumes)`` from the input header alone."""
+        img = nib.load(inputs.in_file)
+        shape = img.header.get_data_shape()
+        voxels = int(math.prod(shape[:3]))
+        volumes = int(shape[3]) if len(shape) > 3 else 1
+        return voxels, volumes
+
+    def estimate_gb(self, voxels, volumes):
+        total = (
+            self.OVERHEAD_GB + self.BYTES_PER_VOXEL_VOLUME * voxels * volumes / 1024**3
+        )
+        return float(self.clamp(total, self.min_gb, None))
+
+    def __call__(self, inputs):
+        voxels, volumes = self._shape(inputs)
+        mem_gb = self.estimate_gb(voxels, volumes)
+        return mem_gb, (
+            "voxels=%d, volumes=%d, estimated RAM=%.2f GB" % (voxels, volumes, mem_gb)
         )
 
 
@@ -604,8 +678,11 @@ class DipyTissueRamEstimator(RamEstimator):
     #: negotiation cannot run at all (see
     #: ``MonitoredMultiProcPlugin._negotiate_ram``) -- e.g. the input header could
     #: not be read, a state in which the node itself cannot run. A conservative
-    #: representative peak (subj2's ~5.2 GB with margin); the dipy engine's RAM
-    #: floor is settled jointly at the end of Phase 2 and may revise it.
+    #: representative peak (subj2's ~5.2 GB with margin). This node has no
+    #: lever (unlike motion/tracking/CSD), but it is no longer the dipy engine's
+    #: binding floor -- real-tractogram measurement showed DipyAtlasSLR's own
+    #: no-lever floor is higher (see DipySlrRamEstimator), so
+    #: ResourceManager.DIPY_TRACTOGRAPHY_RAM_REQUIREMENT is sourced from SLR now.
     STATIC_FALLBACK_GB = 6.0
 
     def __init__(self):
@@ -920,6 +997,81 @@ def _trx_counts(path):
         return int(trx.header["NB_VERTICES"]), int(trx.header["NB_STREAMLINES"])
     finally:
         trx.close()
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class DipySlrRamEstimator(RamEstimator):
+    """
+    RAM estimator for :class:`DipyAtlasSLR` -- one-way, no quality-neutral lever.
+
+    Model
+    -----
+    ``whole_brain_slr`` holds both the (fixed-size) atlas whole-brain
+    tractogram and the subject's whole-brain tractogram, plus registration
+    working structures, so the peak tracks the subject tractogram's point
+    count (the atlas side is constant and folds into the intercept)::
+
+        mem_gb = OVERHEAD_GB + BYTES_PER_POINT * n_points / 2**30
+
+    Why one-way: ``num_threads`` only pins BLAS/OMP threading for the
+    optimisation and does not change peak RSS (the node already pins it to 1
+    in the workflow); reducing the streamline count fed to the registration
+    (e.g. dipy's ``select_random``) would change the fitted transform, so it
+    is a quality lever, not a quality-neutral one, and is not used here.
+
+    Calibration
+    -----------
+    Isolated tree-peak RSS on three real, current-pipeline subject
+    tractograms (points -> measured GB): 121.1M -> 8.665, 67.9M -> 5.045,
+    119.7M -> 8.596. This *supersedes* an earlier, much lower estimate
+    (4.75 / 0.98 GB) that predates the current seed density and tracking
+    parameters and is no longer representative. A least-squares fit is
+    near-exact (R^2 ~= 1): ~73.4 B/point, ~0.40 GB overhead. The constants
+    below round up to keep a ~1.16x margin over every measured point.
+
+    This is now the dipy engine's binding no-lever floor (higher than
+    :class:`DipyTissueRamEstimator`'s), so
+    ``ResourceManager.DIPY_TRACTOGRAPHY_RAM_REQUIREMENT`` is sourced from it.
+    """
+
+    #: Bytes per subject-tractogram point. Fit ~73.4 B, rounded up.
+    BYTES_PER_POINT = 85
+
+    #: Fixed overhead (interpreter, numpy/dipy/trx/nibabel + the fixed-size
+    #: atlas tractogram). Fit ~0.40 GB, rounded up.
+    OVERHEAD_GB = 0.5
+
+    #: No SLR run fits in less than this, whatever the input.
+    MIN_GB = 0.5
+
+    #: Static reservation the workflow declares on the node. Read only when
+    #: the negotiation cannot run at all (see
+    #: ``MonitoredMultiProcPlugin._negotiate_ram``). This node is the dipy
+    #: engine's binding floor, so it is sourced directly from
+    #: ``ResourceManager.dipy_tractography_ram_requirements`` -- the same
+    #: number the "enable dipy tractography" preference gate checks --
+    #: rather than a separate literal that could drift from it.
+    STATIC_FALLBACK_GB = ResourceManager.dipy_tractography_ram_requirements()
+
+    def __init__(self):
+        super().__init__(
+            input_multipliers={},
+            overhead_gb=self.OVERHEAD_GB,
+            min_gb=self.MIN_GB,
+            max_gb=None,
+        )
+
+    def estimate_gb(self, n_points):
+        total = self.OVERHEAD_GB + self.BYTES_PER_POINT * int(n_points) / 1024**3
+        return float(self.clamp(total, self.min_gb, None))
+
+    def __call__(self, inputs):
+        n_points, n_streamlines = _trx_counts(inputs.tractogram)
+        mem_gb = self.estimate_gb(n_points)
+        return mem_gb, (
+            "points=%d, streamlines=%d, estimated RAM=%.2f GB"
+            % (n_points, n_streamlines, mem_gb)
+        )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
