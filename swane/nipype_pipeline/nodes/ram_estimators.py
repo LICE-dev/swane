@@ -1006,51 +1006,49 @@ class DipySlrRamEstimator(RamEstimator):
 
     Model
     -----
-    ``whole_brain_slr`` holds both the (fixed-size) atlas whole-brain
-    tractogram and the subject's whole-brain tractogram, plus registration
-    working structures, so the peak tracks the subject tractogram's point
-    count (the atlas side is constant and folds into the intercept)::
+    :class:`DipyAtlasSLR` fits the transform on a fixed-size random subsample
+    of the subject tractogram, applies the resulting affine to the full
+    tractogram in place, and writes it through pre-allocated memmaps, so the
+    peak tracks the full tractogram's point count (loaded, transformed and
+    written) while the subsample-fit and the fixed-size atlas side fold into
+    the intercept::
 
         mem_gb = OVERHEAD_GB + BYTES_PER_POINT * n_points / 2**30
 
-    Why one-way: ``num_threads`` only pins BLAS/OMP threading for the
-    optimisation and does not change peak RSS (the node already pins it to 1
-    in the workflow); reducing the streamline count fed to the registration
-    (e.g. dipy's ``select_random``) would change the fitted transform, so it
-    is a quality lever, not a quality-neutral one, and is not used here.
+    One-way: ``num_threads`` only pins BLAS/OMP threading for the optimisation
+    and does not change peak RSS, and the subsample size is fixed (it drives
+    quality, not the peak, which is bound by the full-tractogram load/write).
 
     Calibration
     -----------
-    Isolated tree-peak RSS on three real, current-pipeline subject
-    tractograms (points -> measured GB): 121.1M -> 8.665, 67.9M -> 5.045,
-    119.7M -> 8.596. This *supersedes* an earlier, much lower estimate
-    (4.75 / 0.98 GB) that predates the current seed density and tracking
-    parameters and is no longer representative. A least-squares fit is
-    near-exact (R^2 ~= 1): ~73.4 B/point, ~0.40 GB overhead. The constants
-    below round up to keep a ~1.16x margin over every measured point.
+    Isolated tree-peak RSS of the real node on three real, current-pipeline
+    subject tractograms (points -> measured GB): 121.1M -> 4.348, 67.9M ->
+    3.643, 119.7M -> 4.386. A least-squares fit gives ~14 B/point, ~2.7 GB
+    overhead (the fixed cost is the atlas load, the dipy imports and the trx
+    load/write machinery); the constants below round up to keep a ~1.16x
+    margin over every measured point.
 
-    This is now the dipy engine's binding no-lever floor (higher than
-    :class:`DipyTissueRamEstimator`'s), so
-    ``ResourceManager.DIPY_TRACTOGRAPHY_RAM_REQUIREMENT`` is sourced from it.
+    :class:`DipyTissueRamEstimator`'s one-way floor is now higher, so
+    ``ResourceManager.DIPY_TRACTOGRAPHY_RAM_REQUIREMENT`` is no longer sourced
+    from this node; the estimator still reads it for its static fall-back.
     """
 
-    #: Bytes per subject-tractogram point. Fit ~73.4 B, rounded up.
-    BYTES_PER_POINT = 85
+    #: Bytes per subject-tractogram point. Fit ~14 B, rounded up.
+    BYTES_PER_POINT = 18
 
     #: Fixed overhead (interpreter, numpy/dipy/trx/nibabel + the fixed-size
-    #: atlas tractogram). Fit ~0.40 GB, rounded up.
-    OVERHEAD_GB = 0.5
+    #: atlas tractogram + the trx load/write machinery). Fit ~2.7 GB, rounded up.
+    OVERHEAD_GB = 3.0
 
     #: No SLR run fits in less than this, whatever the input.
     MIN_GB = 0.5
 
     #: Static reservation the workflow declares on the node. Read only when
     #: the negotiation cannot run at all (see
-    #: ``MonitoredMultiProcPlugin._negotiate_ram``). This node is the dipy
-    #: engine's binding floor, so it is sourced directly from
-    #: ``ResourceManager.dipy_tractography_ram_requirements`` -- the same
-    #: number the "enable dipy tractography" preference gate checks --
-    #: rather than a separate literal that could drift from it.
+    #: ``MonitoredMultiProcPlugin._negotiate_ram``). Sourced from
+    #: ``ResourceManager.dipy_tractography_ram_requirements`` -- the same number
+    #: the "enable dipy tractography" preference gate checks -- so the node's
+    #: fall-back can never exceed the RAM the gate guarantees a permitted host.
     STATIC_FALLBACK_GB = ResourceManager.dipy_tractography_ram_requirements()
 
     def __init__(self):

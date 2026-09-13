@@ -27,14 +27,15 @@ class ResourceManager:
     #: node's negotiated bottom rung so the workflow can run; the tunable nodes
     #: (motion, tracking, CSD) walk their parallelism/levers down to fit it,
     #: while the one-way nodes -- no lever to walk -- set the actual floor.
-    #: DipyAtlasSLR (whole-brain streamline registration, linear in the subject
-    #: tractogram's point count) is the binding one: isolated tree-peak RSS on
-    #: three real subject tractograms measured up to ~8.7 GB, predicting ~10 GB
-    #: at that model's margin for a denser real tractogram -- above the
-    #: one-way tissue classifier's ~6 GB. DipySlrRamEstimator.STATIC_FALLBACK_GB
-    #: reads this constant directly so the two can never drift apart. See the
-    #: dipy RAM report.
-    DIPY_TRACTOGRAPHY_RAM_REQUIREMENT = {"mac": 11, "linux": 11, "other": 11}
+    #: Minimum RAM to select the dipy tractography engine. It covers every dipy
+    #: node's negotiated bottom rung so the workflow can run; the heavier nodes
+    #: (motion, tracking) tune their parallelism/levers down to fit it, and
+    #: DipyAtlasSLR fits its transform on a fixed subsample and streams the
+    #: apply/write (measured tree-peak up to ~4.4 GB), so the one-way tissue
+    #: classifier (no lever, linear in T1 voxels, ~5.7 GB) is the binding floor.
+    #: DipySlrRamEstimator.STATIC_FALLBACK_GB reads this constant directly. See
+    #: the dipy RAM report.
+    DIPY_TRACTOGRAPHY_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6}
 
     #: In prerelease test_run mode ONLY, the SynthSeg (--fast, robust=False) and
     #: SynthMorph (steps=5) paths do genuinely less work and use less RAM, so

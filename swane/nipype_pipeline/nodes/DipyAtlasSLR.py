@@ -154,21 +154,32 @@ def ensure_atlas(
         ) from error
 
 
-def _run_whole_brain_slr(static, moving, num_threads):
-    """Run dipy's whole-brain SLR of ``moving`` (native) onto ``static`` (atlas).
+# The SLR transform is fitted on a random subsample of this many subject
+# streamlines (capped at the tractogram's streamline count).
+DEFAULT_SELECT_RANDOM = 100000
+# Seed for the random subsample and the SLR optimisation.
+SLR_RNG_SEED = 0
+# Streamline points transformed per chunk when applying the affine in place.
+APPLY_CHUNK_POINTS = 5_000_000
 
-    Returns ``(moved, native2atlas)`` where ``moved`` are the subject streamlines
-    in atlas space and ``native2atlas`` is the 4x4 forward transform.
+
+def _fit_whole_brain_slr(static, moving, num_threads, rng):
+    """Fit dipy's whole-brain SLR of ``moving`` (native) onto ``static`` (atlas).
+
+    Returns the 4x4 ``native2atlas`` forward transform. ``moving`` is the subject
+    subsample the transform is fitted on; the transform is applied to the full
+    tractogram by the caller.
     """
     from dipy.align.streamlinear import whole_brain_slr
 
     with dipy_slr_num_threads(num_threads):
-        moved, matrix, _, _ = whole_brain_slr(
+        _, matrix, _, _ = whole_brain_slr(
             static,
             moving,
             num_threads=num_threads,
+            rng=rng,
         )
-    return moved, matrix
+    return matrix
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -184,6 +195,10 @@ class DipyAtlasSLRInputSpec(BaseInterfaceInputSpec):
     )
     num_threads = traits.Int(
         nohash=True, desc="OpenMP/BLAS thread count for the SLR optimisation"
+    )
+    select_random = traits.Int(
+        desc="subject streamlines the transform is fitted on (capped at the "
+        "tractogram's streamline count)"
     )
     out_tractogram = File(desc="the atlas-aligned tractogram (.trx)")
     out_atlas2native = File(desc="text file with the 4x4 atlas->native transform")
@@ -208,11 +223,19 @@ class DipyAtlasSLR(BaseInterface):
     output_spec = DipyAtlasSLROutputSpec
 
     def _run_interface(self, runtime):
-        from dipy.io.streamline import load_tractogram, save_tractogram
-        from dipy.io.stateful_tractogram import StatefulTractogram
+        from dipy.io.streamline import load_tractogram
+        from dipy.io.stateful_tractogram import StatefulTractogram, Space
+        from dipy.tracking.streamline import select_random_set_of_streamlines
+        from nibabel.streamlines import ArraySequence
+        from trx.trx_file_memmap import TrxFile, save as trx_save
 
         num_threads = (
             int(self.inputs.num_threads) if isdefined(self.inputs.num_threads) else 1
+        )
+        select_random = (
+            int(self.inputs.select_random)
+            if isdefined(self.inputs.select_random)
+            else DEFAULT_SELECT_RANDOM
         )
 
         wholebrain = ensure_atlas(self.inputs.atlas_dir)
@@ -229,17 +252,56 @@ class DipyAtlasSLR(BaseInterface):
         atlas_sft = load_tractogram(wholebrain, "same", bbox_valid_check=False)
         atlas_sft.to_rasmm()
 
-        moved, native2atlas = _run_whole_brain_slr(
-            atlas_sft.streamlines, subject_sft.streamlines, num_threads
+        subject_streamlines = subject_sft.streamlines
+
+        # Fit the transform on a compact random subsample of the subject.
+        rng = np.random.default_rng(SLR_RNG_SEED)
+        subset = ArraySequence(
+            list(
+                select_random_set_of_streamlines(
+                    subject_streamlines, select_random, rng=rng
+                )
+            )
         )
+        native2atlas = _fit_whole_brain_slr(
+            atlas_sft.streamlines, subset, num_threads, rng
+        )
+        del subset
 
         atlas2native = np.linalg.inv(native2atlas)
         np.savetxt(out_atlas2native, atlas2native)
 
-        # The moved streamlines live in atlas world space; anchor them to the
-        # atlas tractogram's spatial reference.
-        moved_sft = StatefulTractogram.from_sft(moved, atlas_sft)
-        save_tractogram(moved_sft, out_tractogram, bbox_valid_check=False)
+        # Apply the affine to the full tractogram in place, chunked over points.
+        data = subject_streamlines._data
+        rotation = np.ascontiguousarray(native2atlas[:3, :3].T, dtype=np.float32)
+        translation = native2atlas[:3, 3].astype(np.float32)
+        for start in range(0, data.shape[0], APPLY_CHUNK_POINTS):
+            stop = start + APPLY_CHUNK_POINTS
+            data[start:stop] = data[start:stop] @ rotation + translation
+
+        # Write the atlas-anchored tractogram through pre-allocated memmaps, in
+        # float32 to match the tractogram positions the pipeline stores.
+        template = TrxFile.from_sft(
+            StatefulTractogram(
+                ArraySequence([np.zeros((2, 3), np.float32)]), atlas_sft, Space.RASMM
+            )
+        )
+        try:
+            trx = TrxFile(
+                nb_streamlines=len(subject_streamlines),
+                nb_vertices=data.shape[0],
+                reference=atlas_sft,
+                init_as=template,
+            )
+            try:
+                trx.streamlines._data[:] = data
+                trx.streamlines._offsets[:] = subject_streamlines._offsets
+                trx.streamlines._lengths[:] = subject_streamlines._lengths
+                trx_save(trx, out_tractogram)
+            finally:
+                trx.close()
+        finally:
+            template.close()
 
         return runtime
 
