@@ -1,21 +1,20 @@
 """Tests for
 :class:`swane.nipype_pipeline.nodes.ram_estimators.DipySlrRamEstimator`.
 
-``DipyAtlasSLR`` runs dipy's ``whole_brain_slr`` on the subject whole-brain
-tractogram against the (fixed-size) HCP842 atlas. ``num_threads`` only pins
-BLAS/OMP threading for the optimisation and does not change peak RSS, and
-subsampling the streamlines fed to the registration would change the fitted
-transform (a quality lever, not a quality-neutral one) -- so this estimator
-is one-way, like :class:`DipyTissueRamEstimator`/:class:`RecoBundlesRamEstimator`,
-keyed on the subject tractogram's point count.
+``DipyAtlasSLR`` fits dipy's ``whole_brain_slr`` on a fixed-size subsample of
+the subject tractogram, applies the affine to the full tractogram in place and
+streams the write, so the peak tracks the full tractogram's point count.
+``num_threads`` only pins BLAS/OMP threading and the subsample size is fixed --
+so this estimator is one-way, like
+:class:`DipyTissueRamEstimator`/:class:`RecoBundlesRamEstimator`, keyed on the
+subject tractogram's point count.
 
 Everything runs against tiny synthetic ``.trx`` phantoms (nibabel/numpy/dipy)
 -- no test depends on a real subject being present. The conservative-bound
 guard pins three isolated tree-peak RSS measurements taken on real,
-current-pipeline subject tractograms (RAM audit, 2026-09-12); lowering the
+current-pipeline subject tractograms (RAM audit, 2026-09-13); lowering the
 multiplier below what covers them must fail.
 
-This node is also the dipy engine's binding no-lever floor, so
 ``ResourceManager.dipy_tractography_ram_requirements`` and
 ``DipySlrRamEstimator.STATIC_FALLBACK_GB`` must never drift apart -- see
 ``TestResourceManagerAlignment``.
@@ -37,12 +36,12 @@ from swane.utils.ResourceManager import ResourceManager
 GB = 1024**3
 
 # Isolated tree-peak RSS of the real node on three real, current-pipeline
-# subject tractograms (points -> measured GB), 2026-09-12. The conservative
+# subject tractograms (points -> measured GB), 2026-09-13. The conservative
 # bound must sit above all three.
 MEASURED_PEAKS = {
-    121_088_164: 8.665,  # subj1
-    67_925_234: 5.045,  # subj2
-    119_653_463: 8.596,  # subj3
+    121_088_164: 4.348,  # subj1
+    67_925_234: 3.643,  # subj2
+    119_653_463: 4.386,  # subj3
 }
 
 
@@ -76,9 +75,11 @@ class TestModel:
         expected = est.OVERHEAD_GB + est.BYTES_PER_POINT * points / GB
         assert est.estimate_gb(points) == pytest.approx(expected)
 
-    def test_estimate_floored_at_min_gb(self):
+    def test_estimate_floored_at_fixed_overhead(self):
         est = DipySlrRamEstimator()
-        assert est.estimate_gb(0) == pytest.approx(est.MIN_GB)
+        # An empty tractogram still reserves the fixed overhead (atlas load,
+        # dipy imports, trx machinery), which exceeds MIN_GB.
+        assert est.estimate_gb(0) == pytest.approx(est.OVERHEAD_GB)
 
     def test_estimate_monotone_in_points(self):
         est = DipySlrRamEstimator()
@@ -114,8 +115,8 @@ class TestConservativeBound:
         """max_gb is None: a big tractogram must reserve its full modelled peak."""
         est = DipySlrRamEstimator()
         assert est.max_gb is None
-        mem_gb = est.estimate_gb(300_000_000)  # far above every measured subject
-        assert mem_gb > 20
+        mem_gb = est.estimate_gb(500_000_000)  # far above every measured subject
+        assert mem_gb > 10
 
 
 class TestClassicNegotiation:
@@ -160,7 +161,7 @@ class TestPluginIntegration:
 
 
 class TestResourceManagerAlignment:
-    """This node is the dipy engine's binding floor: the two must never drift."""
+    """The node's static fall-back must never exceed the engine gate."""
 
     def test_static_fallback_matches_the_preference_gate(self):
         assert (

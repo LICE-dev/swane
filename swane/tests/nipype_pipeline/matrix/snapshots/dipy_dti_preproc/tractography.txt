@@ -58,7 +58,7 @@
 - dipy_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
 - dipy_recobundles_build [DipyRecoBundlesBuild] mapnode(iterfield=tractogram_chunk) mem_gb=6.0 n_procs=4
     num_threads = 4
-- dipy_slr [DipyAtlasSLR] mem_gb=11 n_procs=1
+- dipy_slr [DipyAtlasSLR] mem_gb=6 n_procs=1
     atlas_dir = '<HOME>/.dipy'
     num_threads = 1
 - dipy_tensorfit [DipyTensorFit] mem_gb=2 n_procs=1
