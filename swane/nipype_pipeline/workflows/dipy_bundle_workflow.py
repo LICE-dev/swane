@@ -23,11 +23,9 @@ the preproc chunker's RAM estimator, so the shared ``recobundles_builds`` /
 single chunk yields a one-element MapNode, a chunked build an N-element one.
 :class:`DipyBundleUnion` concatenates the partials (a pass-through for one).
 
-The fornix is the one tract the atlas ships side-combined (``F_L_R.trk``); a
-:class:`~swane.nipype_pipeline.nodes.DipyFornixSplit.DipyFornixSplit` lateralises
-it into ``F_L``/``F_R`` (once, on the shared atlas) and its ``atlas_dir``
-passthrough orders the two fornix recognitions after it. Every other tract takes
-``atlas_dir`` straight from the inputnode.
+The fornix is the one tract the atlas ships side-combined (``F_L_R.trk``);
+it is processed as a single bilateral bundle (``bundle_bilateral``), unlike
+other tracts which are processed per side.
 
 New dipy nodes implement HARD_CAP only, so this factory takes no
 ``multicore_node_limit`` parameter (spec section 10).
@@ -42,7 +40,6 @@ from swane.nipype_pipeline.nodes.DipyRecoBundles import (
 )
 from swane.nipype_pipeline.nodes.DipyBundleUnion import DipyBundleUnion
 from swane.nipype_pipeline.nodes.DipyBundlesToRef import DipyBundlesToRef
-from swane.nipype_pipeline.nodes.DipyFornixSplit import DipyFornixSplit
 from swane.nipype_pipeline.nodes.ram_estimators import RecoBundlesRamEstimator
 
 # Fixed per-node memory reservations (GB), no estimator: all three nodes work
@@ -54,9 +51,6 @@ from swane.nipype_pipeline.nodes.ram_estimators import RecoBundlesRamEstimator
 _MEM_GB = {
     "union": 1.0,
     "to_ref": 1.0,
-    # fornix_split runs once per shared atlas directory, on the atlas's own
-    # fixed-size F_L_R.trk (no subject data at all); measured 0.17 GB.
-    "fornix_split": 0.5,
 }
 
 # lh/rh -> the atlas's left/right model-file suffix.
@@ -66,8 +60,8 @@ _SIDE_SUFFIX = {"lh": "L", "rh": "R"}
 # The SWANe tract key -> the atlas model-bundle basename (spec section 3,
 # verified against the downloaded HCP842 atlas). Every value is bilateral: the
 # per-side model file is ``<base>_L`` / ``<base>_R``. ``fx`` maps to ``F`` and is
-# the one tract needing DipyFornixSplit (the atlas ships F_L_R combined);
-# ``cingulum`` is dipy-only. Tracts with no atlas counterpart
+# the one tract processed as a single bilateral bundle (the atlas ships F_L_R
+# combined); ``cingulum`` is dipy-only. Tracts with no atlas counterpart
 # (``atr``/``str``/``cbd``/``cbp``/``cbt`` -- greyed on dipy -- and the
 # non-bilateral ``fma``/``fmi``/``mcp``/``ac``) are deliberately absent, so
 # :func:`dipy_bundle_workflow` returns ``None`` for them.
@@ -86,7 +80,7 @@ DIPY_TRACT_ATLAS = {
     "cingulum": "C",
 }
 
-# The one tract lateralised from a side-combined atlas file (see DipyFornixSplit).
+# The one tract processed as a single bilateral bundle.
 _FORNIX_TRACT = "fx"
 
 
@@ -134,6 +128,9 @@ def dipy_bundle_workflow(
         The left recognised bundle in reference space (``.vtp``).
     bundle_rh : path
         The right recognised bundle in reference space (``.vtp``).
+    bundle_bilateral : path
+        The bilateral recognised bundle in reference space (``.vtp``), for tracts
+        like the fornix that are not split by side.
     """
 
     atlas_base = DIPY_TRACT_ATLAS.get(name)
@@ -155,72 +152,84 @@ def dipy_bundle_workflow(
     )
 
     outputnode = Node(
-        IdentityInterface(fields=["bundle_lh", "bundle_rh"]),
+        IdentityInterface(fields=["bundle_lh", "bundle_rh", "bundle_bilateral"]),
         name="outputnode",
     )
 
-    # The fornix is the one tract the atlas ships side-combined: split it once
-    # (on the shared atlas) and take atlas_dir from the split's passthrough so
-    # the two fornix recognitions run only after F_L.trk/F_R.trk exist.
     is_fornix = name == _FORNIX_TRACT
+    
     if is_fornix:
-        fornix_split = Node(DipyFornixSplit(), name="fornix_split")
-        fornix_split._mem_gb = _MEM_GB["fornix_split"]
-        workflow.connect(inputnode, "atlas_dir", fornix_split, "atlas_dir")
-        atlas_dir_source = (fornix_split, "atlas_dir")
-    else:
-        atlas_dir_source = (inputnode, "atlas_dir")
+        # The fornix is the one tract the atlas ships side-combined. We process
+        # it as a single bilateral bundle.
+        model_bundle_name = "F_L_R"
+        node_suffix = "bilateral"
 
-    for side in SIDES:
-        model_bundle_name = "%s_%s" % (atlas_base, _SIDE_SUFFIX[side])
-
-        # Always a MapNode over the shared build pickles and their chunks,
-        # iterated in lockstep (nipype zips multiple iterfields by index). The
-        # list length is a runtime property (the preproc chunker chooses the
-        # chunk count from the RAM budget), so the MapNode fans out over however
-        # many chunks exist -- one element for an unsplit build, N for a split.
         recognize = MapNode(
             DipyRecoBundlesRecognize(),
-            name="recognize_%s" % side,
+            name="recognize_%s" % node_suffix,
             iterfield=["recobundles_pickle", "tractogram_chunk"],
         )
-        # RAM is reserved at scheduling time from each chunk's point count; the
-        # MapNode propagates the estimator to every mapped subnode, so each is
-        # priced from its own chunk. The static value is only the
-        # negotiation-failed fail-safe.
         recognize._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
         recognize.ram_estimator = RecoBundlesRamEstimator()
-        workflow.connect(
-            inputnode, "recobundles_builds", recognize, "recobundles_pickle"
-        )
+        workflow.connect(inputnode, "recobundles_builds", recognize, "recobundles_pickle")
         workflow.connect(inputnode, "recobundles_chunks", recognize, "tractogram_chunk")
 
         recognize.inputs.model_bundle_name = model_bundle_name
         recognize.inputs.num_threads = num_threads
 
-        # The recognition parameters for this tract (both sides share them), the
-        # same for any number of chunks.
         params = recognition_params(model_bundle_name)
         for trait, value in params.items():
             setattr(recognize.inputs, trait, value)
-        workflow.connect(
-            atlas_dir_source[0], atlas_dir_source[1], recognize, "atlas_dir"
-        )
+        workflow.connect(inputnode, "atlas_dir", recognize, "atlas_dir")
 
-        # Union the per-chunk partials (a pass-through for a single chunk); the
-        # recognise MapNode emits the list the union's InputMultiPath consumes.
-        union = Node(DipyBundleUnion(), name="union_%s" % side)
+        union = Node(DipyBundleUnion(), name="union_%s" % node_suffix)
         union._mem_gb = _MEM_GB["union"]
         workflow.connect(recognize, "recognized_bundle", union, "recognized_bundles")
 
-        # Transform the recognised (atlas-space) bundle back to reference space
-        # and write the .vtp result contract.
-        to_ref = Node(DipyBundlesToRef(), name="to_ref_%s" % side)
+        to_ref = Node(DipyBundlesToRef(), name="to_ref_%s" % node_suffix)
         to_ref._mem_gb = _MEM_GB["to_ref"]
-        to_ref.inputs.out_name = "r-%s_%s" % (name, side)
+        to_ref.inputs.out_name = "r-%s" % name
         workflow.connect(union, "bundle", to_ref, "bundle")
         workflow.connect(inputnode, "atlas2native", to_ref, "atlas2native")
 
-        workflow.connect(to_ref, "bundle_vtp", outputnode, "bundle_%s" % side)
+        workflow.connect(to_ref, "bundle_vtp", outputnode, "bundle_bilateral")
+
+    else:
+        for side in SIDES:
+            model_bundle_name = "%s_%s" % (atlas_base, _SIDE_SUFFIX[side])
+
+            recognize = MapNode(
+                DipyRecoBundlesRecognize(),
+                name="recognize_%s" % side,
+                iterfield=["recobundles_pickle", "tractogram_chunk"],
+            )
+            recognize._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
+            recognize.ram_estimator = RecoBundlesRamEstimator()
+            workflow.connect(
+                inputnode, "recobundles_builds", recognize, "recobundles_pickle"
+            )
+            workflow.connect(inputnode, "recobundles_chunks", recognize, "tractogram_chunk")
+
+            recognize.inputs.model_bundle_name = model_bundle_name
+            recognize.inputs.num_threads = num_threads
+
+            params = recognition_params(model_bundle_name)
+            for trait, value in params.items():
+                setattr(recognize.inputs, trait, value)
+            workflow.connect(
+                inputnode, "atlas_dir", recognize, "atlas_dir"
+            )
+
+            union = Node(DipyBundleUnion(), name="union_%s" % side)
+            union._mem_gb = _MEM_GB["union"]
+            workflow.connect(recognize, "recognized_bundle", union, "recognized_bundles")
+
+            to_ref = Node(DipyBundlesToRef(), name="to_ref_%s" % side)
+            to_ref._mem_gb = _MEM_GB["to_ref"]
+            to_ref.inputs.out_name = "r-%s_%s" % (name, side)
+            workflow.connect(union, "bundle", to_ref, "bundle")
+            workflow.connect(inputnode, "atlas2native", to_ref, "atlas2native")
+
+            workflow.connect(to_ref, "bundle_vtp", outputnode, "bundle_%s" % side)
 
     return workflow

@@ -1189,13 +1189,21 @@ class MainWorkflow(CustomWorkflow):
                     bundle_workflow,
                     "inputnode.atlas2native",
                 )
-                for side in SIDES:
+                if tract == "fx":
                     bundle_workflow.sink_result(
                         save_path=self.base_dir,
                         result_node="outputnode",
-                        result_name="bundle_%s" % side,
+                        result_name="bundle_bilateral",
                         sub_folder=os.path.join(self.Result_DIR, "dti"),
                     )
+                else:
+                    for side in SIDES:
+                        bundle_workflow.sink_result(
+                            save_path=self.base_dir,
+                            result_node="outputnode",
+                            result_name="bundle_%s" % side,
+                            sub_folder=os.path.join(self.Result_DIR, "dti"),
+                        )
 
             # The TRACTS checkboxes are shared with the FSL engine; only the
             # tracts with an HCP842 atlas counterpart get a dipy bundle workflow
