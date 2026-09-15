@@ -550,7 +550,7 @@ node_names["DipyTracking"] = "probabilistic fiber tracking"
 node_names["DipyAtlasSLR"] = "atlas registration"
 node_names["DipyRecoBundlesBuild"] = "bundle clustering"
 node_names["DipyRecoBundlesRecognize"] = "bundle recognition"
-node_names["DipyFornixSplit"] = "fornix lateralization"
+node_names["DipyBundleUnion"] = "bundle parts concatenation"
 node_names["AffineToRAS"] = "affine RAS conversion"
 
 license_consent_title = "Third-party tool licenses"

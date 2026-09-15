@@ -167,32 +167,28 @@ class TestFornix:
     def fx_wf(self):
         return dipy_bundle_workflow("fx", num_threads=4)
 
-    def test_fornix_split_present(self, fx_wf):
-        assert len(_nodes_by_iface(fx_wf, "DipyFornixSplit")) == 1
+    def test_fornix_split_absent(self, fx_wf):
+        assert len(_nodes_by_iface(fx_wf, "DipyFornixSplit")) == 0
 
-    def test_model_mapping_is_lateralised_fornix(self, fx_wf):
+    def test_model_mapping_is_bilateral_fornix(self, fx_wf):
         names = {
             r.inputs.model_bundle_name
             for r in _nodes_by_iface(fx_wf, "DipyRecoBundlesRecognize")
         }
-        assert names == {"F_L", "F_R"}
+        assert names == {"F_L_R"}
 
-    def test_recognitions_ordered_after_the_split(self, fx_wf):
-        """The fornix recognitions take atlas_dir from the split's passthrough
-        output (so they run only once F_L.trk/F_R.trk exist), not from
-        inputnode."""
-        split = _nodes_by_iface(fx_wf, "DipyFornixSplit")[0]
+    def test_recognitions_ordered_from_inputnode(self, fx_wf):
+        """The bilateral fornix recognition takes atlas_dir from the inputnode."""
         inputnode = _node_by_name(fx_wf, "inputnode")
-        assert (inputnode, "atlas_dir", "atlas_dir") in _incoming(fx_wf, split)
         for recog in _nodes_by_iface(fx_wf, "DipyRecoBundlesRecognize"):
             atlas_edges = [c for c in _incoming(fx_wf, recog) if c[2] == "atlas_dir"]
             assert len(atlas_edges) == 1
             src, sf, _ = atlas_edges[0]
-            assert src is split and sf == "atlas_dir"
+            assert src is inputnode and sf == "atlas_dir"
 
     def test_result_names(self, fx_wf):
         names = {t.inputs.out_name for t in _nodes_by_iface(fx_wf, "DipyBundlesToRef")}
-        assert names == {"r-fx_lh", "r-fx_rh"}
+        assert names == {"r-fx"}
 
 
 # --------------------------------------------------------------------------- #
@@ -258,7 +254,7 @@ class TestRecognitionParametersAreApplied:
 
     @pytest.mark.parametrize(
         "tract",
-        ["af", "ar", "cst", "fa", "ifo", "ilf", "mdlf", "or", "uf", "vof", "fx"],
+        ["af", "ar", "cst", "fa", "ifo", "ilf", "mdlf", "or", "uf", "vof"],
     )
     def test_both_sides_of_every_tract_share_one_configuration(self, tract):
         """Left and right are the same structure and are routinely compared, so
