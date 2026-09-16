@@ -93,7 +93,14 @@ _FORNIX_TRACT = "fx"
 
 
 def _add_recovery(
-    workflow, inputnode, union, suffix, model_bundle_name, params, num_threads
+    workflow,
+    inputnode,
+    union,
+    suffix,
+    model_bundle_name,
+    params,
+    num_threads,
+    out_bundle_name,
 ):
     """Insert the per-bundle recovery node after ``union``.
 
@@ -108,6 +115,7 @@ def _add_recovery(
     recovery._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
     recovery.inputs.model_bundle_name = model_bundle_name
     recovery.inputs.num_threads = num_threads
+    recovery.inputs.out_bundle = out_bundle_name + ".trx"
     for trait, value in params.items():
         setattr(recovery.inputs, trait, value)
     workflow.connect(union, "bundle", recovery, "default_bundle")
@@ -238,6 +246,7 @@ def dipy_bundle_workflow(
             model_bundle_name,
             params,
             num_threads,
+            out_bundle_name="r-%s" % name,
         )
 
         to_ref = Node(DipyBundlesToRef(), name="to_ref_%s" % node_suffix)
@@ -289,6 +298,7 @@ def dipy_bundle_workflow(
                 model_bundle_name,
                 params,
                 num_threads,
+                out_bundle_name="r-%s_%s" % (name, side),
             )
 
             to_ref = Node(DipyBundlesToRef(), name="to_ref_%s" % side)
