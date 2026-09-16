@@ -12,8 +12,10 @@ independently without repeating the clustering.
 
 Per side (``lh``/``rh`` -> the atlas's ``_L``/``_R`` convention) the chain is:
 
-``DipyRecoBundlesRecognize`` -> ``DipyBundleUnion`` -> ``DipyBundlesToRef`` ->
-``outputnode.bundle_lh``/``bundle_rh`` (``.vtp``, reference space).
+``DipyRecoBundlesRecognize`` -> ``DipyBundleUnion`` -> ``DipyBundleRecovery`` ->
+``DipyBundlesToRef`` -> ``outputnode.bundle_lh``/``bundle_rh`` (``.vtp``,
+reference space), with ``outputnode.flag_lh``/``flag_rh`` a sidecar written only
+for a low-confidence bundle.
 
 The recognise node is always a :class:`nipype.MapNode` over the shared build
 pickles and their ``.trx`` chunks, iterated in lockstep with the same
@@ -22,6 +24,9 @@ the preproc chunker's RAM estimator, so the shared ``recobundles_builds`` /
 ``recobundles_chunks`` lists have a runtime length the MapNode fans out over: a
 single chunk yields a one-element MapNode, a chunked build an N-element one.
 :class:`DipyBundleUnion` concatenates the partials (a pass-through for one).
+:class:`DipyBundleRecovery` then scores the concatenated bundle against the atlas
+model and, when it looks contaminated or scarce, retries recognition once with an
+adjusted configuration, keeping whichever result matches the model better.
 
 The fornix is the one tract the atlas ships side-combined (``F_L_R.trk``);
 it is processed as a single bilateral bundle (``bundle_bilateral``), unlike
@@ -40,6 +45,7 @@ from swane.nipype_pipeline.nodes.DipyRecoBundles import (
 )
 from swane.nipype_pipeline.nodes.DipyBundleUnion import DipyBundleUnion
 from swane.nipype_pipeline.nodes.DipyBundlesToRef import DipyBundlesToRef
+from swane.nipype_pipeline.nodes.DipyBundleRecovery import DipyBundleRecovery
 from swane.nipype_pipeline.nodes.ram_estimators import RecoBundlesRamEstimator
 
 # Fixed per-node memory reservations (GB), no estimator: all three nodes work
@@ -64,10 +70,12 @@ _SIDE_SUFFIX = {"lh": "L", "rh": "R"}
 # combined); ``cingulum`` is dipy-only. Tracts with no atlas counterpart
 # (``atr``/``str``/``cbd``/``cbp``/``cbt`` -- greyed on dipy -- and the
 # non-bilateral ``fma``/``fmi``/``mcp``/``ac``) are deliberately absent, so
-# :func:`dipy_bundle_workflow` returns ``None`` for them.
+# :func:`dipy_bundle_workflow` returns ``None`` for them. ``ar`` (acoustic
+# radiation) *has* an atlas counterpart (``AR_L``/``AR_R``) but is excluded too:
+# RecoBundles recognises it displaced/off-model on real diffusion data, so the
+# acoustic radiation is left to the FSL engine (its shared checkbox still works).
 DIPY_TRACT_ATLAS = {
     "af": "AF",
-    "ar": "AR",
     "cst": "CST",
     "fa": "AST",
     "ifo": "IFOF",
@@ -82,6 +90,31 @@ DIPY_TRACT_ATLAS = {
 
 # The one tract processed as a single bilateral bundle.
 _FORNIX_TRACT = "fx"
+
+
+def _add_recovery(
+    workflow, inputnode, union, suffix, model_bundle_name, params, num_threads
+):
+    """Insert the per-bundle recovery node after ``union``.
+
+    Scores the union's default bundle against the atlas model and, when it looks
+    contaminated or scarce, retries recognition once from the same chunks/builds
+    with an adjusted configuration (see :class:`DipyBundleRecovery`). Returns the
+    node so the caller wires ``bundle`` to ``to_ref`` and ``confidence_flag`` to
+    the outputnode. It may re-run recognition, so it reserves the same static RAM
+    as the recognise node.
+    """
+    recovery = Node(DipyBundleRecovery(), name="recovery_%s" % suffix)
+    recovery._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
+    recovery.inputs.model_bundle_name = model_bundle_name
+    recovery.inputs.num_threads = num_threads
+    for trait, value in params.items():
+        setattr(recovery.inputs, trait, value)
+    workflow.connect(union, "bundle", recovery, "default_bundle")
+    workflow.connect(inputnode, "recobundles_builds", recovery, "recobundles_pickles")
+    workflow.connect(inputnode, "recobundles_chunks", recovery, "tractogram_chunks")
+    workflow.connect(inputnode, "atlas_dir", recovery, "atlas_dir")
+    return recovery
 
 
 def dipy_bundle_workflow(
@@ -152,12 +185,21 @@ def dipy_bundle_workflow(
     )
 
     outputnode = Node(
-        IdentityInterface(fields=["bundle_lh", "bundle_rh", "bundle_bilateral"]),
+        IdentityInterface(
+            fields=[
+                "bundle_lh",
+                "bundle_rh",
+                "bundle_bilateral",
+                "flag_lh",
+                "flag_rh",
+                "flag_bilateral",
+            ]
+        ),
         name="outputnode",
     )
 
     is_fornix = name == _FORNIX_TRACT
-    
+
     if is_fornix:
         # The fornix is the one tract the atlas ships side-combined. We process
         # it as a single bilateral bundle.
@@ -171,7 +213,9 @@ def dipy_bundle_workflow(
         )
         recognize._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
         recognize.ram_estimator = RecoBundlesRamEstimator()
-        workflow.connect(inputnode, "recobundles_builds", recognize, "recobundles_pickle")
+        workflow.connect(
+            inputnode, "recobundles_builds", recognize, "recobundles_pickle"
+        )
         workflow.connect(inputnode, "recobundles_chunks", recognize, "tractogram_chunk")
 
         recognize.inputs.model_bundle_name = model_bundle_name
@@ -186,13 +230,24 @@ def dipy_bundle_workflow(
         union._mem_gb = _MEM_GB["union"]
         workflow.connect(recognize, "recognized_bundle", union, "recognized_bundles")
 
+        recovery = _add_recovery(
+            workflow,
+            inputnode,
+            union,
+            node_suffix,
+            model_bundle_name,
+            params,
+            num_threads,
+        )
+
         to_ref = Node(DipyBundlesToRef(), name="to_ref_%s" % node_suffix)
         to_ref._mem_gb = _MEM_GB["to_ref"]
         to_ref.inputs.out_name = "r-%s" % name
-        workflow.connect(union, "bundle", to_ref, "bundle")
+        workflow.connect(recovery, "bundle", to_ref, "bundle")
         workflow.connect(inputnode, "atlas2native", to_ref, "atlas2native")
 
         workflow.connect(to_ref, "bundle_vtp", outputnode, "bundle_bilateral")
+        workflow.connect(recovery, "confidence_flag", outputnode, "flag_bilateral")
 
     else:
         for side in SIDES:
@@ -208,7 +263,9 @@ def dipy_bundle_workflow(
             workflow.connect(
                 inputnode, "recobundles_builds", recognize, "recobundles_pickle"
             )
-            workflow.connect(inputnode, "recobundles_chunks", recognize, "tractogram_chunk")
+            workflow.connect(
+                inputnode, "recobundles_chunks", recognize, "tractogram_chunk"
+            )
 
             recognize.inputs.model_bundle_name = model_bundle_name
             recognize.inputs.num_threads = num_threads
@@ -216,20 +273,31 @@ def dipy_bundle_workflow(
             params = recognition_params(model_bundle_name)
             for trait, value in params.items():
                 setattr(recognize.inputs, trait, value)
-            workflow.connect(
-                inputnode, "atlas_dir", recognize, "atlas_dir"
-            )
+            workflow.connect(inputnode, "atlas_dir", recognize, "atlas_dir")
 
             union = Node(DipyBundleUnion(), name="union_%s" % side)
             union._mem_gb = _MEM_GB["union"]
-            workflow.connect(recognize, "recognized_bundle", union, "recognized_bundles")
+            workflow.connect(
+                recognize, "recognized_bundle", union, "recognized_bundles"
+            )
+
+            recovery = _add_recovery(
+                workflow,
+                inputnode,
+                union,
+                side,
+                model_bundle_name,
+                params,
+                num_threads,
+            )
 
             to_ref = Node(DipyBundlesToRef(), name="to_ref_%s" % side)
             to_ref._mem_gb = _MEM_GB["to_ref"]
             to_ref.inputs.out_name = "r-%s_%s" % (name, side)
-            workflow.connect(union, "bundle", to_ref, "bundle")
+            workflow.connect(recovery, "bundle", to_ref, "bundle")
             workflow.connect(inputnode, "atlas2native", to_ref, "atlas2native")
 
             workflow.connect(to_ref, "bundle_vtp", outputnode, "bundle_%s" % side)
+            workflow.connect(recovery, "confidence_flag", outputnode, "flag_%s" % side)
 
     return workflow

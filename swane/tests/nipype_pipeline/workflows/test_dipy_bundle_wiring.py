@@ -128,8 +128,9 @@ class TestBilateral:
             src, sf, _ = atlas_edges[0]
             assert src is inputnode and sf == "atlas_dir"
 
-    def test_recognize_union_toref_outputnode_chain(self, af_wf):
+    def test_recognize_union_recovery_toref_outputnode_chain(self, af_wf):
         outputnode = _node_by_name(af_wf, "outputnode")
+        inputnode = _node_by_name(af_wf, "inputnode")
         for side, model in (("lh", "AF_L"), ("rh", "AF_R")):
             recog = next(
                 r
@@ -143,18 +144,33 @@ class TestBilateral:
                 if (recog, "recognized_bundle", "recognized_bundles")
                 in _incoming(af_wf, u)
             )
-            # union -> to_ref
+            # union -> recovery (scored, retried if off)
+            recovery = next(
+                rc
+                for rc in _nodes_by_iface(af_wf, "DipyBundleRecovery")
+                if (union, "bundle", "default_bundle") in _incoming(af_wf, rc)
+            )
+            # the recovery retry gets the whole build/chunk lists and the atlas
+            inc = _incoming(af_wf, recovery)
+            assert (inputnode, "recobundles_builds", "recobundles_pickles") in inc
+            assert (inputnode, "recobundles_chunks", "tractogram_chunks") in inc
+            assert (inputnode, "atlas_dir", "atlas_dir") in inc
+            assert recovery.inputs.model_bundle_name == model
+            # recovery -> to_ref
             to_ref = next(
                 t
                 for t in _nodes_by_iface(af_wf, "DipyBundlesToRef")
-                if (union, "bundle", "bundle") in _incoming(af_wf, t)
+                if (recovery, "bundle", "bundle") in _incoming(af_wf, t)
             )
             assert to_ref.inputs.out_name == "r-af_%s" % side
-            inputnode = _node_by_name(af_wf, "inputnode")
             assert (inputnode, "atlas2native", "atlas2native") in _incoming(
                 af_wf, to_ref
             )
             assert (to_ref, "bundle_vtp", "bundle_%s" % side) in _incoming(
+                af_wf, outputnode
+            )
+            # the low-confidence flag reaches the outputnode
+            assert (recovery, "confidence_flag", "flag_%s" % side) in _incoming(
                 af_wf, outputnode
             )
 
@@ -236,6 +252,12 @@ class TestUnmappedTract:
     def test_unmapped_tract_returns_none(self, tract):
         assert dipy_bundle_workflow(tract) is None
 
+    def test_acoustic_radiation_is_excluded_from_the_dipy_path(self):
+        """``ar`` has an atlas counterpart (AR_L/AR_R) but is deliberately
+        excluded: RecoBundles recognises it displaced/off-model, so no dipy
+        bundle workflow is built and it is left to the FSL engine."""
+        assert dipy_bundle_workflow("ar") is None
+
 
 # --------------------------------------------------------------------------- #
 # The recognition parameters reach the recognise nodes, identically per side.
@@ -247,14 +269,14 @@ class TestRecognitionParametersAreApplied:
             recog = wf.get_node("recognize_%s" % side)
             assert recog.inputs.model_clust_thr == 2.5
             assert recog.inputs.reduction_thr == 15.0
-            assert recog.inputs.pruning_thr == 5.0
+            assert recog.inputs.pruning_thr == 8.0
             assert recog.inputs.refine is True
             assert recog.inputs.r_reduction_thr == 12.0
-            assert recog.inputs.r_pruning_thr == 4.0
+            assert recog.inputs.r_pruning_thr == 6.0
 
     @pytest.mark.parametrize(
         "tract",
-        ["af", "ar", "cst", "fa", "ifo", "ilf", "mdlf", "or", "uf", "vof"],
+        ["af", "cst", "fa", "ifo", "ilf", "mdlf", "or", "uf", "vof"],
     )
     def test_both_sides_of_every_tract_share_one_configuration(self, tract):
         """Left and right are the same structure and are routinely compared, so
@@ -274,10 +296,10 @@ class TestRecognitionParametersAreApplied:
             assert getattr(left, trait) == getattr(right, trait), trait
 
     def test_overridden_tract_applies_to_both_sides(self):
-        wf = dipy_bundle_workflow("or", num_threads=4)
+        wf = dipy_bundle_workflow("cst", num_threads=4)
         for side in ("lh", "rh"):
             recog = wf.get_node("recognize_%s" % side)
-            assert (recog.inputs.r_reduction_thr, recog.inputs.r_pruning_thr) == (
-                14.0,
-                6.0,
+            assert (recog.inputs.reduction_thr, recog.inputs.r_pruning_thr) == (
+                25.0,
+                4.0,
             )

@@ -1189,21 +1189,26 @@ class MainWorkflow(CustomWorkflow):
                     bundle_workflow,
                     "inputnode.atlas2native",
                 )
+                # The confidence flag is a sidecar the recovery node writes only
+                # for a low-confidence bundle; its outputnode field is otherwise
+                # Undefined, which DataSink skips, so the sink is unconditional.
                 if tract == "fx":
-                    bundle_workflow.sink_result(
-                        save_path=self.base_dir,
-                        result_node="outputnode",
-                        result_name="bundle_bilateral",
-                        sub_folder=os.path.join(self.Result_DIR, "dti"),
-                    )
-                else:
-                    for side in SIDES:
+                    for result_name in ("bundle_bilateral", "flag_bilateral"):
                         bundle_workflow.sink_result(
                             save_path=self.base_dir,
                             result_node="outputnode",
-                            result_name="bundle_%s" % side,
+                            result_name=result_name,
                             sub_folder=os.path.join(self.Result_DIR, "dti"),
                         )
+                else:
+                    for side in SIDES:
+                        for result_name in ("bundle_%s" % side, "flag_%s" % side):
+                            bundle_workflow.sink_result(
+                                save_path=self.base_dir,
+                                result_node="outputnode",
+                                result_name=result_name,
+                                sub_folder=os.path.join(self.Result_DIR, "dti"),
+                            )
 
             # The TRACTS checkboxes are shared with the FSL engine; only the
             # tracts with an HCP842 atlas counterpart get a dipy bundle workflow

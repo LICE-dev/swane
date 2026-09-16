@@ -789,18 +789,25 @@ class TestRecognitionParameters:
         params = recognition_params("ILF_L")
         assert params["model_clust_thr"] == 2.5
         assert params["reduction_thr"] == 15.0
-        assert params["pruning_thr"] == 5.0
+        assert params["pruning_thr"] == 8.0
         assert params["refine"] is True
         assert params["r_reduction_thr"] == 12.0
-        assert params["r_pruning_thr"] == 4.0
+        assert params["r_pruning_thr"] == 6.0
 
     @pytest.mark.parametrize("name", ["AF_L", "AF_R", "OR_L", "OR_R", "F_L", "F_R"])
     def test_tract_of_strips_the_side_suffix(self, name):
         assert tract_of(name) == name.rsplit("_", 1)[0]
 
+    def test_tract_of_maps_the_combined_fornix_to_its_tract(self):
+        """The atlas ships the fornix side-combined as ``F_L_R``; it ends in
+        ``_R`` yet must resolve to ``F`` (not ``F_L``) so its override applies."""
+        assert tract_of("F_L_R") == "F"
+        assert recognition_params("F_L_R") == recognition_params("F_L")
+        assert recognition_params("F_L_R") != RECOGNITION_DEFAULTS
+
     @pytest.mark.parametrize(
         "tract, sides",
-        [("OR", ("OR_L", "OR_R")), ("F", ("F_L", "F_R")), ("CST", ("CST_L", "CST_R"))],
+        [("AST", ("AST_L", "AST_R")), ("CST", ("CST_L", "CST_R"))],
     )
     def test_both_sides_of_an_overridden_tract_get_identical_parameters(
         self, tract, sides
