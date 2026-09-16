@@ -1195,16 +1195,23 @@ def tract_bundle(dti_dir: str, tract: dict, side: str = None):
     """
     if side:
         bundle_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.vtp")
+        flag_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.lowconf.json")
         name_suffix = f"_{side}"
         side_print = f" ({side.upper()})"
     else:
         bundle_file = os.path.join(dti_dir, f"r-{tract['name']}.vtp")
+        flag_file = os.path.join(dti_dir, f"r-{tract['name']}.lowconf.json")
         name_suffix = ""
         side_print = " (BILATERAL)"
 
     if not os.path.exists(bundle_file):
         print(f"SLICERLOADER: Bundle file not found: {bundle_file}")
         return
+
+    low_conf = os.path.exists(flag_file)
+    if low_conf:
+        side_print += " [LOW CONFIDENCE]"
+        name_suffix += " (LOW CONFIDENCE)"
 
     print(f"SLICERLOADER: Loading tract bundle '{tract['name']}'{side_print}")
 
@@ -1214,6 +1221,8 @@ def tract_bundle(dti_dir: str, tract: dict, side: str = None):
 
     display_node = model_node.GetDisplayNode()
     display_node.SetColor(*tract["color"])
+    if low_conf:
+        display_node.SetOpacity(0.4)
     # Show the bundle cross-section in the slice views too, like the
     # segmentations built from the FSL maps.
     display_node.SetVisibility2D(True)
