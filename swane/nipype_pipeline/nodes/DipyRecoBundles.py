@@ -17,8 +17,7 @@ the atlas ships a misspelled duplicate ``IF0F_R.trk`` (digit zero) alongside the
 correct ``IFOF_R.trk``, and a glob could pick the wrong one (spec section 3).
 
 ``reduction_thr`` / ``pruning_thr`` / ``model_clust_thr`` are **scientific**
-recognition parameters (their defaults chosen later during the AF/CST recovery
-work); they are exposed as inputs and never tuned for RAM.
+recognition parameters; they are exposed as inputs and never tuned for RAM.
 
 Lightweight build -> recognise handoff
 --------------------------------------
@@ -113,16 +112,23 @@ NB_PTS = 20
 RECOGNITION_DEFAULTS = {
     "model_clust_thr": 2.5,
     "reduction_thr": 15.0,
-    "pruning_thr": 5.0,
+    "pruning_thr": 8.0,
     "refine": True,
     "r_reduction_thr": 12.0,
-    "r_pruning_thr": 4.0,
+    "r_pruning_thr": 6.0,
 }
 
+# Baseline per-tract overrides: a few tracts recognise better from a different
+# starting configuration than the default (a fixed choice, not the per-bundle
+# runtime rescue that DipyBundleRecovery applies). ``AST`` (frontal aslant) and
+# ``CST`` extract more of the bundle from a wider first pass with tight refine
+# pruning; the fornix ``F`` (a single bilateral bundle, ``F_L_R``) needs loose
+# refine pruning to keep its sparse streamlines. Keyed by tract (see
+# :func:`tract_of`), so both sides of a tract stay identical.
 RECOGNITION_OVERRIDES = {
-    "OR": {"r_reduction_thr": 14.0, "r_pruning_thr": 6.0},
-    "F": {"r_reduction_thr": 14.0, "r_pruning_thr": 6.0},
-    "CST": {"reduction_thr": 12.0},
+    "AST": {"reduction_thr": 25.0, "r_reduction_thr": 10.0, "r_pruning_thr": 4.0},
+    "CST": {"reduction_thr": 25.0, "r_pruning_thr": 4.0},
+    "F": {"r_reduction_thr": 14.0, "r_pruning_thr": 10.0},
 }
 
 # dipy's own workflow refines with an affine local SLR and explicit bounds rather
@@ -147,13 +153,22 @@ REFINE_SLR_BOUNDS = [
 # single streamline; below this the pass is skipped and the first pass stands.
 MIN_STREAMLINES_FOR_REFINE = 2
 
-# The side suffixes an atlas bundle name may carry (``AF_L`` -> tract ``AF``).
+# The side suffixes an atlas bundle name may carry (``AF_L`` -> tract ``AF``); the
+# fornix ships side-combined as ``F_L_R`` (-> tract ``F``), which ends in ``_R`` and
+# so must be matched before the single suffixes or it would strip to ``F_L``.
+_COMBINED_SUFFIX = "_L_R"
 _SIDE_SUFFIXES = ("_L", "_R")
 
 
 def tract_of(model_bundle_name):
-    """The tract key of an atlas bundle name, i.e. its name without the side."""
+    """The tract key of an atlas bundle name, i.e. its name without the side.
+
+    The side-combined fornix ``F_L_R`` maps to ``F`` (checked first, since it also
+    ends in ``_R``); every other bundle drops its ``_L``/``_R`` suffix.
+    """
     name = str(model_bundle_name)
+    if name.endswith(_COMBINED_SUFFIX):
+        return name[: -len(_COMBINED_SUFFIX)]
     for suffix in _SIDE_SUFFIXES:
         if name.endswith(suffix):
             return name[: -len(suffix)]
@@ -351,6 +366,77 @@ def _run_refine(
     return refined, np.asarray(labels, dtype=int)
 
 
+def recognize_chunk(
+    tractogram_chunk,
+    recobundles_pickle,
+    model_bundle,
+    params,
+    *,
+    slr=True,
+    num_threads=1,
+):
+    """Recognise ``model_bundle`` in one subject tractogram chunk.
+
+    Runs the first-pass recognition and, when ``params["refine"]`` is set and the
+    first pass caught enough to calibrate on, dipy's refine pass. Returns the
+    selected **subject** streamlines (a fresh
+    :class:`~dipy.tracking.streamline.Streamlines` in the chunk's world space) --
+    the streamlines the recognition indices point at, not the model-frame copies
+    the local SLR moved. Shared by :class:`DipyRecoBundlesRecognize` and by
+    :class:`~swane.nipype_pipeline.nodes.DipyBundleRecovery.DipyBundleRecovery`'s
+    retry, so a retried recognition matches a first-pass one exactly.
+
+    Parameters
+    ----------
+    tractogram_chunk : path
+        The subject (sub-)tractogram ``.trx`` the build was made on.
+    recobundles_pickle : path
+        The matching lightweight RecoBundles build pickle.
+    model_bundle : sequence of ndarray
+        The atlas model-bundle streamlines, already loaded in RASMM.
+    params : dict
+        Recognition thresholds: ``model_clust_thr``, ``reduction_thr``,
+        ``pruning_thr``, ``refine``, ``r_reduction_thr``, ``r_pruning_thr``.
+    slr : bool
+        Run the per-bundle local SLR that selects the streamlines.
+    num_threads : int
+        OpenMP/BLAS threads for the recognition and local SLR.
+    """
+    from dipy.io.streamline import load_tractogram
+    from dipy.tracking.streamline import Streamlines
+
+    subject_sft = load_tractogram(tractogram_chunk, "same", bbox_valid_check=False)
+    subject_sft.to_rasmm()
+
+    previous = _pin_threads(num_threads)
+    try:
+        with threadpool_limits(limits=num_threads):
+            rb = load_build(subject_sft.streamlines, recobundles_pickle)
+            recognized, labels = _run_recognize(
+                rb,
+                model_bundle,
+                model_clust_thr=float(params["model_clust_thr"]),
+                reduction_thr=float(params["reduction_thr"]),
+                pruning_thr=float(params["pruning_thr"]),
+                slr=bool(slr),
+                num_threads=num_threads,
+            )
+            if bool(params["refine"]) and len(recognized) >= MIN_STREAMLINES_FOR_REFINE:
+                with dipy_reco_bundles_num_threads(num_threads):
+                    recognized, labels = _run_refine(
+                        rb,
+                        model_bundle,
+                        recognized,
+                        model_clust_thr=float(params["model_clust_thr"]),
+                        r_reduction_thr=float(params["r_reduction_thr"]),
+                        r_pruning_thr=float(params["r_pruning_thr"]),
+                    )
+    finally:
+        _restore_threads(previous)
+
+    return Streamlines(subject_sft.streamlines[i] for i in labels)
+
+
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class DipyRecoBundlesBuildInputSpec(BaseInterfaceInputSpec):
     tractogram_chunk = File(
@@ -526,7 +612,6 @@ class DipyRecoBundlesRecognize(BaseInterface):
     def _run_interface(self, runtime):
         from dipy.io.streamline import load_tractogram, save_tractogram
         from dipy.io.stateful_tractogram import StatefulTractogram
-        from dipy.tracking.streamline import Streamlines
 
         num_threads = (
             int(self.inputs.num_threads) if isdefined(self.inputs.num_threads) else 1
@@ -547,47 +632,25 @@ class DipyRecoBundlesRecognize(BaseInterface):
         model_sft.to_rasmm()
         model_bundle = model_sft.streamlines
 
-        previous = _pin_threads(num_threads)
-        try:
-            subject_sft = load_tractogram(
-                self.inputs.tractogram_chunk, "same", bbox_valid_check=False
-            )
-            subject_sft.to_rasmm()
-            with threadpool_limits(limits=num_threads):
-                rb = load_build(subject_sft.streamlines, self.inputs.recobundles_pickle)
-                recognized, labels = _run_recognize(
-                    rb,
-                    model_bundle,
-                    model_clust_thr=float(self.inputs.model_clust_thr),
-                    reduction_thr=float(self.inputs.reduction_thr),
-                    pruning_thr=float(self.inputs.pruning_thr),
-                    slr=bool(self.inputs.slr),
-                    num_threads=num_threads,
-                )
-                # The auto-calibration pass, skipped when there is nothing to
-                # calibrate on: dipy clusters the first-pass bundle, which is not
-                # meaningful for a single streamline (and the bundles that recover
-                # that little are a reported gap, not something refine can fix).
-                if (
-                    bool(self.inputs.refine)
-                    and len(recognized) >= MIN_STREAMLINES_FOR_REFINE
-                ):
-                    with dipy_reco_bundles_num_threads(num_threads):
-                        recognized, labels = _run_refine(
-                            rb,
-                            model_bundle,
-                            recognized,
-                            model_clust_thr=float(self.inputs.model_clust_thr),
-                            r_reduction_thr=float(self.inputs.r_reduction_thr),
-                            r_pruning_thr=float(self.inputs.r_pruning_thr),
-                        )
-        finally:
-            _restore_threads(previous)
-
-        # The bundle is written as the subject streamlines the recognition
-        # selected, copied into a new sequence, rather than as the copies the
-        # local SLR moved into the model frame.
-        bundle = Streamlines(subject_sft.streamlines[i] for i in labels)
+        params = {
+            "model_clust_thr": float(self.inputs.model_clust_thr),
+            "reduction_thr": float(self.inputs.reduction_thr),
+            "pruning_thr": float(self.inputs.pruning_thr),
+            "refine": bool(self.inputs.refine),
+            "r_reduction_thr": float(self.inputs.r_reduction_thr),
+            "r_pruning_thr": float(self.inputs.r_pruning_thr),
+        }
+        # The refine pass inside recognize_chunk is skipped when the first pass
+        # caught too little to calibrate on (dipy clusters that bundle, which is
+        # not meaningful for a single streamline).
+        bundle = recognize_chunk(
+            self.inputs.tractogram_chunk,
+            self.inputs.recobundles_pickle,
+            model_bundle,
+            params,
+            slr=bool(self.inputs.slr),
+            num_threads=num_threads,
+        )
         recognized_sft = StatefulTractogram.from_sft(bundle, model_sft)
         save_tractogram(recognized_sft, out_bundle, bbox_valid_check=False)
 

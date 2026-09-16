@@ -3,7 +3,7 @@
 #   num_threads = 4
 #   tract = fx
 #
-# nodes=5 edges=5
+# nodes=6 edges=8
 
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
@@ -11,9 +11,19 @@
     model_bundle_name = 'F_L_R'
     model_clust_thr = 2.5
     num_threads = 4
-    pruning_thr = 5.0
-    r_pruning_thr = 4.0
-    r_reduction_thr = 12.0
+    pruning_thr = 8.0
+    r_pruning_thr = 10.0
+    r_reduction_thr = 14.0
+    reduction_thr = 15.0
+    refine = True
+    slr = True
+- recovery_bilateral [DipyBundleRecovery] mem_gb=6.0 n_procs=4
+    model_bundle_name = 'F_L_R'
+    model_clust_thr = 2.5
+    num_threads = 4
+    pruning_thr = 8.0
+    r_pruning_thr = 10.0
+    r_reduction_thr = 14.0
     reduction_thr = 15.0
     refine = True
     slr = True
@@ -23,8 +33,13 @@
 # connections
 inputnode.atlas2native -> to_ref_bilateral.atlas2native
 inputnode.atlas_dir -> recognize_bilateral.atlas_dir
+inputnode.atlas_dir -> recovery_bilateral.atlas_dir
 inputnode.recobundles_builds -> recognize_bilateral.recobundles_pickle
+inputnode.recobundles_builds -> recovery_bilateral.recobundles_pickles
 inputnode.recobundles_chunks -> recognize_bilateral.tractogram_chunk
+inputnode.recobundles_chunks -> recovery_bilateral.tractogram_chunks
 recognize_bilateral.recognized_bundle -> union_bilateral.recognized_bundles
+recovery_bilateral.bundle -> to_ref_bilateral.bundle
+recovery_bilateral.confidence_flag -> outputnode.flag_bilateral
 to_ref_bilateral.bundle_vtp -> outputnode.bundle_bilateral
-union_bilateral.bundle -> to_ref_bilateral.bundle
+union_bilateral.bundle -> recovery_bilateral.default_bundle
