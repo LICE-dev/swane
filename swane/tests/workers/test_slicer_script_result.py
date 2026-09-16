@@ -92,7 +92,8 @@ def normalise(log, **paths):
 CST = {"name": "cst", "thr": 500, "color": [0, 1, 0]}
 AF = {"name": "af", "thr": 1500, "color": [1, 0, 1]}
 OR = {"name": "or", "thr": 500, "color": [1, 1, 0]}
-TRACTS = [CST, AF, OR]
+FX = {"name": "fx", "thr": 500, "color": [0, 1, 1]}
+TRACTS = [CST, AF, OR, FX]
 
 EDITOR = "slicer.qMRMLSegmentEditorWidget()"
 
