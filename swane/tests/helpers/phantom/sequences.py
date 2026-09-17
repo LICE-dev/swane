@@ -292,12 +292,13 @@ def render_dwi(
     seed: int = 0,
     pose: np.ndarray | None = None,
 ) -> tuple:
-    """Render a 4D single-shell DWI whose CST voxels are anisotropic.
+    """Render a 4D single-shell DWI anisotropic across the whole white matter.
 
     Signal model per voxel: ``S = S0 * exp(-b * gT D g)`` with an isotropic
-    tensor everywhere except along the cortico-spinal corridor, whose principal
-    axis follows the local corridor direction so ``dtifit`` recovers high FA
-    there and low FA elsewhere.
+    tensor in GM/CSF/air and an anisotropic single-fibre tensor across every WM
+    voxel whose ``cst_dir`` carries a non-zero principal direction (the CST, AF,
+    OR corridors and the smooth WM background), so a whole-brain DTI/fODF
+    reconstruction recovers biologically plausible FA and fibre orientations.
 
     Returns ``(data4d, affine, bvals, bvecs)``.
     """
@@ -309,26 +310,22 @@ def render_dwi(
         s0_native, tissue.affine, spec.voxel_sizes(), psf, tissue.zooms, pose
     )
 
-    # resample CST membership to the DWI grid; the corridor runs roughly
-    # infero-superior, so its principal diffusion axis is ~ RAS +z (superior).
-    # A constant axis is far cheaper than a full direction field and still
-    # yields high FA along the tract and low FA elsewhere.
-    cst_native = tissue.cst.astype(np.float32)
-    cst, _ = _resample(
-        cst_native, tissue.affine, spec.voxel_sizes(), psf, tissue.zooms, pose
-    )
-    cst_mask = cst > 0.3
-
-    # Per-voxel principal diffusion axis, following the bundle's curvature.  A
-    # single global axis makes the tract effectively straight, and tractography
-    # then leaves it where the real tract bends (internal capsule, peduncle) -
-    # which is why the reconstructed bundle came out threadlike.
-    princ = _resample_direction_field(tissue, spec, psf, pose, cst_mask.shape)
+    # Per-voxel principal diffusion axis across the whole white matter,
+    # following each bundle's curvature plus a smooth background direction.
+    # Before v9, only the CST corridor carried anisotropy; now the combined
+    # direction field from TissueModel.cst_dir (CST + AF + OR + WM background)
+    # drives the single-fibre tensor model everywhere in WM, so a whole-brain
+    # tractogram has structure for RecoBundles' SLR to register against.
+    princ = _resample_direction_field(tissue, spec, psf, pose, s0.shape)
     if pose is not None:
         # the pose rotates the anatomy, so the fibre directions rotate with it
         princ = np.einsum("ij,jxyz->ixyz", np.linalg.inv(pose)[:3, :3], princ)
         norm = np.sqrt((princ**2).sum(axis=0)) + 1e-6
         princ = princ / norm
+
+    # Mask of voxels whose direction field survived resampling: anywhere the
+    # resampled field has non-trivial magnitude receives the anisotropic tensor.
+    fiber_mask = np.sqrt((princ**2).sum(axis=0)) > 0.3
 
     d_par, d_perp, d_iso = 1.7e-3, 0.3e-3, 0.9e-3  # mm^2/s
     bvals = np.asarray(bvals, dtype=np.float32)
@@ -344,14 +341,14 @@ def render_dwi(
         if b <= 0:
             atten = np.ones_like(s0)
         else:
-            # isotropic background
+            # isotropic fallback for GM / CSF / air
             atten = np.full(s0.shape, np.exp(-b * d_iso), dtype=np.float32)
-            # anisotropic in the CST: gT D g, with the principal axis varying
-            # voxel by voxel along the tract
+            # anisotropic across the whole WM fibre field: gT D g, with the
+            # principal axis varying voxel by voxel
             gdot = princ[0] * g[0] + princ[1] * g[1] + princ[2] * g[2]
             g_perp2 = np.clip(1.0 - gdot**2, 0.0, 1.0)
             gDg = d_par * gdot**2 + d_perp * g_perp2
-            atten = np.where(cst_mask, np.exp(-b * gDg), atten)
+            atten = np.where(fiber_mask, np.exp(-b * gDg), atten)
         vol = _rician(s0 * atten * bias, spec.noise_sigma, rng)
         np.clip(vol, spec.clip_min, cmax, out=vol)
         data[..., i] = np.rint(vol)
@@ -360,9 +357,9 @@ def render_dwi(
 
 
 def _resample_direction_field(tissue, spec, psf, pose, target_shape):
-    """Resample the CST fibre directions onto the output grid, re-normalised.
+    """Resample the WM fibre directions onto the output grid, re-normalised.
 
-    Falls back to a superior-pointing axis where the tract has no direction
+    Falls back to a superior-pointing axis where the field has no direction
     (older tissue models, or voxels the interpolation left at zero).
     """
     field = getattr(tissue, "cst_dir", None)
