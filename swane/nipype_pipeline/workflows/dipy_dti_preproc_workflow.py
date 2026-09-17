@@ -43,67 +43,17 @@ from swane.nipype_pipeline.nodes.utils import (
     resolve_registration_engine,
 )
 
-# Per-node memory reservations (GB), integer-rounded from isolated tree-peak RSS
-# measurements on BOTH oracle subjects (subj1 15-dir 256x256x52 / subj2 64-dir
-# 144x144x60), taking the max across the two. Measured with the shipped node code
-# -- brain-bbox-cropped probabilistic tracking and rigid-only motion -- at
-# num_threads=4 for the parallel nodes. Each remaining node's RAM tracks an
-# input-size regressor (streamline count for slr, 4D size for denoise and bias);
-# the full table lives in the spec Measurements section and the dipy RAM report.
+# Per-node memory reservations (GB) for static nodes.
 #
-# motion, tracking, tissue and csd are deliberately absent: their reservations
-# are set at scheduling time by estimators. DipyMotionRamEstimator prices the
-# parent 4D buffers and the pool workers separately and walks the worker count
-# down; DipyTrackingRamEstimator prices the incompressible full-FOV working set
-# and walks seed_buffer_fraction (then trx_chunk_size) down to fit the RAM
-# budget. DipyTissueRamEstimator is classic (one-way): the HMRF peak is linear
-# in T1 voxels and the node pins OMP=1 with no thread lever (measured
-# thread-invariant, 2026-09-06), so it reserves RAM from the voxel count and
-# tunes nothing. DipyCsdRamEstimator models peaks_from_model's two branches --
-# the parallel one holds three full-volume copies of the per-voxel output arrays
-# against the serial one's single copy -- and scans the worker count down to the
-# serial rung.
-#
-# Correction (measured 2026-09-06, same isolated tree-peak method, num_threads=4):
-# the Phase-1bis float32 buffers (C2.3) did NOT drop motion's peak to ~3.7 GB as
-# recorded earlier -- that figure is a single-worker/parent-side number. The
-# 4-worker tree peak went 7.11 -> 6.68 GB (subj1) and 8.44 -> 8.06 GB (subj2),
-# a ~5% saving, because the float32 buffers sit in the parent while the pool
-# workers dominate the peak. The dipy engine's RAM floor is re-derived jointly
-# at the end of Phase 2 from each estimator's bottom rung.
-#
-# E9 + float32-load (measured 2026-09-07, same isolated tree-peak method).
-# Two related 2026-09-07 changes: (1) denoise/motion/bias now WRITE float32 on
-# disk (fixing the int16-with-scaling precision loss), and (2) denoise/tensor/csd
-# now LOAD float32 (get_fdata(dtype=float32)) rather than the float64 default
-# (user decision -- computing/saving float64 only to approximate at save is
-# wasted RAM/time). The write change is peak-neutral (nodes held float64 in
-# memory regardless of the on-disk dtype); the load change LOWERS these peaks:
-# denoise 0.62 -> 0.40, tensorfit 0.64 -> 0.45, csd 0.56 -> 0.45 GB (subj2, -20
-# to -36%). So these 1 GB reservations stay comfortably conservative and are
-# left unchanged. The one estimator constant that moves is
-# DipyCsdRamEstimator.DATA_BYTES_PER_VOXEL_VOLUME (10 -> 8: float32 resident
-# input, was float64). motion's estimator (32 B/voxel x vol) stays conservative
-# (float32 save buffer replaces the old int16 one, adding no peak; motion still
-# loads float64 -- dipy's motion_correction controls that, and float32 on the
-# parallel path alone would break the serial-vs-parallel oracle). tissue stays
-# float64 (dipy's HMRF Cython kernel requires 'double'). So the dipy engine's
-# working set -- hence the floor input -- does not rise; it falls slightly.
-#
-# RAM audit (2026-09-12, isolated tree-peak RSS on three real subject DWIs):
-# crop and slr are now sized by DipyCropRamEstimator/DipySlrRamEstimator (both
-# one-way, no lever) instead of a fixed literal -- crop was an unmeasured
-# placeholder, and slr's old fixed 5 GB (from an earlier, lower-seed-density
-# calibration) undershot the current pipeline's real peak by up to ~4 GB. The
-# denoise/tensorfit reservations below were also under the measured peak on at
-# least one subject (still fixed-value nodes; same voxel x volume regressor
-# family as motion/csd, but with too little RAM headroom for it to be worth
-# promoting them to an estimator yet) and are rounded up 1 -> 2 GB.
+# motion, tracking, tissue and csd are sized at scheduling time by their
+# respective estimators: DipyMotionRamEstimator, DipyTrackingRamEstimator,
+# DipyTissueRamEstimator, and DipyCsdRamEstimator.
+# crop and slr are sized by DipyCropRamEstimator and DipySlrRamEstimator.
 _MEM_GB = {
-    "denoise": 2,  # subj1 1.11 / subj2 1.37 -- 1 GB under-reserved both; rounded up
-    "bias": 1,  # subj1 0.85 / subj2 0.99
-    "tensorfit": 2,  # subj1 0.89 / subj2 1.16 -- 1 GB under-reserved subj2; rounded up
-    "ras": 1,  # subj1 0.11 / subj2 0.11 (min 1 GB reservation)
+    "denoise": 2,
+    "bias": 1,
+    "tensorfit": 2,
+    "ras": 1,
 }
 
 
@@ -391,7 +341,7 @@ def dipy_dti_preproc_workflow(
         # RAM is reserved at scheduling time from the T1 voxel count: HMRF peak
         # is linear in voxels. The estimator is classic (one-way) -- the node
         # pins OMP=1 internally and has no thread lever, so there is nothing to
-        # tune (measured thread-invariant on both oracle T1 brains, 2026-09-06).
+        # tune.
         # The static value below is only the fail-safe used when the negotiation
         # cannot run (see MonitoredMultiProcPlugin._negotiate_ram).
         tissue._mem_gb = DipyTissueRamEstimator.STATIC_FALLBACK_GB

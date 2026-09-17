@@ -34,7 +34,7 @@ TRACTS = {
     "cst": ["Corticospinal Tract", "true", 0],
     "fa": ["Frontal Aslant", "false", 0],
     # TODO: fsl tract workflow does not handle non-bilateral tacts, so they are disabled for now
-    # "fma": ["Forceps Major", "false", 0], 
+    # "fma": ["Forceps Major", "false", 0],
     # "fmi": ["Forceps Minor", "false", 0],
     # "mcp": ["Middle Cerebellar Peduncle", "false", 0],
     # "ac": ["Anterior Commissure", "false", 0],
@@ -715,7 +715,7 @@ category = GlobalPrefCategoryList.PERFORMANCE
 GLOBAL_PREFERENCES[category] = {}
 GLOBAL_PREFERENCES[category]["max_subj"] = PreferenceEntry(
     input_type=InputTypes.INT,
-    label="Patient tab limit",
+    label="Subject tab limit",
     default=1,
     range=[1, 5],
 )

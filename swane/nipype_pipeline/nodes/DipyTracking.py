@@ -8,7 +8,7 @@ The tracker is
 than following its maximum). It replaced particle-filtering tractography
 (``pft_tracking``), which was unusable on the 8 GB / 4-core target: ``pft_tracking``
 runs single-core (its OpenMP pool does not engage on the ``sh=`` path) and its
-dense full-FOV PMF precompute (X x Y x Z x 362 x 8 bytes = 9.19 GB on subj1)
+dense full-FOV PMF precompute (X x Y x Z x 362 x 8 bytes > 9 GB on typical FOVs)
 alone busts the memory budget (spec section 5, "Accepted risk").
 
 Streamlines stop on :class:`dipy.tracking.stopping_criterion.ThresholdStoppingCriterion`
@@ -40,13 +40,12 @@ and from nothing else: not the PVE/FA maps (registration-apply/tensor-fit output
 that can extend past the true brain edge), and not the shm, whose ``DipyCsdFit``
 output carries the int16/NaN-scaled DWI header, so its voxels read non-zero across
 the whole FOV and would degenerate the bbox to a no-op crop. The full FOV is
-dominated by background -- on subj1 the brain fills <50% of 256x256x52, so the
-uncropped SH volume alone is 4.15 GB in float64 and passing it whole to
-``probabilistic_tracking`` peaks around 7 GB, over the 8 GB target (spec section 2,
-"crop"). Background voxels carry no fODF, no WM seed and no FA signal, so the crop
-halves the voxel count at zero scientific cost: the affine is shifted by the crop
-offset, so tracking still runs in the original diffusion world frame and the
-streamlines are unchanged.
+dominated by background (the brain can fill <50% of the volume), so passing an
+uncropped SH volume whole to ``probabilistic_tracking`` introduces a large
+memory overhead (spec section 2, "crop"). Background voxels carry no fODF, no WM
+seed and no FA signal, so the crop halves the voxel count at zero scientific
+cost: the affine is shifted by the crop offset, so tracking still runs in the
+original diffusion world frame and the streamlines are unchanged.
 
 Tracking runs in diffusion space (no DWI interpolation); each streamline is
 moved to reference space with the diffusion -> reference affine already produced
@@ -125,14 +124,13 @@ TRX_CHUNK_SIZE = 10000
 # maps, which are registration-apply/tensor-fit outputs that can extend past the
 # true brain edge, and not the shm, whose int16/NaN-scaled DWI header reads
 # non-zero across the whole FOV and would degenerate the bbox to a no-op crop.
-# The full FOV is dominated by background: on subj1 the brain fills <50% of
-# 256x256x52, so the uncropped SH volume alone is 256x256x52x15 float64 = 4.15
-# GB, and passing it whole to probabilistic_tracking peaks around 7 GB -- over
-# the 8 GB target (spec section 2, "crop"). Background voxels carry no fODF, no
-# WM seed and no FA signal, so the crop is a pure memory optimisation with no
-# effect on the streamlines: the affine is shifted by the crop offset (see
-# shift_affine_for_crop) so tracking still runs in the original diffusion world
-# frame.
+# The full FOV is often dominated by background (the brain can fill <50% of
+# the volume), so passing an uncropped SH volume whole to probabilistic_tracking
+# introduces a large memory overhead (spec section 2, "crop"). Background voxels
+# carry no fODF, no WM seed and no FA signal, so the crop is a pure memory
+# optimisation with no effect on the streamlines: the affine is shifted by the
+# crop offset (see shift_affine_for_crop) so tracking still runs in the original
+# diffusion world frame.
 BBOX_PAD_VOXELS = 2
 
 
@@ -357,8 +355,8 @@ class DipyTracking(BaseInterface):
 
         shm_nii = nib.load(self.inputs.shm_coeff)
         # Load via dataobj as float32 rather than get_fdata (float64): the full FOV
-        # SH volume is 256x256x52x15 = 4.15 GB in float64 on subj1, half that in
-        # float32, and dipy upcasts to float64 only the cropped array below.
+        # SH volume RAM is halved in float32, and dipy upcasts to float64 only the
+        # cropped array below.
         sh_data = np.asarray(shm_nii.dataobj, dtype=np.float32)
         diff_affine = shm_nii.affine
 
@@ -369,7 +367,7 @@ class DipyTracking(BaseInterface):
         )
 
         # Crop SH + WM PVE + FA to the brain bounding box so tracking never
-        # carries the background (>50% of the FOV on subj1) in RAM. The crop
+        # carries the background in RAM. The crop
         # is derived from nodif_brain -- dti_preproc's own skull-stripped b0,
         # on the same diffusion grid -- and from nothing else. Not from the
         # PVE/FA maps: they are registration-apply/tensor-fit outputs that may

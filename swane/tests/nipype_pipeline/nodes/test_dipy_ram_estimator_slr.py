@@ -35,13 +35,12 @@ from swane.utils.ResourceManager import ResourceManager
 
 GB = 1024**3
 
-# Isolated tree-peak RSS of the real node on three real, current-pipeline
-# subject tractograms (points -> measured GB), 2026-09-13. The conservative
-# bound must sit above all three.
+# Isolated peak RSS across representative tractograms (points -> measured GB).
+# The conservative bound must sit above all three.
 MEASURED_PEAKS = {
-    121_088_164: 4.348,  # subj1
-    67_925_234: 3.643,  # subj2
-    119_653_463: 4.386,  # subj3
+    121_088_164: 4.348,
+    67_925_234: 3.643,
+    119_653_463: 4.386,
 }
 
 

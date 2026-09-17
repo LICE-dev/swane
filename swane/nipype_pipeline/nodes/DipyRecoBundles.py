@@ -95,7 +95,7 @@ NB_PTS = 20
 
 # Recognition parameters, per tract.
 #
-# ``refine`` is dipy's auto-calibration pass (Chandio BQ, Risacher SL, Pestilli F,
+# ``refine`` is dipy's second pass (Chandio BQ, Risacher SL, Pestilli F,
 # et al. Bundle analytics, a computational framework for investigating the shapes
 # and profiles of brain pathways across populations. Scientific Reports.
 # 2020;10:17149): a second pass that rebuilds its search space from the bundle
@@ -641,7 +641,7 @@ class DipyRecoBundlesRecognize(BaseInterface):
             "r_pruning_thr": float(self.inputs.r_pruning_thr),
         }
         # The refine pass inside recognize_chunk is skipped when the first pass
-        # caught too little to calibrate on (dipy clusters that bundle, which is
+        # caught too few streamlines (dipy clusters that bundle, which is
         # not meaningful for a single streamline).
         bundle = recognize_chunk(
             self.inputs.tractogram_chunk,

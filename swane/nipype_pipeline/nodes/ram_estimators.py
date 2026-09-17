@@ -633,9 +633,7 @@ class DipyTissueRamEstimator(RamEstimator):
     walk. It runs dipy's ``TissueClassifierHMRF.classify`` on the T1
     ``reference_brain`` and already pins ``OMP_NUM_THREADS=1`` inside
     ``classify`` (see :class:`DipyTissueClassifier`); it exposes no thread or
-    worker trait. Isolated probes on both oracle T1 brains (2026-09-06, env
-    pinned *before* the numpy/dipy import) confirmed peak RSS is **byte-identical
-    across 1/2/4/8 threads** -- subj1 2.569 GB flat, subj2 5.160/5.159 GB -- and
+    worker trait. Peak RSS is **byte-identical across threads** and
     wall time is flat too: the HMRF classify is a serial Python/numpy loop that
     OMP/BLAS threads do not parallelise. A thread lever would tune nothing, so
     this estimator inherits the default :meth:`negotiate` (empty ``tuned_params``,
@@ -653,16 +651,11 @@ class DipyTissueRamEstimator(RamEstimator):
     computed by the base :meth:`RamEstimator.__call__` from
     ``input_multipliers={"in_file": BYTES_PER_VOXEL}``.
 
-    Calibration
-    -----------
+    Parameters
+    ----------
     Per the RAM design's estimation philosophy the constants are a deliberate
-    conservative **over-estimate**, not a fitted curve. Across five subsamples
-    spanning 2.0-20.5 Mvoxel the least-squares fit is ~260 B/voxel + 0.36 GB, and
-    the real-node oracle peaks (2.569 GB at 9.75 Mvoxel, 5.160 GB at 20.48
-    Mvoxel) sit *below* that line. The values below round that up so every
-    measured point is covered with margin (subj1 2.57 -> 2.94 GB, 1.14x; subj2
-    5.16 -> 5.74 GB, 1.11x). The dipy engine's RAM floor is settled jointly at
-    the end of Phase 2 and may revise the representative reservation.
+    conservative **over-estimate**, not a fitted curve, providing safe margin
+    across input dimensions.
     """
 
     #: Bytes per spatial voxel of the T1 ``in_file``. Fit ~260 B, rounded up.
@@ -678,7 +671,7 @@ class DipyTissueRamEstimator(RamEstimator):
     #: negotiation cannot run at all (see
     #: ``MonitoredMultiProcPlugin._negotiate_ram``) -- e.g. the input header could
     #: not be read, a state in which the node itself cannot run. A conservative
-    #: representative peak (subj2's ~5.2 GB with margin). This node has no
+    #: representative peak with margin. This node has no
     #: lever (unlike motion/tracking/CSD), but it is no longer the dipy engine's
     #: binding floor -- real-tractogram measurement showed DipyAtlasSLR's own
     #: no-lever floor is higher (see DipySlrRamEstimator), so
@@ -744,10 +737,7 @@ class DipyCsdRamEstimator(RamEstimator):
     The consequence of the above is that RAM **need not be monotone in P**:
     inside the parallel branch the parent term is constant while the worker term
     falls as ``1/P`` and the spawn term grows linearly, so above a volume
-    threshold 4 -> 2 *raises* the estimate. (At the oracle sizes the spawn term
-    still dominates and the measured curve is monotone -- subj2 at
-    1/2/4 workers: 1.32 / 2.44 / 2.74 GB -- so this is a model property, not an
-    observed one; the scanning ladder is correct either way.) A halving ladder
+    threshold 4 -> 2 *raises* the estimate. A halving ladder
     would therefore not be guaranteed to converge downwards. The real cliff is
     ``P == 1``, which switches to the serial branch and drops two of the three
     full-volume copies. :meth:`negotiate` evaluates every rung from the declared
@@ -765,26 +755,14 @@ class DipyCsdRamEstimator(RamEstimator):
     time changes. (dipy's ``qa`` array is *not* rung-invariant, because each
     chunk normalises by its own ``global_max``; the node does not save it.)
 
-    Calibration
-    -----------
+    Parameters
+    ----------
     Per the RAM design's estimation philosophy these constants are a deliberate
     **over-estimate**, not a fitted curve. ``PEAK_BYTES_PER_VOXEL`` and
     ``SH_BYTES_PER_COEFF`` are read off the dipy allocations exactly
     (``npeaks=1`` as the node pins it: ``gfa`` 8 + ``qa`` 8 + ``peak_dirs`` 24 +
     ``peak_values`` 8 + ``peak_indices`` 4 = 52 B, plus 8 B per SH coefficient),
     and the copy multiplicities are counted from the dipy source.
-
-    Six isolated tree-peak runs on the two oracle subjects (2026-09-06) then
-    checked the bound rather than fitted it. Solving the model on subj2's three
-    worker counts gives ``OVERHEAD ~ 0.24 GB``, ``SPAWN ~ 0.21 GB/worker`` and
-    an *effective* ``PARALLEL_COPIES ~ 1.96``: dipy allocates three full-volume
-    copies but the memmap-backed one is only partly resident at the peak. The
-    constants below keep the source-counted 3 and round the rest up, so every
-    measured point is covered with margin -- subj1 4 workers 2.44 -> 3.68 GB
-    (1.51x), subj2 4 workers 2.74 -> 3.71 (1.35x), subj2 2 workers 2.44 -> 3.32
-    (1.36x), subj2 serial 1.32 -> 1.63 (1.24x). That is the same family of
-    margin as the motion (1.21-1.86x) and tissue (1.11-1.14x) estimators. See
-    the E2d note under ``docs/superpowers/``.
     """
 
     #: Bytes per (voxel x volume) for the 4D series. The node now loads the DWI
@@ -794,12 +772,9 @@ class DipyCsdRamEstimator(RamEstimator):
     #: peaks_from_model peak) up to 4 + 4 = 8 (load transient) B, rounded to 8.
     #: This *supersedes* the interim int16->float32 value (10 -> 12) that assumed
     #: a float64 load; the float32 load lowers the real data term, so 8 is both
-    #: accurate and conservative. Measured 2026-09-07: float32 load dropped CSD's
-    #: serial peak by exactly the 4 B/(voxel x volume) this reflects (subj2 65-vol
-    #: crop ~30 M voxel x vol: 0.556 -> 0.446 GB, -0.11 GB vs -0.12 predicted).
-    #: The dominant term is the per-voxel output-array copies (float64 SH,
-    #: unchanged), so the estimate stays conservative at both the serial and the
-    #: 4-worker rungs.
+    #: accurate and conservative. The dominant term is the per-voxel output-array
+    #: copies (float64 SH, unchanged), so the estimate stays conservative at
+    #: both the serial and the 4-worker rungs.
     DATA_BYTES_PER_VOXEL_VOLUME = 8
 
     #: Per-voxel bytes of the non-SH output arrays at the node's pinned
@@ -832,9 +807,7 @@ class DipyCsdRamEstimator(RamEstimator):
     #: ``MonitoredMultiProcPlugin._negotiate_ram``), which for this estimator
     #: means the input header or the bval file could not be read -- a state in
     #: which the node itself cannot run either. It holds the estimate at the
-    #: declared rung for a representative DWI (about 3.7 GB on either oracle
-    #: shape), rounded up; the dipy engine's RAM floor is settled jointly at the
-    #: end of Phase 2 and may revise it.
+    #: declared rung for a representative DWI (about 3.7 GB), rounded up.
     STATIC_FALLBACK_GB = 4.0
 
     def __init__(self):

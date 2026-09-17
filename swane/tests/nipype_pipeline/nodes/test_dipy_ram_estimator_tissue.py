@@ -5,9 +5,8 @@
 T1 ``reference_brain`` to derive the three PVE maps. Unlike motion, tracking and
 CSD, it has **no quality-neutral lever**: the node already pins
 ``OMP_NUM_THREADS=1`` internally and exposes no thread/worker trait, and the
-HMRF classify is a serial Python/numpy loop. Isolated probes on both oracle T1
-brains (2026-09-06) confirmed peak RSS is **byte-identical across 1/2/4/8
-threads** (subj1 2.569 GB flat; subj2 5.160/5.159 GB), so a thread lever would
+HMRF classify is a serial Python/numpy loop. Peak RSS is **byte-identical
+across threads**, so a thread lever would
 tune nothing. This estimator is therefore a **classic one-way** ``RamEstimator``
 (like the FSL ones): it reserves RAM and tunes nothing, inheriting the default
 ``negotiate`` (empty ``tuned_params``, ``n_procs=None``).
@@ -39,12 +38,10 @@ from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
     MonitoredMultiProcPlugin,
 )
 
-# Measured peak RSS of the real node on the two oracle T1 brains, single process
-# (isolated tree-peak, threads pinned to 1), 2026-09-06. The conservative bound
-# must sit above both.
+# Representative benchmark points; the conservative bound must sit above both.
 ORACLE_PEAKS = {
-    (224, 256, 170): 2.569,  # subj1, 9_748_480 voxels
-    (320, 320, 200): 5.160,  # subj2, 20_480_000 voxels
+    (224, 256, 170): 2.569,  # 9_748_480 voxels
+    (320, 320, 200): 5.160,  # 20_480_000 voxels
 }
 
 

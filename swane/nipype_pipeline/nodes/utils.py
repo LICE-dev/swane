@@ -538,10 +538,7 @@ def get_registration_node(
                 # 4-level internal defaults, and any mismatch in per-level list
                 # lengths makes it abort (it prints usage and writes no warp).
                 # Staying at length 4 keeps every internal default consistent.
-                # Coarsest-first schedule stopping at subsamp 2 (never full
-                # resolution): measured on the phantom this is the fastest of the
-                # length-4 schemes tried and still clears the nonlinear target
-                # alignment check with margin (Dice 0.94, NCC 0.79 vs 0.85/0.5).
+                # Coarsest-first schedule stopping at subsamp 2 for test runs.
                 fnirt.inputs.subsampling_scheme = [4, 4, 4, 2]
                 fnirt.inputs.max_nonlin_iter = [5, 5, 5, 3]
             workflow.connect(flirt, "out_matrix_file", fnirt, "affine_file")

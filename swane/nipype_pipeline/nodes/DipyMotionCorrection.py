@@ -57,15 +57,14 @@ OMP_THREADS_VAR = "OMP_NUM_THREADS"
 OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
 
 # The registration pyramid. This is dipy's ``motion_correction`` default with the
-# trailing ``affine`` stage DROPPED: between-volumes head motion is rigid, so the
-# affine stage only models scaling/shear that head motion cannot produce. Measured
-# on both oracle subjects, dropping it leaves the corrected series ~identical
-# (series correlation 0.9995 subj1 / 0.9997 subj2, max reoriented-bvec diff <0.005)
-# and saves ~30% of the motion-correction time. The cost is that the affine stage
-# was also the dipy branch's only geometric eddy-distortion correction, so eddy
-# distortion is now left uncorrected -- a declared asymmetry vs the FSL eddy path
-# (spec section 5). Both the serial and parallel paths read this constant, so they
-# stay bit-for-bit equivalent.
+# trailing ``affine`` stage omitted: between-volumes head motion is rigid, so the
+# affine stage only models scaling/shear that head motion cannot produce.
+# Omitting it saves execution time while preserving series fidelity.
+# The cost is that the affine stage was also the dipy branch's only geometric
+# eddy-distortion correction, so eddy distortion is now left uncorrected -- a
+# declared asymmetry vs the FSL eddy path.
+# Both the serial and parallel paths read this constant, so they stay bit-for-bit
+# equivalent.
 DEFAULT_PIPELINE = ["center_of_mass", "translation", "rigid"]
 
 # Module-level globals populated by ``_worker_initializer`` in each worker.
@@ -372,7 +371,7 @@ class DipyMotionCorrection(BaseInterface):
         # are a float computation; casting them back to the raw dcm2niix DWI's
         # int16 on-disk dtype (inherited via ``img.header``) would quantize every
         # correction. Reading the data at float32 keeps the serial reference and
-        # the parallel path bit-for-bit equal (the oracle contract) -- the
+        # the parallel path bit-for-bit equal -- the
         # parallel path already assembles into a float32 buffer -- and writing
         # float32 on disk makes that correction lossless. The affine/orientation/
         # zooms from the source header are preserved; only the data dtype changes.
