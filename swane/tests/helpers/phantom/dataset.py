@@ -44,7 +44,10 @@ from swane.tests.helpers.phantom.tissue import TissueClass as TC, build_tissue_m
 #: del_vols=0 on data that genuinely has none instead of faking "no trim" on
 #: padded data (which desynced the GLM and emptied the activation maps).
 #: v8: increased subarachnoid space width to improve deskull performance
-GENERATOR_VERSION = "8"
+#: v9: 15-direction DWI (lmax-4 floor) with anisotropy across the whole WM
+#: tensor field (CST + AF + OR + WM background), not only the CST corridor.
+#: This is a full cache invalidation: every install rebuilds on first run.
+GENERATOR_VERSION = "9"
 
 #: Default cache root; ``SWANE_PHANTOM_DIR`` overrides it.
 DEFAULT_CACHE_ROOT = os.path.join(os.path.expanduser("~"), "test_swane", "phantom")
@@ -67,7 +70,7 @@ class PhantomProfile:
     in_plane_2d_mm: float = 1.5  # 2D FLAIR / T2
     slice_2d_mm: float = 3.0
     dwi_mm: float = 3.0
-    dwi_directions: int = 6  # minimum for a tensor fit
+    dwi_directions: int = 15  # lmax-4 supported floor (see direction-count decision)
     bold_mm: float = 4.0
     bold_tr_s: float = 2.5
     # task and rest blocks have fixed but *different* lengths
