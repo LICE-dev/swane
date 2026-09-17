@@ -21,6 +21,7 @@
     model_bundle_name = 'F_L_R'
     model_clust_thr = 2.5
     num_threads = 4
+    out_bundle = 'r-fx.trx'
     pruning_thr = 8.0
     r_pruning_thr = 10.0
     r_reduction_thr = 14.0

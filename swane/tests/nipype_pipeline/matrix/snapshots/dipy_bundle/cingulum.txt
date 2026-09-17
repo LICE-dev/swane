@@ -31,6 +31,7 @@
     model_bundle_name = 'C_L'
     model_clust_thr = 2.5
     num_threads = 4
+    out_bundle = 'r-cingulum_lh.trx'
     pruning_thr = 8.0
     r_pruning_thr = 6.0
     r_reduction_thr = 12.0
@@ -41,6 +42,7 @@
     model_bundle_name = 'C_R'
     model_clust_thr = 2.5
     num_threads = 4
+    out_bundle = 'r-cingulum_rh.trx'
     pruning_thr = 8.0
     r_pruning_thr = 6.0
     r_reduction_thr = 12.0
