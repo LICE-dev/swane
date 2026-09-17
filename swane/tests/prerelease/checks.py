@@ -225,8 +225,50 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
     checks.extend(_check_reference(result, files))
     checks.extend(_check_nonlinear_registration(result))
     checks.extend(_check_nonlinear_target_alignment(result))
+    checks.extend(_check_dipy_bundle_recovery(result, files))
     if ground_truth is not None:
         checks.extend(_check_plausibility(result, files, ground_truth))
+    return checks
+
+def _check_dipy_bundle_recovery(result, files: list) -> list:
+    """Verify dipy tractography recovered af, cst, and or (and none are low-confidence)."""
+    checks = []
+    if result.name != "dti_tractography_dipy":
+        return checks
+
+    tract_dir = os.path.join(result.subject_dir, "dti", "tractography")
+    if not os.path.isdir(tract_dir):
+        return checks
+
+    import json
+
+    lowconf_file = os.path.join(tract_dir, "lowconf.json")
+    lowconf = []
+    if os.path.isfile(lowconf_file):
+        with open(lowconf_file, "r") as f:
+            try:
+                lowconf = json.load(f)
+            except Exception:
+                pass
+
+    for bundle in ["af", "cst", "or"]:
+        for hemi in ["lh", "rh"]:
+            name = f"{bundle}_{hemi}"
+            vtp_file = os.path.join(tract_dir, f"{name}.vtp")
+            checks.append(
+                CheckResult(
+                    f"dipy.recovery.{name}",
+                    os.path.isfile(vtp_file),
+                    f"{name}.vtp present",
+                )
+            )
+            checks.append(
+                CheckResult(
+                    f"dipy.confidence.{name}",
+                    name not in lowconf,
+                    f"{name} is not flagged as low confidence",
+                )
+            )
     return checks
 
 
