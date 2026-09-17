@@ -2,7 +2,7 @@
 
 Generates, at run time and from scratch, a complete synthetic DICOM exam that
 covers **every** `DataInputList` input of SWANe, so workflow *execution* can be
-driven end to end (dcm2niix → FSL/FreeSurfer/Slicer) without any real patient
+driven end to end (dcm2niix → FSL/FreeSurfer/Slicer) without any real subject
 data.
 
 Nothing is committed to the repository: the anatomy is derived at run time from

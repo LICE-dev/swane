@@ -80,9 +80,18 @@ class TissueModel:
     #: reference feature masks in the same grid, handy for later stages/tests
     precentral: np.ndarray  # bool, motor cortex
     cst: np.ndarray  # bool, cortico-spinal corridor
-    #: (X, Y, Z, 3) unit fibre direction in RAS inside the CST, zero elsewhere;
-    #: follows the bundle's curvature so tractography can track through it
+    #: (X, Y, Z, 3) unit fibre direction in RAS across the **whole white matter**,
+    #: zero outside it.  Historically this held the CST corridor only; from
+    #: phantom v9 it carries the principal direction of every fibre-bearing voxel
+    #: -- the CST/AF/OR corridor tangents where a named bundle owns the voxel, and
+    #: a smooth WM-background direction everywhere else -- so a whole-brain SLR has
+    #: structure to register against.  The attribute name is kept (``cst_dir``) so
+    #: ``deformation.py`` and ``sequences.py`` keep consuming it by name.
     cst_dir: np.ndarray = None
+    #: bool, arcuate fasciculus corridor (fronto-temporal, bilateral)
+    af: np.ndarray = None
+    #: bool, optic radiation corridor (LGN -> calcarine, bilateral)
+    optic_radiation: np.ndarray = None
 
 
 def _fsaverage_dir(freesurfer_home: str | None = None) -> str:
@@ -191,16 +200,39 @@ def build_tissue_model(
 
     # --- feature overlays ------------------------------------------------
     precentral = _in(aparc, _PRECENTRAL) & _in(aseg, _FS["cortex"])
-    cst, cst_dir = _build_cst(brain, precentral, aseg, zooms, affine)
+    cst, cst_tan = _build_cst(brain, precentral, aseg, zooms, affine)
+    af, af_tan = _build_tube_corridor(brain, _AF_WAYPOINTS_L, affine)
+    orad, or_tan = _build_tube_corridor(brain, _OR_WAYPOINTS_L, affine)
 
     out = labels.copy()
     out[precentral] = TissueClass.PRECENTRAL_GM
-    # CST runs through WM; only stamp where it overlaps white matter/brainstem
+    # CST runs through WM/brainstem; only stamp where it overlaps those tissues.
     cst_stampable = cst & np.isin(
         labels, [TissueClass.WM, TissueClass.BRAINSTEM, TissueClass.CEREBELLUM_WM]
     )
     out[cst_stampable] = TissueClass.CST
-    cst_dir[~cst_stampable] = 0.0
+    # AF and OR are cerebral-WM tracts; keep them where they overlap WM.  They are
+    # not stamped as a distinct tissue class (they stay WM in the label map): the
+    # engine recognises them through the fibre direction field, not the labels, so
+    # no new TissueClass / LUT entry is needed.
+    wm = labels == TissueClass.WM
+    af_stampable = af & wm
+    or_stampable = orad & wm
+
+    # Combined per-voxel fibre direction (stored on ``cst_dir``; see TissueModel).
+    # A smooth whole-WM background gives a whole-brain SLR structure to register
+    # against; each named corridor's curvature tangent then takes priority inside
+    # its own voxels.  The support of the field is WM plus the corridor voxels the
+    # CST adds outside WM (brainstem, cerebellar WM).
+    fiber_dir = _wm_background_field(wm, affine, zooms)
+    for mask, tan in (
+        (cst_stampable, cst_tan),
+        (af_stampable, af_tan),
+        (or_stampable, or_tan),
+    ):
+        fiber_dir[mask] = tan[mask]
+    fiber_support = wm | cst_stampable | af_stampable | or_stampable
+    fiber_dir[~fiber_support] = 0.0
 
     venous = _build_venous_sinuses(brain, aseg, zooms, affine)
     out[venous & (out == TissueClass.CSF_EXTRA)] = TissueClass.VENOUS_SINUS
@@ -211,23 +243,37 @@ def build_tissue_model(
     if deform:
         from swane.tests.helpers.phantom.deformation import deform_anatomy
 
-        out, warped_masks, cst_dir = deform_anatomy(
+        out, warped_masks, fiber_dir = deform_anatomy(
             out,
-            {"precentral": precentral, "cst": cst_stampable},
-            cst_dir,
+            {
+                "precentral": precentral,
+                "cst": cst_stampable,
+                "af": af_stampable,
+                "orad": or_stampable,
+                "fiber_support": fiber_support,
+            },
+            fiber_dir,
             affine,
             zooms,
         )
         precentral = warped_masks["precentral"]
         cst_stampable = warped_masks["cst"]
+        af_stampable = warped_masks["af"]
+        or_stampable = warped_masks["orad"]
 
     precentral_out = precentral
     cst_out = cst_stampable
+    af_out = af_stampable
+    or_out = or_stampable
     if crop_margin_mm >= 0:
-        out, affine, (sl, precentral_out, cst_out) = _crop_to_head(
-            out, affine, zooms, crop_margin_mm, [precentral, cst_stampable]
+        out, affine, (sl, precentral_out, cst_out, af_out, or_out) = _crop_to_head(
+            out,
+            affine,
+            zooms,
+            crop_margin_mm,
+            [precentral, cst_stampable, af_stampable, or_stampable],
         )
-        cst_dir = cst_dir[sl]
+        fiber_dir = fiber_dir[sl]
 
     return TissueModel(
         labels=out,
@@ -235,7 +281,9 @@ def build_tissue_model(
         zooms=zooms,
         precentral=precentral_out,
         cst=cst_out,
-        cst_dir=cst_dir,
+        cst_dir=fiber_dir,
+        af=af_out,
+        optic_radiation=or_out,
     )
 
 
@@ -279,28 +327,56 @@ _CST_WAYPOINTS_L = [
 ]
 
 
-def _build_cst(brain, precentral, aseg, zooms, affine):
-    """Cortico-spinal corridor following the real descending anatomy.
+# Arcuate fasciculus (AF): the dorsal, C-shaped fronto-temporal language tract.
+# It runs from the inferior-frontal / precentral white matter, arches up and
+# over the Sylvian fissure, then descends into the posterior superior/middle
+# temporal white matter.  LEFT-side RAS(mm) waypoints; the right side is the
+# x-mirror.  The waypoints stay lateral (|x| ~ 38-44 mm), sweep posteriorly in y
+# and rise then fall in z, tracing the arch.  Radii are generous, as for the CST.
+_AF_WAYPOINTS_L = [
+    # (R, A, S) mm,                 radius_mm,  segment
+    ((-38.0, 10.0, 26.0), 8.0),  # frontal terminus (IFG / precentral WM)
+    ((-37.0, -2.0, 33.0), 7.5),  # ascending frontal limb
+    ((-37.0, -18.0, 34.0), 7.0),  # superior arch, above the Sylvian fissure
+    ((-40.0, -34.0, 26.0), 7.0),  # descending parieto-temporal limb
+    ((-43.0, -44.0, 10.0), 7.5),  # temporal terminus (posterior STG / MTG WM)
+]
 
-    The bundle is a smooth tube through anatomical waypoints (M1 -> corona
-    radiata -> posterior limb of the internal capsule -> cerebral peduncle ->
-    basis pontis -> medullary pyramid), built in RAS millimetres so it does not
-    depend on the array axis order (fsaverage is LIA, not RAS).
+# Optic radiation (OR): lateral geniculate nucleus (posterolateral thalamus) ->
+# occipital calcarine cortex, with Meyer's loop swinging anteriorly over the
+# temporal horn before turning back.  LEFT-side RAS(mm) waypoints; right is the
+# x-mirror.  The second waypoint is deliberately the most anterior and inferior
+# point (Meyer's loop) before the tract sweeps posteriorly to the occipital pole.
+_OR_WAYPOINTS_L = [
+    # (R, A, S) mm,                 radius_mm,  segment
+    ((-23.0, -26.0, 2.0), 6.0),  # LGN (posterolateral thalamus)
+    ((-30.0, -20.0, -8.0), 6.0),  # Meyer's loop (anterior temporal, inferior)
+    ((-34.0, -40.0, -6.0), 6.5),  # sagittal stratum along the temporal horn
+    ((-30.0, -66.0, 2.0), 6.5),  # posterior sweep toward the occipital lobe
+    ((-18.0, -84.0, 6.0), 6.0),  # calcarine / occipital terminus
+]
+
+
+def _build_tube_corridor(brain, waypoints_l, affine):
+    """A bilateral smooth-tube corridor with a per-voxel curvature tangent.
+
+    Shared machinery for every named bundle (CST, AF, OR): stamp a variable-radius
+    tube through the LEFT ``waypoints_l`` and its x-mirror, in RAS millimetres so
+    it is independent of the array axis order (fsaverage is LIA, not RAS), and
+    give each voxel the unit tangent of its nearest curve point.  A single global
+    axis would make the bundle straight, and tractography would then leave it
+    wherever the real tract bends; the local tangent keeps fibres inside the curve.
     """
     from scipy import ndimage as ndi
 
     corridor = np.zeros(brain.shape, dtype=bool)
-    # Unit fibre direction (RAS) per voxel.  A single global axis would make the
-    # bundle straight, and tractography then leaves it wherever the real tract
-    # bends (internal capsule, cerebral peduncle); following the local tangent
-    # keeps the fibres inside the curving bundle.
     direction = np.zeros(brain.shape + (3,), dtype=np.float32)
     for mirror in (1.0, -1.0):
         pts = np.array(
-            [[w[0][0] * mirror, w[0][1], w[0][2]] for w in _CST_WAYPOINTS_L],
+            [[w[0][0] * mirror, w[0][1], w[0][2]] for w in waypoints_l],
             dtype=np.float64,
         )
-        radii = np.array([w[1] for w in _CST_WAYPOINTS_L], dtype=np.float64)
+        radii = np.array([w[1] for w in waypoints_l], dtype=np.float64)
         curve, curve_r = _resample_polyline(pts, radii, step_mm=0.5)
         tangents = _curve_tangents(curve)
         corridor |= _tube_ras(
@@ -311,6 +387,68 @@ def _build_cst(brain, precentral, aseg, zooms, affine):
     corridor = ndi.binary_closing(corridor, iterations=1)
     direction[~corridor] = 0.0
     return corridor, direction
+
+
+def _wm_background_field(wm, affine, zooms):
+    """A smooth, coherent principal direction for every white-matter voxel.
+
+    RecoBundles runs a whole-brain SLR against the atlas *before* recognising
+    any bundle, so a tractogram of a few isolated corridors registers
+    arbitrarily and even the CST fails. The background field is what gives the
+    whole-brain tractogram enough structure to register non-arbitrarily.
+
+    Construction is derived only from the WM mask geometry (nothing subject- or
+    atlas-derived): the Euclidean distance from the WM boundary is smoothed
+    heavily (~6 mm) and its spatial gradient, rotated into RAS, is taken as the
+    local principal direction. A low-frequency gradient is spatially coherent by
+    construction (neighbouring voxels align), which is the requirement -- not
+    biological exactness. Voxels where the smoothed gradient vanishes (the
+    medial ridge, flat interior) inherit the nearest valid direction, so the
+    field covers the whole WM without arbitrary constants breaking coherence.
+
+    Returns an ``(X, Y, Z, 3)`` float32 unit field, zero outside ``wm``.
+    """
+    from scipy import ndimage as ndi
+
+    wm = np.asarray(wm, dtype=bool)
+    field = np.zeros(wm.shape + (3,), dtype=np.float32)
+    if not wm.any():
+        return field
+
+    dist = ndi.distance_transform_edt(wm, sampling=zooms).astype(np.float64)
+    sigma_vox = tuple(6.0 / float(z) for z in zooms)  # ~6 mm smoothing
+    smooth = ndi.gaussian_filter(dist, sigma=sigma_vox)
+    grad = np.gradient(smooth, *[float(z) for z in zooms])  # per-mm, index axes
+    gidx = np.stack(grad, axis=-1)  # (X, Y, Z, 3) in index axes
+    ras = gidx @ affine[:3, :3].T  # rotate the index gradient into RAS
+
+    norm = np.linalg.norm(ras, axis=-1)
+    valid = (norm > 1e-6) & wm
+    if not valid.any():
+        return field
+
+    # Fill every WM voxel from the nearest voxel that has a defined gradient, so
+    # ridge/flat voxels take a coherent neighbour direction rather than a hole.
+    _, indices = ndi.distance_transform_edt(
+        ~valid, return_distances=True, return_indices=True
+    )
+    filled = ras[tuple(indices)]  # (X, Y, Z, 3)
+    fn = np.linalg.norm(filled, axis=-1, keepdims=True)
+    fn[fn == 0] = 1.0
+    unit = (filled / fn).astype(np.float32)
+    field[wm] = unit[wm]
+    return field
+
+
+def _build_cst(brain, precentral, aseg, zooms, affine):
+    """Cortico-spinal corridor following the real descending anatomy.
+
+    The bundle is a smooth tube through anatomical waypoints (M1 -> corona
+    radiata -> posterior limb of the internal capsule -> cerebral peduncle ->
+    basis pontis -> medullary pyramid), built in RAS millimetres so it does not
+    depend on the array axis order (fsaverage is LIA, not RAS).
+    """
+    return _build_tube_corridor(brain, _CST_WAYPOINTS_L, affine)
 
 
 def _curve_tangents(curve):
