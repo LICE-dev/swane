@@ -35,6 +35,7 @@ from swane.config.config_enums import (
     GlobalPrefCategoryList,
     RegistrationEngine,
     SliceTiming,
+    TractographyEngine,
     VeinDetectionMode,
 )
 from swane.utils.DataInputList import DataInputList as DIL
@@ -299,6 +300,14 @@ AXES = (
         gates={"true": "xtract"},
         needs_input=DIL.DTI,
         note="the sweep only enables the corticospinal tract",
+    ),
+    Axis(
+        name="tractography_engine",
+        scope=GLOBAL,
+        section=GlobalPrefCategoryList.SYNTH,
+        option="tractography_engine",
+        values=_enum_values(TractographyEngine, "FSL_XTRACT", "DIPY_RECOBUNDLES"),
+        gates={"FSL_XTRACT": "xtract", "DIPY_RECOBUNDLES": "dipy"},
     ),
     # ---- task fMRI -----------------------------------------------------------
     # The phantom generates fmri_0 as rArA and fmri_1 as rArBrArB, so a pass
@@ -644,6 +653,24 @@ PASSES = (
             "multicore_node_limit": "NO_LIMIT",
         },
     ),
+    PassSpec(
+        name="dti_tractography_dipy",
+        description=(
+            "Diffusion with dipy and RecoBundles tractography on the CPU. "
+            "Exercises the DIPY_RECOBUNDLES engine."
+        ),
+        inputs=(DIL.T13D, DIL.DTI),
+        values={
+            "freesurfer_step": "DISABLED",
+            "deskull_engine": "BET",
+            "registration_engine": "FSL",
+            "cuda": "false",
+            "old_eddy_correct": "false",
+            "tractography": "true",
+            "tractography_engine": "DIPY_RECOBUNDLES",
+            "multicore_node_limit": "SOFT_CAP",
+        },
+    ),
     # The CPU tractography baseline: modern eddy + BEDPOSTX + corticospinal
     # ProbTrackX, all on the CPU. It runs on every host that has the XTRACT
     # protocols, so the CPU path of that chain is always exercised. The GPU
@@ -666,6 +693,7 @@ PASSES = (
             "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
+            "tractography_engine": "FSL_XTRACT",
             "multicore_node_limit": "SOFT_CAP",
         },
     ),
@@ -687,6 +715,7 @@ PASSES = (
             "cuda": "true",
             "old_eddy_correct": "false",
             "tractography": "true",
+            "tractography_engine": "FSL_XTRACT",
             "multicore_node_limit": "SOFT_CAP",
         },
     ),
@@ -711,6 +740,7 @@ PASSES = (
             "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
+            "tractography_engine": "FSL_XTRACT",
             "multicore_node_limit": "SOFT_CAP",
         },
     ),
@@ -996,6 +1026,7 @@ _PASS_REQUIREMENTS = {
     # skipped with a clear reason.
     "func_map_synthseg": ("synth_seg",),
     "dti_tractography": ("xtract",),
+    "dti_tractography_dipy": ("dipy",),
     # The GPU pass needs both the protocols and an actual GPU; without one it
     # would only duplicate the CPU baseline, so it is skipped there.
     "dti_tractography_gpu": ("xtract", "cuda"),
