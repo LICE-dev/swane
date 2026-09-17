@@ -24,13 +24,12 @@ from swane.nipype_pipeline.nodes.ram_estimators import DipyCropRamEstimator
 
 GB = 1024**3
 
-# Isolated tree-peak RSS of the real node on three real subject DWIs
-# (voxel x volume -> measured GB), 2026-09-12. The conservative bound must sit
-# above all three.
+# Isolated peak RSS across representative DWIs (voxel x volume -> measured GB).
+# The conservative bound must sit above all three.
 MEASURED_PEAKS = {
-    54_525_952: 0.532,  # subj1, 256x256x52x16
-    80_870_400: 1.153,  # subj2, 144x144x60x65
-    167_731_200: 2.425,  # subj3, 192x192x70x65
+    54_525_952: 0.532,  # 256x256x52x16
+    80_870_400: 1.153,  # 144x144x60x65
+    167_731_200: 2.425,  # 192x192x70x65
 }
 
 

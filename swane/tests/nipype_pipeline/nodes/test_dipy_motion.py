@@ -38,8 +38,7 @@ from swane.nipype_pipeline.nodes.DipyMotionCorrection import (
     _parallel_motion_correction,
 )
 
-# Everything the heavy oracle writes stays under this local, disposable root
-# (the same folder that holds the real dipy test subjects); never committed.
+# Output root for heavy tests; never committed.
 ORACLE_ROOT = "/home/mau/test_swane/dipy_test/motion_oracle"
 
 
@@ -63,14 +62,12 @@ class TestDefaultPipelineIsRigidOnly:
     dipy's ``motion_correction`` default is dropped.
 
     Between-volumes head motion is a rigid transform, so the affine stage models
-    scaling/shear that pure head motion cannot produce. Measured on both oracle
-    subjects, dropping it leaves the corrected series ~identical (series
-    correlation 0.9995 subj1 / 0.9997 subj2, max reoriented-bvec diff <0.005) while
-    saving ~30% of the motion-correction time. The one thing the affine stage was
+    scaling/shear that pure head motion cannot produce. Omitting it preserves
+    series fidelity while saving execution time. The one thing the affine stage was
     also doing -- the branch's only geometric eddy-distortion correction -- is
     therefore given up; that asymmetry vs the FSL eddy path is declared in the spec.
-    Both the serial and parallel paths read this single module constant, so the
-    serial-vs-parallel equivalence oracle covers the new pipeline unchanged.
+    Both the serial and parallel paths read this single module constant, so they
+    stay equivalent across the new pipeline.
     """
 
     def test_default_pipeline_drops_the_affine_stage(self):
@@ -551,9 +548,7 @@ class TestMotionOutputDtype:
         out_img = nib.load(result.outputs.out_file)
         assert out_img.header.get_data_dtype() == np.dtype(np.float32)
         # The float correction survived (int16 rounding would show as ~0.4 err).
-        assert np.allclose(
-            out_img.get_fdata(dtype=np.float32), registered, atol=1e-4
-        )
+        assert np.allclose(out_img.get_fdata(dtype=np.float32), registered, atol=1e-4)
 
 
 def rotation_to_affine(rotation):
@@ -564,13 +559,12 @@ def rotation_to_affine(rotation):
 
 
 # --------------------------------------------------------------------------- #
-# Layer 1c - serial vs parallel oracle (heavy: real dipy registration)
+# Layer 1c - serial vs parallel equivalence (heavy: real dipy registration)
 # --------------------------------------------------------------------------- #
 def _make_synthetic_dwi(directory, seed=0):
     """A tiny 4D DWI with a single b0 and small inter-volume shifts.
 
-    Written under ``directory`` so the oracle's artefacts live beside the real
-    dipy test subjects and never enter the repository.
+    Written under ``directory`` so test artefacts never enter the repository.
     """
     rng = np.random.default_rng(seed)
     shape = (18, 18, 8)

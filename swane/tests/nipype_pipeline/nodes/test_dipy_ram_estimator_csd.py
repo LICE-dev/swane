@@ -338,14 +338,11 @@ class TestNodeIntegration:
         assert DipyCsdRamEstimator.STATIC_FALLBACK_GB > 0
 
 
-# Isolated tree-peak RSS of the real node on the two oracle subjects, measured
-# 2026-09-06 with the shipped node code (npeaks=1) at the stated worker count.
-# Keyed by (voxels, volumes, n_coeff, workers). The conservative bound must sit
-# above every one of them.
+# Representative benchmark points; the conservative bound must sit above every one of them.
 ORACLE_PEAKS = {
-    # subj1, 256x256x52x16, 15 directions -> lmax 4
+    # 256x256x52x16, 15 directions -> lmax 4
     (3_407_872, 16, 15, 4): 2.440,
-    # subj2, 144x144x60x65, 64 directions -> lmax 8
+    # 144x144x60x65, 64 directions -> lmax 8
     (1_244_160, 65, 45, 4): 2.739,
     (1_244_160, 65, 45, 2): 2.436,
     (1_244_160, 65, 45, 1): 1.316,
@@ -433,18 +430,16 @@ class TestPluginIntegration:
 
 
 # --------------------------------------------------------------------------- #
-# Tuned-vs-untuned scientific equivalence (heavy: real dipy CSD on oracle data)
+# Tuned-vs-untuned scientific equivalence (heavy: real dipy CSD)
 # --------------------------------------------------------------------------- #
 ORACLE_DIR = os.environ.get(
     "SWANE_DIPY_ORACLE_DIR",
-    os.path.join(
-        os.path.expanduser("~"), "test_swane", "dipy_test", "phasee_subj2", "dipy_dti"
-    ),
+    os.path.join(os.path.expanduser("~"), "test_swane", "dipy_test", "dipy_dti"),
 )
 
 
 def _oracle_inputs():
-    """The real subj2 CSD inputs, or ``None`` when the oracle tree is absent."""
+    """The CSD inputs, or ``None`` when the test data tree is absent."""
     csd_dir = os.path.join(ORACLE_DIR, "dipy_csd")
     bias_dir = os.path.join(ORACLE_DIR, "dipy_bias")
     if not (os.path.isdir(csd_dir) and os.path.isdir(bias_dir)):

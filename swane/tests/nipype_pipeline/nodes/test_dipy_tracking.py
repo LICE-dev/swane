@@ -41,7 +41,6 @@ from swane.nipype_pipeline.nodes.DipyTracking import (
     OPENBLAS_THREADS_VAR,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Synthetic fixture: a single coherent WM slab along z, CSF everywhere else,
 # GM caps at the slab ends. The fODF points along z, so probabilistic_tracking
@@ -151,13 +150,11 @@ def _configure(node, inputs, **overrides):
 # --------------------------------------------------------------------------- #
 # Brain bounding-box crop before tracking (spec section 2 "crop").
 #
-# The committed node passed the full FOV SH volume to probabilistic_tracking:
-# 256x256x52x15 float64 = 4.15 GB just for that array on subj1, of which >50% is
-# background zeros. That full-FOV footprint (~7 GB tree peak) is what busts the
-# 8 GB target and hard-froze the measurement box. Cropping SH + PVE to the
+# Passing the full FOV SH volume to probabilistic_tracking introduces a large
+# footprint dominated by background zeros. Cropping SH + PVE to the
 # nodif_brain (skull-stripped b0) bounding box (and shifting the affine so world
 # coordinates are preserved) halves the voxel count at zero scientific cost:
-# background carries no fODF, no WM seed and no tissue for the CMC criterion.
+# background carries no fODF, no WM seed and no tissue.
 # --------------------------------------------------------------------------- #
 class TestBrainBboxCrop:
     def test_bbox_slices_tighten_to_foreground_with_pad(self):
@@ -542,7 +539,9 @@ class TestFaStopping:
 
         wm_for_threshold, _, _ = _pve_maps()
         assert captured["threshold"] == pytest.approx(
-            fa_stop_threshold(_fa_field(wm_for_threshold), wm_seed_mask(wm_for_threshold))
+            fa_stop_threshold(
+                _fa_field(wm_for_threshold), wm_seed_mask(wm_for_threshold)
+            )
         )
         wm, _, _ = _pve_maps()
         # tracking_inputs' nodif_brain is nonzero everywhere (comment at the

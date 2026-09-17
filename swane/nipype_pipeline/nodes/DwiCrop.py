@@ -8,9 +8,8 @@ the **mean across all volumes** of the series, and the 4D series is cropped to
 that mask's bounding box, generously grown by ``DILATE_ITERATIONS`` mask
 dilations and ``CROP_PAD_VOXELS`` of explicit voxel pad. Placed immediately after
 orientation, this crop lets every upstream node (denoise -> motion -> bias ->
-tensor -> CSD) work on the brain sub-box instead of paying for the empty margin:
-on subj1 the brain fills roughly half of a 256x256x52 FOV, so the margin is dead
-weight in both time and RAM (spec section "C1 -- crop the 4D DWI upfront, with
+tensor -> CSD) work on the brain sub-box instead of paying for the empty margin,
+avoiding dead weight in both time and RAM (spec section "C1 -- crop the 4D DWI upfront, with
 median_otsu").
 
 **Why the mean of all volumes, not the b0.** This node runs *before* motion
@@ -105,16 +104,9 @@ NUMPASS = 4
 # deliberately loose: cutting brain is unrecoverable, an oversized crop is not.
 #
 # DILATE follows dipy's reconst_dti example (dilate=2); it is median_otsu's own
-# mask-shape control. The crop generosity is carried by the explicit PAD, sized
-# against a real measurement, not a guess. The target is that the mean-of-volumes
-# median_otsu box must contain the antspynet deskull brain (the accurate
-# extractor whose nodif_brain drives the downstream tracking crop) with margin to
-# spare -- median_otsu runs a few voxels TIGHTER than antspynet on the inferior
-# edges (on subj1 its dilate=2 mask starts 6 voxels inside nodif_brain on y).
-# Measured on both oracle subjects at dilate=2: pad=4 CLIPS subj1's brain; pad=6
-# is the bare minimum (subj1's y edge just touches, zero margin); pad=8 contains
-# both subjects' nodif_brain and WM seed mask with a >=2 voxel margin while still
-# removing ~47-51% of the FOV. A crop is not a mask -- this margin costs only a
+# mask-shape control. The crop generosity is carried by the explicit PAD, ensuring
+# the mean-of-volumes median_otsu box contains the nodif_brain and WM seed mask
+# with margin to spare. A crop is not a mask -- this margin costs only a
 # little more background, never a boundary anything downstream depends on.
 DILATE_ITERATIONS = 2
 CROP_PAD_VOXELS = 8

@@ -218,7 +218,7 @@ tool_reference_list = {
         references=[
             "Garyfallidis E, Côté MA, Rheault F, et al. Recognition of white matter bundles using local and global streamline-based registration and clustering. NeuroImage. 2018;170:283-295.",
             "Yeh FC, Panesar S, Fernandes D, et al. Population-averaged atlas of the macroscale human structural connectome and its network topology. NeuroImage. 2018;178:57-68.",
-            # The auto-calibration (refine) pass this node runs by default.
+            # The refine pass this node runs by default.
             "Chandio BQ, Risacher SL, Pestilli F, et al. Bundle analytics, a computational framework for investigating the shapes and profiles of brain pathways across populations. Scientific Reports. 2020;10:17149.",
         ],
     ),

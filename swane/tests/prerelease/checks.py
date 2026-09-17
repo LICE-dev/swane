@@ -47,10 +47,8 @@ INFO = "info"
 RESULTS_DIR = "results"
 
 #: A feature (veins, electrodes, high-FA corridor) must land within this
-#: distance of the structure the phantom actually drew. Calibrated against a
-#: real run: measured margins are the reference brain at 8.1 mm, the CST at
-#: 3.1 mm, the venous sinus at 1.6 mm and the SEEG contacts at 6.5 mm, so
-#: 15 mm leaves headroom for cross-machine variation without masking a gross
+#: distance of the structure the phantom actually drew. A 15 mm margin
+#: leaves headroom for cross-machine variation without masking a gross
 #: mislocalisation. ``_check_feature`` doubles it for its own ``*.position``
 #: checks (electrodes/veins), which is looser on purpose.
 FEATURE_TOLERANCE_MM = 15.0
@@ -229,6 +227,7 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
     if ground_truth is not None:
         checks.extend(_check_plausibility(result, files, ground_truth))
     return checks
+
 
 def _check_dipy_bundle_recovery(result, files: list) -> list:
     """Verify dipy tractography recovered af, cst, and or (and none are low-confidence)."""
