@@ -104,18 +104,21 @@ def get_tool_cpu_config(max_cpu: int, limit_synth_cores: bool) -> int:
     """Thread count for a CPU-bound tool node under the hard-cap contract.
 
     limit_synth_cores caps Synth tools at SYNTH_CORE_LIMIT; otherwise the node
-    uses the full subject budget. The count is always nipype-aware (the caller
-    sets both num_threads and n_procs to it).
+    uses the full subject budget (max_cpu). The caller sets the node's
+    num_threads input to this value; nipype derives node.n_procs from it (via
+    the Node.n_procs property), so the reservation is always nipype-aware.
+
+    max_cpu is already resolved to a real budget by MainWorkflow (max_subj_cpu
+    < 1 becomes cpu_count()). A max_cpu of 0 is a deliberate "auto/all cores"
+    sentinel used by callers that never received a subject budget: it flows
+    through as num_threads=0, which the tools treat as auto, and keeps golden
+    snapshots deterministic (no machine-specific core count is baked in).
     """
     if limit_synth_cores:
         cores = ResourceManager.SYNTH_CORE_LIMIT
         if max_cpu > 0:
             cores = min(cores, max_cpu)
         return cores
-    if max_cpu <= 0:
-        from multiprocessing import cpu_count
-
-        return cpu_count()
     return max_cpu
 
 
