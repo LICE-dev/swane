@@ -2,17 +2,17 @@ from nipype.interfaces.fsl import (
     ApplyMask,
     ImageMaths,
 )
-from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
+from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from nipype.interfaces.utility import Merge, Function
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.VenousCheck import VenousCheck
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.vascular.VenousCheck import VenousCheck
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
-from swane.nipype_pipeline.nodes.utils import get_deskull_node
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import get_deskull_node
+from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     get_registration_node,
     resolve_registration_engine,

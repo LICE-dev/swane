@@ -194,6 +194,8 @@ class TestGeneratorVersionAndDirections:
         assert PhantomProfile().dwi_directions == 15
 
     def test_sh_order_for_15_directions_is_4(self):
-        from swane.nipype_pipeline.nodes.DipyCsdFit import sh_order_for_directions
+        from swane.nipype_pipeline.interfaces.dipy.DipyCsdFit import (
+            sh_order_for_directions,
+        )
 
         assert sh_order_for_directions(15) == 4

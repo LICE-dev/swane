@@ -223,11 +223,11 @@ class PreferencesWindow(QDialog):
                                 .subject.input_state_list[cat_check]
                                 .loaded
                             ):
-                                self.inputs[x].disable(
-                                    self.preferences[category][
-                                        key
-                                    ].input_requirement_fail_tooltip
-                                )
+                                # The required input series can only be loaded
+                                # from outside this window (it depends on the
+                                # subject's DICOM data), so hide rather than
+                                # gray out.
+                                self.inputs[x].hide()
                                 break
 
                 # Add GUI elements to grid
@@ -348,9 +348,9 @@ class PreferencesWindow(QDialog):
             )
             if dep_check is None or not callable(dep_check) or not dep_check():
 
-                self.inputs[x].disable(
-                    self.preferences[category][key].dependency_fail_tooltip
-                )
+                # An external dependency cannot be installed from this window,
+                # so graying the preference out would be a dead end: hide it.
+                self.inputs[x].hide()
                 return False
         if self.preferences[category][key].resource is not None:
             resource_check = getattr(
@@ -363,9 +363,9 @@ class PreferencesWindow(QDialog):
                 or not callable(resource_check)
                 or not resource_check()
             ):
-                self.inputs[x].disable(
-                    self.preferences[category][key].resource_fail_tooltip
-                )
+                # Same reasoning as the dependency check above: a missing
+                # host resource cannot be fixed from this window.
+                self.inputs[x].hide()
                 return False
 
         # no need return false because combo should neve be completely disabled for subsection dep
@@ -484,8 +484,11 @@ class PreferencesWindow(QDialog):
 
                     if not check:
                         if option is None:
-                            # disable all input
-                            self.inputs[my_x].disable(fail_tooltip)
+                            # The requirement lives in another preferences
+                            # window (it is not one of self.input_keys), so it
+                            # cannot be changed from here: hide rather than
+                            # gray out.
+                            self.inputs[my_x].hide()
                         else:
                             self.inputs[my_x].disable_combo_option(
                                 option, False, fail_tooltip

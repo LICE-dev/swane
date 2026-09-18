@@ -8,15 +8,15 @@ from multiprocessing import cpu_count
 from nipype.pipeline.engine import Node
 from math import trunc
 
-from swane.nipype_pipeline.nodes.SynthSeg import SynthSeg
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.freesurfer.SynthSeg import SynthSeg
+from swane.nipype_pipeline.interfaces.utils import (
     getn,
     get_synth_cpu_config,
     apply_synth_num_threads,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.SegmentHA import SegmentHA
-from swane.nipype_pipeline.nodes.ThrROI import ThrROI
+from swane.nipype_pipeline.interfaces.freesurfer.SegmentHA import SegmentHA
+from swane.nipype_pipeline.interfaces.fsl.ThrROI import ThrROI
 from swane.config.config_enums import CoreLimit, FreesurferStep
 from nipype.interfaces.utility import IdentityInterface
 from swane.utils.ResourceManager import ResourceManager

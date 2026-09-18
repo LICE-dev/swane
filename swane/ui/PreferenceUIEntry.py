@@ -415,6 +415,23 @@ class PreferenceUIEntry:
         self.set_tooltip(self.tooltip)
         self.label.setStyleSheet("")
 
+    def hide(self):
+        """
+        Completely hide the label, input field, button and informative text.
+
+        Used instead of disable() when the preference is unavailable for a
+        reason the user cannot change from within this same preferences
+        window (a missing external dependency/resource, an unloaded input
+        series, or a preference that lives in a different preferences
+        window), so graying it out would just be a dead end.
+        """
+        self.label.setVisible(False)
+        self.input_field.setVisible(False)
+        if self.button is not None:
+            self.button.setVisible(False)
+        if self.informative_text_label is not None:
+            self.informative_text_label.setVisible(False)
+
     def get_value(self) -> str:
         """
         Return

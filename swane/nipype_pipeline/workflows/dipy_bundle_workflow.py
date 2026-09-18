@@ -39,14 +39,14 @@ New dipy nodes implement HARD_CAP only, so this factory takes no
 from nipype import Node, MapNode, IdentityInterface
 
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.DipyRecoBundles import (
+from swane.nipype_pipeline.interfaces.dipy.DipyRecoBundles import (
     DipyRecoBundlesRecognize,
     recognition_params,
 )
-from swane.nipype_pipeline.nodes.DipyBundleUnion import DipyBundleUnion
-from swane.nipype_pipeline.nodes.DipyBundlesToRef import DipyBundlesToRef
-from swane.nipype_pipeline.nodes.DipyBundleRecovery import DipyBundleRecovery
-from swane.nipype_pipeline.nodes.ram_estimators import RecoBundlesRamEstimator
+from swane.nipype_pipeline.interfaces.dipy.DipyBundleUnion import DipyBundleUnion
+from swane.nipype_pipeline.interfaces.dipy.DipyBundlesToRef import DipyBundlesToRef
+from swane.nipype_pipeline.interfaces.dipy.DipyBundleRecovery import DipyBundleRecovery
+from swane.nipype_pipeline.interfaces.ram_estimators import RecoBundlesRamEstimator
 
 # Fixed per-node memory reservations (GB), no estimator: all three nodes work
 # on one recognised tract's streamlines (a small subset of the whole-brain

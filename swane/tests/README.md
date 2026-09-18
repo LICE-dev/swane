@@ -18,14 +18,14 @@ swane/tests/
 ├── ui/                    # swane/ui      (head-less widget tests)
 ├── nipype_pipeline/       # swane/nipype_pipeline
 │   ├── engine/            #   engine helpers (report, ram estimator, workflow)
-│   ├── nodes/             #   node interfaces (FSL-free logic)
+│   ├── interfaces/        #   interface tests, mirroring nipype_pipeline/interfaces/ subfolders
 │   └── matrix/            #   settings matrix + golden snapshots (incl. CUDA on/off)
 ├── prerelease/            # real-execution sweep on the phantom (opt-in, heavy)
 └── integration/           # slow end-to-end tests (real FSL/FreeSurfer/Slicer)
 ```
 
 `swane/nipype_pipeline/` is covered by the light unit tests under
-`nipype_pipeline/`: engine helpers and pure-Python (and pure-helper) node logic.
+`nipype_pipeline/`: engine helpers and pure-Python (and pure-helper) interface logic.
 Workflow **construction** — assembling each builder's node graph and asserting
 its structure across every relevant setting — is covered by
 `nipype_pipeline/matrix/`, which records a deterministic golden *snapshot* of
