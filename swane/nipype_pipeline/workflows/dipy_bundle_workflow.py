@@ -266,6 +266,7 @@ def dipy_bundle_workflow(
                 name="recognize_%s" % side,
                 iterfield=["recobundles_pickle", "tractogram_chunk"],
             )
+            recognize.long_name = side + " %s"
             recognize._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
             recognize.ram_estimator = RecoBundlesRamEstimator()
             workflow.connect(
@@ -284,6 +285,7 @@ def dipy_bundle_workflow(
             workflow.connect(inputnode, "atlas_dir", recognize, "atlas_dir")
 
             union = Node(DipyBundleUnion(), name="union_%s" % side)
+            union.long_name = side + " %s"
             union._mem_gb = _MEM_GB["union"]
             workflow.connect(
                 recognize, "recognized_bundle", union, "recognized_bundles"
@@ -299,8 +301,10 @@ def dipy_bundle_workflow(
                 num_threads,
                 out_bundle_name="r-%s_%s" % (name, side),
             )
+            recovery.long_name = side + " %s"
 
             to_ref = Node(DipyBundlesToRef(), name="to_ref_%s" % side)
+            to_ref.long_name = side + " %s"
             to_ref._mem_gb = _MEM_GB["to_ref"]
             to_ref.inputs.out_name = "r-%s_%s" % (name, side)
             workflow.connect(recovery, "bundle", to_ref, "bundle")
