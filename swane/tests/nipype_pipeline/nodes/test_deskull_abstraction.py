@@ -1,9 +1,10 @@
 import pytest
 
-from swane.config.config_enums import DeskullEngine, DeskullModality
+from swane.config.config_enums import DeskullEngine, DeskullModality, SegmentationEngine
 from swane.nipype_pipeline.nodes.utils import (
     get_deskull_node,
     resolve_deskull_engine,
+    resolve_segmentation_engine,
 )
 from swane.nipype_pipeline.nodes.AntsPyNetBrainExtraction import (
     AntsPyNetBrainExtraction,
@@ -83,3 +84,22 @@ def test_get_deskull_node_antspynet_threshold_defaults_unset():
     from nipype.interfaces.base import isdefined
 
     assert not isdefined(n.inputs.threshold) or n.inputs.threshold == 0.5
+
+
+class _FakeSection:
+    def __init__(self, value):
+        self._value = value
+
+    def getenum_safe(self, key):
+        assert key == "segmentation_engine"
+        return self._value
+
+
+def test_resolve_segmentation_engine_passthrough_ants():
+    cfg = _FakeSection(SegmentationEngine.ANTS)
+    assert resolve_segmentation_engine(cfg) is SegmentationEngine.ANTS
+
+
+def test_resolve_segmentation_engine_passthrough_fsl():
+    cfg = _FakeSection(SegmentationEngine.FSL)
+    assert resolve_segmentation_engine(cfg) is SegmentationEngine.FSL
