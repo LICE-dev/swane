@@ -19,7 +19,7 @@ the graph SHAPE independently of the byte snapshot.
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList
+from swane.config.config_enums import CoreLimit, GlobalPrefCategoryList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
 flat1_workflow = import_workflow_or_skip(
@@ -217,6 +217,42 @@ def test_flat1_fast_construction_unchanged(global_config, make_file):
         src.name == "flat1_fast" and sf == "restored_image"
         for src, sf, df in restore_in
     )
+
+
+def test_flat1_atropos_num_threads_budgeted(global_config, make_file):
+    """Atropos (ITK) gets a real num_threads/n_procs reservation from the CPU
+    budget, like the antspynet deskull node -- so it cannot oversubscribe."""
+    from nipype.interfaces.base import isdefined
+
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["engine"] = "FSL"
+    synth["segmentation_engine"] = "ANTS"
+    wf = flat1_workflow(
+        "flat1",
+        mni1_dir=make_file("mni1.nii.gz", "x"),
+        synth_config=synth,
+        max_cpu=4,
+        multicore_node_limit=CoreLimit.SOFT_CAP,
+    )
+    atropos = {n.name: n for n in wf._graph.nodes()}["flat1_atropos"]
+    assert isdefined(atropos.inputs.num_threads)
+    assert atropos.inputs.num_threads == 4
+    assert atropos.n_procs == 4
+
+
+def test_flat1_atropos_unbudgeted_when_max_cpu_zero(global_config, make_file):
+    """Default max_cpu (0) leaves Atropos unbudgeted: no num_threads is set,
+    so the graph default build is unchanged."""
+    from nipype.interfaces.base import isdefined
+
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["engine"] = "FSL"
+    synth["segmentation_engine"] = "ANTS"
+    wf = flat1_workflow(
+        "flat1", mni1_dir=make_file("mni1.nii.gz", "x"), synth_config=synth
+    )
+    atropos = {n.name: n for n in wf._graph.nodes()}["flat1_atropos"]
+    assert not isdefined(atropos.inputs.num_threads)
 
 
 SEGMENTATION_SCENARIOS = {
