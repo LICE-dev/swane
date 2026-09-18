@@ -207,7 +207,7 @@ def _probe_synth_ram(caps: Capabilities, test_run: bool = False) -> None:
     ``robust=False``) and SynthMorph (``steps=5``) then do less work and fit in
     less RAM, so their floor is lowered by ``TEST_RUN_SYNTH_RAM_FACTOR``. This
     must stay in lock-step with the per-node ``mem_gb`` those tools reserve
-    under test_run (nodes/utils.py, freesurfer_workflow.py): lower the gate but
+    under test_run (interfaces/utils.py, freesurfer_workflow.py): lower the gate but
     not the reservation and the pass is planned yet aborts in the plugin's
     prerun check; lower the reservation but not the gate and it is never planned.
     SynthStrip and Synth recon-all have no such flag, so they are not scaled.

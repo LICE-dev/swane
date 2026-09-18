@@ -337,7 +337,7 @@ class TestSharedRecoBundlesBuild:
     def test_chunker_and_build_carry_ram_estimators(self, dipy_wf):
         """The chunker chooses n_chunks from the RAM budget and the build prices
         each chunk from its point count -- both via RecoBundles estimators."""
-        from swane.nipype_pipeline.nodes.ram_estimators import (
+        from swane.nipype_pipeline.interfaces.ram_estimators import (
             DipyRecoBundlesChunkerRamEstimator,
             RecoBundlesRamEstimator,
         )

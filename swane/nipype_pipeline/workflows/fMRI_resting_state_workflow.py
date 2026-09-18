@@ -7,7 +7,7 @@ from nipype.interfaces.fsl import (
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import (
     get_registration_node,
     apply_registration_node,
     resolve_registration_engine,

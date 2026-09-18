@@ -15,7 +15,7 @@ Read this reference for changes to workflow graphs, custom interfaces, analysis 
 
 ## Layer responsibilities
 
-- Put reusable Nipype interface implementations and focused wrappers in `swane/nipype_pipeline/nodes/`.
+- Put reusable Nipype interface implementations and focused wrappers in `swane/nipype_pipeline/interfaces/`, grouped into per-tool subfolders (`ants/`, `dipy/`, `freesurfer/`, `fsl/`, `dcm2nii/`, `slicer/`) or per-domain subfolders for pure-Python interfaces with no single external tool (`geometry/`, `volumes/`, `dti/`, `fmri/`, `stats/`, `vascular/`), mirroring nipype's own `interfaces/<tool>/` layout. `utils.py` and `ram_estimators.py` stay directly under `interfaces/`.
 - Put reusable graph factories in `swane/nipype_pipeline/workflows/`.
 - Keep `MainWorkflow` responsible for subject-level feature gates, input paths, global/subject configuration propagation, cross-workflow connections, resources, and result sinking.
 - Keep graph introspection, progress metadata, scheduling, memory estimation, and workflow signals in `swane/nipype_pipeline/engine/`.

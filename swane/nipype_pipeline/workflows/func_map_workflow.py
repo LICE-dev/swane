@@ -7,15 +7,15 @@ from nipype.interfaces.fsl import (
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.workflows.tractography_workflow import SIDES
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.AsymmetryIndex import AsymmetryIndex
-from swane.nipype_pipeline.nodes.Zscore import Zscore
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.stats.AsymmetryIndex import AsymmetryIndex
+from swane.nipype_pipeline.interfaces.stats.Zscore import Zscore
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
 import swane_supplement
 from swane.config.config_enums import BetweenModFlirtCost, FreesurferStep, CoreLimit
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     get_registration_node,
     resolve_registration_engine,

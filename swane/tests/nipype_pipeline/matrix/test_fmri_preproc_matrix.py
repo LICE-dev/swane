@@ -14,7 +14,7 @@ from swane.config.config_enums import (
     RegistrationEngine,
     GlobalPrefCategoryList,
 )
-from swane.nipype_pipeline.nodes.utils import RegistrationNodeWrapper
+from swane.nipype_pipeline.interfaces.utils import RegistrationNodeWrapper
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
 fMRI_preproc_workflow = import_workflow_or_skip(

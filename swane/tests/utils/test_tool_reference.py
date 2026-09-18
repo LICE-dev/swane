@@ -44,7 +44,7 @@ def test_ants_tools_share_a_single_package_label():
 def test_get_command_info_matches_actual_interface_class_names():
     # keys must match nipype interface.__class__.__name__, since that is what
     # NipypeNodeRuntimeWidget looks up (see AntsN4BiasFieldCorrection in
-    # swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection).
+    # swane.nipype_pipeline.interfaces.ants.AntsN4BiasFieldCorrection).
     assert get_command_info("AntsN4BiasFieldCorrection") is not None
 
 
