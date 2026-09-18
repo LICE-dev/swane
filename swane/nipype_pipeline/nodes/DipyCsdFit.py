@@ -174,12 +174,14 @@ class DipyCsdFit(BaseInterface):
                 else:
                     os.environ[var] = value
 
-        nib.save(
-            nib.Nifti1Image(
-                peaks.shm_coeff.astype(np.float32), in_nii.affine, in_nii.header
-            ),
-            out_file,
+        out_img = nib.Nifti1Image(
+            peaks.shm_coeff.astype(np.float32), in_nii.affine, in_nii.header
         )
+        # Pin the on-disk dtype to float32 so a future upstream header change
+        # cannot silently re-quantize the SH coefficients that drive
+        # tractography (the input header's dtype is not guaranteed).
+        out_img.header.set_data_dtype(np.float32)
+        nib.save(out_img, out_file)
 
         return runtime
 

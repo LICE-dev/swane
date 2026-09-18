@@ -17,6 +17,7 @@ channel 0, gray matter in channel 1 and white matter (brightest) in channel 2.
 import os
 from os.path import abspath
 
+import numpy as np
 import nibabel as nib
 from nipype.interfaces.base import (
     traits,
@@ -88,10 +89,14 @@ class DipyTissueClassifier(BaseInterface):
                 os.environ[OMP_THREADS_VAR] = previous_omp
 
         for index, field in enumerate(_PVE_FIELDS):
-            nib.save(
-                nib.Nifti1Image(pve[..., index], in_nii.affine, in_nii.header),
-                self._gen_outfilename(field),
-            )
+            out_img = nib.Nifti1Image(pve[..., index], in_nii.affine, in_nii.header)
+            # Pin the on-disk dtype to float32 so a future upstream header
+            # change cannot silently quantize the PVE maps that drive the CMC
+            # stopping criterion. The HMRF computation is float64 (dipy's
+            # Cython kernel requires double), but float32 is more than
+            # sufficient for [0, 1] partial-volume estimates on disk.
+            out_img.header.set_data_dtype(np.float32)
+            nib.save(out_img, self._gen_outfilename(field))
 
         return runtime
 
