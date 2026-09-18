@@ -3,7 +3,7 @@
 
 Sweeps the FreeSurfer step enum (SYNTHSEG vs the multi-stage recon-all variants)
 and the hippocampal/amygdala substructure option, with an explicit ``max_cpu``
-and ``SOFT_CAP`` so the ``openmp``/``n_procs`` hints stay host-independent.
+(hard cap) so the ``openmp``/``n_procs`` hints stay host-independent.
 ``DISABLED`` is a guard returning ``None`` and is snapshotted as such.
 Snapshots live under ``snapshots/freesurfer/``.
 """
