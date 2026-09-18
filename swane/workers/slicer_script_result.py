@@ -1166,15 +1166,79 @@ def tract_model(
     slicer.mrmlScene.RemoveNode(tract_node)
 
 
+def tract_bundle(dti_dir: str, tract: dict, side: str = None):
+    """
+    Load a single dipy fiber bundle as a 3D model.
+
+    The dipy tractography engine writes each recognized bundle as VTK PolyData
+    (``r-<tract>_<side>.vtp`` or ``r-<tract>.vtp`` for bilateral), a format
+    3D Slicer reads natively as a model, already resampled in the reference space
+    — so the file is loaded as-is, with no transform and no thresholding. This is
+    the counterpart of :func:`tract_model`, which handles the FSL probabilistic maps.
+
+    Parameters
+    ----------
+    dti_dir : str
+        Directory containing DTI tractography outputs.
+
+    tract : dict
+        Dictionary describing the tract with the following keys:
+            - 'name' (str): tract name (e.g. 'cst', 'af')
+            - 'color' (list): RGB color in range [0-1]
+
+    side : str, optional
+        Hemisphere side identifier ('lh' or 'rh'). If None, loads a bilateral bundle.
+
+    Returns
+    -------
+    None
+    """
+    if side:
+        bundle_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.vtp")
+        flag_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.lowconf.json")
+        name_suffix = f"_{side}"
+        side_print = f" ({side.upper()})"
+    else:
+        bundle_file = os.path.join(dti_dir, f"r-{tract['name']}.vtp")
+        flag_file = os.path.join(dti_dir, f"r-{tract['name']}.lowconf.json")
+        name_suffix = ""
+        side_print = " (BILATERAL)"
+
+    if not os.path.exists(bundle_file):
+        print(f"SLICERLOADER: Bundle file not found: {bundle_file}")
+        return
+
+    low_conf = os.path.exists(flag_file)
+    if low_conf:
+        side_print += " [LOW CONFIDENCE]"
+        name_suffix += " (LOW CONFIDENCE)"
+
+    print(f"SLICERLOADER: Loading tract bundle '{tract['name']}'{side_print}")
+
+    model_node = slicer.util.loadModel(bundle_file)
+    model_node.SetName(f"{tract['name']}{name_suffix}")
+    model_node.CreateDefaultDisplayNodes()
+
+    display_node = model_node.GetDisplayNode()
+    display_node.SetColor(*tract["color"])
+    if low_conf:
+        display_node.SetOpacity(0.4)
+    # Show the bundle cross-section in the slice views too, like the
+    # segmentations built from the FSL maps.
+    display_node.SetVisibility2D(True)
+
+
 def main_tract(dti_dir: str, scene_dir: str, dti_threshold: float = 0.0035):
     """
     Create DTI tractography segmentations and export them as 3D models.
 
-    For each hemisphere (LH, RH), this function:
-    - Creates a segmentation node
-    - Loads tract probability maps
-    - Thresholds them to generate segments
-    - Saves the resulting segmentation to disk
+    For each hemisphere (LH, RH) and each tract, this function branches on the
+    result format:
+    - ``r-<tract>_<side>.vtp`` (dipy): loaded as a fiber bundle model, in the
+      reference space, with no thresholding.
+    - ``r-<tract>_<side>.nii.gz`` (FSL): loaded as a probability map,
+      thresholded into a segment of a per-hemisphere segmentation node, which
+      is then saved to disk.
 
     Parameters
     ----------
@@ -1199,18 +1263,41 @@ def main_tract(dti_dir: str, scene_dir: str, dti_threshold: float = 0.0035):
         {"name": "cst", "thr": 500, "color": [0, 1, 0]},
         {"name": "af", "thr": 1500, "color": [1, 0, 1]},
         {"name": "or", "thr": 500, "color": [1, 1, 0]},
+        {"name": "fx", "thr": 500, "color": [0, 1, 1]},
     ]
 
     print("SLICERLOADER: Creating DTI tract 3D models (this may take a few minutes)")
 
+    # Handle dipy bilateral tracts (e.g. fornix) once, independent of hemisphere
+    bilateral_dipy_tracts = set()
+    for tract in tracts:
+        if os.path.exists(os.path.join(dti_dir, f"r-{tract['name']}.vtp")):
+            tract_bundle(dti_dir=dti_dir, tract=tract, side=None)
+            bilateral_dipy_tracts.add(tract["name"])
+
     for side in sides:
+        # Branch per tract on the result format: dipy writes a .vtp bundle,
+        # FSL a .nii.gz probability map. Only the latter needs a segmentation.
+        volume_tracts = []
+        for tract in tracts:
+            if tract["name"] in bilateral_dipy_tracts:
+                continue
+            if os.path.exists(os.path.join(dti_dir, f"r-{tract['name']}_{side}.vtp")):
+                tract_bundle(dti_dir=dti_dir, tract=tract, side=side)
+            else:
+                volume_tracts.append(tract)
+
+        # Every tract of this hemisphere came from dipy: nothing to threshold.
+        if not volume_tracts:
+            continue
+
         # Create a segmentation node for the current hemisphere
         segmentation_node = slicer.mrmlScene.AddNewNodeByClass(
             "vtkMRMLSegmentationNode", f"tracts_{side}"
         )
         segmentation_node.CreateDefaultDisplayNodes()
 
-        for tract in tracts:
+        for tract in volume_tracts:
             tract_model(
                 segmentation_node=segmentation_node,
                 dti_dir=dti_dir,

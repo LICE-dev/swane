@@ -15,6 +15,7 @@ from swane.config.config_enums import (
     GlobalPrefCategoryList,
     FreesurferStep,
     DeskullModality,
+    TractographyEngine,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -32,6 +33,13 @@ from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_mr_workflow import venous_mr_workflow
 from swane.nipype_pipeline.workflows.venous_ct_workflow import venous_ct_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
+from swane.nipype_pipeline.workflows.dipy_dti_preproc_workflow import (
+    dipy_dti_preproc_workflow,
+)
+from swane.nipype_pipeline.workflows.dipy_bundle_workflow import (
+    dipy_bundle_workflow,
+    DIPY_TRACT_ATLAS,
+)
 from swane.nipype_pipeline.workflows.seeg_ct_workflow import seeg_ct_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import (
     tractography_workflow,
@@ -985,6 +993,13 @@ class MainWorkflow(CustomWorkflow):
         # DTI analysis
         dti_dir = self.subject_input_state_list.get_dicom_dir(DIL.DTI)
 
+        tractography_engine = self.global_config.getenum_safe(
+            GlobalPrefCategoryList.SYNTH, "tractography_engine"
+        )
+        if tractography_engine == TractographyEngine.DIPY_RECOBUNDLES:
+            self.launch_dipy_dti_analysis(dti_dir)
+            return
+
         self.dti_preproc = dti_preproc_workflow(
             name=DIL.DTI.value.workflow_name,
             dti_dir=dti_dir,
@@ -1097,6 +1112,129 @@ class MainWorkflow(CustomWorkflow):
                             result_name="fdt_paths_%s" % side,
                             sub_folder=os.path.join(self.Result_DIR, "dti"),
                         )
+
+    def launch_dipy_dti_analysis(self, dti_dir):
+        # dipy tractography engine: preprocessing to a global tractogram. New
+        # dipy nodes implement HARD_CAP only, so the factory takes no
+        # multicore_node_limit.
+        self.dti_preproc = dipy_dti_preproc_workflow(
+            name=DIL.DTI.value.workflow_name,
+            dti_dir=dti_dir,
+            config=self.subject_config[DIL.DTI],
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.NODIF,
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
+        )
+        self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
+        self.connect(
+            self.t1,
+            "outputnode.reference_brain",
+            self.dti_preproc,
+            "inputnode.reference_brain",
+        )
+        self.connect(
+            self.t1, "outputnode.reference", self.dti_preproc, "inputnode.reference"
+        )
+
+        self.dti_preproc.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="FA",
+            sub_folder=self.Result_DIR,
+        )
+
+        if self.is_tractography:
+            # Global tractogram outputs consumed by the per-tract bundle
+            # workflows. The shared RecoBundles build ran once inside the preproc
+            # workflow (chunker -> build MapNode); each tract below only
+            # recognises from it, so the build is never repeated per tract.
+            for result_name in ("tractogram", "tractogram_atlas", "atlas2native"):
+                self.dti_preproc.sink_result(
+                    save_path=self.base_dir,
+                    result_node="outputnode",
+                    result_name=result_name,
+                    sub_folder=os.path.join(self.Result_DIR, "dti"),
+                )
+
+            atlas_dir = os.path.join(os.path.expanduser("~"), ".dipy")
+            num_threads = self.max_cpu if self.max_cpu and self.max_cpu > 0 else 1
+
+            def add_bundle_workflow(tract, long_label):
+                """Instantiate one per-tract dipy bundle workflow consuming the
+                shared build, and sink its two reference-space .vtp results."""
+                bundle_workflow = dipy_bundle_workflow(
+                    name=tract,
+                    num_threads=num_threads,
+                )
+                if bundle_workflow is None:
+                    return
+                bundle_workflow.long_name = long_label
+                bundle_workflow.get_node("inputnode").inputs.atlas_dir = atlas_dir
+                self.connect(
+                    self.dti_preproc,
+                    "outputnode.recobundles_builds",
+                    bundle_workflow,
+                    "inputnode.recobundles_builds",
+                )
+                self.connect(
+                    self.dti_preproc,
+                    "outputnode.recobundles_chunks",
+                    bundle_workflow,
+                    "inputnode.recobundles_chunks",
+                )
+                self.connect(
+                    self.dti_preproc,
+                    "outputnode.atlas2native",
+                    bundle_workflow,
+                    "inputnode.atlas2native",
+                )
+                # The confidence flag is a sidecar the recovery node writes only
+                # for a low-confidence bundle; its outputnode field is otherwise
+                # Undefined, which DataSink skips, so the sink is unconditional.
+                if tract == "fx":
+                    for result_name in ("bundle_bilateral", "flag_bilateral"):
+                        bundle_workflow.sink_result(
+                            save_path=self.base_dir,
+                            result_node="outputnode",
+                            result_name=result_name,
+                            sub_folder=os.path.join(self.Result_DIR, "dti"),
+                        )
+                else:
+                    for side in SIDES:
+                        for result_name in ("bundle_%s" % side, "flag_%s" % side):
+                            bundle_workflow.sink_result(
+                                save_path=self.base_dir,
+                                result_node="outputnode",
+                                result_name=result_name,
+                                sub_folder=os.path.join(self.Result_DIR, "dti"),
+                            )
+
+            # The TRACTS checkboxes are shared with the FSL engine; only the
+            # tracts with an HCP842 atlas counterpart get a dipy bundle workflow
+            # (atr/str/cbd/cbp/cbt -- greyed on dipy -- and the non-bilateral
+            # fma/fmi/mcp/ac have no counterpart, so dipy_bundle_workflow returns
+            # None for them and they are skipped).
+            for tract in TRACTS.keys():
+                if tract not in DIPY_TRACT_ATLAS:
+                    continue
+                try:
+                    if not self.subject_config.getboolean_safe(DIL.DTI, tract):
+                        continue
+                except Exception:
+                    continue
+                add_bundle_workflow(tract, TRACTS[tract][0] + " tractography")
+
+            # The cingulum is a dipy-only checkbox (not in the shared TRACTS
+            # list; greyed on FSL), mapping to the atlas C_L/C_R bundles.
+            try:
+                cingulum_selected = self.subject_config.getboolean_safe(
+                    DIL.DTI, "cingulum"
+                )
+            except Exception:
+                cingulum_selected = False
+            if cingulum_selected:
+                add_bundle_workflow("cingulum", "Cingulum tractography")
 
     def launch_fMRI_task_analysis(self):
         # Check for Task FMRI sequences

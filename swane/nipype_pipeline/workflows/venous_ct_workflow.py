@@ -86,12 +86,10 @@ def venous_ct_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
-    # CT follows the global registration engine (ANTs by default). The former
-    # scientific FSL pin (``# FLIRT performs better on CT``) is lifted so CT
-    # exercises ANTs, and the comparative oracle validates it on real data.
-    # SynthMorph is the known-worse backend on CT, so an explicit SynthMorph
-    # choice falls back to FSL; an ANTs config stays ANTs (that is the point of
-    # this work), and an explicit FSL choice stays FSL.
+    # CT follows the global registration engine (ANTs by default).
+    # SynthMorph is not recommended on CT, so an explicit SynthMorph
+    # choice falls back to FSL; an ANTs config stays ANTs, and an explicit
+    # FSL choice stays FSL.
     engine = resolve_registration_engine(synth_config, allow_ants=True)
     if engine == RegistrationEngine.SYNTH:
         engine = RegistrationEngine.FSL
@@ -160,10 +158,7 @@ def venous_ct_workflow(
         # SegmentEndocranium's own parameters don't change the workflow
         # graph (same nodes either way), so unlike other test_run knobs we
         # unconditionally override them here, even if the user picked a
-        # different value. SWANe defaults (preference_list.py) are tuned
-        # above the underlying tool's own baseline for accuracy:
-        # iteration=6 vs tool default 2, oversampling=1.5 vs tool default
-        # 1.0. Drop to the tool's own baseline.
+        # different value. Drop to the underlying tool's baseline parameters.
         seg_iterations = 2
         seg_oversampling = 1.0
     deskull.inputs.iterations = seg_iterations

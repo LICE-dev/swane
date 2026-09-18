@@ -144,12 +144,14 @@ def deform_anatomy(labels, masks, cst_dir, affine, zooms, spec=DEFORMATION):
         warped_dir = np.zeros_like(cst_dir)
         for axis in range(3):
             warped_dir[..., axis] = _pull(cst_dir[..., axis], order=1)
-        # Keep a direction only inside the (warped) CST corridor: order-1
+        # Keep a direction only inside the (warped) fibre support: order-1
         # interpolation of the components bleeds small values past the crisp
-        # mask, so re-mask to preserve the original "direction ⊆ CST" invariant.
-        corridor = warped_masks.get("cst")
-        if corridor is not None:
-            warped_dir[~corridor] = 0.0
+        # mask, so re-mask to preserve the "direction ⊆ fibre region" invariant.
+        # The support is the whole white matter plus the corridors (from v9);
+        # older callers that pass only a "cst" mask still work by that fallback.
+        support = warped_masks.get("fiber_support", warped_masks.get("cst"))
+        if support is not None:
+            warped_dir[~support] = 0.0
         # The Jacobian rotation and re-normalisation run only on the corridor
         # voxels (a few thousand), never the whole 256^3 grid.
         norm = np.linalg.norm(warped_dir, axis=-1)

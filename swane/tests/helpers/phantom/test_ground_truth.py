@@ -49,6 +49,15 @@ def _synthetic_model() -> TissueModel:
     cst = np.zeros(shape, dtype=bool)
     cst[5, 5, 2:8] = True
 
+    # AF and OR corridors straddle x = 0 so both hemispheres are populated. The
+    # arcuate is placed anterior (high RAS y = high j) and the optic radiation
+    # posterior (low y), the coarse fronto-temporal-vs-occipital relation the
+    # real corridors must also satisfy.
+    af = np.zeros(shape, dtype=bool)
+    af[2:9, 7, 6] = True  # y = +2 (anterior)
+    orad = np.zeros(shape, dtype=bool)
+    orad[2:9, 3, 4] = True  # y = -2 (posterior)
+
     # voxel -> RAS with the origin at the grid centre: x in [-5, 4].
     affine = np.array(
         [
@@ -64,6 +73,8 @@ def _synthetic_model() -> TissueModel:
         zooms=(1.0, 1.0, 1.0),
         precentral=precentral,
         cst=cst,
+        af=af,
+        optic_radiation=orad,
     )
 
 
@@ -76,6 +87,29 @@ def test_compute_centres_returns_expected_features():
     # sit on the correct sides.
     assert centres["venous_sinus_L"][0] < 0
     assert centres["venous_sinus_R"][0] > 0
+
+
+def test_compute_centres_returns_af_or_corridors():
+    """AF and OR centroids exist per hemisphere and sit where anatomy demands.
+
+    Fails today because ``compute_centres`` derives no AF/OR centroids. The
+    coarse relations pinned here are exactly what a plausible-but-wrong corridor
+    would violate: the corridors must split into left/right hemispheres on the
+    RAS x sign, and the arcuate must sit anterior to the optic radiation.
+    """
+    centres = compute_centres(_synthetic_model())
+    for key in ("af_l", "af_r", "or_l", "or_r"):
+        assert key in centres, "missing centroid %r" % key
+        c = np.asarray(centres[key])
+        assert c.shape == (3,)
+        assert np.all(np.isfinite(c)), key
+    # Hemisphere split on the RAS x sign, as venous_sinus already does.
+    assert centres["af_l"][0] < 0 < centres["af_r"][0]
+    assert centres["or_l"][0] < 0 < centres["or_r"][0]
+    # Arcuate is fronto-temporal (anterior); optic radiation is occipital
+    # (posterior): AF centroid is anterior (higher RAS y) to OR on both sides.
+    assert centres["af_l"][1] > centres["or_l"][1]
+    assert centres["af_r"][1] > centres["or_r"][1]
 
 
 def test_save_load_round_trip_is_exact(tmp_path):
@@ -127,6 +161,39 @@ def test_ground_truth_load_none_dir_builds(monkeypatch):
     sentinel = {"brain": np.array([0.0, 0.0, 0.0])}
     monkeypatch.setattr(checks, "build_centres", lambda *_a, **_k: sentinel)
     assert checks.GroundTruth.load(None).centres is sentinel
+
+
+@pytest.mark.heavy
+@pytest.mark.skipif(
+    not _has_fsaverage(),
+    reason="needs $FREESURFER_HOME/subjects/fsaverage to build the phantom",
+)
+def test_real_af_or_corridors_are_anatomically_placed():
+    """The AF/OR corridors built on fsaverage land where the anatomy demands.
+
+    Unlike the hand-built fast test, this stamps the corridors on the real WM
+    and would catch waypoints that miss white matter entirely (empty mask ->
+    omitted centroid) or that put a corridor on the wrong side or in the wrong
+    lobe. The coarse relations are anatomy, not fitted numbers: bilateral split
+    on RAS x, arcuate anterior to optic radiation, and the optic radiation
+    posterior of the brain centroid.
+    """
+    from swane.tests.helpers.phantom.tissue import build_tissue_model
+
+    centres = compute_centres(build_tissue_model())
+    for key in ("af_l", "af_r", "or_l", "or_r"):
+        assert key in centres, "corridor %r missed the white matter entirely" % key
+        assert np.all(np.isfinite(centres[key])), key
+    # Bilateral split on the RAS x sign.
+    assert centres["af_l"][0] < 0 < centres["af_r"][0]
+    assert centres["or_l"][0] < 0 < centres["or_r"][0]
+    # Arcuate (fronto-temporal) sits anterior to the optic radiation (occipital).
+    assert centres["af_l"][1] > centres["or_l"][1]
+    assert centres["af_r"][1] > centres["or_r"][1]
+    # The optic radiation reaches back toward the occipital pole, behind the
+    # brain's own centre of mass.
+    assert centres["or_l"][1] < centres["brain"][1]
+    assert centres["or_r"][1] < centres["brain"][1]
 
 
 @pytest.mark.heavy

@@ -300,6 +300,34 @@ def _probe_antspynet(caps: Capabilities) -> None:
     )
 
 
+def _probe_dipy(caps: Capabilities) -> None:
+    has_dipy = DependencyManager.is_dipy()
+    if not has_dipy:
+        caps.add("dipy", False, "dipy package not importable; the DIPY_RECOBUNDLES engine is dropped")
+        return
+
+    needed = ResourceManager.dipy_tractography_ram_requirements()
+    enough = caps.ram_gb >= needed
+
+    atlas_dir = os.path.join(os.path.expanduser("~"), ".dipy", "bundle_atlas_hcp842")
+    has_atlas = os.path.isdir(atlas_dir)
+
+    if not has_atlas:
+        caps.add("dipy", False, "dipy present but HCP842 atlas not found in ~/.dipy/bundle_atlas_hcp842")
+    elif not enough:
+        caps.add(
+            "dipy",
+            False,
+            "dipy present but needs %.1f GB, only %.1f GB allocated" % (needed, caps.ram_gb)
+        )
+    else:
+        caps.add(
+            "dipy",
+            True,
+            "dipy and HCP842 atlas present, %.1f GB allocated >= %.1f GB required" % (caps.ram_gb, needed)
+        )
+
+
 def _probe_gpu(caps: Capabilities) -> None:
     try:
         is_cuda = ResourceManager.is_cuda()
@@ -437,6 +465,7 @@ def probe(
     _probe_antspynet(caps)
     _probe_gpu(caps)
     _probe_xtract(caps)
+    _probe_dipy(caps)
     _probe_mni(caps)
     _probe_slicer(global_config, caps)
 

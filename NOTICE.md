@@ -100,3 +100,34 @@ SWANe reads the license installed on the user's system when available, otherwise
 fetches the current license online, otherwise falls back to a bundled copy under
 `swane/licenses/`. These bundled copies are license text only (no tool code) and
 are refreshed from upstream before releases via `tools/refresh_bundled_licenses.py`.
+
+---
+## dipy (tractography engine)
+
+SWANe's dipy-based tractography engine depends on the `dipy` pip package.
+SWANe does not modify or redistribute dipy's source; it is installed as a
+regular Python dependency (see `setup.py`).
+
+**License**: BSD 3-Clause License.
+https://github.com/dipy/dipy/blob/master/LICENSE
+
+Like the other detected third-party tools, SWANe shows dipy's license at first
+launch (and whenever its detected version changes) and requires explicit
+acceptance, following the same mechanism described above.
+
+---
+## HCP842 bundle atlas
+
+SWANe's dipy tractography engine fetches the HCP842 whole-brain bundle atlas
+(`Atlas_80_Bundles`, distributed via dipy's `fetch_bundle_atlas_hcp842`) at
+first use, to align each subject's tractogram and recognise its bundles
+(RecoBundles). The atlas is data, not software, and is downloaded on demand
+into the user's local dipy data directory; it is never bundled with or
+committed to this repository.
+
+**License**: Creative Commons Attribution 4.0 International (CC BY 4.0).
+
+**Copyright**: © Eleftherios Garyfallidis.
+
+CC BY 4.0 requires attribution, which this notice provides; unlike the
+software licenses above, it carries no acceptance flow of its own.

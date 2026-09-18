@@ -81,6 +81,23 @@ class TestFormatNodeName:
         node.long_name = "  padded  "
         assert CustomWorkflow.format_node_name(node) == "Padded"
 
+    def test_dipy_recobundles_have_registered_labels(self):
+        """The RecoBundles build/recognise nodes are registered.
+
+        Without an entry in ``strings.node_names`` these would fall back to the
+        raw, internal node name (e.g. "Build") in the progress UI.
+        """
+        from swane.nipype_pipeline.nodes.DipyRecoBundles import (
+            DipyRecoBundlesBuild,
+            DipyRecoBundlesRecognize,
+        )
+
+        build = Node(DipyRecoBundlesBuild(), name="build")
+        recognize = Node(DipyRecoBundlesRecognize(), name="recognize")
+
+        assert CustomWorkflow.format_node_name(build) != "Build"
+        assert CustomWorkflow.format_node_name(recognize) != "Recognize"
+
 
 class TestNodeArrays:
     """Introspection helpers that expose the workflow's nodes/interfaces."""

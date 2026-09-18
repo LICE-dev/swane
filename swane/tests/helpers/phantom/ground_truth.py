@@ -73,15 +73,25 @@ def compute_centres(model) -> dict:
     # helpers/phantom/sequences.py:_apply_side_override), so the L/R ground
     # truth matches how the phantom was actually built.
     wx = world_x_ras(sinus.shape, model.affine)
-    centres = {}
-    for name, mask in (
+    # The AF and OR corridors are bilateral; split them into hemispheres on the
+    # RAS x sign, the same convention used for the venous sinuses above.
+    af = getattr(model, "af", None)
+    orad = getattr(model, "optic_radiation", None)
+    features = [
         ("brain", np.isin(model.labels, [TC.CORTICAL_GM, TC.DEEP_GM, TC.WM])),
         ("precentral", model.precentral),
         ("cst", model.cst),
         ("venous_sinus", sinus),
         ("venous_sinus_L", sinus & (wx < 0)),
         ("venous_sinus_R", sinus & (wx > 0)),
-    ):
+    ]
+    if af is not None:
+        features += [("af_l", af & (wx < 0)), ("af_r", af & (wx > 0))]
+    if orad is not None:
+        features += [("or_l", orad & (wx < 0)), ("or_r", orad & (wx > 0))]
+
+    centres = {}
+    for name, mask in features:
         centre = centre_of_mass_ras(np.asarray(mask, dtype=float), model.affine)
         if centre is not None:
             centres[name] = centre

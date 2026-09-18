@@ -181,6 +181,8 @@ def dti_preproc_workflow(
         eddy.inputs.out_file = "data.nii.gz"
         workflow.connect(reorient, "out_file", eddy, "in_file")
         eddy_output_name = "eddy_corrected"
+        # EddyCorrect emits no rotated b-vectors, so the raw ones stay.
+        bvec_source, bvec_field = conversion, "bvecs"
     else:
         # NODE 4a: Generate Eddy files
         eddy_files = Node(GenEddyFiles(), name="dti_eddy_files")
@@ -219,13 +221,16 @@ def dti_preproc_workflow(
         workflow.connect(eddy_files, "index", eddy, "in_index")
         workflow.connect(b0_deskull, "mask_file", eddy, "in_mask")
         eddy_output_name = "out_corrected"
+        # eddy rotates the volumes, so the gradients must follow them, else FA,
+        # MD and tractography carry a systematic bias (Leemans & Jones 2009).
+        bvec_source, bvec_field = eddy, "out_rotated_bvecs"
 
     # NODE 5: DTI metrics calculation
     dtifit = Node(DTIFit(), name="dti_dtifit")
     dtifit.long_name = "DTI metrics calculation"
     workflow.connect(eddy, eddy_output_name, dtifit, "dwi")
     workflow.connect(b0_deskull, "mask_file", dtifit, "mask")
-    workflow.connect(conversion, "bvecs", dtifit, "bvecs")
+    workflow.connect(bvec_source, bvec_field, dtifit, "bvecs")
     workflow.connect(conversion, "bvals", dtifit, "bvals")
 
     # NODE 6: b0 image linear registration in reference space
@@ -321,7 +326,7 @@ def dti_preproc_workflow(
 
         workflow.connect(eddy, eddy_output_name, bedpostx, "dwi")
         workflow.connect(b0_deskull, "mask_file", bedpostx, "mask")
-        workflow.connect(conversion, "bvecs", bedpostx, "bvecs")
+        workflow.connect(bvec_source, bvec_field, bedpostx, "bvecs")
         workflow.connect(conversion, "bvals", bedpostx, "bvals")
 
         workflow.connect(bedpostx, "merged_fsamples", outputnode, "fsamples")
