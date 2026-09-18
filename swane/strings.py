@@ -551,6 +551,8 @@ node_names["DipyAtlasSLR"] = "atlas registration"
 node_names["DipyRecoBundlesBuild"] = "bundle clustering"
 node_names["DipyRecoBundlesRecognize"] = "bundle recognition"
 node_names["DipyBundleUnion"] = "bundle parts concatenation"
+node_names["DipyBundleRecovery"] = "bundle refine"
+node_names["DipyBundlesToRef"] = "bundle reference transformation"
 node_names["AffineToRAS"] = "affine RAS conversion"
 
 license_consent_title = "Third-party tool licenses"
