@@ -129,7 +129,8 @@ class TestLiveGatingEvaluator:
 
     def _enabled(self, window, key):
         x = window.input_keys[DataInputList.DTI][key]
-        return window.inputs[x].input_field.isEnabled()
+        entry = window.inputs[x]
+        return entry.input_field.isEnabled() and not entry.input_field.isHidden()
 
     def test_dipy_engine_greys_fsl_only_and_activates_dipy_only(
         self, qtbot, global_config, dependency_manager
