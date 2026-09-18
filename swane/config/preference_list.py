@@ -440,7 +440,7 @@ WF_PREFERENCES[category]["cingulum"] = PreferenceEntry(
 WF_PREFERENCES[category]["seed_density"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Seed density for tractography",
-    tooltip="Seeds placed along one axis per voxel in the WM mask (density=2 means ~1.5 seeds per voxel)",
+    tooltip="Seed density in the WM mask: seeds are placed at random with a total count of this many per reference voxel volume of masked white matter (higher means more streamlines)",
     default=2,
     range=[1, 10],
     pref_requirement={
@@ -468,7 +468,7 @@ WF_PREFERENCES[category]["max_angle"] = PreferenceEntry(
 WF_PREFERENCES[category]["step_size"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Tracking step size",
-    tooltip="Step size (mm) used by the particle filtering tracker",
+    tooltip="Step size (mm) used by the probabilistic tracker",
     default=0.2,
     range=[0.05, 2.0],
     decimals=2,
