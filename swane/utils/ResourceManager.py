@@ -22,6 +22,7 @@ class ResourceManager:
     ANTS_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
     #: antspynet brain extraction; fixed at 5 GB for now (revisit later).
     ANTSPYNET_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
+    ATROPOS_RAM_REQUIREMENT = {"mac": 3, "linux": 3, "other": 3}
     #: Minimum RAM to select the dipy tractography engine. It covers every dipy
     #: node's negotiated bottom rung so the workflow can run; the heavier nodes
     #: (motion, tracking) tune their parallelism/levers down to fit it, and
@@ -111,6 +112,10 @@ class ResourceManager:
     @staticmethod
     def antspynet_ram_requirements():
         return ResourceManager.ANTSPYNET_RAM_REQUIREMENT[get_os_type()]
+
+    @staticmethod
+    def atropos_ram_requirements():
+        return ResourceManager.ATROPOS_RAM_REQUIREMENT[get_os_type()]
 
     @staticmethod
     def dipy_tractography_ram_requirements():

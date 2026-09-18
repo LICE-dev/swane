@@ -93,8 +93,8 @@ class TestHideVsGrayOut:
         x = window.input_keys[GlobalPrefCategoryList.PERFORMANCE]["cuda"]
         entry = window.inputs[x]
 
-        assert entry.label.isVisible() is False
-        assert entry.input_field.isVisible() is False
+        assert entry.label.isHidden() is True
+        assert entry.input_field.isHidden() is True
 
     def test_same_window_requirement_is_grayed_not_hidden(
         self, qtbot, global_config, dependency_manager, monkeypatch
@@ -109,13 +109,13 @@ class TestHideVsGrayOut:
         qtbot.addWidget(window)
 
         cuda_x = window.input_keys[GlobalPrefCategoryList.PERFORMANCE]["cuda"]
-        assert window.inputs[cuda_x].label.isVisible() is True
+        assert window.inputs[cuda_x].label.isHidden() is False
 
         gpu_x = window.input_keys[GlobalPrefCategoryList.PERFORMANCE]["max_subj_gpu"]
         entry = window.inputs[gpu_x]
 
-        assert entry.label.isVisible() is True
-        assert entry.input_field.isVisible() is True
+        assert entry.label.isHidden() is False
+        assert entry.input_field.isHidden() is False
         assert entry.input_field.isEnabled() is False
 
     def test_dependency_gated_workflow_entry_is_hidden(
@@ -132,8 +132,8 @@ class TestHideVsGrayOut:
         x = window.input_keys[DataInputList.T13D]["freesurfer_step"]
         entry = window.inputs[x]
 
-        assert entry.label.isVisible() is False
-        assert entry.input_field.isVisible() is False
+        assert entry.label.isHidden() is True
+        assert entry.input_field.isHidden() is True
 
     def test_same_window_pref_requirement_in_workflow_window_is_grayed(
         self, qtbot, global_config, dependency_manager, monkeypatch
@@ -151,6 +151,6 @@ class TestHideVsGrayOut:
         x = window.input_keys[DataInputList.T13D]["hippo_amyg_labels"]
         entry = window.inputs[x]
 
-        assert entry.label.isVisible() is True
-        assert entry.input_field.isVisible() is True
+        assert entry.label.isHidden() is False
+        assert entry.input_field.isHidden() is False
         assert entry.input_field.isEnabled() is False
