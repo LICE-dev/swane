@@ -1,4 +1,4 @@
-# workflow snapshot: dti_preproc / new_eddy_cpu_hardcap
+# workflow snapshot: dti_preproc / new_eddy_cpu
 #
 #   cuda = false
 #   deskull_engine = ANTSPYNET

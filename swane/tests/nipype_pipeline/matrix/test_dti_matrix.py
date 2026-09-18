@@ -5,9 +5,8 @@ Sweeps the eddy-correction backend and the **CUDA on/off** axis (the flagship
 GPU dimension: ``eddy.use_cuda`` / command choice / thread handling) and records
 one golden graph snapshot per scenario under ``snapshots/dti_preproc/``.
 
-CPU thread counts are made deterministic by passing an explicit ``max_cpu`` and
-only using the ``SOFT_CAP`` / ``HARD_CAP`` core-limit modes; ``NO_LIMIT`` would
-fall back to the host ``cpu_count()`` and is left to a behavioural assertion.
+CPU thread counts are made deterministic by passing an explicit ``max_cpu``
+(hard cap: nodes reserve exactly that many cores, host-independent).
 
 The ``tractography=True`` branch adds BEDPOSTX. The MNI-to-reference nonlinear
 registration used to be built here too, but it is the same registration FLAT1
@@ -32,8 +31,7 @@ MAX_CPU = 4
 
 # name -> (cuda, old_eddy, tractography)
 SCENARIOS = {
-    "new_eddy_cpu_softcap": (False, False, False),
-    "new_eddy_cpu_hardcap": (False, False, False),
+    "new_eddy_cpu": (False, False, False),
     "new_eddy_cuda": (True, False, False),
     "old_eddy_correct": (False, True, False),
     "new_eddy_tractography": (False, False, True),
