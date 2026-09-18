@@ -13,7 +13,7 @@ import pytest
 from nipype import Node
 from nipype.interfaces.fsl import BET
 
-from swane.config.config_enums import CoreLimit, RegistrationEngine
+from swane.config.config_enums import RegistrationEngine
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 
 

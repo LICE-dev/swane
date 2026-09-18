@@ -8,7 +8,7 @@ unrotated vectors because nothing better exists there.
 
 import pytest
 
-from swane.config.config_enums import CoreLimit, DeskullModality
+from swane.config.config_enums import DeskullModality
 
 
 def _bvec_sources(workflow, consumer_name):

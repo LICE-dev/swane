@@ -13,7 +13,6 @@ import pytest
 
 from swane.config.config_enums import (
     GlobalPrefCategoryList,
-    CoreLimit,
     DeskullEngine,
     DeskullModality,
 )
