@@ -11,8 +11,8 @@ from nipype.interfaces.fsl import (
 )
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.FMRIGenSpec import FMRIGenSpec
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.fmri.FMRIGenSpec import FMRIGenSpec
+from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     resolve_registration_engine,
 )

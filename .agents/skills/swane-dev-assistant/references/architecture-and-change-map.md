@@ -18,7 +18,7 @@ Names and identities cross several layers. Treat input identities, preference ke
 | `swane/utils/DataInputList.py` | Supported imaging inputs and modality metadata | Enum members, serialized names, parents, volumes, workflow names |
 | `swane/utils/Subject.py`, `SubjectInputStateList.py`, `DicomTree.py` | Subject folders, input state, DICOM organization | Folder layout, loaded state, return values, input identities |
 | `swane/utils/DependencyManager.py`, `ResourceManager.py` | External tools and host/resource capabilities | Versions, status, environment, RAM/CPU/GPU limits |
-| `swane/nipype_pipeline/nodes/` | Custom Nipype interfaces and wrappers | Traits, commands, outputs, paths, disclaimers |
+| `swane/nipype_pipeline/interfaces/` | Custom Nipype interfaces and wrappers, grouped into per-tool/per-domain subfolders (`ants/`, `dipy/`, `freesurfer/`, `fsl/`, `dcm2nii/`, `slicer/`, `geometry/`, `volumes/`, `dti/`, `fmri/`, `stats/`, `vascular/`) mirroring nipype's own `interfaces/<tool>/` layout | Traits, commands, outputs, paths, disclaimers |
 | `swane/nipype_pipeline/workflows/` | Reusable analysis graphs | Factory signatures, boundary nodes, connections, filenames |
 | `swane/nipype_pipeline/MainWorkflow.py` | Subject-level orchestration | Feature gates, cross-workflow connections, result sinks, resources |
 | `swane/nipype_pipeline/engine/` | Graph inspection, monitored execution, scheduling, reporting | Node metadata, memory estimates, process/GPU slots, signals |

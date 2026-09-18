@@ -1,12 +1,14 @@
 from nipype import Node, IdentityInterface
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from configparser import SectionProxy
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import (
     get_registration_node,
     apply_registration_node,
     resolve_registration_engine,
 )
-from swane.nipype_pipeline.nodes.AntsComposeTransform import AntsComposeTransform
+from swane.nipype_pipeline.interfaces.ants.AntsComposeTransform import (
+    AntsComposeTransform,
+)
 from swane.config.config_enums import CoreLimit, RegistrationEngine
 
 

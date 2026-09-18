@@ -1,17 +1,17 @@
 from nipype.interfaces.fsl import RobustFOV, ApplyMask
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
 from swane.config.config_enums import CoreLimit
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
 
-from swane.nipype_pipeline.nodes.AntsN4BiasFieldCorrection import (
+from swane.nipype_pipeline.interfaces.ants.AntsN4BiasFieldCorrection import (
     AntsN4BiasFieldCorrection,
 )
-from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.stats.ZIntNorm import ZIntNorm
+from swane.nipype_pipeline.interfaces.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,

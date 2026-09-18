@@ -2,7 +2,7 @@
 
 Covers :class:`swane.nipype_pipeline.engine.MonitoredMultiProcPlugin.NipypeRamEstimator`
 and the calibrated subclasses in
-:mod:`swane.nipype_pipeline.nodes.ram_estimators`.
+:mod:`swane.nipype_pipeline.interfaces.ram_estimators`.
 
 The estimator inspects a node's nipype input traits and turns them into a
 memory estimate: file inputs contribute through their spatial voxel count,
@@ -19,7 +19,7 @@ from nipype.interfaces.base import BaseInterfaceInputSpec, File, traits
 
 from nipype.utils.ram_estimator import RamEstimator
 
-from swane.nipype_pipeline.nodes.ram_estimators import (
+from swane.nipype_pipeline.interfaces.ram_estimators import (
     FlirtRamEstimator,
     FnirtRamEstimator,
     InvWarpRamEstimator,

@@ -8,12 +8,12 @@ from nipype.interfaces.fsl import (
 )
 from nipype import Node, IdentityInterface
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
 from configparser import SectionProxy
 
 from swane.config.config_enums import CoreLimit, RegistrationEngine
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import (
     get_registration_node,
     resolve_registration_engine,
 )

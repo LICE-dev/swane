@@ -3,16 +3,16 @@ from nipype.interfaces.fsl import (
     DTIFit,
     BEDPOSTX5,
 )
-from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
+from swane.nipype_pipeline.interfaces.volumes.ExtractVolumes import ExtractVolumes
 from nipype.pipeline.engine import Node
 from swane.config.config_enums import CoreLimit, RegistrationEngine, DeskullModality
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
-from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
-from swane.nipype_pipeline.nodes.AffineToFSL import AffineToFSL
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.dti.GenEddyFiles import GenEddyFiles
+from swane.nipype_pipeline.interfaces.fsl.CustomEddy import CustomEddy
+from swane.nipype_pipeline.interfaces.dti.AffineToFSL import AffineToFSL
+from swane.nipype_pipeline.interfaces.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,
