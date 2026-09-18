@@ -437,6 +437,8 @@ class MainWorkflow(CustomWorkflow):
             mni1_dir=mni1_path,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             test_run=self.test_run,
+            max_cpu=self.max_cpu,
+            multicore_node_limit=self.multicore_node_limit,
         )
         self.flat1.long_name = "FLAT1 analysis"
 

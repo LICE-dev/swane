@@ -34,6 +34,7 @@ from swane.config.config_enums import (
     FreesurferStep,
     GlobalPrefCategoryList,
     RegistrationEngine,
+    SegmentationEngine,
     SliceTiming,
     TractographyEngine,
     VeinDetectionMode,
@@ -142,6 +143,19 @@ AXES = (
         option="engine",
         values=_enum_values(RegistrationEngine, "FSL", "SYNTH", "ANTS"),
         gates={"SYNTH": "synth_morph", "ANTS": "antspyx"},
+    ),
+    # The tissue-segmentation backend used by FLAT1: ANTS (antspyx Atropos, the
+    # default, gated on antspyx) and FSL (FAST, always available). Only
+    # meaningful when a pass runs FLAT1; the two structural twins pin it (FSL on
+    # structural_fsl, ANTS on structural_ants) so both engines stay covered.
+    Axis(
+        name="segmentation_engine",
+        scope=GLOBAL,
+        section=GlobalPrefCategoryList.SYNTH,
+        option="segmentation_engine",
+        values=_enum_values(SegmentationEngine, "ANTS", "FSL"),
+        gates={"ANTS": "antspyx"},
+        note="only exercised when a pass runs FLAT1 (flat1=true)",
     ),
     Axis(
         name="synth_reconall",
@@ -417,6 +431,7 @@ PASSES = (
             "hippo_amyg_labels": "false",
             "deskull_engine": "BET",
             "registration_engine": "FSL",
+            "segmentation_engine": "FSL",
             "synth_reconall": "false",
             "cuda": "false",
             "multicore_node_limit": "SOFT_CAP",
@@ -454,6 +469,7 @@ PASSES = (
             "hippo_amyg_labels": "false",
             "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
+            "segmentation_engine": "ANTS",
             "synth_reconall": "false",
             "cuda": "false",
             "multicore_node_limit": "SOFT_CAP",
@@ -522,6 +538,7 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "SYNTH",
+            "segmentation_engine": "ANTS",
             "cuda": "false",
             # flat1 pulls in the nonlinear subject->MNI (mni1) path, so
             # SynthMorph is exercised on a nonlinear registration too, not only

@@ -15,10 +15,16 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.fsl.ThrROI import ThrROI
 from nipype.interfaces.utility import IdentityInterface, Function
 
+from swane.config.config_enums import CoreLimit, SegmentationEngine
+from swane.utils.ResourceManager import ResourceManager
+from swane.nipype_pipeline.interfaces.ants.AntsAtropos import AntsAtropos
 from swane.nipype_pipeline.interfaces.ram_estimators import FastRamEstimator
 from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
+    apply_tool_num_threads,
+    get_tool_cpu_config,
     resolve_registration_engine,
+    resolve_segmentation_engine,
 )
 
 
@@ -28,6 +34,8 @@ def flat1_workflow(
     synth_config: SectionProxy,
     base_dir: str = "/",
     test_run: bool = False,
+    max_cpu: int = 0,
+    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
 ) -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
@@ -44,8 +52,14 @@ def flat1_workflow(
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
     test_run : bool, optional
-        If True, cut FAST segmentation iterations to speed up prerelease
+        If True, cut segmentation iterations to speed up prerelease
         test runs at the cost of accuracy. The default is False.
+    max_cpu : int, optional
+        CPU budget for the ITK-based Atropos node (0 = unset, leave the tool
+        unbudgeted). Ignored by the FSL FAST branch. The default is 0.
+    multicore_node_limit : CoreLimit, optional
+        Multi-core policy applied to the Atropos node's thread reservation.
+        The default is CoreLimit.SOFT_CAP.
 
     Input Node Fields
     ----------
@@ -84,6 +98,7 @@ def flat1_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     engine = resolve_registration_engine(synth_config, allow_ants=True)
+    segmentation_engine = resolve_segmentation_engine(synth_config)
 
     # Input Node
     inputnode = Node(
@@ -104,23 +119,47 @@ def flat1_workflow(
         name="outputnode",
     )
 
-    # NODE 1: three class fast segmentation
-    fast = Node(FAST(), name="%s_fast" % name, mem_gb=4)
-    fast.ram_estimator = FastRamEstimator()
-    fast.inputs.img_type = 1  # param -t
-    fast.inputs.number_classes = 3  # param n
-    fast.inputs.hyper = 0.1  # param -H
-    fast.inputs.bias_lowpass = 40  # param -l
-    fast.inputs.output_biascorrected = True  # param -B
-    if test_run:
-        # FSL defaults: -I 4, -W 15, -O 4. Aggressively cut all three.
-        fast.inputs.bias_iters = 1  # param -I
-        fast.inputs.segment_iters = 5  # param -W
-        fast.inputs.iters_afterbias = 1  # param -O
-    else:
-        fast.inputs.bias_iters = 4  # param -I
-    workflow.add_nodes([fast])
-    workflow.connect(inputnode, "reference_brain", fast, "in_files")
+    # NODE 1: three-class tissue segmentation (engine-selectable)
+    if segmentation_engine == SegmentationEngine.ANTS:
+        segment = Node(
+            AntsAtropos(),
+            name="%s_atropos" % name,
+            mem_gb=ResourceManager.atropos_ram_requirements(),
+        )
+        if test_run:
+            # cut EM iterations to speed prerelease runs at the cost of accuracy
+            segment.inputs.iterations = 3
+        if max_cpu != 0:
+            # Atropos runs on ITK: its thread count flows only through
+            # num_threads (a nipype-aware reservation the node exports as
+            # ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS at run time), exactly like
+            # the antspynet deskull node. Left unbudgeted when max_cpu is 0.
+            limit_synth_cores = synth_config.getboolean_safe("limit_cores")
+            threads, hard = get_tool_cpu_config(
+                max_cpu, multicore_node_limit, limit_synth_cores
+            )
+            apply_tool_num_threads(segment, threads, hard, max_cpu=max_cpu)
+        workflow.add_nodes([segment])
+        workflow.connect(inputnode, "reference_brain", segment, "in_file")
+        restored_source = (inputnode, "reference_brain")
+    else:  # SegmentationEngine.FSL -- unchanged FAST node
+        segment = Node(FAST(), name="%s_fast" % name, mem_gb=4)
+        segment.ram_estimator = FastRamEstimator()
+        segment.inputs.img_type = 1  # param -t
+        segment.inputs.number_classes = 3  # param n
+        segment.inputs.hyper = 0.1  # param -H
+        segment.inputs.bias_lowpass = 40  # param -l
+        segment.inputs.output_biascorrected = True  # param -B
+        if test_run:
+            # FSL defaults: -I 4, -W 15, -O 4. Aggressively cut all three.
+            segment.inputs.bias_iters = 1  # param -I
+            segment.inputs.segment_iters = 5  # param -W
+            segment.inputs.iters_afterbias = 1  # param -O
+        else:
+            segment.inputs.bias_iters = 4  # param -I
+        workflow.add_nodes([segment])
+        workflow.connect(inputnode, "reference_brain", segment, "in_files")
+        restored_source = (segment, "restored_image")
 
     def pick_first_two(file_list):
         return file_list[1], file_list[2]
@@ -134,7 +173,7 @@ def flat1_workflow(
         name="fast_segment_split",
     )
     fast_segment_split.long_name = "Segment identification"
-    workflow.connect(fast, "partial_volume_files", fast_segment_split, "file_list")
+    workflow.connect(segment, "partial_volume_files", fast_segment_split, "file_list")
 
     flair_2_mni1 = apply_registration_node(
         name="flair_2_mni1",
@@ -155,7 +194,7 @@ def flat1_workflow(
         engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
-        moving=[fast, "restored_image"],
+        moving=list(restored_source),
         reference=mni1_dir,
         non_linear=True,
     )
@@ -184,6 +223,46 @@ def flat1_workflow(
         non_linear=True,
     )
 
+    # NODE 5b: GM/WM tissue-mask source for the mean-based masking below.
+    #
+    # FLAT1 consumes gm_2_mni1/wm_2_mni1 as BINARY ApplyMask masks (fslmaths
+    # -mas: any nonzero voxel counts as tissue). FSL FAST partial-volume maps
+    # are sparse (exactly 0 outside a tissue), so they work directly. ANTs
+    # Atropos posteriors are DENSE: every class keeps a small nonzero
+    # probability over the whole brain mask. Used raw, the GM and WM masks would
+    # then cover the same voxels, making gm_mean == wm_mean and collapsing
+    # binary_flair and the junction/extension maps to zero.
+    #
+    # So in the Atropos branch only, threshold each posterior at 0.1 before it is
+    # used as a mask: this restores a FAST-like sparse, tissue-specific support.
+    # (No -bin: the only downstream use is ApplyMask, which reads nonzero
+    # support, not values.)
+    #
+    # Other viable approaches, if this ever needs revisiting:
+    #   * PVE-weighted consumption (fslmaths -mul instead of -mas) in FLAT1:
+    #     handles dense posteriors without a threshold, but changes the FSL FAST
+    #     output too (no longer bit-identical).
+    #   * A binary hard segmentation per class (argmax / posterior > 0.5):
+    #     simplest, but drops the boundary partial volumes below 0.5.
+    #   * Atropos native partial-volume model ("pvlabel" / partial-volume
+    #     classes): true PV fractions like FAST, but needs new parameters.
+    if segmentation_engine == SegmentationEngine.ANTS:
+        gm_tissue = Node(
+            Threshold(thresh=0.1, direction="below"), name="%s_gm_bin" % name
+        )
+        gm_tissue.long_name = "Grey matter mask threshold"
+        workflow.connect(gm_2_mni1, "out_file", gm_tissue, "in_file")
+        wm_tissue = Node(
+            Threshold(thresh=0.1, direction="below"), name="%s_wm_bin" % name
+        )
+        wm_tissue.long_name = "White matter mask threshold"
+        workflow.connect(wm_2_mni1, "out_file", wm_tissue, "in_file")
+        gm_mask_source = (gm_tissue, "out_file")
+        wm_mask_source = (wm_tissue, "out_file")
+    else:  # FSL FAST PVE are already sparse: use them directly (unchanged)
+        gm_mask_source = (gm_2_mni1, "out_file")
+        wm_mask_source = (wm_2_mni1, "out_file")
+
     # NODE 6: Divided image generation from FLAIR/T1
     flair_div_ref = Node(BinaryMaths(), name="%s_flairDIVref" % name)
     flair_div_ref.long_name = "Flair/T1 normalization"
@@ -210,13 +289,13 @@ def flat1_workflow(
     gm_mask = Node(ApplyMask(), name="%s_gmMask" % name)
     gm_mask.long_name = "Grey matter %s"
     workflow.connect(cortex_mask, "out_file", gm_mask, "in_file")
-    workflow.connect(gm_2_mni1, "out_file", gm_mask, "mask_file")
+    workflow.connect(gm_mask_source[0], gm_mask_source[1], gm_mask, "mask_file")
 
     # NODE 10: Masking for white matter on t1_restore in MNI1
     wm_mask = Node(ApplyMask(), name="%s_wmMask" % name)
     wm_mask.long_name = "White matter %s"
     workflow.connect(cortex_mask, "out_file", wm_mask, "in_file")
-    workflow.connect(wm_2_mni1, "out_file", wm_mask, "mask_file")
+    workflow.connect(wm_mask_source[0], wm_mask_source[1], wm_mask, "mask_file")
 
     # NODE 11: Mean calculation for gray matter
     gm_mean = Node(ImageStatistics(), name="%s_gm_mean" % name)
@@ -286,7 +365,7 @@ def flat1_workflow(
     restore_gm_mask.long_name = "grey matter %s"
     restore_gm_mask.inputs.out_file = "masked_image_GM.nii.gz"
     workflow.connect(restore_2_mni1, "out_file", restore_gm_mask, "in_file")
-    workflow.connect(gm_2_mni1, "out_file", restore_gm_mask, "mask_file")
+    workflow.connect(gm_mask_source[0], gm_mask_source[1], restore_gm_mask, "mask_file")
 
     # NODE 18: Grey matter normalization on cerebellum mean value
     normalised_gm_mask = Node(BinaryMaths(), name="%s_normalised_GM_mask" % name)

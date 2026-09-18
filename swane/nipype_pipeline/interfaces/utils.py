@@ -17,6 +17,7 @@ from swane.config.config_enums import (
     RegistrationEngine,
     DeskullEngine,
     DeskullModality,
+    SegmentationEngine,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.freesurfer.SynthMorphApply import SynthMorphApply
@@ -82,6 +83,15 @@ def resolve_deskull_engine(
     if not allow_synthstrip and engine == DeskullEngine.SYNTHSTRIP:
         return DeskullEngine.ANTSPYNET
     return engine
+
+
+def resolve_segmentation_engine(synth_config) -> SegmentationEngine:
+    """
+    Resolve the configured tissue-segmentation engine from a Synth-tools config
+    section. Only flat1 consumes it; there is no phased-migration fallback like
+    ``resolve_registration_engine``'s ``allow_ants``.
+    """
+    return synth_config.getenum_safe("segmentation_engine")
 
 
 def getn(result_list, index):
