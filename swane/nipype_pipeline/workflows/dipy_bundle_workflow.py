@@ -72,8 +72,7 @@ _SIDE_SUFFIX = {"lh": "L", "rh": "R"}
 # non-bilateral ``fma``/``fmi``/``mcp``/``ac``) are deliberately absent, so
 # :func:`dipy_bundle_workflow` returns ``None`` for them. ``ar`` (acoustic
 # radiation) *has* an atlas counterpart (``AR_L``/``AR_R``) but is excluded too:
-# RecoBundles recognises it displaced/off-model on real diffusion data, so the
-# acoustic radiation is left to the FSL engine (its shared checkbox still works).
+# RecoBundles has poor performance on acoustic radiation, so it is FSL-only.
 DIPY_TRACT_ATLAS = {
     "af": "AF",
     "cst": "CST",

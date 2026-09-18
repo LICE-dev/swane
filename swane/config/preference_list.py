@@ -483,12 +483,12 @@ WF_PREFERENCES[category]["step_size"] = PreferenceEntry(
 for tract in TRACTS.keys():
     tract_pref_requirement = {DataInputList.DTI: [("tractography", True)]}
     tract_pref_requirement_fail_tooltip = "Tractography disabled"
-    if tract in ("atr", "str", "cbd", "cbp", "cbt"):
+    if tract in ("atr", "str", "cbd", "cbp", "cbt", "ar"):
         tract_pref_requirement[GlobalPrefCategoryList.SYNTH] = [
             ("tractography_engine", TractographyEngine.FSL_XTRACT)
         ]
         tract_pref_requirement_fail_tooltip = (
-            "Requires tractography enabled and no RecoBundles atlas counterpart"
+            "Requires tractography enabled and FSL tractography engine"
         )
     WF_PREFERENCES[category][tract] = PreferenceEntry(
         input_type=InputTypes.BOOLEAN,

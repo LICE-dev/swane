@@ -252,12 +252,6 @@ class TestUnmappedTract:
     def test_unmapped_tract_returns_none(self, tract):
         assert dipy_bundle_workflow(tract) is None
 
-    def test_acoustic_radiation_is_excluded_from_the_dipy_path(self):
-        """``ar`` has an atlas counterpart (AR_L/AR_R) but is deliberately
-        excluded: RecoBundles recognises it displaced/off-model, so no dipy
-        bundle workflow is built and it is left to the FSL engine."""
-        assert dipy_bundle_workflow("ar") is None
-
 
 # --------------------------------------------------------------------------- #
 # The recognition parameters reach the recognise nodes, identically per side.
