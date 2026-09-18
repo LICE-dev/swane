@@ -1,7 +1,8 @@
 """Tests for the hard-cap reservation policy.
 
-All multicore tools must perform a hard-cap reservation where `n_procs` and
-`num_threads` are both set to `min(threads, max_cpu)`, making Nipype fully
+All multicore tools must perform a hard-cap reservation: the node's
+`num_threads` input is set to `min(threads, max_cpu)`, and Nipype's
+`Node.n_procs` property derives the same value from it, making Nipype fully
 aware of the resource usage.
 """
 
@@ -29,11 +30,14 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_get_tool_cpu_config_uses_max_cpu():
-    # When limit_synth_cores is False, it returns max_cpu (or cpu_count() if max_cpu<=0).
+    # When limit_synth_cores is False, it returns max_cpu unchanged. max_cpu is
+    # already resolved to a real budget upstream by MainWorkflow; a max_cpu of 0
+    # is the deliberate "auto/all cores" sentinel and flows through as 0 (which
+    # the tools treat as auto), keeping the value deterministic across machines.
     assert (
         get_tool_cpu_config(max_cpu=_ALLOCATED, limit_synth_cores=False) == _ALLOCATED
     )
-    assert get_tool_cpu_config(max_cpu=0, limit_synth_cores=False) == cpu_count()
+    assert get_tool_cpu_config(max_cpu=0, limit_synth_cores=False) == 0
 
 
 def test_get_synth_cpu_config_respects_limit_cores_flag():
