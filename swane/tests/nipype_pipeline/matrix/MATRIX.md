@@ -38,8 +38,8 @@ Overview of 85 construction scenarios across 16 workflow families. Each row is o
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
 | [ants_backend](snapshots/flat1/ants_backend.txt) | registration_engine=ANTS; synth_morph=false | 37 / 55 | `fast`, `fslmaths` | — |
-| [atropos_backend](snapshots/flat1/atropos_backend.txt) | segmentation_engine=ANTS; test_run=False | 30 / 43 | `applywarp`, `fslmaths` | — |
-| [atropos_backend_test_run](snapshots/flat1/atropos_backend_test_run.txt) | segmentation_engine=ANTS; test_run=True | 30 / 43 | `applywarp`, `fslmaths` | — |
+| [atropos_backend](snapshots/flat1/atropos_backend.txt) | segmentation_engine=ANTS; test_run=False | 32 / 45 | `applywarp`, `fslmaths` | — |
+| [atropos_backend_test_run](snapshots/flat1/atropos_backend_test_run.txt) | segmentation_engine=ANTS; test_run=True | 32 / 45 | `applywarp`, `fslmaths` | — |
 | [fsl_backend](snapshots/flat1/fsl_backend.txt) | registration_engine=FSL; synth_morph=false | 30 / 44 | `applywarp`, `fast`, `fslmaths` | — |
 | [fsl_backend_test_run](snapshots/flat1/fsl_backend_test_run.txt) | synth_morph=false; test_run=True | 30 / 44 | `applywarp`, `fast`, `fslmaths` | — |
 | [synthmorph_backend](snapshots/flat1/synthmorph_backend.txt) | registration_engine=SYNTH; synth_morph=true | 30 / 44 | `fast`, `fslmaths`, `mri_synthmorph` | — |

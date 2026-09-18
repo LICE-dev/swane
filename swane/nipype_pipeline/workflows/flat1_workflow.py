@@ -126,7 +126,6 @@ def flat1_workflow(
             name="%s_atropos" % name,
             mem_gb=ResourceManager.atropos_ram_requirements(),
         )
-        segment.long_name = "Atropos segmentation"
         if test_run:
             # cut EM iterations to speed prerelease runs at the cost of accuracy
             segment.inputs.iterations = 3
@@ -224,6 +223,46 @@ def flat1_workflow(
         non_linear=True,
     )
 
+    # NODE 5b: GM/WM tissue-mask source for the mean-based masking below.
+    #
+    # FLAT1 consumes gm_2_mni1/wm_2_mni1 as BINARY ApplyMask masks (fslmaths
+    # -mas: any nonzero voxel counts as tissue). FSL FAST partial-volume maps
+    # are sparse (exactly 0 outside a tissue), so they work directly. ANTs
+    # Atropos posteriors are DENSE: every class keeps a small nonzero
+    # probability over the whole brain mask. Used raw, the GM and WM masks would
+    # then cover the same voxels, making gm_mean == wm_mean and collapsing
+    # binary_flair and the junction/extension maps to zero.
+    #
+    # So in the Atropos branch only, threshold each posterior at 0.1 before it is
+    # used as a mask: this restores a FAST-like sparse, tissue-specific support.
+    # (No -bin: the only downstream use is ApplyMask, which reads nonzero
+    # support, not values.)
+    #
+    # Other viable approaches, if this ever needs revisiting:
+    #   * PVE-weighted consumption (fslmaths -mul instead of -mas) in FLAT1:
+    #     handles dense posteriors without a threshold, but changes the FSL FAST
+    #     output too (no longer bit-identical).
+    #   * A binary hard segmentation per class (argmax / posterior > 0.5):
+    #     simplest, but drops the boundary partial volumes below 0.5.
+    #   * Atropos native partial-volume model ("pvlabel" / partial-volume
+    #     classes): true PV fractions like FAST, but needs new parameters.
+    if segmentation_engine == SegmentationEngine.ANTS:
+        gm_tissue = Node(
+            Threshold(thresh=0.1, direction="below"), name="%s_gm_bin" % name
+        )
+        gm_tissue.long_name = "Grey matter mask threshold"
+        workflow.connect(gm_2_mni1, "out_file", gm_tissue, "in_file")
+        wm_tissue = Node(
+            Threshold(thresh=0.1, direction="below"), name="%s_wm_bin" % name
+        )
+        wm_tissue.long_name = "White matter mask threshold"
+        workflow.connect(wm_2_mni1, "out_file", wm_tissue, "in_file")
+        gm_mask_source = (gm_tissue, "out_file")
+        wm_mask_source = (wm_tissue, "out_file")
+    else:  # FSL FAST PVE are already sparse: use them directly (unchanged)
+        gm_mask_source = (gm_2_mni1, "out_file")
+        wm_mask_source = (wm_2_mni1, "out_file")
+
     # NODE 6: Divided image generation from FLAIR/T1
     flair_div_ref = Node(BinaryMaths(), name="%s_flairDIVref" % name)
     flair_div_ref.long_name = "Flair/T1 normalization"
@@ -250,13 +289,13 @@ def flat1_workflow(
     gm_mask = Node(ApplyMask(), name="%s_gmMask" % name)
     gm_mask.long_name = "Grey matter %s"
     workflow.connect(cortex_mask, "out_file", gm_mask, "in_file")
-    workflow.connect(gm_2_mni1, "out_file", gm_mask, "mask_file")
+    workflow.connect(gm_mask_source[0], gm_mask_source[1], gm_mask, "mask_file")
 
     # NODE 10: Masking for white matter on t1_restore in MNI1
     wm_mask = Node(ApplyMask(), name="%s_wmMask" % name)
     wm_mask.long_name = "White matter %s"
     workflow.connect(cortex_mask, "out_file", wm_mask, "in_file")
-    workflow.connect(wm_2_mni1, "out_file", wm_mask, "mask_file")
+    workflow.connect(wm_mask_source[0], wm_mask_source[1], wm_mask, "mask_file")
 
     # NODE 11: Mean calculation for gray matter
     gm_mean = Node(ImageStatistics(), name="%s_gm_mean" % name)
@@ -326,7 +365,7 @@ def flat1_workflow(
     restore_gm_mask.long_name = "grey matter %s"
     restore_gm_mask.inputs.out_file = "masked_image_GM.nii.gz"
     workflow.connect(restore_2_mni1, "out_file", restore_gm_mask, "in_file")
-    workflow.connect(gm_2_mni1, "out_file", restore_gm_mask, "mask_file")
+    workflow.connect(gm_mask_source[0], gm_mask_source[1], restore_gm_mask, "mask_file")
 
     # NODE 18: Grey matter normalization on cerebellum mean value
     normalised_gm_mask = Node(BinaryMaths(), name="%s_normalised_GM_mask" % name)
