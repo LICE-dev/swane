@@ -871,6 +871,30 @@ GLOBAL_PREFERENCES[category]["tractography_engine"] = PreferenceEntry(
     },
     section=True,
 )
+GLOBAL_PREFERENCES[category]["segmentation_engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="Segmentation engine",
+    value_enum=SegmentationEngine,
+    default=SegmentationEngine.ANTS,
+    option_dependency={
+        SegmentationEngine.ANTS: [
+            "is_antspyx",
+            "Atropos segmentation requires the antspyx package",
+        ],
+    },
+    option_pref_requirement={
+        SegmentationEngine.ANTS: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.atropos_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        SegmentationEngine.ANTS: "Atropos segmentation requires at least %.1f GB RAM"
+        % ResourceManager.atropos_ram_requirements(),
+    },
+    section=True,
+)
 GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Use Synth tools during recon-all",
