@@ -4,15 +4,15 @@ from nipype.interfaces.fsl import (
     MCFLIRT,
     SUSAN,
 )
-from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
-from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
+from swane.nipype_pipeline.interfaces.volumes.ExtractVolumes import ExtractVolumes
+from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.NVols import NVols
-from swane.nipype_pipeline.nodes.CustomSliceTimer import CustomSliceTimer
-from swane.nipype_pipeline.nodes.GetNiftiTR import GetNiftiTR
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.DeleteVolumes import DeleteVolumes
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.volumes.NVols import NVols
+from swane.nipype_pipeline.interfaces.fsl.CustomSliceTimer import CustomSliceTimer
+from swane.nipype_pipeline.interfaces.volumes.GetNiftiTR import GetNiftiTR
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.volumes.DeleteVolumes import DeleteVolumes
 from configparser import SectionProxy
 from swane.config.config_enums import (
     SliceTiming,
@@ -20,7 +20,7 @@ from swane.config.config_enums import (
     CoreLimit,
     DeskullModality,
 )
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import (
     get_deskull_node,
     get_registration_node,
     resolve_deskull_engine,
@@ -97,7 +97,7 @@ def fMRI_preproc_workflow(
     workflow : CustomWorkflow
         The fMRI workflow. The func->ref registration is attached as
         ``workflow.reg_2_ref`` (a
-        :class:`~swane.nipype_pipeline.nodes.utils.RegistrationNodeWrapper`) so
+        :class:`~swane.nipype_pipeline.interfaces.utils.RegistrationNodeWrapper`) so
         the ``fMRI_task``/``fMRI_resting_state`` consumers built on this same
         workflow object can apply it backend-agnostically via
         ``registration=workflow.reg_2_ref`` instead of a hardcoded node-name
