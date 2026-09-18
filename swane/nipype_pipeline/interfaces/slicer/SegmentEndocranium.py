@@ -60,7 +60,9 @@ class SegmentEndocranium(CommandLine):
     def _cmd_update(self):
         this_dir = os.path.dirname(os.path.abspath(__file__))
         worker_path = os.path.abspath(
-            os.path.join(this_dir, "..", "..", "..", "workers", "slicer_seg_endocranium.py")
+            os.path.join(
+                this_dir, "..", "..", "..", "workers", "slicer_seg_endocranium.py"
+            )
         )
 
         if not os.path.exists(worker_path):
