@@ -334,3 +334,70 @@ class TestDipyCsdFitNpeaks:
         dipy_default = _run("dipy_default.nii.gz")
 
         assert np.array_equal(shipped, dipy_default)
+
+
+class TestDipyCsdFitOutputDtype:
+    """The shm_coeff output is always written as float32, regardless of the
+    input header's dtype.
+
+    This pins the contract introduced after the E9 investigation
+    (2026-09-07/2026-09-18): ``DipyCsdFit`` now calls
+    ``header.set_data_dtype(np.float32)`` explicitly so a future upstream
+    header change cannot silently re-quantize the SH coefficients that drive
+    tractography.
+    """
+
+    @staticmethod
+    def _make_dwi(tmp_path, header_dtype, *, name="dwi"):
+        """Tiny DWI with a controlled header dtype (float32 or int16)."""
+        from dipy.sims.voxel import single_tensor
+
+        n_dirs, n_b0 = 16, 1
+        gtab, bvals, bvecs = _gtab(n_directions=n_dirs, n_b0=n_b0)
+
+        sig = single_tensor(gtab, S0=100.0, evals=np.array([0.0015, 0.0003, 0.0003]))
+        shape = (4, 4, 4)
+        data = np.tile(sig, shape + (1,))
+
+        if header_dtype == np.int16:
+            data_save = data.astype(np.int16)
+        else:
+            data_save = data.astype(np.float32)
+
+        affine = np.eye(4)
+        img = nib.Nifti1Image(data_save, affine)
+        img.header.set_data_dtype(header_dtype)
+        dwi_path = str(tmp_path / f"{name}.nii.gz")
+        nib.save(img, dwi_path)
+
+        bval_path = str(tmp_path / f"{name}.bval")
+        bvec_path = str(tmp_path / f"{name}.bvec")
+        np.savetxt(bval_path, bvals[None, :], fmt="%g")
+        np.savetxt(bvec_path, bvecs.T, fmt="%.6f")
+
+        mask = np.ones(shape, dtype=np.uint8)
+        mask_path = str(tmp_path / f"{name}_mask.nii.gz")
+        nib.save(nib.Nifti1Image(mask, affine), mask_path)
+
+        return dwi_path, bval_path, bvec_path, mask_path
+
+    @pytest.mark.parametrize("header_dtype", [np.float32, np.int16])
+    def test_output_is_always_float32(self, workspace, header_dtype):
+        dwi, bval, bvec, mask = self._make_dwi(workspace, header_dtype)
+
+        node = DipyCsdFit()
+        node.inputs.in_file = dwi
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.mask = mask
+        node.inputs.out_file = "shm_out.nii.gz"
+        node.run()
+
+        out_img = nib.load(node._list_outputs()["shm_coeff"])
+        assert out_img.header.get_data_dtype() == np.dtype(np.float32), (
+            f"shm_coeff must always be float32, got "
+            f"{out_img.header.get_data_dtype()} with {np.dtype(header_dtype)} input"
+        )
+        # The raw on-disk data must also be float32 (not scaled int16)
+        raw = np.asarray(out_img.dataobj.get_unscaled())
+        assert raw.dtype == np.dtype(np.float32)

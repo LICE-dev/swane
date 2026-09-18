@@ -13,6 +13,7 @@ import os
 
 import numpy as np
 import nibabel as nib
+import pytest
 
 from swane.nipype_pipeline.nodes.DipyTissueClassifier import (
     DipyTissueClassifier,
@@ -141,3 +142,52 @@ class TestDipyTissueClassifierThreadPinning:
 
         assert seen["omp"] == "1"
         assert OMP_THREADS_VAR not in os.environ
+
+
+class TestDipyTissueClassifierOutputDtype:
+    """The PVE outputs are always written as float32, regardless of the input
+    header's dtype.
+
+    This pins the contract introduced 2026-09-18: ``DipyTissueClassifier`` now
+    calls ``header.set_data_dtype(np.float32)`` explicitly so a future upstream
+    header change cannot silently quantize the PVE maps that drive the CMC
+    stopping criterion. The HMRF computation is float64 (dipy's Cython kernel
+    requires double), but float32 is more than sufficient for [0, 1]
+    partial-volume estimates on disk.
+    """
+
+    @staticmethod
+    def _make_t1(tmp_path, header_dtype, *, name="t1"):
+        """Three-block T1 phantom with a controlled header dtype."""
+        image, _ = _three_tissue_phantom(shape=(12, 12, 12))
+
+        if header_dtype == np.int16:
+            # Scale to a typical T1 range so int16 values are meaningful
+            data_save = (image * 1000).astype(np.int16)
+        else:
+            data_save = image.astype(np.float32)
+
+        img = nib.Nifti1Image(data_save, np.eye(4))
+        img.header.set_data_dtype(header_dtype)
+        path = str(tmp_path / f"{name}.nii.gz")
+        nib.save(img, path)
+        return path
+
+    @pytest.mark.parametrize("header_dtype", [np.float32, np.int16])
+    def test_pve_output_is_always_float32(self, workspace, header_dtype):
+        t1_path = self._make_t1(workspace, header_dtype)
+
+        node = DipyTissueClassifier()
+        node.inputs.in_file = t1_path
+        node.run()
+
+        outputs = node._list_outputs()
+        for field in ("pve_csf", "pve_gm", "pve_wm"):
+            out_img = nib.load(outputs[field])
+            assert out_img.header.get_data_dtype() == np.dtype(np.float32), (
+                f"{field} must always be float32, got "
+                f"{out_img.header.get_data_dtype()} with "
+                f"{np.dtype(header_dtype)} input"
+            )
+            raw = np.asarray(out_img.dataobj.get_unscaled())
+            assert raw.dtype == np.dtype(np.float32)

@@ -37,15 +37,17 @@ The SH, WM PVE and FA volumes are cropped to the brain bounding box before track
 The bbox is derived from ``nodif_brain`` -- the skull-stripped b0 that
 ``dti_preproc_workflow``'s own deskull node produces on the same diffusion grid --
 and from nothing else: not the PVE/FA maps (registration-apply/tensor-fit outputs
-that can extend past the true brain edge), and not the shm, whose ``DipyCsdFit``
-output carries the int16/NaN-scaled DWI header, so its voxels read non-zero across
-the whole FOV and would degenerate the bbox to a no-op crop. The full FOV is
-dominated by background (the brain can fill <50% of the volume), so passing an
-uncropped SH volume whole to ``probabilistic_tracking`` introduces a large
-memory overhead (spec section 2, "crop"). Background voxels carry no fODF, no WM
-seed and no FA signal, so the crop halves the voxel count at zero scientific
-cost: the affine is shifted by the crop offset, so tracking still runs in the
-original diffusion world frame and the streamlines are unchanged.
+that can extend past the true brain edge), and not the shm foreground (outside the
+brain mask the SH coefficients are exactly zero, so the shm *could* drive the crop,
+but it may carry ringing or registration-edge artefacts at the brain boundary;
+``nodif_brain`` shares no processing path with the reconstruction outputs and is
+the most reliable crop reference). The full FOV is dominated by background (the
+brain can fill <50% of the volume), so passing an uncropped SH volume whole to
+``probabilistic_tracking`` introduces a large memory overhead (spec section 2,
+"crop"). Background voxels carry no fODF, no WM seed and no FA signal, so the crop
+halves the voxel count at zero scientific cost: the affine is shifted by the crop
+offset, so tracking still runs in the original diffusion world frame and the
+streamlines are unchanged.
 
 Tracking runs in diffusion space (no DWI interpolation); each streamline is
 moved to reference space with the diffusion -> reference affine already produced
@@ -122,8 +124,10 @@ TRX_CHUNK_SIZE = 10000
 # padding, in voxels) before tracking. The bbox comes from nodif_brain (the
 # skull-stripped b0 from dti_preproc's own deskull node) only -- not the PVE/FA
 # maps, which are registration-apply/tensor-fit outputs that can extend past the
-# true brain edge, and not the shm, whose int16/NaN-scaled DWI header reads
-# non-zero across the whole FOV and would degenerate the bbox to a no-op crop.
+# true brain edge, and not the shm foreground (outside the brain mask the SH
+# coefficients are exactly zero, so the shm could drive the crop, but it may
+# carry ringing or registration-edge artefacts at the brain boundary;
+# nodif_brain shares no processing path with the reconstruction outputs).
 # The full FOV is often dominated by background (the brain can fill <50% of
 # the volume), so passing an uncropped SH volume whole to probabilistic_tracking
 # introduces a large memory overhead (spec section 2, "crop"). Background voxels
@@ -367,15 +371,17 @@ class DipyTracking(BaseInterface):
         )
 
         # Crop SH + WM PVE + FA to the brain bounding box so tracking never
-        # carries the background in RAM. The crop
-        # is derived from nodif_brain -- dti_preproc's own skull-stripped b0,
-        # on the same diffusion grid -- and from nothing else. Not from the
-        # PVE/FA maps: they are registration-apply/tensor-fit outputs that may
-        # extend brain-adjacent signal past the true brain edge. Not from the
-        # shm foreground: DipyCsdFit saves the shm with the int16/NaN-scaled
-        # DWI header, so sh_data reads non-zero across the whole FOV, which
-        # would degenerate the bbox to a no-op crop. Outside the brain there
-        # are no seeds and no FA signal, so the nodif_brain-only bbox is
+        # carries the background in RAM. The crop is derived from
+        # nodif_brain -- dti_preproc's own skull-stripped b0, on the same
+        # diffusion grid -- and from nothing else. Not from the PVE/FA maps:
+        # they are registration-apply/tensor-fit outputs that may extend
+        # brain-adjacent signal past the true brain edge. Not from the shm
+        # foreground: outside the brain mask the SH coefficients are exactly
+        # zero, so the shm *could* drive the crop, but it may carry ringing
+        # or registration-edge artefacts at the brain boundary; nodif_brain
+        # shares no processing path with the reconstruction outputs and is
+        # the most reliable crop reference. Outside the brain there are no
+        # seeds and no FA signal, so the nodif_brain-only bbox is
         # scientifically identical; the affine is shifted so the cropped
         # volume tracks in the original diffusion world frame
         # (BBOX_PAD_VOXELS, foreground_bbox_slices, shift_affine_for_crop --
