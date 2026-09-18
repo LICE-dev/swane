@@ -15,10 +15,14 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.nodes.ThrROI import ThrROI
 from nipype.interfaces.utility import IdentityInterface, Function
 
+from swane.config.config_enums import SegmentationEngine
+from swane.utils.ResourceManager import ResourceManager
+from swane.nipype_pipeline.nodes.AntsAtropos import AntsAtropos
 from swane.nipype_pipeline.nodes.ram_estimators import FastRamEstimator
 from swane.nipype_pipeline.nodes.utils import (
     apply_registration_node,
     resolve_registration_engine,
+    resolve_segmentation_engine,
 )
 
 
@@ -84,6 +88,7 @@ def flat1_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     engine = resolve_registration_engine(synth_config, allow_ants=True)
+    segmentation_engine = resolve_segmentation_engine(synth_config)
 
     # Input Node
     inputnode = Node(
@@ -104,23 +109,38 @@ def flat1_workflow(
         name="outputnode",
     )
 
-    # NODE 1: three class fast segmentation
-    fast = Node(FAST(), name="%s_fast" % name, mem_gb=4)
-    fast.ram_estimator = FastRamEstimator()
-    fast.inputs.img_type = 1  # param -t
-    fast.inputs.number_classes = 3  # param n
-    fast.inputs.hyper = 0.1  # param -H
-    fast.inputs.bias_lowpass = 40  # param -l
-    fast.inputs.output_biascorrected = True  # param -B
-    if test_run:
-        # FSL defaults: -I 4, -W 15, -O 4. Aggressively cut all three.
-        fast.inputs.bias_iters = 1  # param -I
-        fast.inputs.segment_iters = 5  # param -W
-        fast.inputs.iters_afterbias = 1  # param -O
-    else:
-        fast.inputs.bias_iters = 4  # param -I
-    workflow.add_nodes([fast])
-    workflow.connect(inputnode, "reference_brain", fast, "in_files")
+    # NODE 1: three-class tissue segmentation (engine-selectable)
+    if segmentation_engine == SegmentationEngine.ANTS:
+        segment = Node(
+            AntsAtropos(),
+            name="%s_atropos" % name,
+            mem_gb=ResourceManager.atropos_ram_requirements(),
+        )
+        segment.long_name = "Atropos segmentation"
+        if test_run:
+            # cut EM iterations to speed prerelease runs at the cost of accuracy
+            segment.inputs.iterations = 3
+        workflow.add_nodes([segment])
+        workflow.connect(inputnode, "reference_brain", segment, "in_file")
+        restored_source = (inputnode, "reference_brain")
+    else:  # SegmentationEngine.FSL -- unchanged FAST node
+        segment = Node(FAST(), name="%s_fast" % name, mem_gb=4)
+        segment.ram_estimator = FastRamEstimator()
+        segment.inputs.img_type = 1  # param -t
+        segment.inputs.number_classes = 3  # param n
+        segment.inputs.hyper = 0.1  # param -H
+        segment.inputs.bias_lowpass = 40  # param -l
+        segment.inputs.output_biascorrected = True  # param -B
+        if test_run:
+            # FSL defaults: -I 4, -W 15, -O 4. Aggressively cut all three.
+            segment.inputs.bias_iters = 1  # param -I
+            segment.inputs.segment_iters = 5  # param -W
+            segment.inputs.iters_afterbias = 1  # param -O
+        else:
+            segment.inputs.bias_iters = 4  # param -I
+        workflow.add_nodes([segment])
+        workflow.connect(inputnode, "reference_brain", segment, "in_files")
+        restored_source = (segment, "restored_image")
 
     def pick_first_two(file_list):
         return file_list[1], file_list[2]
@@ -134,7 +154,7 @@ def flat1_workflow(
         name="fast_segment_split",
     )
     fast_segment_split.long_name = "Segment identification"
-    workflow.connect(fast, "partial_volume_files", fast_segment_split, "file_list")
+    workflow.connect(segment, "partial_volume_files", fast_segment_split, "file_list")
 
     flair_2_mni1 = apply_registration_node(
         name="flair_2_mni1",
@@ -155,7 +175,7 @@ def flat1_workflow(
         engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
-        moving=[fast, "restored_image"],
+        moving=list(restored_source),
         reference=mni1_dir,
         non_linear=True,
     )

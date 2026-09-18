@@ -1,6 +1,6 @@
 # SWANe workflow settings matrix
 
-Overview of 83 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
+Overview of 85 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
 > Generated from the golden snapshots by `python swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
@@ -10,9 +10,9 @@ Overview of 83 construction scenarios across 16 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [af](snapshots/dipy_bundle/af.txt) | num_threads=4; tract=af | 8 / 10 | — | — |
-| [cingulum](snapshots/dipy_bundle/cingulum.txt) | num_threads=4; tract=cingulum | 8 / 10 | — | — |
-| [fornix](snapshots/dipy_bundle/fornix.txt) | num_threads=4; tract=fx | 9 / 13 | — | — |
+| [af](snapshots/dipy_bundle/af.txt) | num_threads=4; tract=af | 10 / 16 | — | — |
+| [cingulum](snapshots/dipy_bundle/cingulum.txt) | num_threads=4; tract=cingulum | 10 / 16 | — | — |
+| [fornix](snapshots/dipy_bundle/fornix.txt) | num_threads=4; tract=fx | 6 / 8 | — | — |
 
 ## dipy_dti_preproc
 
@@ -38,6 +38,8 @@ Overview of 83 construction scenarios across 16 workflow families. Each row is o
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
 | [ants_backend](snapshots/flat1/ants_backend.txt) | registration_engine=ANTS; synth_morph=false | 37 / 55 | `fast`, `fslmaths` | — |
+| [atropos_backend](snapshots/flat1/atropos_backend.txt) | segmentation_engine=ANTS; test_run=False | 30 / 43 | `applywarp`, `fslmaths` | — |
+| [atropos_backend_test_run](snapshots/flat1/atropos_backend_test_run.txt) | segmentation_engine=ANTS; test_run=True | 30 / 43 | `applywarp`, `fslmaths` | — |
 | [fsl_backend](snapshots/flat1/fsl_backend.txt) | registration_engine=FSL; synth_morph=false | 30 / 44 | `applywarp`, `fast`, `fslmaths` | — |
 | [fsl_backend_test_run](snapshots/flat1/fsl_backend_test_run.txt) | synth_morph=false; test_run=True | 30 / 44 | `applywarp`, `fast`, `fslmaths` | — |
 | [synthmorph_backend](snapshots/flat1/synthmorph_backend.txt) | registration_engine=SYNTH; synth_morph=true | 30 / 44 | `fast`, `fslmaths`, `mri_synthmorph` | — |
