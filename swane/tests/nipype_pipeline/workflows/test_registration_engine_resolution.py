@@ -32,7 +32,6 @@ class TestLinearRegFollowsConfiguredEngine:
             dicom_dir=make_input_dir(),
             config=None,
             synth_config=synth,
-            multicore_node_limit=CoreLimit.SOFT_CAP,
         )
 
         assert wf.get_node("flair3d_antsreg") is not None
@@ -49,7 +48,6 @@ class TestLinearRegFollowsConfiguredEngine:
             dicom_dir=make_input_dir(),
             config=None,
             synth_config=synth,
-            multicore_node_limit=CoreLimit.SOFT_CAP,
         )
 
         assert wf.get_node("flair3d_flirt") is not None
@@ -67,7 +65,6 @@ class TestNonlinearRegFollowsConfiguredEngine:
         wf = nonlinear_reg_workflow(
             "sym",
             synth_config=synth,
-            multicore_node_limit=CoreLimit.SOFT_CAP,
         )
 
         assert wf.get_node("sym_antsreg") is not None
@@ -83,7 +80,6 @@ class TestNonlinearRegFollowsConfiguredEngine:
         wf = nonlinear_reg_workflow(
             "sym",
             synth_config=synth,
-            multicore_node_limit=CoreLimit.SOFT_CAP,
         )
 
         assert wf.get_node("sym_flirt") is not None

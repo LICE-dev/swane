@@ -8,9 +8,9 @@
 #
 # nodes=16 edges=25
 
-- asl_2_ref_antsreg [AntsRegistration] mem_gb=5 n_procs=0
+- asl_2_ref_antsreg [AntsRegistration] mem_gb=5 n_procs=16
     aff_metric = 'mattes'
-    num_threads = 0
+    num_threads = 16
     out_prefix = 'ants_reg_'
     syn_metric = 'mattes'
     transform_type = 'Rigid'

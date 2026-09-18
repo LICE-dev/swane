@@ -43,7 +43,6 @@ def _build(subject_config, global_config, make_input_dir, fast):
         ],
         deskull_modality=DeskullModality.NODIF,
         max_cpu=4,
-        multicore_node_limit=CoreLimit.HARD_CAP,
     )
 
 

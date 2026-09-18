@@ -14,7 +14,7 @@ from configparser import SectionProxy
 from nipype.interfaces.fsl import RobustFOV, ApplyMask
 from nipype.interfaces.utility import IdentityInterface
 from nipype import Node
-from swane.config.config_enums import CoreLimit, DeskullModality
+from swane.config.config_enums import DeskullModality
 
 
 def ref_workflow(
@@ -25,7 +25,6 @@ def ref_workflow(
     base_dir: str = "/",
     deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -48,8 +47,6 @@ def ref_workflow(
         is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of Synth tools. The default is 0.
-    multicore_node_limit : CoreLimit, optional
-        Preference for Synth tools core usage. The default is CoreLimit.SOFT_CAP.
     test_run : bool, optional
         If True, cap the N4 bias field correction iterations to speed up
         prerelease test runs at the cost of accuracy. The default is False.
@@ -130,7 +127,6 @@ def ref_workflow(
         bet_bias_correction=config.getboolean_safe("bet_bias_correction"),
         synth_exclude_csf=True,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     workflow.connect(ref_reScale, "out_file", ref_deskull, "in_file")
@@ -139,7 +135,7 @@ def ref_workflow(
         AntsN4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2
     )
     ref_bias_correction.inputs.out_file = "ref.nii.gz"
-    if max_cpu != 0 and multicore_node_limit is not CoreLimit.NO_LIMIT:
+    if max_cpu != 0:
         ref_bias_correction.inputs.num_threads = max_cpu
     if test_run:
         # antspyx default is [50, 50, 50, 50] per resolution level.

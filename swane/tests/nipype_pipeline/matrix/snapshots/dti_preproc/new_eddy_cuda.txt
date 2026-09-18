@@ -3,7 +3,6 @@
 #   cuda = true
 #   deskull_engine = ANTSPYNET
 #   max_cpu = 4
-#   multicore_node_limit = SOFT_CAP
 #   old_eddy_correct = false
 #   synth_morph = False
 #   tractography = false

@@ -19,7 +19,7 @@ MNI templates at construction time.
 
 import pytest
 
-from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList, CoreLimit
+from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
@@ -30,13 +30,13 @@ dti_preproc_workflow = import_workflow_or_skip(
 SUBDIR = "dti_preproc"
 MAX_CPU = 4
 
-# name -> (cuda, old_eddy, multicore_node_limit, tractography)
+# name -> (cuda, old_eddy, tractography)
 SCENARIOS = {
-    "new_eddy_cpu_softcap": (False, False, CoreLimit.SOFT_CAP, False),
-    "new_eddy_cpu_hardcap": (False, False, CoreLimit.HARD_CAP, False),
-    "new_eddy_cuda": (True, False, CoreLimit.SOFT_CAP, False),
-    "old_eddy_correct": (False, True, CoreLimit.SOFT_CAP, False),
-    "new_eddy_tractography": (False, False, CoreLimit.SOFT_CAP, True),
+    "new_eddy_cpu_softcap": (False, False, False),
+    "new_eddy_cpu_hardcap": (False, False, False),
+    "new_eddy_cuda": (True, False, False),
+    "old_eddy_correct": (False, True, False),
+    "new_eddy_tractography": (False, False, True),
 }
 
 
@@ -48,7 +48,7 @@ def _bool(value):
 def test_dti_matrix(
     scenario, subject_config, global_config, make_input_dir, graph_snapshot
 ):
-    cuda, old_eddy, multicore, tractography = SCENARIOS[scenario]
+    cuda, old_eddy, tractography = SCENARIOS[scenario]
     section = subject_config[DataInputList.DTI]
     section["cuda"] = _bool(cuda)
     section["old_eddy_correct"] = _bool(old_eddy)
@@ -67,14 +67,12 @@ def test_dti_matrix(
         config=section,
         synth_config=synth,
         max_cpu=MAX_CPU,
-        multicore_node_limit=multicore,
     )
 
     config_echo = {
         "cuda": section["cuda"],
         "old_eddy_correct": section["old_eddy_correct"],
         "tractography": section["tractography"],
-        "multicore_node_limit": multicore.name,
         "max_cpu": MAX_CPU,
         "deskull_engine": synth["deskull_engine"],
         "synth_morph": synth["morph"],
@@ -112,7 +110,6 @@ def test_dti_matrix_test_run(
         config=section,
         synth_config=synth,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
         test_run=True,
     )
 
@@ -120,7 +117,6 @@ def test_dti_matrix_test_run(
         "cuda": "false",
         "old_eddy_correct": "false",
         "tractography": "true",
-        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
         "max_cpu": MAX_CPU,
         "deskull_engine": synth["deskull_engine"],
         "synth_morph": synth["morph"],
@@ -187,7 +183,6 @@ def _build_engine(engine_name, subject_config, global_config, make_input_dir):
         config=section,
         synth_config=synth,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
 
 
@@ -275,12 +270,8 @@ def test_dti_synth_falls_back_to_fsl(subject_config, global_config, make_input_d
     assert "ref2diff_transforms" not in dst_fields
 
 
-def test_no_limit_eddy_uses_host_cpu_count(
-    subject_config, global_config, make_input_dir
-):
-    """NO_LIMIT is host-dependent (``cpu_count()``), so it is asserted, not snapshotted."""
-    from multiprocessing import cpu_count
-
+def test_eddy_uses_max_cpu_budget(subject_config, global_config, make_input_dir):
+    """The hard cap restricts eddy to MAX_CPU."""
     section = subject_config[DataInputList.DTI]
     section["cuda"] = "false"
     section["old_eddy_correct"] = "false"
@@ -292,10 +283,9 @@ def test_no_limit_eddy_uses_host_cpu_count(
         config=section,
         synth_config=global_config[GlobalPrefCategoryList.SYNTH],
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.NO_LIMIT,
     )
     eddy = wf.get_node("dti_eddy")
-    assert eddy.inputs.args == "--nthr=%d" % cpu_count()
+    assert eddy.inputs.args == "--nthr=%d" % MAX_CPU
 
     hashed_inputs, host_cpu_hash = eddy.inputs.get_hashval()
     assert "args" not in dict(hashed_inputs)

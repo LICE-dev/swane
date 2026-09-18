@@ -3,7 +3,6 @@
 #   cuda = false
 #   deskull_engine = ANTSPYNET
 #   max_cpu = 4
-#   multicore_node_limit = SOFT_CAP
 #   old_eddy_correct = false
 #   synth_morph = False
 #   tractography = false
@@ -48,7 +47,7 @@
     base_name = 'dtifit_'
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-- dti_eddy [CustomEddy] cmd=eddy_openmp mem_gb=1 n_procs=1
+- dti_eddy [CustomEddy] cmd=eddy_openmp mem_gb=1 n_procs=4
     args = '--nthr=4'
     environ = {FSL_SKIP_GLOBAL='1', OMP_NUM_THREADS='4'}
     flm = 'quadratic'
@@ -56,7 +55,7 @@
     interp = 'spline'
     method = 'jac'
     niter = 5
-    num_threads = 1
+    num_threads = 4
     nvoxhp = 1000
     out_base = 'eddy_corrected'
     output_type = 'NIFTI_GZ'
