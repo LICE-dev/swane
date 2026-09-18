@@ -2,10 +2,11 @@ import pytest
 
 from swane.config.config_enums import GlobalPrefCategoryList, TractographyEngine
 from swane.config.preference_list import GLOBAL_PREFERENCES, WF_PREFERENCES, TRACTS
+from swane.nipype_pipeline.workflows.dipy_bundle_workflow import DIPY_TRACT_ATLAS
 from swane.utils.DataInputList import DataInputList
 from swane.utils.qt_compat import QT_AVAILABLE
 
-FSL_ONLY_TRACT_KEYS = {"atr", "str", "cbd", "cbp", "cbt", "ar"}
+FSL_ONLY_TRACT_KEYS = set(TRACTS.keys()) - set(DIPY_TRACT_ATLAS.keys())
 FSL_ONLY_KEYS = FSL_ONLY_TRACT_KEYS | {
     "tractography_threshold",
     "track_procs",
@@ -83,6 +84,25 @@ def test_engine_neutral_keys_have_no_engine_requirement():
         if req is not None and GlobalPrefCategoryList.SYNTH in req:
             for pair in req[GlobalPrefCategoryList.SYNTH]:
                 assert pair[0] != "tractography_engine", key
+
+
+def test_tracts_absent_from_dipy_atlas_gated_to_fsl():
+    dti = WF_PREFERENCES[DataInputList.DTI]
+    for tract in TRACTS.keys():
+        req = dti[tract].pref_requirement
+        synth_reqs = req.get(GlobalPrefCategoryList.SYNTH, []) if req else []
+        is_fsl_gated = (
+            "tractography_engine",
+            TractographyEngine.FSL_XTRACT,
+        ) in synth_reqs
+        if tract not in DIPY_TRACT_ATLAS:
+            assert (
+                is_fsl_gated
+            ), f"Tract {tract} absent from DIPY_TRACT_ATLAS must be gated to FSL_XTRACT"
+        else:
+            assert (
+                not is_fsl_gated
+            ), f"Tract {tract} present in DIPY_TRACT_ATLAS must not be gated to FSL_XTRACT"
 
 
 if not QT_AVAILABLE:

@@ -6,6 +6,7 @@ from swane.utils.ResourceManager import ResourceManager
 from swane import strings
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import *
+from swane.nipype_pipeline.workflows.dipy_bundle_workflow import DIPY_TRACT_ATLAS
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
@@ -483,7 +484,7 @@ WF_PREFERENCES[category]["step_size"] = PreferenceEntry(
 for tract in TRACTS.keys():
     tract_pref_requirement = {DataInputList.DTI: [("tractography", True)]}
     tract_pref_requirement_fail_tooltip = "Tractography disabled"
-    if tract in ("atr", "str", "cbd", "cbp", "cbt", "ar"):
+    if tract not in DIPY_TRACT_ATLAS:
         tract_pref_requirement[GlobalPrefCategoryList.SYNTH] = [
             ("tractography_engine", TractographyEngine.FSL_XTRACT)
         ]
