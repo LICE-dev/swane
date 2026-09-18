@@ -9,7 +9,7 @@ single directional displacement field per direction (``*_fwd_compose`` /
 ``*_inv_compose``) instead of building FLIRT/FNIRT.
 """
 
-from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
+from swane.config.config_enums import GlobalPrefCategoryList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
 linear_reg_workflow = import_workflow_or_skip(
