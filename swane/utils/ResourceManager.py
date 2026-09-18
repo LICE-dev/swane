@@ -22,6 +22,15 @@ class ResourceManager:
     ANTS_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
     #: antspynet brain extraction; fixed at 5 GB for now (revisit later).
     ANTSPYNET_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
+    #: Minimum RAM to select the dipy tractography engine. It covers every dipy
+    #: node's negotiated bottom rung so the workflow can run; the heavier nodes
+    #: (motion, tracking) tune their parallelism/levers down to fit it, and
+    #: DipyAtlasSLR fits its transform on a fixed subsample and streams the
+    #: apply/write (measured tree-peak up to ~4.4 GB), so the one-way tissue
+    #: classifier (no lever, linear in T1 voxels, ~5.7 GB) is the binding floor.
+    #: DipySlrRamEstimator.STATIC_FALLBACK_GB reads this constant directly. See
+    #: the dipy RAM report.
+    DIPY_TRACTOGRAPHY_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6}
 
     #: In prerelease test_run mode ONLY, the SynthSeg (--fast, robust=False) and
     #: SynthMorph (steps=5) paths do genuinely less work and use less RAM, so
@@ -102,6 +111,10 @@ class ResourceManager:
     @staticmethod
     def antspynet_ram_requirements():
         return ResourceManager.ANTSPYNET_RAM_REQUIREMENT[get_os_type()]
+
+    @staticmethod
+    def dipy_tractography_ram_requirements():
+        return ResourceManager.DIPY_TRACTOGRAPHY_RAM_REQUIREMENT[get_os_type()]
 
     @staticmethod
     def get_min_synth_ram_requirement():

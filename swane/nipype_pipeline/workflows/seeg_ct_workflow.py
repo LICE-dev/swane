@@ -77,12 +77,10 @@ def seeg_ct_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
-    # CT follows the global registration engine (ANTs by default). The former
-    # scientific FSL pin (``# FLIRT performs better on CT``) is lifted so CT
-    # exercises ANTs, and the comparative oracle validates it on real data.
-    # SynthMorph is the known-worse backend on CT, so an explicit SynthMorph
-    # choice falls back to FSL; an ANTs config stays ANTs (that is the point of
-    # this work), and an explicit FSL choice stays FSL.
+    # CT follows the global registration engine (ANTs by default).
+    # SynthMorph is not recommended on CT, so an explicit SynthMorph
+    # choice falls back to FSL; an ANTs config stays ANTs, and an explicit
+    # FSL choice stays FSL.
     engine = resolve_registration_engine(synth_config, allow_ants=True)
     if engine == RegistrationEngine.SYNTH:
         engine = RegistrationEngine.FSL

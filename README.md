@@ -42,6 +42,7 @@ A few of the analyses you can do with SWANe:
 * **PET & Arterial Spin Analysis (ASL)**: analysis for registration to reference, z-score and asymmetry index maps, projection on FreeSurfer pial surface;
 * **Diffusion Tensor Imaging processing**: performs DTI preprocessing workflow and fractinal anisotropy calculation;
 * **Tractography**: perrforms tractography execution for chosen tract using FSL xtract protocols;
+* **dipy Tractography**: performs CSD tractography and bundle recognition using dipy and the HCP842 atlas (RecoBundles);
 * **Task fMRI**: performs fMRI first level analysis for a single or double task with constant task-rest paradigm;
 * **Venous MRA**: performs analysis of phase contrasts image (in single or two series) to obtain in-skull veins in reference space.
 
@@ -133,11 +134,23 @@ This project includes subsection derived from other software, which licenses can
 
 - License consent gate: on startup (after the setup wizard) SWANe shows and requires acceptance of the licenses of the detected external tools (FSL, FreeSurfer, 3D Slicer, dcm2niix, ANTs/antspyx). Acceptance is stored per tool and re-prompted only when a tool's version changes.
 - Home dependency labels now include an inline link to each detected tool's license, opening the locally installed license file when available, otherwise the official source.
+- dipy tractography engine: added a CSD and RecoBundles tractography engine as an alternative to FSL XTRACT. A new global `tractography_engine` preference selects the engine, with dipy configured as the default.
+- On the first DTI tractography run, the ~649 MB HCP842 bundle atlas (`Atlas_80_Bundles` via dipy) is automatically downloaded into the local dipy directory.
+- dipy tractography results are exported as `.vtp` streamline bundle models in reference space rather than thresholded `.nii.gz` density maps; re-running an old subject will not reproduce its previous output.
+- Tracking defaults updated to use percentile-based FA stopping (`FA_STOP_PERCENTILE = 10%`, floored at 0.10) and volume-based seeding (`REFERENCE_VOXEL_MM3 = 2.2 mm³`) for consistent tracking across differing voxel sizes and contrasts.
+- Acoustic radiation (`ar`) produces no dipy bundle and remains FSL-only.
+- Low-confidence bundles are flagged rather than hidden: bundles that remain poorly matched to the atlas model after recovery retry generate a `r-<tract>_<side>.lowconf.json` sidecar (or `r-fx.lowconf.json` for fornix) and are labeled with `(LOW CONFIDENCE)` in 3D Slicer.
+- The dipy tractography engine requires a 6 GB RAM floor (`DIPY_TRACTOGRAPHY_RAM_REQUIREMENT`).
 
 #### Fixed
 
 - License consent preparation no longer repeats dependency detection on the GUI thread and keeps the interface responsive while license texts are resolved.
 - Changing the DTI CPU allocation no longer invalidates cached Eddy results.
+- DTI: FSL `eddy`'s rotated b-vectors are now used for tensor fitting (dtifit)
+  and bedpostx. Previously the unrotated vectors were used; rotating the volumes
+  without reorienting the gradients biased FA, MD and tractography in proportion
+  to subject motion (Leemans & Jones 2009). Re-processing a subject will not
+  reproduce results from earlier versions.
 
 ### [0.2.1.1] - 2026-08-08
 

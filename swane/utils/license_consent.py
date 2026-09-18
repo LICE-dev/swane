@@ -16,6 +16,7 @@ from swane.utils.LicenseReference import (
     DCM2NIIX,
     ANTSPYX,
     ANTSPYNET,
+    DIPY,
 )
 
 UNKNOWN_VERSION = "unknown"
@@ -204,6 +205,15 @@ def _antspynet_version():
         return None
 
 
+def _dipy_version():
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("dipy")
+    except Exception:
+        return None
+
+
 def _is_slicer_detected(config) -> bool:
     from swane.utils.DependencyManager import DependencyManager
 
@@ -244,6 +254,8 @@ def detected_tool_versions(dependency_manager, config) -> dict:
         )
     if dependency_manager.is_antspynet():
         versions[ANTSPYNET] = _norm(_antspynet_version())
+    if dependency_manager.is_dipy():
+        versions[DIPY] = _norm(_dipy_version())
     return versions
 
 
@@ -261,7 +273,7 @@ def tools_needing_consent(
         if detected_versions is None
         else detected_versions
     )
-    ordered = [FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET]
+    ordered = [FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET, DIPY]
     needing = []
     for tool_id in ordered:
         if tool_id not in detected:

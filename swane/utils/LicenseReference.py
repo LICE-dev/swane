@@ -15,7 +15,8 @@ SLICER = "slicer"
 DCM2NIIX = "dcm2niix"
 ANTSPYX = "antspyx"
 ANTSPYNET = "antspynet"
-TOOL_IDS = (FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET)
+DIPY = "dipy"
+TOOL_IDS = (FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET, DIPY)
 
 _BUNDLED_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "licenses"
@@ -131,6 +132,29 @@ def _antspyx_candidates(context: dict) -> list:
     return candidates
 
 
+def _dipy_candidates(context: dict) -> list:
+    # The dipy pip package (a SWANe dependency) ships its license directly
+    # under the distribution's .dist-info/ directory, rather than the PEP 639
+    # licenses/ subdirectory dcm2niix/antspyx use; recover it from the
+    # installed package so the displayed text matches the installed version.
+    try:
+        from importlib.metadata import distribution, PackageNotFoundError
+    except ImportError:
+        return []
+    try:
+        dist = distribution("dipy")
+    except PackageNotFoundError:
+        return []
+    candidates = []
+    for entry in dist.files or []:
+        if entry.name.lower().startswith("licen"):
+            try:
+                candidates.append(str(dist.locate_file(entry)))
+            except Exception:
+                continue
+    return candidates
+
+
 LICENSES = {
     FSL: LicenseInfo(
         tool_id=FSL,
@@ -187,5 +211,13 @@ LICENSES = {
         installed_path_candidates=lambda context: [],
         bundled_filename="antspynet_license.txt",
         online_is_official=True,
+    ),
+    DIPY: LicenseInfo(
+        tool_id=DIPY,
+        display_name="dipy",
+        official_url="https://raw.githubusercontent.com/dipy/dipy/master/LICENSE",
+        is_html_online=False,
+        installed_path_candidates=_dipy_candidates,
+        bundled_filename="dipy.txt",
     ),
 }

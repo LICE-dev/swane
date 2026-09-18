@@ -88,23 +88,23 @@ def build_dicom_tree(root):
             f.write("not a dicom")
     scenarios["NONDICOM"] = Scenario("NONDICOM", nondicom_dir, 2, 0, 0, 0, 0, 0)
 
-    # --- multi subject: two patients -------------------------------------
+    # --- multi subject: two subjects -------------------------------------
     multisubj_dir = os.path.join(root, "multisubj")
     os.makedirs(multisubj_dir, exist_ok=True)
-    for patient in ("PA", "PB"):
+    for subject in ("PA", "PB"):
         study_uid = generate_uid()
         for i in range(2):
             write_minimal_dicom(
-                os.path.join(multisubj_dir, f"{patient.lower()}{i}.dcm"),
-                patient_id=patient,
-                series_desc="S_" + patient,
+                os.path.join(multisubj_dir, f"{subject.lower()}{i}.dcm"),
+                patient_id=subject,
+                series_desc="S_" + subject,
                 study_uid=study_uid,
             )
     scenarios["MULTI_SUBJ"] = Scenario(
         "MULTI_SUBJ", multisubj_dir, 4, 2, -1, -1, -1, -1
     )
 
-    # --- multi exam: one patient, two studies ----------------------------
+    # --- multi exam: one subject, two studies ----------------------------
     multiexam_dir = os.path.join(root, "multiexam")
     os.makedirs(multiexam_dir, exist_ok=True)
     for i in range(2):

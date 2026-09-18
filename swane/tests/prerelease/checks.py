@@ -37,6 +37,7 @@ from swane.tests.helpers.phantom.ground_truth import (
     load_centres,
     world_x_ras as _world_x_ras,
 )
+from swane.tests.prerelease.subject import SWEEP_TRACT
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
 
 #: Severity levels. Only ``error`` makes a pass fail.
@@ -47,10 +48,8 @@ INFO = "info"
 RESULTS_DIR = "results"
 
 #: A feature (veins, electrodes, high-FA corridor) must land within this
-#: distance of the structure the phantom actually drew. Calibrated against a
-#: real run: measured margins are the reference brain at 8.1 mm, the CST at
-#: 3.1 mm, the venous sinus at 1.6 mm and the SEEG contacts at 6.5 mm, so
-#: 15 mm leaves headroom for cross-machine variation without masking a gross
+#: distance of the structure the phantom actually drew. A 15 mm margin
+#: leaves headroom for cross-machine variation without masking a gross
 #: mislocalisation. ``_check_feature`` doubles it for its own ``*.position``
 #: checks (electrodes/veins), which is looser on purpose.
 FEATURE_TOLERANCE_MM = 15.0
@@ -225,8 +224,51 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
     checks.extend(_check_reference(result, files))
     checks.extend(_check_nonlinear_registration(result))
     checks.extend(_check_nonlinear_target_alignment(result))
+    checks.extend(_check_dipy_bundle_recovery(result, files))
     if ground_truth is not None:
         checks.extend(_check_plausibility(result, files, ground_truth))
+    return checks
+
+
+def _check_dipy_bundle_recovery(result, files: list) -> list:
+    """Verify the dipy engine recovered the swept bundle and did not flag it.
+
+    The dipy tractography pass sweeps a single tract (``SWEEP_TRACT``, the
+    corticospinal tract), so the per-tract RecoBundles workflow sinks its two
+    reference-space bundles to ``<subject>/results/dti/r-<tract>_<side>.vtp``
+    (see ``MainWorkflow.launch_dipy_dti_analysis`` -> ``dipy_bundle_workflow``,
+    whose ``to_ref`` node writes ``out_name='r-<tract>_<side>'`` + ``.vtp``). A
+    low-confidence bundle additionally leaves a ``r-<tract>_<side>.lowconf.json``
+    sidecar (``DipyBundleRecovery._gen_flagname``); a confident bundle leaves
+    none. So recovery is "the ``.vtp`` exists" and confidence is "no
+    ``.lowconf.json`` sits beside it".
+    """
+    checks = []
+    if result.name != "dti_tractography_dipy":
+        return checks
+
+    tract_dir = os.path.join(result.subject_dir, RESULTS_DIR, "dti")
+    if not os.path.isdir(tract_dir):
+        return checks
+
+    for side in ["lh", "rh"]:
+        name = "%s_%s" % (SWEEP_TRACT, side)
+        vtp_file = os.path.join(tract_dir, "r-%s.vtp" % name)
+        lowconf_file = os.path.join(tract_dir, "r-%s.lowconf.json" % name)
+        checks.append(
+            CheckResult(
+                "dipy.recovery.%s" % name,
+                os.path.isfile(vtp_file),
+                "r-%s.vtp present" % name,
+            )
+        )
+        checks.append(
+            CheckResult(
+                "dipy.confidence.%s" % name,
+                not os.path.isfile(lowconf_file),
+                "%s is not flagged as low confidence" % name,
+            )
+        )
     return checks
 
 
