@@ -7,7 +7,6 @@
 #   is_volumetric = False
 #   limit_synth_cores = false
 #   max_cpu = 4
-#   multicore_node_limit = SOFT_CAP
 #   registration_engine = FSL
 #   synth_morph = false
 #

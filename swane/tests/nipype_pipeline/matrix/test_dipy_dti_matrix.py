@@ -6,7 +6,7 @@ tractography tail is built at all (``tractography`` on/off), and the per-node
 **thread count** the parallel dipy nodes declare to nipype as ``n_procs``
 (``max_cpu``) -- the factory's own HARD_CAP-only core budget (spec section
 10). Unlike ``dti_preproc_workflow``, these new dipy nodes take no
-``multicore_node_limit``/``CoreLimit`` parameter at all, so there is no
+````/``CoreLimit`` parameter at all, so there is no
 SOFT_CAP/HARD_CAP mode axis to sweep here -- only the raw thread count. One
 golden graph snapshot is recorded per scenario under
 ``snapshots/dipy_dti_preproc/``.

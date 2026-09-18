@@ -2,7 +2,6 @@ from nipype.interfaces.fsl import RobustFOV, ApplyMask
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
-from swane.config.config_enums import CoreLimit
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
@@ -18,7 +17,7 @@ from swane.nipype_pipeline.interfaces.utils import (
     resolve_registration_engine,
     resolve_deskull_engine,
 )
-from swane.config.config_enums import CoreLimit, DeskullModality
+from swane.config.config_enums import DeskullModality
 
 
 def linear_reg_workflow(
@@ -32,7 +31,6 @@ def linear_reg_workflow(
     bias_field_correction: bool = False,
     deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -61,8 +59,6 @@ def linear_reg_workflow(
         is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of Synth tools. The default is 0.
-    multicore_node_limit : CoreLimit, optional
-        Preference for Synth tools core usage. The default is CoreLimit.SOFT_CAP.
     test_run : bool, optional
         If True, speed up registration and N4 bias field correction for
         prerelease test runs at the cost of accuracy. The default is False.
@@ -197,7 +193,6 @@ def linear_reg_workflow(
             bet_robust=True,
             bet_bias_correction=bet_bias_correction,
             max_cpu=max_cpu,
-            multicore_node_limit=multicore_node_limit,
             limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
         )
         workflow.connect(robustfov, "out_roi", deskull, "in_file")
@@ -218,7 +213,6 @@ def linear_reg_workflow(
         flirt_search=flirt_search,
         test_run=test_run,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
@@ -264,7 +258,7 @@ def linear_reg_workflow(
             bias_correction = Node(
                 AntsN4BiasFieldCorrection(), name="bias_correction", mem_gb=2
             )
-            if max_cpu != 0 and multicore_node_limit is not CoreLimit.NO_LIMIT:
+            if max_cpu != 0:
                 bias_correction.inputs.num_threads = max_cpu
             if test_run:
                 # antspyx default is [50, 50, 50, 50] per resolution level.

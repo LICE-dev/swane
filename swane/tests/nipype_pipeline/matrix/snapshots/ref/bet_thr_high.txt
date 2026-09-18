@@ -5,7 +5,6 @@
 #   deskull_engine = BET
 #   limit_synth_cores = false
 #   max_cpu = 4
-#   multicore_node_limit = SOFT_CAP
 #
 # nodes=8 edges=12
 

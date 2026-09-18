@@ -15,7 +15,7 @@ from swane.nipype_pipeline.interfaces.slicer.SegmentEndocranium import (
 )
 from configparser import SectionProxy
 
-from swane.config.config_enums import CoreLimit, RegistrationEngine
+from swane.config.config_enums import RegistrationEngine
 from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     get_registration_node,
@@ -32,7 +32,6 @@ def venous_ct_workflow(
     slicer_path: str,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -58,9 +57,6 @@ def venous_ct_workflow(
     max_cpu : int, optional
         If greater than 0, limit the core usage of the registration tools. The
         default is 0.
-    multicore_node_limit : CoreLimit, optional
-        Preference for the registration tools core usage. The default is
-        CoreLimit.SOFT_CAP.
     test_run : bool, optional
         If True, speed up the endocranium segmentation for prerelease test
         runs at the cost of accuracy. These parameters don't change the
@@ -191,7 +187,6 @@ def venous_ct_workflow(
         flirt_search=90,
         test_run=test_run,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     # The basal scan resampled into reference space.
@@ -221,7 +216,6 @@ def venous_ct_workflow(
         map_moving=True,
         test_run=test_run,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
