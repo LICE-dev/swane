@@ -4,17 +4,19 @@ from nipype.interfaces.fsl import (
     ImageMaths,
     RobustFOV,
 )
-from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
+from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from nipype import Node, IdentityInterface, MapNode
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.SumMultiVols import SumMultiVols
-from swane.nipype_pipeline.nodes.SegmentEndocranium import SegmentEndocranium
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.fsl.SumMultiVols import SumMultiVols
+from swane.nipype_pipeline.interfaces.slicer.SegmentEndocranium import (
+    SegmentEndocranium,
+)
 from configparser import SectionProxy
 
 from swane.config.config_enums import CoreLimit, RegistrationEngine
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     get_registration_node,
     resolve_registration_engine,

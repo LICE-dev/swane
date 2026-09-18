@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 
 from swane.config.config_enums import VeinDetectionMode
-from swane.nipype_pipeline.nodes.VenousCheck import VenousCheck
+from swane.nipype_pipeline.interfaces.vascular.VenousCheck import VenousCheck
 from swane.tests.helpers.phantom import catalog as phantom_catalog
 from swane.tests.helpers.phantom.dataset import PhantomProfile
 from swane.tests.helpers.phantom.sequences import render_structural

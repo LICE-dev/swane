@@ -19,7 +19,7 @@ from swane.config.config_enums import (
     DeskullEngine,
     DeskullModality,
 )
-from swane.nipype_pipeline.nodes.AntsPyNetBrainExtraction import (
+from swane.nipype_pipeline.interfaces.ants.AntsPyNetBrainExtraction import (
     AntsPyNetBrainExtraction,
 )
 from nipype.interfaces.fsl import BET

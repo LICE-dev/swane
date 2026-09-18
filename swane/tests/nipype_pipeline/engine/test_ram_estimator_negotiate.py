@@ -39,7 +39,7 @@ from swane.patches.nipype_patches import RamPlan
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
     MonitoredMultiProcPlugin,
 )
-from swane.nipype_pipeline.nodes.ram_estimators import FlirtRamEstimator
+from swane.nipype_pipeline.interfaces.ram_estimators import FlirtRamEstimator
 
 
 def _tiny_image(tmp_path, name="small.nii.gz"):
