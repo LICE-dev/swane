@@ -421,6 +421,14 @@ tool_reference_list = {
             "Tustison NJ, Avants BB, Cook PA, et al. N4ITK: improved N3 bias correction. IEEE Trans Med Imaging. 2010;29(6):1310-1320."
         ],
     ),
+    "AntsAtropos": ToolReference(
+        command="Atropos [antspyx]",
+        package=Package.ANTS,
+        url="https://antspyx.readthedocs.io/en/latest/segmentation.html#ants.atropos",
+        references=[
+            "Avants BB, Tustison NJ, Wu J, Cook PA, Gee JC. An open source multivariate framework for n-tissue segmentation with evaluation on public data. Neuroinformatics. 2011;9(4):381-400."
+        ],
+    ),
     "AntsRegistration": ToolReference(
         command="antsRegistration",
         package=Package.ANTS,
