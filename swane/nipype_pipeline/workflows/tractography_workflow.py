@@ -3,12 +3,12 @@ import glob
 from nipype import Node, IdentityInterface, MapNode, JoinNode, Merge
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
-from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
-from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
+from swane.nipype_pipeline.interfaces.dti.RandomSeedGenerator import RandomSeedGenerator
+from swane.nipype_pipeline.interfaces.dti.MergeTargets import MergeTargets
+from swane.nipype_pipeline.interfaces.dti.SumMultiTracks import SumMultiTracks
 from swane.config.config_enums import RegistrationEngine
 from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     resolve_registration_engine,
 )

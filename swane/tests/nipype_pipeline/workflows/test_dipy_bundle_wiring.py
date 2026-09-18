@@ -92,7 +92,9 @@ class TestBilateral:
             assert recog.inputs.slr is True
 
     def test_recognize_carries_the_recobundles_ram_estimator(self, af_wf):
-        from swane.nipype_pipeline.nodes.ram_estimators import RecoBundlesRamEstimator
+        from swane.nipype_pipeline.interfaces.ram_estimators import (
+            RecoBundlesRamEstimator,
+        )
 
         for recog in _nodes_by_iface(af_wf, "DipyRecoBundlesRecognize"):
             assert isinstance(recog.ram_estimator, RecoBundlesRamEstimator)

@@ -10,22 +10,28 @@ from swane.config.config_enums import (
     DeskullModality,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.ExtractVolumes import ExtractVolumes
-from swane.nipype_pipeline.nodes.AffineToRAS import AffineToRAS
-from swane.nipype_pipeline.nodes.DwiCrop import DwiCrop
-from swane.nipype_pipeline.nodes.DipyDenoise import DipyDenoise
-from swane.nipype_pipeline.nodes.DipyMotionCorrection import DipyMotionCorrection
-from swane.nipype_pipeline.nodes.DwiBiasCorrection import DwiBiasCorrection
-from swane.nipype_pipeline.nodes.DipyTensorFit import DipyTensorFit
-from swane.nipype_pipeline.nodes.DipyCsdFit import DipyCsdFit
-from swane.nipype_pipeline.nodes.DipyTissueClassifier import DipyTissueClassifier
-from swane.nipype_pipeline.nodes.DipyTracking import DipyTracking
-from swane.nipype_pipeline.nodes.DipyAtlasSLR import DipyAtlasSLR
-from swane.nipype_pipeline.nodes.DipyTractogramChunker import DipyTractogramChunker
-from swane.nipype_pipeline.nodes.DipyRecoBundles import DipyRecoBundlesBuild
-from swane.nipype_pipeline.nodes.ram_estimators import (
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.volumes.ExtractVolumes import ExtractVolumes
+from swane.nipype_pipeline.interfaces.dti.AffineToRAS import AffineToRAS
+from swane.nipype_pipeline.interfaces.dti.DwiCrop import DwiCrop
+from swane.nipype_pipeline.interfaces.dipy.DipyDenoise import DipyDenoise
+from swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection import (
+    DipyMotionCorrection,
+)
+from swane.nipype_pipeline.interfaces.dti.DwiBiasCorrection import DwiBiasCorrection
+from swane.nipype_pipeline.interfaces.dipy.DipyTensorFit import DipyTensorFit
+from swane.nipype_pipeline.interfaces.dipy.DipyCsdFit import DipyCsdFit
+from swane.nipype_pipeline.interfaces.dipy.DipyTissueClassifier import (
+    DipyTissueClassifier,
+)
+from swane.nipype_pipeline.interfaces.dipy.DipyTracking import DipyTracking
+from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import DipyAtlasSLR
+from swane.nipype_pipeline.interfaces.dipy.DipyTractogramChunker import (
+    DipyTractogramChunker,
+)
+from swane.nipype_pipeline.interfaces.dipy.DipyRecoBundles import DipyRecoBundlesBuild
+from swane.nipype_pipeline.interfaces.ram_estimators import (
     DipyCropRamEstimator,
     DipyCsdRamEstimator,
     DipyMotionRamEstimator,
@@ -35,7 +41,7 @@ from swane.nipype_pipeline.nodes.ram_estimators import (
     RecoBundlesRamEstimator,
     DipyRecoBundlesChunkerRamEstimator,
 )
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,

@@ -87,7 +87,7 @@ class TestFormatNodeName:
         Without an entry in ``strings.node_names`` these would fall back to the
         raw, internal node name (e.g. "Build") in the progress UI.
         """
-        from swane.nipype_pipeline.nodes.DipyRecoBundles import (
+        from swane.nipype_pipeline.interfaces.dipy.DipyRecoBundles import (
             DipyRecoBundlesBuild,
             DipyRecoBundlesRecognize,
         )

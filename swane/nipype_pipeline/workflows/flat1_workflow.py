@@ -9,14 +9,14 @@ from nipype.interfaces.fsl import (
     SpatialFilter,
     Threshold,
 )
-from swane.nipype_pipeline.nodes.ImageStatistics import ImageStatistics
+from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.ThrROI import ThrROI
+from swane.nipype_pipeline.interfaces.fsl.ThrROI import ThrROI
 from nipype.interfaces.utility import IdentityInterface, Function
 
-from swane.nipype_pipeline.nodes.ram_estimators import FastRamEstimator
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.ram_estimators import FastRamEstimator
+from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     resolve_registration_engine,
 )
