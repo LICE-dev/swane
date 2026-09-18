@@ -12,6 +12,8 @@ if not QT_AVAILABLE:
 
 from swane.config.config_enums import GlobalPrefCategoryList, RegistrationEngine
 from swane.ui.PreferencesWindow import PreferencesWindow
+from swane.utils.DataInputList import DataInputList
+from swane.utils.ResourceManager import ResourceManager
 
 
 class TestRegistrationEngineCombo:
@@ -70,3 +72,85 @@ class TestRegistrationEngineCombo:
         _, combo2 = self._engine_combo(window2)
 
         assert combo2.itemData(combo2.currentIndex()) == RegistrationEngine.ANTS
+
+
+class TestHideVsGrayOut:
+    """A disabled preference is fully hidden when the reason cannot be
+    changed from within the same preferences window (an external
+    dependency/resource, or a requirement on another window's preference),
+    and only grayed out when it could still be unlocked by another
+    preference present in this same window.
+    """
+
+    def test_resource_gated_entry_is_hidden(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        monkeypatch.setattr(ResourceManager, "is_cuda", lambda: False)
+
+        window = PreferencesWindow(global_config, dependency_manager, False)
+        qtbot.addWidget(window)
+
+        x = window.input_keys[GlobalPrefCategoryList.PERFORMANCE]["cuda"]
+        entry = window.inputs[x]
+
+        assert entry.label.isVisible() is False
+        assert entry.input_field.isVisible() is False
+
+    def test_same_window_requirement_is_grayed_not_hidden(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        # CUDA available (so "cuda" itself is not hidden) but left unchecked
+        # (the default), so "max_subj_gpu" -- which requires cuda=True in the
+        # very same PERFORMANCE tab -- fails its requirement and must stay
+        # visible, just disabled: the user can still fix it from here.
+        monkeypatch.setattr(ResourceManager, "is_cuda", lambda: True)
+
+        window = PreferencesWindow(global_config, dependency_manager, False)
+        qtbot.addWidget(window)
+
+        cuda_x = window.input_keys[GlobalPrefCategoryList.PERFORMANCE]["cuda"]
+        assert window.inputs[cuda_x].label.isVisible() is True
+
+        gpu_x = window.input_keys[GlobalPrefCategoryList.PERFORMANCE]["max_subj_gpu"]
+        entry = window.inputs[gpu_x]
+
+        assert entry.label.isVisible() is True
+        assert entry.input_field.isVisible() is True
+        assert entry.input_field.isEnabled() is False
+
+    def test_dependency_gated_workflow_entry_is_hidden(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        # The generic workflow-preferences window (is_workflow=True, no
+        # subject) shares the exact same PreferencesWindow/PreferenceUIEntry
+        # code as the subject one.
+        monkeypatch.setattr(dependency_manager, "is_freesurfer", lambda: False)
+
+        window = PreferencesWindow(global_config, dependency_manager, True)
+        qtbot.addWidget(window)
+
+        x = window.input_keys[DataInputList.T13D]["freesurfer_step"]
+        entry = window.inputs[x]
+
+        assert entry.label.isVisible() is False
+        assert entry.input_field.isVisible() is False
+
+    def test_same_window_pref_requirement_in_workflow_window_is_grayed(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        # freesurfer_step stays at its default (DISABLED), so
+        # hippo_amyg_labels -- which requires freesurfer_step to be
+        # RECONALL/AUTORECON_PIAL in the same T13D tab -- must stay visible
+        # but grayed, not hidden: the user can still fix it from here.
+        monkeypatch.setattr(dependency_manager, "is_freesurfer", lambda: True)
+        monkeypatch.setattr(dependency_manager, "is_freesurfer_matlab", lambda: True)
+
+        window = PreferencesWindow(global_config, dependency_manager, True)
+        qtbot.addWidget(window)
+
+        x = window.input_keys[DataInputList.T13D]["hippo_amyg_labels"]
+        entry = window.inputs[x]
+
+        assert entry.label.isVisible() is True
+        assert entry.input_field.isVisible() is True
+        assert entry.input_field.isEnabled() is False
