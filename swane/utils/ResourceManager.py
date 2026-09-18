@@ -22,11 +22,6 @@ class ResourceManager:
     ANTS_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
     #: antspynet brain extraction; fixed at 5 GB for now (revisit later).
     ANTSPYNET_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
-    #: dipy/RecoBundles tractography engine floor. Set from the measured per-node
-    #: Minimum RAM to select the dipy tractography engine. It covers every dipy
-    #: node's negotiated bottom rung so the workflow can run; the tunable nodes
-    #: (motion, tracking, CSD) walk their parallelism/levers down to fit it,
-    #: while the one-way nodes -- no lever to walk -- set the actual floor.
     #: Minimum RAM to select the dipy tractography engine. It covers every dipy
     #: node's negotiated bottom rung so the workflow can run; the heavier nodes
     #: (motion, tracking) tune their parallelism/levers down to fit it, and

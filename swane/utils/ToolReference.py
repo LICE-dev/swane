@@ -186,11 +186,11 @@ tool_reference_list = {
         ],
     ),
     "DipyTracking": ToolReference(
-        command="pft_tracking [dipy]",
+        command="probabilistic_tracking [dipy]",
         package=Package.DIPY,
-        url="https://docs.dipy.org/stable/reference/dipy.tracking.html#module-dipy.tracking.local_tracking",
+        url="https://docs.dipy.org/stable/reference/dipy.tracking.html#module-dipy.tracking.tracker",
         references=[
-            "Girard G, Whittingstall K, Deriche R, Descoteaux M. Towards quantitative connectivity analysis: reducing tractography biases. NeuroImage. 2014;98:266-278."
+            "Descoteaux M, Deriche R, Knösche TR, Anwander A. Deterministic and probabilistic tractography based on complex fibre orientation distributions. IEEE Trans Med Imaging. 2009;28(2):269-286."
         ],
     ),
     "DipyAtlasSLR": ToolReference(

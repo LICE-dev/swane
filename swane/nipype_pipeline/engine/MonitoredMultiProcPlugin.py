@@ -276,14 +276,6 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
 
         ret = super(MonitoredMultiProcPlugin, self)._submit_mapnode(jobid)
 
-        for sub_id, original_id in self.mapnodesubids.items():
-            print(
-                jobid,
-                sub_id,
-                original_id,
-                self.procs[original_id].fullname,
-                self.procs[sub_id].fullname,
-            )
         # we do this here to not subclass _submit_mapnode
         if hasattr(self.procs[jobid], "ram_estimator"):
             for sub_id, original_id in self.mapnodesubids.items():
