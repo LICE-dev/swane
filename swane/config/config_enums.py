@@ -84,6 +84,11 @@ class TractographyEngine(Enum):
     DIPY_RECOBUNDLES = "dipy (CSD + RecoBundles)"
 
 
+class SegmentationEngine(Enum):
+    ANTS = "ANTs (antspyx Atropos)"
+    FSL = "FSL (FAST)"
+
+
 class DeskullModality(Enum):
     T1 = "t1"
     FLAIR = "flair"

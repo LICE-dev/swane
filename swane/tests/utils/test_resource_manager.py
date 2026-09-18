@@ -1,6 +1,8 @@
 import types
 
 import swane.utils.ResourceManager as rm
+from swane.config.config_enums import SegmentationEngine
+from swane.utils.ResourceManager import ResourceManager
 
 
 def test_to_gb_and_ram_calculations(monkeypatch):
@@ -36,3 +38,14 @@ def test_synth_requirements_and_cpu(monkeypatch):
     assert isinstance(rm.ResourceManager.synth_morph_ram_requirements(), int)
     assert isinstance(rm.ResourceManager.synth_seg_ram_requirements(), int)
     assert isinstance(rm.ResourceManager.synth_reconall_ram_requirements(), int)
+
+
+def test_segmentation_engine_has_exactly_ants_and_fsl():
+    assert {e.name for e in SegmentationEngine} == {"ANTS", "FSL"}
+    # ANTS is declared first so it is the natural default/order
+    assert list(SegmentationEngine)[0] is SegmentationEngine.ANTS
+
+
+def test_atropos_ram_requirement_is_positive_number():
+    assert isinstance(ResourceManager.atropos_ram_requirements(), (int, float))
+    assert ResourceManager.atropos_ram_requirements() > 0
