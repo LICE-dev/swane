@@ -5,7 +5,7 @@ from swane.config.preference_list import GLOBAL_PREFERENCES, WF_PREFERENCES, TRA
 from swane.utils.DataInputList import DataInputList
 from swane.utils.qt_compat import QT_AVAILABLE
 
-FSL_ONLY_TRACT_KEYS = {"atr", "str", "cbd", "cbp", "cbt"}
+FSL_ONLY_TRACT_KEYS = {"atr", "str", "cbd", "cbp", "cbt", "ar"}
 FSL_ONLY_KEYS = FSL_ONLY_TRACT_KEYS | {
     "tractography_threshold",
     "track_procs",
