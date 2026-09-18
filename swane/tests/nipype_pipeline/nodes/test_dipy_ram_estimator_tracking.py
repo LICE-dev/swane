@@ -111,9 +111,7 @@ class TestModel:
         est = DipyTrackingRamEstimator()
         inputs = _inputs(tmp_path, seed_density=3)
         pve = nib.load(inputs.pve_wm)
-        expected = seed_count_for_volume(
-            wm_seed_mask(pve.get_fdata()), pve.affine, 3
-        )
+        expected = seed_count_for_volume(wm_seed_mask(pve.get_fdata()), pve.affine, 3)
         assert est._seed_count(inputs) == expected
         # the fixture's affine is 1 mm3 per voxel, so the masked volume in mm3
         # is the WM voxel count

@@ -134,7 +134,7 @@ class TestDipyDenoiseOutputDtype:
 
         # Force a known non-integer denoised result so int16 quantization would
         # be observable as a rounding error, not merely a dtype tag.
-        forced = (data.astype(np.float32) + 0.3333)
+        forced = data.astype(np.float32) + 0.3333
 
         def _fake_nlmeans(arr, sigma, **kwargs):
             return forced

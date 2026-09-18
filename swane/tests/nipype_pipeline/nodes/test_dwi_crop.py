@@ -42,7 +42,6 @@ from swane.nipype_pipeline.nodes.DipyTracking import (
     foreground_bbox_slices,
 )
 
-
 # --------------------------------------------------------------------------- #
 # A synthetic 4D DWI: a solid "brain" blob surrounded by wide empty margins.
 # Margins are wide (>= 14 voxels each side) so that even the node's generous

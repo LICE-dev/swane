@@ -157,7 +157,7 @@ class TestDwiBiasCorrectionOutputDtype:
         bval = _make_bval(workspace, [0, 1000, 1000])
 
         # Non-uniform field so the corrected values are genuinely non-integer.
-        field = (rng.random(shape).astype(np.float32) * 0.5 + 0.75)
+        field = rng.random(shape).astype(np.float32) * 0.5 + 0.75
         calls = {}
         _install_n4_spy(monkeypatch, field, calls)
 
@@ -172,9 +172,7 @@ class TestDwiBiasCorrectionOutputDtype:
 
         # The division survives on disk (int16 would have quantized it).
         expected = data.astype(np.float32) / field[..., np.newaxis]
-        assert np.allclose(
-            out_img.get_fdata(dtype=np.float32), expected, atol=1e-4
-        )
+        assert np.allclose(out_img.get_fdata(dtype=np.float32), expected, atol=1e-4)
 
 
 class TestDwiBiasCorrectionThreadPinning:
