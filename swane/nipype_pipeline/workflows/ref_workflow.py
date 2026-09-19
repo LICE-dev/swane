@@ -11,7 +11,8 @@ from swane.nipype_pipeline.interfaces.utils import (
     resolve_deskull_engine,
 )
 from configparser import SectionProxy
-from nipype.interfaces.fsl import RobustFOV, ApplyMask
+from nipype.interfaces.fsl import RobustFOV
+from swane.nipype_pipeline.interfaces.niimath import ApplyMask
 from nipype.interfaces.utility import IdentityInterface
 from nipype import Node
 from swane.config.config_enums import DeskullModality

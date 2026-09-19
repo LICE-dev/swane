@@ -1,15 +1,15 @@
-from nipype.interfaces.fsl import (
+from nipype.interfaces.fsl import RobustFOV
+from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
     BinaryMaths,
     ImageMaths,
-    RobustFOV,
 )
 from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from nipype import Node, IdentityInterface, MapNode
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
-from swane.nipype_pipeline.interfaces.fsl.SumMultiVols import SumMultiVols
+from swane.nipype_pipeline.interfaces.niimath.SumMultiVols import SumMultiVols
 from swane.nipype_pipeline.interfaces.slicer.SegmentEndocranium import (
     SegmentEndocranium,
 )

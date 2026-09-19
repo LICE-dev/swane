@@ -1,4 +1,4 @@
-from nipype.interfaces.fsl import (
+from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
     ImageMaths,
 )

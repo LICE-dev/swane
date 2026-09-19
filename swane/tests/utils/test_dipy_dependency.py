@@ -146,6 +146,7 @@ def test_dipy_offered_for_consent_like_other_tools(monkeypatch):
 
     monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
     monkeypatch.setattr(lc, "_dipy_version", lambda: "1.12.0")
+    monkeypatch.setattr(lc, "_niimath_version", lambda: None)
 
     dm, cfg = _FakeDM(), _FakeConfig()
     detected = lc.detected_tool_versions(dm, cfg)

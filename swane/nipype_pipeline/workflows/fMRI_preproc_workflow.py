@@ -1,9 +1,9 @@
 from nipype import Node, IdentityInterface, Merge
 from nipype.interfaces.fsl import (
-    ImageMaths,
     MCFLIRT,
     SUSAN,
 )
+from swane.nipype_pipeline.interfaces.niimath import ImageMaths
 from swane.nipype_pipeline.interfaces.volumes.ExtractVolumes import ExtractVolumes
 from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
