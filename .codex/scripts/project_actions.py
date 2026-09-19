@@ -33,7 +33,6 @@ def find_sibling(repository_name, marker):
 def bootstrap():
     run_python("-m", "pip", "install", "--upgrade", "pip")
     for repository_name, marker in (
-        ("swane_supplement", "swane_supplement/__init__.py"),
         ("dicom_sequence_classifier", "dicom_sequence_classifier/__init__.py"),
     ):
         sibling = find_sibling(repository_name, marker)

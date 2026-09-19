@@ -11,7 +11,7 @@ Determinism is the whole point, so the renderer:
 
 * sorts nodes, input traits and connections by name;
 * rewrites machine-specific absolute paths (the test ``tmp_path``, the home
-  folder, ``swane_supplement`` resources, ``$FSLDIR``, the interpreter's
+  folder, ``swane.supplement`` resources, ``$FSLDIR``, the interpreter's
   ``site-packages`` and the current working directory) to stable ``<TOKEN>``s;
 * normalises Windows back-slashes to ``/`` so a snapshot generated on Windows
   matches one generated on Linux/macOS.
@@ -51,9 +51,9 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
 
     add(tmp_root, "<TMP>")
     try:
-        import swane_supplement
+        from swane import supplement
 
-        add(swane_supplement.__path__[0], "<SUPPLEMENT>")
+        add(supplement.__path__[0], "<SUPPLEMENT>")
     except Exception:
         pass
     # XTRACT_DATA_DIR resolves under $FSLDIR to "Human" (FSL < 6.0.7) or

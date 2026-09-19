@@ -80,6 +80,7 @@ mainwindow_home_label4 = APPNAME + " is not meant for clinical use!\n"
 mainwindow_home_label5 = "\nExternal mandatory dependencies:"
 mainwindow_home_label6 = "\nExternal recommended dependencies:"
 mainwindow_home_label7 = "\nExternal optional dependencies:"
+mainwindow_home_label_atlases = "\nAtlases:"
 
 mainwindow_dep_slicer_src = "Searching Slicer installation..."
 mainwindow_pref_disabled_error = "Preferences disabled during workflow execution!"

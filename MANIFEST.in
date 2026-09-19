@@ -1,4 +1,6 @@
 recursive-include swane/licenses *.txt
+recursive-include swane/supplement/icons *
+recursive-include swane/supplement/resources *
 exclude .gitignore
 exclude .spyproject
 exclude makerealease.sh
