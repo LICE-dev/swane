@@ -56,7 +56,6 @@ def flat1_workflow(
     max_cpu : int, optional
         CPU budget for the ITK-based Atropos node (0 = unset, leave the tool
         unbudgeted). Ignored by the FSL FAST branch. The default is 0.
-        The default is
     Input Node Fields
     ----------
     reference_brain : path
