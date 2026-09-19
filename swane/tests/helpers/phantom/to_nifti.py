@@ -7,7 +7,7 @@ smoke test that every series converts cleanly.
 
 Usage::
 
-    python -m swane.tests.helpers.phantom.to_nifti <subject_dir> [out_dir]
+    python3 -m swane.tests.helpers.phantom.to_nifti <subject_dir> [out_dir]
 """
 
 from __future__ import annotations

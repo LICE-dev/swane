@@ -35,7 +35,7 @@ python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
   Confirm the diff in `snapshots/<workflow>/<scenario>.txt` shows only nodes, commands, flags, and wiring you actually intended to change.
 - **Refresh the generated reports** and commit test + snapshot + report together:
   ```bash
-  python swane/tests/nipype_pipeline/matrix/generate_report.py
+  python3 swane/tests/nipype_pipeline/matrix/generate_report.py
   ```
   This rewrites `MATRIX.md` (committed, GitHub-rendered) and `matrix_report.html` (git-ignored, local). Never hand-edit either.
 - Snapshots are OS-agnostic by construction: the renderer sorts nodes/traits/connections and rewrites volatile absolute paths (`tmp_path`, home, `swane.supplement`, `$FSLDIR`, `site-packages`, cwd) to stable tokens. A snapshot diff that only changes a path or an OS-specific separator signals a renderer regression, not a real graph change — investigate before regenerating.
@@ -43,17 +43,18 @@ python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
 
 ## Prerelease — real execution sweep (delicate)
 
-`swane/tests/prerelease/` (`python -m swane.tests.prerelease`) runs the **real** workflows (dcm2niix, FSL, FreeSurfer, Slicer) over a synthetic phantom exam generated on the machine that runs it — no DICOM is committed or required. It is the only suite that proves scientific/numeric correctness rather than just graph construction, via layered checks: execution (no failed node/crash), integrity (finite, non-constant, on the reference grid), and plausibility (registration overlap, FA/tractography localization, vein localization — quantitative, graded against the phantom's known ground truth, not eyeballed).
+`swane/tests/prerelease/` (`python3 -m swane.tests.prerelease`) runs the **real** workflows (dcm2niix, FSL, FreeSurfer, Slicer) over a synthetic phantom exam generated on the machine that runs it — no DICOM is committed or required. It is the only suite that proves scientific/numeric correctness rather than just graph construction, via layered checks: execution (no failed node/crash), integrity (finite, non-constant, on the reference grid), and plausibility (registration overlap, FA/tractography localization, vein localization — quantitative, graded against the phantom's known ground truth, not eyeballed).
 
 - Always resolve and verify the working root before running: default `~/test_swane/prerelease`, disposable — **never point it at a clinical working directory.**
 - Blocking requirements (nothing runs without them): FSL, dcm2niix, `$FREESURFER_HOME/subjects/fsaverage` (needed to build the phantom, even if FreeSurfer passes are not requested). Everything else (CUDA, Synth tools, Slicer, XTRACT data) degrades gracefully — a missing capability drops only the axes that need it, with the reason recorded in the report.
 - Commands:
   ```bash
-  python -m swane.tests.prerelease --dry-run                 # what would run / what this host cannot do
-  python -m swane.tests.prerelease --cores 8 --ram 10         # the default sweep
-  python -m swane.tests.prerelease --cores 8 --ram 10 --with-reconall   # + slow FreeSurfer passes (hours each)
-  python -m swane.tests.prerelease --only <pass_name> --cores 8 --ram 10  # a single pass, see --list
-  python -m swane.tests.prerelease --checks-only              # re-check results already on disk
+  python3 -m swane.tests.prerelease --dry-run                 # what would run / what this host cannot do
+  python3 -m swane.tests.prerelease --cores 8 --ram 10         # the default sweep
+  python3 -m swane.tests.prerelease --cores 8 --ram 10 --with-reconall   # + slow FreeSurfer passes (hours each)
+  python3 -m swane.tests.prerelease --only <pass_name> --cores 8 --ram 10  # a single pass, see --list
+  python3 -m swane.tests.prerelease --checks-only              # re-check results already on disk
+  python3 -m swane.tests.prerelease --view <pass_name>         # open finished pass in Slicer
   ```
   Pick `--ram` to what the machine actually has — Synth tools have hard floors (SynthStrip 5 GB, SynthMorph/SynthSeg 14 GB, Synth recon-all 20 GB on Linux); passes needing more are skipped, not OOM-killed.
 - A full sweep takes hours; progress is saved after every pass, so re-running the same command resumes. `--retry-failed` re-runs failed passes; `--no-resume` starts over.

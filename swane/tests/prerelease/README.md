@@ -9,7 +9,7 @@ It answers the question the snapshot matrix cannot: *does SWANe still produce
 correct output for every supported combination of settings?*
 
 ```bash
-python -m swane.tests.prerelease --cores 8 --ram 10
+python3 -m swane.tests.prerelease --cores 8 --ram 10
 ```
 
 No DICOM is committed and none is needed: the phantom exam is generated on the
@@ -150,27 +150,32 @@ because the phantom is built from `fsaverage`.
 
 ```bash
 # what would run here, and what this host cannot do (runs nothing)
-python -m swane.tests.prerelease --dry-run
+python3 -m swane.tests.prerelease --dry-run
 ```
 
 ```bash
 # the default sweep
-python -m swane.tests.prerelease --cores 8 --ram 10
+python3 -m swane.tests.prerelease --cores 8 --ram 10
 ```
 
 ```bash
 # include the slow FreeSurfer passes (hours each)
-python -m swane.tests.prerelease --cores 8 --ram 10 --with-reconall
+python3 -m swane.tests.prerelease --cores 8 --ram 10 --with-reconall
 ```
 
 ```bash
 # a single pass (see --list for the names)
-python -m swane.tests.prerelease --only dti_tractography --cores 8 --ram 10
+python3 -m swane.tests.prerelease --only dti_tractography --cores 8 --ram 10
 ```
 
 ```bash
 # re-run the checks over results already on disk, without re-running anything
-python -m swane.tests.prerelease --checks-only
+python3 -m swane.tests.prerelease --checks-only
+```
+
+```bash
+# open a finished pass in Slicer for visual inspection
+python3 -m swane.tests.prerelease --view structural_fsl
 ```
 
 `--cores` and `--ram` are handed to the `MonitoredMultiProcPlugin` exactly as
