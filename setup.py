@@ -19,7 +19,14 @@ setup(
     author_email="dev@lice.it",
     packages=find_packages(exclude=["swane.tests", "swane.tests.*"]),
     include_package_data=True,
-    package_data={"swane": ["licenses/*.txt"]},
+    package_data={
+        "swane": [
+            "licenses/*.txt",
+            "supplement/icons/*",
+            "supplement/resources/*",
+            "supplement/resources/FLAT1/*",
+        ]
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -35,8 +42,6 @@ setup(
         "PySide6",
         "pydicom==3.0.1",
         "psutil==7.0.0",
-        # TODO: upgrade to swane_supplement 0.2
-        "swane_supplement>=0.1.2",
         "matplotlib==3.10.1",
         # todo: SET NIBABEL 5.2 as minimum to be more inclusive?
         "nibabel>=5.3.0,<6",

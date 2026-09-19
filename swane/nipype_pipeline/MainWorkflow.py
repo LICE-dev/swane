@@ -3,7 +3,7 @@ import os
 from multiprocessing import cpu_count
 from os.path import abspath
 
-import swane_supplement
+from swane import supplement
 from swane.utils.ResourceManager import ResourceManager
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.SubjectInputStateList import SubjectInputStateList
@@ -269,7 +269,7 @@ class MainWorkflow(CustomWorkflow):
         self.sym.long_name = "Symmetric atlas registration"
 
         sym_inputnode = self.sym.get_node("inputnode")
-        sym_inputnode.inputs.atlas = swane_supplement.sym_template
+        sym_inputnode.inputs.atlas = supplement.sym_template
         self.connect(
             self.t1, "outputnode.reference_brain", self.sym, "inputnode.in_file"
         )

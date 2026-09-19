@@ -31,7 +31,6 @@ This file is loaded into every conversation in this repository. Keep it short; p
 ## Related repositories
 
 Normally checked out as siblings; discover them from the workspace rather than assuming an absolute path:
-- `../swane_supplement` — packaged icons and scientific resources
 - `../dicom_sequence_classifier` — metadata-based DICOM classification
 - `../swane_classifier` — lesion-classifier research code
 - `../swane.wiki` — public GitHub wiki

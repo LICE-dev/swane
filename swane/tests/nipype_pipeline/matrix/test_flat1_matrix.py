@@ -2,7 +2,7 @@
 :func:`swane.nipype_pipeline.workflows.flat1_workflow.flat1_workflow`.
 
 FLAT1 junction/extension z-score pipeline. It references packaged
-``swane_supplement`` templates (rewritten to ``<SUPPLEMENT>`` in snapshots) and
+``swane.supplement`` templates (rewritten to ``<SUPPLEMENT>`` in snapshots) and
 an MNI template path that only needs to exist. Snapshots under
 ``snapshots/flat1/``.
 
