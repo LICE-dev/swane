@@ -1,6 +1,6 @@
 """Command line entry point for the pre-release sweep.
 
-    python -m swane.tests.prerelease --cores 8 --ram 10
+    python3 -m swane.tests.prerelease --cores 8 --ram 10
 
 The sweep takes hours, so it is deliberately a command rather than a pytest
 run: progress is persisted after every pass, ``--resume`` (the default) picks
@@ -10,16 +10,19 @@ for inspection.
 Useful variants::
 
     # see what would run on this machine, without running anything
-    python -m swane.tests.prerelease --dry-run
+    python3 -m swane.tests.prerelease --dry-run
 
     # include the slow FreeSurfer passes
-    python -m swane.tests.prerelease --cores 8 --ram 10 --with-reconall
+    python3 -m swane.tests.prerelease --cores 8 --ram 10 --with-reconall
 
     # re-check results already on disk, without re-running the workflows
-    python -m swane.tests.prerelease --checks-only
+    python3 -m swane.tests.prerelease --checks-only
 
     # one pass at a time
-    python -m swane.tests.prerelease --only dti_tractography
+    python3 -m swane.tests.prerelease --only dti_tractography
+
+    # open a finished pass in Slicer for visual inspection
+    python3 -m swane.tests.prerelease --view structural_fsl
 """
 
 from __future__ import annotations
@@ -35,7 +38,7 @@ DEFAULT_WORK_DIR = os.path.join(os.path.expanduser("~"), "test_swane", "prerelea
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m swane.tests.prerelease",
+        prog="python3 -m swane.tests.prerelease",
         description=(
             "Run every SWANe workflow over the synthetic phantom exam across "
             "the configuration matrix, then check the results."

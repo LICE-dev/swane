@@ -239,7 +239,7 @@ def _pass_section(item: dict, work_dir: str) -> str:
             % html.escape(os.path.join(item["subject_dir"], "results"))
         )
         if os.path.isdir(os.path.join(item["subject_dir"], "results")):
-            view_cmd = "python -m swane.tests.prerelease --view %s --work-dir %s" % (
+            view_cmd = "python3 -m swane.tests.prerelease --view %s --work-dir %s" % (
                 item["name"],
                 work_dir,
             )

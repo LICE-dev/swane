@@ -12,7 +12,7 @@ extracted "decision" highlights (commands used, CUDA/GPU flags, node count):
 This is a plain script, not a pytest test (the file name does not start with
 ``test_``). Run it with::
 
-    python swane/tests/nipype_pipeline/matrix/generate_report.py [html_output]
+    python3 swane/tests/nipype_pipeline/matrix/generate_report.py [html_output]
 
 It reads ``snapshots/`` next to this file, writes the HTML (to the given path or
 ``matrix_report.html``) and always refreshes ``MATRIX.md``. It never touches the
@@ -201,7 +201,7 @@ def _render_markdown(families: dict) -> str:
     lines.append("")
     lines.append(
         "> Generated from the golden snapshots by "
-        "`python swane/tests/nipype_pipeline/matrix/generate_report.py` — "
+        "`python3 swane/tests/nipype_pipeline/matrix/generate_report.py` — "
         "do not edit by hand. Regenerate after refreshing the snapshots "
         "(`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`)."
     )
