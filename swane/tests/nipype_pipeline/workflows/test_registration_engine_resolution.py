@@ -9,7 +9,7 @@ single directional displacement field per direction (``*_fwd_compose`` /
 ``*_inv_compose``) instead of building FLIRT/FNIRT.
 """
 
-from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
+from swane.config.config_enums import GlobalPrefCategoryList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
 linear_reg_workflow = import_workflow_or_skip(
@@ -32,7 +32,6 @@ class TestLinearRegFollowsConfiguredEngine:
             dicom_dir=make_input_dir(),
             config=None,
             synth_config=synth,
-            multicore_node_limit=CoreLimit.SOFT_CAP,
         )
 
         assert wf.get_node("flair3d_antsreg") is not None
@@ -49,7 +48,6 @@ class TestLinearRegFollowsConfiguredEngine:
             dicom_dir=make_input_dir(),
             config=None,
             synth_config=synth,
-            multicore_node_limit=CoreLimit.SOFT_CAP,
         )
 
         assert wf.get_node("flair3d_flirt") is not None
@@ -67,7 +65,6 @@ class TestNonlinearRegFollowsConfiguredEngine:
         wf = nonlinear_reg_workflow(
             "sym",
             synth_config=synth,
-            multicore_node_limit=CoreLimit.SOFT_CAP,
         )
 
         assert wf.get_node("sym_antsreg") is not None
@@ -83,7 +80,6 @@ class TestNonlinearRegFollowsConfiguredEngine:
         wf = nonlinear_reg_workflow(
             "sym",
             synth_config=synth,
-            multicore_node_limit=CoreLimit.SOFT_CAP,
         )
 
         assert wf.get_node("sym_flirt") is not None

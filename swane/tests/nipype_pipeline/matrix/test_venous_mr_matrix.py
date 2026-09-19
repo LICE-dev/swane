@@ -14,7 +14,6 @@ from swane.config.config_enums import (
     DeskullEngine,
     GlobalPrefCategoryList,
     VeinDetectionMode,
-    CoreLimit,
 )
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
@@ -86,7 +85,6 @@ def test_venous_mr_matrix(
         synth_config=synth,
         venous2_mr_dir=second_dir,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
 
     config_echo = {
@@ -96,7 +94,6 @@ def test_venous_mr_matrix(
         "synth_morph": synth["morph"],
         "limit_synth_cores": synth["limit_cores"],
         "max_cpu": MAX_CPU,
-        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
     }
     graph_snapshot(
         wf,
@@ -129,7 +126,6 @@ def test_venous_mr_matrix_test_run(
         config=section,
         synth_config=synth,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
         test_run=True,
     )
 

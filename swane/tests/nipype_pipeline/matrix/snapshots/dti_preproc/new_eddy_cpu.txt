@@ -1,9 +1,8 @@
-# workflow snapshot: dti_preproc / new_eddy_cpu_hardcap
+# workflow snapshot: dti_preproc / new_eddy_cpu
 #
 #   cuda = false
 #   deskull_engine = ANTSPYNET
 #   max_cpu = 4
-#   multicore_node_limit = HARD_CAP
 #   old_eddy_correct = false
 #   synth_morph = False
 #   tractography = false

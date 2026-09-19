@@ -13,7 +13,6 @@ import pytest
 
 from swane.config.config_enums import (
     GlobalPrefCategoryList,
-    CoreLimit,
     DeskullEngine,
     DeskullModality,
 )
@@ -61,7 +60,6 @@ def test_linear_reg_forwards_flair_modality(
         bias_field_correction=True,
         deskull_modality=DeskullModality.FLAIR,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     assert _modality_of(wf, "flair_deskull_antspynet") == DeskullModality.FLAIR.value
     assert DeskullModality.FLAIR.value == "flair"
@@ -80,7 +78,6 @@ def test_linear_reg_defaults_to_t1_modality(
         is_partial_coverage=False,
         bias_field_correction=True,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     assert _modality_of(wf, "mdc_deskull_antspynet") == DeskullModality.T1.value
 
@@ -94,7 +91,6 @@ def test_ref_forwards_t1_modality(subject_config, global_config, make_input_dir)
         synth_config=synth,
         deskull_modality=DeskullModality.T1,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     assert _modality_of(wf, "ref_deskull_biased_antspynet") == DeskullModality.T1.value
 
@@ -112,7 +108,6 @@ def test_dti_forwards_nodif_modality(subject_config, global_config, make_input_d
         synth_config=synth,
         deskull_modality=DeskullModality.NODIF,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     assert _modality_of(wf, "dti_deskull_antspynet") == DeskullModality.NODIF.value
 
@@ -128,7 +123,6 @@ def test_venous_mr_forwards_venous_modality(
         synth_config=synth,
         deskull_modality=DeskullModality.VENOUS,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     assert _modality_of(wf, "vein_mr_deskull_antspynet") == DeskullModality.VENOUS.value
 
@@ -150,7 +144,6 @@ def test_ref_forwards_antspynet_threshold(
         synth_config=synth,
         deskull_modality=DeskullModality.T1,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     assert _threshold_of(wf, "ref_deskull_biased_antspynet") == 0.6
 
@@ -171,7 +164,6 @@ def test_linear_reg_forwards_antspynet_threshold(
         bias_field_correction=True,
         deskull_modality=DeskullModality.FLAIR,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     assert _threshold_of(wf, "flair_deskull_antspynet") == 0.6
 
@@ -189,6 +181,5 @@ def test_venous_mr_forwards_antspynet_threshold(
         synth_config=synth,
         deskull_modality=DeskullModality.VENOUS,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     assert _threshold_of(wf, "vein_mr_deskull_antspynet") == 0.6

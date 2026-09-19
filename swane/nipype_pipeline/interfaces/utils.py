@@ -1,5 +1,3 @@
-from multiprocessing import cpu_count
-
 from nipype import Node, MapNode
 from nipype.interfaces.utility import Merge
 from nipype.interfaces.fsl import (
@@ -13,7 +11,6 @@ from nipype.interfaces.fsl import (
 )
 
 from swane.config.config_enums import (
-    CoreLimit,
     RegistrationEngine,
     DeskullEngine,
     DeskullModality,
@@ -103,80 +100,33 @@ def getn(result_list, index):
     return result_list[index]
 
 
-def get_tool_cpu_config(
-    max_cpu: int,
-    multicore_node_limit: CoreLimit,
-    limit_synth_cores: bool,
-) -> tuple[int, bool]:
-    """
-    Computes the thread count for a CPU-bound tool node (SynthStrip,
-    SynthMorphReg, SynthSeg, AntsRegistration) and whether nipype's own
-    scheduler must be made aware of it.
+def get_tool_cpu_config(max_cpu: int, limit_synth_cores: bool) -> int:
+    """Thread count for a CPU-bound tool node under the hard-cap contract.
 
-    Hard cap: the tool uses `threads` cores and nipype's resource accounting
-    (node.n_procs) knows and reserves the same amount. Soft cap: the tool
-    still uses `threads` cores.
+    limit_synth_cores caps Synth tools at SYNTH_CORE_LIMIT; otherwise the node
+    uses the full subject budget (max_cpu). The caller sets the node's
+    num_threads input to this value; nipype derives node.n_procs from it (via
+    the Node.n_procs property), so the reservation is always nipype-aware.
 
+    max_cpu is already resolved to a real budget by MainWorkflow (max_subj_cpu
+    < 1 becomes cpu_count()). A max_cpu of 0 is a deliberate "auto/all cores"
+    sentinel used by callers that never received a subject budget: it flows
+    through as num_threads=0, which the tools treat as auto, and keeps golden
+    snapshots deterministic (no machine-specific core count is baked in).
     """
     if limit_synth_cores:
         cores = ResourceManager.SYNTH_CORE_LIMIT
         if max_cpu > 0:
             cores = min(cores, max_cpu)
-        return cores, True
-
-    if multicore_node_limit == CoreLimit.NO_LIMIT:
-        return cpu_count(), False
-    if multicore_node_limit == CoreLimit.HARD_CAP:
-        return max_cpu, True
-    # SOFT_CAP
-    return max_cpu, False
+        return cores
+    return max_cpu
 
 
-def apply_tool_num_threads(
-    node: Node,
-    threads: int,
-    hard: bool,
-    soft_env_vars: tuple[str, ...] = (),
-    max_cpu: int = 0,
-) -> None:
-    """
-    Applies a CPU-bound tool's thread count.
-
-    Hard cap (or when the tool exposes no way to hide its thread usage from
-    nipype, e.g. SynthSeg, or the ANTs node whose only thread knob is the
-    ``num_threads`` input): sets the node's `num_threads` input, which nipype's
-    scheduler reads back as node.n_procs -- a real, visible reservation. (For
-    the ANTs node that input is what the node exports as
-    ``ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS`` at run time; nipype couples
-    ``num_threads`` to ``n_procs``, so such a tool can never truly hide its
-    thread usage and is always scheduled as a real reservation.)
-
-    Soft cap: leaves `num_threads` undefined (n_procs stays at its unaware
-    default of 1) and instead sets the tool-specific environment variables that
-    actually drive its thread count (SynthStrip's ``OMP_NUM_THREADS``,
-    SynthMorph's ``TF_NUM_*``), invisible to nipype.
-
-    ``max_cpu`` bounds the *nipype-aware* branch only. ``CoreLimit.NO_LIMIT``
-    makes ``get_tool_cpu_config`` answer ``cpu_count()`` with ``hard=False`` --
-    "use every core, keep nipype unaware". A tool with no soft env-var knob
-    cannot honour the second half: it lands here and would reserve
-    ``cpu_count()`` procs. Where that exceeds the cores the subject allocated,
-    ``MultiProc._prerun_check`` refuses the whole workflow ("Insufficient
-    resources available for job") before a single node runs, so the reservation
-    is clamped to the budget. A genuine hard cap is already within it, which
-    makes this a no-op there.
-
-    """
-    if hard or not soft_env_vars:
-        if max_cpu > 0:
-            threads = min(threads, max_cpu)
-        node.inputs.num_threads = threads
-        node.n_procs = threads
-    else:
-        node.inputs.environ = {
-            **node.inputs.environ,
-            **{var: str(threads) for var in soft_env_vars},
-        }
+def apply_tool_num_threads(node: Node, threads: int, max_cpu: int = 0) -> None:
+    """Apply a CPU-bound tool's thread count as a real, nipype-aware reservation."""
+    if max_cpu > 0:
+        threads = min(threads, max_cpu)
+    node.inputs.num_threads = threads
 
 
 # Backwards-compatible aliases: these helpers were named after Synth tools when
@@ -200,7 +150,6 @@ def get_deskull_node(
     out_file: str = None,
     name_prefix: str = "",
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     limit_synth_cores: bool = False,
 ) -> Node:
     if deskull_engine == DeskullEngine.ANTSPYNET:
@@ -218,13 +167,11 @@ def get_deskull_node(
             if out_file:
                 mask_name = fname_presuffix(out_file, suffix="_brain", use_ext=True)
             deskull_node.inputs.mask_file = mask_name
-        threads, hard = get_tool_cpu_config(
-            max_cpu, multicore_node_limit, limit_synth_cores
-        )
+        threads = get_tool_cpu_config(max_cpu, limit_synth_cores)
         # antspynet/ITK take threads only through num_threads (a real, nipype-aware
         # reservation), like the ANTs registration node -- no soft env-var path,
         # hence the max_cpu bound (see apply_tool_num_threads).
-        apply_tool_num_threads(deskull_node, threads, hard, max_cpu=max_cpu)
+        apply_tool_num_threads(deskull_node, threads, max_cpu=max_cpu)
         if bet_surfaces:
             deskull_node.inskull_out_name = "mask_file"
     elif deskull_engine == DeskullEngine.SYNTHSTRIP:
@@ -235,12 +182,8 @@ def get_deskull_node(
                 mask_name = fname_presuffix(out_file, suffix="_brain", use_ext=True)
             deskull_node.inputs.mask_file = mask_name
         deskull_node.inputs.exclude_csf = synth_exclude_csf
-        threads, hard = get_tool_cpu_config(
-            max_cpu, multicore_node_limit, limit_synth_cores
-        )
-        apply_tool_num_threads(
-            deskull_node, threads, hard, soft_env_vars=("OMP_NUM_THREADS",)
-        )
+        threads = get_tool_cpu_config(max_cpu, limit_synth_cores)
+        apply_tool_num_threads(deskull_node, threads)
         if bet_surfaces:
             deskull_node.inskull_out_name = "mask_file"
     else:  # DeskullEngine.BET
@@ -335,7 +278,6 @@ def get_registration_node(
     name_suffix: str = "",
     test_run: bool = False,
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     limit_synth_cores: bool = False,
 ) -> RegistrationNodeWrapper:
     """
@@ -396,15 +338,8 @@ def get_registration_node(
         )
         synth_morph_reg.long_name = name_prefix + " %s " + name_suffix
         synth_morph_reg.inputs.model = model
-        threads, hard = get_tool_cpu_config(
-            max_cpu, multicore_node_limit, limit_synth_cores
-        )
-        apply_tool_num_threads(
-            synth_morph_reg,
-            threads,
-            hard,
-            soft_env_vars=("TF_NUM_INTRAOP_THREADS", "TF_NUM_INTEROP_THREADS"),
-        )
+        threads = get_tool_cpu_config(max_cpu, limit_synth_cores)
+        apply_tool_num_threads(synth_morph_reg, threads)
         if test_run and non_linear:
             # Reduce deformable integration steps (default 7) for prerelease
             # test runs. FreeSurfer advises not to go below 5.
@@ -471,10 +406,8 @@ def get_registration_node(
         # ANTs takes its thread count only through num_threads (which the node
         # exports as the ITK env var); nipype couples that to n_procs, so there
         # is no soft-env-var path -- always a real, nipype-aware reservation.
-        threads, hard = get_tool_cpu_config(
-            max_cpu, multicore_node_limit, limit_synth_cores
-        )
-        apply_tool_num_threads(ants_reg, threads, hard, max_cpu=max_cpu)
+        threads = get_tool_cpu_config(max_cpu, limit_synth_cores)
+        apply_tool_num_threads(ants_reg, threads, max_cpu=max_cpu)
 
         if type(moving_brain) == str:
             ants_reg.inputs.moving = moving_brain

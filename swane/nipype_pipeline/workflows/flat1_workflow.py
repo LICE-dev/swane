@@ -15,7 +15,7 @@ from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.fsl.ThrROI import ThrROI
 from nipype.interfaces.utility import IdentityInterface, Function
 
-from swane.config.config_enums import CoreLimit, SegmentationEngine
+from swane.config.config_enums import SegmentationEngine
 from swane.utils.ResourceManager import ResourceManager
 from swane.nipype_pipeline.interfaces.ants.AntsAtropos import AntsAtropos
 from swane.nipype_pipeline.interfaces.ram_estimators import FastRamEstimator
@@ -35,7 +35,6 @@ def flat1_workflow(
     base_dir: str = "/",
     test_run: bool = False,
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
 ) -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
@@ -57,10 +56,6 @@ def flat1_workflow(
     max_cpu : int, optional
         CPU budget for the ITK-based Atropos node (0 = unset, leave the tool
         unbudgeted). Ignored by the FSL FAST branch. The default is 0.
-    multicore_node_limit : CoreLimit, optional
-        Multi-core policy applied to the Atropos node's thread reservation.
-        The default is CoreLimit.SOFT_CAP.
-
     Input Node Fields
     ----------
     reference_brain : path
@@ -135,10 +130,8 @@ def flat1_workflow(
             # ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS at run time), exactly like
             # the antspynet deskull node. Left unbudgeted when max_cpu is 0.
             limit_synth_cores = synth_config.getboolean_safe("limit_cores")
-            threads, hard = get_tool_cpu_config(
-                max_cpu, multicore_node_limit, limit_synth_cores
-            )
-            apply_tool_num_threads(segment, threads, hard, max_cpu=max_cpu)
+            threads = get_tool_cpu_config(max_cpu, limit_synth_cores)
+            apply_tool_num_threads(segment, threads, max_cpu=max_cpu)
         workflow.add_nodes([segment])
         workflow.connect(inputnode, "reference_brain", segment, "in_file")
         restored_source = (inputnode, "reference_brain")

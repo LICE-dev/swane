@@ -3,7 +3,6 @@
 #   cuda = false
 #   deskull_engine = ANTSPYNET
 #   max_cpu = 4
-#   multicore_node_limit = SOFT_CAP
 #   old_eddy_correct = false
 #   synth_morph = False
 #   test_run = True
@@ -24,13 +23,14 @@
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     invert_xfm = True
     output_type = 'NIFTI_GZ'
-- dti_bedpostx [BEDPOSTX5] cmd=bedpostx mem_gb=0.2 n_procs=1
+- dti_bedpostx [BEDPOSTX5] cmd=bedpostx mem_gb=0.2 n_procs=4
     burn_in = 100
     burn_in_no_ard = 0
     environ = {FSLSUB_PARALLEL='4'}
     force_dir = True
     n_fibres = 2
     n_jumps = 200
+    num_threads = 4
     out_dir = 'bedpostx'
     output_type = 'NIFTI_GZ'
     rician = True
@@ -62,7 +62,7 @@
     base_name = 'dtifit_'
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-- dti_eddy [CustomEddy] cmd=eddy_openmp mem_gb=1 n_procs=1
+- dti_eddy [CustomEddy] cmd=eddy_openmp mem_gb=1 n_procs=4
     args = '--nthr=4'
     environ = {FSL_SKIP_GLOBAL='1', OMP_NUM_THREADS='4'}
     flm = 'quadratic'
@@ -70,7 +70,7 @@
     interp = 'spline'
     method = 'jac'
     niter = 1
-    num_threads = 1
+    num_threads = 4
     nvoxhp = 1000
     out_base = 'eddy_corrected'
     output_type = 'NIFTI_GZ'
