@@ -4,17 +4,17 @@
 #
 # nodes=13 edges=16
 
-- electrodes_weight_bin [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- electrodes_weight_bin [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-thr 2000.0000000000 -bin -mul -1 -add 1'
     output_type = 'NIFTI_GZ'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
-- ref_brain_dilate [DilateImage] cmd=fslmaths mem_gb=0.2 n_procs=1
+- ref_brain_dilate [DilateImage] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operation = 'mean'
     output_type = 'NIFTI_GZ'
-- ref_brain_erode [ErodeImage] cmd=fslmaths mem_gb=0.2 n_procs=1
+- ref_brain_erode [ErodeImage] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     kernel_shape = 'box'
     kernel_size = 5.0
@@ -26,7 +26,7 @@
     out_prefix = 'ants_reg_'
     syn_metric = 'mattes'
     transform_type = 'Rigid'
-- seeg_ct_brain [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+- seeg_ct_brain [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
 - seeg_ct_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
@@ -44,21 +44,21 @@
     single_file = False
     source_dir = '<TMP>/dicom'
     verbose = False
-- seeg_ct_electrode_skull [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+- seeg_ct_electrode_skull [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
 - seeg_ct_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
-- seeg_electodes [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- seeg_electodes [BinaryMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operation = 'add'
     out_file = 'r-seeg_electrodes.nii.gz'
     output_type = 'NIFTI_GZ'
-- seeg_electrodes_thr_ref [Threshold] cmd=fslmaths mem_gb=0.2 n_procs=1
+- seeg_electrodes_thr_ref [Threshold] cmd=niimath mem_gb=0.2 n_procs=1
     direction = 'below'
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     thresh = 2000.0
-- seeg_no_electrodes_thr_ref [Threshold] cmd=fslmaths mem_gb=0.2 n_procs=1
+- seeg_no_electrodes_thr_ref [Threshold] cmd=niimath mem_gb=0.2 n_procs=1
     direction = 'above'
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'

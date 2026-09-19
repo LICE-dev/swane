@@ -1,5 +1,5 @@
 from nipype.interfaces.freesurfer import SampleToSurface
-from nipype.interfaces.fsl import (
+from swane.nipype_pipeline.interfaces.niimath import (
     IsotropicSmooth,
     ApplyMask,
     ImageMaths,

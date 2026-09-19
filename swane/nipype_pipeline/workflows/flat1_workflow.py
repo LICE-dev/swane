@@ -2,17 +2,17 @@ from configparser import SectionProxy
 
 import swane_supplement
 
-from nipype.interfaces.fsl import (
+from nipype.interfaces.fsl import FAST
+from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
     BinaryMaths,
-    FAST,
     SpatialFilter,
     Threshold,
 )
 from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.interfaces.fsl.ThrROI import ThrROI
+from swane.nipype_pipeline.interfaces.niimath.ThrROI import ThrROI
 from nipype.interfaces.utility import IdentityInterface, Function
 
 from swane.config.config_enums import SegmentationEngine

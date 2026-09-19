@@ -3,7 +3,7 @@ import tempfile
 from configparser import SectionProxy
 
 from nipype.interfaces.freesurfer import ReconAll, ApplyVolTransform
-from nipype.interfaces.fsl import BinaryMaths
+from swane.nipype_pipeline.interfaces.niimath import BinaryMaths
 from nipype.pipeline.engine import Node
 from math import trunc
 
@@ -15,7 +15,7 @@ from swane.nipype_pipeline.interfaces.utils import (
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.freesurfer.SegmentHA import SegmentHA
-from swane.nipype_pipeline.interfaces.fsl.ThrROI import ThrROI
+from swane.nipype_pipeline.interfaces.niimath.ThrROI import ThrROI
 from swane.config.config_enums import FreesurferStep
 from nipype.interfaces.utility import IdentityInterface
 from swane.utils.ResourceManager import ResourceManager
