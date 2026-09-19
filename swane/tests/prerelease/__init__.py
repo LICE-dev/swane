@@ -6,7 +6,7 @@ construction time, and checks the produced results automatically.
 
 Entry point::
 
-    python -m swane.tests.prerelease --cores 8 --ram 24
+    python3 -m swane.tests.prerelease --cores 8 --ram 24
 
 See ``README.md`` in this package for the full procedure.
 """
