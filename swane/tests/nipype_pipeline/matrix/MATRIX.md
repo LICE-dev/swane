@@ -26,12 +26,12 @@ Overview of 85 construction scenarios across 16 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [new_eddy_cpu_hardcap](snapshots/dti_preproc/new_eddy_cpu_hardcap.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; multicore_node_limit=HARD_CAP; old_eddy_correct=false; synth_morph=False; tractography=false | 12 / 21 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
-| [new_eddy_cpu_softcap](snapshots/dti_preproc/new_eddy_cpu_softcap.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; tractography=false | 12 / 21 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
-| [new_eddy_cuda](snapshots/dti_preproc/new_eddy_cuda.txt) | cuda=true; deskull_engine=ANTSPYNET; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; tractography=false | 12 / 21 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy`, `flirt` | `use_cuda=True` |
-| [new_eddy_tractography](snapshots/dti_preproc/new_eddy_tractography.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; tractography=true | 13 / 25 | `bedpostx`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False`, `use_gpu=False` |
-| [old_eddy_correct](snapshots/dti_preproc/old_eddy_correct.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=true; synth_morph=False; tractography=false | 11 / 17 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_correct`, `flirt` | — |
-| [test_run](snapshots/dti_preproc/test_run.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; multicore_node_limit=SOFT_CAP; old_eddy_correct=false; synth_morph=False; test_run=True; tractography=true | 13 / 25 | `bedpostx`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False`, `use_gpu=False` |
+| [new_eddy_cpu_hardcap](snapshots/dti_preproc/new_eddy_cpu_hardcap.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=false; synth_morph=False; tractography=false | 12 / 21 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
+| [new_eddy_cpu_softcap](snapshots/dti_preproc/new_eddy_cpu_softcap.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=false; synth_morph=False; tractography=false | 12 / 21 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
+| [new_eddy_cuda](snapshots/dti_preproc/new_eddy_cuda.txt) | cuda=true; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=false; synth_morph=False; tractography=false | 12 / 21 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy`, `flirt` | `use_cuda=True` |
+| [new_eddy_tractography](snapshots/dti_preproc/new_eddy_tractography.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=false; synth_morph=False; tractography=true | 13 / 25 | `bedpostx`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False`, `use_gpu=False` |
+| [old_eddy_correct](snapshots/dti_preproc/old_eddy_correct.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=true; synth_morph=False; tractography=false | 11 / 17 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_correct`, `flirt` | — |
+| [test_run](snapshots/dti_preproc/test_run.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=false; synth_morph=False; test_run=True; tractography=true | 13 / 25 | `bedpostx`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False`, `use_gpu=False` |
 
 ## flat1
 
@@ -76,16 +76,16 @@ Overview of 85 construction scenarios across 16 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [autorecon_pial](snapshots/freesurfer/autorecon_pial.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; step=AUTORECON_PIAL; synth_reconall=false; synthseg_fast=False | 11 / 16 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
-| [disabled_returns_none](snapshots/freesurfer/disabled_returns_none.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; step=DISABLED; synth_reconall=false; synthseg_fast=False | None | — | — |
-| [reconall](snapshots/freesurfer/reconall.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; step=RECONALL; synth_reconall=false; synthseg_fast=False | 12 / 18 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
-| [reconall_hippo](snapshots/freesurfer/reconall_hippo.txt) | hippo_amyg_labels=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; step=RECONALL; synth_reconall=false; synthseg_fast=False | 15 / 25 | `fslmaths`, `mri_vol2vol`, `recon-all`, `segmentHA_T1.sh` | — |
-| [reconall_synth_tools](snapshots/freesurfer/reconall_synth_tools.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; step=RECONALL; synth_reconall=true; synthseg_fast=False | 12 / 18 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
-| [reconall_test_run](snapshots/freesurfer/reconall_test_run.txt) | max_cpu=4; multicore_node_limit=SOFT_CAP; step=RECONALL; test_run=True | 12 / 18 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
-| [synthseg](snapshots/freesurfer/synthseg.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; step=SYNTHSEG; synth_reconall=false; synthseg_fast=False | 8 / 11 | `fslmaths`, `mri_synthseg`, `mri_vol2vol` | — |
-| [synthseg_fast](snapshots/freesurfer/synthseg_fast.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; step=SYNTHSEG; synth_reconall=false; synthseg_fast=True | 8 / 11 | `fslmaths`, `mri_synthseg`, `mri_vol2vol` | — |
-| [synthseg_limit_cores](snapshots/freesurfer/synthseg_limit_cores.txt) | hippo_amyg_labels=False; limit_synth_cores=true; max_cpu=4; multicore_node_limit=SOFT_CAP; step=SYNTHSEG; synth_reconall=false; synthseg_fast=False | 8 / 11 | `fslmaths`, `mri_synthseg`, `mri_vol2vol` | — |
-| [synthseg_test_run](snapshots/freesurfer/synthseg_test_run.txt) | max_cpu=4; multicore_node_limit=SOFT_CAP; step=SYNTHSEG; test_run=True | 8 / 11 | `fslmaths`, `mri_synthseg`, `mri_vol2vol` | — |
+| [autorecon_pial](snapshots/freesurfer/autorecon_pial.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=AUTORECON_PIAL; synth_reconall=false; synthseg_fast=False | 11 / 16 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
+| [disabled_returns_none](snapshots/freesurfer/disabled_returns_none.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=DISABLED; synth_reconall=false; synthseg_fast=False | None | — | — |
+| [reconall](snapshots/freesurfer/reconall.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=RECONALL; synth_reconall=false; synthseg_fast=False | 12 / 18 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
+| [reconall_hippo](snapshots/freesurfer/reconall_hippo.txt) | hippo_amyg_labels=True; limit_synth_cores=false; max_cpu=4; step=RECONALL; synth_reconall=false; synthseg_fast=False | 15 / 25 | `fslmaths`, `mri_vol2vol`, `recon-all`, `segmentHA_T1.sh` | — |
+| [reconall_synth_tools](snapshots/freesurfer/reconall_synth_tools.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=RECONALL; synth_reconall=true; synthseg_fast=False | 12 / 18 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
+| [reconall_test_run](snapshots/freesurfer/reconall_test_run.txt) | max_cpu=4; step=RECONALL; test_run=True | 12 / 18 | `fslmaths`, `mri_vol2vol`, `recon-all` | — |
+| [synthseg](snapshots/freesurfer/synthseg.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=SYNTHSEG; synth_reconall=false; synthseg_fast=False | 8 / 11 | `fslmaths`, `mri_synthseg`, `mri_vol2vol` | — |
+| [synthseg_fast](snapshots/freesurfer/synthseg_fast.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=SYNTHSEG; synth_reconall=false; synthseg_fast=True | 8 / 11 | `fslmaths`, `mri_synthseg`, `mri_vol2vol` | — |
+| [synthseg_limit_cores](snapshots/freesurfer/synthseg_limit_cores.txt) | hippo_amyg_labels=False; limit_synth_cores=true; max_cpu=4; step=SYNTHSEG; synth_reconall=false; synthseg_fast=False | 8 / 11 | `fslmaths`, `mri_synthseg`, `mri_vol2vol` | — |
+| [synthseg_test_run](snapshots/freesurfer/synthseg_test_run.txt) | max_cpu=4; step=SYNTHSEG; test_run=True | 8 / 11 | `fslmaths`, `mri_synthseg`, `mri_vol2vol` | — |
 
 ## func_map
 
@@ -104,37 +104,37 @@ Overview of 85 construction scenarios across 16 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [flair2d_non_volumetric](snapshots/linear_reg/flair2d_non_volumetric.txt) | bias_field_correction=False; config=None; deskull_engine=BET; is_partial_coverage=False; is_volumetric=False; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false | 11 / 18 | `bet`, `dcm2niix`, `flirt`, `robustfov` | — |
-| [flair3d_ants_backend](snapshots/linear_reg/flair3d_ants_backend.txt) | bias_field_correction=True; config=FLAIR3D; deskull_engine=ANTSPYNET; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=ANTS; synth_morph=false | 13 / 26 | `dcm2niix`, `fslmaths`, `robustfov` | — |
-| [flair3d_bias](snapshots/linear_reg/flair3d_bias.txt) | bias_field_correction=True; config=FLAIR3D; deskull_engine=BET; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
-| [flair3d_no_bias](snapshots/linear_reg/flair3d_no_bias.txt) | bias_field_correction=False; config=FLAIR3D; deskull_engine=BET; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false | 11 / 18 | `bet`, `dcm2niix`, `flirt`, `robustfov` | — |
-| [flair3d_synth_backend](snapshots/linear_reg/flair3d_synth_backend.txt) | bias_field_correction=True; config=FLAIR3D; deskull_engine=SYNTHSTRIP; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=SYNTH; synth_morph=true | 13 / 24 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip`, `robustfov` | — |
-| [flair3d_synth_backend_limit_cores](snapshots/linear_reg/flair3d_synth_backend_limit_cores.txt) | bias_field_correction=True; config=FLAIR3D; deskull_engine=SYNTHSTRIP; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=true; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=SYNTH; synth_morph=true | 13 / 24 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip`, `robustfov` | — |
-| [mdc_bias](snapshots/linear_reg/mdc_bias.txt) | bias_field_correction=True; config=MDC; deskull_engine=BET; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
-| [t2cor_partial_coverage](snapshots/linear_reg/t2cor_partial_coverage.txt) | bias_field_correction=False; config=None; deskull_engine=BET; is_partial_coverage=True; is_volumetric=True; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false | 10 / 16 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
+| [flair2d_non_volumetric](snapshots/linear_reg/flair2d_non_volumetric.txt) | bias_field_correction=False; config=None; deskull_engine=BET; is_partial_coverage=False; is_volumetric=False; limit_synth_cores=false; max_cpu=4; registration_engine=FSL; synth_morph=false | 11 / 18 | `bet`, `dcm2niix`, `flirt`, `robustfov` | — |
+| [flair3d_ants_backend](snapshots/linear_reg/flair3d_ants_backend.txt) | bias_field_correction=True; config=FLAIR3D; deskull_engine=ANTSPYNET; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; registration_engine=ANTS; synth_morph=false | 13 / 26 | `dcm2niix`, `fslmaths`, `robustfov` | — |
+| [flair3d_bias](snapshots/linear_reg/flair3d_bias.txt) | bias_field_correction=True; config=FLAIR3D; deskull_engine=BET; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; registration_engine=FSL; synth_morph=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
+| [flair3d_no_bias](snapshots/linear_reg/flair3d_no_bias.txt) | bias_field_correction=False; config=FLAIR3D; deskull_engine=BET; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; registration_engine=FSL; synth_morph=false | 11 / 18 | `bet`, `dcm2niix`, `flirt`, `robustfov` | — |
+| [flair3d_synth_backend](snapshots/linear_reg/flair3d_synth_backend.txt) | bias_field_correction=True; config=FLAIR3D; deskull_engine=SYNTHSTRIP; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; registration_engine=SYNTH; synth_morph=true | 13 / 24 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip`, `robustfov` | — |
+| [flair3d_synth_backend_limit_cores](snapshots/linear_reg/flair3d_synth_backend_limit_cores.txt) | bias_field_correction=True; config=FLAIR3D; deskull_engine=SYNTHSTRIP; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=true; max_cpu=4; registration_engine=SYNTH; synth_morph=true | 13 / 24 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip`, `robustfov` | — |
+| [mdc_bias](snapshots/linear_reg/mdc_bias.txt) | bias_field_correction=True; config=MDC; deskull_engine=BET; is_partial_coverage=False; is_volumetric=True; limit_synth_cores=false; max_cpu=4; registration_engine=FSL; synth_morph=false | 13 / 26 | `bet`, `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
+| [t2cor_partial_coverage](snapshots/linear_reg/t2cor_partial_coverage.txt) | bias_field_correction=False; config=None; deskull_engine=BET; is_partial_coverage=True; is_volumetric=True; limit_synth_cores=false; max_cpu=4; registration_engine=FSL; synth_morph=false | 10 / 16 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
 | [test_run](snapshots/linear_reg/test_run.txt) | bias_field_correction=True; config=FLAIR3D; deskull_engine=ANTSPYNET; is_partial_coverage=False; is_volumetric=True; synth_morph=False; test_run=True | 13 / 26 | `dcm2niix`, `flirt`, `fslmaths`, `robustfov` | — |
 
 ## nonlinear_reg
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [ants_backend](snapshots/nonlinear_reg/ants_backend.txt) | limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=ANTS; synth_morph=false | 6 / 10 | — | — |
-| [fsl_backend](snapshots/nonlinear_reg/fsl_backend.txt) | limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=FSL; synth_morph=false | 6 / 10 | `applywarp`, `flirt`, `fnirt`, `invwarp` | — |
-| [fsl_backend_test_run](snapshots/nonlinear_reg/fsl_backend_test_run.txt) | max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; test_run=True | 6 / 10 | `applywarp`, `flirt`, `fnirt`, `invwarp` | — |
-| [synthmorph_backend](snapshots/nonlinear_reg/synthmorph_backend.txt) | limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=SYNTH; synth_morph=true | 4 / 5 | `mri_synthmorph` | — |
-| [synthmorph_backend_limit_cores](snapshots/nonlinear_reg/synthmorph_backend_limit_cores.txt) | limit_synth_cores=true; max_cpu=4; multicore_node_limit=SOFT_CAP; registration_engine=SYNTH; synth_morph=true | 4 / 5 | `mri_synthmorph` | — |
-| [synthmorph_backend_test_run](snapshots/nonlinear_reg/synthmorph_backend_test_run.txt) | max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=true; test_run=True | 4 / 5 | `mri_synthmorph` | — |
+| [ants_backend](snapshots/nonlinear_reg/ants_backend.txt) | limit_synth_cores=false; max_cpu=4; registration_engine=ANTS; synth_morph=false | 6 / 10 | — | — |
+| [fsl_backend](snapshots/nonlinear_reg/fsl_backend.txt) | limit_synth_cores=false; max_cpu=4; registration_engine=FSL; synth_morph=false | 6 / 10 | `applywarp`, `flirt`, `fnirt`, `invwarp` | — |
+| [fsl_backend_test_run](snapshots/nonlinear_reg/fsl_backend_test_run.txt) | max_cpu=4; synth_morph=false; test_run=True | 6 / 10 | `applywarp`, `flirt`, `fnirt`, `invwarp` | — |
+| [synthmorph_backend](snapshots/nonlinear_reg/synthmorph_backend.txt) | limit_synth_cores=false; max_cpu=4; registration_engine=SYNTH; synth_morph=true | 4 / 5 | `mri_synthmorph` | — |
+| [synthmorph_backend_limit_cores](snapshots/nonlinear_reg/synthmorph_backend_limit_cores.txt) | limit_synth_cores=true; max_cpu=4; registration_engine=SYNTH; synth_morph=true | 4 / 5 | `mri_synthmorph` | — |
+| [synthmorph_backend_test_run](snapshots/nonlinear_reg/synthmorph_backend_test_run.txt) | max_cpu=4; synth_morph=true; test_run=True | 4 / 5 | `mri_synthmorph` | — |
 
 ## ref
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [antspynet](snapshots/ref/antspynet.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=ANTSPYNET; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP | 8 / 12 | `dcm2niix`, `fslmaths`, `robustfov` | — |
-| [bet_bias_thr0](snapshots/ref/bet_bias_thr0.txt) | bet_bias_correction=true; bet_thr=0.0; deskull_engine=BET; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP | 8 / 12 | `bet`, `dcm2niix`, `fslmaths`, `robustfov` | — |
-| [bet_default](snapshots/ref/bet_default.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=BET; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP | 8 / 12 | `bet`, `dcm2niix`, `fslmaths`, `robustfov` | — |
-| [bet_thr_high](snapshots/ref/bet_thr_high.txt) | bet_bias_correction=false; bet_thr=1.0; deskull_engine=BET; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP | 8 / 12 | `bet`, `dcm2niix`, `fslmaths`, `robustfov` | — |
-| [synthstrip](snapshots/ref/synthstrip.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=SYNTHSTRIP; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP | 8 / 12 | `dcm2niix`, `fslmaths`, `mri_synthstrip`, `robustfov` | — |
-| [synthstrip_limit_cores](snapshots/ref/synthstrip_limit_cores.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=SYNTHSTRIP; limit_synth_cores=true; max_cpu=4; multicore_node_limit=SOFT_CAP | 8 / 12 | `dcm2niix`, `fslmaths`, `mri_synthstrip`, `robustfov` | — |
+| [antspynet](snapshots/ref/antspynet.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=ANTSPYNET; limit_synth_cores=false; max_cpu=4 | 8 / 12 | `dcm2niix`, `fslmaths`, `robustfov` | — |
+| [bet_bias_thr0](snapshots/ref/bet_bias_thr0.txt) | bet_bias_correction=true; bet_thr=0.0; deskull_engine=BET; limit_synth_cores=false; max_cpu=4 | 8 / 12 | `bet`, `dcm2niix`, `fslmaths`, `robustfov` | — |
+| [bet_default](snapshots/ref/bet_default.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=BET; limit_synth_cores=false; max_cpu=4 | 8 / 12 | `bet`, `dcm2niix`, `fslmaths`, `robustfov` | — |
+| [bet_thr_high](snapshots/ref/bet_thr_high.txt) | bet_bias_correction=false; bet_thr=1.0; deskull_engine=BET; limit_synth_cores=false; max_cpu=4 | 8 / 12 | `bet`, `dcm2niix`, `fslmaths`, `robustfov` | — |
+| [synthstrip](snapshots/ref/synthstrip.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=SYNTHSTRIP; limit_synth_cores=false; max_cpu=4 | 8 / 12 | `dcm2niix`, `fslmaths`, `mri_synthstrip`, `robustfov` | — |
+| [synthstrip_limit_cores](snapshots/ref/synthstrip_limit_cores.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=SYNTHSTRIP; limit_synth_cores=true; max_cpu=4 | 8 / 12 | `dcm2niix`, `fslmaths`, `mri_synthstrip`, `robustfov` | — |
 | [test_run](snapshots/ref/test_run.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=ANTSPYNET; test_run=True | 8 / 12 | `dcm2niix`, `fslmaths`, `robustfov` | — |
 
 ## seeg_ct
@@ -163,11 +163,11 @@ Overview of 85 construction scenarios across 16 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [single_series_antspynet](snapshots/venous_mr/single_series_antspynet.txt) | deskull_engine=ANTSPYNET; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; two_series=False; vein_detection_mode=SD | 12 / 15 | `dcm2niix`, `flirt`, `fslmaths` | — |
-| [single_series_first](snapshots/venous_mr/single_series_first.txt) | deskull_engine=BET; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; two_series=False; vein_detection_mode=FIRST | 12 / 15 | `bet`, `dcm2niix`, `flirt`, `fslmaths` | — |
-| [single_series_sd](snapshots/venous_mr/single_series_sd.txt) | deskull_engine=BET; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; two_series=False; vein_detection_mode=SD | 12 / 15 | `bet`, `dcm2niix`, `flirt`, `fslmaths` | — |
-| [single_series_synth_backend](snapshots/venous_mr/single_series_synth_backend.txt) | deskull_engine=SYNTHSTRIP; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=true; two_series=False; vein_detection_mode=SD | 12 / 14 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip` | — |
-| [single_series_synth_backend_limit_cores](snapshots/venous_mr/single_series_synth_backend_limit_cores.txt) | deskull_engine=SYNTHSTRIP; limit_synth_cores=true; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=true; two_series=False; vein_detection_mode=SD | 12 / 14 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip` | — |
+| [single_series_antspynet](snapshots/venous_mr/single_series_antspynet.txt) | deskull_engine=ANTSPYNET; limit_synth_cores=false; max_cpu=4; synth_morph=false; two_series=False; vein_detection_mode=SD | 12 / 15 | `dcm2niix`, `flirt`, `fslmaths` | — |
+| [single_series_first](snapshots/venous_mr/single_series_first.txt) | deskull_engine=BET; limit_synth_cores=false; max_cpu=4; synth_morph=false; two_series=False; vein_detection_mode=FIRST | 12 / 15 | `bet`, `dcm2niix`, `flirt`, `fslmaths` | — |
+| [single_series_sd](snapshots/venous_mr/single_series_sd.txt) | deskull_engine=BET; limit_synth_cores=false; max_cpu=4; synth_morph=false; two_series=False; vein_detection_mode=SD | 12 / 15 | `bet`, `dcm2niix`, `flirt`, `fslmaths` | — |
+| [single_series_synth_backend](snapshots/venous_mr/single_series_synth_backend.txt) | deskull_engine=SYNTHSTRIP; limit_synth_cores=false; max_cpu=4; synth_morph=true; two_series=False; vein_detection_mode=SD | 12 / 14 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip` | — |
+| [single_series_synth_backend_limit_cores](snapshots/venous_mr/single_series_synth_backend_limit_cores.txt) | deskull_engine=SYNTHSTRIP; limit_synth_cores=true; max_cpu=4; synth_morph=true; two_series=False; vein_detection_mode=SD | 12 / 14 | `dcm2niix`, `fslmaths`, `mri_synthmorph`, `mri_synthstrip` | — |
 | [test_run](snapshots/venous_mr/test_run.txt) | deskull_engine=ANTSPYNET; synth_morph=False; test_run=True; two_series=False; vein_detection_mode=SD | 12 / 15 | `dcm2niix`, `flirt`, `fslmaths` | — |
-| [two_series](snapshots/venous_mr/two_series.txt) | deskull_engine=BET; limit_synth_cores=false; max_cpu=4; multicore_node_limit=SOFT_CAP; synth_morph=false; two_series=True; vein_detection_mode=SD | 14 / 17 | `bet`, `dcm2niix`, `flirt`, `fslmaths` | — |
+| [two_series](snapshots/venous_mr/two_series.txt) | deskull_engine=BET; limit_synth_cores=false; max_cpu=4; synth_morph=false; two_series=True; vein_detection_mode=SD | 14 / 17 | `bet`, `dcm2niix`, `flirt`, `fslmaths` | — |
 

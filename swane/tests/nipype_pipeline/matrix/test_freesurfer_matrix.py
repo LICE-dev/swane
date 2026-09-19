@@ -3,14 +3,14 @@
 
 Sweeps the FreeSurfer step enum (SYNTHSEG vs the multi-stage recon-all variants)
 and the hippocampal/amygdala substructure option, with an explicit ``max_cpu``
-and ``SOFT_CAP`` so the ``openmp``/``n_procs`` hints stay host-independent.
+(hard cap) so the ``openmp``/``n_procs`` hints stay host-independent.
 ``DISABLED`` is a guard returning ``None`` and is snapshotted as such.
 Snapshots live under ``snapshots/freesurfer/``.
 """
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit, FreesurferStep
+from swane.config.config_enums import GlobalPrefCategoryList, FreesurferStep
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
 freesurfer_workflow = import_workflow_or_skip(
@@ -46,7 +46,6 @@ def test_freesurfer_matrix(scenario, global_config, graph_snapshot):
         is_hippo_amyg_labels=hippo,
         synthseg_fast=synthseg_fast,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
         synth_config=synth,
     )
 
@@ -57,7 +56,6 @@ def test_freesurfer_matrix(scenario, global_config, graph_snapshot):
         "limit_synth_cores": synth["limit_cores"],
         "synthseg_fast": synthseg_fast,
         "max_cpu": MAX_CPU,
-        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
     }
     graph_snapshot(
         wf,
@@ -93,7 +91,6 @@ def test_freesurfer_matrix_test_run(scenario, global_config, graph_snapshot):
         step=step,
         is_hippo_amyg_labels=False,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
         synth_config=synth,
         test_run=True,
     )
@@ -101,7 +98,6 @@ def test_freesurfer_matrix_test_run(scenario, global_config, graph_snapshot):
     config_echo = {
         "step": step.name,
         "max_cpu": MAX_CPU,
-        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
         "test_run": True,
     }
     graph_snapshot(

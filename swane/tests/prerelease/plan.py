@@ -29,7 +29,6 @@ from dataclasses import dataclass, field
 
 from swane.config.config_enums import (
     BlockDesign,
-    CoreLimit,
     DeskullEngine,
     FreesurferStep,
     GlobalPrefCategoryList,
@@ -173,13 +172,6 @@ AXES = (
         values=("false", "true"),
         gates={"true": "cuda"},
         note="MainWorkflow propagates this into the DTI 'cuda' preference",
-    ),
-    Axis(
-        name="multicore_node_limit",
-        scope=GLOBAL,
-        section=GlobalPrefCategoryList.PERFORMANCE,
-        option="multicore_node_limit",
-        values=_enum_values(CoreLimit, "SOFT_CAP", "HARD_CAP", "NO_LIMIT"),
     ),
     # ---- structural reference and linear registration ----------------------
     Axis(
@@ -434,7 +426,6 @@ PASSES = (
             "segmentation_engine": "FSL",
             "synth_reconall": "false",
             "cuda": "false",
-            "multicore_node_limit": "SOFT_CAP",
             "ref_bet_bias_correction": "false",
             "ref_bet_thr": "0.3",
             "flat1": "true",
@@ -472,7 +463,6 @@ PASSES = (
             "segmentation_engine": "ANTS",
             "synth_reconall": "false",
             "cuda": "false",
-            "multicore_node_limit": "SOFT_CAP",
             "ref_bet_bias_correction": "false",
             "ref_bet_thr": "0.3",
             "flat1": "true",
@@ -500,7 +490,6 @@ PASSES = (
             "deskull_engine": "BET",
             "registration_engine": "FSL",
             "cuda": "false",
-            "multicore_node_limit": "HARD_CAP",
             "ref_bet_bias_correction": "true",
             "ref_bet_thr": "0.5",
             "flat1": "false",
@@ -560,7 +549,6 @@ PASSES = (
             "cuda": "false",
             "venous_ct_contrasts": "2",
             "skull_threshold": "-1",
-            "multicore_node_limit": "SOFT_CAP",
         },
     ),
     # The ANTS counterpart of venous_ct_slicer: before Phase 2, venous_ct's
@@ -608,7 +596,6 @@ PASSES = (
             "cuda": "false",
             "asl_ai": "false",
             "pet_ai": "false",
-            "multicore_node_limit": "SOFT_CAP",
         },
     ),
     # The asymmetry index lives here, not on func_map_synthseg: the symmetric
@@ -667,7 +654,6 @@ PASSES = (
             "cuda": "false",
             "old_eddy_correct": "true",
             "tractography": "false",
-            "multicore_node_limit": "NO_LIMIT",
         },
     ),
     PassSpec(
@@ -685,7 +671,6 @@ PASSES = (
             "old_eddy_correct": "false",
             "tractography": "true",
             "tractography_engine": "DIPY_RECOBUNDLES",
-            "multicore_node_limit": "SOFT_CAP",
         },
     ),
     # The CPU tractography baseline: modern eddy + BEDPOSTX + corticospinal
@@ -711,7 +696,6 @@ PASSES = (
             "old_eddy_correct": "false",
             "tractography": "true",
             "tractography_engine": "FSL_XTRACT",
-            "multicore_node_limit": "SOFT_CAP",
         },
     ),
     # The GPU counterpart: same chain with cuda=true. It requires a usable GPU
@@ -733,7 +717,6 @@ PASSES = (
             "old_eddy_correct": "false",
             "tractography": "true",
             "tractography_engine": "FSL_XTRACT",
-            "multicore_node_limit": "SOFT_CAP",
         },
     ),
     # The explicit ANTS twin of dti_tractography (Phase 3): the externalized
@@ -758,7 +741,6 @@ PASSES = (
             "old_eddy_correct": "false",
             "tractography": "true",
             "tractography_engine": "FSL_XTRACT",
-            "multicore_node_limit": "SOFT_CAP",
         },
     ),
     # SynthMorph/SynthStrip coverage for diffusion: dti_preproc_workflow uses
@@ -780,7 +762,6 @@ PASSES = (
             "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
-            "multicore_node_limit": "SOFT_CAP",
         },
     ),
     # Phase 3 lifted fMRI_preproc/task/resting_state's FSL pin (func->ref, and

@@ -3,7 +3,6 @@
 #   hippo_amyg_labels = False
 #   limit_synth_cores = true
 #   max_cpu = 4
-#   multicore_node_limit = SOFT_CAP
 #   step = SYNTHSEG
 #   synth_reconall = false
 #   synthseg_fast = False

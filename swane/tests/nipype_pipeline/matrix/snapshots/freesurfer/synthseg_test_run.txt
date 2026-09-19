@@ -1,7 +1,6 @@
 # workflow snapshot: freesurfer / synthseg_test_run
 #
 #   max_cpu = 4
-#   multicore_node_limit = SOFT_CAP
 #   step = SYNTHSEG
 #   test_run = True
 #
