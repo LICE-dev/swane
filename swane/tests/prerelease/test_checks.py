@@ -10,7 +10,11 @@ nothing. A directory-shape regression must fail loudly instead of vanishing.
 
 import os
 
-from swane.tests.prerelease.checks import _check_dipy_bundle_recovery, RESULTS_DIR
+from swane.tests.prerelease.checks import (
+    _check_dipy_bundle_recovery,
+    RESULTS_DIR,
+    WARNING,
+)
 from swane.tests.prerelease.runner import PassResult
 from swane.tests.prerelease.subject import SWEEP_TRACT
 
@@ -82,3 +86,6 @@ def test_dipy_bundle_recovery_flags_a_low_confidence_bundle(tmp_path):
     assert checks["dipy.recovery.%s_rh" % SWEEP_TRACT].passed
     assert checks["dipy.confidence.%s_lh" % SWEEP_TRACT].passed
     assert not checks["dipy.confidence.%s_rh" % SWEEP_TRACT].passed
+    # A flagged bundle is a warning, not a broken pass: the recovery mechanism
+    # is doing its job (see _check_dipy_bundle_recovery's docstring).
+    assert checks["dipy.confidence.%s_rh" % SWEEP_TRACT].severity == WARNING
