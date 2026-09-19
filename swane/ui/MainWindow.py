@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QTabWidget,
     QGridLayout,
+    QVBoxLayout,
     QLabel,
     QSizePolicy,
     QSpacerItem,
@@ -903,7 +904,9 @@ class MainWindow(QMainWindow):
 
         """
 
+        self.home_v_layout = QVBoxLayout()
         self.home_grid_layout = QGridLayout()
+        self.home_v_layout.addLayout(self.home_grid_layout)
 
         bold_font = QFont()
         bold_font.setBold(True)
@@ -921,13 +924,13 @@ class MainWindow(QMainWindow):
         label_welcome4 = QLabel(strings.mainwindow_home_label4)
         label_welcome4.setFont(bold_font)
 
-        self.home_grid_layout.addWidget(label_welcome1, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome1, x, 0, 1, 5)
         x += 1
-        self.home_grid_layout.addWidget(label_welcome2, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome2, x, 0, 1, 5)
         x += 1
-        self.home_grid_layout.addWidget(label_welcome3, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome3, x, 0, 1, 5)
         x += 1
-        self.home_grid_layout.addWidget(label_welcome4, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome4, x, 0, 1, 5)
         x += 1
 
         # Main window dependency check
@@ -940,7 +943,11 @@ class MainWindow(QMainWindow):
         label_atlases = QLabel(strings.mainwindow_home_label_atlases)
         label_atlases.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_atlases.setFont(bold_font)
-        self.home_grid_layout.addWidget(label_atlases, x, 2, 1, 2)
+        self.home_grid_layout.addWidget(label_atlases, x, 3, 1, 2)
+
+        horizontal_spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.home_grid_layout.addItem(horizontal_spacer, x, 2, 1, 1)
+
         y = x + 1
         for atlas in ATLASES:
             y = self.add_atlas_entry(atlas, y)
@@ -957,22 +964,28 @@ class MainWindow(QMainWindow):
 
         x = self.add_home_entry(self.dependency_manager.dipy, x)
 
+        self.optional_grid_layout = QGridLayout()
+        self.home_v_layout.addLayout(self.optional_grid_layout)
+
+        opt_x = 0
+
         label_main_dep = QLabel(strings.mainwindow_home_label6)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        self.home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
-        x += 1
+        self.optional_grid_layout.addWidget(label_main_dep, opt_x, 0, 1, 2)
+        opt_x += 1
 
-        x = self.add_home_entry(self.dependency_manager.freesurfer, x)
+        opt_x = self.add_home_entry(self.dependency_manager.freesurfer, opt_x, self.optional_grid_layout)
         self.global_config.freesurfer = self.dependency_manager.is_freesurfer()
 
         if DependencyManager.need_slicer_check(self.global_config):
-            self.slicer_x = x
-            x = self.add_home_entry(
+            self.slicer_x = opt_x
+            opt_x = self.add_home_entry(
                 Dependence(
                     DependenceStatus.CHECKING, strings.mainwindow_dep_slicer_src
                 ),
-                x,
+                opt_x,
+                self.optional_grid_layout
             )
             DependencyManager.check_slicer(
                 self.global_config.get_slicer_path(), self.slicer_row
@@ -981,24 +994,24 @@ class MainWindow(QMainWindow):
             label = strings.check_dep_slicer_found % version_with_license(
                 SLICER, self.global_config.get_slicer_version()
             )
-            x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, label), x)
+            opt_x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, label), opt_x, self.optional_grid_layout)
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        self.home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
-        x += 1
+        self.optional_grid_layout.addWidget(label_main_dep, opt_x, 0, 1, 2)
+        opt_x += 1
 
-        x = self.add_home_entry(self.dependency_manager.graphviz, x)
+        opt_x = self.add_home_entry(self.dependency_manager.graphviz, opt_x, self.optional_grid_layout)
 
         vertical_spacer = QSpacerItem(
             20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding
         )
-        self.home_grid_layout.addItem(vertical_spacer, x, 0, 1, 2)
+        self.home_v_layout.addItem(vertical_spacer)
 
-        self.homeTab.setLayout(self.home_grid_layout)
+        self.homeTab.setLayout(self.home_v_layout)
 
-    def add_home_entry(self, dep: Dependence, x: int) -> int:
+    def add_home_entry(self, dep: Dependence, x: int, layout: QGridLayout = None) -> int:
         """
         Generates a dependency check label, adding it to an existing layout
 
@@ -1008,6 +1021,8 @@ class MainWindow(QMainWindow):
             A Dependence object to be parsed.
         x : int
             The starting grid layout row index.
+        layout : QGridLayout
+            The grid layout to which to add the widgets. Defaults to self.home_grid_layout.
 
         Returns
         -------
@@ -1015,6 +1030,9 @@ class MainWindow(QMainWindow):
             The next grid layout row index.
 
         """
+
+        if layout is None:
+            layout = self.home_grid_layout
 
         label_icon = QLabel()
         label_icon.setScaledContents(True)
@@ -1031,34 +1049,34 @@ class MainWindow(QMainWindow):
 
         label_icon.setFixedSize(25, 25)
 
-        old_icon_layout = self.home_grid_layout.itemAtPosition(x, 0)
+        old_icon_layout = layout.itemAtPosition(x, 0)
         if old_icon_layout is not None:
             old_icon_layout.widget().deleteLater()
-            self.home_grid_layout.removeItem(old_icon_layout)
-        self.home_grid_layout.addWidget(label_icon, x, 0)
+            layout.removeItem(old_icon_layout)
+        layout.addWidget(label_icon, x, 0)
 
         label = QLabel(dep.label)
         label.setOpenExternalLinks(True)
         label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
 
-        old_label_layout = self.home_grid_layout.itemAtPosition(x, 1)
+        old_label_layout = layout.itemAtPosition(x, 1)
         if old_label_layout is not None:
             old_label_layout.widget().deleteLater()
-            self.home_grid_layout.removeItem(old_label_layout)
-        self.home_grid_layout.addWidget(label, x, 1)
+            layout.removeItem(old_label_layout)
+        layout.addWidget(label, x, 1)
 
         return x + 1
 
     def add_atlas_entry(self, atlas, y: int) -> int:
         """
-        Generates an atlas name + license link label, adding it to the home grid.
+        Generates an atlas name and license link, adding them to the home grid.
 
         Parameters
         ----------
         atlas : AtlasInfo
             The atlas to display.
         y : int
-            The starting grid layout row index for the atlas column.
+            The starting grid layout row index for the atlas row.
 
         Returns
         -------
@@ -1068,7 +1086,7 @@ class MainWindow(QMainWindow):
         """
 
         label = QLabel(
-            '%s - <a href="%s">%s</a>'
+            '%s (<a href="%s">%s</a>)'
             % (
                 atlas.display_name,
                 atlas.license_url,
@@ -1077,7 +1095,7 @@ class MainWindow(QMainWindow):
         )
         label.setOpenExternalLinks(True)
         label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-        self.home_grid_layout.addWidget(label, y, 2, 1, 2)
+        self.home_grid_layout.addWidget(label, y, 3, 1, 2)
 
         return y + 1
 
@@ -1104,7 +1122,7 @@ class MainWindow(QMainWindow):
 
         """
 
-        self.add_home_entry(Dependence(state, msg), self.slicer_x)
+        self.add_home_entry(Dependence(state, msg), self.slicer_x, self.optional_grid_layout)
 
         if state is not DependenceStatus.MISSING:
             self.global_config.set_slicer_path(slicer_path)
