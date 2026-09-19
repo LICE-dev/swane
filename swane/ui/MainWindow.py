@@ -36,9 +36,10 @@ from swane.utils.license_consent import (
     version_with_license,
 )
 from swane.utils.LicenseReference import SLICER
+from swane.utils.AtlasReference import ATLASES
 from swane.ui.LicenseConsentWindow import LicenseConsentWindow
 from swane.workers.LicenseResolveWorker import LicenseResolveWorker
-import swane_supplement
+from swane import supplement
 from swane import __version__, EXIT_CODE_REBOOT, strings
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
 from swane.utils.Subject import Subject, SubjectRet
@@ -63,12 +64,12 @@ class MainWindow(QMainWindow):
         self.global_config.check_dependencies(self.dependency_manager)
 
         # GUI Icons setting
-        self.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
-        self.OK_ICON_FILE = swane_supplement.okIcon_file
-        self.ERROR_ICON_FILE = swane_supplement.errorIcon_file
-        self.WARNING_ICON_FILE = swane_supplement.warnIcon_file
-        self.LOADING_MOVIE_FILE = swane_supplement.loadingMovie_file
-        self.VOID_SVG_FILE = swane_supplement.voidsvg_file
+        self.setWindowIcon(QIcon(QPixmap(supplement.appIcon_file)))
+        self.OK_ICON_FILE = supplement.okIcon_file
+        self.ERROR_ICON_FILE = supplement.errorIcon_file
+        self.WARNING_ICON_FILE = supplement.warnIcon_file
+        self.LOADING_MOVIE_FILE = supplement.loadingMovie_file
+        self.VOID_SVG_FILE = supplement.voidsvg_file
         self.OK_ICON = QPixmap(self.OK_ICON_FILE)
         self.ERROR_ICON = QPixmap(self.ERROR_ICON_FILE)
         self.WARNING_ICON = QPixmap(self.WARNING_ICON_FILE)
@@ -666,7 +667,7 @@ class MainWindow(QMainWindow):
         label_about5 = QLabel(strings.aboutwindow_wiki_dependencylist)
 
         label_about_icon = QLabel()
-        icon = QPixmap(swane_supplement.appIcon_file)
+        icon = QPixmap(supplement.appIcon_file)
 
         label_about_icon.setPixmap(icon.scaled(60, 60))
 
@@ -934,6 +935,16 @@ class MainWindow(QMainWindow):
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
         self.home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
+
+        # Atlases column, aligned next to the mandatory dependencies section
+        label_atlases = QLabel(strings.mainwindow_home_label_atlases)
+        label_atlases.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        label_atlases.setFont(bold_font)
+        self.home_grid_layout.addWidget(label_atlases, x, 2, 1, 2)
+        y = x + 1
+        for atlas in ATLASES:
+            y = self.add_atlas_entry(atlas, y)
+
         x += 1
 
         x = self.add_home_entry(self.dependency_manager.dcm2niix, x)
@@ -1037,6 +1048,38 @@ class MainWindow(QMainWindow):
         self.home_grid_layout.addWidget(label, x, 1)
 
         return x + 1
+
+    def add_atlas_entry(self, atlas, y: int) -> int:
+        """
+        Generates an atlas name + license link label, adding it to the home grid.
+
+        Parameters
+        ----------
+        atlas : AtlasInfo
+            The atlas to display.
+        y : int
+            The starting grid layout row index for the atlas column.
+
+        Returns
+        -------
+        int
+            The next grid layout row index.
+
+        """
+
+        label = QLabel(
+            '%s - <a href="%s">%s</a>'
+            % (
+                atlas.display_name,
+                atlas.license_url,
+                strings.mainwindow_home_license_link,
+            )
+        )
+        label.setOpenExternalLinks(True)
+        label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.home_grid_layout.addWidget(label, y, 2, 1, 2)
+
+        return y + 1
 
     def slicer_row(
         self, slicer_path: str, slicer_version: str, msg: str, state: DependenceStatus

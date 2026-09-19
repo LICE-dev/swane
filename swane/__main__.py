@@ -6,7 +6,7 @@ def main():
     import os
     import psutil
     from swane import strings
-    import swane_supplement
+    from swane import supplement
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication, QMessageBox
     from PySide6.QtGui import QIcon, QPixmap
@@ -29,7 +29,7 @@ def main():
             app = QApplication.instance()
 
         # SWANe Icon definition
-        app.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
+        app.setWindowIcon(QIcon(QPixmap(supplement.appIcon_file)))
         # Desktop file name definition, needed on Linux/Wayland to match the running
         # window to the .desktop entry installed by ensure_desktop_entry() below, so
         # that the taskbar/dock shows the SWANe icon instead of a generic one
@@ -37,7 +37,7 @@ def main():
         # SWANe App Name definition
         app.setApplicationDisplayName(strings.APPNAME)
         # Install/refresh the Linux .desktop entry so taskbar/dock show the SWANe icon
-        ensure_desktop_entry(swane_supplement.appIcon_file)
+        ensure_desktop_entry(supplement.appIcon_file)
 
         # SWANe Configuration loading
         global_config = ConfigManager()
@@ -63,7 +63,7 @@ def main():
         # MainWindow in a variable to prevent garbage collector deletion (might cause crash)
         try:
             widget = MainWindow(global_config)
-            widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
+            widget.setWindowIcon(QIcon(QPixmap(supplement.appIcon_file)))
 
             # Start the regular Qt event loop before running the modal license
             # gate. This lets the already-visible main window paint and process

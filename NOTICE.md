@@ -66,15 +66,49 @@ Prior to release 0.12, Nipype was licensed under a BSD license.
 
 This project includes images derived from ICBM 2009c Nonlinear Symmetric 
 Atlas (https://nist.mni.mcgill.ca/icbm-152-nonlinear-atlases-2009/).
-These images are distributed inside swane-supplement package.
+These images are internalized under `swane/supplement/resources/` (formerly
+distributed as the separate `swane_supplement` package, now merged into this
+repository).
 
 
 **Copyright**: (c) 1993-2004 Louis Collins, McConnell Brain Imaging Centre, Montreal 
 Neurological Institute, McGill University
 
-**License**: Permission to use, copy, modify, and distribute this software and its documentation 
-for any purpose and without fee is hereby granted, provided that the above copyright 
-notice appears in all copies. The authors and McGill University make no represe.
+**License**: Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby granted, provided
+that the above copyright notice appear in all copies. The authors and McGill
+University make no representations about the suitability of this software for
+any purpose. It is provided "as is" without express or implied warranty. The
+authors are not responsible for any data loss, equipment damage, property
+loss, or injury to subjects or patients resulting from the use or misuse of
+this software package.
+
+Like the HCP842 atlas below, this is a permissive, attribution-style license:
+it carries no acceptance flow of its own and is not part of the first-launch
+consent gate. It is documented here, and linked from the Home tab's Atlases
+column, for attribution.
+
+---
+
+## FLAT1 reference maps
+
+The FLAT1 workflow's z-score pipeline uses a set of statistical reference
+templates (cerebellum mask, cortex mask, and mean/std FLAIR and extension
+maps), internalized under `swane/supplement/resources/FLAT1/`. These are
+SWANe/LICE's own derived data, not third-party material, and are covered by
+this repository's own root `LICENSE` (MIT) like the rest of the codebase.
+
+---
+
+## fsaverage (FreeSurfer)
+
+SWANe's test suite builds a synthetic subject ("phantom") for automated
+testing, and its tissue-class map generator
+(`swane/tests/helpers/phantom/`) reads the `fsaverage` subject shipped with a
+locally installed FreeSurfer. `fsaverage` is never bundled with or committed
+to this repository; it is only read, at test time, from the user's own
+FreeSurfer installation, under the same FreeSurfer Software License Agreement
+already listed above.
 
 ---
 ## External neuroimaging tools orchestrated by SWANe

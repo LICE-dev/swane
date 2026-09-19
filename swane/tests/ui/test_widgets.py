@@ -14,7 +14,7 @@ if not QT_AVAILABLE:
         allow_module_level=True,
     )
 
-import swane_supplement
+from swane import supplement
 from PySide6.QtWidgets import QTreeWidget
 from PySide6.QtCore import Qt
 
@@ -75,7 +75,7 @@ class TestCustomTreeWidgetItem:
         item = CustomTreeWidgetItem(tree, tree, "Node", "node_name")
 
         assert item.get_status() is None
-        item.set_art(swane_supplement.okIcon_file)
+        item.set_art(supplement.okIcon_file)
         assert item.get_status() == WorkflowSignals.NODE_COMPLETED
-        item.set_art(swane_supplement.errorIcon_file)
+        item.set_art(supplement.errorIcon_file)
         assert item.get_status() == WorkflowSignals.NODE_ERROR
