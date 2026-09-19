@@ -145,6 +145,7 @@ def _patch_versions(
     antspyx="0.6.3",
     antspynet="0.2.4",
     dipy="1.12.0",
+    niimath="1.0.20260720",
 ):
     monkeypatch.setattr(lc, "_fsl_version", lambda: fsl)
     monkeypatch.setattr(lc, "_freesurfer_version", lambda: fs)
@@ -152,6 +153,7 @@ def _patch_versions(
     monkeypatch.setattr(lc, "_antspyx_version", lambda: antspyx)
     monkeypatch.setattr(lc, "_antspynet_version", lambda: antspynet)
     monkeypatch.setattr(lc, "_dipy_version", lambda: dipy)
+    monkeypatch.setattr(lc, "_niimath_version", lambda: niimath)
     monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
 
 
@@ -165,6 +167,7 @@ def test_first_run_all_detected_need_consent(monkeypatch):
         "antspyx",
         "antspynet",
         "dipy",
+        "niimath",
     ]
 
 
@@ -179,6 +182,7 @@ def test_unchanged_versions_need_no_consent(monkeypatch):
             "antspyx": "0.6.3",
             "antspynet": "0.2.4",
             "dipy": "1.12.0",
+            "niimath": "1.0.20260720",
         }
     )
     assert lc.tools_needing_consent(dm, cfg) == []
@@ -209,13 +213,14 @@ def test_upgraded_tool_reprompts_only_that_tool(monkeypatch):
             "antspyx": "0.6.3",
             "antspynet": "0.2.4",
             "dipy": "1.12.0",
+            "niimath": "1.0.20260720",
         }
     )
     assert lc.tools_needing_consent(dm, cfg) == ["fsl"]
 
 
 def test_undeterminable_version_uses_sentinel(monkeypatch):
-    _patch_versions(monkeypatch, fsl=None)
+    _patch_versions(monkeypatch, fsl=None, niimath=None)
     dm = _FakeDM(fs=False, dcm=False, antspyx=False, antspynet=False, dipy=False)
     cfg = _FakeConfig()
     assert lc.detected_tool_versions(dm, cfg) == {"fsl": lc.UNKNOWN_VERSION}
@@ -254,6 +259,7 @@ def test_detected_versions_reuse_dependency_check_results(monkeypatch):
     dm.antspyx = SimpleNamespace(detected_version="0.6.3")
     cfg = _FakeConfig()
     monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
+    monkeypatch.setattr(lc, "_niimath_version", lambda: None)
     monkeypatch.setattr(
         lc,
         "_fsl_version",

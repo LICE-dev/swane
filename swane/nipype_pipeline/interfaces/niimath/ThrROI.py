@@ -1,6 +1,7 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
-from nipype.interfaces.fsl.utils import ImageMaths, ImageMathsInputSpec
+from nipype.interfaces.fsl.utils import ImageMathsInputSpec
+from swane.nipype_pipeline.interfaces.niimath.maths import ImageMaths
 from nipype.interfaces.base import traits
 
 
@@ -14,7 +15,7 @@ class ThrROIInputSpec(ImageMathsInputSpec):
     )
 
 
-# -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.utils.ImageMaths)  -*-
+# -*- DISCLAIMER: this class extends the niimath-backed ImageMaths (derived from nipype.interfaces.fsl.utils.ImageMaths)  -*-
 class ThrROI(ImageMaths):
     """
     Extracts a binary ROI from a segmentation using a min and a max value.

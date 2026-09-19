@@ -12,6 +12,7 @@ def test_registry_has_all_tools():
         "antspyx",
         "antspynet",
         "dipy",
+        "niimath",
     }
 
 

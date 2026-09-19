@@ -21,13 +21,13 @@
     reg_header = True
     subjects_dir = '<SUBJECTS_DIR>'
     transformed_file = 'r-aparc_aseg.mgz'
-- bgROI [BinaryMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- bgROI [BinaryMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     operation = 'add'
     out_file = 'bgROI.nii.gz'
     output_type = 'NIFTI_GZ'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
-- lhbgROI [ThrROI] cmd=fslmaths mem_gb=0.2 n_procs=1
+- lhbgROI [ThrROI] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'lhbgROI.nii.gz'
     output_type = 'NIFTI_GZ'
@@ -59,7 +59,7 @@
     environ = {FS_V8_XOPTS='0'}
     openmp = 2
     parallel = True
-- rhbgROI [ThrROI] cmd=fslmaths mem_gb=0.2 n_procs=1
+- rhbgROI [ThrROI] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'rhbgROI.nii.gz'
     output_type = 'NIFTI_GZ'

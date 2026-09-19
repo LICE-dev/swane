@@ -41,7 +41,7 @@
 - fmri_rs_del_vols [DeleteVolumes] mem_gb=0.2 n_procs=1
     del_end_vols = 0
     del_start_vols = 0
-- fmri_rs_dilatemask [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_dilatemask [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-dilF'
     output_type = 'NIFTI_GZ'
@@ -53,46 +53,46 @@
     force_value = -1.0
 - fmri_rs_getthresh [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = [98.0]
-- fmri_rs_highpass [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_highpass [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     suffix = '_tempfilt'
-- fmri_rs_img2float [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_img2float [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = ''
     out_data_type = 'float'
     output_type = 'NIFTI_GZ'
     suffix = '_dtype'
-- fmri_rs_intnorm [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_intnorm [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     suffix = '_intnorm'
-- fmri_rs_maskfunc [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_maskfunc [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-mas'
     output_type = 'NIFTI_GZ'
     suffix = '_bet'
-- fmri_rs_maskfunc2 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_maskfunc2 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-mas'
     output_type = 'NIFTI_GZ'
     suffix = '_mask'
-- fmri_rs_maskfunc3 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_maskfunc3 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-mas'
     output_type = 'NIFTI_GZ'
     suffix = '_mask'
-- fmri_rs_meanfunc [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_meanfunc [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-Tmean'
     output_type = 'NIFTI_GZ'
     suffix = '_mean'
-- fmri_rs_meanfunc2 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_meanfunc2 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-Tmean'
     output_type = 'NIFTI_GZ'
     suffix = '_mean'
-- fmri_rs_meanfunc3 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_meanfunc3 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-Tmean'
     output_type = 'NIFTI_GZ'
@@ -129,7 +129,7 @@
     output_type = 'NIFTI_GZ'
     usans = []
     use_median = 1
-- fmri_rs_threshold [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_rs_threshold [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_data_type = 'char'
     output_type = 'NIFTI_GZ'

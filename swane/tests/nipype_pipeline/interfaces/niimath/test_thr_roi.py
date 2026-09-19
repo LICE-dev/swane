@@ -1,12 +1,13 @@
-"""Unit tests for :class:`swane.nipype_pipeline.interfaces.fsl.ThrROI.ThrROI`.
+"""Unit tests for :class:`swane.nipype_pipeline.interfaces.niimath.ThrROI.ThrROI`.
 
-``ThrROI`` now subclasses the FSL ``ImageMaths`` interface and only customises
-``_parse_inputs`` to build the thresholding ``op_string`` from the segmentation
-bounds. That string assembly is pure Python, so it is exercised here without
-running FSL (the actual thresholding stays in the integration suite).
+``ThrROI`` subclasses the niimath-backed ``ImageMaths`` interface and only
+customises ``_parse_inputs`` to build the thresholding ``op_string`` from the
+segmentation bounds. That string assembly is pure Python, so it is exercised
+here without running niimath (the actual thresholding stays in the integration
+suite).
 """
 
-from swane.nipype_pipeline.interfaces.fsl.ThrROI import ThrROI
+from swane.nipype_pipeline.interfaces.niimath.ThrROI import ThrROI
 
 
 class TestThrROIOpString:
