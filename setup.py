@@ -23,7 +23,8 @@ setup(
         "swane": [
             "licenses/*.txt",
             "supplement/icons/*",
-            "supplement/resources/**/*",
+            "supplement/resources/*",
+            "supplement/resources/FLAT1/*",
         ]
     },
     classifiers=[
