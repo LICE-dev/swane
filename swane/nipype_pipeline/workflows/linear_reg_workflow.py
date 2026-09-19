@@ -1,4 +1,5 @@
-from nipype.interfaces.fsl import RobustFOV, ApplyMask
+from nipype.interfaces.fsl import RobustFOV
+from swane.nipype_pipeline.interfaces.niimath import ApplyMask
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient

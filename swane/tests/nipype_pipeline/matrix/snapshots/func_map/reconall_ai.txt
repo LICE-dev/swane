@@ -25,7 +25,7 @@
 - asl_ai_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-- asl_ai_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+- asl_ai_mask [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-asl_ai.nii.gz'
     output_type = 'NIFTI_GZ'
@@ -49,7 +49,7 @@
     sampling_range = 0.5
     sampling_units = 'frac'
     subjects_dir = '<SUBJECTS_DIR>'
-- asl_ai_threshold [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- asl_ai_threshold [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-thr -0.850000 -uthr 0.850000'
     output_type = 'NIFTI_GZ'
@@ -68,12 +68,12 @@
     single_file = False
     source_dir = '<TMP>/dicom'
     verbose = False
-- asl_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+- asl_mask [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-asl.nii.gz'
     output_type = 'NIFTI_GZ'
 - asl_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
-- asl_smooth [IsotropicSmooth] cmd=fslmaths mem_gb=0.2 n_procs=1
+- asl_smooth [IsotropicSmooth] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     sigma = 2.0

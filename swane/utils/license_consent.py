@@ -17,6 +17,7 @@ from swane.utils.LicenseReference import (
     ANTSPYX,
     ANTSPYNET,
     DIPY,
+    NIIMATH,
 )
 
 UNKNOWN_VERSION = "unknown"
@@ -214,6 +215,18 @@ def _dipy_version():
         return None
 
 
+def _niimath_version():
+    # niimath is a hard pip dependency: the maths pipeline always runs the
+    # binary bundled by the package, so the license-relevant version is the
+    # installed package version.
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("niimath")
+    except Exception:
+        return None
+
+
 def _is_slicer_detected(config) -> bool:
     from swane.utils.DependencyManager import DependencyManager
 
@@ -256,6 +269,12 @@ def detected_tool_versions(dependency_manager, config) -> dict:
         versions[ANTSPYNET] = _norm(_antspynet_version())
     if dependency_manager.is_dipy():
         versions[DIPY] = _norm(_dipy_version())
+    # niimath is a required pip dependency (not surfaced in the dependency UI),
+    # so it is detected directly from the installed package rather than through
+    # the dependency manager.
+    niimath_version = _niimath_version()
+    if niimath_version is not None:
+        versions[NIIMATH] = _norm(niimath_version)
     return versions
 
 
@@ -273,7 +292,7 @@ def tools_needing_consent(
         if detected_versions is None
         else detected_versions
     )
-    ordered = [FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET, DIPY]
+    ordered = [FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET, DIPY, NIIMATH]
     needing = []
     for tool_id in ordered:
         if tool_id not in detected:

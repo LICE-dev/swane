@@ -2,13 +2,13 @@ from nipype import Node, IdentityInterface, SelectFiles
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.algorithms.rapidart import ArtifactDetect
 from nipype.interfaces.fsl import (
-    ImageMaths,
     Level1Design,
     FEATModel,
     FILMGLS,
     SmoothEstimate,
     Cluster,
 )
+from swane.nipype_pipeline.interfaces.niimath import ImageMaths
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.fmri.FMRIGenSpec import FMRIGenSpec
