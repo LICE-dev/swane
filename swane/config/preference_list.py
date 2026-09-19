@@ -729,18 +729,6 @@ GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
     special_value_text="No limit",
     section=True,
 )
-GLOBAL_PREFERENCES[category]["multicore_node_limit"] = PreferenceEntry(
-    input_type=InputTypes.ENUM,
-    label="CPU management for multi-core steps",
-    value_enum=CoreLimit,
-    default=CoreLimit.SOFT_CAP,
-    informative_text={
-        CoreLimit.NO_LIMIT: "Multi-core steps ignore the subject CPU core limit, using all available resources",
-        CoreLimit.SOFT_CAP: "Multi-core steps use up to twice the subject CPU core limit",
-        CoreLimit.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
-    },
-)
-
 GLOBAL_PREFERENCES[category]["ram_gb"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Estimated RAM allocation per subject",

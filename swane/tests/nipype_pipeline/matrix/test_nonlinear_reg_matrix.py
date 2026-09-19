@@ -19,7 +19,7 @@ keeps asserting the graph SHAPE independently of the byte snapshot.
 
 import pytest
 
-from swane.config.config_enums import GlobalPrefCategoryList, CoreLimit
+from swane.config.config_enums import GlobalPrefCategoryList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
 nonlinear_reg_workflow = import_workflow_or_skip(
@@ -55,7 +55,6 @@ def test_nonlinear_reg_matrix(scenario, global_config, graph_snapshot):
         "sym",
         synth_config=synth,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
 
     graph_snapshot(
@@ -67,7 +66,6 @@ def test_nonlinear_reg_matrix(scenario, global_config, graph_snapshot):
             "registration_engine": synth["engine"],
             "limit_synth_cores": synth["limit_cores"],
             "max_cpu": MAX_CPU,
-            "multicore_node_limit": CoreLimit.SOFT_CAP.name,
         },
         title="nonlinear_reg / %s" % scenario,
     )
@@ -96,7 +94,6 @@ def test_nonlinear_reg_matrix_test_run(scenario, global_config, graph_snapshot):
         "sym",
         synth_config=synth,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
         test_run=True,
     )
 
@@ -107,7 +104,6 @@ def test_nonlinear_reg_matrix_test_run(scenario, global_config, graph_snapshot):
         config={
             "synth_morph": synth["morph"],
             "max_cpu": MAX_CPU,
-            "multicore_node_limit": CoreLimit.SOFT_CAP.name,
             "test_run": True,
         },
         title="nonlinear_reg / %s" % scenario,
@@ -152,7 +148,6 @@ def _build(global_config, engine):
         "sym",
         synth_config=synth,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
 
 

@@ -3,8 +3,7 @@ import tempfile
 from configparser import SectionProxy
 
 from nipype.interfaces.freesurfer import ReconAll, ApplyVolTransform
-from nipype.interfaces.fsl import BinaryMaths
-from multiprocessing import cpu_count
+from swane.nipype_pipeline.interfaces.niimath import BinaryMaths
 from nipype.pipeline.engine import Node
 from math import trunc
 
@@ -16,8 +15,8 @@ from swane.nipype_pipeline.interfaces.utils import (
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.freesurfer.SegmentHA import SegmentHA
-from swane.nipype_pipeline.interfaces.fsl.ThrROI import ThrROI
-from swane.config.config_enums import CoreLimit, FreesurferStep
+from swane.nipype_pipeline.interfaces.niimath.ThrROI import ThrROI
+from swane.config.config_enums import FreesurferStep
 from nipype.interfaces.utility import IdentityInterface
 from swane.utils.ResourceManager import ResourceManager
 
@@ -77,7 +76,6 @@ def freesurfer_workflow(
     synthseg_fast: bool = False,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -98,8 +96,7 @@ def freesurfer_workflow(
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
-    multicore_node_limit: CORE_LIMIT, optional
-        Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
+
     test_run : bool, optional
         If True, speed up prerelease test runs at the cost of accuracy: for
         the SynthSeg step, enable --fast and drop the robust variant; for the
@@ -198,13 +195,11 @@ def freesurfer_workflow(
         synth_seg.inputs.keep_geometry = True
         # SynthSeg cannot be tricked into using more threads than nipype
         # believes it does (no separate env-var thread control), so it is
-        # always a hard, nipype-visible cap regardless of multicore_node_limit.
-        synth_seg_threads, _ = get_synth_cpu_config(
-            max_cpu, multicore_node_limit, synth_config.getboolean_safe("limit_cores")
+        # always a hard, nipype-visible cap regardless of the CPU limit.
+        synth_seg_threads = get_synth_cpu_config(
+            max_cpu, synth_config.getboolean_safe("limit_cores")
         )
-        apply_synth_num_threads(
-            synth_seg, synth_seg_threads, hard=True, max_cpu=max_cpu
-        )
+        apply_synth_num_threads(synth_seg, synth_seg_threads, max_cpu=max_cpu)
         synth_seg.inputs.out_file = "r-aparc_aseg.mgz"
         workflow.connect(inputnode, "reference", synth_seg, "in_file")
         workflow.connect(synth_seg, "out_file", outputnode, "vol_label_file")
@@ -245,16 +240,6 @@ def freesurfer_workflow(
         # parallel option splits some steps in right and left
         if max_cpu > 1:
             reconall_parallel = True
-        # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
-        if multicore_node_limit == CoreLimit.NO_LIMIT:
-            # no limit
-            reconall_openmp = cpu_count()
-        elif multicore_node_limit == CoreLimit.SOFT_CAP:
-            # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
-            reconall_openmp = max_cpu
-            reconall_nprocs = reconall_openmp
-        elif max_cpu > 1:
-            # for hard cap we use half of max_cpu setting, but at least 1
             reconall_openmp = max(trunc(max_cpu / 2), 1)
             reconall_nprocs = reconall_openmp * 2
 
@@ -409,13 +394,8 @@ def freesurfer_workflow(
             # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
             segment_ha = Node(SegmentHA(), name="segment_ha")
             segment_ha._mem_gb = 5
-            if multicore_node_limit == CoreLimit.NO_LIMIT:
-                segment_ha.inputs.num_cpu = cpu_count()
-            elif multicore_node_limit == CoreLimit.SOFT_CAP:
-                segment_ha.inputs.num_cpu = max_cpu
-            else:
-                segment_ha.inputs.num_cpu = max_cpu
-                segment_ha.n_procs = segment_ha.inputs.num_cpu
+            segment_ha.inputs.num_cpu = max_cpu
+            segment_ha.n_procs = segment_ha.inputs.num_cpu
             workflow.connect(
                 recon_all_recon_pial, "subjects_dir", segment_ha, "subjects_dir"
             )

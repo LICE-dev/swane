@@ -1,4 +1,4 @@
-from nipype.interfaces.fsl import (
+from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
     ImageMaths,
 )
@@ -18,7 +18,7 @@ from swane.nipype_pipeline.interfaces.utils import (
     resolve_registration_engine,
     resolve_deskull_engine,
 )
-from swane.config.config_enums import CoreLimit, DeskullModality
+from swane.config.config_enums import DeskullModality
 
 
 def venous_mr_workflow(
@@ -30,7 +30,6 @@ def venous_mr_workflow(
     base_dir: str = "/",
     deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -56,8 +55,6 @@ def venous_mr_workflow(
         is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of Synth tools. The default is 0.
-    multicore_node_limit : CoreLimit, optional
-        Preference for Synth tools core usage. The default is CoreLimit.SOFT_CAP.
     test_run : bool, optional
         If True, speed up the underlying registration for prerelease test
         runs at the cost of accuracy. The default is False.
@@ -181,7 +178,6 @@ def venous_mr_workflow(
         antspynet_thr=config.getfloat_safe("antspynet_thr"),
         bet_surfaces=True,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     workflow.connect(veins_check, "out_file_anat", deskull, "in_file")
@@ -208,7 +204,6 @@ def venous_mr_workflow(
         flirt_cost="mutualinfo",
         test_run=test_run,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 

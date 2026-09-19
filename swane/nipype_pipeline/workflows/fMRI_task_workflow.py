@@ -2,13 +2,13 @@ from nipype import Node, IdentityInterface, SelectFiles
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.algorithms.rapidart import ArtifactDetect
 from nipype.interfaces.fsl import (
-    ImageMaths,
     Level1Design,
     FEATModel,
     FILMGLS,
     SmoothEstimate,
     Cluster,
 )
+from swane.nipype_pipeline.interfaces.niimath import ImageMaths
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.fmri.FMRIGenSpec import FMRIGenSpec
@@ -16,7 +16,7 @@ from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     resolve_registration_engine,
 )
-from swane.config.config_enums import BlockDesign, CoreLimit, RegistrationEngine
+from swane.config.config_enums import BlockDesign, RegistrationEngine
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 
 
@@ -27,7 +27,6 @@ def fMRI_task_workflow(
     synth_config: SectionProxy,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -50,9 +49,6 @@ def fMRI_task_workflow(
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
         Per-subject CPU budget passed to the registration node. The default is 0.
-    multicore_node_limit : CoreLimit, optional
-        How the registration node's thread usage is capped/accounted. The
-        default is ``CoreLimit.SOFT_CAP``.
     test_run : bool, optional
         If True, speed up the underlying fMRI preprocessing (motion
         correction) for prerelease test runs at the cost of accuracy.
@@ -110,7 +106,6 @@ def fMRI_task_workflow(
         synth_config=synth_config,
         base_dir=base_dir,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         test_run=test_run,
     )
 

@@ -288,7 +288,12 @@ tool_reference_list = {
         references=[nibabel_reference],
     ),
     "MathsCommand": ToolReference(
-        command="fslmaths", package=Package.FSL, url=utilities_url, references=[]
+        command="niimath",
+        package=Package.OTHER,
+        url="https://github.com/rordenlab/niimath",
+        references=[
+            "Rorden C, Webster M, Drake C, et al. niimath and fslmaths: replication as a method to enhance popular neuroimaging tools. Aperture Neuro. 2024."
+        ],
     ),
     "NVols": ToolReference(
         command="spatialimages [NiBabel]",

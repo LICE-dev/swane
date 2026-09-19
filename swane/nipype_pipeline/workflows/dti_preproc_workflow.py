@@ -5,7 +5,7 @@ from nipype.interfaces.fsl import (
 )
 from swane.nipype_pipeline.interfaces.volumes.ExtractVolumes import ExtractVolumes
 from nipype.pipeline.engine import Node
-from swane.config.config_enums import CoreLimit, RegistrationEngine, DeskullModality
+from swane.config.config_enums import RegistrationEngine, DeskullModality
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
 from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
@@ -21,7 +21,6 @@ from swane.nipype_pipeline.interfaces.utils import (
 )
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
-from multiprocessing import cpu_count
 
 
 def dti_preproc_workflow(
@@ -32,7 +31,6 @@ def dti_preproc_workflow(
     base_dir: str = "/",
     deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -57,8 +55,6 @@ def dti_preproc_workflow(
         default is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
-    multicore_node_limit: CORE_LIMIT, optional
-        Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
     test_run : bool, optional
         If True, tweak eddy, registration and bedpostx parameters to speed up
         prerelease test runs at the cost of accuracy. The default is False.
@@ -167,7 +163,6 @@ def dti_preproc_workflow(
         bet_threshold=True,
         out_file="nodif_brain.nii.gz",
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     workflow.connect(nodif, "out_file", b0_deskull, "in_file")
@@ -196,13 +191,8 @@ def dti_preproc_workflow(
             # FSL default is 5; cut to the minimum for prerelease speed.
             eddy.inputs.niter = 1
         if not is_cuda:
-            if multicore_node_limit == CoreLimit.HARD_CAP:
-                eddy_cpu = max_cpu
-                eddy.inputs.num_threads = max_cpu
-            elif multicore_node_limit == CoreLimit.SOFT_CAP:
-                eddy_cpu = max_cpu
-            else:
-                eddy_cpu = cpu_count()
+            eddy_cpu = max_cpu
+            eddy.inputs.num_threads = max_cpu
             eddy.inputs.environ = {
                 "OMP_NUM_THREADS": str(eddy_cpu),
                 "FSL_SKIP_GLOBAL": "1",
@@ -249,7 +239,6 @@ def dti_preproc_workflow(
         inverse=True,
         test_run=test_run,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
@@ -318,11 +307,8 @@ def dti_preproc_workflow(
         bedpostx.inputs.use_gpu = is_cuda
         if not is_cuda:
             # if cuda is enabled only 1 process is launched
-            if multicore_node_limit == CoreLimit.SOFT_CAP:
-                bedpostx.inputs.environ = {"FSLSUB_PARALLEL": str(max_cpu)}
-            elif multicore_node_limit == CoreLimit.HARD_CAP:
-                bedpostx.inputs.environ = {"FSLSUB_PARALLEL": str(max_cpu)}
-                bedpostx.n_procs = max_cpu
+            bedpostx.inputs.environ = {"FSLSUB_PARALLEL": str(max_cpu)}
+            bedpostx.n_procs = max_cpu
 
         workflow.connect(eddy, eddy_output_name, bedpostx, "dwi")
         workflow.connect(b0_deskull, "mask_file", bedpostx, "mask")

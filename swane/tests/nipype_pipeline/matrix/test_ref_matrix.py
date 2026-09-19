@@ -13,7 +13,7 @@ the BET engine; one scenario each covers the SynthStrip backend and the
 
 import pytest
 
-from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList, CoreLimit
+from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
@@ -59,7 +59,6 @@ def test_ref_matrix(
         config=section,
         synth_config=synth,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
 
     config_echo = {
@@ -68,7 +67,6 @@ def test_ref_matrix(
         "bet_thr": section["bet_thr"],
         "limit_synth_cores": synth["limit_cores"],
         "max_cpu": MAX_CPU,
-        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
     }
     graph_snapshot(
         wf,
@@ -97,7 +95,6 @@ def test_ref_matrix_test_run(
         config=section,
         synth_config=synth,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
         test_run=True,
     )
 

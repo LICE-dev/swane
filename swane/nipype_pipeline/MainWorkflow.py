@@ -10,7 +10,6 @@ from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
 from swane.config.config_enums import (
     Planes,
-    CoreLimit,
     BlockDesign,
     GlobalPrefCategoryList,
     FreesurferStep,
@@ -62,7 +61,7 @@ class MainWorkflow(CustomWorkflow):
     test_run: bool = False
     max_cpu: int = -1
     max_gpu: int = -1
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP
+
     memory_gb: float = -1
     freesurfer_step: FreesurferStep = FreesurferStep.DISABLED
     is_hippo_amyg_labels: bool = False
@@ -173,9 +172,7 @@ class MainWorkflow(CustomWorkflow):
         )
         if self.max_cpu < 1:
             self.max_cpu = cpu_count()
-        self.multicore_node_limit = self.global_config.getenum_safe(
-            GlobalPrefCategoryList.PERFORMANCE, "multicore_node_limit"
-        )
+
         # GPU management
         self.max_gpu = self.global_config.getint_safe(
             GlobalPrefCategoryList.PERFORMANCE, "max_subj_gpu"
@@ -234,7 +231,6 @@ class MainWorkflow(CustomWorkflow):
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             deskull_modality=DeskullModality.T1,
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.t1.long_name = "3D T1w analysis"
@@ -268,7 +264,6 @@ class MainWorkflow(CustomWorkflow):
             name="sym",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.sym.long_name = "Symmetric atlas registration"
@@ -290,7 +285,6 @@ class MainWorkflow(CustomWorkflow):
             is_hippo_amyg_labels=self.is_hippo_amyg_labels,
             synthseg_fast=self.is_synthseg_fast,
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             test_run=self.test_run,
         )
@@ -356,7 +350,6 @@ class MainWorkflow(CustomWorkflow):
             bias_field_correction=True,
             deskull_modality=DeskullModality.FLAIR,
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.flair.long_name = "3D Flair analysis"
@@ -412,7 +405,6 @@ class MainWorkflow(CustomWorkflow):
             name="mni1",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.mni1.long_name = "MNI atlas registration"
@@ -438,7 +430,6 @@ class MainWorkflow(CustomWorkflow):
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             test_run=self.test_run,
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
         )
         self.flat1.long_name = "FLAT1 analysis"
 
@@ -503,7 +494,6 @@ class MainWorkflow(CustomWorkflow):
                     synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
                     deskull_modality=DeskullModality.FLAIR,
                     max_cpu=self.max_cpu,
-                    multicore_node_limit=self.multicore_node_limit,
                     test_run=self.test_run,
                 )
                 self.flair2d.long_name = "2D %s FLAIR analysis" % plane.value
@@ -545,7 +535,6 @@ class MainWorkflow(CustomWorkflow):
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             deskull_modality=DeskullModality.T2,
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.t2_cor.long_name = "2D coronal T2 analysis"
@@ -594,7 +583,6 @@ class MainWorkflow(CustomWorkflow):
             bias_field_correction=True,
             deskull_modality=DeskullModality.T1,
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.mdc.long_name = "Post-contrast 3D T1w analysis"
@@ -634,7 +622,6 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.ASL],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.asl.long_name = "Arterial Spin Labelling analysis"
@@ -751,7 +738,6 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.PET],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.pet.long_name = "Pet analysis"
@@ -881,7 +867,6 @@ class MainWorkflow(CustomWorkflow):
             venous2_ct_dir=venous2_ct_dir,
             slicer_path=self.global_config.get_slicer_path(),
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.venous_ct.long_name = "Venous CT analysis"
@@ -926,7 +911,6 @@ class MainWorkflow(CustomWorkflow):
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             deskull_modality=DeskullModality.VENOUS,
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.venous_mr.long_name = "Venous MRA analysis"
@@ -963,7 +947,6 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.SEEG_CT],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.seeg_ct_dir.long_name = "SEEG CT analysis"
@@ -1007,7 +990,6 @@ class MainWorkflow(CustomWorkflow):
             dti_dir=dti_dir,
             config=self.subject_config[DIL.DTI],
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             deskull_modality=DeskullModality.NODIF,
             test_run=self.test_run,
@@ -1118,7 +1100,7 @@ class MainWorkflow(CustomWorkflow):
     def launch_dipy_dti_analysis(self, dti_dir):
         # dipy tractography engine: preprocessing to a global tractogram. New
         # dipy nodes implement HARD_CAP only, so the factory takes no
-        # multicore_node_limit.
+        # get_registration_node bounds its nipype-aware branch to max_cpu.
         self.dti_preproc = dipy_dti_preproc_workflow(
             name=DIL.DTI.value.workflow_name,
             dti_dir=dti_dir,
@@ -1256,7 +1238,6 @@ class MainWorkflow(CustomWorkflow):
                 base_dir=self.base_dir,
                 synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
                 max_cpu=self.max_cpu,
-                multicore_node_limit=self.multicore_node_limit,
                 test_run=self.test_run,
             )
             self.fMRI.long_name = "Task fMRI analysis - %d" % y
@@ -1302,7 +1283,6 @@ class MainWorkflow(CustomWorkflow):
             base_dir=self.base_dir,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             test_run=self.test_run,
         )
         self.fMRI_resting_state.long_name = "Resting state fMRI analysis"

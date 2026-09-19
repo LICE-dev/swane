@@ -1,4 +1,4 @@
-from nipype.interfaces.fsl import (
+from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
     ImageMaths,
     Threshold,
@@ -12,7 +12,7 @@ from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2ni
 from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
 from configparser import SectionProxy
 
-from swane.config.config_enums import CoreLimit, RegistrationEngine
+from swane.config.config_enums import RegistrationEngine
 from swane.nipype_pipeline.interfaces.utils import (
     get_registration_node,
     resolve_registration_engine,
@@ -26,7 +26,6 @@ def seeg_ct_workflow(
     synth_config: SectionProxy,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -47,9 +46,6 @@ def seeg_ct_workflow(
     max_cpu : int, optional
         If greater than 0, limit the core usage of the registration tools. The
         default is 0.
-    multicore_node_limit : CoreLimit, optional
-        Preference for the registration tools core usage. The default is
-        CoreLimit.SOFT_CAP.
     test_run : bool, optional
         If True, speed up the underlying registration for prerelease test
         runs at the cost of accuracy. The default is False.
@@ -141,7 +137,6 @@ def seeg_ct_workflow(
         moving_mask=[electrodes_weight_map, "out_file"],
         test_run=test_run,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     seeg_registered_node = seeg_ct_2_ref.registered_node

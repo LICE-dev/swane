@@ -809,9 +809,6 @@ class ConfigManager(configparser.ConfigParser):
             self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(
                 ResourceManager.get_min_cpu()
             )
-            self[GlobalPrefCategoryList.PERFORMANCE][
-                "multicore_node_limit"
-            ] = CoreLimit.HARD_CAP.name
             self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "1"
 
         elif profile == PerformanceProfile.BALANCED:
@@ -821,9 +818,6 @@ class ConfigManager(configparser.ConfigParser):
             self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(
                 ResourceManager.get_default_cpu()
             )
-            self[GlobalPrefCategoryList.PERFORMANCE][
-                "multicore_node_limit"
-            ] = CoreLimit.HARD_CAP.name
             self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "2"
 
         elif profile == PerformanceProfile.MAX_PERF:
@@ -833,7 +827,4 @@ class ConfigManager(configparser.ConfigParser):
             self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(
                 ResourceManager.get_max_cpu()
             )
-            self[GlobalPrefCategoryList.PERFORMANCE][
-                "multicore_node_limit"
-            ] = CoreLimit.SOFT_CAP.name
             self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "3"

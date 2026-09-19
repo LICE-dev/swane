@@ -78,7 +78,8 @@ def ensure_desktop_entry(icon_path: str) -> None:
             f'rm -f "{launcher_script}" "{desktop_file}"\n'
             "if command -v notify-send >/dev/null 2>&1; then\n"
             '    notify-send "SWANe" '
-            '"SWANe is no longer installed; this shortcut has been removed."\n'
+            '"SWANe is no longer installed; this shortcut has been removed." '
+            "|| true\n"
             "fi\n"
         )
 

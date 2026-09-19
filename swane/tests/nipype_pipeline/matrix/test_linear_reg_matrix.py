@@ -26,7 +26,7 @@ scenario, with ``flair3d_ants_backend`` carrying the full ANTs stack
 
 import pytest
 
-from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList, CoreLimit
+from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
@@ -154,7 +154,6 @@ def test_linear_reg_matrix(
         is_partial_coverage=params["partial"],
         bias_field_correction=params["bias"],
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
 
     config_echo = {
@@ -166,7 +165,6 @@ def test_linear_reg_matrix(
         "registration_engine": synth["engine"],
         "limit_synth_cores": synth["limit_cores"],
         "max_cpu": MAX_CPU,
-        "multicore_node_limit": CoreLimit.SOFT_CAP.name,
         "config": params["config_input"].name if params["config_input"] else "None",
     }
     graph_snapshot(
@@ -202,7 +200,6 @@ def test_linear_reg_matrix_test_run(
         is_partial_coverage=False,
         bias_field_correction=True,
         max_cpu=MAX_CPU,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
         test_run=True,
     )
 
