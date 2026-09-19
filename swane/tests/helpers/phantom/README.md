@@ -21,7 +21,7 @@ subject_dir = get_phantom_subject()      # builds once, then reuses the cache
 Convert every series to NIfTI (same dcm2niix SWANe uses) for visual inspection:
 
 ```bash
-python -m swane.tests.helpers.phantom.to_nifti <subject_dir> <out_dir>
+python3 -m swane.tests.helpers.phantom.to_nifti <subject_dir> <out_dir>
 ```
 
 `$FREESURFER_HOME` must be set (the anatomy comes from `fsaverage`).

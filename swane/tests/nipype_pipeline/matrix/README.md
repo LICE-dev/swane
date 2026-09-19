@@ -116,7 +116,7 @@ pytest swane/tests/nipype_pipeline/matrix
 SWANE_SNAPSHOT_UPDATE=1 pytest swane/tests/nipype_pipeline/matrix
 
 # regenerate the reports (MATRIX.md + local HTML) after refreshing snapshots
-python swane/tests/nipype_pipeline/matrix/generate_report.py
+python3 swane/tests/nipype_pipeline/matrix/generate_report.py
 ```
 
 ## Adding a workflow / scenario
@@ -127,5 +127,5 @@ python swane/tests/nipype_pipeline/matrix/generate_report.py
 3. **Read the generated `snapshots/<workflow>/<scenario>.txt` by hand** and
    confirm the nodes, commands, flags and wiring are what you expect — the
    golden file is only as trustworthy as its first review.
-4. Regenerate the reports (`python .../matrix/generate_report.py`) so `MATRIX.md`
+4. Regenerate the reports (`python3 .../matrix/generate_report.py`) so `MATRIX.md`
    stays in sync, and commit the test, the golden file and `MATRIX.md` together.

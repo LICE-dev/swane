@@ -2,7 +2,7 @@
 
 Overview of 84 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
-> Generated from the golden snapshots by `python swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
+> Generated from the golden snapshots by `python3 swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
 [dipy_bundle](#dipy-bundle) · [dipy_dti_preproc](#dipy-dti-preproc) · [dti_preproc](#dti-preproc) · [flat1](#flat1) · [fmri_preproc](#fmri-preproc) · [fmri_resting_state](#fmri-resting-state) · [fmri_task](#fmri-task) · [freesurfer](#freesurfer) · [func_map](#func-map) · [linear_reg](#linear-reg) · [nonlinear_reg](#nonlinear-reg) · [ref](#ref) · [seeg_ct](#seeg-ct) · [tractography](#tractography) · [venous_ct](#venous-ct) · [venous_mr](#venous-mr)
 

@@ -7,7 +7,7 @@ overlays look right.
 
 Usage::
 
-    python -m swane.tests.helpers.phantom.preview <subject_dir> <out_dir>
+    python3 -m swane.tests.helpers.phantom.preview <subject_dir> <out_dir>
 """
 
 from __future__ import annotations
