@@ -945,7 +945,9 @@ class MainWindow(QMainWindow):
         label_atlases.setFont(bold_font)
         self.home_grid_layout.addWidget(label_atlases, x, 3, 1, 2)
 
-        horizontal_spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        horizontal_spacer = QSpacerItem(
+            40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum
+        )
         self.home_grid_layout.addItem(horizontal_spacer, x, 2, 1, 1)
 
         y = x + 1
@@ -975,7 +977,9 @@ class MainWindow(QMainWindow):
         self.optional_grid_layout.addWidget(label_main_dep, opt_x, 0, 1, 2)
         opt_x += 1
 
-        opt_x = self.add_home_entry(self.dependency_manager.freesurfer, opt_x, self.optional_grid_layout)
+        opt_x = self.add_home_entry(
+            self.dependency_manager.freesurfer, opt_x, self.optional_grid_layout
+        )
         self.global_config.freesurfer = self.dependency_manager.is_freesurfer()
 
         if DependencyManager.need_slicer_check(self.global_config):
@@ -985,7 +989,7 @@ class MainWindow(QMainWindow):
                     DependenceStatus.CHECKING, strings.mainwindow_dep_slicer_src
                 ),
                 opt_x,
-                self.optional_grid_layout
+                self.optional_grid_layout,
             )
             DependencyManager.check_slicer(
                 self.global_config.get_slicer_path(), self.slicer_row
@@ -994,7 +998,11 @@ class MainWindow(QMainWindow):
             label = strings.check_dep_slicer_found % version_with_license(
                 SLICER, self.global_config.get_slicer_version()
             )
-            opt_x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, label), opt_x, self.optional_grid_layout)
+            opt_x = self.add_home_entry(
+                Dependence(DependenceStatus.DETECTED, label),
+                opt_x,
+                self.optional_grid_layout,
+            )
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -1002,7 +1010,9 @@ class MainWindow(QMainWindow):
         self.optional_grid_layout.addWidget(label_main_dep, opt_x, 0, 1, 2)
         opt_x += 1
 
-        opt_x = self.add_home_entry(self.dependency_manager.graphviz, opt_x, self.optional_grid_layout)
+        opt_x = self.add_home_entry(
+            self.dependency_manager.graphviz, opt_x, self.optional_grid_layout
+        )
 
         vertical_spacer = QSpacerItem(
             20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding
@@ -1011,7 +1021,9 @@ class MainWindow(QMainWindow):
 
         self.homeTab.setLayout(self.home_v_layout)
 
-    def add_home_entry(self, dep: Dependence, x: int, layout: QGridLayout = None) -> int:
+    def add_home_entry(
+        self, dep: Dependence, x: int, layout: QGridLayout = None
+    ) -> int:
         """
         Generates a dependency check label, adding it to an existing layout
 
@@ -1122,7 +1134,9 @@ class MainWindow(QMainWindow):
 
         """
 
-        self.add_home_entry(Dependence(state, msg), self.slicer_x, self.optional_grid_layout)
+        self.add_home_entry(
+            Dependence(state, msg), self.slicer_x, self.optional_grid_layout
+        )
 
         if state is not DependenceStatus.MISSING:
             self.global_config.set_slicer_path(slicer_path)
