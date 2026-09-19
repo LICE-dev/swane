@@ -23,7 +23,7 @@ Read this reference before bumping a pinned dependency in `setup.py` (e.g. `nipy
    pipdeptree -p <package>      # full recursive tree, if available in the dev environment
    ```
    A conflicting transitive pin fails loudly at install time; a *compatible* transitive bump does not, and is the one that needs deliberate checking.
-5. **Check whether the reason for an existing pin still applies.** If a comment references a specific bug or version floor (the `swane_supplement>=0.1.2` TODO, the `dcm2niix` upper bound), verify against the new dependency's issue tracker/changelog whether the underlying bug is fixed upstream before loosening or removing the pin.
+5. **Check whether the reason for an existing pin still applies.** If a comment references a specific bug or version floor (e.g. the `dcm2niix` upper bound), verify against the new dependency's issue tracker/changelog whether the underlying bug is fixed upstream before loosening or removing the pin.
 6. **Update `setup.py` deliberately**: exact pin (`==`) when a known bug or ABI-sensitive/monkeypatched behavior justifies it, a range otherwise. Comment a new exact pin the same way existing ones are commented, explaining why.
 7. **Run the full validation ladder** from [testing.md](testing.md) after the bump — compileall, targeted tests, then the light suite at minimum; the heavy suite and `prerelease/` when the changed dependency touches workflow execution, image I/O, or GUI behavior. Validate on both Linux and macOS when the dependency has platform-specific wheels or behavior (Qt, SimpleITK, cryptography).
 

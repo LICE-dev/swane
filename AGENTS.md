@@ -23,7 +23,6 @@ This file is versioned with the repository so every trusted clone uses the same 
 
 - This repository owns the main application and Nipype workflows and uses `$swane-dev-assistant` from `.agents/skills/`.
 - Related repositories are normally checked out as siblings, but agents must discover them from the workspace instead of assuming an absolute path:
-  - `../swane_supplement` owns packaged icons and scientific resources and uses `$swane-supplement-maintainer`.
   - `../dicom_sequence_classifier` owns metadata-based DICOM classification and uses `$dicom-sequence-classifier-maintainer`.
   - `../swane_classifier` owns lesion-classifier research code and uses `$swane-classifier-research`.
   - `../swane.wiki` owns the public GitHub wiki and uses `$swane-wiki-maintainer`.
