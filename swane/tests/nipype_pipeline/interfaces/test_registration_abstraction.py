@@ -13,7 +13,7 @@ import pytest
 from nipype import Node
 from nipype.interfaces.fsl import BET
 
-from swane.config.config_enums import CoreLimit, RegistrationEngine
+from swane.config.config_enums import RegistrationEngine
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 
 
@@ -29,22 +29,20 @@ class TestToolCpuHelpers:
     def test_get_tool_cpu_config_soft_cap(self):
         from swane.nipype_pipeline.interfaces.utils import get_tool_cpu_config
 
-        threads, hard = get_tool_cpu_config(
+        threads = get_tool_cpu_config(
             max_cpu=4,
-            multicore_node_limit=CoreLimit.SOFT_CAP,
             limit_synth_cores=False,
         )
-        assert (threads, hard) == (4, False)
+        assert threads == 4
 
     def test_get_tool_cpu_config_hard_cap(self):
         from swane.nipype_pipeline.interfaces.utils import get_tool_cpu_config
 
-        threads, hard = get_tool_cpu_config(
+        threads = get_tool_cpu_config(
             max_cpu=4,
-            multicore_node_limit=CoreLimit.HARD_CAP,
             limit_synth_cores=False,
         )
-        assert (threads, hard) == (4, True)
+        assert threads == 4
 
     def test_old_helper_names_are_aliases(self):
         from swane.nipype_pipeline.interfaces import utils
@@ -59,34 +57,11 @@ class TestToolCpuHelpers:
         )
 
         node = Node(AntsRegistration(), name="antsreg")
-        apply_tool_num_threads(node, threads=3, hard=True)
+        apply_tool_num_threads(node, threads=3)
+        # Without a hard cap, Nipype exports ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS
+        # to match num_threads, but n_procs is set to the same value (since soft_cap was removed)
         assert node.inputs.num_threads == 3
         assert node.n_procs == 3
-
-    def test_apply_tool_num_threads_soft_env_vars(self):
-        from swane.nipype_pipeline.interfaces.utils import apply_tool_num_threads
-
-        node = Node(BET(), name="bet")
-        apply_tool_num_threads(
-            node, threads=2, hard=False, soft_env_vars=("OMP_NUM_THREADS",)
-        )
-        assert node.inputs.environ["OMP_NUM_THREADS"] == "2"
-        # Soft cap keeps nipype unaware of the reservation.
-        assert node.n_procs in (None, 1)
-
-    def test_apply_tool_num_threads_no_env_vars_is_always_aware(self):
-        """A tool with no soft env vars (SynthSeg, ANTs) can never hide its
-        threads from nipype -- ``num_threads`` is set and ``n_procs`` follows it
-        even in the soft-cap case."""
-        from swane.nipype_pipeline.interfaces.utils import apply_tool_num_threads
-        from swane.nipype_pipeline.interfaces.ants.AntsRegistration import (
-            AntsRegistration,
-        )
-
-        node = Node(AntsRegistration(), name="antsreg")
-        apply_tool_num_threads(node, threads=2, hard=False)
-        assert node.inputs.num_threads == 2
-        assert node.n_procs == 2
 
 
 # --------------------------------------------------------------------------- #

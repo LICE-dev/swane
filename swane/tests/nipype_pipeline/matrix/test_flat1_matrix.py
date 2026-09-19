@@ -19,7 +19,7 @@ the graph SHAPE independently of the byte snapshot.
 
 import pytest
 
-from swane.config.config_enums import CoreLimit, GlobalPrefCategoryList
+from swane.config.config_enums import GlobalPrefCategoryList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
 
 flat1_workflow = import_workflow_or_skip(
@@ -232,7 +232,6 @@ def test_flat1_atropos_num_threads_budgeted(global_config, make_file):
         mni1_dir=make_file("mni1.nii.gz", "x"),
         synth_config=synth,
         max_cpu=4,
-        multicore_node_limit=CoreLimit.SOFT_CAP,
     )
     atropos = {n.name: n for n in wf._graph.nodes()}["flat1_atropos"]
     assert isdefined(atropos.inputs.num_threads)

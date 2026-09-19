@@ -1,9 +1,9 @@
 from nipype import Node, IdentityInterface, Merge
 from nipype.interfaces.fsl import (
-    ImageMaths,
     MCFLIRT,
     SUSAN,
 )
+from swane.nipype_pipeline.interfaces.niimath import ImageMaths
 from swane.nipype_pipeline.interfaces.volumes.ExtractVolumes import ExtractVolumes
 from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
@@ -17,7 +17,6 @@ from configparser import SectionProxy
 from swane.config.config_enums import (
     SliceTiming,
     RegistrationEngine,
-    CoreLimit,
     DeskullModality,
 )
 from swane.nipype_pipeline.interfaces.utils import (
@@ -40,7 +39,6 @@ def fMRI_preproc_workflow(
     synth_config: SectionProxy,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -72,9 +70,6 @@ def fMRI_preproc_workflow(
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
         Per-subject CPU budget passed to the registration node. The default is 0.
-    multicore_node_limit : CoreLimit, optional
-        How the registration node's thread usage is capped/accounted. The
-        default is ``CoreLimit.SOFT_CAP``.
     test_run : bool, optional
         If True, cut MCFLIRT motion-correction search levels and switch to
         trilinear interpolation to speed up prerelease test runs at the cost
@@ -234,7 +229,6 @@ def fMRI_preproc_workflow(
         mask=True,
         bet_thr=0.3,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     workflow.connect(meanfunc, "out_file", meanfuncmask, "in_file")
@@ -429,7 +423,6 @@ def fMRI_preproc_workflow(
         flirt_search=90,
         test_run=test_run,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     # Expose the func->ref registration to the task/resting consumers that

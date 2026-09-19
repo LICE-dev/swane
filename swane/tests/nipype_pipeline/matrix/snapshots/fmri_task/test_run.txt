@@ -96,7 +96,7 @@
 - fmri_0_del_vols [DeleteVolumes] mem_gb=0.2 n_procs=1
     del_end_vols = 0
     del_start_vols = 0
-- fmri_0_dilatemask [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_dilatemask [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-dilF'
     output_type = 'NIFTI_GZ'
@@ -114,17 +114,17 @@
     force_value = -1.0
 - fmri_0_getthresh [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = [98.0]
-- fmri_0_highpass [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_highpass [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     suffix = '_tempfilt'
-- fmri_0_img2float [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_img2float [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = ''
     out_data_type = 'float'
     output_type = 'NIFTI_GZ'
     suffix = '_dtype'
-- fmri_0_intnorm [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_intnorm [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     suffix = '_intnorm'
@@ -132,37 +132,37 @@
     bases = {dgamma={'derivs': False}}
     model_serial_correlations = True
     orthogonalization = {}
-- fmri_0_maskfunc [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_maskfunc [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-mas'
     output_type = 'NIFTI_GZ'
     suffix = '_bet'
-- fmri_0_maskfunc2 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_maskfunc2 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-mas'
     output_type = 'NIFTI_GZ'
     suffix = '_mask'
-- fmri_0_maskfunc3 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_maskfunc3 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-mas'
     output_type = 'NIFTI_GZ'
     suffix = '_mask'
-- fmri_0_maskfunc4_1 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_maskfunc4_1 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-mas'
     output_type = 'NIFTI_GZ'
     suffix = '_mask'
-- fmri_0_meanfunc [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_meanfunc [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-Tmean'
     output_type = 'NIFTI_GZ'
     suffix = '_mean'
-- fmri_0_meanfunc2 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_meanfunc2 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-Tmean'
     output_type = 'NIFTI_GZ'
     suffix = '_mean'
-- fmri_0_meanfunc3 [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_meanfunc3 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = '-Tmean'
     output_type = 'NIFTI_GZ'
@@ -221,7 +221,7 @@
 - fmri_0_smoothness [SmoothEstimate] cmd=smoothest mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-- fmri_0_threshold [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- fmri_0_threshold [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_data_type = 'char'
     output_type = 'NIFTI_GZ'

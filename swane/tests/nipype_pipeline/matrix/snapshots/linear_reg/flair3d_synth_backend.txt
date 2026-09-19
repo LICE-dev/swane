@@ -7,7 +7,6 @@
 #   is_volumetric = True
 #   limit_synth_cores = false
 #   max_cpu = 4
-#   multicore_node_limit = SOFT_CAP
 #   registration_engine = SYNTH
 #   synth_morph = true
 #
@@ -18,7 +17,7 @@
 - bias_correction [AntsN4BiasFieldCorrection] mem_gb=2 n_procs=4
     num_threads = 4
     skull_stripped = False
-- corrected_deskull [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+- corrected_deskull [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
 - deskulled_flair3d_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
@@ -39,10 +38,11 @@
     single_file = False
     source_dir = '<TMP>/dicom'
     verbose = False
-- flair3d_deskull_synthstrip [SynthStrip] cmd=mri_synthstrip mem_gb=5 n_procs=1
-    environ = {OMP_NUM_THREADS='4', SUBJECTS_DIR='<SUBJECTS_DIR>'}
+- flair3d_deskull_synthstrip [SynthStrip] cmd=mri_synthstrip mem_gb=5 n_procs=4
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     exclude_csf = False
     mask_file = 'brain_mask.nii.gz'
+    num_threads = 4
     subjects_dir = '<SUBJECTS_DIR>'
 - flair3d_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
     environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
@@ -51,9 +51,10 @@
 - flair3d_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-- flair3d_synthmorphreg [SynthMorphReg] cmd=mri_synthmorph register mem_gb=9 n_procs=1
-    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>', TF_NUM_INTEROP_THREADS='4', TF_NUM_INTRAOP_THREADS='4'}
+- flair3d_synthmorphreg [SynthMorphReg] cmd=mri_synthmorph register mem_gb=9 n_procs=4
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     model = 'rigid'
+    num_threads = 4
     subjects_dir = '<SUBJECTS_DIR>'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1

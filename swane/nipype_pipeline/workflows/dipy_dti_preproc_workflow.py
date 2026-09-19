@@ -5,7 +5,6 @@ from nipype.pipeline.engine import Node, MapNode
 from nipype.interfaces.utility import IdentityInterface
 
 from swane.config.config_enums import (
-    CoreLimit,
     RegistrationEngine,
     DeskullModality,
 )
@@ -100,7 +99,7 @@ def dipy_dti_preproc_workflow(
     requirement the dipy tracker does not share.
 
     New dipy nodes implement HARD_CAP only, so this factory takes no
-    ``multicore_node_limit`` parameter (spec section 10).
+    CPU preference.
 
     Parameters
     ----------
@@ -249,7 +248,6 @@ def dipy_dti_preproc_workflow(
         # parallel_cpu, not raw max_cpu: under HARD_CAP the helper reserves
         # exactly max_cpu cores, and max_cpu==0 ("auto") must land as 1, not 0.
         max_cpu=parallel_cpu,
-        multicore_node_limit=CoreLimit.HARD_CAP,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     workflow.connect(nodif, "out_file", b0_deskull, "in_file")
@@ -317,7 +315,6 @@ def dipy_dti_preproc_workflow(
         # parallel_cpu, not raw max_cpu: HARD_CAP reserves exactly this many
         # cores and max_cpu==0 ("auto") must land as 1 (FSL FLIRT ignores it).
         max_cpu=parallel_cpu,
-        multicore_node_limit=CoreLimit.HARD_CAP,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 

@@ -25,12 +25,6 @@ class SlicerExtensions(Enum):
     MRML = "mrml"
 
 
-class CoreLimit(Enum):
-    NO_LIMIT = "No limit"
-    SOFT_CAP = "Soft cap"
-    HARD_CAP = "Hard Cap"
-
-
 class BetweenModFlirtCost(Enum):
     MUTUAL_INFORMATION = "Mutual information"
     NORMALIZED_MUTUAL_INFORMATION = "Normalized mutual information"

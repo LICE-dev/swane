@@ -1,5 +1,5 @@
 from nipype.interfaces.freesurfer import SampleToSurface
-from nipype.interfaces.fsl import (
+from swane.nipype_pipeline.interfaces.niimath import (
     IsotropicSmooth,
     ApplyMask,
     ImageMaths,
@@ -14,7 +14,7 @@ from swane.nipype_pipeline.interfaces.stats.Zscore import Zscore
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
 import swane_supplement
-from swane.config.config_enums import BetweenModFlirtCost, FreesurferStep, CoreLimit
+from swane.config.config_enums import BetweenModFlirtCost, FreesurferStep
 from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     get_registration_node,
@@ -30,7 +30,6 @@ def func_map_workflow(
     synth_config: SectionProxy,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -55,8 +54,6 @@ def func_map_workflow(
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
         If greater than 0, limit the core usage of Synth tools. The default is 0.
-    multicore_node_limit : CoreLimit, optional
-        Preference for Synth tools core usage. The default is CoreLimit.SOFT_CAP.
     test_run : bool, optional
         If True, speed up the underlying registrations for prerelease test
         runs at the cost of accuracy. The default is False.
@@ -186,7 +183,6 @@ def func_map_workflow(
         non_linear=False,
         test_run=test_run,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 

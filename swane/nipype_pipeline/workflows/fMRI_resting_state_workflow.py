@@ -12,7 +12,7 @@ from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     resolve_registration_engine,
 )
-from swane.config.config_enums import SliceTiming, RegistrationEngine, CoreLimit
+from swane.config.config_enums import SliceTiming, RegistrationEngine
 from ica_aroma_py.services.ICA_AROMA_nodes import (
     FeatureTimeSeries,
     FeatureFrequency,
@@ -31,7 +31,6 @@ def fMRI_resting_state_workflow(
     synth_config: SectionProxy,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
     test_run: bool = False,
 ) -> CustomWorkflow:
     """
@@ -54,9 +53,6 @@ def fMRI_resting_state_workflow(
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
         Per-subject CPU budget passed to the registration nodes. The default is 0.
-    multicore_node_limit : CoreLimit, optional
-        How the registration nodes' thread usage is capped/accounted. The
-        default is ``CoreLimit.SOFT_CAP``.
     test_run : bool, optional
         If True, speed up the ref-to-atlas registration for prerelease test
         runs at the cost of accuracy. melodic_dim is never touched: the
@@ -110,7 +106,6 @@ def fMRI_resting_state_workflow(
         synth_config=synth_config,
         base_dir=base_dir,
         max_cpu=max_cpu,
-        multicore_node_limit=multicore_node_limit,
         test_run=test_run,
     )
 
@@ -202,7 +197,6 @@ def fMRI_resting_state_workflow(
             flirt_search=90,
             test_run=test_run,
             max_cpu=max_cpu,
-            multicore_node_limit=multicore_node_limit,
             limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
         )
 

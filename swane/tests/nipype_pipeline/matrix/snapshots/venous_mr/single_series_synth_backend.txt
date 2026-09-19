@@ -3,23 +3,24 @@
 #   deskull_engine = SYNTHSTRIP
 #   limit_synth_cores = false
 #   max_cpu = 4
-#   multicore_node_limit = SOFT_CAP
 #   synth_morph = true
 #   two_series = False
 #   vein_detection_mode = SD
 #
 # nodes=12 edges=14
 
-- anat_2_ref_synthmorphreg [SynthMorphReg] cmd=mri_synthmorph register mem_gb=9 n_procs=1
-    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>', TF_NUM_INTEROP_THREADS='4', TF_NUM_INTRAOP_THREADS='4'}
+- anat_2_ref_synthmorphreg [SynthMorphReg] cmd=mri_synthmorph register mem_gb=9 n_procs=4
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     model = 'rigid'
+    num_threads = 4
     subjects_dir = '<SUBJECTS_DIR>'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
-- vein_mr_deskull_synthstrip [SynthStrip] cmd=mri_synthstrip mem_gb=5 n_procs=1
-    environ = {OMP_NUM_THREADS='4', SUBJECTS_DIR='<SUBJECTS_DIR>'}
+- vein_mr_deskull_synthstrip [SynthStrip] cmd=mri_synthstrip mem_gb=5 n_procs=4
+    environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
     exclude_csf = False
     mask_file = 'brain_mask.nii.gz'
+    num_threads = 4
     subjects_dir = '<SUBJECTS_DIR>'
 - veins_2_ref_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
     environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
@@ -41,13 +42,13 @@
     single_file = False
     source_dir = '<TMP>/phase1'
     verbose = False
-- veins_inskull_mask [ApplyMask] cmd=fslmaths mem_gb=0.2 n_procs=1
+- veins_inskull_mask [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
 - veins_range [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = []
 - veins_reOrient [ForceOrient] mem_gb=0.2 n_procs=1
-- veins_rescale [ImageMaths] cmd=fslmaths mem_gb=0.2 n_procs=1
+- veins_rescale [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'r-veins_mra_inskull.nii.gz'
     output_type = 'NIFTI_GZ'

@@ -33,7 +33,7 @@ it is processed as a single bilateral bundle (``bundle_bilateral``), unlike
 other tracts which are processed per side.
 
 New dipy nodes implement HARD_CAP only, so this factory takes no
-``multicore_node_limit`` parameter (spec section 10).
+CPU preference.
 """
 
 from nipype import Node, MapNode, IdentityInterface
