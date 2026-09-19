@@ -29,8 +29,4 @@ ATLASES = (
         display_name="fsaverage",
         license_url="https://raw.githubusercontent.com/freesurfer/freesurfer/dev/LICENSE.txt",
     ),
-    AtlasInfo(
-        display_name="FLAT1 reference maps",
-        license_url="https://github.com/LICE-dev/swane/blob/main/LICENSE",
-    ),
 )
