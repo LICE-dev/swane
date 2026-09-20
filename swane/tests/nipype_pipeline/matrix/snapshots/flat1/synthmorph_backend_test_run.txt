@@ -33,7 +33,7 @@
     output_type = 'NIFTI_GZ'
 - flat1_cortexMask [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    mask_file = '<SUPPLEMENT>/resources/FLAT1/brain_cortex_mas_OK.nii.gz'
+    mask_file = '<RESOURCES>/atlas/FLAT1/brain_cortex_mas_OK.nii.gz'
     output_type = 'NIFTI_GZ'
 - flat1_fast [FAST] cmd=fast mem_gb=4 n_procs=1
     bias_iters = 1
@@ -57,35 +57,35 @@
     percentiles = []
 - flat1_image_extension [BinaryMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    operand_file = '<SUPPLEMENT>/resources/FLAT1/mean_extension.nii.gz'
+    operand_file = '<RESOURCES>/atlas/FLAT1/mean_extension.nii.gz'
     operation = 'sub'
     out_file = 'extension_image.nii.gz'
     output_type = 'NIFTI_GZ'
 - flat1_image_extensionz [BinaryMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    operand_file = '<SUPPLEMENT>/resources/FLAT1/std_final_extension.nii.gz'
+    operand_file = '<RESOURCES>/atlas/FLAT1/std_final_extension.nii.gz'
     operation = 'div'
     out_file = 'extension_z.nii.gz'
     output_type = 'NIFTI_GZ'
 - flat1_junction_mean [BinaryMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    operand_file = '<SUPPLEMENT>/resources/FLAT1/mean_flair.nii.gz'
+    operand_file = '<RESOURCES>/atlas/FLAT1/mean_flair.nii.gz'
     operation = 'sub'
     out_file = 'junction_flair.nii.gz'
     output_type = 'NIFTI_GZ'
 - flat1_junctionz [BinaryMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    operand_file = '<SUPPLEMENT>/resources/FLAT1/std_final_flair.nii.gz'
+    operand_file = '<RESOURCES>/atlas/FLAT1/std_final_flair.nii.gz'
     operation = 'div'
     out_file = 'junctionZ_flair.nii.gz'
     output_type = 'NIFTI_GZ'
 - flat1_masked_cerebellum [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    mask_file = '<SUPPLEMENT>/resources/FLAT1/binary_cerebellum.nii.gz'
+    mask_file = '<RESOURCES>/atlas/FLAT1/binary_cerebellum.nii.gz'
     output_type = 'NIFTI_GZ'
 - flat1_no_cereb_extension_z [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    mask_file = '<SUPPLEMENT>/resources/FLAT1/brain_cortex_mas_OK.nii.gz'
+    mask_file = '<RESOURCES>/atlas/FLAT1/brain_cortex_mas_OK.nii.gz'
     out_file = 'no_cereb_extension_z.nii.gz'
     output_type = 'NIFTI_GZ'
 - flat1_normalised_GM_mask [BinaryMaths] cmd=niimath mem_gb=0.2 n_procs=1

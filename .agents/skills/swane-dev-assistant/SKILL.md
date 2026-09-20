@@ -40,7 +40,7 @@ Develop SWANe while preserving its workflow contracts, scientific behavior, pers
 - Keep custom interfaces in `swane/nipype_pipeline/interfaces/` (grouped into per-tool/per-domain subfolders mirroring nipype's own `interfaces/<tool>/` layout), reusable graphs in `workflows/`, subject orchestration in `MainWorkflow.py`, and execution/reporting infrastructure in `engine/`.
 - Keep preference schema, defaults, typed identifiers, validation, and persistence in `swane/config/`. Keep subject, DICOM, dependency, resource, and reusable domain behavior in `swane/utils/`.
 - Keep UI composition in `swane/ui/` and long-running GUI work in `swane/workers/` using the existing Qt signal, `QThreadPool`, and multiprocessing patterns.
-- Keep user-facing text in `swane/strings.py`. Reuse `swane.supplement` and `ResourceManager` for packaged resources and resource discovery.
+- Keep user-facing text in `swane/resources/strings.py`. Reuse `swane.resources` and `ResourceManager` for packaged resources and resource discovery.
 - Preserve persisted preference keys, enum-member names, workflow and node names, Traits fields, output filenames, report signals, and Slicer/result mappings unless the task explicitly includes a compatibility plan.
 - Distinguish Python packages in `setup.py` from system tools detected by `DependencyManager` such as dcm2niix, FSL, FreeSurfer, Graphviz, and 3D Slicer.
 

@@ -101,7 +101,7 @@ def _configured_slicer_path():
     """
     import configparser
 
-    from swane import strings
+    from swane.resources import strings
 
     config_file = os.path.join(os.path.expanduser("~"), "." + strings.APPNAME)
     if not os.path.exists(config_file):

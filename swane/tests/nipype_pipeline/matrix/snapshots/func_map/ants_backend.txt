@@ -16,7 +16,7 @@
     transform_type = 'Rigid'
 - asl_2_sym_warp_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
     interpolator = 'linear'
-    reference_image = '<SUPPLEMENT>/resources/mni_icbm152_t1_tal_nlin_sym_09c_brain.nii.gz'
+    reference_image = '<RESOURCES>/atlas/mni_icbm152_t1_tal_nlin_sym_09c_brain.nii.gz'
 - asl_2_sym_warp_transformlist [Merge] mem_gb=0.2 n_procs=1
     axis = 'vstack'
     no_flatten = False

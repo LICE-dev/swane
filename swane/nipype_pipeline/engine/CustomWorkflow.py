@@ -5,7 +5,7 @@ from nipype import Node, logging, MapNode
 from nipype.interfaces.utility import IdentityInterface
 from nipype.interfaces.io import DataSink
 from swane.nipype_pipeline.engine.NodeListEntry import NodeListEntry
-from swane import strings
+from swane.resources import strings
 
 logger = logging.getLogger("nipype.workflow")
 
