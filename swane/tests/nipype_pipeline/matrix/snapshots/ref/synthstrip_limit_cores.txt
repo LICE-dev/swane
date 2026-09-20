@@ -42,7 +42,7 @@
 - ref_reScale [CropFov] mem_gb=0.2 n_procs=1
     max_dim = 256
     out_file = 'ref_uncorrected.nii.gz'
-- ref_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
+- ref_robustfov [NiiMathRobustFov] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_roi = 'ref_robustfov.nii.gz'
     output_type = 'NIFTI_GZ'

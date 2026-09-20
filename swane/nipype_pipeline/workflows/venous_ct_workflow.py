@@ -1,4 +1,4 @@
-from nipype.interfaces.fsl import RobustFOV
+from swane.nipype_pipeline.interfaces.niimath import NiiMathRobustFov
 from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
     BinaryMaths,
@@ -115,7 +115,7 @@ def venous_ct_workflow(
     workflow.connect(veins_conv, "converted_files", veins_reOrient, "in_file")
 
     # NODE 3: Crop neck
-    veins_robustfov = Node(RobustFOV(), name="%s_robustfov" % name)
+    veins_robustfov = Node(NiiMathRobustFov(), name="%s_robustfov" % name)
     veins_robustfov.long_name = "Non-contrast scan %s"
     workflow.connect(veins_reOrient, "out_file", veins_robustfov, "in_file")
 
@@ -139,7 +139,7 @@ def venous_ct_workflow(
     workflow.connect(veins2_conv, "converted_files", veins2_reOrient, "in_file")
 
     veins2_robustfov = MapNode(
-        RobustFOV(),
+        NiiMathRobustFov(),
         name="%s2_robustfov" % name,
         iterfield=["in_file"],
     )
