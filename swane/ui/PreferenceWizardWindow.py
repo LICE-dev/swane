@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
 )
 
-from swane import strings
+from swane.resources import strings
 from swane.config.ConfigManager import ConfigManager
 from swane.config.config_enums import (
     FreesurferStep,

@@ -8,7 +8,7 @@ from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DependencyManager import DependencyManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.qt_compat import QThreadPool
-from swane import strings
+from swane.resources import strings
 import traceback
 from threading import Thread
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR

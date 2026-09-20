@@ -1,6 +1,6 @@
 from enum import Enum, auto
 
-from swane import strings
+from swane.resources import strings
 from swane.config.PrefCategory import PrefCategory
 
 
@@ -141,7 +141,7 @@ class PerformanceProfile(str, Enum):
 
     Notes
     -----
-    The enum values are localized strings from `swane.strings`.
+    The enum values are localized strings from `swane.resources.strings`.
 
     """
 

@@ -2,7 +2,7 @@ import os
 import shlex
 import subprocess
 from swane.utils.qt_compat import QRunnable, Signal, QObject
-from swane import strings
+from swane.resources import strings
 from swane.utils.DependencyManager import DependencyManager, DependenceStatus
 from swane.utils.license_consent import version_with_license
 from swane.utils.LicenseReference import SLICER

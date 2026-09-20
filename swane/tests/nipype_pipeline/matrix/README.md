@@ -70,7 +70,7 @@ structural `../workflows/` tests.
 Golden files must match regardless of machine or OS, so the renderer:
 
 * sorts nodes, input traits and connections;
-* rewrites volatile absolute paths (`tmp_path`, home, `swane.supplement`,
+* rewrites volatile absolute paths (`tmp_path`, home, `swane.resources`,
   `$FSLDIR`, `site-packages`, cwd) to stable `<TOKEN>`s and normalises `\` to `/`;
 * reduces resolved executables (e.g. the bundled `dcm2niix` binary) to a stem so
   neither the install path nor the Windows `.exe` suffix leaks.
