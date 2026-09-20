@@ -490,6 +490,7 @@ toolreference_reference_label = "References"
 node_names = {}
 node_names["CustomDcm2niix"] = "nifti conversion"
 node_names["RobustFOV"] = "neck removal"
+node_names["NiiMathRobustFov"] = "neck removal"
 node_names["ForceOrient"] = "standard orientation"
 node_names["BET"] = "scalp removal"
 node_names["SegmentEndocranium"] = "scalp removal"

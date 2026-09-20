@@ -1,4 +1,4 @@
-from nipype.interfaces.fsl import RobustFOV
+from swane.nipype_pipeline.interfaces.niimath import NiiMathRobustFov
 from swane.nipype_pipeline.interfaces.niimath import ApplyMask
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
@@ -139,7 +139,7 @@ def linear_reg_workflow(
     workflow.connect(conversion, "converted_files", reorient, "in_file")
 
     # NODE 3: Crop neck
-    robustfov = Node(RobustFOV(), name="%s_robustfov" % name)
+    robustfov = Node(NiiMathRobustFov(), name="%s_robustfov" % name)
     workflow.connect(reorient, "out_file", robustfov, "in_file")
 
     def get_betted_name(basename):

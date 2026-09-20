@@ -18,9 +18,13 @@ from swane.nipype_pipeline.interfaces.niimath.maths import (
     IsotropicSmooth,
     SpatialFilter,
 )
+from swane.nipype_pipeline.interfaces.niimath.NiiMathRobustFov import (
+    NiiMathRobustFov,
+)
 
 __all__ = [
     "NIIMATH_CMD",
+    "NiiMathRobustFov",
     "ImageMaths",
     "BinaryMaths",
     "ApplyMask",

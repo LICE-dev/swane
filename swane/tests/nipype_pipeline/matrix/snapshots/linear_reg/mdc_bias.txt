@@ -61,7 +61,7 @@
     searchr_y = [-90, 90]
     searchr_z = [-90, 90]
 - mdc_reorient [ForceOrient] mem_gb=0.2 n_procs=1
-- mdc_robustfov [RobustFOV] cmd=robustfov mem_gb=0.2 n_procs=1
+- mdc_robustfov [NiiMathRobustFov] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
