@@ -14,7 +14,7 @@ if not QT_AVAILABLE:
         allow_module_level=True,
     )
 
-from swane import supplement
+from swane import resources
 from PySide6.QtWidgets import QTreeWidget
 from PySide6.QtCore import Qt
 
@@ -57,7 +57,7 @@ class TestPersistentProgressDialog:
 class TestCustomTreeWidgetItem:
 
     def test_text_and_tooltip_infochar(self, qtbot):
-        from swane import strings
+        from swane.resources import strings
 
         tree = QTreeWidget()
         qtbot.addWidget(tree)
@@ -75,7 +75,7 @@ class TestCustomTreeWidgetItem:
         item = CustomTreeWidgetItem(tree, tree, "Node", "node_name")
 
         assert item.get_status() is None
-        item.set_art(supplement.okIcon_file)
+        item.set_art(resources.okIcon_file)
         assert item.get_status() == WorkflowSignals.NODE_COMPLETED
-        item.set_art(supplement.errorIcon_file)
+        item.set_art(resources.errorIcon_file)
         assert item.get_status() == WorkflowSignals.NODE_ERROR

@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QFontMetrics
 
-from swane import strings
+from swane.resources import strings
 from nipype.utils.filemanip import loadpkl
 from datetime import datetime
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals

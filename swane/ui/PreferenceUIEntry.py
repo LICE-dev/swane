@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 from functools import partial
 from enum import Enum
-from swane import strings
+from swane.resources import strings
 from swane.config.config_enums import InputTypes
 from swane.config.ConfigManager import ConfigManager
 from swane.config.PreferenceEntry import PreferenceEntry

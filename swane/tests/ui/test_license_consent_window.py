@@ -18,7 +18,7 @@ if QT_AVAILABLE:
     from PySide6.QtWidgets import QDialog, QLabel, QMainWindow, QTextBrowser
     from swane.ui.LicenseConsentWindow import LicenseConsentWindow
     from swane.utils.license_consent import ResolvedLicense, LicenseSource
-    from swane import strings
+    from swane.resources import strings
 
 
 def _mk(text="line\n" * 500):

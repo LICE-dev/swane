@@ -10,7 +10,7 @@ if not QT_AVAILABLE:
         allow_module_level=True,
     )
 
-from swane import strings
+from swane.resources import strings
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.ui.SubjectTab import SubjectTab
 from swane.utils.DependencyManager import DependencyManager

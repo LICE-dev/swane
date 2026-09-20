@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QFrame,
 )
-from swane import strings, EXIT_CODE_REBOOT
+from swane.resources import strings
+from swane import EXIT_CODE_REBOOT
 from swane.config.ConfigManager import ConfigManager
 from swane.ui.PreferenceUIEntry import PreferenceUIEntry
 from swane.config.preference_list import WF_PREFERENCES, GLOBAL_PREFERENCES

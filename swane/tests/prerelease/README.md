@@ -124,7 +124,7 @@ Its quality is graded by:
   of sane magnitude (a degenerate FNIRT gives ~0, a diverged one tens of mm);
 * `nonlinear.target_alignment.<space>` — the warped subject that SWANe writes
   into the target space is compared against the **real target**, read at run
-  time from `$FSLDIR` (MNI152) or `swane.supplement` (the symmetric template).
+  time from `$FSLDIR` (MNI152) or `swane.resources` (the symmetric template).
   Measured against the real MNI152 1 mm brain: Dice 0.94, intensity NCC 0.78
   (gates 0.85 / 0.5). Reading the target to score the result is licence-clean —
   the tools are run and their output inspected; no atlas image or code is copied
