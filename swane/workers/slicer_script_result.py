@@ -1438,8 +1438,32 @@ if __name__ == "__main__":
     # Guarded so this file can also be imported (e.g. by slicerrc_swane.py, at
     # Slicer startup) to reuse install_melodic_timecourse_viewer() without
     # re-running the whole batch export.
-    main_export()
+    try:
+        main_export()
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
+        import slicer
+
+        slicer.util.exit(status=1)
+
     # In --no-save (inspection) mode, leave Slicer open so the user can look at
     # the scene and close it themselves; only auto-quit in the headless export.
     if "--no-save" not in sys.argv:
         qt.QTimer.singleShot(0, slicer.app.quit)
+
+        # Fallback: Slicer occasionally hangs on shutdown in headless mode
+        # after the scene has been saved. We spawn a daemon thread to forcefully
+        # exit the process after a reasonable timeout, preventing SWANe from hanging.
+        import threading
+        import os
+        import time
+
+        def force_exit():
+            time.sleep(5)
+            os._exit(0)
+
+        t = threading.Thread(target=force_exit)
+        t.daemon = True
+        t.start()
