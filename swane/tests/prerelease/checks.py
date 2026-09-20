@@ -482,7 +482,7 @@ NONLINEAR_TARGET_MIN_NCC = 0.5
 def _registration_target(node_dir: str):
     """The real image a given nonlinear_reg instance registers to, read at run
     time. MNI templates come from ``$FSLDIR``; the symmetric template ships as
-    part of ``swane.supplement`` (not an FSL atlas). Reading them to score the
+    part of ``swane.resources`` (not an FSL atlas). Reading them to score the
     result is allowed; we never copy or derive committed images from them.
     """
     if node_dir.startswith("mni1"):
@@ -494,9 +494,9 @@ def _registration_target(node_dir: str):
             return os.path.join(fsldir, "data/standard/MNI152_T1_1mm_brain.nii.gz")
     elif node_dir.startswith("sym"):
         try:
-            from swane import supplement
+            from swane import resources
 
-            return supplement.sym_template
+            return resources.sym_template
         except Exception:
             return None
     return None

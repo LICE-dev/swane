@@ -1,6 +1,6 @@
 from configparser import SectionProxy
 
-from swane import supplement
+from swane import resources
 
 from nipype.interfaces.fsl import FAST
 from swane.nipype_pipeline.interfaces.niimath import (
@@ -275,7 +275,7 @@ def flat1_workflow(
     # NODE 8: Cerebellum removal from divided image
     cortex_mask = Node(ApplyMask(), name="%s_cortexMask" % name)
     cortex_mask.long_name = "outliers %s"
-    cortex_mask.inputs.mask_file = supplement.cortex_mas
+    cortex_mask.inputs.mask_file = resources.cortex_mas
     workflow.connect(outliers_removal, "out_file", cortex_mask, "in_file")
 
     # NODE 9: Masking for gray matter on t1_restore in MNI1
@@ -330,7 +330,7 @@ def flat1_workflow(
     junction_mean = Node(BinaryMaths(), name="%s_junction_mean" % name)
     junction_mean.long_name = "junction variation from mean atlas"
     junction_mean.inputs.operation = "sub"  # Param -sub
-    junction_mean.inputs.operand_file = supplement.mean_flair
+    junction_mean.inputs.operand_file = resources.mean_flair
     junction_mean.inputs.out_file = "junction_flair.nii.gz"
     workflow.connect(convolution_flair, "out_file", junction_mean, "in_file")
 
@@ -338,14 +338,14 @@ def flat1_workflow(
     junction_z = Node(BinaryMaths(), name="%s_junctionz" % name)
     junction_z.long_name = "junction z score calculation"
     junction_z.inputs.operation = "div"
-    junction_z.inputs.operand_file = supplement.std_final_flair
+    junction_z.inputs.operand_file = resources.std_final_flair
     junction_z.inputs.out_file = "junctionZ_flair.nii.gz"
     workflow.connect(junction_mean, "out_file", junction_z, "in_file")
 
     # NODE 15: Cerebellum mask on restore_t1
     masked_cerebellum = Node(ApplyMask(), name="%s_masked_cerebellum" % name)
     masked_cerebellum.long_name = "cerebellum %s"
-    masked_cerebellum.inputs.mask_file = supplement.binary_cerebellum
+    masked_cerebellum.inputs.mask_file = resources.binary_cerebellum
     workflow.connect(restore_2_mni1, "out_file", masked_cerebellum, "in_file")
 
     # NODE 16: Cerebellum mean value calculation
@@ -385,7 +385,7 @@ def flat1_workflow(
     extension_mean = Node(BinaryMaths(), name="%s_image_extension" % name)
     extension_mean.long_name = "extension variation from mean atlas"
     extension_mean.inputs.operation = "sub"
-    extension_mean.inputs.operand_file = supplement.mean_extension
+    extension_mean.inputs.operand_file = resources.mean_extension
     extension_mean.inputs.out_file = "extension_image.nii.gz"
     workflow.connect(smoothed_image_extension, "out_file", extension_mean, "in_file")
 
@@ -393,7 +393,7 @@ def flat1_workflow(
     extension_z = Node(BinaryMaths(), name="%s_image_extensionz" % name)
     extension_z.long_name = "extension z score calculation"
     extension_z.inputs.operation = "div"
-    extension_z.inputs.operand_file = supplement.std_final_extension
+    extension_z.inputs.operand_file = resources.std_final_extension
     extension_z.inputs.out_file = "extension_z.nii.gz"
     workflow.connect(extension_mean, "out_file", extension_z, "in_file")
 
@@ -403,7 +403,7 @@ def flat1_workflow(
     no_cereb_extension_z.inputs.out_file = "no_cereb_extension_z.nii.gz"
     workflow.connect(extension_z, "out_file", no_cereb_extension_z, "in_file")
     # workflow.connect(outliers_mask, "out_file", no_cereb_extension_z, "mask_file")
-    no_cereb_extension_z.inputs.mask_file = supplement.cortex_mas
+    no_cereb_extension_z.inputs.mask_file = resources.cortex_mas
 
     extension_z_2_ref = apply_registration_node(
         name="extension_z_2_ref",

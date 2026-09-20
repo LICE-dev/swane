@@ -369,7 +369,7 @@ def user_slicer_path() -> str:
     """
     import configparser
 
-    from swane import strings
+    from swane.resources import strings
     from swane.config.config_enums import GlobalPrefCategoryList
 
     path = os.path.join(os.path.expanduser("~"), "." + strings.APPNAME)

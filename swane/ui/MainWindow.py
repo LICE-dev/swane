@@ -40,8 +40,9 @@ from swane.utils.LicenseReference import SLICER
 from swane.utils.AtlasReference import ATLASES
 from swane.ui.LicenseConsentWindow import LicenseConsentWindow
 from swane.workers.LicenseResolveWorker import LicenseResolveWorker
-from swane import supplement
-from swane import __version__, EXIT_CODE_REBOOT, strings
+from swane import resources
+from swane.resources import strings
+from swane import __version__, EXIT_CODE_REBOOT
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
 from swane.utils.Subject import Subject, SubjectRet
 from swane.config.ConfigManager import ConfigManager
@@ -65,12 +66,12 @@ class MainWindow(QMainWindow):
         self.global_config.check_dependencies(self.dependency_manager)
 
         # GUI Icons setting
-        self.setWindowIcon(QIcon(QPixmap(supplement.appIcon_file)))
-        self.OK_ICON_FILE = supplement.okIcon_file
-        self.ERROR_ICON_FILE = supplement.errorIcon_file
-        self.WARNING_ICON_FILE = supplement.warnIcon_file
-        self.LOADING_MOVIE_FILE = supplement.loadingMovie_file
-        self.VOID_SVG_FILE = supplement.voidsvg_file
+        self.setWindowIcon(QIcon(QPixmap(resources.appIcon_file)))
+        self.OK_ICON_FILE = resources.okIcon_file
+        self.ERROR_ICON_FILE = resources.errorIcon_file
+        self.WARNING_ICON_FILE = resources.warnIcon_file
+        self.LOADING_MOVIE_FILE = resources.loadingMovie_file
+        self.VOID_SVG_FILE = resources.voidsvg_file
         self.OK_ICON = QPixmap(self.OK_ICON_FILE)
         self.ERROR_ICON = QPixmap(self.ERROR_ICON_FILE)
         self.WARNING_ICON = QPixmap(self.WARNING_ICON_FILE)
@@ -668,7 +669,7 @@ class MainWindow(QMainWindow):
         label_about5 = QLabel(strings.aboutwindow_wiki_dependencylist)
 
         label_about_icon = QLabel()
-        icon = QPixmap(supplement.appIcon_file)
+        icon = QPixmap(resources.appIcon_file)
 
         label_about_icon.setPixmap(icon.scaled(60, 60))
 

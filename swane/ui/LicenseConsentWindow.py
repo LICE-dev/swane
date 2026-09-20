@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QFrame,
 )
 
-from swane import strings
+from swane.resources import strings
 from swane.utils.license_consent import LicenseSource
 
 

@@ -1,7 +1,7 @@
 import sys
 import os
 from datetime import datetime
-from swane import strings
+from swane.resources import strings
 from inspect import getframeinfo, stack
 
 ERROR_FILE = os.path.abspath(

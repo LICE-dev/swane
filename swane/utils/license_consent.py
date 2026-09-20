@@ -138,7 +138,7 @@ def version_with_license(tool_id: str, version, context: dict = None) -> str:
     """
     if not version:
         return version
-    from swane import strings
+    from swane.resources import strings
 
     url = license_link_url(LICENSES[tool_id], context or {})
     return '%s - <a href="%s">%s</a>' % (

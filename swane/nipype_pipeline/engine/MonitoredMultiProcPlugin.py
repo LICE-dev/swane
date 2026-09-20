@@ -7,7 +7,7 @@ from threading import Lock
 from nipype.interfaces.base import isdefined
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.patches.nipype_patches import swane_run_node
-from swane import strings
+from swane.resources import strings
 import numpy as np
 from logging import INFO
 import logging

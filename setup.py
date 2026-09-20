@@ -22,9 +22,9 @@ setup(
     package_data={
         "swane": [
             "licenses/*.txt",
-            "supplement/icons/*",
-            "supplement/resources/*",
-            "supplement/resources/FLAT1/*",
+            "resources/icons/*",
+            "resources/atlas/*",
+            "resources/atlas/FLAT1/*",
         ]
     },
     classifiers=[

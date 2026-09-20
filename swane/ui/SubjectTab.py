@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QTreeView,
     QComboBox,
 )
-from swane import strings
+from swane.resources import strings
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.workers.SlicerViewerWorker import SlicerViewerWorker

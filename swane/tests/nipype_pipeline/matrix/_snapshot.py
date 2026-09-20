@@ -11,7 +11,7 @@ Determinism is the whole point, so the renderer:
 
 * sorts nodes, input traits and connections by name;
 * rewrites machine-specific absolute paths (the test ``tmp_path``, the home
-  folder, ``swane.supplement`` resources, ``$FSLDIR``, the interpreter's
+  folder, the ``swane.resources`` package, ``$FSLDIR``, the interpreter's
   ``site-packages`` and the current working directory) to stable ``<TOKEN>``s;
 * normalises Windows back-slashes to ``/`` so a snapshot generated on Windows
   matches one generated on Linux/macOS.
@@ -51,9 +51,9 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
 
     add(tmp_root, "<TMP>")
     try:
-        from swane import supplement
+        from swane import resources
 
-        add(supplement.__path__[0], "<SUPPLEMENT>")
+        add(resources.__path__[0], "<RESOURCES>")
     except Exception:
         pass
     # XTRACT_DATA_DIR resolves under $FSLDIR to "Human" (FSL < 6.0.7) or
@@ -79,7 +79,7 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
     # golden and tying it to one developer's machine and Python version. All
     # roots share the <SITE> token so the result is identical across install
     # layouts; longest-prefix-first ordering keeps nested roots (e.g.
-    # <SUPPLEMENT>) winning over the enclosing site-packages dir.
+    # <RESOURCES>) winning over the enclosing site-packages dir.
     site_roots: list[Any] = [
         sysconfig.get_paths().get("purelib"),
         sysconfig.get_paths().get("platlib"),
