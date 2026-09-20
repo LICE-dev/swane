@@ -1,4 +1,4 @@
-from swane import strings
+from swane.resources import strings
 
 
 def test_license_strings_present_and_english():

@@ -13,7 +13,8 @@ Names and identities cross several layers. Treat input identities, preference ke
 | Area | Responsibility | Important contracts |
 |---|---|---|
 | `swane/__main__.py` | Startup, Qt lifecycle, single-instance guard, restart loop | Exit code, PID cleanup, `QApplication` lifetime |
-| `swane/strings.py` | User-facing labels and messages | Keys referenced by UI, reports, and dependency errors |
+| `swane/resources/strings.py` | User-facing labels and messages | Keys referenced by UI, reports, and dependency errors |
+| `swane/resources/` | Packaged icons, atlas/template data (`atlas/`, including `atlas/FLAT1/`) | Path constants exposed by `swane/resources/__init__.py` |
 | `swane/config/` | Preference metadata, enums, defaults, presets, persistence, validation | Sections, keys, enum names, defaults, requirements |
 | `swane/utils/DataInputList.py` | Supported imaging inputs and modality metadata | Enum members, serialized names, parents, volumes, workflow names |
 | `swane/utils/Subject.py`, `SubjectInputStateList.py`, `DicomTree.py` | Subject folders, input state, DICOM organization | Folder layout, loaded state, return values, input identities |

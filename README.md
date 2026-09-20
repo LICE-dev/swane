@@ -1,7 +1,7 @@
 <h1 align="center"> SWANe</h1><br>
 <p align="center">
   <a href="#">
-    <img alt="SWANe" title="SWANe" src="swane/supplement/icons/swane.png">
+    <img alt="SWANe" title="SWANe" src="swane/resources/icons/swane.png">
   </a>
 </p>
 <h3 align="center"> Standardized Workflow for Advanced Neuroimaging in Epilepsy</h3>

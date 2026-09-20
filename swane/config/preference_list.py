@@ -3,7 +3,7 @@ from swane.utils.DataInputList import DataInputList, FMRI_NUM
 from swane import __version__
 from swane.utils.ResourceManager import ResourceManager
 
-from swane import strings
+from swane.resources import strings
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import *
 from swane.nipype_pipeline.workflows.dipy_bundle_workflow import DIPY_TRACT_ATLAS

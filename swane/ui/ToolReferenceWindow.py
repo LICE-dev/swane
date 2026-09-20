@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from PySide6_VerticalQTabWidget import VerticalQTabWidget
 
-from swane import strings
+from swane.resources import strings
 from swane.utils.ToolReference import Package, tool_reference_list
 from swane.utils.ToolReference import ToolReference
 

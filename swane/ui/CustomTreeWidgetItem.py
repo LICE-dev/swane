@@ -7,8 +7,8 @@ from PySide6.QtWidgets import (
     QTreeWidget,
 )
 from PySide6.QtSvgWidgets import QSvgWidget
-from swane import strings
-from swane import supplement
+from swane.resources import strings
+from swane import resources
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
 
 
@@ -134,11 +134,11 @@ class CustomTreeWidgetItem(QTreeWidgetItem):
         status: WorkflowSignals|None
 
         """
-        if self.art == supplement.errorIcon_file:
+        if self.art == resources.errorIcon_file:
             return WorkflowSignals.NODE_ERROR
-        elif self.art == supplement.loadingMovie_file:
+        elif self.art == resources.loadingMovie_file:
             return WorkflowSignals.NODE_STARTED
-        elif self.art == supplement.okIcon_file:
+        elif self.art == resources.okIcon_file:
             return WorkflowSignals.NODE_COMPLETED
         else:
             return None

@@ -5,7 +5,7 @@ import subprocess
 import re
 from shutil import which
 from nipype.interfaces import dcm2nii, fsl, freesurfer
-from swane import strings
+from swane.resources import strings
 from packaging import version
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.qt_compat import QThreadPool

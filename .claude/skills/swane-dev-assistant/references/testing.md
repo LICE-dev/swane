@@ -38,7 +38,7 @@ python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
   python swane/tests/nipype_pipeline/matrix/generate_report.py
   ```
   This rewrites `MATRIX.md` (committed, GitHub-rendered) and `matrix_report.html` (git-ignored, local). Never hand-edit either.
-- Snapshots are OS-agnostic by construction: the renderer sorts nodes/traits/connections and rewrites volatile absolute paths (`tmp_path`, home, `swane.supplement`, `$FSLDIR`, `site-packages`, cwd) to stable tokens. A snapshot diff that only changes a path or an OS-specific separator signals a renderer regression, not a real graph change — investigate before regenerating.
+- Snapshots are OS-agnostic by construction: the renderer sorts nodes/traits/connections and rewrites volatile absolute paths (`tmp_path`, home, `swane.resources`, `$FSLDIR`, `site-packages`, cwd) to stable tokens. A snapshot diff that only changes a path or an OS-specific separator signals a renderer regression, not a real graph change — investigate before regenerating.
 - Adding a workflow/scenario: add it to the module's `SCENARIOS` dict (or a new `test_<workflow>_matrix.py`), generate its golden file, read it by hand, regenerate the reports, commit all three together.
 
 ## Prerelease — real execution sweep (delicate)

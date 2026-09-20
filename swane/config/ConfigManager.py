@@ -2,7 +2,8 @@ import configparser
 from configparser import SectionProxy
 from typing import Literal, cast
 
-from swane import strings, __version__
+from swane.resources import strings
+from swane import __version__
 from swane.config.preference_list import *
 from swane.utils.CryptographyManager import CryptographyManager
 from swane.utils.DataInputList import DataInputList

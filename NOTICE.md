@@ -66,7 +66,7 @@ Prior to release 0.12, Nipype was licensed under a BSD license.
 
 This project includes images derived from ICBM 2009c Nonlinear Symmetric 
 Atlas (https://nist.mni.mcgill.ca/icbm-152-nonlinear-atlases-2009/).
-These images are internalized under `swane/supplement/resources/` (formerly
+These images are internalized under `swane/resources/atlas/` (formerly
 distributed as the separate `swane_supplement` package, now merged into this
 repository).
 
@@ -94,7 +94,7 @@ column, for attribution.
 
 The FLAT1 workflow's z-score pipeline uses a set of statistical reference
 templates (cerebellum mask, cortex mask, and mean/std FLAIR and extension
-maps), internalized under `swane/supplement/resources/FLAT1/`. These are
+maps), internalized under `swane/resources/atlas/FLAT1/`. These are
 SWANe/LICE's own derived data, not third-party material, and are covered by
 this repository's own root `LICENSE` (MIT) like the rest of the codebase.
 
