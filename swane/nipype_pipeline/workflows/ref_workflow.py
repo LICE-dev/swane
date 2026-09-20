@@ -11,7 +11,7 @@ from swane.nipype_pipeline.interfaces.utils import (
     resolve_deskull_engine,
 )
 from configparser import SectionProxy
-from nipype.interfaces.fsl import RobustFOV
+from swane.nipype_pipeline.interfaces.niimath import NiiMathRobustFov
 from swane.nipype_pipeline.interfaces.niimath import ApplyMask
 from nipype.interfaces.utility import IdentityInterface
 from nipype import Node
@@ -105,7 +105,7 @@ def ref_workflow(
     workflow.connect(conversion, "converted_files", ref_reOrient, "in_file")
 
     # NODE 3: Crop neck
-    ref_robustfov = Node(RobustFOV(), name="%s_robustfov" % name)
+    ref_robustfov = Node(NiiMathRobustFov(), name="%s_robustfov" % name)
     ref_robustfov.inputs.out_roi = "ref_robustfov.nii.gz"
     workflow.connect(ref_reOrient, "out_file", ref_robustfov, "in_file")
 

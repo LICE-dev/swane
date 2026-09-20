@@ -7,6 +7,7 @@ class Package(Enum):
     ANTS = "ants"
     NIPY = "nipy"
     DIPY = "dipy"
+    NIIMATH = "niimath"
     OTHER = "Other"
 
 
@@ -269,6 +270,12 @@ tool_reference_list = {
         command="robustfov",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/structural/fsl_anat.html",
+        references=[],
+    ),
+    "NiiMathRobustFov": ToolReference(
+        command="niimath",
+        package=Package.NIIMATH,
+        url="https://github.com/rordenlab/niimath",
         references=[],
     ),
     "Cluster": ToolReference(
