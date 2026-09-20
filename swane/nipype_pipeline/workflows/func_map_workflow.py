@@ -13,7 +13,7 @@ from swane.nipype_pipeline.interfaces.stats.AsymmetryIndex import AsymmetryIndex
 from swane.nipype_pipeline.interfaces.stats.Zscore import Zscore
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
-from swane import supplement
+from swane import resources
 from swane.config.config_enums import BetweenModFlirtCost, FreesurferStep
 from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
@@ -270,7 +270,7 @@ def func_map_workflow(
     is_ai = config.getboolean_safe("ai")
 
     if is_ai:
-        sym_template = supplement.sym_template
+        sym_template = resources.sym_template
 
         func_2_sym_warp = apply_registration_node(
             name="%s_2_sym_warp" % name,
