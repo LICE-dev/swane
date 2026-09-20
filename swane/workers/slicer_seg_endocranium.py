@@ -238,6 +238,18 @@ def main(argv=None):
     segmentEditorNode = None
     qt.QTimer.singleShot(0, slicer.app.quit)
 
+    import threading
+    import os
+    import time
+
+    def force_exit():
+        time.sleep(5)
+        os._exit(0)
+
+    t = threading.Thread(target=force_exit)
+    t.daemon = True
+    t.start()
+
 
 if __name__ == "__main__":
     try:
