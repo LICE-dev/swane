@@ -481,24 +481,17 @@ NONLINEAR_TARGET_MIN_NCC = 0.5
 
 def _registration_target(node_dir: str):
     """The real image a given nonlinear_reg instance registers to, read at run
-    time. MNI templates come from ``$FSLDIR``; the symmetric template ships as
-    part of ``swane.resources`` (not an FSL atlas). Reading them to score the
+    time. MNI templates come from TemplateFlow. Reading them to score the
     result is allowed; we never copy or derive committed images from them.
     """
-    if node_dir.startswith("mni1"):
-        # Shared by FLAT1 and DTI tractography: both now consume the single
-        # "mni1" nonlinear_reg_workflow instance instead of DTI computing its
-        # own MNI<->reference registration (dti_preproc no longer has one).
-        fsldir = os.environ.get("FSLDIR")
-        if fsldir:
-            return os.path.join(fsldir, "data/standard/MNI152_T1_1mm_brain.nii.gz")
-    elif node_dir.startswith("sym"):
-        try:
-            from swane import resources
-
-            return resources.sym_template
-        except Exception:
-            return None
+    try:
+        from swane.utils.templates import get_swane_template
+        if node_dir.startswith("mni1"):
+            return get_swane_template(name="MNI152NLin6Asym", resolution=1, desc="brain", enforce_las=True)
+        elif node_dir.startswith("sym"):
+            return get_swane_template(name="MNI152NLin2009cSym", resolution=1, desc="brain", enforce_las=True)
+    except Exception:
+        return None
     return None
 
 

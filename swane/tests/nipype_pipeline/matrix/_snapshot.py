@@ -64,6 +64,15 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
     # more specific root first.
     add(XTRACT_DATA_DIR, "<XTRACT_DATA>")
     add(os.environ.get("FSLDIR"), "<FSLDIR>")
+    try:
+        from swane.utils.templates import _SWANE_TEMPLATE_CACHE
+        add(_SWANE_TEMPLATE_CACHE, "<SWANE_TEMPLATES>")
+        home = os.path.expanduser("~")
+        add(os.path.join(home, ".cache", "templateflow"), "<TEMPLATEFLOW>")
+        # pytest sometimes mocks HOME under tmp_root
+        add(os.path.join(tmp_root, "home", ".cache", "templateflow"), "<TEMPLATEFLOW>")
+    except Exception:
+        pass
     # nipype stamps SUBJECTS_DIR onto every FreeSurfer node; its value is
     # machine-specific (and, in the test session, a throwaway directory).
     add(os.environ.get("SUBJECTS_DIR"), "<SUBJECTS_DIR>")

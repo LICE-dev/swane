@@ -368,19 +368,15 @@ def _probe_xtract(caps: Capabilities) -> None:
 
 def _probe_mni(caps: Capabilities) -> None:
     """MNI standard templates, read at construction by several branches."""
-    fsldir = os.environ.get("FSLDIR")
-    needed = [
-        "MNI152_T1_1mm.nii.gz",
-        "MNI152_T1_1mm_brain.nii.gz",
-        "MNI152_T1_2mm_brain.nii.gz",
-    ]
     missing = []
-    if not fsldir:
-        missing = needed
-    else:
-        for name in needed:
-            if not os.path.isfile(os.path.join(fsldir, "data", "standard", name)):
-                missing.append(name)
+    try:
+        from swane.utils.templates import get_swane_template
+        get_swane_template(name="MNI152NLin6Asym", resolution=1, desc="brain")
+        get_swane_template(name="MNI152NLin6Asym", resolution=2, desc="brain")
+        get_swane_template(name="MNI152NLin2009cSym", resolution=1, desc="brain")
+    except Exception as e:
+        missing = ["TemplateFlow templates"]
+
     caps.add(
         "mni_templates",
         not missing,
