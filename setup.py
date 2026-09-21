@@ -63,6 +63,7 @@ setup(
         # fetch in DipyAtlasSLR.
         "threadpoolctl==3.6.0",
         "filelock==3.17.0",
+        "templateflow>=24.0.0",
         "vtk",
     ],
     python_requires=">=3.10",

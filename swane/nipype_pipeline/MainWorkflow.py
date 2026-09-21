@@ -269,7 +269,10 @@ class MainWorkflow(CustomWorkflow):
         self.sym.long_name = "Symmetric atlas registration"
 
         sym_inputnode = self.sym.get_node("inputnode")
-        sym_inputnode.inputs.atlas = resources.sym_template
+        from swane.utils.templates import get_swane_template
+        sym_inputnode.inputs.atlas = get_swane_template(
+            name="MNI152NLin2009cSym", resolution=1, desc="brain", enforce_las=True
+        )
         self.connect(
             self.t1, "outputnode.reference_brain", self.sym, "inputnode.in_file"
         )
@@ -391,10 +394,12 @@ class MainWorkflow(CustomWorkflow):
         mni1_path : str
             The MNI1mm brain atlas path (also needed as a FLAT1 input).
         """
-        mni1_path = abspath(
-            os.path.join(
-                os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm_brain.nii.gz"
-            )
+        from swane.utils.templates import get_swane_template
+        mni1_path = get_swane_template(
+            name="MNI152NLin6Asym",
+            resolution=1,
+            desc="brain",
+            enforce_las=True
         )
 
         if getattr(self, "mni1", None) is not None:

@@ -18,7 +18,7 @@ class AtlasInfo:
 
 ATLASES = (
     AtlasInfo(
-        display_name="ICBM 2009c Nonlinear Symmetric Atlas",
+        display_name="TemplateFlow MNI152 Atlases (Symmetric & Asymmetric)",
         license_url="https://nist.mni.mcgill.ca/icbm-152-nonlinear-atlases-2009/",
     ),
     AtlasInfo(
