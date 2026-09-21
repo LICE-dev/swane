@@ -30,7 +30,7 @@ INVERSE_WARP_MARKER = "InverseWarp"
 # (aff_iterations) and, for SyN, the deformable stage (reg_iterations); a
 # Rigid/Affine run simply ignores reg_iterations.
 TEST_RUN_AFF_ITERATIONS = (100, 100, 50, 10)
-TEST_RUN_REG_ITERATIONS = (10, 5, 0)
+TEST_RUN_REG_ITERATIONS = (40, 20, 10)
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -137,6 +137,15 @@ class AntsRegistration(BaseInterface):
             # is unchanged (see TEST_RUN_* above).
             kwargs["aff_iterations"] = TEST_RUN_AFF_ITERATIONS
             kwargs["reg_iterations"] = TEST_RUN_REG_ITERATIONS
+        else:
+            # Explicitly set the standard clinical schedule. We cannot rely on
+            # antspyx's default reg_iterations because it defaults to (40, 20, 0),
+            # which performs zero iterations at the native resolution and yields
+            # terrible nonlinear (SyN) registrations. The affine default
+            # (2100, 1200, 1200, 10) is robust, but we explicitly set both to
+            # replicate the standard antsRegistrationSyN.sh parameters.
+            kwargs["aff_iterations"] = (2100, 1200, 1200, 10)
+            kwargs["reg_iterations"] = (100, 70, 50, 20)
 
         previous_threads = os.environ.get(ITK_THREADS_VAR)
         if isdefined(self.inputs.num_threads):

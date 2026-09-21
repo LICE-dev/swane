@@ -276,11 +276,12 @@ class TestAntsRegistrationTestRun:
         return _run(node, monkeypatch, NONLINEAR_FILES)["kwargs"]
 
     def test_full_accuracy_by_default(self, workspace, make_nifti, monkeypatch):
-        """Without the knob, antspyx keeps its own (full-accuracy) defaults: the
-        node must not override the iteration schedules at all."""
+        """Without the knob, the node explicitly sets clinical standards,
+        because antspyx's own SyN defaults are inadequate (e.g. 0 iterations
+        at native resolution)."""
         kwargs = self._kwargs(monkeypatch, make_nifti)
-        assert "aff_iterations" not in kwargs
-        assert "reg_iterations" not in kwargs
+        assert kwargs["aff_iterations"] == (2100, 1200, 1200, 10)
+        assert kwargs["reg_iterations"] == (100, 70, 50, 20)
 
     def test_test_run_cuts_both_iteration_schedules(
         self, workspace, make_nifti, monkeypatch
@@ -292,9 +293,9 @@ class TestAntsRegistrationTestRun:
         assert "aff_iterations" in kwargs
         assert len(kwargs["aff_iterations"]) == 4
         assert max(kwargs["aff_iterations"]) < 2100  # antspyx default coarsest
-        # The SyN deformable stage: fewer iterations than the (40, 20, 0) default.
+        # The SyN deformable stage: fewer iterations than the clinical (100, 70, 50, 20).
         assert "reg_iterations" in kwargs
-        assert max(kwargs["reg_iterations"]) < 40
+        assert max(kwargs["reg_iterations"]) < 100
 
     def test_reduced_affine_schedule_is_antspyx_valid(self):
         """A real antspyx call raises if aff_iterations length does not match the
