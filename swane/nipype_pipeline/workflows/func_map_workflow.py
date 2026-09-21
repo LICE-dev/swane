@@ -270,7 +270,13 @@ def func_map_workflow(
     is_ai = config.getboolean_safe("ai")
 
     if is_ai:
-        sym_template = resources.sym_template
+        from swane.utils.templates import get_swane_template
+        sym_template = get_swane_template(
+            name="MNI152NLin2009cSym",
+            resolution=1,
+            desc="brain",
+            enforce_las=True
+        )
 
         func_2_sym_warp = apply_registration_node(
             name="%s_2_sym_warp" % name,
