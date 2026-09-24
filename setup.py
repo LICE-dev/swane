@@ -50,13 +50,15 @@ setup(
         "niimath==1.0.20260720",
         "packaging",
         "PySide6_VerticalQTabWidget==0.0.3",
-        "numpy==2.2.4",
         "cryptography",
         "dicom-sequence-classifier==1.0.5",
         "ica_aroma_py==0.1.2",
         "antspyx==0.6.3",
         "antspynet==0.3.2",
-        "tensorflow==2.21.0",
+        "numpy>=2; not (sys_platform=='darwin' and platform_machine=='x86_64')",
+        "numpy>=1.26,<2; sys_platform=='darwin' and platform_machine=='x86_64'",
+        "tensorflow>=2.20.0; not (sys_platform=='darwin' and platform_machine=='x86_64')",
+        "tensorflow>=2.16.2; sys_platform=='darwin' and platform_machine=='x86_64'",
         "dipy==1.12.0",
         # Now direct dependencies, no longer transitive: threadpoolctl pins the
         # BLAS pool in DipyMotionCorrection, filelock serialises the HCP842 atlas
