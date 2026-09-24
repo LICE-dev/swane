@@ -486,10 +486,15 @@ def _registration_target(node_dir: str):
     """
     try:
         from swane.utils.templates import get_swane_template
+
         if node_dir.startswith("mni1"):
-            return get_swane_template(name="MNI152NLin6Asym", resolution=1, desc="brain", enforce_las=True)
+            return get_swane_template(
+                name="MNI152NLin6Asym", resolution=1, desc="brain", enforce_las=True
+            )
         elif node_dir.startswith("sym"):
-            return get_swane_template(name="MNI152NLin2009cSym", resolution=1, desc="brain", enforce_las=True)
+            return get_swane_template(
+                name="MNI152NLin2009cSym", resolution=1, desc="brain", enforce_las=True
+            )
     except Exception:
         return None
     return None
