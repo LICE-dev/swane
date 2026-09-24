@@ -55,6 +55,8 @@ setup(
         "ica_aroma_py==0.1.2",
         "antspyx==0.6.3",
         "antspynet==0.3.2",
+        # On intel macos the last published tensorflow version is 2.16.2
+        # and it requires numpy <2
         "numpy>=2; not (sys_platform=='darwin' and platform_machine=='x86_64')",
         "numpy>=1.26,<2; sys_platform=='darwin' and platform_machine=='x86_64'",
         "tensorflow>=2.20.0; not (sys_platform=='darwin' and platform_machine=='x86_64')",
