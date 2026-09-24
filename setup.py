@@ -53,8 +53,8 @@ setup(
         "cryptography",
         "dicom-sequence-classifier==1.0.5",
         "ica_aroma_py==0.1.2",
-        "antspyx==0.6.3",
-        "antspynet==0.3.2",
+        "antspyx>=0.6",
+        "antspynet>=0.3",
         # On intel macos the last published tensorflow version is 2.16.2
         # and it requires numpy <2
         "numpy>=2; not (sys_platform=='darwin' and platform_machine=='x86_64')",
