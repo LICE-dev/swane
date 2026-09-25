@@ -178,7 +178,7 @@ class TestToolChecksMocked:
         monkeypatch.setattr(ants, "__version__", "0.6.3")
         assert DependencyManager.check_antspyx().state == DependenceStatus.DETECTED
 
-        monkeypatch.setattr(ants, "__version__", "0.6.2")
+        monkeypatch.setattr(ants, "__version__", "0.6.1")
         assert DependencyManager.check_antspyx().state == DependenceStatus.WARNING
 
         monkeypatch.delattr(ants, "__version__", raising=False)
