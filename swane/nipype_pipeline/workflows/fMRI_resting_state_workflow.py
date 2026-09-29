@@ -180,11 +180,9 @@ def fMRI_resting_state_workflow(
         workflow.connect(meanfuncmask, "mask_file", feature_spatial_prep, "mask_file")
 
         from swane.utils.templates import get_swane_template
+
         mni2 = get_swane_template(
-            name="MNI152NLin6Asym",
-            resolution=2,
-            desc="brain",
-            enforce_las=True
+            name="MNI152NLin6Asym", resolution=2, desc="brain", enforce_las=True
         )
 
         reg_2_mni = get_registration_node(
