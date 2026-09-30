@@ -91,8 +91,8 @@ class Subject:
         if check != SubjectRet.ValidFolder:
             return check
 
-        self.folder = subject_folder
-        self.name = os.path.basename(subject_folder)
+        self.folder = os.path.abspath(subject_folder)
+        self.name = os.path.basename(self.folder)
         self.input_state_list = SubjectInputStateList(
             self.dicom_folder(), self.global_config
         )
