@@ -76,24 +76,24 @@ class AntsComposeTransform(BaseInterface):
     output_spec = AntsComposeTransformOutputSpec
 
     def _run_interface(self, runtime):
-        import ants
-
-        kwargs = {}
-        if isdefined(self.inputs.which_to_invert):
-            if len(self.inputs.which_to_invert) != len(self.inputs.transformlist):
-                raise ValueError(
-                    "which_to_invert must hold exactly one flag per transform "
-                    f"({len(self.inputs.which_to_invert)} flags for "
-                    f"{len(self.inputs.transformlist)} transforms)"
-                )
-            kwargs["whichtoinvert"] = self.inputs.which_to_invert
-
-        reference = ants.image_read(self.inputs.reference_image)
-
         previous_threads = os.environ.get(ITK_THREADS_VAR)
         if isdefined(self.inputs.num_threads):
             os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
         try:
+            import ants
+
+            kwargs = {}
+            if isdefined(self.inputs.which_to_invert):
+                if len(self.inputs.which_to_invert) != len(self.inputs.transformlist):
+                    raise ValueError(
+                        "which_to_invert must hold exactly one flag per transform "
+                        f"({len(self.inputs.which_to_invert)} flags for "
+                        f"{len(self.inputs.transformlist)} transforms)"
+                    )
+                kwargs["whichtoinvert"] = self.inputs.which_to_invert
+
+            reference = ants.image_read(self.inputs.reference_image)
+
             composed = ants.apply_transforms(
                 fixed=reference,
                 moving=reference,
