@@ -130,7 +130,11 @@ def test_other_eddy_arguments_still_change_hash():
 
 @pytest.mark.parametrize(
     "start_method",
-    [method for method in ("fork", "spawn") if method in mp.get_all_start_methods()],
+    [
+        method
+        for method in ("fork", "forkserver", "spawn")
+        if method in mp.get_all_start_methods()
+    ],
 )
 def test_eddy_hash_patch_survives_process_start(start_method):
     context = mp.get_context(start_method)
@@ -185,14 +189,20 @@ def test_swane_run_node_enables_resource_monitor_from_node_config(monkeypatch):
     assert calls["enabled"] == 1
 
 
-def test_spawn_worker_writes_proc_into_crashdump_dir(tmp_path):
+@pytest.mark.parametrize(
+    "start_method",
+    [m for m in ("spawn", "forkserver") if m in mp.get_all_start_methods()],
+)
+def test_spawn_worker_writes_proc_into_crashdump_dir(tmp_path, start_method):
     """
-    End-to-end check with the ``spawn`` start method: a fresh interpreter must
-    import the patch (via unpickling ``swane_run_node``), *enable* the resource
-    monitor from node.config and drop the ``.proc`` file into ``crashdump_dir``.
-    This goes through the real Nipype ``config.resource_monitor`` gate.
+    End-to-end check with the ``spawn`` start method (and ``forkserver``, used
+    on macOS, whose workers also start without the parent's runtime state): a
+    fresh interpreter must import the patch (via unpickling ``swane_run_node``),
+    *enable* the resource monitor from node.config and drop the ``.proc`` file
+    into ``crashdump_dir``. This goes through the real Nipype
+    ``config.resource_monitor`` gate.
     """
-    ctx = mp.get_context("spawn")
+    ctx = mp.get_context(start_method)
     crashdump = tmp_path / "log"
     crashdump.mkdir()
 

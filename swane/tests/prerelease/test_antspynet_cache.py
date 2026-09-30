@@ -14,6 +14,7 @@ import pytest
 
 from swane.config.config_enums import DeskullModality
 from swane.tests.prerelease import antspynet_cache
+from swane.utils import antspynet_weights
 
 
 def test_weight_names_cover_every_modality_without_duplicates():
@@ -36,7 +37,7 @@ def test_preload_runs_in_a_child_process_and_leaves_the_caller_clean(monkeypatch
 
         return _Done()
 
-    monkeypatch.setattr(antspynet_cache.subprocess, "run", fake_run)
+    monkeypatch.setattr(antspynet_weights.subprocess, "run", fake_run)
     antspynet_cache.preload_antspynet_models(verbose=False)
 
     assert calls, "the pre-cache must shell out, not import antspynet in-process"
