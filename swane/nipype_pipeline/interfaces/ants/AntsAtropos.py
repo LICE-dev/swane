@@ -81,34 +81,34 @@ class AntsAtropos(BaseInterface):
         return abspath("atropos_seg.nii.gz")
 
     def _run_interface(self, runtime):
-        import ants
-
-        img = ants.image_read(self.inputs.in_file, pixeltype="float")
-
-        if isdefined(self.inputs.mask_file):
-            mask = ants.image_read(self.inputs.mask_file)
-            mask = (mask > 0).clone("float")
-            # geometry-coherence guard (same tolerance as AntsN4BiasFieldCorrection)
-            max_tolerance = 0.1
-            distance = np.linalg.norm(np.array(img.origin) - np.array(mask.origin))
-            if distance > 0:
-                if distance <= max_tolerance:
-                    mask.set_origin(img.origin)
-                    mask.set_spacing(img.spacing)
-                    mask.set_direction(img.direction)
-                else:
-                    raise RuntimeError(
-                        f"Image and Mask do not coincide! Origin distance: "
-                        f"{distance:.4f} mm. Maximum allowed threshold is "
-                        f"{max_tolerance} mm."
-                    )
-        else:
-            mask = (img > 0).clone("float")
-
         previous_threads = os.environ.get(ITK_THREADS_VAR)
         if isdefined(self.inputs.num_threads):
             os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
         try:
+            import ants
+
+            img = ants.image_read(self.inputs.in_file, pixeltype="float")
+
+            if isdefined(self.inputs.mask_file):
+                mask = ants.image_read(self.inputs.mask_file)
+                mask = (mask > 0).clone("float")
+                # geometry-coherence guard (same tolerance as AntsN4BiasFieldCorrection)
+                max_tolerance = 0.1
+                distance = np.linalg.norm(np.array(img.origin) - np.array(mask.origin))
+                if distance > 0:
+                    if distance <= max_tolerance:
+                        mask.set_origin(img.origin)
+                        mask.set_spacing(img.spacing)
+                        mask.set_direction(img.direction)
+                    else:
+                        raise RuntimeError(
+                            f"Image and Mask do not coincide! Origin distance: "
+                            f"{distance:.4f} mm. Maximum allowed threshold is "
+                            f"{max_tolerance} mm."
+                        )
+            else:
+                mask = (img > 0).clone("float")
+
             res = ants.atropos(
                 a=img,
                 x=mask,

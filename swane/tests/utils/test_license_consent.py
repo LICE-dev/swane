@@ -227,13 +227,25 @@ def test_undeterminable_version_uses_sentinel(monkeypatch):
 
 
 def test_dcm2niix_version_reads_package_attribute(monkeypatch):
-    fake_dcm2niix = SimpleNamespace(__version__="1.0.20260724")
-    monkeypatch.setitem(sys.modules, "dcm2niix", fake_dcm2niix)
+    import importlib.metadata
+    monkeypatch.setattr(
+        importlib.metadata,
+        "version",
+        lambda name: "1.0.20260724",
+    )
     assert lc._dcm2niix_version() == "1.0.20260724"
 
 
 def test_dcm2niix_version_none_when_package_missing(monkeypatch):
-    monkeypatch.setitem(sys.modules, "dcm2niix", None)
+    def mock_version(name):
+        raise Exception("missing")
+    
+    import importlib.metadata
+    monkeypatch.setattr(
+        importlib.metadata,
+        "version",
+        mock_version,
+    )
     assert lc._dcm2niix_version() is None
 
 
@@ -245,7 +257,12 @@ def test_dcm2niix_version_does_not_spawn_subprocess(monkeypatch):
     spawn that also targets the wrong, possibly absent, PATH binary).
     """
     fake_dcm2niix = SimpleNamespace(__version__="1.0.20260724")
-    monkeypatch.setitem(sys.modules, "dcm2niix", fake_dcm2niix)
+    import importlib.metadata
+    monkeypatch.setattr(
+        importlib.metadata,
+        "version",
+        lambda name: "1.0.20260724",
+    )
     if "nipype.interfaces" in sys.modules:
         monkeypatch.delitem(sys.modules, "nipype.interfaces", raising=False)
     monkeypatch.setitem(sys.modules, "nipype", None)

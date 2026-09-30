@@ -122,35 +122,35 @@ class AntsRegistration(BaseInterface):
     output_spec = AntsRegistrationOutputSpec
 
     def _run_interface(self, runtime):
-        import ants
-
-        kwargs = {
-            "aff_metric": self.inputs.aff_metric,
-            "syn_metric": self.inputs.syn_metric,
-        }
-        if isdefined(self.inputs.initial_transform):
-            kwargs["initial_transform"] = self.inputs.initial_transform
-        if isdefined(self.inputs.moving_mask):
-            kwargs["moving_mask"] = ants.image_read(self.inputs.moving_mask)
-        if isdefined(self.inputs.test_run) and self.inputs.test_run:
-            # Fast, lower-accuracy schedules for the prerelease sweep; the graph
-            # is unchanged (see TEST_RUN_* above).
-            kwargs["aff_iterations"] = TEST_RUN_AFF_ITERATIONS
-            kwargs["reg_iterations"] = TEST_RUN_REG_ITERATIONS
-        else:
-            # Explicitly set the standard clinical schedule. We cannot rely on
-            # antspyx's default reg_iterations because it defaults to (40, 20, 0),
-            # which performs zero iterations at the native resolution and yields
-            # terrible nonlinear (SyN) registrations. The affine default
-            # (2100, 1200, 1200, 10) is robust, but we explicitly set both to
-            # replicate the standard antsRegistrationSyN.sh parameters.
-            kwargs["aff_iterations"] = (2100, 1200, 1200, 10)
-            kwargs["reg_iterations"] = (100, 70, 50, 20)
-
         previous_threads = os.environ.get(ITK_THREADS_VAR)
         if isdefined(self.inputs.num_threads):
             os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
         try:
+            import ants
+
+            kwargs = {
+                "aff_metric": self.inputs.aff_metric,
+                "syn_metric": self.inputs.syn_metric,
+            }
+            if isdefined(self.inputs.initial_transform):
+                kwargs["initial_transform"] = self.inputs.initial_transform
+            if isdefined(self.inputs.moving_mask):
+                kwargs["moving_mask"] = ants.image_read(self.inputs.moving_mask)
+            if isdefined(self.inputs.test_run) and self.inputs.test_run:
+                # Fast, lower-accuracy schedules for the prerelease sweep; the graph
+                # is unchanged (see TEST_RUN_* above).
+                kwargs["aff_iterations"] = TEST_RUN_AFF_ITERATIONS
+                kwargs["reg_iterations"] = TEST_RUN_REG_ITERATIONS
+            else:
+                # Explicitly set the standard clinical schedule. We cannot rely on
+                # antspyx's default reg_iterations because it defaults to (40, 20, 0),
+                # which performs zero iterations at the native resolution and yields
+                # terrible nonlinear (SyN) registrations. The affine default
+                # (2100, 1200, 1200, 10) is robust, but we explicitly set both to
+                # replicate the standard antsRegistrationSyN.sh parameters.
+                kwargs["aff_iterations"] = (2100, 1200, 1200, 10)
+                kwargs["reg_iterations"] = (100, 70, 50, 20)
+
             result = ants.registration(
                 fixed=ants.image_read(self.inputs.fixed),
                 moving=ants.image_read(self.inputs.moving),

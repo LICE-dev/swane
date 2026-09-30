@@ -326,15 +326,19 @@ class DependencyManager:
         -------
         A Dependence object with dcm2niix information.
         """
+        if importlib.util.find_spec("dcm2niix") is None:
+            return Dependence(
+                DependenceStatus.MISSING,
+                strings.check_dep_dcm2niix_error,
+            )
         try:
-            import dcm2niix
-
+            dcm2niix_version = importlib.metadata.version("dcm2niix")
             return Dependence(
                 DependenceStatus.DETECTED,
                 strings.check_dep_dcm2niix_found
-                % version_with_license(DCM2NIIX, str(dcm2niix.__version__)),
+                % version_with_license(DCM2NIIX, dcm2niix_version),
             )
-        except (ImportError, AttributeError):
+        except Exception:
             return Dependence(
                 DependenceStatus.MISSING,
                 strings.check_dep_dcm2niix_error,
@@ -387,10 +391,10 @@ class DependencyManager:
         -------
         A Dependence object with antspyx information.
         """
+        if importlib.util.find_spec("ants") is None:
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_antspyx_error)
         try:
-            import ants
-
-            antspyx_version = str(ants.__version__)
+            antspyx_version = importlib.metadata.version("antspyx")
         except Exception:
             return Dependence(DependenceStatus.MISSING, strings.check_dep_antspyx_error)
 
