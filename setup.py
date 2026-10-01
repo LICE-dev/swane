@@ -91,7 +91,7 @@ setup(
         "dicom-sequence-classifier==1.0.5",
         "ica_aroma_py==0.1.2",
         # Intel macOS: antspyx 0.6.1 provides x86_64 wheels for macOS 13 (Ventura)
-        # and later (including 14 and 15). Versions >=0.6.2 only provide wheels 
+        # and later (including 14 and 15). Versions >=0.6.2 only provide wheels
         # for macOS 15, which forces older Macs to build from source (taking hours).
         "antspyx==0.6.1; sys_platform=='darwin' and platform_machine=='x86_64'",
         "antspyx>=0.6.2; sys_platform!='darwin' or platform_machine!='x86_64'",
