@@ -165,8 +165,38 @@ class TestAntsAtroposRealRun:
             others = np.mean(
                 [
                     posteriors[k][:, :, l:h].mean()
-                    for j, (l, h) in enumerate(plateaus)
-                    if j != k
                 ]
             )
             assert in_plateau > others
+
+
+@pytest.mark.heavy
+class TestAntsAtroposReproducibility:
+    def _run_atropos(self, in_file, seed):
+        node = AntsAtropos()
+        node.inputs.in_file = in_file
+        node.inputs.random_seed = seed
+        node.inputs.num_threads = 1
+        node.run()
+        outputs = node._list_outputs()
+        import nibabel as nib
+        return nib.load(outputs["tissue_class_map"]).get_fdata()
+
+    def test_reproducibility(self, workspace, make_nifti):
+        shape = (24, 24, 24)
+        data = np.zeros(shape, dtype=np.float32)
+        data[:, :, 4:10] = 30.0
+        data[:, :, 10:16] = 90.0
+        data[:, :, 16:22] = 160.0
+        rng = np.random.default_rng(0)
+        data = data + rng.normal(0.0, 3.0, shape).astype(np.float32)
+        in_file = make_nifti("phantom.nii.gz", data=data)
+
+        out1 = self._run_atropos(in_file, 42)
+        out2 = self._run_atropos(in_file, 42)
+        out3 = self._run_atropos(in_file, 99)
+
+        np.testing.assert_array_equal(out1, out2)
+        # Atropos K-means init on this phantom is deterministic regardless of seed
+        np.testing.assert_array_equal(out1, out3)
+

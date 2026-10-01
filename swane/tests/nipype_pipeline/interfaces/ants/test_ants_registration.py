@@ -348,7 +348,40 @@ class TestAntsRegistrationRealRun:
         recovered = np.corrcoef(back.numpy().ravel(), moving_data.ravel())[0, 1]
         assert recovered > 0.9
 
-        # and the warped output really lives in the fixed image's grid
         warped = nib.load(outputs["warped_file"])
         assert warped.shape == nib.load(fixed).shape
         assert np.allclose(warped.affine, nib.load(fixed).affine, atol=1e-4)
+
+
+@pytest.mark.heavy
+class TestAntsRegistrationReproducibility:
+    def _run_reg(self, fixed, moving, seed):
+        node = AntsRegistration()
+        node.inputs.fixed = fixed
+        node.inputs.moving = moving
+        node.inputs.transform_type = "Affine"
+        node.inputs.random_seed = seed
+        node.inputs.num_threads = 1
+        node.inputs.test_run = True
+        node.run()
+        outputs = node._list_outputs()
+        import nibabel as nib
+        return nib.load(outputs["warped_file"]).get_fdata()
+
+    def test_reproducibility(self, workspace, make_nifti):
+        fixed_data = np.zeros((24, 24, 24), dtype=np.float32)
+        fixed_data[6:18, 6:18, 6:18] = 1.0
+        moving_data = np.zeros((24, 24, 24), dtype=np.float32)
+        moving_data[10:22, 4:16, 6:18] = 1.0
+        fixed = make_nifti("f.nii.gz", data=fixed_data)
+        moving = make_nifti("m.nii.gz", data=moving_data)
+
+        out1 = self._run_reg(fixed, moving, 42)
+        out2 = self._run_reg(fixed, moving, 42)
+        out3 = self._run_reg(fixed, moving, 99)
+
+        # Same seed should be exactly identical
+        np.testing.assert_array_equal(out1, out2)
+        # Different seed should be different due to random sampling
+        assert not np.array_equal(out1, out3)
+

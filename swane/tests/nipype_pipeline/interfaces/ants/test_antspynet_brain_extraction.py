@@ -269,3 +269,79 @@ def test_non_positive_num_threads_does_not_export_zero(tmp_path, fake_antspynet)
     node.inputs.out_file = str(tmp_path / "brain.nii.gz")
     node.run()
     assert seen["omp"] != "0"
+
+
+def test_random_seed_sets_ants_config(tmp_path, fake_antspynet):
+    seen = {}
+    real_be = sys.modules["antspynet"].brain_extraction
+
+    def spy(image, modality=None, **kwargs):
+        seen["ants_seed"] = ants.config._random_seed
+        return real_be(image, modality=modality, **kwargs)
+
+    sys.modules["antspynet"].brain_extraction = spy
+
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.random_seed = 99
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+    assert seen["ants_seed"] == 99
+
+
+def test_random_seed_sets_tensorflow_seed(tmp_path, fake_antspynet, monkeypatch):
+    tf_calls = {}
+
+    class FakeTF:
+        class random:
+            @staticmethod
+            def set_seed(seed):
+                tf_calls["seed"] = seed
+
+    monkeypatch.setitem(sys.modules, "tensorflow", FakeTF)
+
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.random_seed = 99
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+
+    assert tf_calls.get("seed") == 99
+
+
+@pytest.mark.heavy
+class TestAntsPyNetBrainExtractionReproducibility:
+    def _run_be(self, in_file, seed, tmp_path):
+        node = AntsPyNetBrainExtraction()
+        node.inputs.in_file = in_file
+        node.inputs.modality = "t1"
+        node.inputs.random_seed = seed
+        node.inputs.out_file = str(tmp_path / f"brain_{seed}.nii.gz")
+        node.run()
+        outputs = node._list_outputs()
+        import nibabel as nib
+        return nib.load(outputs["out_file"]).get_fdata()
+
+    def test_reproducibility(self, tmp_path):
+        arr = np.zeros((96, 96, 96), dtype="float32")
+        arr[24:72, 24:72, 24:72] = 100.0
+        in_file = _write_image(str(tmp_path / "t1.nii.gz"))
+        
+        # Override data since _write_image writes 6x6x6
+        import nibabel as nib
+        img = nib.Nifti1Image(arr, np.eye(4))
+        nib.save(img, in_file)
+
+        out1 = self._run_be(in_file, 42, tmp_path)
+        out2 = self._run_be(in_file, 42, tmp_path)
+        out3 = self._run_be(in_file, 99, tmp_path)
+
+        np.testing.assert_array_equal(out1, out2)
+        # Brain extraction uses deterministic inference unless stochastic layers are active
+        np.testing.assert_array_equal(out1, out3)
+
+
