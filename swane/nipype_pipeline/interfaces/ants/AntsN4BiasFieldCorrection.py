@@ -56,59 +56,59 @@ class AntsN4BiasFieldCorrection(BaseInterface):
     output_spec = AntsN4BiasFieldCorrectionOutputSpec
 
     def _run_interface(self, runtime):
-        import ants
-
-        out_file = self._gen_outfilename()
-
-        # load image as float, as requested by N4
-        img = ants.image_read(self.inputs.in_file, pixeltype="float")
-
-        # --- MASK LOGIC ---
-        if isdefined(self.inputs.mask_file):
-            # If a mask is provided, use it (binarize in case it isn't already).
-            # Cast back to float: antspyx's N4 correction is markedly weaker when
-            # given an unsigned-char mask (the boolean comparison's dtype) than a
-            # float mask with the same 0/1 values.
-            mask = ants.image_read(self.inputs.mask_file)
-            mask = (mask > 0).clone("float")
-        elif self.inputs.skull_stripped:
-            # Otherwise, if the input sequence is skull stripped, assume brain for every non 0 voxel
-            mask = (img > 0).clone("float")
-        else:
-            # In other cases use automatic Otsu thresholding
-            mask = ants.otsu_segmentation(img, k=1)
-
-        # --- Check geometrical coherence between mask and img ---
-        max_tolerance = 0.1
-        origin_img = np.array(img.origin)
-        origin_mask = np.array(mask.origin)
-        distance = np.linalg.norm(origin_img - origin_mask)
-        if distance > 0:
-            if distance <= max_tolerance:
-                # If mask and img have minimal difference, force mask in img geometrical space
-                mask.set_origin(img.origin)
-                mask.set_spacing(img.spacing)
-                mask.set_direction(img.direction)
-            else:
-                # If difference is bigger, stop
-                raise RuntimeError(
-                    f"Image and Mask do not coincide! Origin distance: {distance:.4f} mm. "
-                    f"Maximum allowed threshold is {max_tolerance} mm."
-                )
-
-        # --- N4 (antspyx standard parameters, aside from mask/iterations) ---
-        kwargs = {}
-        if isdefined(self.inputs.max_iterations):
-            kwargs["convergence"] = {
-                "iters": list(self.inputs.max_iterations),
-                "tol": N4_DEFAULT_TOL,
-            }
-
         # --- Threads control ---
         previous_threads = os.environ.get(ITK_THREADS_VAR)
         if isdefined(self.inputs.num_threads):
             os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
         try:
+            import ants
+
+            out_file = self._gen_outfilename()
+
+            # load image as float, as requested by N4
+            img = ants.image_read(self.inputs.in_file, pixeltype="float")
+
+            # --- MASK LOGIC ---
+            if isdefined(self.inputs.mask_file):
+                # If a mask is provided, use it (binarize in case it isn't already).
+                # Cast back to float: antspyx's N4 correction is markedly weaker when
+                # given an unsigned-char mask (the boolean comparison's dtype) than a
+                # float mask with the same 0/1 values.
+                mask = ants.image_read(self.inputs.mask_file)
+                mask = (mask > 0).clone("float")
+            elif self.inputs.skull_stripped:
+                # Otherwise, if the input sequence is skull stripped, assume brain for every non 0 voxel
+                mask = (img > 0).clone("float")
+            else:
+                # In other cases use automatic Otsu thresholding
+                mask = ants.otsu_segmentation(img, k=1)
+
+            # --- Check geometrical coherence between mask and img ---
+            max_tolerance = 0.1
+            origin_img = np.array(img.origin)
+            origin_mask = np.array(mask.origin)
+            distance = np.linalg.norm(origin_img - origin_mask)
+            if distance > 0:
+                if distance <= max_tolerance:
+                    # If mask and img have minimal difference, force mask in img geometrical space
+                    mask.set_origin(img.origin)
+                    mask.set_spacing(img.spacing)
+                    mask.set_direction(img.direction)
+                else:
+                    # If difference is bigger, stop
+                    raise RuntimeError(
+                        f"Image and Mask do not coincide! Origin distance: {distance:.4f} mm. "
+                        f"Maximum allowed threshold is {max_tolerance} mm."
+                    )
+
+            # --- N4 (antspyx standard parameters, aside from mask/iterations) ---
+            kwargs = {}
+            if isdefined(self.inputs.max_iterations):
+                kwargs["convergence"] = {
+                    "iters": list(self.inputs.max_iterations),
+                    "tol": N4_DEFAULT_TOL,
+                }
+
             corrected = ants.n4_bias_field_correction(img, mask=mask, **kwargs)
         finally:
             if previous_threads is None:
