@@ -181,18 +181,18 @@ def _dcm2niix_version():
     # so the license-relevant version is the package attribute - not
     # nipype's CommandLine-based Info.version(), which targets PATH.
     try:
-        import dcm2niix
+        import importlib.metadata
 
-        return str(dcm2niix.__version__)
+        return importlib.metadata.version("dcm2niix")
     except Exception:
         return None
 
 
 def _antspyx_version():
     try:
-        import ants
+        import importlib.metadata
 
-        return str(ants.__version__)
+        return importlib.metadata.version("antspyx")
     except Exception:
         return None
 
