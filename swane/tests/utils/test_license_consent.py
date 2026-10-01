@@ -228,6 +228,7 @@ def test_undeterminable_version_uses_sentinel(monkeypatch):
 
 def test_dcm2niix_version_reads_package_attribute(monkeypatch):
     import importlib.metadata
+
     monkeypatch.setattr(
         importlib.metadata,
         "version",
@@ -239,8 +240,9 @@ def test_dcm2niix_version_reads_package_attribute(monkeypatch):
 def test_dcm2niix_version_none_when_package_missing(monkeypatch):
     def mock_version(name):
         raise Exception("missing")
-    
+
     import importlib.metadata
+
     monkeypatch.setattr(
         importlib.metadata,
         "version",
@@ -258,6 +260,7 @@ def test_dcm2niix_version_does_not_spawn_subprocess(monkeypatch):
     """
     fake_dcm2niix = SimpleNamespace(__version__="1.0.20260724")
     import importlib.metadata
+
     monkeypatch.setattr(
         importlib.metadata,
         "version",
