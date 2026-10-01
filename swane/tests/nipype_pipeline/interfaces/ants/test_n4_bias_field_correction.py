@@ -239,3 +239,33 @@ class TestN4BiasFieldCorrectionRealRun:
         # the corrected foreground should be more uniform than the biased input
         fg = base > 0
         assert corrected[fg].std() < biased[fg].std()
+
+
+@pytest.mark.heavy
+class TestN4BiasFieldCorrectionReproducibility:
+    def _run_n4(self, in_file, seed):
+        node = AntsN4BiasFieldCorrection()
+        node.inputs.in_file = in_file
+        node.inputs.skull_stripped = True
+        node.inputs.random_seed = seed
+        node.run()
+        outputs = node._list_outputs()
+        import nibabel as nib
+        return nib.load(outputs["out_file"]).get_fdata()
+
+    def test_reproducibility(self, workspace, make_nifti):
+        shape = (24, 24, 24)
+        base = np.zeros(shape, dtype=np.float32)
+        base[6:18, 6:18, 6:18] = 100.0
+        ramp = np.linspace(0.6, 1.4, shape[0]).astype(np.float32)
+        biased = base * ramp[:, None, None]
+        in_file = make_nifti("biased.nii.gz", data=biased)
+
+        out1 = self._run_n4(in_file, 42)
+        out2 = self._run_n4(in_file, 42)
+        out3 = self._run_n4(in_file, 99)
+
+        np.testing.assert_array_equal(out1, out2)
+        # N4 is fully deterministic without random sampling
+        np.testing.assert_array_equal(out1, out3)
+

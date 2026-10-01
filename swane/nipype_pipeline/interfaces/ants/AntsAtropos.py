@@ -35,6 +35,9 @@ class AntsAtroposInputSpec(BaseInterfaceInputSpec):
         10, usedefault=True, desc="maximum EM iterations (convergence threshold 0)"
     )
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
+    random_seed = traits.Int(
+        42, usedefault=True, desc="Seed to initialize the random number generator"
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -84,8 +87,14 @@ class AntsAtropos(BaseInterface):
         previous_threads = os.environ.get(ITK_THREADS_VAR)
         if isdefined(self.inputs.num_threads):
             os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
+        ants = None
+        previous_random_seed = None
         try:
             import ants
+
+            previous_random_seed = ants.config._random_seed
+            if isdefined(self.inputs.random_seed):
+                ants.config._random_seed = self.inputs.random_seed
 
             img = ants.image_read(self.inputs.in_file, pixeltype="float")
 
@@ -121,6 +130,8 @@ class AntsAtropos(BaseInterface):
                 os.environ.pop(ITK_THREADS_VAR, None)
             else:
                 os.environ[ITK_THREADS_VAR] = previous_threads
+            if ants is not None:
+                ants.config._random_seed = previous_random_seed
 
         probs = res["probabilityimages"]
         if len(probs) != self.inputs.number_classes:

@@ -32,6 +32,9 @@ class AntsPyNetBrainExtractionInputSpec(BaseInterfaceInputSpec):
     out_file = File(desc="the skull-stripped brain image")
     mask_file = File(desc="the binary brain mask")
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
+    random_seed = traits.Int(
+        42, usedefault=True, desc="Seed to initialize the random number generator"
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -69,10 +72,25 @@ class AntsPyNetBrainExtraction(BaseInterface):
         if isdefined(self.inputs.num_threads) and self.inputs.num_threads > 0:
             for v in self.THREAD_ENV_VARS:
                 os.environ[v] = str(self.inputs.num_threads)
+        ants = None
+        previous_random_seed = None
         try:
             import ants
             import antspynet
+            import random
+            import numpy as np
             from ants.core.ants_image import ANTsImage
+
+            previous_random_seed = ants.config._random_seed
+            if isdefined(self.inputs.random_seed):
+                ants.config._random_seed = self.inputs.random_seed
+                random.seed(self.inputs.random_seed)
+                np.random.seed(self.inputs.random_seed)
+                try:
+                    import tensorflow as tf
+                    tf.random.set_seed(self.inputs.random_seed)
+                except ImportError:
+                    pass
 
             out_file = self._gen_outfilename()
             img = ants.image_read(self.inputs.in_file, pixeltype="float")
@@ -112,6 +130,8 @@ class AntsPyNetBrainExtraction(BaseInterface):
                     os.environ.pop(v, None)
                 else:
                     os.environ[v] = prev
+            if ants is not None:
+                ants.config._random_seed = previous_random_seed
 
         return runtime
 
