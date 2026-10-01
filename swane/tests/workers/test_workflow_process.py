@@ -1,6 +1,11 @@
 import logging
+import multiprocessing as mp
 import os
 from multiprocessing import Queue
+
+import pytest
+
+from swane.utils.mp_start_method import START_METHOD_ENV_VAR, worker_pool_start_method
 from swane.workers.WorkflowProcess import WorkflowProcess, swane_log_nodes_cb
 import types
 
@@ -15,6 +20,9 @@ class DummyWorkflow:
 
     def run(self, plugin=None):
         return
+
+    def _get_all_nodes(self):
+        return []
 
 
 def test_add_and_remove_handlers(monkeypatch):
@@ -67,6 +75,117 @@ def test_workflow_run_worker_gpu_budget_reaches_the_plugin(monkeypatch, tmp_path
     assert captured.get("n_gpu_procs") == 2
     assert captured.get("n_procs") == 3
     assert captured.get("memory_gb") == 5
+    assert captured.get("mp_context") == worker_pool_start_method()
+
+
+def test_antspynet_preload_failure_does_not_stop_the_workflow(monkeypatch, tmp_path):
+    """The weights pre-fetch runs before the plugin; if it fails the workflow
+    still runs and the node that needs the weights reports its own error."""
+    from subprocess import CalledProcessError
+    from swane.utils import antspynet_weights
+
+    order = []
+
+    class FakePlugin:
+        def __init__(self, plugin_args=None):
+            order.append("plugin")
+
+    def failing_preload(names):
+        order.append(("preload", list(names)))
+        raise CalledProcessError(1, "child", stderr="offline")
+
+    monkeypatch.setattr(
+        "swane.nipype_pipeline.engine.MonitoredMultiProcPlugin.MonitoredMultiProcPlugin",
+        FakePlugin,
+    )
+    monkeypatch.setattr(
+        antspynet_weights, "workflow_modalities", lambda workflow: ["t1"]
+    )
+    monkeypatch.setattr(antspynet_weights, "preload_weights", failing_preload)
+
+    workflow = DummyWorkflow()
+    workflow.base_dir = str(tmp_path)
+    prev_cwd = os.getcwd()
+    try:
+        WorkflowProcess("subj", workflow, Queue()).workflow_run_worker()
+    finally:
+        os.chdir(prev_cwd)
+
+    assert order == [("preload", ["brainExtractionRobustT1"]), "plugin"]
+
+
+def test_workflow_without_antspynet_nodes_skips_the_preload(monkeypatch):
+    from swane.utils import antspynet_weights
+
+    # Record rather than raise: preload_antspynet_weights swallows exceptions.
+    calls = []
+    monkeypatch.setattr(antspynet_weights, "preload_weights", calls.append)
+    WorkflowProcess("subj", DummyWorkflow(), Queue()).preload_antspynet_weights()
+    assert calls == [], "no antspynet node: nothing to pre-fetch"
+
+
+def _record_worker_parent(out_dir):
+    """Function node body: record which process started this worker."""
+    import os
+
+    ppid = os.getppid()
+    with open(os.path.join(out_dir, "ppid.txt"), "w") as handle:
+        handle.write(str(ppid))
+    return ppid
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Nipype MultiProc requires POSIX")
+@pytest.mark.parametrize(
+    "start_method",
+    [m for m in ("fork", "forkserver") if m in mp.get_all_start_methods()],
+)
+def test_real_worker_pool_uses_the_selected_start_method(
+    monkeypatch, tmp_path, start_method
+):
+    """
+    Run a real one-node workflow through WorkflowProcess and the monitored
+    MultiProc plugin. Under ``fork`` the worker is a child of this process;
+    under ``forkserver`` it is a child of the fork server, never of this
+    (Qt-holding, on macOS) process -- which is what keeps macOS workers clear
+    of the frameworks that are not fork-safe.
+    """
+    from nipype import Node, Workflow
+    from nipype.interfaces.utility import Function
+
+    monkeypatch.setenv(START_METHOD_ENV_VAR, start_method)
+
+    workflow = Workflow(name="start_method_check", base_dir=str(tmp_path))
+    node = Node(
+        Function(
+            input_names=["out_dir"],
+            output_names=["ppid"],
+            function=_record_worker_parent,
+        ),
+        name="record_parent",
+    )
+    node.inputs.out_dir = str(tmp_path)
+    workflow.add_nodes([node])
+    workflow.max_cpu = 1
+    workflow.max_gpu = 0
+    workflow.memory_gb = 1.0
+    workflow.config["execution"]["poll_sleep_duration"] = "0.1"
+
+    queue = Queue()
+    prev_cwd = os.getcwd()
+    try:
+        WorkflowProcess("subj", workflow, queue).workflow_run_worker()
+    finally:
+        os.chdir(prev_cwd)
+        queue.close()
+        queue.cancel_join_thread()
+
+    ppid_file = tmp_path / "ppid.txt"
+    assert ppid_file.exists(), "the node did not run in a worker"
+    worker_parent = int(ppid_file.read_text())
+    if start_method == "fork":
+        assert worker_parent == os.getpid()
+    else:
+        assert worker_parent != os.getpid()
 
 
 def test_run_advertises_monitoring_on_workflow_config(monkeypatch, tmp_path):
