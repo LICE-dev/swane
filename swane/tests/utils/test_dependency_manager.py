@@ -101,15 +101,20 @@ class TestToolChecksMocked:
         assert DependencyManager.check_graphviz().state == DependenceStatus.DETECTED
 
     def test_check_dcm2niix(self, monkeypatch):
-        # check_dcm2niix() detects the dcm2niix pip package (the one the
-        # pipeline actually runs, via CustomDcm2niix), not whatever
-        # "dcm2niix" resolves to on PATH - so it is exercised by mocking the
-        # package import, not nipype's dcm2nii.Info.
-        monkeypatch.setitem(sys.modules, "dcm2niix", None)
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.util.find_spec",
+            lambda name: None if name == "dcm2niix" else object(),
+        )
         assert DependencyManager.check_dcm2niix().state == DependenceStatus.MISSING
 
-        fake_dcm2niix = types.SimpleNamespace(__version__="1.0.20220720")
-        monkeypatch.setitem(sys.modules, "dcm2niix", fake_dcm2niix)
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.util.find_spec",
+            lambda name: object() if name == "dcm2niix" else None,
+        )
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.metadata.version",
+            lambda name: "1.0.20220720",
+        )
         assert DependencyManager.check_dcm2niix().state == DependenceStatus.DETECTED
 
     def test_check_fsl(self, monkeypatch):
@@ -173,15 +178,26 @@ class TestToolChecksMocked:
         assert dep.state2 == DependenceStatus.DETECTED
 
     def test_check_antspyx(self, monkeypatch):
-        import ants
-
-        monkeypatch.setattr(ants, "__version__", "0.6.3")
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.util.find_spec",
+            lambda name: object() if name == "ants" else None,
+        )
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.metadata.version",
+            lambda name: "0.6.3",
+        )
         assert DependencyManager.check_antspyx().state == DependenceStatus.DETECTED
 
-        monkeypatch.setattr(ants, "__version__", "0.6.1")
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.metadata.version",
+            lambda name: "0.6.1",
+        )
         assert DependencyManager.check_antspyx().state == DependenceStatus.WARNING
 
-        monkeypatch.delattr(ants, "__version__", raising=False)
+        monkeypatch.setattr(
+            "swane.utils.DependencyManager.importlib.util.find_spec",
+            lambda name: None,
+        )
         assert DependencyManager.check_antspyx().state == DependenceStatus.MISSING
 
     def test_is_freesurfer_synth(self, monkeypatch):
