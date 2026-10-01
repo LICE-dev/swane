@@ -371,6 +371,7 @@ def _probe_mni(caps: Capabilities) -> None:
     missing = []
     try:
         from swane.utils.templates import get_swane_template
+
         get_swane_template(name="MNI152NLin6Asym", resolution=1, desc="brain")
         get_swane_template(name="MNI152NLin6Asym", resolution=2, desc="brain")
         get_swane_template(name="MNI152NLin2009cSym", resolution=1, desc="brain")

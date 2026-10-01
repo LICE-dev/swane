@@ -66,6 +66,7 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
     add(os.environ.get("FSLDIR"), "<FSLDIR>")
     try:
         from swane.utils.templates import _SWANE_TEMPLATE_CACHE
+
         add(_SWANE_TEMPLATE_CACHE, "<SWANE_TEMPLATES>")
         home = os.path.expanduser("~")
         add(os.path.join(home, ".cache", "templateflow"), "<TEMPLATEFLOW>")
