@@ -75,6 +75,13 @@ class WorkflowGenerateWorker(QRunnable):
         """
         Pre-downloads all antspynet models used by SWANe.
         """
+        from swane.config.config_enums import GlobalPrefCategoryList, DeskullEngine
+        from swane.nipype_pipeline.interfaces.utils import resolve_deskull_engine
+
+        synth_config = self.subject.global_config[GlobalPrefCategoryList.SYNTH]
+        if resolve_deskull_engine(synth_config) != DeskullEngine.ANTSPYNET:
+            return
+
         from swane.utils.antspynet_weights import (
             WEIGHTS_BY_MODALITY,
             preload_weights,

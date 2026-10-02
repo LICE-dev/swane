@@ -779,6 +779,10 @@ GLOBAL_PREFERENCES[category]["deskull_engine"] = PreferenceEntry(
             "is_freesurfer_synth",
             "SynthStrip requires FreeSurfer 8.1.0",
         ],
+        DeskullEngine.BET: [
+            "is_fsl",
+            "FSL BET requires the FSL software suite",
+        ],
     },
     option_pref_requirement={
         DeskullEngine.ANTSPYNET: {
@@ -813,6 +817,10 @@ GLOBAL_PREFERENCES[category]["engine"] = PreferenceEntry(
         RegistrationEngine.ANTS: [
             "is_antspyx",
             "ANTs registration requires the antspyx package",
+        ],
+        RegistrationEngine.FSL: [
+            "is_fsl",
+            "FSL FLIRT/FNIRT requires the FSL software suite",
         ],
     },
     option_pref_requirement={
