@@ -100,7 +100,7 @@ class DependencyManager:
 
     MIN_FSL_VERSION = "6.0.6"
     # Kept in sync with the antspyx pin in setup.py.
-    MIN_ANTSPYX_VERSION = "0.6.2"
+    MIN_ANTSPYX_VERSION = "0.6.1"
     # Kept in sync with the antspynet pin in setup.py.
     MIN_ANTSPYNET_VERSION = "0.3.2"
     # Kept in sync with the dipy pin in setup.py.
