@@ -76,6 +76,23 @@ class TestSubjectTab:
         # enabled first -- normally done by data loading, out of scope here.
         tab.setTabEnabled(SubjectTab.EXECTAB, True)
 
+        # Mock preload methods to avoid network requests and subprocesses in tests
+        from swane.workers.WorkflowGenerateWorker import WorkflowGenerateWorker
+
+        monkeypatch.setattr(
+            WorkflowGenerateWorker, "_preload_templates", lambda *args: None
+        )
+        monkeypatch.setattr(
+            WorkflowGenerateWorker, "_preload_models", lambda *args: None
+        )
+
+        # Since generate_workflow is now async, we must wait for the finished signal
+        # and we can't intercept the worker creation easily, so we just run the QThreadPool
+        # inline for this test
+        from PySide6.QtCore import QThreadPool
+
+        monkeypatch.setattr(QThreadPool.globalInstance(), "start", lambda w: w.run())
+
         tab.generate_workflow()
         assert tab.exec_button.isEnabled() is True
         assert tab.generate_workflow_button.isEnabled() is False
