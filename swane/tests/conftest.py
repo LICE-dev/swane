@@ -38,7 +38,7 @@ os.environ.setdefault("FSLOUTPUTTYPE", "NIFTI_GZ")
 # at a real empty directory (the trait is Directory(exists=True), so a
 # non-existent path would fail validation too) and never override a value the
 # environment already set.
-if not os.environ.get("SUBJECTS_DIR"):
+if not os.environ.get("SUBJECTS_DIR") or not os.path.exists(os.environ["SUBJECTS_DIR"]):
     import tempfile
 
     os.environ["SUBJECTS_DIR"] = tempfile.mkdtemp(prefix="swane_tests_subjects_")

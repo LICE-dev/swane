@@ -111,8 +111,9 @@ setup(
         # BLAS pool in DipyMotionCorrection, filelock serialises the HCP842 atlas
         # fetch in DipyAtlasSLR.
         "threadpoolctl==3.6.0",
-        # scipy>=1.17.1 prevent a macos bug with PROPACK
-        "scipy>=1.17.1",
+        # scipy>=1.17.1 prevent a macos bug with PROPACK, but it conflicts
+        # with antspyx < 0.6.4 (which forces scipy < 1.16). We now handle the
+        # PROPACK bug with a monkeypatch in swane.patches.scipy_patches instead.
         "filelock==3.17.0",
         "templateflow>=24.0.0",
         "vtk",
