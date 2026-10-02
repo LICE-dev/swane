@@ -35,6 +35,12 @@ def get_swane_template(
     str
         Path to the requested template (in LAS if requested).
     """
+    # Check SWANe cache first if enforcing LAS to avoid slow TemplateFlow initialization
+    if enforce_las:
+        las_filename = f"{name}_res-{resolution}_desc-{desc}_{suffix}_LAS.nii.gz"
+        las_path = _SWANE_TEMPLATE_CACHE / las_filename
+        if las_path.exists():
+            return str(las_path)
 
     # We use a global lock file to prevent concurrent TemplateFlow downloads
     # and concurrent RAS-to-LAS conversions.
@@ -83,6 +89,7 @@ def get_swane_template(
         las_filename = f"{name}_res-{resolution}_desc-{desc}_{suffix}_LAS.nii.gz"
         las_path = _SWANE_TEMPLATE_CACHE / las_filename
 
+        # If it was cached during another process's lock hold, return it
         if las_path.exists():
             return str(las_path)
 
@@ -113,6 +120,17 @@ def get_swane_template(
 
 def _compute_brain_template(name: str, resolution: int, enforce_las: bool) -> str:
     """Compute a skull-stripped template by multiplying the T1w and brain mask."""
+
+    cache_name = f"{name}_res-{resolution}_desc-brain_T1w"
+    if enforce_las:
+        cache_name += "_LAS.nii.gz"
+    else:
+        cache_name += ".nii.gz"
+
+    out_path = _SWANE_TEMPLATE_CACHE / cache_name
+    if out_path.exists():
+        return str(out_path)
+
     import templateflow.api as tf
     import nibabel as nib
 
@@ -138,16 +156,6 @@ def _compute_brain_template(name: str, resolution: int, enforce_las: bool) -> st
                 f"TemplateFlow returned no matches for {name} res-{resolution} brain mask"
             )
         mask_obj = mask_obj[0]
-
-    cache_name = f"{name}_res-{resolution}_desc-brain_T1w"
-    if enforce_las:
-        cache_name += "_LAS.nii.gz"
-    else:
-        cache_name += ".nii.gz"
-
-    out_path = _SWANE_TEMPLATE_CACHE / cache_name
-    if out_path.exists():
-        return str(out_path)
 
     # Multiply
     t1w_img = nib.load(str(t1w_obj))

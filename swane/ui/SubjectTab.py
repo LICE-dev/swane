@@ -470,25 +470,27 @@ class SubjectTab(QTabWidget):
         if not os.path.exists(folder_path):
             return
 
-        dicom_src_work = DicomSearchWorker(
+        self._dicom_worker = DicomSearchWorker(
             folder_path,
             classify=self.global_config.getboolean_safe(
                 GlobalPrefCategoryList.MAIN, "auto_import"
             ),
         )
-        dicom_src_work.load_dir()
+        self._dicom_worker.load_dir()
 
-        if dicom_src_work.get_files_len() > 0:
+        if self._dicom_worker.get_files_len() > 0:
             self.clear_scan_result()
             self.dicom_scan_series_list = []
             progress = PersistentProgressDialog(
                 strings.subj_tab_dicom_scan, 0, 0, parent=self.parent()
             )
             progress.show()
-            progress.setMaximum(dicom_src_work.get_files_len() + 1)
-            dicom_src_work.signal.sig_loop.connect(lambda i: progress.increase_value(i))
-            dicom_src_work.signal.sig_finish.connect(self.show_scan_result)
-            QThreadPool.globalInstance().start(dicom_src_work)
+            progress.setMaximum(self._dicom_worker.get_files_len() + 1)
+            self._dicom_worker.signal.sig_loop.connect(
+                lambda i: progress.increase_value(i)
+            )
+            self._dicom_worker.signal.sig_finish.connect(self.show_scan_result)
+            QThreadPool.globalInstance().start(self._dicom_worker)
 
         else:
             msg_box = QMessageBox()
@@ -504,6 +506,7 @@ class SubjectTab(QTabWidget):
         None.
 
         """
+        self._dicom_worker = None
 
         layout = QGridLayout()
 
@@ -625,13 +628,38 @@ class SubjectTab(QTabWidget):
 
         """
 
-        generate_workflow_return = self.subject.generate_workflow()
+        self.generate_workflow_button.setEnabled(False)
+
+        from swane.ui.PersistentProgressDialog import PersistentProgressDialog
+
+        progress = PersistentProgressDialog(
+            strings.subj_tab_wf_gen_start, 0, 0, parent=self
+        )
+        progress.show()
+
+        from swane.workers.WorkflowGenerateWorker import WorkflowGenerateWorker
+
+        self._generate_worker = WorkflowGenerateWorker(self.subject)
+        self._generate_worker.signal.progress_msg.connect(progress.setLabelText)
+        self._generate_worker.signal.finished.connect(
+            lambda ret: self._on_workflow_generated(ret, progress)
+        )
+        QThreadPool.globalInstance().start(self._generate_worker)
+
+    def _on_workflow_generated(self, generate_workflow_return: SubjectRet, progress):
+        """
+        Callback for workflow generation completion.
+        """
+        self._generate_worker = None
+        progress.accept()
 
         if generate_workflow_return == SubjectRet.GenWfMissingRequisites:
+            self.generate_workflow_button.setEnabled(True)
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.subj_tab_missing_fsl_error)
             return
         elif generate_workflow_return == SubjectRet.GenWfError:
+            self.generate_workflow_button.setEnabled(True)
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.subj_tab_wf_gen_error)
             return
@@ -665,7 +693,6 @@ class SubjectTab(QTabWidget):
         self.exec_button_set_enabled(True)
         self.node_runtime_widget.hide()
         self.exec_graph.hide()
-        self.generate_workflow_button.setEnabled(False)
 
     def tree_item_changed(
         self, current: CustomTreeWidgetItem, previous: CustomTreeWidgetItem

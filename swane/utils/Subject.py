@@ -10,7 +10,6 @@ from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.qt_compat import QThreadPool
 from swane.resources import strings
 import traceback
-from threading import Thread
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from multiprocessing import Queue
 from swane.utils.ToolReference import tool_reference_list
@@ -745,17 +744,13 @@ class Subject:
             for node in node_list.keys():
                 if len(node_list[node].node_list.keys()) > 0:
                     if self.dependency_manager.is_graphviz():
-                        thread = Thread(
-                            target=self.workflow.get_node(node).write_graph,
-                            kwargs={
-                                "graph2use": self.GRAPH_TYPE,
-                                "format": Subject.GRAPH_FILE_EXT,
-                                "dotfilename": os.path.join(
-                                    self.graph_file(node_list[node].long_name)
-                                ),
-                            },
+                        self.workflow.get_node(node).write_graph(
+                            graph2use=self.GRAPH_TYPE,
+                            format=Subject.GRAPH_FILE_EXT,
+                            dotfilename=os.path.join(
+                                self.graph_file(node_list[node].long_name)
+                            ),
                         )
-                        thread.start()
 
         return SubjectRet.GenWfCompleted
 
