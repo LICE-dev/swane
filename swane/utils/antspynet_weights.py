@@ -65,6 +65,39 @@ def weight_names(modality_keys) -> list:
     return names
 
 
+def weights_are_fetched(names) -> bool:
+    """Return True if all weights (and the shared template) are already cached.
+
+    This performs a fast filesystem check without importing ``antspynet`` or
+    TensorFlow, making it safe and cheap to call from the main UI thread.
+    """
+    import os
+
+    candidates = [
+        os.path.expanduser(os.environ.get("KERAS_HOME") or "~/.keras"),
+        "/tmp/.keras",
+    ]
+    cache_dirs = [os.path.join(c, "ANTsXNet") for c in candidates]
+    existing_dirs = [d for d in cache_dirs if os.path.isdir(d)]
+
+    if not existing_dirs:
+        return False
+
+    for weight in names:
+        if not any(
+            os.path.exists(os.path.join(d, weight + ".h5")) for d in existing_dirs
+        ):
+            return False
+
+    if not any(
+        os.path.exists(os.path.join(d, TEMPLATE_NAME + ".nii.gz"))
+        for d in existing_dirs
+    ):
+        return False
+
+    return True
+
+
 def workflow_modalities(workflow) -> list:
     """Return the sorted antspynet modality keys used by ``workflow``'s nodes.
 
@@ -104,9 +137,23 @@ def preload_weights(names) -> None:
     subprocess.CalledProcessError
         If the child cannot get them. Its captured output is on the exception.
     """
+    if weights_are_fetched(names):
+        return
+
+    import os
+
+    env = os.environ.copy()
+    if "PYTHONPATH" not in env:
+        # If running from source, swane might be in the current working directory's parent
+        # We append the current directory and its parent to ensure swane is found
+        env["PYTHONPATH"] = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..")
+        )
+
     subprocess.run(
         [sys.executable, "-c", _CHILD, *names],
         check=True,
         capture_output=True,
         text=True,
+        env=env,
     )
