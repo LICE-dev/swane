@@ -190,7 +190,7 @@ class TestToolChecksMocked:
 
         monkeypatch.setattr(
             "swane.utils.DependencyManager.importlib.metadata.version",
-            lambda name: "0.6.1",
+            lambda name: "0.6.0",
         )
         assert DependencyManager.check_antspyx().state == DependenceStatus.WARNING
 
