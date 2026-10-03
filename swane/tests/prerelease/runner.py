@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import queue as queue_mod
+import shutil
 import socket
 import time
 import traceback
@@ -59,6 +60,7 @@ class PassResult:
     nodes_completed: int = 0
     node_errors: list = field(default_factory=list)  # {node, workflow, crash_file}
     insufficient_resources: bool = False
+    workflow_crashed: bool = False
     #: Filled in later by the checks module.
     checks: list = field(default_factory=list)
 
@@ -248,6 +250,8 @@ def _drain(q: Queue, result: PassResult, verbose: bool) -> None:
         elif signal == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES:
             result.insufficient_resources = True
             print("      ! a node needs more RAM than the budget allows", flush=True)
+        elif signal == WorkflowSignals.WORKFLOW_CRASHED:
+            result.workflow_crashed = True
         elif signal == WorkflowSignals.WORKFLOW_STOP:
             raise _Finished
 
@@ -310,6 +314,10 @@ def run_pass(
             slicer_path=slicer_path,
         )
         result.subject_dir = subject_dir
+
+        results_dir = os.path.join(subject_dir, "results")
+        if os.path.exists(results_dir):
+            shutil.rmtree(results_dir)
 
         workflow = MainWorkflow(
             name=WORKFLOW_NAME,
@@ -398,6 +406,16 @@ def run_pass(
         result.reason = "%d node(s) failed: %s" % (
             len(result.node_errors),
             ", ".join(failed_nodes[:5]),
+        )
+    elif result.workflow_crashed:
+        result.status = "error"
+        result.reason = (
+            "workflow execution crashed (plugin-level exception, see the pass log)"
+        )
+    elif process.exitcode != 0:
+        result.status = "error"
+        result.reason = (
+            "workflow process exited abnormally (exit code %s)" % process.exitcode
         )
     elif result.nodes_completed == 0:
         result.status = "failed"

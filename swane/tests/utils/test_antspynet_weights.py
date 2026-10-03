@@ -67,6 +67,7 @@ def test_preload_runs_in_an_exec_child_and_raises_on_failure(monkeypatch):
         raise subprocess.CalledProcessError(1, cmd, stderr="offline")
 
     monkeypatch.setattr(antspynet_weights.subprocess, "run", fake_run)
+    monkeypatch.setattr(antspynet_weights, "weights_are_fetched", lambda x: False)
     with pytest.raises(subprocess.CalledProcessError):
         antspynet_weights.preload_weights(["brainExtractionRobustT1"])
 

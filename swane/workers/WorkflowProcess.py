@@ -2,6 +2,7 @@
 
 from nipype import logging as nipype_log, config
 import os
+import sys
 import traceback
 from multiprocessing import Process, Event, Queue
 from threading import Thread
@@ -120,6 +121,7 @@ class WorkflowProcess(Process):
         # Assign to niype specified RAM
         plugin_args["memory_gb"] = self.workflow.memory_gb
 
+        self.run_raised = False
         try:
             # this is useful to generate resource monitor files in subject directory
             os.chdir(self.workflow.base_dir)
@@ -135,6 +137,7 @@ class WorkflowProcess(Process):
             self.workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args))
 
         except:
+            self.run_raised = True
             traceback.print_exc()
         finally:
             # TODO implement nipype.utils.draw_gantt_chart.generate_gantt_chart but maybe it's bugged
@@ -228,6 +231,9 @@ class WorkflowProcess(Process):
         if self.workflow.is_resource_monitor:
             callback_logger.removeHandler(resource_log_handler)
 
+        if getattr(self, "run_raised", False):
+            self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_CRASHED))
+
         # Signal workflow_stop to GUI and close queue
         self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_STOP))
         self.queue.close()
@@ -239,6 +245,9 @@ class WorkflowProcess(Process):
         # If the thread is alive at this point the stop_event was set from GUI, so the user asked to kill the process
         if workflow_run_work.is_alive():
             WorkflowProcess.kill_with_subprocess()
+
+        if getattr(self, "run_raised", False):
+            sys.exit(1)
 
 
 # Log node stats function
