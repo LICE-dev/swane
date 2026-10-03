@@ -32,6 +32,9 @@ class ResourceManager:
     #: DipySlrRamEstimator.STATIC_FALLBACK_GB reads this constant directly. See
     #: the dipy RAM report.
     DIPY_TRACTOGRAPHY_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6}
+    #: Minimum RAM to select the nilearn fMRI engine (covers antspynet BOLD
+    #: extraction + CanICA).
+    NILEARN_FMRI_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6}
 
     #: In prerelease test_run mode ONLY, the SynthSeg (--fast, robust=False) and
     #: SynthMorph (steps=5) paths do genuinely less work and use less RAM, so
@@ -120,6 +123,10 @@ class ResourceManager:
     @staticmethod
     def dipy_tractography_ram_requirements():
         return ResourceManager.DIPY_TRACTOGRAPHY_RAM_REQUIREMENT[get_os_type()]
+
+    @staticmethod
+    def nilearn_fmri_ram_requirements():
+        return ResourceManager.NILEARN_FMRI_RAM_REQUIREMENT[get_os_type()]
 
     @staticmethod
     def get_min_synth_ram_requirement():

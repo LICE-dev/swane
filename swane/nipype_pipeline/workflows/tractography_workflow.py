@@ -92,7 +92,7 @@ def tractography_workflow(
 
     workflow = CustomWorkflow(name="tract_" + name, base_dir=base_dir)
 
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    engine = resolve_registration_engine(synth_config)
 
     inputnode = Node(
         IdentityInterface(

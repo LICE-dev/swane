@@ -11,3 +11,4 @@ exclude venv
 exclude build
 exclude SWANe.spec
 exclude swane.spec
+recursive-include swane/resources/priors *

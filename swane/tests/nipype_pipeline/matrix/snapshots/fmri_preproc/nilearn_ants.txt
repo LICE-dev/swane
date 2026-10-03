@@ -1,0 +1,149 @@
+# workflow snapshot: fmri_preproc / nilearn_ants
+#
+#   TR = 2.0
+#   del_end_vols = 0
+#   del_start_vols = 0
+#   fmri_engine = NILEARN
+#   hpcutoff = 30
+#   n_vols = 100
+#   registration_engine = ANTS
+#   slice_timing = UP
+#
+# nodes=24 edges=34
+
+- fmri_0_2_ref_antsreg [AntsRegistration] mem_gb=5 n_procs=0
+    aff_metric = 'mattes'
+    num_threads = 0
+    out_prefix = 'ants_reg_'
+    syn_metric = 'mattes'
+    transform_type = 'Rigid'
+- fmri_0_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'fmri_0'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- fmri_0_del_vols [DeleteVolumes] mem_gb=0.2 n_procs=1
+    del_end_vols = 0
+    del_start_vols = 0
+- fmri_0_dilatemask [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-dilF'
+    output_type = 'NIFTI_GZ'
+    suffix = '_dil'
+- fmri_0_extract_ref [ExtractVolumes] mem_gb=0.2 n_procs=1
+    num_volumes = 1
+    start_volume = 0
+- fmri_0_getTR [GetNiftiTR] mem_gb=0.2 n_procs=1
+    force_value = 2.0
+- fmri_0_highpass [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    suffix = '_tempfilt'
+- fmri_0_img2float [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = ''
+    out_data_type = 'float'
+    output_type = 'NIFTI_GZ'
+    suffix = '_dtype'
+- fmri_0_intnorm [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    suffix = '_intnorm'
+- fmri_0_maskfunc [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_bet'
+- fmri_0_maskfunc2 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mask'
+- fmri_0_maskfunc3 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mask'
+- fmri_0_meanfunc [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
+- fmri_0_meanfunc2 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
+- fmri_0_meanfunc3 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
+- fmri_0_meanfuncmask_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=0
+    mask_file = 'brain_mask.nii.gz'
+    modality = 'bold'
+    num_threads = 0
+    threshold = 0.5
+- fmri_0_medianval [ImageStatistics] mem_gb=0.2 n_procs=1
+    percentiles = [50.0]
+- fmri_0_merge_tr_meanfunc3 [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- fmri_0_mergenode [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- fmri_0_motion_correct [AntsMotionCorrection] mem_gb=0.2 n_procs=1
+    random_seed = 123
+- fmri_0_nvols [NVols] mem_gb=0.2 n_procs=1
+    force_value = 100
+- fmri_0_reorient [ForceOrient] mem_gb=0.2 n_procs=1
+- fmri_0_smooth [NilearnSmooth] mem_gb=0.2 n_procs=1
+    fwhm = 5.0
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+# connections
+fmri_0_conv.converted_files -> fmri_0_del_vols.in_file
+fmri_0_conv.converted_files -> fmri_0_getTR.in_file
+fmri_0_conv.converted_files -> fmri_0_nvols.in_file
+fmri_0_del_vols.out_file -> fmri_0_reorient.in_file
+fmri_0_dilatemask.out_file -> fmri_0_maskfunc2.in_file2
+fmri_0_dilatemask.out_file -> fmri_0_maskfunc3.in_file2
+fmri_0_dilatemask.out_file -> fmri_0_smooth.mask_file
+fmri_0_getTR.TR -> fmri_0_merge_tr_meanfunc3.in1
+fmri_0_img2float.out_file -> fmri_0_extract_ref.in_file
+fmri_0_img2float.out_file -> fmri_0_motion_correct.in_file
+fmri_0_intnorm.out_file -> fmri_0_highpass.in_file
+fmri_0_intnorm.out_file -> fmri_0_meanfunc3.in_file
+fmri_0_maskfunc2.out_file -> fmri_0_meanfunc2.in_file
+fmri_0_maskfunc2.out_file -> fmri_0_smooth.in_file
+fmri_0_maskfunc3.out_file -> fmri_0_intnorm.in_file
+fmri_0_meanfunc.out_file -> fmri_0_meanfuncmask_antspynet.in_file
+fmri_0_meanfunc2.out_file -> fmri_0_2_ref_antsreg.moving
+fmri_0_meanfunc2.out_file -> fmri_0_mergenode.in1
+fmri_0_meanfunc3.out_file -> fmri_0_merge_tr_meanfunc3.in2
+fmri_0_meanfuncmask_antspynet.mask_file -> fmri_0_dilatemask.in_file
+fmri_0_meanfuncmask_antspynet.mask_file -> fmri_0_maskfunc.in_file2
+fmri_0_meanfuncmask_antspynet.mask_file -> fmri_0_medianval.mask_file
+fmri_0_medianval.('percentile_values', "def get_inorm_scale(percentile_values):\n    return '-mul %.10f' % (10000.0 / percentile_values[0])", ()) -> fmri_0_intnorm.op_string
+fmri_0_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]', ()) -> fmri_0_mergenode.in2
+fmri_0_merge_tr_meanfunc3.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (30,)) -> fmri_0_highpass.op_string
+fmri_0_motion_correct.out_file -> fmri_0_maskfunc.in_file
+fmri_0_motion_correct.out_file -> fmri_0_maskfunc2.in_file
+fmri_0_motion_correct.out_file -> fmri_0_meanfunc.in_file
+fmri_0_motion_correct.out_file -> fmri_0_medianval.in_file
+fmri_0_nvols.nvols -> fmri_0_del_vols.nvols
+fmri_0_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle', ()) -> fmri_0_extract_ref.start_volume
+fmri_0_reorient.out_file -> fmri_0_img2float.in_file
+fmri_0_smooth.out_file -> fmri_0_maskfunc3.in_file
+inputnode.reference_brain -> fmri_0_2_ref_antsreg.fixed

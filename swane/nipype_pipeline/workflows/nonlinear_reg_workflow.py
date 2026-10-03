@@ -71,7 +71,7 @@ def nonlinear_reg_workflow(
     # directional displacement field per direction (see below), so the boundary
     # stays 1:1 with FSL's fieldcoeff_file/inverse_warp. The engine now follows
     # the configured preference, like linear_reg_workflow.
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    engine = resolve_registration_engine(synth_config)
 
     # Input Node
     inputnode = Node(IdentityInterface(fields=["atlas", "in_file"]), name="inputnode")

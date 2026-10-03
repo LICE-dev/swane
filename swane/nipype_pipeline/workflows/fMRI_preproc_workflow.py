@@ -1,3 +1,5 @@
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
+
 from nipype import Node, IdentityInterface, Merge
 from nipype.interfaces.fsl import (
     MCFLIRT,
@@ -13,18 +15,35 @@ from swane.nipype_pipeline.interfaces.fsl.CustomSliceTimer import CustomSliceTim
 from swane.nipype_pipeline.interfaces.volumes.GetNiftiTR import GetNiftiTR
 from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
 from swane.nipype_pipeline.interfaces.volumes.DeleteVolumes import DeleteVolumes
+from swane.nipype_pipeline.interfaces.ants.AntsMotionCorrection import (
+    AntsMotionCorrection,
+)
+from swane.nipype_pipeline.interfaces.fmri.NilearnSmooth import NilearnSmooth
 from configparser import SectionProxy
 from swane.config.config_enums import (
     SliceTiming,
     RegistrationEngine,
     DeskullModality,
+    FmriEngine,
 )
 from swane.nipype_pipeline.interfaces.utils import (
     get_deskull_node,
     get_registration_node,
     resolve_deskull_engine,
     resolve_registration_engine,
+    resolve_fmri_engine,
 )
+
+
+# ImageMaths op string of the temporal high-pass filter: -bptf with
+# sigma = cutoff / (2 * TR) volumes, then the temporal mean image is added back
+# (-bptf removes it). ``merged`` is ``[TR, mean_image_path]`` from a Merge(2)
+# node and ``real_hpcutoff`` the cutoff in seconds. Kept at module level so the
+# resting-state builders reuse the same formula; no docstring, because Nipype
+# serialises the function source into every connection that uses it.
+def highpass_op_string(merged, real_hpcutoff):
+    hp_sigma_vol = real_hpcutoff / (2 * merged[0])
+    return "-bptf %f -1 -add %s" % (hp_sigma_vol, merged[1])
 
 
 def fMRI_preproc_workflow(
@@ -107,9 +126,15 @@ def fMRI_preproc_workflow(
         engine to the node name, so ``fMRI_resting_state_workflow`` cannot
         look it up by a fixed name.
 
+        The intensity-normalisation nodes are exposed as
+        ``workflow.intnorm_node`` and ``workflow.medianval_node``. With the
+        NILEARN engine the dilated mask and the median both come from the
+        bold brain mask; the FSL engine keeps the percentile-threshold mask.
+
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+    fmri_engine = resolve_fmri_engine(synth_config)
 
     # Input Node
     inputnode = Node(IdentityInterface(fields=["reference_brain"]), name="inputnode")
@@ -176,28 +201,33 @@ def fMRI_preproc_workflow(
     )
 
     # NODE 7: Realign the functional runs to the middle volume of the first run
-    motion_correct = Node(MCFLIRT(), name="%s_motion_correct" % name)
-    motion_correct.inputs.save_mats = True
-    motion_correct.inputs.save_plots = True
-    motion_correct.inputs.save_rms = True
-    if test_run:
-        # FSL default stages=3; we explicitly request the slower spline
-        # interpolation normally, so drop both for prerelease speed (cost
-        # scales with the number of fMRI volumes). MCFLIRT's interpolation
-        # trait only accepts 'spline'/'nn'/'sinc' -- trilinear is the tool's
-        # own default and is what you get by leaving the trait unset.
-        motion_correct.inputs.stages = 1
+    if fmri_engine == FmriEngine.NILEARN:
+        motion_correct = Node(AntsMotionCorrection(), name="%s_motion_correct" % name)
     else:
-        motion_correct.inputs.interpolation = "spline"
+        motion_correct = Node(MCFLIRT(), name="%s_motion_correct" % name)
+        motion_correct.inputs.save_mats = True
+        motion_correct.inputs.save_plots = True
+        motion_correct.inputs.save_rms = True
+        if test_run:
+            # FSL default stages=3; we explicitly request the slower spline
+            # interpolation normally, so drop both for prerelease speed (cost
+            # scales with the number of fMRI volumes). MCFLIRT's interpolation
+            # trait only accepts 'spline'/'nn'/'sinc' -- trilinear is the tool's
+            # own default and is what you get by leaving the trait unset.
+            motion_correct.inputs.stages = 1
+        else:
+            motion_correct.inputs.interpolation = "spline"
     workflow.connect(img2float, "out_file", motion_correct, "in_file")
-    workflow.connect(extract_ref, "out_file", motion_correct, "ref_file")
+    if fmri_engine != FmriEngine.NILEARN:
+        workflow.connect(extract_ref, "out_file", motion_correct, "ref_file")
 
     # NODE 8: Perform slice timing correction if needed
-    # TODO: for resting state do NOT use slice timing correction
-    # When the slice timing is unknown there is nothing to correct: skip the
-    # node at the workflow level (rather than no-op inside it) so that
-    # whenever CustomSliceTimer *is* built, it always calls slicetimer.
-    if slice_timing == SliceTiming.UNKNOWN:
+    if fmri_engine == FmriEngine.NILEARN:
+        # TODO(niimath-slicetiming): adopt niimath's slice-timing implementation
+        # once a PyPI niimath release ships it (currently git-only).
+        slice_time_corrected_node = motion_correct
+        slice_time_corrected_field = "out_file"
+    elif slice_timing == SliceTiming.UNKNOWN:
         slice_time_corrected_node = motion_correct
         slice_time_corrected_field = "out_file"
     else:
@@ -248,30 +278,41 @@ def fMRI_preproc_workflow(
     )
     workflow.connect(meanfuncmask, "mask_file", maskfunc, "in_file2")
 
-    # NODE 12: Determine the 2nd and 98th percentile intensities of each functional run
-    getthresh = Node(ImageStatistics(), name="%s_getthresh" % name)
-    getthresh.long_name = "2-98% threshold calculation"
-    getthresh.inputs.percentiles = [98]
-    workflow.connect(maskfunc, "out_file", getthresh, "in_file")
-
-    # NODE 13: Threshold the first run of the functional data at 10% of the 98th percentile
-    threshold = Node(ImageMaths(), name="%s_threshold" % name)
-    threshold.long_name = "thresholding"
-    threshold.inputs.out_data_type = "char"
-    threshold.inputs.suffix = "_thresh"
-
-    # NODE 14: Define a function to get 10% of the intensity
-    def get_thresh_op(thresh):
-        return "-thr %.10f -Tmin -bin" % (0.1 * thresh[0])
-
     def get_first_percentile(percentile_values):
         return percentile_values[0]
 
-    # NODE 15: Determine the median value of the functional runs using the mask
-    workflow.connect(maskfunc, "out_file", threshold, "in_file")
-    workflow.connect(
-        getthresh, ("percentile_values", get_thresh_op), threshold, "op_string"
-    )
+    # Brain mask used for the median value and for the dilated mask.
+    if fmri_engine == FmriEngine.NILEARN:
+        # The bold brain mask itself: its max-filter dilation (-dilF) is the
+        # dilated mask, and the median for the intensity normalisation is
+        # taken inside it.
+        brain_mask_node = meanfuncmask
+        brain_mask_field = "mask_file"
+    else:
+        # NODE 12: Determine the 2nd and 98th percentile intensities of each functional run
+        getthresh = Node(ImageStatistics(), name="%s_getthresh" % name)
+        getthresh.long_name = "2-98% threshold calculation"
+        getthresh.inputs.percentiles = [98]
+        workflow.connect(maskfunc, "out_file", getthresh, "in_file")
+
+        # NODE 13: Threshold the first run of the functional data at 10% of the 98th percentile
+        threshold = Node(ImageMaths(), name="%s_threshold" % name)
+        threshold.long_name = "thresholding"
+        threshold.inputs.out_data_type = "char"
+        threshold.inputs.suffix = "_thresh"
+
+        # NODE 14: Define a function to get 10% of the intensity
+        def get_thresh_op(thresh):
+            return "-thr %.10f -Tmin -bin" % (0.1 * thresh[0])
+
+        # NODE 15: Determine the median value of the functional runs using the mask
+        workflow.connect(maskfunc, "out_file", threshold, "in_file")
+        workflow.connect(
+            getthresh, ("percentile_values", get_thresh_op), threshold, "op_string"
+        )
+
+        brain_mask_node = threshold
+        brain_mask_field = "out_file"
 
     # NODE 16: Determine the median value of the functional runs using the mask
     medianval = Node(ImageStatistics(), name="%s_medianval" % name)
@@ -280,14 +321,14 @@ def fMRI_preproc_workflow(
     workflow.connect(
         slice_time_corrected_node, slice_time_corrected_field, medianval, "in_file"
     )
-    workflow.connect(threshold, "out_file", medianval, "mask_file")
+    workflow.connect(brain_mask_node, brain_mask_field, medianval, "mask_file")
 
     # NODE 17: Dilate the mask
     dilatemask = Node(ImageMaths(), name="%s_dilatemask" % name)
     dilatemask.long_name = "Dilate the mask"
     dilatemask.inputs.suffix = "_dil"
     dilatemask.inputs.op_string = "-dilF"
-    workflow.connect(threshold, "out_file", dilatemask, "in_file")
+    workflow.connect(brain_mask_node, brain_mask_field, dilatemask, "in_file")
 
     # NODE 18: Mask the motion corrected functional runs with the dilated mask
     maskfunc2 = Node(ImageMaths(), name="%s_maskfunc2" % name)
@@ -316,33 +357,42 @@ def fMRI_preproc_workflow(
 
     # NODE 21: Smooth each run using SUSAN with the brightness threshold set to 75% of the
     # median value for each run and a mask constituting the mean functional
-    smooth = Node(SUSAN(), name="%s_smooth" % name)
-    # Nipype uses a different algorithm to calculate it ->
-    # float(fwhm) / np.sqrt(8 * np.log(2)).
-    # Therefore, to get 2.12314225053, fwhm should be 4.9996179300001655 instead of 5
-    fwhm_thr = 4.9996179300001655
-    smooth.inputs.fwhm = fwhm_thr
+    if fmri_engine == FmriEngine.NILEARN:
+        smooth = Node(NilearnSmooth(), name="%s_smooth" % name)
+        smooth.inputs.fwhm = 5.0
+        workflow.connect(maskfunc2, "out_file", smooth, "in_file")
+        workflow.connect(dilatemask, "out_file", smooth, "mask_file")
+    else:
+        smooth = Node(SUSAN(), name="%s_smooth" % name)
+        # Nipype uses a different algorithm to calculate it ->
+        # float(fwhm) / np.sqrt(8 * np.log(2)).
+        # Therefore, to get 2.12314225053, fwhm should be 4.9996179300001655 instead of 5
+        fwhm_thr = 4.9996179300001655
+        smooth.inputs.fwhm = fwhm_thr
 
-    # Function to calculate the 75% of the median value
-    def get_bt_thresh(percentile_values):
-        return 0.75 * percentile_values[0]
+        # Function to calculate the 75% of the median value
+        def get_bt_thresh(percentile_values):
+            return 0.75 * percentile_values[0]
 
-    # Function to define the couple of values
-    def get_usans(x):
-        return [tuple([x[0], 0.75 * x[1]])]
+        # Function to define the couple of values
+        def get_usans(x):
+            return [tuple([x[0], 0.75 * x[1]])]
 
-    workflow.connect(maskfunc2, "out_file", smooth, "in_file")
-    workflow.connect(
-        medianval, ("percentile_values", get_bt_thresh), smooth, "brightness_threshold"
-    )
-    workflow.connect(mergenode, ("out", get_usans), smooth, "usans")
+        workflow.connect(maskfunc2, "out_file", smooth, "in_file")
+        workflow.connect(
+            medianval, ("percentile_values", get_bt_thresh), smooth, "brightness_threshold"
+        )
+        workflow.connect(mergenode, ("out", get_usans), smooth, "usans")
 
     # NODE 22: Mask the smoothed data with the dilated mask
     maskfunc3 = Node(ImageMaths(), name="%s_maskfunc3" % name)
     maskfunc3.long_name = "denoised images masking"
     maskfunc3.inputs.suffix = "_mask"
     maskfunc3.inputs.op_string = "-mas"
-    workflow.connect(smooth, "smoothed_file", maskfunc3, "in_file")
+    if fmri_engine == FmriEngine.NILEARN:
+        workflow.connect(smooth, "out_file", maskfunc3, "in_file")
+    else:
+        workflow.connect(smooth, "smoothed_file", maskfunc3, "in_file")
     workflow.connect(dilatemask, "out_file", maskfunc3, "in_file2")
 
     # NODE 23: Scale each volume of the run so that the median value of the run is set to 10000
@@ -358,6 +408,8 @@ def fMRI_preproc_workflow(
     workflow.connect(
         medianval, ("percentile_values", get_inorm_scale), intnorm, "op_string"
     )
+    workflow.intnorm_node = intnorm
+    workflow.medianval_node = medianval
 
     # NODE 24: Generate a mean functional image from the first run
     meanfunc3 = Node(ImageMaths(), name="%s_meanfunc3" % name)
@@ -377,11 +429,6 @@ def fMRI_preproc_workflow(
     highpass.long_name = "Highpass temporal filtering"
     # TODO: for resting state generate hpstring in genSpec with input hpcutoff=100, the cutoff is 100/(2TR)
     highpass.inputs.suffix = "_tempfilt"
-
-    # Function to generate the name for the file of output cluster
-    def highpass_op_string(merged, real_hpcutoff):
-        hp_sigma_vol = real_hpcutoff / (2 * merged[0])
-        return "-bptf %f -1 -add %s" % (hp_sigma_vol, merged[1])
 
     workflow.connect(
         [
@@ -404,9 +451,7 @@ def fMRI_preproc_workflow(
     # NODE 27: Coregister the mean functional image to the structural image.
     # Follow the configured engine; EPI avoids SynthMorph (see spec §1), so
     # SYNTH falls back to FSL.
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
-    if engine == RegistrationEngine.SYNTH:
-        engine = RegistrationEngine.FSL
+    engine = resolve_registration_engine(synth_config, allow_synth=False)
 
     reg_2_ref = get_registration_node(
         name="%s_2_ref" % name,
