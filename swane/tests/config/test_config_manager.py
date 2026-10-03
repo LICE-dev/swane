@@ -149,6 +149,63 @@ class TestSafeGetters:
         )
 
 
+class TestFmriRestingPreferenceMigration:
+
+    @staticmethod
+    def _new_subject_config(tmp_path, subject_name="subj"):
+        # global_base_folder must already exist: ConfigManager silently falls
+        # back to the real home directory otherwise (os.path.expanduser("~")).
+        global_dir = tmp_path / "global"
+        global_dir.mkdir(exist_ok=True)
+        global_config = ConfigManager(global_base_folder=str(global_dir))
+        subject_folder = tmp_path / subject_name
+        subject_folder.mkdir()
+        config = ConfigManager(str(subject_folder), global_config=global_config)
+        return config, subject_folder
+
+    def test_melodic_dim_migrates_to_ic_dim(self, tmp_path):
+        config, subject_folder = self._new_subject_config(tmp_path)
+        section = str(DataInputList.FMRI_RS)
+        config[section]["ic_dim"] = "0"
+        config.save()
+
+        # Simulate a pre-rename config file written by an older SWANe version.
+        config_path = subject_folder / ".config"
+        text = config_path.read_text().replace("ic_dim = 0", "melodic_dim = 12")
+        config_path.write_text(text)
+
+        reloaded_global = ConfigManager(global_base_folder=str(tmp_path / "global"))
+        reloaded = ConfigManager(str(subject_folder), global_config=reloaded_global)
+
+        assert reloaded.getint_safe(section, "ic_dim") == 12
+        assert "melodic_dim" not in reloaded[section]
+        assert "melodic_dim" not in config_path.read_text()
+
+    def test_melodic_dim_migrates_in_global_config(self, tmp_path):
+        # WF_PREFERENCES sections (e.g. the resting-state fMRI category) are
+        # also persisted in the global config, as the default applied to new
+        # subjects, so the migration must run there too.
+        global_dir = tmp_path / "global"
+        global_dir.mkdir()
+        config = ConfigManager(global_base_folder=str(global_dir))
+        section = str(DataInputList.FMRI_RS)
+
+        config_path = global_dir / ".SWANe"
+        text = config_path.read_text().replace("ic_dim = 0", "melodic_dim = 12")
+        config_path.write_text(text)
+
+        reloaded = ConfigManager(global_base_folder=str(global_dir))
+
+        assert reloaded.getint_safe(section, "ic_dim") == 12
+        assert "melodic_dim" not in reloaded[section]
+        assert "melodic_dim" not in config_path.read_text()
+
+    def test_spatial_z_thr_default(self, tmp_path):
+        config, _ = self._new_subject_config(tmp_path)
+        section = str(DataInputList.FMRI_RS)
+        assert config.getfloat_safe(section, "spatial_z_thr") == 1.95
+
+
 class TestMailManagerFactory:
 
     def test_disabled_returns_none(self, tmp_path):

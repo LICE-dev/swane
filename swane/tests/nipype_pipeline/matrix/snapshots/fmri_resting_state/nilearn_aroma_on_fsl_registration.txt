@@ -1,0 +1,456 @@
+# workflow snapshot: fmri_resting_state / nilearn_aroma_on_fsl_registration
+#
+#   aroma = true
+#   fmri_engine = NILEARN
+#   ic_dim = 0
+#   registration_engine = FSL
+#   spatial_z_thr = 1.95
+#
+# nodes=73 edges=150
+
+- aroma_classification [AromaClassification] mem_gb=0.2 n_procs=1
+- count_motion_ics [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def count_motion_ics(motion_ics):\n    """Number of components classified as motion by ICA-AROMA."""\n    return len(motion_ics)'
+- csf_prior_2_func_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    datatype = 'float'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    in_file = '<SITE>/ica_aroma_py/resources/mask_csf.nii.gz'
+    output_type = 'NIFTI_GZ'
+- csf_prior_thr_bin [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-thr 0.5 -bin -mas'
+    out_data_type = 'char'
+    output_type = 'NIFTI_GZ'
+    suffix = '_thr'
+- csf_roi [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-thr 0.5 -bin -mas'
+    out_data_type = 'char'
+    output_type = 'NIFTI_GZ'
+    suffix = '_roi'
+- csf_subject_2_func_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    datatype = 'float'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- csf_subject_thr [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-thr 0.95 -bin'
+    output_type = 'NIFTI_GZ'
+    suffix = '_thr'
+- dof [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def compute_dof(in_file, TR, rank, n_aroma):\n    """Degrees of freedom left in the cleaned data: T - rank - n_HP - n_AROMA."""\n    import nibabel as nib\n    from swane.nipype_pipeline.workflows.fMRI_resting_state_nilearn import n_hp_columns\n    T = int(nib.load(in_file).shape[3])\n    return T - int(rank) - n_hp_columns(T, TR) - int(n_aroma)'
+- feature_frequency [FeatureFrequency] mem_gb=0.2 n_procs=1
+- feature_spatial [FeatureSpatial] mem_gb=0.2 n_procs=1
+    mask_csf = '<SITE>/ica_aroma_py/resources/mask_csf.nii.gz'
+    mask_edge = '<SITE>/ica_aroma_py/resources/mask_edge.nii.gz'
+    mask_out = '<SITE>/ica_aroma_py/resources/mask_out.nii.gz'
+- feature_spatial_prep [FeatureSpatialPrep] mem_gb=0.2 n_procs=1
+- feature_time_series [FeatureTimeSeries] mem_gb=0.2 n_procs=1
+    seed = 0
+- fmri_rs_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'corratio'
+    dof = 6
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    interp = 'trilinear'
+    output_type = 'NIFTI_GZ'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
+- fmri_rs_2_ref_invwarp [ConvertXFM] cmd=convert_xfm mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    invert_xfm = True
+    output_type = 'NIFTI_GZ'
+- fmri_rs_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
+    bids_format = False
+    compress = 'y'
+    crop = False
+    environ = {}
+    expected_files = 1
+    has_private = False
+    merge_imgs = 2
+    name_conflicts = 1
+    out_filename = 'fmri_rs'
+    output_dir = '.'
+    request_dti = False
+    single_file = False
+    source_dir = '<TMP>/dicom'
+    verbose = False
+- fmri_rs_del_vols [DeleteVolumes] mem_gb=0.2 n_procs=1
+    del_end_vols = 0
+    del_start_vols = 0
+- fmri_rs_dilatemask [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-dilF'
+    output_type = 'NIFTI_GZ'
+    suffix = '_dil'
+- fmri_rs_extract_ref [ExtractVolumes] mem_gb=0.2 n_procs=1
+    num_volumes = 1
+    start_volume = 0
+- fmri_rs_getTR [GetNiftiTR] mem_gb=0.2 n_procs=1
+    force_value = -1.0
+- fmri_rs_img2float [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = ''
+    out_data_type = 'float'
+    output_type = 'NIFTI_GZ'
+    suffix = '_dtype'
+- fmri_rs_intnorm [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    suffix = '_intnorm'
+- fmri_rs_intnorm_unsmoothed [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    suffix = '_intnorm'
+- fmri_rs_maskfunc [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_bet'
+- fmri_rs_maskfunc2 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mask'
+- fmri_rs_maskfunc3 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mask'
+- fmri_rs_maskfunc_unsmoothed [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-mas'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mask'
+- fmri_rs_meanfunc [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
+- fmri_rs_meanfunc2 [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
+- fmri_rs_meanfuncmask_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=0
+    mask_file = 'brain_mask.nii.gz'
+    modality = 'bold'
+    num_threads = 0
+    threshold = 0.5
+- fmri_rs_medianval [ImageStatistics] mem_gb=0.2 n_procs=1
+    percentiles = [50.0]
+- fmri_rs_mergenode [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- fmri_rs_motion_correct [AntsMotionCorrection] mem_gb=0.2 n_procs=1
+    random_seed = 123
+- fmri_rs_nvols [NVols] mem_gb=0.2 n_procs=1
+    force_value = -1
+- fmri_rs_reorient [ForceOrient] mem_gb=0.2 n_procs=1
+- fmri_rs_smooth [NilearnSmooth] mem_gb=0.2 n_procs=1
+    fwhm = 5.0
+- func2mni_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    ref_file = '<SWANE_TEMPLATES>/MNI152NLin6Asym_res-2_desc-brain_T1w_LAS.nii.gz'
+- func_2_mni_warp [ConvertWarp] cmd=convertwarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    reference = '<SWANE_TEMPLATES>/MNI152NLin6Asym_res-2_desc-brain_T1w_LAS.nii.gz'
+- highpass_clean [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    suffix = '_tempfilt'
+- ica_auto_dim [NilearnAutoDim] mem_gb=5.0 n_procs=1
+    n_removed = 0
+    num_threads = 1
+- ica_cluster_extent [ClusterExtentMC] mem_gb=2.0 n_procs=1
+    alpha = 0.05
+    n_sim = 1000
+    n_vol = 60
+    num_threads = 1
+    r_max_mm = 30.0
+    random_state = 0
+    z_thr = 1.95
+- ica_dual_reg [DualRegressionZStat] mem_gb=3.0 n_procs=1
+    centre_maps = True
+    num_threads = 1
+    t_to_z = True
+    write_residuals = True
+- ica_fastica_icasso [FastIcaIcasso] mem_gb=4.0 n_procs=1
+    max_iter = 10000
+    n_runs = 10
+    num_threads = 1
+    random_state = 0
+    tol = 0.0001
+- ica_output [IdentityInterface] mem_gb=0.2 n_procs=1
+- ica_spatialz [SpatialZThreshold] mem_gb=0.2 n_procs=1
+    connectivity = 1
+    z_thr = 1.95
+- ica_zstat_split [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def split_zstats(in_file):\n    """Write each volume of a 4D z map as ``zstatNN.nii.gz`` (1-based)."""\n    import os\n    import nibabel as nib\n    import numpy as np\n    img = nib.load(in_file)\n    data = img.get_fdata(dtype=np.float32)\n    out_files = []\n    for k in range(data.shape[3]):\n        header = img.header.copy()\n        header.set_data_dtype(np.float32)\n        path = os.path.abspath(\'zstat%02d.nii.gz\' % (k + 1))\n        nib.save(nib.Nifti1Image(data[..., k], img.affine, header), path)\n        out_files.append(path)\n    return out_files'
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- meanfunc_clean [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
+- merge_tr_meanfunc_clean [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- mni_2_func_warp [ConvertWarp] cmd=convertwarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- n_removed [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def removed_rank(rank, n_aroma):\n    """Rank removed before the model order: design rank (constant included)\n    plus the non-aggressively removed motion components."""\n    return rank + n_aroma'
+- nonaggr_denoising [IcaDenoise] mem_gb=5 n_procs=1
+    aggressive = False
+    num_threads = 1
+- nonaggr_denoising_unsmoothed [IcaDenoise] mem_gb=5 n_procs=1
+    aggressive = False
+    num_threads = 1
+- nuisance_regression [NuisanceRegression] mem_gb=5.0 n_procs=1
+    motion24 = False
+    num_threads = 1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- preproc_ica_auto_dim [NilearnAutoDim] mem_gb=5.0 n_procs=1
+    n_removed = 0
+    num_threads = 1
+- preproc_ica_canica [NilearnCanICA] mem_gb=3.0 n_procs=1
+    num_threads = 1
+    random_state = 0
+- preproc_ica_dual_reg [DualRegressionZStat] mem_gb=3.0 n_procs=1
+    centre_maps = False
+    num_threads = 1
+    t_to_z = False
+    write_residuals = False
+- preproc_ica_ggm [GgmThreshold] mem_gb=0.2 n_procs=1
+    mm_thresh = 0.5
+    num_threads = 1
+- preproc_ica_output [IdentityInterface] mem_gb=0.2 n_procs=1
+- ref_2_mni_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
+    cost = 'corratio'
+    dof = 12
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    reference = '<SWANE_TEMPLATES>/MNI152NLin6Asym_res-2_desc-brain_T1w_LAS.nii.gz'
+    searchr_x = [-90, 90]
+    searchr_y = [-90, 90]
+    searchr_z = [-90, 90]
+- ref_2_mni_fnirt [FNIRT] cmd=fnirt mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    fieldcoeff_file = True
+    output_type = 'NIFTI_GZ'
+    ref_file = '<SWANE_TEMPLATES>/MNI152NLin6Asym_res-2_desc-brain_T1w_LAS.nii.gz'
+- ref_2_mni_invwarp [InvWarp] cmd=invwarp mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- survivors_neg_2_ref_apply_xfm [ApplyXFM] cmd=flirt mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    datatype = 'float'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- survivors_pos_2_ref_apply_xfm [ApplyXFM] cmd=flirt mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    datatype = 'float'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- t1_segmentation [AntsAtropos] mem_gb=3 n_procs=1
+    iterations = 10
+    mrf_radius = 1
+    mrf_smoothing = 0.0
+    number_classes = 3
+- wm_prior_2_func_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
+    datatype = 'float'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- wm_prior_mni [Function] mem_gb=0.2 n_procs=1
+    function_str = 'def get_wm_prior():\n    """Path of the binary white-matter prior on the MNI152NLin6Asym 2 mm grid\n    (built and cached on first use)."""\n    from swane.utils.wm_prior import nlin6_wm_prior\n    return nlin6_wm_prior()'
+- wm_prior_thr_bin [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-thr 0.5 -bin -mas'
+    out_data_type = 'char'
+    output_type = 'NIFTI_GZ'
+    suffix = '_thr'
+- wm_roi [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-thr 0.5 -bin -mas'
+    out_data_type = 'char'
+    output_type = 'NIFTI_GZ'
+    suffix = '_roi'
+- wm_subject_2_func_apply_xfm [ApplyXFM] cmd=flirt mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    datatype = 'float'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+- wm_subject_thr [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-thr 0.95 -bin'
+    output_type = 'NIFTI_GZ'
+    suffix = '_thr'
+- zstats_combine [MaskedResampleCombine] mapnode(iterfield=z_file,pos_mask_file,neg_mask_file,out_file) mem_gb=0.2 n_procs=1
+    mask_thr = 0.5
+- zstats_unthr_2_ref_apply_xfm [ApplyXFM] cmd=flirt mapnode(iterfield=in_file) mem_gb=0.2 n_procs=1
+    apply_xfm = True
+    datatype = 'float'
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+# connections
+aroma_classification.classification_overview -> outputnode.aroma_classification
+aroma_classification.motion_ics -> count_motion_ics.motion_ics
+aroma_classification.motion_ics -> nonaggr_denoising.motion_ics
+aroma_classification.motion_ics -> nonaggr_denoising_unsmoothed.motion_ics
+count_motion_ics.n_aroma -> dof.n_aroma
+count_motion_ics.n_aroma -> n_removed.n_aroma
+csf_prior_2_func_apply_warp.out_file -> csf_prior_thr_bin.in_file
+csf_prior_thr_bin.out_file -> csf_roi.in_file2
+csf_roi.out_file -> nuisance_regression.csf_roi_file
+csf_subject_2_func_apply_xfm.out_file -> csf_roi.in_file
+csf_subject_thr.out_file -> csf_subject_2_func_apply_xfm.in_file
+dof.dof -> ica_dual_reg.dof
+feature_frequency.HFC -> aroma_classification.HFC
+feature_spatial.csf_fract -> aroma_classification.csf_fract
+feature_spatial.edge_fract -> aroma_classification.edge_fract
+feature_spatial_prep.out_file -> func2mni_apply_warp.in_file
+feature_time_series.max_rp_corr -> aroma_classification.max_rp_corr
+fmri_rs_2_ref_flirt.out_matrix_file -> fmri_rs_2_ref_invwarp.in_file
+fmri_rs_2_ref_flirt.out_matrix_file -> func_2_mni_warp.premat
+fmri_rs_2_ref_flirt.out_matrix_file -> survivors_neg_2_ref_apply_xfm.in_matrix_file
+fmri_rs_2_ref_flirt.out_matrix_file -> survivors_pos_2_ref_apply_xfm.in_matrix_file
+fmri_rs_2_ref_flirt.out_matrix_file -> zstats_unthr_2_ref_apply_xfm.in_matrix_file
+fmri_rs_2_ref_invwarp.out_file -> csf_subject_2_func_apply_xfm.in_matrix_file
+fmri_rs_2_ref_invwarp.out_file -> mni_2_func_warp.postmat
+fmri_rs_2_ref_invwarp.out_file -> wm_subject_2_func_apply_xfm.in_matrix_file
+fmri_rs_conv.converted_files -> fmri_rs_del_vols.in_file
+fmri_rs_conv.converted_files -> fmri_rs_getTR.in_file
+fmri_rs_conv.converted_files -> fmri_rs_nvols.in_file
+fmri_rs_del_vols.out_file -> fmri_rs_reorient.in_file
+fmri_rs_dilatemask.out_file -> fmri_rs_maskfunc2.in_file2
+fmri_rs_dilatemask.out_file -> fmri_rs_maskfunc3.in_file2
+fmri_rs_dilatemask.out_file -> fmri_rs_maskfunc_unsmoothed.in_file2
+fmri_rs_dilatemask.out_file -> fmri_rs_smooth.mask_file
+fmri_rs_dilatemask.out_file -> ica_cluster_extent.mask_file
+fmri_rs_dilatemask.out_file -> ica_dual_reg.mask_file
+fmri_rs_dilatemask.out_file -> ica_fastica_icasso.mask_file
+fmri_rs_dilatemask.out_file -> ica_spatialz.mask_file
+fmri_rs_dilatemask.out_file -> nonaggr_denoising.mask_file
+fmri_rs_dilatemask.out_file -> nonaggr_denoising_unsmoothed.mask_file
+fmri_rs_dilatemask.out_file -> nuisance_regression.mask_file
+fmri_rs_getTR.TR -> dof.TR
+fmri_rs_getTR.TR -> feature_frequency.TR
+fmri_rs_getTR.TR -> merge_tr_meanfunc_clean.in1
+fmri_rs_img2float.out_file -> fmri_rs_extract_ref.in_file
+fmri_rs_img2float.out_file -> fmri_rs_motion_correct.in_file
+fmri_rs_intnorm.out_file -> nonaggr_denoising.in_file
+fmri_rs_intnorm.out_file -> preproc_ica_canica.preproc_file
+fmri_rs_intnorm.out_file -> preproc_ica_dual_reg.preproc_file
+fmri_rs_intnorm_unsmoothed.out_file -> nonaggr_denoising_unsmoothed.in_file
+fmri_rs_maskfunc2.out_file -> fmri_rs_meanfunc2.in_file
+fmri_rs_maskfunc2.out_file -> fmri_rs_smooth.in_file
+fmri_rs_maskfunc3.out_file -> fmri_rs_intnorm.in_file
+fmri_rs_maskfunc_unsmoothed.out_file -> fmri_rs_intnorm_unsmoothed.in_file
+fmri_rs_meanfunc.out_file -> fmri_rs_meanfuncmask_antspynet.in_file
+fmri_rs_meanfunc2.out_file -> csf_prior_2_func_apply_warp.ref_file
+fmri_rs_meanfunc2.out_file -> csf_subject_2_func_apply_xfm.reference
+fmri_rs_meanfunc2.out_file -> fmri_rs_2_ref_flirt.in_file
+fmri_rs_meanfunc2.out_file -> fmri_rs_mergenode.in1
+fmri_rs_meanfunc2.out_file -> mni_2_func_warp.reference
+fmri_rs_meanfunc2.out_file -> wm_prior_2_func_apply_warp.ref_file
+fmri_rs_meanfunc2.out_file -> wm_subject_2_func_apply_xfm.reference
+fmri_rs_meanfuncmask_antspynet.mask_file -> csf_prior_thr_bin.in_file2
+fmri_rs_meanfuncmask_antspynet.mask_file -> feature_spatial_prep.mask_file
+fmri_rs_meanfuncmask_antspynet.mask_file -> fmri_rs_dilatemask.in_file
+fmri_rs_meanfuncmask_antspynet.mask_file -> fmri_rs_maskfunc.in_file2
+fmri_rs_meanfuncmask_antspynet.mask_file -> fmri_rs_medianval.mask_file
+fmri_rs_meanfuncmask_antspynet.mask_file -> ica_auto_dim.mask_file
+fmri_rs_meanfuncmask_antspynet.mask_file -> preproc_ica_auto_dim.mask_file
+fmri_rs_meanfuncmask_antspynet.mask_file -> preproc_ica_canica.mask_file
+fmri_rs_meanfuncmask_antspynet.mask_file -> preproc_ica_dual_reg.mask_file
+fmri_rs_meanfuncmask_antspynet.mask_file -> preproc_ica_ggm.mask_file
+fmri_rs_meanfuncmask_antspynet.mask_file -> wm_prior_thr_bin.in_file2
+fmri_rs_medianval.('percentile_values', "def get_inorm_scale(percentile_values):\n    return '-mul %.10f' % (10000.0 / percentile_values[0])", ()) -> fmri_rs_intnorm.op_string
+fmri_rs_medianval.('percentile_values', "def get_inorm_scale(percentile_values):\n    return '-mul %.10f' % (10000.0 / percentile_values[0])", ()) -> fmri_rs_intnorm_unsmoothed.op_string
+fmri_rs_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]', ()) -> fmri_rs_mergenode.in2
+fmri_rs_motion_correct.out_file -> fmri_rs_maskfunc.in_file
+fmri_rs_motion_correct.out_file -> fmri_rs_maskfunc2.in_file
+fmri_rs_motion_correct.out_file -> fmri_rs_maskfunc_unsmoothed.in_file
+fmri_rs_motion_correct.out_file -> fmri_rs_meanfunc.in_file
+fmri_rs_motion_correct.out_file -> fmri_rs_medianval.in_file
+fmri_rs_motion_correct.out_file -> preproc_ica_auto_dim.in_file
+fmri_rs_motion_correct.par_file -> feature_time_series.mc
+fmri_rs_nvols.nvols -> fmri_rs_del_vols.nvols
+fmri_rs_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle', ()) -> fmri_rs_extract_ref.start_volume
+fmri_rs_reorient.out_file -> fmri_rs_img2float.in_file
+fmri_rs_smooth.out_file -> fmri_rs_maskfunc3.in_file
+func2mni_apply_warp.out_file -> feature_spatial.in_file
+func_2_mni_warp.out_file -> func2mni_apply_warp.field_file
+highpass_clean.out_file -> dof.in_file
+highpass_clean.out_file -> ica_dual_reg.preproc_file
+highpass_clean.out_file -> ica_fastica_icasso.in_file
+ica_auto_dim.n_components -> ica_fastica_icasso.n_components
+ica_cluster_extent.min_cluster_voxels -> ica_spatialz.min_cluster_voxels
+ica_dual_reg.ic_mix -> ica_output.ic_mix
+ica_dual_reg.residual_file -> ica_cluster_extent.residual_file
+ica_dual_reg.zstat_file -> ica_output.zstat_file
+ica_dual_reg.zstat_file -> ica_spatialz.zstat_file
+ica_fastica_icasso.components_file -> ica_dual_reg.components_file
+ica_output.('thresh_zstat_files', 'def registered_file_name(in_file_names):\n    """\n    Adds prefix \'r-\' and use 2 digid number at end.\n    Example: \'zstat1.nii.gz\' -> \'r-zstat01.nii.gz\'\n    """\n    from os.path import basename\n    import re\n    out_files = []\n    for f in in_file_names:\n        base_name = basename(f)\n        m = re.search(\'(//d+)(//.nii(?://.gz)?)$\', base_name)\n        if m:\n            num = int(m.group(1))\n            ext = m.group(2)\n            new_name = re.sub(\'//d+(//.nii(?://.gz)?)$\', f\'{num:02d}{ext}\', base_name)\n        else:\n            new_name = base_name\n        out_files.append(\'r-\' + new_name)\n    return out_files', ()) -> zstats_combine.out_file
+ica_output.ic_mix -> outputnode.ic_mix
+ica_output.survivor_neg_files -> survivors_neg_2_ref_apply_xfm.in_file
+ica_output.survivor_pos_files -> survivors_pos_2_ref_apply_xfm.in_file
+ica_output.zstat_file -> ica_zstat_split.in_file
+ica_spatialz.survivor_neg_files -> ica_output.survivor_neg_files
+ica_spatialz.survivor_pos_files -> ica_output.survivor_pos_files
+ica_spatialz.thresh_zstat_files -> ica_output.thresh_zstat_files
+ica_zstat_split.out_files -> zstats_unthr_2_ref_apply_xfm.in_file
+inputnode.reference_brain -> fmri_rs_2_ref_flirt.reference
+inputnode.reference_brain -> ref_2_mni_flirt.in_file
+inputnode.reference_brain -> ref_2_mni_fnirt.in_file
+inputnode.reference_brain -> ref_2_mni_invwarp.reference
+inputnode.reference_brain -> survivors_neg_2_ref_apply_xfm.reference
+inputnode.reference_brain -> survivors_pos_2_ref_apply_xfm.reference
+inputnode.reference_brain -> t1_segmentation.in_file
+inputnode.reference_brain -> zstats_unthr_2_ref_apply_xfm.reference
+meanfunc_clean.out_file -> merge_tr_meanfunc_clean.in2
+merge_tr_meanfunc_clean.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (100,)) -> highpass_clean.op_string
+mni_2_func_warp.out_file -> csf_prior_2_func_apply_warp.field_file
+mni_2_func_warp.out_file -> wm_prior_2_func_apply_warp.field_file
+n_removed.n_removed -> ica_auto_dim.n_removed
+nonaggr_denoising.denoised_file -> nuisance_regression.in_file
+nonaggr_denoising_unsmoothed.denoised_file -> nuisance_regression.twin_file
+nuisance_regression.out_file -> highpass_clean.in_file
+nuisance_regression.out_file -> meanfunc_clean.in_file
+nuisance_regression.rank -> dof.rank
+nuisance_regression.rank -> n_removed.rank
+nuisance_regression.twin_out_file -> ica_auto_dim.in_file
+preproc_ica_auto_dim.n_components -> preproc_ica_canica.n_components
+preproc_ica_canica.components_file -> preproc_ica_dual_reg.components_file
+preproc_ica_canica.components_file -> preproc_ica_output.IC
+preproc_ica_dual_reg.ic_ft_mix -> preproc_ica_output.mel_ft_mix
+preproc_ica_dual_reg.ic_mix -> preproc_ica_output.mel_mix
+preproc_ica_dual_reg.zstat_file -> preproc_ica_ggm.zstat_file
+preproc_ica_ggm.thresh_zstat_files -> preproc_ica_output.thresh_zstat_files
+preproc_ica_output.mel_ft_mix -> feature_frequency.mel_ft_mix
+preproc_ica_output.mel_mix -> feature_time_series.mel_mix
+preproc_ica_output.mel_mix -> nonaggr_denoising.ic_mix
+preproc_ica_output.mel_mix -> nonaggr_denoising_unsmoothed.ic_mix
+preproc_ica_output.thresh_zstat_files -> feature_spatial_prep.in_files
+ref_2_mni_flirt.out_matrix_file -> ref_2_mni_fnirt.affine_file
+ref_2_mni_fnirt.fieldcoeff_file -> func_2_mni_warp.warp1
+ref_2_mni_fnirt.fieldcoeff_file -> ref_2_mni_invwarp.warp
+ref_2_mni_invwarp.inverse_warp -> mni_2_func_warp.warp1
+survivors_neg_2_ref_apply_xfm.out_file -> zstats_combine.neg_mask_file
+survivors_pos_2_ref_apply_xfm.out_file -> zstats_combine.pos_mask_file
+t1_segmentation.('partial_volume_files', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (0,)) -> csf_subject_thr.in_file
+t1_segmentation.('partial_volume_files', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (2,)) -> wm_subject_thr.in_file
+wm_prior_2_func_apply_warp.out_file -> wm_prior_thr_bin.in_file
+wm_prior_mni.prior_file -> wm_prior_2_func_apply_warp.in_file
+wm_prior_thr_bin.out_file -> wm_roi.in_file2
+wm_roi.out_file -> nuisance_regression.wm_roi_file
+wm_subject_2_func_apply_xfm.out_file -> wm_roi.in_file
+wm_subject_thr.out_file -> wm_subject_2_func_apply_xfm.in_file
+zstats_combine.out_file -> outputnode.thresh_zstat_files
+zstats_unthr_2_ref_apply_xfm.out_file -> zstats_combine.z_file

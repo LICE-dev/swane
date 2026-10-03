@@ -92,7 +92,7 @@ def flat1_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    engine = resolve_registration_engine(synth_config)
     segmentation_engine = resolve_segmentation_engine(synth_config)
 
     # Input Node

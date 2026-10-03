@@ -74,12 +74,8 @@ def seeg_ct_workflow(
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
     # CT follows the global registration engine (ANTs by default).
-    # SynthMorph is not recommended on CT, so an explicit SynthMorph
-    # choice falls back to FSL; an ANTs config stays ANTs, and an explicit
-    # FSL choice stays FSL.
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
-    if engine == RegistrationEngine.SYNTH:
-        engine = RegistrationEngine.FSL
+    # SynthMorph is not recommended on CT.
+    engine = resolve_registration_engine(synth_config, allow_synth=False)
 
     electrode_thr = config.getint_safe("electrode_threshold")
     erode_kernel_size = config.getfloat_safe("erode_kernel_size")

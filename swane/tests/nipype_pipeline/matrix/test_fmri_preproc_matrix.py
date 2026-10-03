@@ -62,6 +62,7 @@ def test_fmri_preproc_matrix(scenario, global_config, make_input_dir, graph_snap
     # golden files stay valid. The ANTS-default snapshots are Session F's job.
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = "FSL"
+    synth["fmri_engine"] = "FSL"
     wf = fMRI_preproc_workflow(
         "fmri_0",
         dicom_dir=make_input_dir(),
@@ -101,6 +102,7 @@ def test_fmri_preproc_matrix_test_run(global_config, make_input_dir, graph_snaps
     p = SCENARIOS["slicetiming_up"]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = "FSL"
+    synth["fmri_engine"] = "FSL"
     wf = fMRI_preproc_workflow(
         "fmri_0",
         dicom_dir=make_input_dir(),
@@ -132,10 +134,51 @@ def test_fmri_preproc_matrix_test_run(global_config, make_input_dir, graph_snaps
     )
 
 
+def test_fmri_preproc_matrix_nilearn(global_config, make_input_dir, graph_snapshot):
+    """NILEARN engine with ANTS registration on the ``slicetiming_up`` settings:
+    the dilated mask and the intensity-normalisation median come from the
+    ANTsPyNet bold mask, so the FSL percentile threshold nodes are not built.
+    """
+    p = SCENARIOS["slicetiming_up"]
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["engine"] = "ANTS"
+    synth["fmri_engine"] = "NILEARN"
+    wf = fMRI_preproc_workflow(
+        "fmri_0",
+        dicom_dir=make_input_dir(),
+        TR=p["TR"],
+        slice_timing=p["slice_timing"],
+        n_vols=p["n_vols"],
+        del_start_vols=p["del_start"],
+        del_end_vols=p["del_end"],
+        hpcutoff=p["hp"],
+        synth_config=synth,
+    )
+
+    config_echo = {
+        "TR": p["TR"],
+        "slice_timing": p["slice_timing"].name,
+        "n_vols": p["n_vols"],
+        "del_start_vols": p["del_start"],
+        "del_end_vols": p["del_end"],
+        "hpcutoff": p["hp"],
+        "fmri_engine": "NILEARN",
+        "registration_engine": "ANTS",
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="nilearn_ants",
+        config=config_echo,
+        title="fmri_preproc / nilearn_ants",
+    )
+
+
 def _build_engine(global_config, make_input_dir, engine):
     """Build fMRI_preproc under a forced registration engine."""
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = engine
+    synth["fmri_engine"] = "FSL"
     return fMRI_preproc_workflow(
         "fmri_0",
         dicom_dir=make_input_dir(),
@@ -173,13 +216,13 @@ def test_fmri_preproc_reg_2_ref_fsl_unchanged(global_config, make_input_dir):
     assert wf.get_node("fmri_0_2_ref_flirt") is not None
 
 
-def test_fmri_preproc_reg_2_ref_synth_falls_back_to_fsl(global_config, make_input_dir):
-    """EPI avoids SynthMorph: SYNTH resolves to FSL (a FLIRT node, no
+def test_fmri_preproc_reg_2_ref_synth_falls_back_to_ants(global_config, make_input_dir):
+    """EPI avoids SynthMorph: SYNTH resolves to ANTS (a ANtS node, no
     SynthMorphReg / AntsRegistration)."""
     wf = _build_engine(global_config, make_input_dir, "SYNTH")
     assert isinstance(wf.reg_2_ref, RegistrationNodeWrapper)
-    assert wf.reg_2_ref.engine == RegistrationEngine.FSL
+    assert wf.reg_2_ref.engine == RegistrationEngine.ANTS
     node_types = {_iface(n) for n in wf._graph.nodes()}
-    assert "FLIRT" in node_types
+    assert "AntsRegistration" in node_types
     assert "SynthMorphReg" not in node_types
-    assert "AntsRegistration" not in node_types
+    assert "FLIRT" not in node_types

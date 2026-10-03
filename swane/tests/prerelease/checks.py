@@ -221,6 +221,7 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
     checks.extend(_check_expected_outputs(result, files))
     checks.extend(_check_integrity(files))
     checks.extend(_check_fmri_activation(result, files))
+    checks.extend(_check_nilearn_resting(result, files))
     checks.extend(_check_reference(result, files))
     checks.extend(_check_nonlinear_registration(result))
     checks.extend(_check_nonlinear_target_alignment(result))
@@ -632,6 +633,35 @@ def _is_activation_map(name: str) -> bool:
     return "cluster" in lowered or "zstat" in lowered
 
 
+#: Suprathreshold voxel counts of the registered task cluster maps on the
+#: phantom (NILEARN engine). Obtained from two runs of ``python3 -m
+#: swane.tests.prerelease --only fmri_task_and_rest --cores 3 --ram 10``, which
+#: gave identical maps (same counts, bit-identical data): the NILEARN motion
+#: correction runs with a fixed seed and one ITK thread. They hold only for the
+#: registration configuration of that pass (NILEARN_TASK_PINNED_CONFIGURATION).
+NILEARN_TASK_EXPECTED_VOXELS = {
+    "fmri_0": {
+        "r-fmri_0_cluster_Task_A_versus_Rest_threshold3.1.nii.gz": 11165,
+        "r-fmri_0_cluster_Task_A_versus_Rest_threshold5.0.nii.gz": 7901,
+        "r-fmri_0_cluster_Task_A_versus_Rest_threshold7.0.nii.gz": 2010,
+    },
+    "fmri_1": {
+        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold3.1.nii.gz": 8601,
+        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold5.0.nii.gz": 3637,
+        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold7.0.nii.gz": 0,
+        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold3.1.nii.gz": 8339,
+        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold5.0.nii.gz": 898,
+        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold7.0.nii.gz": 0,
+    },
+}
+
+#: Pass values the NILEARN task voxel counts were obtained with.
+NILEARN_TASK_PINNED_CONFIGURATION = {
+    "registration_engine": "FSL",
+    "deskull_engine": "BET",
+}
+
+
 def _check_fmri_activation(result, files: list) -> list:
     """Confirm the fMRI workflows actually produced activation.
 
@@ -675,6 +705,157 @@ def _check_fmri_activation(result, files: list) -> list:
                 ),
             )
         )
+
+        # Phantom determinism for the NILEARN engine, only for the
+        # configuration the counts were obtained with (the registered maps
+        # depend on the func->ref registration).
+        values = result.values
+        if (
+            values.get("fmri_engine", "NILEARN") == "NILEARN"
+            and all(
+                values.get(key) == value
+                for key, value in NILEARN_TASK_PINNED_CONFIGURATION.items()
+            )
+            and input_name.lower() in NILEARN_TASK_EXPECTED_VOXELS
+        ):
+            expected = NILEARN_TASK_EXPECTED_VOXELS[input_name.lower()]
+            for f in maps:
+                basename = os.path.basename(f)
+                if basename in expected:
+                    _, data = _load(f)
+                    count = int((data != 0).sum())
+                    checks.append(
+                        CheckResult(
+                            "fmri.determinism.%s_%s"
+                            % (
+                                input_name.lower(),
+                                basename.split("_threshold")[-1].split(".")[0],
+                            ),
+                            count == expected[basename],
+                            "expected %d suprathreshold voxels, got %d"
+                            % (expected[basename], count),
+                        )
+                    )
+
+    return checks
+
+
+#: Final ICA component count on the resting-state phantom (NILEARN engine).
+#: Obtained from complete passes of ``python3 -m swane.tests.prerelease --only
+#: fmri_task_and_rest`` (AROMA on, registration FSL with BET), run twice from
+#: a clean pass directory with ica_aroma_py 0.1.4 (``ica_fastica_icasso``
+#: ``ica_IC.nii.gz`` has one volume in both runs; the final z-threshold maps
+#: were bit-identical between the runs). The AROMA classification flags exactly
+#: one motion IC on the phantom, the case that ica_aroma_py 0.1.3 rejected. The
+#: ANTs registration pass (``fmri_task_and_rest_ants``) also completes with
+#: all checks green against this value.
+NILEARN_RS_EXPECTED_COMPONENTS = 1
+
+
+def _check_nilearn_resting(result, files: list) -> list:
+    """NILEARN resting-state checks: final ICA source and component count,
+    Monte Carlo cluster-extent threshold k, registered IC maps.
+
+    The Nipype work directory holds two ``ica_IC.nii.gz`` files (the AROMA-pass
+    CanICA and the final FastICA/ICASSO): only the ``ica_fastica_icasso`` node
+    output is the final decomposition.
+    """
+    if str(DIL.FMRI_RS) not in [str(i) for i in result.inputs]:
+        return []
+    if result.values.get("fmri_engine", "NILEARN") != "NILEARN":
+        return []
+    subject_dir = result.subject_dir
+    results_root = os.path.realpath(_results_root(subject_dir))
+
+    def _work_files(pattern):
+        found = glob.glob(os.path.join(subject_dir, "**", pattern), recursive=True)
+        return sorted(
+            p
+            for p in found
+            if not os.path.realpath(p).startswith(results_root + os.sep)
+        )
+
+    checks = []
+    ic_paths = _work_files(os.path.join("ica_fastica_icasso", "ica_IC.nii.gz"))
+    checks.append(
+        CheckResult(
+            "fmri.rs.ica_source",
+            len(ic_paths) == 1,
+            (
+                "final ICA written by ica_fastica_icasso"
+                if len(ic_paths) == 1
+                else "%d ica_IC.nii.gz under ica_fastica_icasso (expected 1)"
+                % len(ic_paths)
+            ),
+        )
+    )
+    n_components = None
+    if len(ic_paths) == 1:
+        try:
+            _, ic_data = _load(ic_paths[0])
+            n_components = ic_data.shape[3] if ic_data.ndim == 4 else 1
+        except Exception as error:  # noqa: BLE001 - reported as a failed check
+            checks.append(
+                CheckResult(
+                    "fmri.determinism.rs_components", False, "error: %s" % error
+                )
+            )
+    if n_components is not None or not ic_paths:
+        checks.append(
+            CheckResult(
+                "fmri.determinism.rs_components",
+                n_components == NILEARN_RS_EXPECTED_COMPONENTS,
+                "expected %d resting state components, got %s"
+                % (NILEARN_RS_EXPECTED_COMPONENTS, n_components),
+            )
+        )
+
+    # k is read from the node's result file: the JSON report is not consumed
+    # downstream, so Nipype removes it (remove_unnecessary_outputs).
+    results = _work_files(
+        os.path.join("ica_cluster_extent", "result_ica_cluster_extent.pklz")
+    )
+    k = None
+    if len(results) == 1:
+        try:
+            from nipype.utils.filemanip import loadpkl
+
+            k = loadpkl(results[0]).outputs.min_cluster_voxels
+        except Exception:  # noqa: BLE001 - reported as a failed check
+            k = None
+    checks.append(
+        CheckResult(
+            "fmri.rs.cluster_extent",
+            isinstance(k, (int, np.integer)) and k >= 1,
+            (
+                "ica_cluster_extent min_cluster_voxels = %s" % k
+                if len(results) == 1
+                else "%d ica_cluster_extent result file(s) (expected 1)" % len(results)
+            ),
+        )
+    )
+
+    maps = [
+        f
+        for f in files
+        if re.match(r"r-thresh_zstat\d+\.nii\.gz$", os.path.basename(f))
+    ]
+    nonempty = 0
+    for path in maps:
+        try:
+            _, data = _load(path)
+        except Exception:  # noqa: BLE001 - an unreadable map is not non-empty
+            continue
+        if int((data != 0).sum()) > 0:
+            nonempty += 1
+    checks.append(
+        CheckResult(
+            "fmri.rs.zstat_maps",
+            nonempty >= 1,
+            "%d of %d r-thresh_zstat map(s) non-empty (%s components)"
+            % (nonempty, len(maps), n_components),
+        )
+    )
     return checks
 
 

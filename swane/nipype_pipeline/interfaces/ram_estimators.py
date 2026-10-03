@@ -1206,3 +1206,140 @@ class DipyRecoBundlesChunkerRamEstimator(RamEstimator):
             n_procs=None,
             debug_str=debug,
         )
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class FmriSeriesRamEstimator(RamEstimator):
+    """
+    Classic one-way RAM estimator for the Python fMRI nodes that load whole 4D
+    series in memory (``get_fdata()`` as float64, plus masked copies).
+
+    Their peak RSS is linear in the number of 4D **elements** (voxels x
+    volumes) of each series, not in the spatial voxel count the base
+    ``RamEstimator`` uses, so :meth:`voxels` counts every element of the image.
+    The ICA nodes also hold one map per component (per run for ICASSO) on the
+    mask voxels; subclasses set ``COMPONENT_BYTES`` for that term::
+
+        mem_gb = OVERHEAD_GB
+                 + sum(BYTES_PER_ELEMENT[input] * elements(input)) / 2**30
+                 + COMPONENT_BYTES * mask_voxels * n_components * n_runs / 2**30
+
+    The coefficients are conservative over-estimates (about 1.25x) of the
+    slopes measured with ``/usr/bin/time -f %M`` on synthetic float32 series
+    of 64x64x40x250 and 80x80x48x300 (3 BLAS threads); the tests pin those
+    measured peaks below the estimate.
+    """
+
+    #: ``input name -> bytes per 4D element`` of that input.
+    BYTES_PER_ELEMENT = {}
+
+    #: Bytes per mask voxel per component (per run); 0 disables the term.
+    COMPONENT_BYTES = 0
+
+    #: Fixed overhead (interpreter, numpy/scipy/nibabel). Measured ~0.13 GB.
+    OVERHEAD_GB = 0.4
+
+    #: No node fits in less than this, whatever the input.
+    MIN_GB = 0.5
+
+    #: Static reservation declared on the node, read only when the estimate
+    #: cannot run (see ``MonitoredMultiProcPlugin._negotiate_ram``). It must
+    #: not exceed ``ResourceManager.NILEARN_FMRI_RAM_REQUIREMENT``, or Nipype's
+    #: pre-run check would reject the workflow on the smallest admitted budget.
+    STATIC_FALLBACK_GB = 3.0
+
+    def __init__(self):
+        # max_gb is deliberately None: clamping the estimate down would make
+        # the node under-reserve and co-schedule with other heavy work.
+        super().__init__(
+            input_multipliers=dict(self.BYTES_PER_ELEMENT),
+            overhead_gb=self.OVERHEAD_GB,
+            min_gb=self.MIN_GB,
+            max_gb=None,
+        )
+
+    @staticmethod
+    def voxels(path):
+        """Number of elements of the image, time axis included."""
+        shape = nib.load(path).header.get_data_shape()
+        return int(math.prod(shape))
+
+    @staticmethod
+    def _n_runs(inputs):
+        n_runs = getattr(inputs, "n_runs", None)
+        return int(n_runs) if isdefined(n_runs) and n_runs is not None else 1
+
+    def __call__(self, inputs):
+        mem_gb, debug = super().__call__(inputs)
+        if not self.COMPONENT_BYTES:
+            return mem_gb, debug
+        k = getattr(inputs, "n_components", None)
+        if not isdefined(k) or k is None:
+            return mem_gb, debug + " | n_components: undefined"
+        mask_voxels = int(
+            np.count_nonzero(np.asanyarray(nib.load(inputs.mask_file).dataobj))
+        )
+        runs = self._n_runs(inputs)
+        extra = self.COMPONENT_BYTES * mask_voxels * int(k) * runs / 1024**3
+        mem_gb = float(mem_gb + extra)
+        debug += (
+            f" | components: mask_voxels={mask_voxels}, n_components={k}, "
+            f"runs={runs}, contribution={extra:.3f} GB, total={mem_gb:.3f} GB"
+        )
+        return mem_gb, debug
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class NilearnAutoDimRamEstimator(FmriSeriesRamEstimator):
+    """RAM estimator for ``NilearnAutoDim`` (measured slope ~29 B/element)."""
+
+    BYTES_PER_ELEMENT = {"in_file": 36}
+    STATIC_FALLBACK_GB = 5.0
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class DualRegressionRamEstimator(FmriSeriesRamEstimator):
+    """RAM estimator for ``DualRegressionZStat`` (measured slope ~11
+    B/element of the series; the component maps are loaded the same way)."""
+
+    BYTES_PER_ELEMENT = {"preproc_file": 14, "components_file": 14}
+    STATIC_FALLBACK_GB = 3.0
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class FastIcaIcassoRamEstimator(FmriSeriesRamEstimator):
+    """RAM estimator for ``FastIcaIcasso`` (measured ~20 B/element of the
+    series, plus ~32 B per mask voxel per component per run for the maps of
+    every ICASSO run kept for the clustering)."""
+
+    BYTES_PER_ELEMENT = {"in_file": 24}
+    COMPONENT_BYTES = 40
+    STATIC_FALLBACK_GB = 4.0
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class NuisanceRegressionRamEstimator(FmriSeriesRamEstimator):
+    """RAM estimator for ``NuisanceRegression``, which loads the smoothed
+    series and its unsmoothed twin (measured ~31 B/element for the pair)."""
+
+    BYTES_PER_ELEMENT = {"in_file": 20, "twin_file": 20}
+    STATIC_FALLBACK_GB = 5.0
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class ClusterExtentMCRamEstimator(FmriSeriesRamEstimator):
+    """RAM estimator for ``ClusterExtentMC`` (measured ~8 B/element of the
+    residual series; the null fields are generated one at a time)."""
+
+    BYTES_PER_ELEMENT = {"residual_file": 10}
+    STATIC_FALLBACK_GB = 2.0
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class NilearnCanICARamEstimator(FmriSeriesRamEstimator):
+    """RAM estimator for ``NilearnCanICA`` (measured ~14 B/element of the
+    series, plus ~73 B per mask voxel per component)."""
+
+    BYTES_PER_ELEMENT = {"preproc_file": 18}
+    COMPONENT_BYTES = 96
+    STATIC_FALLBACK_GB = 3.0

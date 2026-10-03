@@ -235,3 +235,21 @@ def phantom_dicom_tree(tmp_path_factory):
     """Build every synthetic DICOM scenario once and share it read-only."""
     root = tmp_path_factory.mktemp("phantom_dicom")
     return build_dicom_tree(str(root))
+
+
+@pytest.fixture(autouse=True)
+def _restore_c_numeric_locale():
+    """Ensure LC_NUMERIC is 'C' so C/C++ scientific libraries (ITK/ANTs) work
+    reliably even after Qt's QApplication initializes and alters the C locale.
+    """
+    import locale
+
+    try:
+        locale.setlocale(locale.LC_NUMERIC, "C")
+    except Exception:
+        pass
+    yield
+    try:
+        locale.setlocale(locale.LC_NUMERIC, "C")
+    except Exception:
+        pass

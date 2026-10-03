@@ -29,3 +29,11 @@ def test_tool_reference_window_has_ants_tab(qtbot):
     assert Package.ANTS in window._package_ui
     labels = [window._tab_widget.tabText(i) for i in range(window._tab_widget.count())]
     assert "ANTS" in labels
+
+
+def test_tool_reference_window_has_nilearn_tab(qtbot):
+    window = ToolReferenceWindow(default_tab=Package.NILEARN)
+    qtbot.addWidget(window)
+    assert Package.NILEARN in window._package_ui
+    labels = [window._tab_widget.tabText(i) for i in range(window._tab_widget.count())]
+    assert "NILEARN" in labels

@@ -490,7 +490,10 @@ class MainWindow(QMainWindow):
         if not needing:
             return True
 
-        context = {"slicer_path": self.global_config.get_slicer_path()}
+        context = {
+            "slicer_path": self.global_config.get_slicer_path(),
+            "fsl_installed": self.dependency_manager.is_fsl(),
+        }
         resolved = self._resolve_licenses(needing, context)
         if resolved is None or len(resolved) != len(needing):
             return False
@@ -966,6 +969,17 @@ class MainWindow(QMainWindow):
         x = self.add_home_entry(self.dependency_manager.antspynet, x)
 
         x = self.add_home_entry(self.dependency_manager.dipy, x)
+
+        from swane.utils.license_consent import _nilearn_version
+        from swane.utils.DependencyManager import version_with_license
+        from swane.utils.LicenseReference import NILEARN
+
+        nilearn_version = _nilearn_version()
+        if nilearn_version:
+            lbl = strings.check_dep_nilearn_found % version_with_license(
+                NILEARN, nilearn_version
+            )
+            x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, lbl), x)
 
         self.optional_grid_layout = QGridLayout()
         self.home_v_layout.addLayout(self.optional_grid_layout)

@@ -1,8 +1,4 @@
 """Unit tests for :class:`swane.nipype_pipeline.interfaces.volumes.DeleteVolumes.DeleteVolumes`.
-
-Only the FSL-free parts are exercised: the volume-count arithmetic in
-``_list_outputs`` and the pass-through branch of ``_run_interface`` that just
-copies the file when nothing has to be trimmed.
 """
 
 import os

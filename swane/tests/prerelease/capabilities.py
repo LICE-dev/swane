@@ -438,6 +438,19 @@ def _probe_freesurfer_subject(caps: Capabilities) -> None:
     )
 
 
+def _probe_nilearn(caps: Capabilities) -> None:
+    has_nilearn = DependencyManager.is_nilearn()
+    caps.add(
+        "nilearn",
+        has_nilearn,
+        (
+            "nilearn present"
+            if has_nilearn
+            else "nilearn not importable; the NILEARN fMRI engine is dropped"
+        ),
+    )
+
+
 def probe(
     global_config=None,
     cores: int = 0,
@@ -475,6 +488,7 @@ def probe(
     _probe_dipy(caps)
     _probe_mni(caps)
     _probe_slicer(global_config, caps)
+    _probe_nilearn(caps)
 
     caps.add(
         "graphviz",

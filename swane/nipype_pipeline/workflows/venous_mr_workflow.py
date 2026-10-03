@@ -82,7 +82,7 @@ def venous_mr_workflow(
 
     # Not yet ported to the ANTs transform-list format: keep this workflow on
     # its prior backend (FSL/SynthMorph), so the ANTs default falls back to FSL.
-    engine = resolve_registration_engine(synth_config, allow_ants=False)
+    engine = resolve_registration_engine(synth_config)
 
     # Input Node
     inputnode = Node(

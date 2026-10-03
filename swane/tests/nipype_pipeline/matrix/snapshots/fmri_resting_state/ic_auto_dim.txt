@@ -1,7 +1,7 @@
-# workflow snapshot: fmri_resting_state / melodic_auto_dim
+# workflow snapshot: fmri_resting_state / ic_auto_dim
 #
 #   aroma = false
-#   melodic_dim = 0
+#   ic_dim = 0
 #   melodic_thr = 0.5
 #
 # nodes=31 edges=49
@@ -197,7 +197,7 @@ inputnode.reference_brain -> zstats_apply_xfm.reference
 melodic.out_dir -> melodic_output.base_directory
 melodic.out_dir -> melodic_output.melodic_dir
 melodic_output.('thresh_zstat_files', 'def registered_file_name(in_file_names):\n    """\n    Adds prefix \'r-\' and use 2 digid number at end.\n    Example: \'zstat1.nii.gz\' -> \'r-zstat01.nii.gz\'\n    """\n    from os.path import basename\n    import re\n    out_files = []\n    for f in in_file_names:\n        base_name = basename(f)\n        m = re.search(\'(//d+)(//.nii(?://.gz)?)$\', base_name)\n        if m:\n            num = int(m.group(1))\n            ext = m.group(2)\n            new_name = re.sub(\'//d+(//.nii(?://.gz)?)$\', f\'{num:02d}{ext}\', base_name)\n        else:\n            new_name = base_name\n        out_files.append(\'r-\' + new_name)\n    return out_files', ()) -> zstats_apply_xfm.out_file
-melodic_output.mel_mix -> outputnode.mel_mix
+melodic_output.ic_mix -> outputnode.ic_mix
 melodic_output.thresh_zstat_files -> zstats_apply_xfm.in_file
 merge_node.out -> melodic.in_files
 zstats_apply_xfm.out_file -> outputnode.thresh_zstat_files

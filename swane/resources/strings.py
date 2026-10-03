@@ -412,6 +412,7 @@ check_dep_dipy_wrong_version = (
     "<a href='https://dipy.org/documentation/1.12.0/installation/'>update</a>"
 )
 check_dep_dipy_found = "dipy detected (%s)"
+check_dep_nilearn_found = "nilearn detected (%s)"
 check_dep_fs_found = "FreeSurfer detected (%s)"
 check_dep_fs_error1 = (
     "FreeSurfer not detected (<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall"
@@ -561,6 +562,20 @@ node_names["DipyBundleUnion"] = "bundle parts concatenation"
 node_names["DipyBundleRecovery"] = "bundle refine"
 node_names["DipyBundlesToRef"] = "bundle reference transformation"
 node_names["AffineToRAS"] = "affine RAS conversion"
+node_names["AntsMotionCorrection"] = "motion correction"
+node_names["AntsComposeTransform"] = "transform composition"
+node_names["NilearnSmooth"] = "spatial smoothing"
+node_names["NilearnAutoDim"] = "dimensionality estimation"
+node_names["NilearnCanICA"] = "CanICA decomposition"
+node_names["DualRegressionZStat"] = "dual regression"
+node_names["GgmThreshold"] = "mixture model thresholding"
+node_names["IcaDenoise"] = "denoising"
+node_names["FastIcaIcasso"] = "ICASSO ICA decomposition"
+node_names["NuisanceRegression"] = "nuisance regression"
+node_names["ClusterExtentMC"] = "cluster extent estimation"
+node_names["SpatialZThreshold"] = "spatial z thresholding"
+node_names["MaskedResampleCombine"] = "resampled map combination"
+node_names["NilearnFirstLevel"] = "first-level GLM estimation"
 
 license_consent_title = "Third-party tool licenses"
 license_consent_banner = (
@@ -585,4 +600,9 @@ license_consent_source_online = (
 license_consent_source_bundled = (
     "Could not load the online license for {tool}; showing a bundled copy that "
     "may differ from your installed version."
+)
+license_consent_fsl_not_installed = (
+    "FSL is not installed. SWANe still asks you to accept its license because "
+    "it also covers the MNI152NLin6Asym template SWANe downloads and uses "
+    "(AROMA registration target, XTRACT/FLAT1)."
 )
