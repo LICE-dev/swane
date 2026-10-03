@@ -131,6 +131,7 @@
     random_seed = 123
 - fmri_0_nilearn_glm [NilearnFirstLevel] mem_gb=0.2 n_procs=1
     num_threads = 1
+    slice_time_ref = 0.0
 - fmri_0_nvols [NVols] mem_gb=0.2 n_procs=1
     force_value = -1
 - fmri_0_reorient [ForceOrient] mem_gb=0.2 n_procs=1
