@@ -185,6 +185,25 @@ def test_online_warning_suppressed_when_official(qtbot):
     assert all(expected not in t for t in _label_texts(win))
 
 
+def test_fsl_not_installed_note_shown(qtbot):
+    res = [
+        ResolvedLicense(
+            "fsl",
+            "FSL",
+            "x",
+            False,
+            LicenseSource.BUNDLED,
+            show_source_warning=False,
+            extra_note=strings.license_consent_fsl_not_installed,
+        )
+    ]
+    win = LicenseConsentWindow(res)
+    qtbot.addWidget(win)
+    assert any(
+        strings.license_consent_fsl_not_installed in t for t in _label_texts(win)
+    )
+
+
 def test_gate_returns_true_when_nothing_to_consent(
     qtbot, monkeypatch, global_config, offline_update
 ):

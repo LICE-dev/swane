@@ -87,6 +87,21 @@ class ConfigManager(configparser.ConfigParser):
 
         if not reset_pref and os.path.exists(self.config_file):
             self.read(self.config_file)
+
+            # Migrate options renamed in a later SWANe version, in place, before
+            # the re-validation loop below relies on the current option names.
+            # The new option name is already present at this point with its
+            # default value (populated by _load_defaults above), so the old
+            # persisted value must overwrite it unconditionally, not only when
+            # the new key is still missing.
+            for section, renames in RENAMED_PREFERENCES.items():
+                if section not in self:
+                    continue
+                for old, new in renames.items():
+                    if old in self[section]:
+                        self[section][new] = self[section][old]
+                        self.remove_option(section, old)
+
             # Cycle all read values and reassign them to invoke validate_type without rewriting read method
             for section in self._section_defaults.keys():
                 for option in self._section_defaults[section].keys():

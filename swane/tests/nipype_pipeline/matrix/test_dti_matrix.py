@@ -134,7 +134,7 @@ def test_dti_matrix_test_run(
 # updated for the reference-space tractography revert (nitransforms bridge).
 #
 # dti_preproc now follows resolve_registration_engine(synth_config,
-# allow_ants=True) with SYNTH -> FSL. The diff<->ref outputnode contract is an
+# allow_synth=False) with SYNTH -> ANTS. The diff<->ref outputnode contract is an
 # FSL .mat pair (diff2ref_mat/ref2diff_mat): on FSL/Synth the FLIRT .mat and
 # its ConvertXFM inverse pass straight through; on ANTs the ITK affine is
 # bridged through AffineToFSL (nitransforms), since probtrackx only accepts a
@@ -252,14 +252,16 @@ def test_dti_fsl_construction(subject_config, global_config, make_input_dir):
     assert "ref2diff_which_to_invert" not in dst_fields
 
 
-def test_dti_synth_falls_back_to_fsl(subject_config, global_config, make_input_dir):
+def test_dti_synth_falls_back_to_ants(subject_config, global_config, make_input_dir):
     wf = _build_engine("SYNTH", subject_config, global_config, make_input_dir)
     ifaces = [_iface(n) for n in wf._graph.nodes()]
     # SYNTH -> FSL for the diff -> ref registration (no SynthMorph, no LTAConvert).
-    assert "FLIRT" in ifaces
+    assert "AntsRegistration" in ifaces
+    assert "AffineToFSL" in ifaces
     assert "SynthMorphReg" not in ifaces
     assert "LTAConvert" not in ifaces
-    assert "AffineToFSL" not in ifaces
+    assert "FLIRT" not in ifaces
+    
 
     outputnode = _node_by_name(wf, "outputnode")
     dst_fields = {df for _, _, df in _incoming(wf, outputnode)}

@@ -603,7 +603,7 @@ WF_PREFERENCES[category]["del_end_vols"] = PreferenceEntry(
     default=0,
     range=[0, 500],
 )
-WF_PREFERENCES[category]["melodic_dim"] = PreferenceEntry(
+WF_PREFERENCES[category]["ic_dim"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Independent Components to estimate",
     tooltip="Set 0 for automatic detection",
@@ -611,10 +611,18 @@ WF_PREFERENCES[category]["melodic_dim"] = PreferenceEntry(
     range=[0, 200],
     special_value_text="Auto",
 )
+WF_PREFERENCES[category]["spatial_z_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Spatial z threshold",
+    tooltip="Spatial z threshold for the final IC maps (Python engine only)",
+    default=1.95,
+    decimals=2,
+    range=[1.0, 5.0],
+)
 WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold for mixture model estimation",
-    tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives",
+    tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives (FSL engine only)",
     default=0.50,
     decimals=2,
     range=[0, 1],
@@ -624,6 +632,11 @@ WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
     label="ICA-AROMA denoising",
     default="true",
 )
+
+# Preference keys renamed across a SWANe version: {section: {old_key: new_key}}.
+# ConfigManager migrates them in place on load so that existing subject and
+# global config files keep working.
+RENAMED_PREFERENCES = {str(DataInputList.FMRI_RS): {"melodic_dim": "ic_dim"}}
 
 GLOBAL_PREFERENCES = {}
 
@@ -888,6 +901,34 @@ GLOBAL_PREFERENCES[category]["segmentation_engine"] = PreferenceEntry(
     option_pref_requirement_fail_tooltip={
         SegmentationEngine.ANTS: "Atropos segmentation requires at least %.1f GB RAM"
         % ResourceManager.atropos_ram_requirements(),
+    },
+    section=True,
+)
+GLOBAL_PREFERENCES[category]["fmri_engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="fMRI engine",
+    value_enum=FmriEngine,
+    default=FmriEngine.NILEARN,
+    option_dependency={
+        FmriEngine.FSL: [
+            "is_fsl",
+            "FSL fMRI requires FSL",
+        ],
+        FmriEngine.NILEARN: [
+            "is_nilearn",
+            "nilearn fMRI requires the nilearn/antspyx packages",
+        ],
+    },
+    option_pref_requirement={
+        FmriEngine.NILEARN: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.nilearn_fmri_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        FmriEngine.NILEARN: "nilearn fMRI requires at least %.1f GB RAM"
+        % ResourceManager.nilearn_fmri_ram_requirements(),
     },
     section=True,
 )

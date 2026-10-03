@@ -17,7 +17,18 @@ ANTSPYX = "antspyx"
 ANTSPYNET = "antspynet"
 DIPY = "dipy"
 NIIMATH = "niimath"
-TOOL_IDS = (FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET, DIPY, NIIMATH)
+NILEARN = "nilearn"
+TOOL_IDS = (
+    FSL,
+    FREESURFER,
+    SLICER,
+    DCM2NIIX,
+    ANTSPYX,
+    ANTSPYNET,
+    DIPY,
+    NIIMATH,
+    NILEARN,
+)
 
 _BUNDLED_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "licenses"
@@ -157,6 +168,29 @@ def _niimath_candidates(context: dict) -> list:
     return candidates
 
 
+def _nilearn_candidates(context: dict) -> list:
+    # The nilearn pip package (a SWANe dependency) ships its license under the
+    # distribution's .dist-info/licenses/ directory (PEP 639); recover it from
+    # the installed package so the displayed text matches the installed version.
+    try:
+        from importlib.metadata import distribution, PackageNotFoundError
+    except ImportError:
+        return []
+    try:
+        dist = distribution("nilearn")
+    except PackageNotFoundError:
+        return []
+    candidates = []
+    for entry in dist.files or []:
+        parts = [part.lower() for part in entry.parts]
+        if "licenses" in parts and entry.name.lower().startswith("licen"):
+            try:
+                candidates.append(str(dist.locate_file(entry)))
+            except Exception:
+                continue
+    return candidates
+
+
 def _dipy_candidates(context: dict) -> list:
     # The dipy pip package (a SWANe dependency) ships its license directly
     # under the distribution's .dist-info/ directory, rather than the PEP 639
@@ -253,5 +287,13 @@ LICENSES = {
         installed_path_candidates=_niimath_candidates,
         bundled_filename="niimath.txt",
         online_is_official=True,
+    ),
+    NILEARN: LicenseInfo(
+        tool_id=NILEARN,
+        display_name="nilearn",
+        official_url="https://raw.githubusercontent.com/nilearn/nilearn/main/LICENSE",
+        is_html_online=False,
+        installed_path_candidates=_nilearn_candidates,
+        bundled_filename="nilearn.txt",
     ),
 }

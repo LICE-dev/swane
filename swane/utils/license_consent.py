@@ -18,6 +18,7 @@ from swane.utils.LicenseReference import (
     ANTSPYNET,
     DIPY,
     NIIMATH,
+    NILEARN,
 )
 
 UNKNOWN_VERSION = "unknown"
@@ -40,6 +41,9 @@ class ResolvedLicense:
     # Whether the gate should warn that this text is not the user's installed
     # copy. False when the source is the tool's official reference anyway.
     show_source_warning: bool = True
+    # Extra explanatory note shown alongside the license (e.g. why FSL's
+    # license is asked for even when FSL is not installed). Empty by default.
+    extra_note: str = ""
 
 
 def _read_first_existing(candidates: list):
@@ -73,11 +77,42 @@ def fetch_online_license(
     return text, is_html_online
 
 
+def _resolve_fsl_not_installed(info: LicenseInfo) -> ResolvedLicense:
+    """
+    Resolve FSL's license text when FSL is not installed.
+
+    FSL's license must still be accepted, because it also covers the
+    MNI152NLin6Asym template SWANe downloads and uses (AROMA registration
+    target, XTRACT/FLAT1), even without FSL itself. Always use the bundled
+    snapshot - never the installed/online lookups, which target an FSL
+    installation that does not exist here - so the displayed text's identity
+    matches ``_fsl_not_installed_marker()`` exactly.
+    """
+    from swane.resources import strings
+
+    with open(bundled_license_path(info), encoding="utf-8", errors="replace") as fh:
+        bundled_text = fh.read()
+    return ResolvedLicense(
+        info.tool_id,
+        info.display_name,
+        bundled_text,
+        # The bundled fsl.txt snapshot is the official license page's HTML
+        # (like FSL's online source, is_html_online=True), unlike the other
+        # tools' bundled plain-text license files.
+        info.is_html_online,
+        LicenseSource.BUNDLED,
+        show_source_warning=False,
+        extra_note=strings.license_consent_fsl_not_installed,
+    )
+
+
 def resolve_license_text(
     info: LicenseInfo,
     context: dict,
     timeout: float = DEFAULT_LICENSE_FETCH_TIMEOUT,
 ) -> ResolvedLicense:
+    if info.tool_id == FSL and context.get("fsl_installed") is False:
+        return _resolve_fsl_not_installed(info)
     installed = _read_first_existing(info.installed_path_candidates(context))
     if installed is not None:
         return ResolvedLicense(
@@ -106,7 +141,9 @@ def resolve_license_text(
         info.tool_id,
         info.display_name,
         bundled_text,
-        False,
+        # Each bundled snapshot keeps the format of the tool's online source
+        # (FSL's is the licence page's HTML; the others are plain text).
+        info.is_html_online,
         LicenseSource.BUNDLED,
         show_source_warning=True,
     )
@@ -165,6 +202,22 @@ def _fsl_version():
     from nipype.interfaces import fsl
 
     return fsl.base.Info.version()
+
+
+def _fsl_not_installed_marker() -> str:
+    """
+    Stable "version" identity for FSL's license when FSL is not installed.
+
+    Derived from the bundled license snapshot's content, so it stays the same
+    across restarts (no re-prompt once accepted) but changes - and so
+    re-prompts once, exactly like an installed tool's version bump - if a
+    future SWANe release ships an updated bundled snapshot.
+    """
+    import hashlib
+
+    with open(bundled_license_path(LICENSES[FSL]), "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()[:12]
+    return "not-installed-" + digest
 
 
 def _freesurfer_version():
@@ -227,6 +280,15 @@ def _niimath_version():
         return None
 
 
+def _nilearn_version():
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("nilearn")
+    except Exception:
+        return None
+
+
 def _is_slicer_detected(config) -> bool:
     from swane.utils.DependencyManager import DependencyManager
 
@@ -251,6 +313,11 @@ def detected_tool_versions(dependency_manager, config) -> dict:
         versions[FSL] = _norm(
             _cached_dependency_version(dependency_manager, "fsl", _fsl_version)
         )
+    else:
+        # FSL's license also covers the MNI152NLin6Asym template SWANe
+        # downloads and uses (AROMA registration target, XTRACT/FLAT1), so it
+        # is always in the consent gate, even without FSL itself installed.
+        versions[FSL] = _fsl_not_installed_marker()
     if dependency_manager.is_freesurfer():
         versions[FREESURFER] = _norm(
             _cached_dependency_version(
@@ -269,12 +336,15 @@ def detected_tool_versions(dependency_manager, config) -> dict:
         versions[ANTSPYNET] = _norm(_antspynet_version())
     if dependency_manager.is_dipy():
         versions[DIPY] = _norm(_dipy_version())
-    # niimath is a required pip dependency (not surfaced in the dependency UI),
-    # so it is detected directly from the installed package rather than through
+    # niimath and nilearn are required pip dependencies (not surfaced in the dependency UI),
+    # so they are detected directly from the installed package rather than through
     # the dependency manager.
     niimath_version = _niimath_version()
     if niimath_version is not None:
         versions[NIIMATH] = _norm(niimath_version)
+    nilearn_version = _nilearn_version()
+    if nilearn_version is not None:
+        versions[NILEARN] = _norm(nilearn_version)
     return versions
 
 
@@ -292,7 +362,17 @@ def tools_needing_consent(
         if detected_versions is None
         else detected_versions
     )
-    ordered = [FSL, FREESURFER, SLICER, DCM2NIIX, ANTSPYX, ANTSPYNET, DIPY, NIIMATH]
+    ordered = [
+        FSL,
+        FREESURFER,
+        SLICER,
+        DCM2NIIX,
+        ANTSPYX,
+        ANTSPYNET,
+        DIPY,
+        NIIMATH,
+        NILEARN,
+    ]
     needing = []
     for tool_id in ordered:
         if tool_id not in detected:
