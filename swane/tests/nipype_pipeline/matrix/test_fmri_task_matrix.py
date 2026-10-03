@@ -16,6 +16,7 @@ from swane.config.config_enums import (
     BlockDesign,
     GlobalPrefCategoryList,
     RegistrationEngine,
+    SliceTiming,
 )
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
@@ -139,6 +140,45 @@ def test_fmri_task_matrix_nilearn(
         name="nilearn_rara_ants",
         config=config_echo,
         title="fmri_task / nilearn_rara_ants",
+    )
+
+
+def test_fmri_task_matrix_nilearn_slice_timing(
+    subject_config, global_config, make_input_dir, graph_snapshot
+):
+    """NILEARN engine with a known slice timing: the niimath slice-timing node
+    is built in the preprocessing and the GLM samples the design at the middle
+    of the TR (slice_time_ref = 0.5)."""
+    section = subject_config[DataInputList.FMRI_0]
+    section["block_design"] = BlockDesign.RARA.name
+    section["slice_timing"] = SliceTiming.UP.name
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["engine"] = "ANTS"
+    synth["fmri_engine"] = "NILEARN"
+
+    wf = fMRI_task_workflow(
+        "fmri_0",
+        dicom_dir=make_input_dir(),
+        config=section,
+        synth_config=synth,
+    )
+
+    config_echo = {
+        "block_design": BlockDesign.RARA.name,
+        "task_a_name": section["task_a_name"],
+        "task_b_name": section["task_b_name"],
+        "task_duration": section["task_duration"],
+        "rest_duration": section["rest_duration"],
+        "fmri_engine": "NILEARN",
+        "registration_engine": "ANTS",
+        "slice_timing": SliceTiming.UP.name,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="nilearn_rara_ants_slicetiming_up",
+        config=config_echo,
+        title="fmri_task / nilearn_rara_ants_slicetiming_up",
     )
 
 

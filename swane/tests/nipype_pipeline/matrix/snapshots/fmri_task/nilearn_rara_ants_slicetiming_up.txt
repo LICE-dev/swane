@@ -1,14 +1,15 @@
-# workflow snapshot: fmri_task / nilearn_rara_ants
+# workflow snapshot: fmri_task / nilearn_rara_ants_slicetiming_up
 #
 #   block_design = RARA
 #   fmri_engine = NILEARN
 #   registration_engine = ANTS
 #   rest_duration = 30
+#   slice_timing = UP
 #   task_a_name = Task_A
 #   task_b_name = Task_B
 #   task_duration = 30
 #
-# nodes=31 edges=59
+# nodes=32 edges=61
 
 - fmri_0_2_ref_antsreg [AntsRegistration] mem_gb=5 n_procs=0
     aff_metric = 'mattes'
@@ -131,12 +132,17 @@
     random_seed = 123
 - fmri_0_nilearn_glm [NilearnFirstLevel] mem_gb=0.2 n_procs=1
     num_threads = 1
-    slice_time_ref = 0.0
+    slice_time_ref = 0.5
 - fmri_0_nvols [NVols] mem_gb=0.2 n_procs=1
     force_value = -1
 - fmri_0_reorient [ForceOrient] mem_gb=0.2 n_procs=1
 - fmri_0_smooth [NilearnSmooth] mem_gb=0.2 n_procs=1
     fwhm = 5.0
+- fmri_0_timing_correction [NiiMathSliceTimer] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    slice_timing = <SliceTiming.UP: 'Regular up'>
+    suffix = '_st'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 # connections
@@ -168,6 +174,7 @@ fmri_0_genSpec.evs_run -> fmri_0_nilearn_glm.subject_info
 fmri_0_getTR.TR -> fmri_0_genSpec.TR
 fmri_0_getTR.TR -> fmri_0_merge_tr_meanfunc3.in1
 fmri_0_getTR.TR -> fmri_0_nilearn_glm.tr
+fmri_0_getTR.TR -> fmri_0_timing_correction.time_repetition
 fmri_0_highpass.out_file -> fmri_0_nilearn_glm.in_file
 fmri_0_img2float.out_file -> fmri_0_extract_ref.in_file
 fmri_0_img2float.out_file -> fmri_0_motion_correct.in_file
@@ -187,10 +194,7 @@ fmri_0_medianval.('percentile_values', "def get_inorm_scale(percentile_values):\
 fmri_0_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]', ()) -> fmri_0_mergenode.in2
 fmri_0_merge_tr_meanfunc3.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (60,)) -> fmri_0_highpass.op_string
 fmri_0_motion_correct.out_file -> fmri_0_art.realigned_files
-fmri_0_motion_correct.out_file -> fmri_0_maskfunc.in_file
-fmri_0_motion_correct.out_file -> fmri_0_maskfunc2.in_file
-fmri_0_motion_correct.out_file -> fmri_0_meanfunc.in_file
-fmri_0_motion_correct.out_file -> fmri_0_medianval.in_file
+fmri_0_motion_correct.out_file -> fmri_0_timing_correction.in_file
 fmri_0_motion_correct.par_file -> fmri_0_art.realignment_parameters
 fmri_0_motion_correct.par_file -> fmri_0_nilearn_glm.realignment_parameters
 fmri_0_nilearn_glm.threshold_file_cont1_thresh1 -> fmri_0_cluster_t3_1_to_ref_ants_apply.input_image
@@ -200,6 +204,10 @@ fmri_0_nvols.nvols -> fmri_0_del_vols.nvols
 fmri_0_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle', ()) -> fmri_0_extract_ref.start_volume
 fmri_0_reorient.out_file -> fmri_0_img2float.in_file
 fmri_0_smooth.out_file -> fmri_0_maskfunc3.in_file
+fmri_0_timing_correction.out_file -> fmri_0_maskfunc.in_file
+fmri_0_timing_correction.out_file -> fmri_0_maskfunc2.in_file
+fmri_0_timing_correction.out_file -> fmri_0_meanfunc.in_file
+fmri_0_timing_correction.out_file -> fmri_0_medianval.in_file
 inputnode.reference_brain -> fmri_0_2_ref_antsreg.fixed
 inputnode.reference_brain -> fmri_0_cluster_t3_1_to_ref_ants_apply.reference_image
 inputnode.reference_brain -> fmri_0_cluster_t5_1_to_ref_ants_apply.reference_image

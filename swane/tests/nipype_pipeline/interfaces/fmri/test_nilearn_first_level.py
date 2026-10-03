@@ -1,4 +1,5 @@
 import os
+import pytest
 import numpy as np
 import nibabel as nib
 import pandas as pd
@@ -72,3 +73,49 @@ def test_nilearn_first_level(tmp_path, monkeypatch):
     assert os.path.exists(t1)
     assert os.path.exists(t2)
     assert os.path.exists(t3)
+
+
+def test_slice_time_ref_default():
+    assert NilearnFirstLevel().inputs.slice_time_ref == 0.0
+
+
+@pytest.mark.parametrize("slice_time_ref", [None, 0.5])
+def test_slice_time_ref_reaches_first_level_model(
+    tmp_path, monkeypatch, slice_time_ref
+):
+    """The input is forwarded to nilearn's FirstLevelModel (default 0.0)."""
+    import nilearn.glm.first_level as first_level
+
+    seen = {}
+    real_model = first_level.FirstLevelModel
+
+    def recording_model(*args, **kwargs):
+        seen.update(kwargs)
+        return real_model(*args, **kwargs)
+
+    monkeypatch.setattr(first_level, "FirstLevelModel", recording_model)
+    monkeypatch.chdir(tmp_path)
+
+    data = np.random.RandomState(0).randn(5, 5, 5, 30)
+    nib.save(nib.Nifti1Image(data, np.eye(4)), tmp_path / "preproc.nii.gz")
+    mask = np.zeros((5, 5, 5))
+    mask[1:4, 1:4, 1:4] = 1
+    nib.save(nib.Nifti1Image(mask, np.eye(4)), tmp_path / "mask.nii.gz")
+    np.savetxt(tmp_path / "motion.par", np.zeros((30, 6)), fmt="%.6f")
+    (tmp_path / "outliers.txt").write_text("5\n")
+
+    interface = NilearnFirstLevel()
+    interface.inputs.in_file = str(tmp_path / "preproc.nii.gz")
+    interface.inputs.mask_file = str(tmp_path / "mask.nii.gz")
+    interface.inputs.tr = 2.0
+    interface.inputs.subject_info = Bunch(
+        conditions=["TaskA"], onsets=[[10]], durations=[[10]]
+    )
+    interface.inputs.realignment_parameters = str(tmp_path / "motion.par")
+    interface.inputs.outlier_files = str(tmp_path / "outliers.txt")
+    interface.inputs.contrasts = [["TaskA", "T", ["TaskA"], [1]]]
+    if slice_time_ref is not None:
+        interface.inputs.slice_time_ref = slice_time_ref
+    interface.run()
+
+    assert seen["slice_time_ref"] == (slice_time_ref or 0.0)
