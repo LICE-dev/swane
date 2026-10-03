@@ -88,7 +88,12 @@ setup(
         "niimath==1.0.20260924",
         "packaging",
         "PySide6_VerticalQTabWidget==0.0.3",
-        "dipy==1.12.0",
+        # 1.12.1, not 1.12.0: the 1.12.0 macosx_15_0_arm64 wheel (preferred by pip
+        # on Apple Silicon with macOS >= 15) does not bundle libomp and links
+        # /opt/homebrew/opt/libomp/lib/libomp.dylib, so importing dipy fails
+        # without Homebrew libomp. 1.12.1 ships only macosx_11_0 wheels, which
+        # bundle it.
+        "dipy==1.12.1",
         "dicom-sequence-classifier==1.0.5",
         # 0.1.4 fixes AromaClassification returning a scalar (TraitError)
         # when exactly one component is classified as motion.
