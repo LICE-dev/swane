@@ -639,6 +639,8 @@ def _is_activation_map(name: str) -> bool:
 #: gave identical maps (same counts, bit-identical data): the NILEARN motion
 #: correction runs with a fixed seed and one ITK thread. They hold only for the
 #: registration configuration of that pass (NILEARN_TASK_PINNED_CONFIGURATION).
+#: fmri_1 runs with INTERLEAVED slice timing, so its counts include the niimath
+#: slice-timing correction (niimath 1.0.20260924); fmri_0 (UNKNOWN) has none.
 NILEARN_TASK_EXPECTED_VOXELS = {
     "fmri_0": {
         "r-fmri_0_cluster_Task_A_versus_Rest_threshold3.1.nii.gz": 11165,
@@ -646,11 +648,11 @@ NILEARN_TASK_EXPECTED_VOXELS = {
         "r-fmri_0_cluster_Task_A_versus_Rest_threshold7.0.nii.gz": 2010,
     },
     "fmri_1": {
-        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold3.1.nii.gz": 8601,
-        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold5.0.nii.gz": 3637,
+        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold3.1.nii.gz": 8975,
+        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold5.0.nii.gz": 5849,
         "r-fmri_1_cluster_Task_A_versus_Task_B_threshold7.0.nii.gz": 0,
-        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold3.1.nii.gz": 8339,
-        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold5.0.nii.gz": 898,
+        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold3.1.nii.gz": 8598,
+        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold5.0.nii.gz": 1351,
         "r-fmri_1_cluster_Task_B_versus_Task_A_threshold7.0.nii.gz": 0,
     },
 }

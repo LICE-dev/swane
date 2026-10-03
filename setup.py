@@ -85,7 +85,7 @@ setup(
         "nibabel>=5.3.0,<6",
         "nitransforms>=25.1.0",
         "dcm2niix>=1.0.20241211,<=1.0.20260724",
-        "niimath==1.0.20260720",
+        "niimath==1.0.20260924",
         "packaging",
         "PySide6_VerticalQTabWidget==0.0.3",
         "dipy==1.12.0",

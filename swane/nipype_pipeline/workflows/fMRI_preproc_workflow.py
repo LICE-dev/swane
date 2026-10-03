@@ -5,7 +5,7 @@ from nipype.interfaces.fsl import (
     MCFLIRT,
     SUSAN,
 )
-from swane.nipype_pipeline.interfaces.niimath import ImageMaths
+from swane.nipype_pipeline.interfaces.niimath import ImageMaths, NiiMathSliceTimer
 from swane.nipype_pipeline.interfaces.volumes.ExtractVolumes import ExtractVolumes
 from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
@@ -221,14 +221,21 @@ def fMRI_preproc_workflow(
     if fmri_engine != FmriEngine.NILEARN:
         workflow.connect(extract_ref, "out_file", motion_correct, "ref_file")
 
-    # NODE 8: Perform slice timing correction if needed
-    if fmri_engine == FmriEngine.NILEARN:
-        # TODO(niimath-slicetiming): adopt niimath's slice-timing implementation
-        # once a PyPI niimath release ships it (currently git-only).
+    # NODE 8: Perform slice timing correction if needed. Both engines correct
+    # along the third voxel axis of the reoriented series, so the correction
+    # is only meaningful for axial acquisitions.
+    if slice_timing == SliceTiming.UNKNOWN:
         slice_time_corrected_node = motion_correct
         slice_time_corrected_field = "out_file"
-    elif slice_timing == SliceTiming.UNKNOWN:
-        slice_time_corrected_node = motion_correct
+    elif fmri_engine == FmriEngine.NILEARN:
+        slice_timing_correction = Node(
+            NiiMathSliceTimer(), name="%s_timing_correction" % name
+        )
+        slice_timing_correction.inputs.slice_timing = slice_timing
+        slice_timing_correction.inputs.suffix = "_st"
+        workflow.connect(getTR, "TR", slice_timing_correction, "time_repetition")
+        workflow.connect(motion_correct, "out_file", slice_timing_correction, "in_file")
+        slice_time_corrected_node = slice_timing_correction
         slice_time_corrected_field = "out_file"
     else:
         slice_timing_correction = Node(
@@ -380,7 +387,10 @@ def fMRI_preproc_workflow(
 
         workflow.connect(maskfunc2, "out_file", smooth, "in_file")
         workflow.connect(
-            medianval, ("percentile_values", get_bt_thresh), smooth, "brightness_threshold"
+            medianval,
+            ("percentile_values", get_bt_thresh),
+            smooth,
+            "brightness_threshold",
         )
         workflow.connect(mergenode, ("out", get_usans), smooth, "usans")
 
