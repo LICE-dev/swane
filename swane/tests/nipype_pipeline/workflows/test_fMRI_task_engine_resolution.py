@@ -5,8 +5,14 @@ from swane.nipype_pipeline.workflows.fMRI_task_workflow import fMRI_task_workflo
 
 class MockConfig:
     def __init__(
-        self, engine: FmriEngine, block_design: BlockDesign = BlockDesign.RARA
+        self,
+        engine: FmriEngine,
+        block_design: BlockDesign = BlockDesign.RARA,
+        slice_timing=None,
     ):
+        from swane.config.config_enums import SliceTiming
+
+        self.slice_timing = slice_timing or SliceTiming.UP
         self.engine = engine
         self.block_design = block_design
         self._dict = {}
@@ -17,9 +23,7 @@ class MockConfig:
         elif key == "block_design":
             return self.block_design
         elif key == "slice_timing":
-            from swane.config.config_enums import SliceTiming
-
-            return SliceTiming.UP
+            return self.slice_timing
         return None
 
     def getboolean_safe(self, key):
@@ -120,3 +124,21 @@ def test_fmri_task_nilearn_glm_thread_budget(max_cpu, budget):
     assert glm.n_procs == glm.inputs.num_threads
     # The task GLM reads the preprocessing high-pass.
     assert wf.get_node("test_task_nilearn_highpass") is not None
+
+
+@pytest.mark.parametrize("timing, expected", [("UP", 0.5), ("UNKNOWN", 0.0)])
+def test_fmri_task_nilearn_glm_slice_time_ref(timing, expected):
+    from swane.config.config_enums import SliceTiming
+
+    config = MockConfig(FmriEngine.NILEARN, BlockDesign.RARB, SliceTiming[timing])
+    wf = fMRI_task_workflow(
+        name="test_task_nilearn",
+        dicom_dir="/tmp",
+        config=config,
+        synth_config=config,
+        test_run=False,
+    )
+    glm = wf.get_node("test_task_nilearn_nilearn_glm")
+    assert glm.inputs.slice_time_ref == expected
+    has_stc = wf.get_node("test_task_nilearn_timing_correction") is not None
+    assert has_stc == (timing != "UNKNOWN")

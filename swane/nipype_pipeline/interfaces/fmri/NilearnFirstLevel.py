@@ -18,6 +18,13 @@ class NilearnFirstLevelInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc="Preprocessed 4D EPI")
     mask_file = File(exists=True, mandatory=True, desc="Dilated 3D brain mask")
     tr = traits.Float(mandatory=True, desc="Repetition time")
+    slice_time_ref = traits.Range(
+        low=0.0,
+        high=1.0,
+        value=0.0,
+        usedefault=True,
+        desc="Fraction of the TR the slice-time-corrected data are aligned to",
+    )
     subject_info = traits.Any(mandatory=True, desc="Nipype Bunch from FMRIGenSpec")
     realignment_parameters = File(exists=True, mandatory=True, desc="6 motion params")
     outlier_files = traits.Either(
@@ -110,7 +117,7 @@ class NilearnFirstLevel(BaseInterface):
         # nilearn FirstLevelModel
         flm = FirstLevelModel(
             t_r=tr,
-            slice_time_ref=0.0,
+            slice_time_ref=self.inputs.slice_time_ref,
             hrf_model="spm",  # canonical, no derivative
             drift_model=None,  # high-pass already applied via niimath
             high_pass=None,

@@ -17,7 +17,12 @@ from swane.nipype_pipeline.interfaces.utils import (
     resolve_registration_engine,
     resolve_fmri_engine,
 )
-from swane.config.config_enums import BlockDesign, RegistrationEngine, FmriEngine
+from swane.config.config_enums import (
+    BlockDesign,
+    RegistrationEngine,
+    FmriEngine,
+    SliceTiming,
+)
 from swane.nipype_pipeline.interfaces.fmri.NilearnFirstLevel import NilearnFirstLevel
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 
@@ -218,6 +223,10 @@ def fMRI_task_workflow(
         # The GLM fit is BLAS-bound: the whole per-node budget, as num_threads
         # (Nipype derives n_procs from it); max_cpu == 0 ("auto") clamps to 1.
         nilearn_glm.inputs.num_threads = max_cpu if max_cpu and max_cpu > 0 else 1
+        # The preprocessing shifts every slice to the middle of the TR when the
+        # slice timing is known, so the design is sampled there too.
+        if slice_timing != SliceTiming.UNKNOWN:
+            nilearn_glm.inputs.slice_time_ref = 0.5
         workflow.connect(highpass, "out_file", nilearn_glm, "in_file")
         workflow.connect(dilatemask, "out_file", nilearn_glm, "mask_file")
         workflow.connect(getTR, "TR", nilearn_glm, "tr")

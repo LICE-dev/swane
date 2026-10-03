@@ -279,6 +279,15 @@ tool_reference_list = {
         url="https://github.com/rordenlab/niimath",
         references=[],
     ),
+    "NiiMathSliceTimer": ToolReference(
+        command="niimath -stc",
+        package=Package.NIIMATH,
+        url="https://github.com/rordenlab/niimath",
+        references=[
+            "Rorden C, Webster M, Drake C, et al. niimath and fslmaths: replication as a method to enhance popular neuroimaging tools. Aperture Neuro. 2024.",
+            "Cox RW. AFNI: software for analysis and visualization of functional magnetic resonance neuroimages. Comput Biomed Res. 1996;29(3):162-173.",
+        ],
+    ),
     "Cluster": ToolReference(
         command="fsl-cluster",
         package=Package.FSL,
@@ -515,5 +524,4 @@ equivalent_command_list = {
     "GetNiftiTR": "NVols",
     "ExtractVolumes": "NVols",
     "DeleteVolumes": "NVols",
-
 }
