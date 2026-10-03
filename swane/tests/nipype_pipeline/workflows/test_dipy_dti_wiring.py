@@ -64,8 +64,7 @@ MAX_CPU = 4
 
 @pytest.fixture
 def build_dipy_wf(subject_config, global_config, make_input_dir):
-    """Build the workflow with an optional registration engine / core budget.
-    """
+    """Build the workflow with an optional registration engine / core budget."""
 
     def _build(engine=None, max_cpu=MAX_CPU, tractography=True):
         section = subject_config[DataInputList.DTI]

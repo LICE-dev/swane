@@ -261,7 +261,6 @@ def test_dti_synth_falls_back_to_ants(subject_config, global_config, make_input_
     assert "SynthMorphReg" not in ifaces
     assert "LTAConvert" not in ifaces
     assert "FLIRT" not in ifaces
-    
 
     outputnode = _node_by_name(wf, "outputnode")
     dst_fields = {df for _, _, df in _incoming(wf, outputnode)}
