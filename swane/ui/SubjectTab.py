@@ -165,6 +165,16 @@ class SubjectTab(QTabWidget):
             msg_box.exec()
             self.workflow_had_error = True
             return
+        elif wf_report.signal_type == WorkflowSignals.WORKFLOW_CRASHED:
+            try:
+                self.workflow_process.stop_event.set()
+            except Exception:
+                pass
+            msg_box = QMessageBox()
+            msg_box.setText(strings.subj_tab_wf_crashed)
+            msg_box.exec()
+            self.workflow_had_error = True
+            return
 
         if wf_report.signal_type == WorkflowSignals.NODE_STARTED:
             icon = self.main_window.LOADING_MOVIE_FILE

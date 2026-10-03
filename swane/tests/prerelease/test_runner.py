@@ -241,3 +241,175 @@ def test_sigsegv_worker_fails_run_pass_without_waiting_for_timeout(
     assert result.node_errors
     assert "ref_bias_correction" in result.reason
     assert "timed out" not in result.reason
+
+
+def test_workflow_process_crash_is_detected(monkeypatch, tmp_path):
+    class CrashedWorkflowProcess:
+        def __init__(self, subject_name, workflow, signal_queue):
+            self.signal_queue = signal_queue
+            self.stop_event = _FakeEvent()
+            self.exitcode = 1
+
+        def start(self):
+            # Normal crash sends WORKFLOW_CRASHED then WORKFLOW_STOP
+            self.signal_queue.put(
+                WorkflowReport(
+                    WorkflowSignals.WORKFLOW_CRASHED,
+                )
+            )
+            self.signal_queue.put(
+                WorkflowReport(
+                    WorkflowSignals.WORKFLOW_STOP,
+                )
+            )
+
+        def is_alive(self):
+            return False
+
+        def join(self, timeout=None):
+            return None
+
+        def terminate(self):
+            return None
+
+    fake_main_workflow = types.ModuleType("swane.nipype_pipeline.MainWorkflow")
+    fake_main_workflow.MainWorkflow = lambda **kwargs: object()
+    fake_workflow_process = types.ModuleType("swane.workers.WorkflowProcess")
+    fake_workflow_process.WorkflowProcess = CrashedWorkflowProcess
+    monkeypatch.setitem(
+        sys.modules, "swane.nipype_pipeline.MainWorkflow", fake_main_workflow
+    )
+    monkeypatch.setitem(
+        sys.modules, "swane.workers.WorkflowProcess", fake_workflow_process
+    )
+    monkeypatch.setattr(runner, "Queue", _ImmediateQueue)
+    monkeypatch.setattr(runner, "DependencyManager", lambda: object())
+    monkeypatch.setattr(
+        runner,
+        "prepare_subject",
+        lambda *args, **kwargs: (str(tmp_path), None, None, None),
+    )
+
+    result = runner.run_pass(
+        _pass_item(),
+        exam=object(),
+        work_dir=str(tmp_path),
+        cores=1,
+        ram_gb=1.0,
+        timeout_seconds=30,
+    )
+
+    assert result.status == "error"
+    assert "workflow execution crashed (plugin-level exception" in result.reason
+
+
+def test_workflow_process_abnormal_exit_is_detected(monkeypatch, tmp_path):
+    class CrashedWorkflowProcess:
+        def __init__(self, subject_name, workflow, signal_queue):
+            self.signal_queue = signal_queue
+            self.stop_event = _FakeEvent()
+            self.exitcode = 1
+
+        def start(self):
+            # Normal crash sends WORKFLOW_STOP but ends with exitcode != 0
+            self.signal_queue.put(
+                WorkflowReport(
+                    WorkflowSignals.WORKFLOW_STOP,
+                )
+            )
+
+        def is_alive(self):
+            return False
+
+        def join(self, timeout=None):
+            return None
+
+        def terminate(self):
+            return None
+
+    fake_main_workflow = types.ModuleType("swane.nipype_pipeline.MainWorkflow")
+    fake_main_workflow.MainWorkflow = lambda **kwargs: object()
+    fake_workflow_process = types.ModuleType("swane.workers.WorkflowProcess")
+    fake_workflow_process.WorkflowProcess = CrashedWorkflowProcess
+    monkeypatch.setitem(
+        sys.modules, "swane.nipype_pipeline.MainWorkflow", fake_main_workflow
+    )
+    monkeypatch.setitem(
+        sys.modules, "swane.workers.WorkflowProcess", fake_workflow_process
+    )
+    monkeypatch.setattr(runner, "Queue", _ImmediateQueue)
+    monkeypatch.setattr(runner, "DependencyManager", lambda: object())
+    monkeypatch.setattr(
+        runner,
+        "prepare_subject",
+        lambda *args, **kwargs: (str(tmp_path), None, None, None),
+    )
+
+    result = runner.run_pass(
+        _pass_item(),
+        exam=object(),
+        work_dir=str(tmp_path),
+        cores=1,
+        ram_gb=1.0,
+        timeout_seconds=30,
+    )
+
+    assert result.status == "error"
+    assert "workflow process exited abnormally (exit code 1)" in result.reason
+
+
+def test_stale_results_are_deleted_before_run(monkeypatch, tmp_path):
+    subject_dir = tmp_path / "subject"
+    subject_dir.mkdir()
+    results_dir = subject_dir / "results"
+    results_dir.mkdir()
+    stale_file = results_dir / "stale_result.nii.gz"
+    stale_file.write_text("old data")
+
+    fake_main_workflow = types.ModuleType("swane.nipype_pipeline.MainWorkflow")
+    fake_main_workflow.MainWorkflow = lambda **kwargs: object()
+
+    class FakeWorkflowProcess:
+        def __init__(self, *args, **kwargs):
+            self.exitcode = 0
+            self.signal_queue = args[2]
+
+        def start(self):
+            self.signal_queue.put(WorkflowReport(WorkflowSignals.WORKFLOW_STOP))
+
+        def is_alive(self):
+            return False
+
+        def join(self, timeout=None):
+            pass
+
+        def terminate(self):
+            pass
+
+    monkeypatch.setitem(
+        sys.modules, "swane.nipype_pipeline.MainWorkflow", fake_main_workflow
+    )
+    fake_workflow_process = types.ModuleType("swane.workers.WorkflowProcess")
+    fake_workflow_process.WorkflowProcess = FakeWorkflowProcess
+    monkeypatch.setitem(
+        sys.modules, "swane.workers.WorkflowProcess", fake_workflow_process
+    )
+    monkeypatch.setattr(runner, "Queue", _ImmediateQueue)
+    monkeypatch.setattr(runner, "DependencyManager", lambda: object())
+
+    monkeypatch.setattr(
+        runner,
+        "prepare_subject",
+        lambda *args, **kwargs: (str(subject_dir), None, None, None),
+    )
+
+    runner.run_pass(
+        _pass_item(),
+        exam=object(),
+        work_dir=str(tmp_path),
+        cores=1,
+        ram_gb=1.0,
+        timeout_seconds=30,
+    )
+
+    assert not stale_file.exists()
