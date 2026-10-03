@@ -123,14 +123,16 @@ class DependencyManager:
         self.freesurfer = DependencyManager.check_freesurfer()
         self.graphviz = DependencyManager.check_graphviz()
 
-    def is_fsl(self) -> bool:
+    def is_fsl(self=None) -> bool:
         """
         Returns
         -------
         True if fsl is detected (even if outdated).
 
         """
-        return self.fsl.state != DependenceStatus.MISSING
+        if self is not None:
+            return self.fsl.state != DependenceStatus.MISSING
+        return DependencyManager.check_fsl().state != DependenceStatus.MISSING
 
     def is_dcm2niix(self) -> bool:
         """
@@ -219,6 +221,19 @@ class DependencyManager:
 
         """
         return DependencyManager.check_dipy().state != DependenceStatus.MISSING
+
+    @staticmethod
+    def is_nilearn() -> bool:
+        """
+        Returns
+        -------
+        True if the nilearn package is importable.
+
+        """
+        try:
+            return importlib.util.find_spec("nilearn") is not None
+        except Exception:
+            return False
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:

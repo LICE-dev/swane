@@ -37,6 +37,7 @@ from swane.config.config_enums import (
     SliceTiming,
     TractographyEngine,
     VeinDetectionMode,
+    FmriEngine,
 )
 from swane.utils.DataInputList import DataInputList as DIL
 
@@ -142,6 +143,14 @@ AXES = (
         option="engine",
         values=_enum_values(RegistrationEngine, "FSL", "SYNTH", "ANTS"),
         gates={"SYNTH": "synth_morph", "ANTS": "antspyx"},
+    ),
+    Axis(
+        name="fmri_engine",
+        scope=GLOBAL,
+        section=GlobalPrefCategoryList.SYNTH,
+        option="fmri_engine",
+        values=_enum_values(FmriEngine, "NILEARN", "FSL"),
+        gates={"NILEARN": "nilearn"},
     ),
     # The tissue-segmentation backend used by FLAT1: ANTS (antspyx Atropos, the
     # default, gated on antspyx) and FSL (FAST, always available). Only
@@ -370,13 +379,24 @@ AXES = (
         needs_input=DIL.FMRI_RS,
     ),
     Axis(
-        name="melodic_dim",
+        name="ic_dim",
         scope=SUBJECT,
         section=DIL.FMRI_RS,
-        option="melodic_dim",
+        option="ic_dim",
         values=("0", "20"),
         needs_input=DIL.FMRI_RS,
-        note="0 lets MELODIC estimate the dimensionality",
+        note="0 lets the fMRI engine estimate the dimensionality",
+    ),
+    # Read by the NILEARN engine only (threshold of the final IC maps). One
+    # value, the default: the NILEARN passes pin it so the axis is covered.
+    Axis(
+        name="spatial_z_thr",
+        scope=SUBJECT,
+        section=DIL.FMRI_RS,
+        option="spatial_z_thr",
+        values=("1.95",),
+        needs_input=DIL.FMRI_RS,
+        note="spatial z threshold of the final IC maps (NILEARN engine)",
     ),
 )
 
@@ -774,7 +794,7 @@ PASSES = (
         name="fmri_task_and_rest",
         description=(
             "Both task runs (rArA with dummy padding, rArBrArB without, "
-            "different slice timings) plus resting state with MELODIC/ICA-AROMA."
+            "different slice timings) plus resting state with the default NILEARN fMRI engine."
         ),
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
@@ -787,7 +807,30 @@ PASSES = (
             "fmri0_slice_timing": "UNKNOWN",
             "fmri1_slice_timing": "INTERLEAVED",
             "aroma": "true",
-            "melodic_dim": "0",
+            "ic_dim": "0",
+            "spatial_z_thr": "1.95",
+            "fmri_engine": "NILEARN",
+        },
+    ),
+    PassSpec(
+        name="fmri_task_and_rest_fsl",
+        description=(
+            "The FSL baseline twin of fmri_task_and_rest: task GLM and resting state "
+            "with FSL FEAT/MELODIC to ensure the legacy fMRI engine still passes."
+        ),
+        inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
+        values={
+            "freesurfer_step": "DISABLED",
+            "deskull_engine": "BET",
+            "registration_engine": "FSL",
+            "cuda": "false",
+            "fmri0_block_design": "RARA",
+            "fmri1_block_design": "RARB",
+            "fmri0_slice_timing": "UNKNOWN",
+            "fmri1_slice_timing": "INTERLEAVED",
+            "aroma": "true",
+            "ic_dim": "0",
+            "fmri_engine": "FSL",
         },
     ),
     # The explicit ANTS twin of fmri_task_and_rest (Phase 3): func->ref (task
@@ -815,14 +858,16 @@ PASSES = (
             "fmri0_slice_timing": "UNKNOWN",
             "fmri1_slice_timing": "INTERLEAVED",
             "aroma": "true",
-            "melodic_dim": "0",
+            "ic_dim": "0",
+            "spatial_z_thr": "1.95",
+            "fmri_engine": "NILEARN",
         },
     ),
     PassSpec(
         name="fmri_alt_settings",
         description=(
             "The remaining fMRI preference values: the other slice-timing "
-            "modes, a fixed MELODIC dimensionality, AROMA off."
+            "modes, a fixed ICA dimensionality, AROMA off."
         ),
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
@@ -835,7 +880,8 @@ PASSES = (
             "fmri0_slice_timing": "UP",
             "fmri1_slice_timing": "DOWN",
             "aroma": "false",
-            "melodic_dim": "20",
+            "ic_dim": "20",
+            "fmri_engine": "FSL",
         },
     ),
     # SynthMorph/SynthStrip coverage for the venous MR chain: venous_mr_workflow
@@ -1008,7 +1054,8 @@ _PASS_REQUIREMENTS = {
     # structural_ants: without antspyx the engine axis would silently
     # downgrade ANTS->FSL, exactly duplicating fmri_task_and_rest /
     # dti_tractography, so they are skipped with a clear reason instead.
-    "fmri_task_and_rest_ants": ("antspyx",),
+    "fmri_task_and_rest": ("nilearn",),
+    "fmri_task_and_rest_ants": ("antspyx", "nilearn"),
     "dti_tractography_ants": ("antspyx",),
     "structural_synthstrip": ("synth_strip",),
     "structural_synthmorph": ("synth_morph",),

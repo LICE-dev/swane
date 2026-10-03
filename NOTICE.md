@@ -39,8 +39,19 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 This project makes use of code, procedures and concepts derived from 
 NiPype (https://github.com/nipy/nipype), licensed under the Apache License, Version 2.0.
 This code has been modified from the original Nipype implementation
-to support custom command-line handling and integration with 3D Slicer and 
-is included in `slicer/nipype_pipeline` directory.
+to support custom command-line handling and integration with 3D Slicer.
+The Nipype-derived code is included in the paths below;
+each derived file is marked by a file-level disclaimer comment:
+
+- `swane/nipype_pipeline/engine/` (custom workflow and MultiProc plugin);
+- `swane/nipype_pipeline/interfaces/` (interfaces that extend Nipype base
+  classes or Nipype interfaces);
+- `swane/workers/WorkflowProcess.py`;
+- `swane/patches/nipype_patches.py` (runtime patches of Nipype);
+- `swane/nipype_pipeline/workflows/fMRI_preproc_workflow.py`, whose
+  preprocessing graph follows Nipype's `create_featreg_preproc` workflow
+  (closely matching node sequence and node naming). It is marked by the
+  same file-level disclaimer comment.
 
 
 **License**: Apache License, Version 2.0
@@ -165,3 +176,62 @@ committed to this repository.
 
 CC BY 4.0 requires attribution, which this notice provides; unlike the
 software licenses above, it carries no acceptance flow of its own.
+
+---
+## nilearn (fMRI engine)
+
+SWANe's nilearn fMRI engine depends on the `nilearn` pip package.
+SWANe does not modify or redistribute nilearn's source; it is installed as a
+regular Python dependency (see `setup.py`).
+
+**License**: BSD 3-Clause License.
+https://github.com/nilearn/nilearn/blob/main/LICENSE
+
+---
+## ICA-AROMA / ICA-AROMA-PY (fMRI resting-state denoising)
+
+SWANe's fMRI resting-state denoising integrates ICA-AROMA feature extraction
+and classification via the `ica_aroma_py` package. The algorithmic procedures
+derive from the original ICA-AROMA project (Pruim et al. 2015):
+https://github.com/maartenmennes/ICA-AROMA
+
+**Upstream repository**: https://github.com/maartenmennes/ICA-AROMA
+**Reference**: Pruim, R. H., et al. (2015). ICA-AROMA: A robust ICA-based strategy for removing motion artifacts from fMRI data. NeuroImage, 112, 267-277.
+**License**: Apache License, Version 2.0.
+
+**CSF mask**: the NILEARN resting-state engine builds its CSF nuisance ROI from
+the CSF mask bundled in the installed `ica_aroma_py` package
+(`ica_aroma_py/resources/mask_csf.nii.gz`, read at run time, not shipped by
+SWANe). Pruim et al. (2015) describe this mask as "a CSF segmentation prior,
+supplied as part of FSL", thresholded "at 95% of the robust range".
+
+---
+## MNI152NLin2009cAsym Probseg (TemplateFlow) and WM Prior Transform
+
+SWANe fetches the MNI152NLin2009cAsym WM probseg from TemplateFlow and applies a shipped transformation to map it to the MNI152NLin6Asym grid. 
+
+**Copyright**: (C) 1993–2004 Louis Collins, McConnell Brain Imaging Centre, Montreal Neurological Institute, McGill University.
+
+**License**: Permission to use, copy, modify, and distribute this software and its documentation for any purpose and without fee is hereby granted, provided that the above copyright notice appear in all copies. The authors and McGill University make no representations about the suitability of this software for any purpose. It is provided “as is” without express or implied warranty. The authors are not responsible for any data loss, equipment damage, property loss, or injury to subjects or patients resulting from the use or misuse of this software package.
+
+**Note on MNI152NLin6Asym**: SWANe ships a transformation
+(`swane/resources/priors/tpl-MNI152NLin6Asym_from-MNI152NLin2009cAsym_desc-swaneSyN_warp.nii.gz`
+and `..._affine.mat`) defined on the MNI152NLin6Asym 2 mm grid. It is a
+displacement field computed by SWANe (antspyx SyN) from the TemplateFlow
+`tpl-MNI152NLin2009cAsym` and `tpl-MNI152NLin6Asym` 2 mm T1w images and brain
+masks (see `swane/resources/priors/provenance.json`). SWANe does not ship
+either template image; both are fetched from TemplateFlow at run time.
+
+MNI152NLin6Asym is "FSL's MNI ICBM 152 non-linear 6th Generation Asymmetric
+Average Brain Stereotaxic Registration Model" (TemplateFlow
+`tpl-MNI152NLin6Asym`, author: Janke AL; https://github.com/templateflow/tpl-MNI152NLin6Asym),
+distributed with FSL (https://fsl.fmrib.ox.ac.uk/fsl/docs/other/datasets.html).
+Its symmetric counterpart, the MNI ICBM 152 non-linear 6th Generation Symmetric
+model, carries the McConnell Brain Imaging Centre notice (Copyright (C)
+1993–2009 Louis Collins, McConnell Brain Imaging Centre, Montreal Neurological
+Institute, McGill University;
+https://nist.mni.mcgill.ca/mni-icbm152-non-linear-6th-generation-symmetric-average-brain-stereotaxic-registration-model/).
+
+SWANe's Home tab lists MNI152NLin6Asym under the FSL licence
+(https://fsl.fmrib.ox.ac.uk/fsl/docs/license.html), since it is distributed
+with FSL and byte-identical to FSL's own `MNI152_T1` template.

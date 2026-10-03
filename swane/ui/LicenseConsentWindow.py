@@ -146,6 +146,12 @@ class LicenseConsentWindow(QDialog):
             warning_text = strings.license_consent_source_bundled.format(
                 tool=res.display_name
             )
+        if res.extra_note:
+            warning_text = (
+                warning_text + "\n\n" + res.extra_note
+                if warning_text
+                else res.extra_note
+            )
         self._warning.setText(warning_text)
         self._warning.setVisible(bool(warning_text))
 

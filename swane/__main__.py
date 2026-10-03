@@ -28,6 +28,16 @@ def main():
         else:
             app = QApplication.instance()
 
+        # Qt sets the C library LC_ALL to the host environment locale. In locales
+        # with comma decimals (e.g. it_IT, de_DE), this breaks C/C++ scientific
+        # libraries (ITK/ANTs) that parse floating-point numbers with '.' decimals.
+        import locale
+
+        try:
+            locale.setlocale(locale.LC_NUMERIC, "C")
+        except Exception:
+            pass
+
         # SWANe Icon definition
         app.setWindowIcon(QIcon(QPixmap(resources.appIcon_file)))
         # Desktop file name definition, needed on Linux/Wayland to match the running

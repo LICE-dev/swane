@@ -102,6 +102,16 @@ def build_replacements(tmp_root: str) -> list[tuple[str, str]]:
         site_roots.append(site.getusersitepackages())
     except Exception:
         pass
+    try:
+        import ica_aroma_py
+
+        if hasattr(ica_aroma_py, "__file__") and ica_aroma_py.__file__:
+            pkg_root = os.path.dirname(
+                os.path.dirname(os.path.abspath(ica_aroma_py.__file__))
+            )
+            site_roots.append(pkg_root)
+    except Exception:
+        pass
     for site_root in site_roots:
         add(site_root, "<SITE>")
     add(os.getcwd(), "<CWD>")

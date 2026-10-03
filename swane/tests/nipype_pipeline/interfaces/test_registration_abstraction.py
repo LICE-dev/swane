@@ -350,8 +350,8 @@ class TestResolveRegistrationEngine:
 
         synth = global_config[GlobalPrefCategoryList.SYNTH]
         assert (
-            resolve_registration_engine(synth, allow_ants=False)
-            == RegistrationEngine.FSL
+            resolve_registration_engine(synth, allow_synth=False)
+            == RegistrationEngine.ANTS
         )
 
     def test_synth_honoured_even_when_ants_disallowed(self, global_config):
@@ -361,8 +361,8 @@ class TestResolveRegistrationEngine:
         synth = global_config[GlobalPrefCategoryList.SYNTH]
         synth["engine"] = "SYNTH"
         assert (
-            resolve_registration_engine(synth, allow_ants=False)
-            == RegistrationEngine.SYNTH
+            resolve_registration_engine(synth, allow_synth=False)
+            == RegistrationEngine.ANTS
         )
 
 

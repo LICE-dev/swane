@@ -65,10 +65,6 @@ MAX_CPU = 4
 @pytest.fixture
 def build_dipy_wf(subject_config, global_config, make_input_dir):
     """Build the workflow with an optional registration engine / core budget.
-
-    A non-FSL deskull engine keeps the shared head FSL-free; the registration
-    engine follows the SYNTH ``engine`` preference (spec section 1), defaulting
-    to ANTs when unset.
     """
 
     def _build(engine=None, max_cpu=MAX_CPU, tractography=True):
@@ -128,8 +124,7 @@ class TestNodePresence:
 class TestRegistrationEngine:
     """The abstracted registration step follows the user's global engine choice
     (spec section 1), which drives the interface built and the format the
-    diff->ref affine is read from. The dipy engine's own steps stay FSL-free;
-    it never uses AffineToFSL (its tracker consumes a plain RAS affine)."""
+    diff->ref affine is read from."""
 
     @pytest.mark.parametrize(
         "engine,reg_iface,ras_fmt",

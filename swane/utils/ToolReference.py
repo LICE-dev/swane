@@ -8,6 +8,7 @@ class Package(Enum):
     NIPY = "nipy"
     DIPY = "dipy"
     NIIMATH = "niimath"
+    NILEARN = "nilearn"
     OTHER = "Other"
 
 
@@ -308,24 +309,6 @@ tool_reference_list = {
         url=spatialimages_url,
         references=[nibabel_reference],
     ),
-    "GetNiftiTR": ToolReference(
-        command="spatialimages [NiBabel]",
-        package=Package.NIPY,
-        url=spatialimages_url,
-        references=[nibabel_reference],
-    ),
-    "ExtractVolumes": ToolReference(
-        command="spatialimages [NiBabel]",
-        package=Package.NIPY,
-        url=spatialimages_url,
-        references=[nibabel_reference],
-    ),
-    "DeleteVolumes": ToolReference(
-        command="spatialimages [NiBabel]",
-        package=Package.NIPY,
-        url=spatialimages_url,
-        references=[nibabel_reference],
-    ),
     "ImageStatistics": ToolReference(
         command="statistics [NumPy]",
         package=Package.OTHER,
@@ -460,11 +443,39 @@ tool_reference_list = {
             "Tustison NJ, Cook PA, Holbrook AJ, et al. The ANTsX ecosystem for quantitative biological and medical imaging. Sci Rep. 2021;11:9068."
         ],
     ),
+    "AntsMotionCorrection": ToolReference(
+        command="motion_correction [antspyx]",
+        package=Package.ANTS,
+        url="",
+        references=[
+            "Avants BB, Epstein CL, Grossman M, Gee JC. Symmetric diffeomorphic image registration with cross-correlation: evaluating automated labeling of elderly and neurodegenerative brain. Med Image Anal. 2008;12(1):26-41.",
+            "Tustison NJ, Cook PA, Holbrook AJ, et al. The ANTsX ecosystem for quantitative biological and medical imaging. Sci Rep. 2021;11:9068.",
+        ],
+    ),
     "AffineToRAS": ToolReference(
         command="linear [nitransforms]",
         package=Package.NIPY,
         url="https://github.com/nipy/nitransforms",
         references=[],
+    ),
+    # NILEARN
+    "NilearnCanICA": ToolReference(
+        command="CanICA [nilearn]",
+        package=Package.NILEARN,
+        url="https://nilearn.github.io/stable/modules/generated/nilearn.decomposition.CanICA.html",
+        references=[
+            "Varoquaux G, Sadaghiani S, Poline JB, et al. A group model for stable multi-subject ICA on fMRI datasets. NeuroImage. 2010;51(1):288-299.",
+            "Hyvärinen A, Oja E. Independent component analysis: algorithms and applications. Neural Networks. 2000;13(4-5):411-430.",
+        ],
+    ),
+    "NilearnFirstLevel": ToolReference(
+        command="FirstLevelModel [nilearn]",
+        package=Package.NILEARN,
+        url="https://nilearn.github.io/stable/modules/generated/nilearn.glm.first_level.FirstLevelModel.html",
+        references=[
+            "Friston KJ, Holmes AP, Worsley KJ, et al. Statistical parametric maps in functional imaging: a general linear approach. Hum Brain Mapp. 1994;2(4):189-210.",
+            "Abraham A, Pedregosa F, Eickenberg M, et al. Machine learning for neuroimaging with scikit-learn. Front Neuroinform. 2014;8:14.",
+        ],
     ),
 }
 
@@ -500,4 +511,9 @@ equivalent_command_list = {
     "SynthMorphApply": "SynthMorphReg",
     "EddyCorrect": "Eddy",
     "AntsApplyTransforms": "AntsRegistration",
+    "AntsComposeTransform": "AntsRegistration",
+    "GetNiftiTR": "NVols",
+    "ExtractVolumes": "NVols",
+    "DeleteVolumes": "NVols",
+
 }

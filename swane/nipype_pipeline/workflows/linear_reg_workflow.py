@@ -102,7 +102,7 @@ def linear_reg_workflow(
     # follow the configured engine (ANTs by default). nonlinear_reg_workflow
     # stays pinned to FSL (see its own allow_ants=False) until its FSL-specific
     # ApplyWarp consumers are ported (Phase 2/3).
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    engine = resolve_registration_engine(synth_config)
 
     # Input Node
     inputnode = Node(
