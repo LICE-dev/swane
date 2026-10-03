@@ -253,3 +253,23 @@ def test_swane_log_nodes_cb_creates_dict(monkeypatch):
     # call the callback with status not 'end' and 'end'
     swane_log_nodes_cb(Node(), "start")
     swane_log_nodes_cb(Node(), "end")
+
+
+def test_workflow_run_worker_crash_sets_exitcode(monkeypatch, tmp_path):
+    import pytest
+
+    class CrashingWorkflow(DummyWorkflow):
+        def run(self, plugin=None):
+            raise ValueError("Intentional crash")
+
+    workflow = CrashingWorkflow()
+    workflow.base_dir = str(tmp_path)
+    workflow.freesurfer = None
+    workflow.config = {"execution": {}}
+
+    wp = WorkflowProcess("subj", workflow, Queue())
+
+    with pytest.raises(SystemExit) as exc:
+        wp.run()
+    assert exc.value.code == 1
+    assert getattr(wp, "run_raised", False) is True
