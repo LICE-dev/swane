@@ -104,6 +104,9 @@ setup(
         # Keep >=0.3.2 to ensure compatibility with the antspyx version
         # required for Intel macOS.
         "antspynet>=0.3.2",
+        # CA bundle for the antspynet weights download (python.org macOS builds
+        # have no system certificates): see swane/utils/antspynet_weights.py.
+        "certifi",
         # Nipype 1.12 requires numpy >= 2.2.0.
         "numpy>=2.2.0",
         # For macOS Intel, TensorFlow is checked at the top of this script
