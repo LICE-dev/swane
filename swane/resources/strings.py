@@ -607,3 +607,6 @@ license_consent_fsl_not_installed = (
     "it also covers the MNI152NLin6Asym template SWANe downloads and uses "
     "(AROMA registration target, XTRACT/FLAT1)."
 )
+subj_tab_wf_crashed = (
+    "Workflow execution crashed unexpectedly. Check the logs for details."
+)

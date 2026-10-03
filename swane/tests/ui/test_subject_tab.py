@@ -144,3 +144,22 @@ class TestSubjectTab:
 
         progress = tab.generate_scene()
         assert progress.isVisible() is False
+
+
+def test_workflow_crash_signal_updates_tab_states(
+    qtbot, monkeypatch, main_window, tmp_path
+):
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_crash",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
+
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_CRASHED))
+    assert tab.workflow_had_error is True
