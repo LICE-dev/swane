@@ -32,11 +32,7 @@ def test_nilearn_first_level(tmp_path, monkeypatch):
         f.write("5\n15\n")
 
     # Events from FMRIGenSpec (Bunch)
-    events = Bunch(
-        conditions=["TaskA"],
-        onsets=[[10]],
-        durations=[[10]]
-    )
+    events = Bunch(conditions=["TaskA"], onsets=[[10]], durations=[[10]])
 
     # Contrasts from FMRIGenSpec
     contrasts = [["TaskA", "T", ["TaskA"], [1]]]

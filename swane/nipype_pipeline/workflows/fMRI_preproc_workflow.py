@@ -380,7 +380,10 @@ def fMRI_preproc_workflow(
 
         workflow.connect(maskfunc2, "out_file", smooth, "in_file")
         workflow.connect(
-            medianval, ("percentile_values", get_bt_thresh), smooth, "brightness_threshold"
+            medianval,
+            ("percentile_values", get_bt_thresh),
+            smooth,
+            "brightness_threshold",
         )
         workflow.connect(mergenode, ("out", get_usans), smooth, "usans")
 

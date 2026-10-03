@@ -515,5 +515,4 @@ equivalent_command_list = {
     "GetNiftiTR": "NVols",
     "ExtractVolumes": "NVols",
     "DeleteVolumes": "NVols",
-
 }
