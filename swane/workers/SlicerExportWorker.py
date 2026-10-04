@@ -1,4 +1,5 @@
 from swane.utils.qt_compat import QRunnable, Signal, QObject
+import logging
 import os
 import subprocess
 
@@ -60,17 +61,27 @@ class SlicerExportWorker(QRunnable):
             str(vein_threshold_ct),
         ]
 
-        popen = subprocess.Popen(
-            cmd,
-            cwd=self.result_dir,
-            stdout=subprocess.PIPE,
-            universal_newlines=True,
-        )
-        for stdout_line in iter(popen.stdout.readline, ""):
-            if stdout_line.startswith(self.PROGRESS_MSG_PREFIX):
-                self.signal.export.emit(
-                    stdout_line.replace(self.PROGRESS_MSG_PREFIX, "").replace("\n", "")
-                )
-        popen.stdout.close()
-        popen.wait()
-        self.signal.export.emit(self.END_MSG)
+        try:
+            popen = subprocess.Popen(
+                cmd,
+                cwd=self.result_dir,
+                stdout=subprocess.PIPE,
+                universal_newlines=True,
+            )
+            for stdout_line in iter(popen.stdout.readline, ""):
+                if stdout_line.startswith(self.PROGRESS_MSG_PREFIX):
+                    self.signal.export.emit(
+                        stdout_line.replace(self.PROGRESS_MSG_PREFIX, "").replace(
+                            "\n", ""
+                        )
+                    )
+            popen.stdout.close()
+            popen.wait()
+        except OSError as e:
+            # Missing/stale Slicer path or permission problem: report it, but
+            # never leave the modal progress dialog waiting for END_MSG.
+            logging.getLogger(__name__).error(
+                "3D Slicer export failed to run %s: %s", self.slicer_path, e
+            )
+        finally:
+            self.signal.export.emit(self.END_MSG)

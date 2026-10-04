@@ -277,7 +277,17 @@ if _swane_os.path.isdir(_swane_workers_dir):
             for entry in split:
                 cmd = os.path.abspath(os.path.join(os.path.dirname(entry), rel_path))
                 break
-            if cmd == "" or not os.path.exists(cmd):
+            output2 = None
+            if cmd != "" and os.path.exists(cmd):
+                try:
+                    output2 = subprocess.run(
+                        [cmd, "--version"], stdout=subprocess.PIPE
+                    ).stdout.decode("utf-8")
+                except OSError:
+                    # stale path / not executable: treat as not found
+                    output2 = None
+                    cmd = ""
+            if output2 is None:
                 # if slicer executable is not found, search entire filesystem if we were searchng a specific folder
                 # otherwise stop loop, slicer is not detectable on system
                 if self.current_slicer_path != "":
@@ -288,10 +298,7 @@ if _swane_os.path.isdir(_swane_workers_dir):
             else:
                 # if slicer command is found, version check
                 repeat = False
-                output2 = subprocess.run(
-                    [cmd, "--version"], stdout=subprocess.PIPE
-                ).stdout.decode("utf-8")
-                slicer_version = output2.replace("Slicer ", "").replace("\n", "")
+                slicer_version = output2.replace("Slicer ", "").strip()
                 if not DependencyManager.check_slicer_version(slicer_version):
                     label = strings.check_dep_slicer_wrong_version % (
                         version_with_license(SLICER, slicer_version),
@@ -314,9 +321,12 @@ if _swane_os.path.isdir(_swane_workers_dir):
                         module_install_script,
                         ",".join(DependencyManager.SLICER_MODULES),
                     ]
-                    output3 = subprocess.run(
-                        cmd3, stdout=subprocess.PIPE
-                    ).stdout.decode("utf-8")
+                    try:
+                        output3 = subprocess.run(
+                            cmd3, stdout=subprocess.PIPE
+                        ).stdout.decode("utf-8")
+                    except OSError:
+                        output3 = ""
                     if "MODULE FOUND" in output3:
                         state = DependenceStatus.DETECTED
                         label = strings.check_dep_slicer_found % version_with_license(

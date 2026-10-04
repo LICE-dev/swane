@@ -77,3 +77,19 @@ def test_slicer_export_keeps_script_path_separate(monkeypatch, tmp_path):
     # thresholds are separate elements, not concatenated onto the path
     for flag in ("--dti_threshold", "--vein_threshold_mr", "--vein_threshold_ct"):
         assert flag in cmd
+
+
+def test_slicer_export_emits_end_msg_when_executable_missing(monkeypatch, tmp_path):
+    """A stale/missing Slicer path makes Popen raise OSError: the modal progress
+    dialog is closed by END_MSG, so it must still be emitted exactly once."""
+    emitted = []
+
+    def raising_popen(cmd, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory", cmd[0])
+
+    monkeypatch.setattr(subprocess, "Popen", raising_popen)
+
+    w = SlicerExportWorker("/stale/Slicer", str(tmp_path), ".mrml", FakeConfig())
+    w.signal.export.connect(lambda msg: emitted.append(msg))
+    w.run()
+    assert emitted == [SlicerExportWorker.END_MSG]
