@@ -18,7 +18,7 @@ def test_run_emits_when_newer_available(monkeypatch):
     worker = UpdateCheckWorker()
     worker.signal.last_available.connect(emitted.append)
 
-    def fake_run(cmd, shell, stdout, stderr):
+    def fake_run(cmd, stdout, stderr):
         captured["cmd"] = cmd
         captured["stderr"] = stderr
         return type("P", (), {"stdout": b"swane (9999.9.9)\n"})
@@ -29,7 +29,9 @@ def test_run_emits_when_newer_available(monkeypatch):
     assert emitted == ["9999.9.9"]
     # stderr is silenced cross-platform via DEVNULL, not the POSIX-only 2>/dev/null
     assert captured["stderr"] is subprocess.DEVNULL
-    assert "2>/dev/null" not in captured["cmd"]
+    # argv list without a shell: interpreter paths with spaces are not split
+    assert isinstance(captured["cmd"], list)
+    assert captured["cmd"][1:] == ["-m", "pip", "index", "versions", "swane"]
 
 
 def test_run_silent_when_up_to_date(monkeypatch):
@@ -37,10 +39,26 @@ def test_run_silent_when_up_to_date(monkeypatch):
     worker = UpdateCheckWorker()
     worker.signal.last_available.connect(emitted.append)
 
-    def fake_run(cmd, shell, stdout, stderr):
+    def fake_run(cmd, stdout, stderr):
         return type("P", (), {"stdout": b"swane (0.0.1)\n"})
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     worker.run()
 
     assert emitted == []
+
+
+def test_run_parses_crlf_output(monkeypatch):
+    emitted = []
+    worker = UpdateCheckWorker()
+    worker.signal.last_available.connect(emitted.append)
+
+    def fake_run(cmd, stdout, stderr):
+        return type(
+            "P", (), {"stdout": b"WARNING: x\r\nswane (9999.9.9)\r\n  Available\r\n"}
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    worker.run()
+
+    assert emitted == ["9999.9.9"]
