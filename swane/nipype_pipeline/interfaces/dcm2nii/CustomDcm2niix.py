@@ -7,13 +7,17 @@ from nipype.interfaces.dcm2nii import Dcm2niix, Dcm2niixInputSpec
 from nipype.pipeline.engine.nodes import NodeExecutionError
 from nipype.interfaces.base import traits
 
+from swane.patches.windows_compat import shell_executable
+
 # absolute path to the dcm2niix binary shipped by the pip package, so no
 # system dcm2niix installation is required. The package exposes the path
-# without the Windows suffix, so we add it ourselves when needed
+# without the Windows suffix, so we add it ourselves when needed. Nipype runs
+# ``_cmd`` through a shell, so on Windows the path is quoted (it may contain
+# spaces); elsewhere it is used unchanged.
 _dcm2niix_binary = Path(dcm2niix.bin)
 if platform.system() == "Windows" and _dcm2niix_binary.suffix != ".exe":
     _dcm2niix_binary = _dcm2niix_binary.with_suffix(".exe")
-DCM2NIIX_CMD = str(_dcm2niix_binary)
+DCM2NIIX_CMD = shell_executable(str(_dcm2niix_binary))
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.dcm2nii.Dcm2niixInputSpec)  -*-
