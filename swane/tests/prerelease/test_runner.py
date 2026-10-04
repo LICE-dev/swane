@@ -412,3 +412,31 @@ def test_stale_results_are_deleted_before_run(monkeypatch, tmp_path):
     )
 
     assert not stale_file.exists()
+
+
+def test_list_json_prints_only_the_runnable_pass_names(monkeypatch, capsys):
+    """--list-json: stdout is exactly one JSON list of non-skipped passes."""
+    from swane.tests.prerelease import __main__ as cli
+    from swane.tests.prerelease import capabilities as caps_mod
+
+    caps = caps_mod.Capabilities(cores=4, ram_gb=14.0)
+
+    def fake_probe(**kwargs):
+        print("probing chatter that must not reach stdout")
+        return caps
+
+    monkeypatch.setattr(caps_mod, "probe", fake_probe)
+    monkeypatch.setattr(cli, "user_slicer_path", lambda: "")
+    plan = [
+        SimpleNamespace(name="runs", skipped=False),
+        SimpleNamespace(name="skipped_one", skipped=True),
+        SimpleNamespace(name="also_runs", skipped=False),
+    ]
+    import swane.tests.prerelease.plan as plan_mod
+
+    monkeypatch.setattr(plan_mod, "build_plan", lambda *a, **k: plan)
+
+    assert cli.main(["--list-json"]) == 0
+    out = capsys.readouterr()
+    assert json.loads(out.out) == ["runs", "also_runs"]
+    assert "chatter" in out.err
