@@ -141,10 +141,10 @@ jobs:
         run: |
           python -m swane.tests.prerelease --dry-run --cores 4 --ram 14 | tee dry-run.txt
           if [ -n "$REQUESTED_PASSES" ]; then
-            passes=$(python -c "import json,sys; print(json.dumps([p.strip() for p in sys.argv[1].split(',') if p.strip()]))" "$REQUESTED_PASSES")
+            passes=$(python -c "import json,sys; print(json.dumps([p.strip() for p in sys.argv[1].split(',') if p.strip()]))" "$REQUESTED_PASSES" | tr -d '\r')
           else
             # stdout carries only the JSON list; probe chatter goes to stderr
-            passes=$(python -m swane.tests.prerelease --list-json --cores 4 --ram 14)
+            passes=$(python -m swane.tests.prerelease --list-json --cores 4 --ram 14 | tr -d '\r')
           fi
           echo "passes=$passes" >> "$GITHUB_OUTPUT"
       - if: always()
@@ -196,7 +196,7 @@ jobs:
         shell: bash
         run: >
           python -m swane.tests.prerelease --only ${{ matrix.pass }}
-          --cores 4 --ram 14 --work-dir "D:/swp" --timeout 5.5
+          --cores 4 --ram 14 --work-dir "D:/swp" --timeout 5
       # Reports and logs only: never dicom/, the phantom or result volumes.
       # Per-pass layout: D:/swp/<pass>/{pass_result.json,log/}; crash files
       # are text (crashfile_format=txt) in log/, beside pypeline.log[.N].
@@ -212,3 +212,37 @@ jobs:
             D:/swp/*/pass_result.json
             D:/swp/*/log/*.txt
             D:/swp/*/log/pypeline.log*
+
+  prerelease-summary:
+    needs: [prerelease-plan, prerelease-run]
+    if: ${{ always() && needs.prerelease-plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The merge script is stdlib only: no SWANe install needed.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: prerelease-*
+          path: artifacts
+          merge-multiple: false
+      - name: Merge pass results
+        shell: bash
+        env:
+          EXPECTED_PASSES: ${{ needs.prerelease-plan.outputs.passes }}
+        run: |
+          set +e
+          python swane/tests/prerelease/ci_summary.py artifacts \
+            --expected "$EXPECTED_PASSES" --output prerelease-summary.md > /dev/null
+          rc=$?
+          cat prerelease-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prerelease-summary
+          path: prerelease-summary.md
+          if-no-files-found: ignore
