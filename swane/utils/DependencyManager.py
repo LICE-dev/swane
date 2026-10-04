@@ -104,7 +104,7 @@ class DependencyManager:
     # Kept in sync with the antspynet pin in setup.py.
     MIN_ANTSPYNET_VERSION = "0.3.2"
     # Kept in sync with the dipy pin in setup.py.
-    MIN_DIPY_VERSION = "1.12.0"
+    MIN_DIPY_VERSION = "1.12.1"
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"

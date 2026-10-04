@@ -403,13 +403,13 @@ check_dep_antspynet_wrong_version = (
 )
 check_dep_antspynet_found = "antspynet detected (%s)"
 check_dep_dipy_error = (
-    "dipy not detected (<a href='https://dipy.org/documentation/1.12.0/installation/"
-    "'>installation info</a>)"
+    "dipy not detected (<a href='https://docs.dipy.org/stable/user_guide/"
+    "installation.html'>installation info</a>)"
 )
 check_dep_dipy_no_version = "dipy detected, but its version could not be determined"
 check_dep_dipy_wrong_version = (
     "dipy version outdated (found %s, required %s). Please "
-    "<a href='https://dipy.org/documentation/1.12.0/installation/'>update</a>"
+    "<a href='https://docs.dipy.org/stable/user_guide/installation.html'>update</a>"
 )
 check_dep_dipy_found = "dipy detected (%s)"
 check_dep_nilearn_found = "nilearn detected (%s)"

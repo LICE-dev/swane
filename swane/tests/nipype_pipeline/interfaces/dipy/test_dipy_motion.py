@@ -79,6 +79,88 @@ class TestDefaultPipelineIsRigidOnly:
         assert "affine" not in motion_module.DEFAULT_PIPELINE
 
 
+class TestOptimizerOptionsArePinned:
+    """Every dipy registration call receives explicit optimizer options.
+
+    dipy 1.12.1 moved the ``{"gtol": 1e-4, "ftol": 1e-3}`` default from
+    ``affine_registration`` to ``register_dwi_series`` only, so relying on dipy's
+    defaults made the parallel path (direct ``affine_registration`` calls) run with
+    scipy's much tighter ftol and diverge from the serial path. Each call must get
+    the pinned values in a fresh dict, because dipy's AffineRegistration mutates it.
+    """
+
+    EXPECTED = {"gtol": 1e-4, "ftol": 1e-3}
+
+    def _assert_pinned(self, options):
+        assert options == self.EXPECTED
+        assert options is not motion_module.DEFAULT_OPTIMIZER_OPTIONS
+
+    def _gtab_and_img(self, bvals):
+        from dipy.core.gradients import gradient_table
+
+        n = len(bvals)
+        data = np.random.default_rng(3).random((6, 6, 4, n))
+        bvecs = np.zeros((n, 3))
+        bvecs[np.asarray(bvals) > 0] = [1.0, 0.0, 0.0]
+        gtab = gradient_table(np.asarray(bvals, dtype=float), bvecs=bvecs)
+        return nib.Nifti1Image(data, np.eye(4)), gtab
+
+    def test_constant_value(self):
+        assert motion_module.DEFAULT_OPTIMIZER_OPTIONS == self.EXPECTED
+
+    def test_serial_path_passes_options(self, monkeypatch):
+        seen = {}
+
+        def spy_motion_correction(img, gtab, **kwargs):
+            seen.update(kwargs)
+            return img, np.zeros((4, 4, img.shape[-1]))
+
+        monkeypatch.setattr(motion_module, "motion_correction", spy_motion_correction)
+        img, gtab = self._gtab_and_img([0, 1000, 1000])
+        _serial_motion_correction(img, gtab)
+        self._assert_pinned(seen["optimizer_options"])
+
+    def test_parallel_b0_registration_passes_options(self, monkeypatch):
+        seen = {}
+
+        def spy_register_series(b0_img, ref, **kwargs):
+            seen.update(kwargs)
+            n = b0_img.shape[-1]
+            return np.asanyarray(b0_img.dataobj), np.repeat(
+                np.eye(4)[..., np.newaxis], n, axis=-1
+            )
+
+        def fake_register_moving_volumes(moving_data, static, aff, pipeline, n):
+            affs = np.repeat(np.eye(4)[..., np.newaxis], moving_data.shape[-1], -1)
+            return moving_data.astype(np.float32), affs
+
+        monkeypatch.setattr(motion_module, "register_series", spy_register_series)
+        monkeypatch.setattr(
+            motion_module, "_register_moving_volumes", fake_register_moving_volumes
+        )
+        # Two b0s so the b0-to-b0 register_series branch actually runs.
+        img, gtab = self._gtab_and_img([0, 0, 1000])
+        _parallel_motion_correction(img, gtab, 1)
+        self._assert_pinned(seen["optimizer_options"])
+
+    def test_parallel_worker_registration_passes_options(self, monkeypatch):
+        seen = {}
+
+        def spy_affine_registration(moving, static, **kwargs):
+            seen.update(kwargs)
+            return moving, np.eye(4)
+
+        monkeypatch.setattr(
+            motion_module, "affine_registration", spy_affine_registration
+        )
+        monkeypatch.setattr(motion_module, "_worker_static", np.zeros((6, 6, 4)))
+        monkeypatch.setattr(motion_module, "_worker_static_affine", np.eye(4))
+        motion_module._register_one_volume(
+            0, np.zeros((6, 6, 4)), np.eye(4), motion_module.DEFAULT_PIPELINE
+        )
+        self._assert_pinned(seen["optimizer_options"])
+
+
 # --------------------------------------------------------------------------- #
 # Layer 1a - reassembly by index
 # --------------------------------------------------------------------------- #
