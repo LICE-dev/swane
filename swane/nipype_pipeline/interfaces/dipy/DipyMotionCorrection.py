@@ -67,6 +67,15 @@ OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
 # equivalent.
 DEFAULT_PIPELINE = ["center_of_mass", "translation", "rigid"]
 
+# L-BFGS-B options for every registration call, passed explicitly instead of
+# relying on dipy's defaults. dipy <= 1.12.0 applied these inside
+# ``affine_registration``; 1.12.1 moved them to ``register_dwi_series`` only, so a
+# direct ``affine_registration`` call (the parallel path) fell back to scipy's
+# ftol (~2.2e-9) and diverged from the serial path. Pinning them here keeps both
+# paths bit-for-bit equal and the output identical to dipy 1.12.0. Each call gets
+# a fresh copy because dipy's AffineRegistration mutates the dict (maxfun).
+DEFAULT_OPTIMIZER_OPTIONS = {"gtol": 1e-4, "ftol": 1e-3}
+
 # Module-level globals populated by ``_worker_initializer`` in each worker.
 # Under ``spawn`` (Windows/macOS) each worker re-imports the module from scratch,
 # so these start as ``None``; under ``fork`` (Linux) they are inherited from the
@@ -154,6 +163,7 @@ def _register_one_volume(index, moving, moving_affine, pipeline):
             moving_affine=moving_affine,
             static_affine=_worker_static_affine,
             pipeline=pipeline,
+            optimizer_options=dict(DEFAULT_OPTIMIZER_OPTIONS),
         )
     return index, transformed, reg_affine
 
@@ -246,7 +256,12 @@ def _serial_motion_correction(img, gtab, blas_threads=1):
     DEFAULT_PIPELINE) and break the equivalence oracle.
     """
     with threadpool_limits(limits=max(1, int(blas_threads))):
-        return motion_correction(img, gtab, pipeline=DEFAULT_PIPELINE)
+        return motion_correction(
+            img,
+            gtab,
+            pipeline=DEFAULT_PIPELINE,
+            optimizer_options=dict(DEFAULT_OPTIMIZER_OPTIONS),
+        )
 
 
 def _parallel_motion_correction(img, gtab, num_threads):
@@ -265,7 +280,10 @@ def _parallel_motion_correction(img, gtab, num_threads):
         b0_img = nib.Nifti1Image(data[..., b0s_mask], affine)
         with threadpool_limits(limits=1):
             trans_b0, b0_affines = register_series(
-                b0_img, ref=0, pipeline=DEFAULT_PIPELINE
+                b0_img,
+                ref=0,
+                pipeline=DEFAULT_PIPELINE,
+                optimizer_options=dict(DEFAULT_OPTIMIZER_OPTIONS),
             )
         ref_data = np.mean(trans_b0, -1, keepdims=True)
     else:
