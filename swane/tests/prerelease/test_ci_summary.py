@@ -2,7 +2,11 @@
 
 import json
 
+from swane.tests.prerelease import capabilities as caps_mod
+from swane.tests.prerelease import checks as checks_mod
 from swane.tests.prerelease import ci_summary
+from swane.tests.prerelease import report as report_mod
+from swane.tests.prerelease import runner
 
 DRY_RUN = """Capabilities
   [yes] dcm2niix
@@ -18,12 +22,23 @@ Dry run: nothing was executed.
 """
 
 
-def _write(root, artifact, name, **fields):
-    folder = root / artifact / name
-    folder.mkdir(parents=True)
-    data = {"name": name, "status": "completed", "node_errors": [], "checks": []}
-    data.update(fields)
-    (folder / "pass_result.json").write_text(json.dumps(data))
+def _write(root, artifact, name, checks=(), **fields):
+    """Produce one matrix-job artifact with the real writers: pass_result.json
+    (before the checks, as run_passes does) and prerelease_report.json (after)."""
+    folder = root / artifact
+    subject_dir = folder / name
+    subject_dir.mkdir(parents=True)
+    fields.setdefault("status", "completed")
+    result = runner.PassResult(name=name, subject_dir=str(subject_dir), **fields)
+    runner._write_pass_result(result)
+    result.checks = [
+        checks_mod.CheckResult(c["name"], c["passed"], severity=c["severity"])
+        for c in checks
+    ]
+    report = report_mod.build_report(
+        [result], caps_mod.Capabilities(cores=4, ram_gb=14.0), {}, str(folder), {}
+    )
+    report_mod.write_json(report, str(folder))
 
 
 def test_all_passes_ok(tmp_path):
@@ -65,6 +80,22 @@ def test_failures_are_reported_and_fail(tmp_path):
     assert "| b | FAILED |" in markdown
     assert "c.shape" in markdown and "c.soft" not in markdown
     assert "| d | ok |" in markdown
+
+
+def test_pass_result_file_has_no_checks_so_report_is_needed(tmp_path):
+    """Guards the producer shape: pass_result.json never carries the checks."""
+    _write(
+        tmp_path,
+        "prerelease-a",
+        "a",
+        checks=[{"name": "a.x", "passed": False, "severity": "error"}],
+    )
+    data = json.loads(
+        (tmp_path / "prerelease-a" / "a" / "pass_result.json").read_text()
+    )
+    assert data["checks"] == []
+    markdown, ok = ci_summary.build_summary(str(tmp_path), ["a"])
+    assert not ok and "a.x" in markdown
 
 
 def test_expected_pass_without_result_fails(tmp_path):
