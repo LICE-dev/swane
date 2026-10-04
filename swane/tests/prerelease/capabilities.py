@@ -84,7 +84,7 @@ def _probe_fsl(dependency_manager: DependencyManager, caps: Capabilities) -> Non
         (
             "FSL %s" % os.environ.get("FSLDIR", "?")
             if dependency_manager.is_fsl()
-            else "no usable FSL (>= %s) found; nothing can run"
+            else "no usable FSL (>= %s) found; FSL engines are dropped"
             % DependencyManager.MIN_FSL_VERSION
         ),
     )
@@ -338,6 +338,16 @@ def _probe_dipy(caps: Capabilities) -> None:
         )
 
 
+def _probe_tractography(caps: Capabilities) -> None:
+    """Tractography runs with either engine: FSL XTRACT or dipy RecoBundles."""
+    ok = caps.has("xtract") or caps.has("dipy")
+    caps.add(
+        "tractography",
+        ok,
+        "XTRACT or dipy available" if ok else "neither XTRACT nor dipy is usable",
+    )
+
+
 def _probe_gpu(caps: Capabilities) -> None:
     try:
         is_cuda = ResourceManager.is_cuda()
@@ -350,9 +360,13 @@ def _probe_gpu(caps: Capabilities) -> None:
     )
 
 
-def _probe_xtract(caps: Capabilities) -> None:
+def _probe_xtract(dependency_manager: DependencyManager, caps: Capabilities) -> None:
     # A real tract graph needs the per-tract protocol folders. The suite only
-    # sweeps the corticospinal tract, so that is what must be present.
+    # sweeps the corticospinal tract, so that is what must be present. XTRACT
+    # runs FSL's probtrackx (and the FSL diffusion chain), so FSL is needed too.
+    if not dependency_manager.is_fsl():
+        caps.add("xtract", False, "no usable FSL; the XTRACT engine is dropped")
+        return
     tract_dir = os.path.join(XTRACT_DATA_DIR, "cst_l") if XTRACT_DATA_DIR else ""
     ok = bool(XTRACT_DATA_DIR) and os.path.isdir(tract_dir)
     caps.add(
@@ -361,7 +375,7 @@ def _probe_xtract(caps: Capabilities) -> None:
         (
             "XTRACT protocols at %s" % XTRACT_DATA_DIR
             if ok
-            else "no XTRACT protocol data; the tractography axis is dropped"
+            else "no XTRACT protocol data; the XTRACT engine is dropped"
         ),
     )
 
@@ -484,8 +498,9 @@ def probe(
     _probe_antspyx(caps)
     _probe_antspynet(caps)
     _probe_gpu(caps)
-    _probe_xtract(caps)
+    _probe_xtract(dependency_manager, caps)
     _probe_dipy(caps)
+    _probe_tractography(caps)
     _probe_mni(caps)
     _probe_slicer(global_config, caps)
     _probe_nilearn(caps)
@@ -498,10 +513,14 @@ def probe(
     return caps
 
 
-#: Capabilities without which nothing can run at all.
-BLOCKING = ("fsl", "dcm2niix", "fsaverage", "ram_budget")
+#: Capabilities without which nothing can run at all. FSL joins them only when
+#: the build makes it mandatory (swane.config.dependency_policy.FSL_MANDATORY).
+BLOCKING = ("dcm2niix", "fsaverage", "ram_budget")
 
 
 def blocking_failures(caps: Capabilities) -> list:
     """Return the capabilities that make a run pointless, if any."""
-    return [caps.items[name] for name in BLOCKING if not caps.has(name)]
+    from swane.config import dependency_policy
+
+    names = (("fsl",) if dependency_policy.FSL_MANDATORY else ()) + BLOCKING
+    return [caps.items[name] for name in names if not caps.has(name)]

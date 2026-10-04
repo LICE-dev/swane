@@ -10,7 +10,7 @@ coverage the next time someone adds a setting to SWANe.
 
 import pytest
 
-from swane.tests.prerelease.capabilities import Capabilities
+from swane.tests.prerelease.capabilities import BLOCKING, Capabilities
 from swane.tests.prerelease.plan import (
     AXES,
     AXES_BY_NAME,
@@ -28,9 +28,7 @@ def all_capable():
     """A host where everything is available, to judge the plan on its own merits."""
     caps = Capabilities(cores=8, ram_gb=64.0)
     needed = {gate for axis in AXES for gate in axis.gates.values()}
-    needed.update(
-        {"fsl", "dcm2niix", "freesurfer", "fsaverage", "slicer", "ram_budget"}
-    )
+    needed.update({"fsl", "freesurfer", "slicer", "tractography"} | set(BLOCKING))
     # Capabilities that gate whole passes (not tied to an axis value), e.g.
     # reconall_expert, so a fully capable host really skips nothing.
     needed.update(
@@ -121,7 +119,8 @@ def test_missing_capability_downgrades_instead_of_failing():
     for name in needed:
         caps.add(name, True, "available")
     caps.add("synth_morph", False, "needs 14.0 GB, only 8.0 GB allocated")
-    for name in ("fsl", "dcm2niix", "fsaverage", "ram_budget", "slicer"):
+    # FSL stays available here: this test is about losing SynthMorph alone.
+    for name in BLOCKING + ("fsl", "slicer"):
         caps.add(name, True, "available")
 
     plan = build_plan(caps, with_reconall=True)
@@ -147,8 +146,9 @@ def test_registration_engine_axis_has_the_three_backends():
     axis = AXES_BY_NAME["registration_engine"]
     assert axis.option == "engine"
     assert set(axis.values) == {"FSL", "SYNTH", "ANTS"}
-    # FSL is always available; SYNTH and ANTS are gated on their dependencies.
-    assert axis.gate_for("FSL") == ""
+    # Each backend is gated on its own dependency (FSL is optional, see
+    # test_fsl_free_plan.py).
+    assert axis.gate_for("FSL") == "fsl"
     assert axis.gate_for("SYNTH") == "synth_morph"
     assert axis.gate_for("ANTS") == "antspyx"
 

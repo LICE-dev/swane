@@ -114,8 +114,10 @@ AXES = (
     ),
     # The brain-extraction backend is an ENUM, not the old boolean ``strip``
     # key: ANTSPYNET (the default) and SYNTHSTRIP are each gated on their own
-    # dependency + RAM floor, BET is always available and is therefore the
-    # fallback _safe_value lands on -- so it is listed last.
+    # dependency + RAM floor, BET on FSL. On an FSL host BET is the fallback
+    # _safe_value lands on when the other two are missing; on an FSL-free host
+    # a pinned BET falls back to ANTSPYNET (listed first) and BET itself is
+    # reported unreachable, never covered.
     #
     # Every pass pins this axis. Before the antspynet flip the default was BET,
     # which needs nothing, so a pass leaving the axis unset was harmless; now
@@ -130,19 +132,22 @@ AXES = (
         section=GlobalPrefCategoryList.SYNTH,
         option="deskull_engine",
         values=_enum_values(DeskullEngine, "ANTSPYNET", "SYNTHSTRIP", "BET"),
-        gates={"ANTSPYNET": "antspynet", "SYNTHSTRIP": "synth_strip"},
+        gates={"ANTSPYNET": "antspynet", "SYNTHSTRIP": "synth_strip", "BET": "fsl"},
     ),
     # The registration backend is an ENUM, not the old boolean ``morph`` key
-    # Group A removed. FSL (FLIRT/FNIRT) is always available; SYNTH (SynthMorph)
+    # Group A removed. FSL (FLIRT/FNIRT) is gated on FSL; SYNTH (SynthMorph)
     # and ANTS (antspyx) are each gated on their own dependency + RAM floor, so
-    # a host missing one still exercises the others.
+    # a host missing one still exercises the others. ANTS is listed before SYNTH
+    # so that a pinned FSL on an FSL-free host falls back (_safe_value takes the
+    # first usable value) to the default ANTS engine rather than to the 14 GB
+    # SynthMorph; with FSL present the fallback is FSL, as before.
     Axis(
         name="registration_engine",
         scope=GLOBAL,
         section=GlobalPrefCategoryList.SYNTH,
         option="engine",
-        values=_enum_values(RegistrationEngine, "FSL", "SYNTH", "ANTS"),
-        gates={"SYNTH": "synth_morph", "ANTS": "antspyx"},
+        values=_enum_values(RegistrationEngine, "FSL", "ANTS", "SYNTH"),
+        gates={"SYNTH": "synth_morph", "ANTS": "antspyx", "FSL": "fsl"},
     ),
     Axis(
         name="fmri_engine",
@@ -150,10 +155,10 @@ AXES = (
         section=GlobalPrefCategoryList.SYNTH,
         option="fmri_engine",
         values=_enum_values(FmriEngine, "NILEARN", "FSL"),
-        gates={"NILEARN": "nilearn"},
+        gates={"NILEARN": "nilearn", "FSL": "fsl"},
     ),
     # The tissue-segmentation backend used by FLAT1: ANTS (antspyx Atropos, the
-    # default, gated on antspyx) and FSL (FAST, always available). Only
+    # default, gated on antspyx) and FSL (FAST, gated on FSL). Only
     # meaningful when a pass runs FLAT1; the two structural twins pin it (FSL on
     # structural_fsl, ANTS on structural_ants) so both engines stay covered.
     Axis(
@@ -162,7 +167,7 @@ AXES = (
         section=GlobalPrefCategoryList.SYNTH,
         option="segmentation_engine",
         values=_enum_values(SegmentationEngine, "ANTS", "FSL"),
-        gates={"ANTS": "antspyx"},
+        gates={"ANTS": "antspyx", "FSL": "fsl"},
         note="only exercised when a pass runs FLAT1 (flat1=true)",
     ),
     Axis(
@@ -189,6 +194,10 @@ AXES = (
         section=DIL.T13D,
         option="bet_bias_correction",
         values=("false", "true"),
+        # A BET parameter: get_deskull_node reads it only on the BET branch, so
+        # each value is gated on FSL -- without it no value is exercised, and
+        # the axis is reported unreachable instead of riding a non-BET engine.
+        gates={"false": "fsl", "true": "fsl"},
         needs_input=DIL.T13D,
     ),
     Axis(
@@ -197,6 +206,10 @@ AXES = (
         section=DIL.T13D,
         option="bet_thr",
         values=("0.3", "0.5"),
+        # A BET parameter: get_deskull_node reads it only on the BET branch, so
+        # each value is gated on FSL -- without it no value is exercised, and
+        # the axis is reported unreachable instead of riding a non-BET engine.
+        gates={"0.3": "fsl", "0.5": "fsl"},
         needs_input=DIL.T13D,
     ),
     Axis(
@@ -259,6 +272,10 @@ AXES = (
         section=DIL.VENOUS_MR,
         option="bet_thr",
         values=("0.4", "0.25"),
+        # A BET parameter: get_deskull_node reads it only on the BET branch, so
+        # each value is gated on FSL -- without it no value is exercised, and
+        # the axis is reported unreachable instead of riding a non-BET engine.
+        gates={"0.4": "fsl", "0.25": "fsl"},
         needs_input=DIL.VENOUS_MR,
     ),
     # ---- venous CT ----------------------------------------------------------
@@ -304,6 +321,9 @@ AXES = (
         section=DIL.DTI,
         option="old_eddy_correct",
         values=("false", "true"),
+        # Read only by the FSL diffusion chain (dti_preproc_workflow: eddy vs
+        # eddy_correct); the dipy chain ignores it. Both values need FSL.
+        gates={"false": "fsl", "true": "fsl"},
         needs_input=DIL.DTI,
     ),
     Axis(
@@ -312,7 +332,9 @@ AXES = (
         section=DIL.DTI,
         option="tractography",
         values=("false", "true"),
-        gates={"true": "xtract"},
+        # Either engine can track (capabilities: tractography = xtract or dipy);
+        # which one is the tractography_engine axis' business.
+        gates={"true": "tractography"},
         needs_input=DIL.DTI,
         note="the sweep only enables the corticospinal tract",
     ),
@@ -483,12 +505,12 @@ PASSES = (
             "segmentation_engine": "ANTS",
             "synth_reconall": "false",
             "cuda": "false",
-            "ref_bet_bias_correction": "false",
-            "ref_bet_thr": "0.3",
+            # No ref_bet_*/venous_mr_bet_thr pins: ANTSPYNET runs no BET, so
+            # those FSL-gated values would be claimed without being exercised
+            # (and would skip this FSL-free pass on a host without FSL).
             "flat1": "true",
             "venous_mr_shape": "single_series",
             "vein_detection_mode": "KURTOSIS",
-            "venous_mr_bet_thr": "0.4",
             "electrode_threshold": "2000",
             "erode_kernel_size": "5",
         },
@@ -688,7 +710,7 @@ PASSES = (
             "deskull_engine": "BET",
             "registration_engine": "FSL",
             "cuda": "false",
-            "old_eddy_correct": "false",
+            # No old_eddy_correct pin: the dipy chain ignores it (FSL-only).
             "tractography": "true",
             "tractography_engine": "DIPY_RECOBUNDLES",
         },
@@ -1050,6 +1072,15 @@ _PASS_REQUIREMENTS = {
     # first ungated value), turning this pass into an undetected duplicate of
     # structural_fsl; gate it so it is skipped with a clear reason instead.
     "structural_ants": ("antspyx",),
+    # The FSL baselines, same reasoning in reverse: without FSL their engine
+    # axes would downgrade to the FSL-free defaults, turning them into
+    # undetected duplicates of structural_ants / fmri_task_and_rest (and their
+    # BET/eddy_correct values have no FSL-free variant at all), so they are
+    # skipped with a clear reason instead.
+    "structural_fsl": ("fsl",),
+    "structural_alt_settings": ("fsl",),
+    "dti_classic": ("fsl",),
+    "fmri_task_and_rest_fsl": ("fsl",),
     # Phase 3 ANTS twins of the EPI/diffusion baselines, same reasoning as
     # structural_ants: without antspyx the engine axis would silently
     # downgrade ANTS->FSL, exactly duplicating fmri_task_and_rest /
