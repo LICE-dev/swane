@@ -270,6 +270,12 @@ def test_dti_synthmorph_builds_the_fsl_diffusion_chain_with_synth(
     assert built(CustomEddy), "dti_synthmorph builds no eddy node"
     assert built(BEDPOSTX5), "dti_synthmorph builds no BEDPOSTX node"
     assert built(ProbTrackX2), "dti_synthmorph builds no probtrackx node"
-    assert built(SynthStrip), "dti_synthmorph builds no SynthStrip node"
+    # mni1.* alone would satisfy a bare SynthMorph check: require the b0
+    # deskull and the tract ROI transforms of the probtrackx bridge themselves.
+    assert [
+        name for name in built(SynthStrip) if name.startswith("dti.")
+    ], "dti_synthmorph does not deskull the b0 with SynthStrip"
     assert built(SynthMorphReg), "dti_synthmorph builds no SynthMorph registration"
-    assert built(SynthMorphApply), "dti_synthmorph applies no SynthMorph transform"
+    assert [
+        name for name in built(SynthMorphApply) if name.startswith("tract_cst.")
+    ], "the probtrackx transform bridge does not apply SynthMorph"
