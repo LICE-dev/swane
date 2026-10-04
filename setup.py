@@ -78,7 +78,7 @@ setup(
         "networkx==3.4.2",
         "nipype==1.12.0",
         "PySide6",
-        "pydicom==3.0.1",
+        "pydicom==3.0.2",
         "psutil==7.0.0",
         "matplotlib==3.10.1",
         # todo: SET NIBABEL 5.2 as minimum to be more inclusive?
@@ -119,7 +119,7 @@ setup(
         # scipy>=1.17.1 prevent a macos bug with PROPACK, but it conflicts
         # with antspyx < 0.6.4 (which forces scipy < 1.16). We now handle the
         # PROPACK bug with a monkeypatch in swane.patches.scipy_patches instead.
-        "filelock==3.17.0",
+        "filelock>=3.20.3,<4",
         "templateflow>=24.0.0",
         "vtk",
     ],
