@@ -506,31 +506,10 @@ class ConfigManager(configparser.ConfigParser):
                         changed = True
                         continue
 
-                if (
-                    WF_PREFERENCES[section][option].input_type == InputTypes.ENUM
-                    and self[section][option]
-                    in WF_PREFERENCES[section][option].value_enum.__members__
+                if self._reset_unavailable_enum_option(
+                    section, option, WF_PREFERENCES[section][option], dependency_manager
                 ):
-                    enum_cls = WF_PREFERENCES[section][option].value_enum
-                    value_enum = enum_cls[self[section][option]]
-                    if value_enum in WF_PREFERENCES[section][option].option_dependency:
-                        dep_check = getattr(
-                            dependency_manager,
-                            WF_PREFERENCES[section][option].option_dependency[
-                                value_enum
-                            ][0],
-                            None,
-                        )
-                        if (
-                            dep_check is not None
-                            and callable(dep_check)
-                            and not dep_check()
-                        ):
-                            self[section][option] = str(
-                                self._section_defaults[str(section)][
-                                    str(option)
-                                ].default
-                            )
+                    changed = True
 
                 if WF_PREFERENCES[section][option].resource is not None:
                     resource_check = getattr(
@@ -545,8 +524,65 @@ class ConfigManager(configparser.ConfigParser):
                     ):
                         self[section][option] = "false"
                         changed = True
+
+        # Global-only engine choices (e.g. the Synth-tools engines) are not part
+        # of WF_PREFERENCES: reset any whose selected option lost its dependency
+        # (e.g. an FSL engine when FSL is not installed) to the default.
+        if self.global_config:
+            for category in GLOBAL_PREFERENCES:
+                for option in GLOBAL_PREFERENCES[category]:
+                    if self._reset_unavailable_enum_option(
+                        category,
+                        option,
+                        GLOBAL_PREFERENCES[category][option],
+                        dependency_manager,
+                    ):
+                        changed = True
+
         if changed:
             self.save()
+
+    def _reset_unavailable_enum_option(
+        self, section, option: str, entry, dependency_manager
+    ) -> bool:
+        """
+        Reset an enum preference to its default if the dependency of its current
+        option is not met.
+
+        Parameters
+        ----------
+        section: GlobalPrefCategoryList | DataInputList
+            The preference section
+        option: str
+            The preference key
+        entry: PreferenceEntry
+            The preference metadata
+        dependency_manager: DependencyManager
+            The application dependencies
+
+        Returns
+        -------
+        True if the preference was reset.
+        """
+        if (
+            entry.input_type != InputTypes.ENUM
+            or not self.has_option(str(section), option)
+            or self[section][option] not in entry.value_enum.__members__
+        ):
+            return False
+        value_enum = entry.value_enum[self[section][option]]
+        if value_enum not in entry.option_dependency:
+            return False
+        dep_check = getattr(
+            dependency_manager, entry.option_dependency[value_enum][0], None
+        )
+        if dep_check is None or not callable(dep_check) or dep_check():
+            return False
+        default = self._section_defaults[str(section)][option].default
+        self[section][option] = (
+            default.name if isinstance(default, Enum) else str(default)
+        )
+        return True
 
     def get_last_pid(self) -> tuple[int, str | None]:
         """

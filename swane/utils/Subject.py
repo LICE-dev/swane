@@ -4,6 +4,7 @@ import shutil
 from swane.utils.DataInputList import DataInputList, ImageModality
 from enum import Enum, auto
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DependencyManager import DependencyManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
@@ -633,7 +634,9 @@ class Subject:
         """
         return (
             self.input_state_list.is_ref_loaded()
-            and self.dependency_manager.is_fsl()
+            and (
+                not dependency_policy.FSL_MANDATORY or self.dependency_manager.is_fsl()
+            )
             and self.dependency_manager.is_dcm2niix()
         )
 

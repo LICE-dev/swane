@@ -17,5 +17,5 @@ def test_segmentation_engine_ants_option_gated_on_antspyx():
     entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["segmentation_engine"]
     dep = entry.option_dependency[SegmentationEngine.ANTS]
     assert dep[0] == "is_antspyx"
-    # FSL FAST needs no antspyx gate
-    assert SegmentationEngine.FSL not in entry.option_dependency
+    # FSL is only a recommended dependency: FAST is gated on FSL itself
+    assert entry.option_dependency[SegmentationEngine.FSL][0] == "is_fsl"
