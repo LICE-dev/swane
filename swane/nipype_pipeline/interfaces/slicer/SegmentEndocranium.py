@@ -4,8 +4,11 @@ from nipype.interfaces.base import (
     TraitedSpec,
     File,
     traits,
+    isdefined,
 )
 import os
+import shlex
+import subprocess
 
 
 class SegmentEndocraniumInputSpec(CommandLineInputSpec):
@@ -56,6 +59,8 @@ class SegmentEndocranium(CommandLine):
     def __init__(self, **inputs):
         super().__init__(**inputs)
         self.inputs.on_trait_change(self._cmd_update, "slicer_cmd")
+        if isdefined(self.inputs.slicer_cmd):
+            self._cmd_update()
 
     def _cmd_update(self):
         this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -67,7 +72,18 @@ class SegmentEndocranium(CommandLine):
 
         if not os.path.exists(worker_path):
             raise FileNotFoundError(f"Worker not found: {worker_path}")
-        self._cmd = f"{self.inputs.slicer_cmd} --no-splash --no-main-window --python-script {worker_path}"
+        # nipype runs _cmd through a shell: quote both paths (Slicer's install
+        # dir contains a space on Windows).
+        if os.name == "nt":
+            # nipype validates the executable with shlex.split (POSIX rules),
+            # which would eat backslashes: use forward slashes inside the quotes.
+            quote = lambda p: subprocess.list2cmdline([p.replace("\\", "/")])
+        else:
+            quote = shlex.quote
+        self._cmd = (
+            f"{quote(str(self.inputs.slicer_cmd))} --no-splash --no-main-window "
+            f"--python-script {quote(worker_path)}"
+        )
 
     def _format_arg(self, name, spec, value):
         return super()._format_arg(name, spec, value)
