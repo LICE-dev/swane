@@ -95,5 +95,13 @@ def test_render_cmd_windows_quoted_executable_matches_linux():
     )
     assert linux == "dcm2niix"
     assert windows == linux
-    assert _render_cmd('"niimath"', repl) == "niimath"
+    assert _render_cmd('"C:/env/niimath.exe"', repl) == "niimath"
     assert _render_cmd("niimath", repl) == "niimath"
+
+
+def test_render_cmd_keeps_posix_double_quotes_visible():
+    """Only Windows-looking executables are unquoted: a double-quoted POSIX
+    command would be a quoting regression and must show up in the goldens."""
+    repl = build_replacements(tmp_root=os.getcwd())
+    assert _render_cmd('"/opt/env/dcm2niix/dcm2niix"', repl) == 'dcm2niix"'
+    assert _render_cmd('"niimath"', repl) == '"niimath"'
