@@ -48,7 +48,7 @@ from swane.utils.Subject import Subject, SubjectRet
 from swane.config.ConfigManager import ConfigManager
 from swane.config import dependency_policy
 from swane.config.config_enums import GlobalPrefCategoryList
-from swane.utils.platform_and_tools_utils import is_mac
+from swane.utils.platform_and_tools_utils import is_mac, is_windows
 
 
 class MainWindow(QMainWindow):
@@ -935,6 +935,11 @@ class MainWindow(QMainWindow):
         x += 1
         self.home_grid_layout.addWidget(label_welcome3, x, 0, 1, 5)
         x += 1
+        if is_windows():
+            label_windows = QLabel(strings.windows_experimental_warn)
+            label_windows.setWordWrap(True)
+            self.home_grid_layout.addWidget(label_windows, x, 0, 1, 5)
+            x += 1
         self.home_grid_layout.addWidget(label_welcome4, x, 0, 1, 5)
         x += 1
 
