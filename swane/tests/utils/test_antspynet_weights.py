@@ -75,3 +75,28 @@ def test_preload_runs_in_an_exec_child_and_raises_on_failure(monkeypatch):
     assert cmd[0] == sys.executable
     assert cmd[-1] == "brainExtractionRobustT1"
     assert kwargs["check"] is True
+
+
+def _capture_child_env(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        antspynet_weights.subprocess,
+        "run",
+        lambda cmd, **kwargs: calls.append(kwargs["env"]),
+    )
+    monkeypatch.setattr(antspynet_weights, "weights_are_fetched", lambda x: False)
+    antspynet_weights.preload_weights(["brainExtractionRobustT1"])
+    return calls[0]
+
+
+def test_preload_points_the_child_at_certifi_bundle(monkeypatch):
+    # python.org macOS Pythons have no CA store: the child needs certifi's.
+    import certifi
+
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    assert _capture_child_env(monkeypatch)["SSL_CERT_FILE"] == certifi.where()
+
+
+def test_preload_keeps_a_user_configured_ca_bundle(monkeypatch):
+    monkeypatch.setenv("SSL_CERT_FILE", "/custom/ca.pem")
+    assert _capture_child_env(monkeypatch)["SSL_CERT_FILE"] == "/custom/ca.pem"

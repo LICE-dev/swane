@@ -143,6 +143,17 @@ def preload_weights(names) -> None:
     import os
 
     env = os.environ.copy()
+    # python.org builds of Python on macOS ship without CA certificates until
+    # "Install Certificates.command" is run, so the HTTPS download fails with
+    # CERTIFICATE_VERIFY_FAILED. Point the child at certifi's bundle unless
+    # the user configured one.
+    if "SSL_CERT_FILE" not in env:
+        try:
+            import certifi
+
+            env["SSL_CERT_FILE"] = certifi.where()
+        except ImportError:
+            pass
     if "PYTHONPATH" not in env:
         # If running from source, swane might be in the current working directory's parent
         # We append the current directory and its parent to ensure swane is found
