@@ -60,7 +60,8 @@ Use `PreferenceEntry` metadata rather than ad hoc UI/runtime checks:
 
 - Treat UI disablement as guidance, not the sole enforcement layer.
 - `PreferencesWindow` evaluates external dependencies, resources, cross-preference requirements, input requirements, and option-level requirements for presentation.
-- `ConfigManager.check_dependencies` sanitizes subject workflow choices when dependencies or resources are unavailable. Keep this runtime enforcement aligned with the catalog metadata.
+- `ConfigManager.check_dependencies` sanitizes subject workflow choices when dependencies or resources are unavailable and, on the global config, resets any global enum preference (e.g. the Synth-tools engines) whose selected option's `option_dependency` is unmet to its default. Keep this runtime enforcement aligned with the catalog metadata.
+- `swane/config/dependency_policy.py` holds the build-time `FSL_MANDATORY` flag. True: `Subject.can_generate_workflow` requires FSL, the home tab lists it as mandatory, and `default_engines` makes the FSL tools the default deskull/tractography/segmentation/fMRI engines (registration stays ANTs). False: FSL is a recommended dependency and the FSL-free engines are the defaults. Consumers read `dependency_policy.FSL_MANDATORY` at call time so tests can monkeypatch it; the preference defaults are fixed at import time.
 - Ensure requirement callables exist on the declared owner and return the expected boolean contract.
 - When one preference changes another preference's availability, connect the UI update and verify the persisted result remains valid after reload.
 - For `validate_on_change`, preserve the `<key>_validation` companion flag and mark it when the user changes the field. Trace the worker or dependency check that consumes it.

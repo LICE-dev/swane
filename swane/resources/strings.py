@@ -143,7 +143,9 @@ subj_tab_no_dicom_error = "No DICOM file in "
 subj_tab_multi_subj_error = "Dicom file from more than one subject in "
 subj_tab_multi_exam_error = "DICOM file from more than one examination in "
 subj_tab_multi_series_error = "DICOM file from more than one series in "
-subj_tab_missing_fsl_error = "FSL is required to generate " + APPNAME + " Workflow!"
+subj_tab_missing_dependencies_error = (
+    "Mandatory dependencies are required to generate " + APPNAME + " Workflow!"
+)
 subj_tab_wf_gen_start = "Generating the Workflow..."
 subj_tab_wf_gen_templates = "Downloading templates..."
 subj_tab_wf_gen_models = "Downloading ANTsPyNet deskull models..."

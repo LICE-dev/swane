@@ -46,6 +46,7 @@ from swane import __version__, EXIT_CODE_REBOOT
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
 from swane.utils.Subject import Subject, SubjectRet
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.utils.platform_and_tools_utils import is_mac
 
@@ -962,7 +963,8 @@ class MainWindow(QMainWindow):
 
         x = self.add_home_entry(self.dependency_manager.dcm2niix, x)
 
-        x = self.add_home_entry(self.dependency_manager.fsl, x)
+        if dependency_policy.FSL_MANDATORY:
+            x = self.add_home_entry(self.dependency_manager.fsl, x)
 
         x = self.add_home_entry(self.dependency_manager.antspyx, x)
 
@@ -991,6 +993,11 @@ class MainWindow(QMainWindow):
         label_main_dep.setFont(bold_font)
         self.optional_grid_layout.addWidget(label_main_dep, opt_x, 0, 1, 2)
         opt_x += 1
+
+        if not dependency_policy.FSL_MANDATORY:
+            opt_x = self.add_home_entry(
+                self.dependency_manager.fsl, opt_x, self.optional_grid_layout
+            )
 
         opt_x = self.add_home_entry(
             self.dependency_manager.freesurfer, opt_x, self.optional_grid_layout
