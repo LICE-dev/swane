@@ -17,6 +17,7 @@ import os
 import shutil
 import ssl
 import tempfile
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -86,24 +87,36 @@ def download_fsaverage_mri(
     handle, tmp_zip = tempfile.mkstemp(suffix=".zip", dir=os.path.dirname(cache_dir))
     os.close(handle)
     try:
-        with urllib.request.urlopen(
-            url, timeout=_DOWNLOAD_TIMEOUT_S, context=_ssl_context()
-        ) as response, open(tmp_zip, "wb") as out:
-            shutil.copyfileobj(response, out)
+        try:
+            with urllib.request.urlopen(
+                url, timeout=_DOWNLOAD_TIMEOUT_S, context=_ssl_context()
+            ) as response, open(tmp_zip, "wb") as out:
+                shutil.copyfileobj(response, out)
+        except (urllib.error.URLError, OSError) as exc:
+            raise RuntimeError(
+                "could not download the fsaverage archive from %s (cache dir %s): %s"
+                % (url, cache_dir, exc)
+            ) from exc
         got = _md5(tmp_zip)
         if got != md5:
             raise RuntimeError(
                 "fsaverage archive md5 mismatch: expected %s, got %s (%s)"
                 % (md5, got, url)
             )
-        with zipfile.ZipFile(tmp_zip) as archive:
-            for name in FSAVERAGE_FILES:
-                staging = os.path.join(cache_dir, name + ".part")
-                with archive.open("fsaverage/mri/" + name) as src, open(
-                    staging, "wb"
-                ) as dst:
-                    shutil.copyfileobj(src, dst)
-                os.replace(staging, os.path.join(cache_dir, name))
+        try:
+            with zipfile.ZipFile(tmp_zip) as archive:
+                for name in FSAVERAGE_FILES:
+                    staging = os.path.join(cache_dir, name + ".part")
+                    with archive.open("fsaverage/mri/" + name) as src, open(
+                        staging, "wb"
+                    ) as dst:
+                        shutil.copyfileobj(src, dst)
+                    os.replace(staging, os.path.join(cache_dir, name))
+        except KeyError as exc:
+            raise RuntimeError(
+                "fsaverage archive from %s lacks %s (cache dir %s)"
+                % (url, exc, cache_dir)
+            ) from exc
     finally:
         if os.path.exists(tmp_zip):
             os.remove(tmp_zip)

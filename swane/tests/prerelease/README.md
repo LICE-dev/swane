@@ -158,6 +158,9 @@ dipy RecoBundles pass (the `tractography` capability is XTRACT *or* dipy).
 
 The phantom is built from `fsaverage` even when FreeSurfer passes are not
 requested: without FreeSurfer it is downloaded once (network needed).
+Phantom caches are now keyed by the fsaverage content, so old
+`phantom_<key>` folders under `~/test_swane/phantom` from earlier versions are
+orphaned and can be deleted.
 
 The anatomy files are FreeSurfer data, distributed under the FreeSurfer Software
 License (https://github.com/freesurfer/freesurfer/blob/dev/LICENSE.txt); the
