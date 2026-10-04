@@ -11,10 +11,10 @@ from swane.resources import strings
 from swane.tests.prerelease import capabilities as caps_mod
 from swane.tests.prerelease.capabilities import Capabilities
 from swane.tests.prerelease.plan import (
-    AXES,
     _PASS_REQUIREMENTS,
     build_plan,
     coverage,
+    gate_capabilities,
     plan_holes,
 )
 from swane.utils.DataInputList import DataInputList as DIL
@@ -29,7 +29,7 @@ FSL_ONLY = {"fsl", "xtract"}
 
 def _no_fsl_caps() -> Capabilities:
     caps = Capabilities(cores=4, ram_gb=14.0)
-    needed = {gate for axis in AXES for gate in axis.gates.values()}
+    needed = gate_capabilities()
     needed.update({"dcm2niix", "fsaverage", "ram_budget", "slicer", "tractography"})
     needed.update(c for reqs in _PASS_REQUIREMENTS.values() for c in reqs)
     for name in needed - FSL_ONLY:
@@ -70,6 +70,45 @@ def test_fsl_free_host_reports_fsl_values_unreachable(no_fsl_host):
         assert value not in report[axis_name].covered, (axis_name, value)
 
 
+#: The FSL-free-capable values whose only coverer used to be an FSL-pinned pass
+#: (structural_alt_settings, dti_classic, dti_tractography_gpu).
+FORMERLY_DEFERRED = (
+    ("flat1", "false"),
+    ("venous_mr_shape", "two_series"),
+    ("electrode_threshold", "2500"),
+    ("erode_kernel_size", "8"),
+    ("tractography", "false"),
+    ("cuda", "true"),
+)
+
+
+def test_fsl_free_host_defers_nothing(no_fsl_host):
+    """With every non-FSL capability present, nothing is merely deferred: each
+    value is either exercised by a running pass or reported unreachable."""
+    resolved = build_plan(no_fsl_host, with_reconall=True)
+    report = coverage(resolved, no_fsl_host)
+    assert plan_holes(report) == {}
+    deferred = {name: c.deferred for name, c in report.items() if c.deferred}
+    assert deferred == {}, deferred
+    for axis_name, value in FORMERLY_DEFERRED:
+        assert value not in report[axis_name].deferred, (axis_name, value)
+    for axis_name, value in FORMERLY_DEFERRED[:-1]:
+        assert value in report[axis_name].covered, (axis_name, value)
+
+
+def test_cuda_is_unreachable_without_fsl(no_fsl_host):
+    """Only the FSL diffusion chain (eddy, BEDPOSTX, probtrackx) reads cuda, so
+    on an FSL-free host cuda=true is unreachable even with a GPU -- never
+    claimed by a pass whose engines ignore it."""
+    report = coverage(build_plan(no_fsl_host), no_fsl_host)
+    assert "true" in report["cuda"].unreachable
+    assert "true" not in report["cuda"].covered
+    no_gpu = _no_fsl_caps()
+    no_gpu.add("cuda", False, "no GPU detected")
+    report = coverage(build_plan(no_gpu), no_gpu)
+    assert "no GPU" in report["cuda"].unreachable["true"]
+
+
 def test_fsl_free_host_still_runs_dipy_tractography(no_fsl_host):
     resolved = {item.name: item for item in build_plan(no_fsl_host)}
     assert not resolved["dti_tractography_dipy"].skipped, resolved[
@@ -106,8 +145,9 @@ def _stub_series() -> dict:
 FSL_FREE_PASSES = [item.name for item in build_plan(_no_fsl_caps()) if not item.skipped]
 
 
-@pytest.mark.parametrize("pass_name", FSL_FREE_PASSES)
-def test_fsl_free_pass_builds_without_fsl_nodes(pass_name, tmp_path, monkeypatch):
+def _build_pass_graph(item, tmp_path, monkeypatch, with_fsl: bool) -> list:
+    """Build the MainWorkflow of one resolved pass over a stub phantom exam
+    and return its nodes (nothing is executed)."""
     from swane.nipype_pipeline.MainWorkflow import MainWorkflow
     from swane.tests.prerelease.subject import PhantomExam, prepare_subject
 
@@ -115,22 +155,20 @@ def test_fsl_free_pass_builds_without_fsl_nodes(pass_name, tmp_path, monkeypatch
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
-    monkeypatch.delenv("FSLDIR", raising=False)
-    monkeypatch.delenv("FSLOUTPUTTYPE", raising=False)
+    if with_fsl:
+        monkeypatch.setenv("FSLOUTPUTTYPE", "NIFTI_GZ")
+        found = Dependence(DependenceStatus.DETECTED, "FSL assumed in this test")
+    else:
+        monkeypatch.delenv("FSLDIR", raising=False)
+        monkeypatch.delenv("FSLOUTPUTTYPE", raising=False)
+        found = Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_error)
     # prepare_subject writes SUBJECTS_DIR into os.environ; register it with
     # monkeypatch first so it is restored after the test.
     monkeypatch.setenv("SUBJECTS_DIR", str(tmp_path))
-    monkeypatch.setattr(
-        DependencyManager,
-        "check_fsl",
-        staticmethod(
-            lambda: Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_error)
-        ),
-    )
+    monkeypatch.setattr(DependencyManager, "check_fsl", staticmethod(lambda: found))
     dependency_manager = DependencyManager()
-    assert not dependency_manager.is_fsl()
+    assert dependency_manager.is_fsl() == with_fsl
 
-    item = {p.name: p for p in build_plan(_no_fsl_caps())}[pass_name]
     exam = PhantomExam(root=str(tmp_path / "phantom"), series=_stub_series())
     for folder in exam.series:
         os.makedirs(exam.folder(folder))
@@ -139,7 +177,7 @@ def test_fsl_free_pass_builds_without_fsl_nodes(pass_name, tmp_path, monkeypatch
         item, exam, str(tmp_path / "work"), cores=4, ram_gb=14.0
     )
     workflow = MainWorkflow(
-        name="fsl_free",
+        name="fsl_free" if not with_fsl else "fsl",
         base_dir=subject_dir,
         global_config=global_config,
         subject_config=subject_config,
@@ -148,7 +186,14 @@ def test_fsl_free_pass_builds_without_fsl_nodes(pass_name, tmp_path, monkeypatch
         test_run=True,
     )
     nodes = workflow._get_all_nodes()
-    assert nodes, "pass %s built an empty graph" % pass_name
+    assert nodes, "pass %s built an empty graph" % item.name
+    return nodes
+
+
+@pytest.mark.parametrize("pass_name", FSL_FREE_PASSES)
+def test_fsl_free_pass_builds_without_fsl_nodes(pass_name, tmp_path, monkeypatch):
+    item = {p.name: p for p in build_plan(_no_fsl_caps())}[pass_name]
+    nodes = _build_pass_graph(item, tmp_path, monkeypatch, with_fsl=False)
 
     fsl_nodes = sorted(
         "%s (%s)" % (node.fullname, type(node.interface).__name__)
@@ -160,3 +205,24 @@ def test_fsl_free_pass_builds_without_fsl_nodes(pass_name, tmp_path, monkeypatch
         and not _is_niimath(node.interface)
     )
     assert fsl_nodes == [], "pass %s builds FSL nodes: %s" % (pass_name, fsl_nodes)
+
+
+def test_fsl_free_stand_ins_run_without_fsl():
+    """The FSL-free stand-ins replace their FSL originals on this host."""
+    for name in ("structural_alt_settings_fsl_free", "dti_classic_fsl_free"):
+        assert name in FSL_FREE_PASSES, name
+
+
+def test_dti_classic_builds_eddy_correct_on_an_fsl_host(tmp_path, monkeypatch):
+    """old_eddy_correct=true is covered only if the legacy eddy_correct node is
+    really in dti_classic's graph (the dipy chain ignores the preference)."""
+    from nipype.interfaces.fsl import EddyCorrect
+
+    from swane.tests.prerelease.test_plan_integrity import _all_capable_caps
+
+    caps = _all_capable_caps()
+    item = {p.name: p for p in build_plan(caps)}["dti_classic"]
+    assert not item.skipped, item.skip_reason
+    nodes = _build_pass_graph(item, tmp_path, monkeypatch, with_fsl=True)
+    eddy = [n.fullname for n in nodes if isinstance(n.interface, EddyCorrect)]
+    assert eddy, "dti_classic builds no eddy_correct node"

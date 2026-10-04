@@ -152,9 +152,31 @@ values — `deskull_engine=BET`, `registration_engine=FSL`, `fmri_engine=FSL`,
 `segmentation_engine=FSL`, `tractography_engine=FSL_XTRACT`, and every value of
 the BET parameters (`ref_bet_thr`, `ref_bet_bias_correction`,
 `venous_mr_bet_thr`) and of `old_eddy_correct` — are reported **unreachable**,
-never covered by a pass that silently ran another engine. The FSL baseline
-passes are skipped with a "needs fsl" reason; tractography stays covered by the
-dipy RecoBundles pass (the `tractography` capability is XTRACT *or* dipy).
+never covered by a pass that silently ran another engine. So is `cuda=true`:
+only the FSL diffusion chain (eddy, BEDPOSTX, probtrackx) reads it, so its gate
+needs both a GPU and FSL. The FSL baseline passes are skipped with a "needs
+fsl" reason (`fmri_task_and_rest` too: without FSL it would resolve to exactly
+`fmri_task_and_rest_ants`); tractography stays covered by the dipy RecoBundles
+pass (the `tractography` capability is XTRACT *or* dipy).
+
+The FSL-free values that only an FSL-pinned pass sets are kept exercised by
+**stand-in passes** (`PassSpec.stands_in_for`). A stand-in runs only where its
+FSL original is skipped, so on an FSL host the sweep is unchanged (the stand-ins
+are listed as skipped, "stand-in for …, which runs on this host"):
+
+* `structural_alt_settings_fsl_free` stands in for `structural_alt_settings`:
+  `flat1=false`, the two-series venous MR shape, `electrode_threshold=2500`,
+  `erode_kernel_size=8` on the ANTSPYNET/ANTS backends, without the BET-only
+  parameters;
+* `dti_classic_fsl_free` stands in for `dti_classic`: diffusion on the dipy
+  chain with `tractography=false`, without `old_eddy_correct` (an FSL tool).
+
+`dti_classic` itself pins `tractography_engine=FSL_XTRACT`: the engine also
+selects the diffusion preprocessing chain, and only the FSL chain builds
+`eddy_correct` (`old_eddy_correct=true`). It therefore needs `fsl` and `xtract`;
+where either is missing it is skipped and its stand-in runs instead. With every
+non-FSL capability present, an FSL-free host defers nothing but the opt-in
+recon-all values.
 
 The phantom is built from `fsaverage` even when FreeSurfer passes are not
 requested: without FreeSurfer it is downloaded once (network needed).
