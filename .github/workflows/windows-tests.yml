@@ -54,7 +54,7 @@ jobs:
         run: >
           python -m pytest swane/tests -m "not heavy"
           --basetemp "${{ runner.temp }}/swane tmp"
-          --junitxml=junit-light.xml -p no:cacheprovider -rs
+          --junitxml=junit-light.xml -p no:cacheprovider -rfEs
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -95,7 +95,7 @@ jobs:
         run: >
           python -m pytest swane/tests --run-heavy -m heavy
           --basetemp "${{ runner.temp }}/swane tmp"
-          --junitxml=junit-heavy.xml -p no:cacheprovider -rs
+          --junitxml=junit-heavy.xml -p no:cacheprovider -rfEs
       - if: always()
         uses: actions/upload-artifact@v4
         with:
