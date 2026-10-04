@@ -100,3 +100,57 @@ def test_fingerprint_depends_on_content_not_location(tmp_path):
     assert fs.fsaverage_fingerprint(str(a)) == fs.fsaverage_fingerprint(str(b))
     (b / "aseg.mgz").write_bytes(b"3")
     assert fs.fsaverage_fingerprint(str(a)) != fs.fsaverage_fingerprint(str(b))
+
+
+def test_network_error_becomes_runtime_error_naming_url(tmp_path, monkeypatch):
+    url = "https://example.invalid/fsaverage-root.zip"
+
+    def urlopen(u, timeout=None, context=None):
+        raise fs.urllib.error.URLError("offline")
+
+    monkeypatch.setattr(fs.urllib.request, "urlopen", urlopen)
+    cache = tmp_path / "cache" / "mri"
+    with pytest.raises(RuntimeError) as excinfo:
+        fs.download_fsaverage_mri(cache_dir=str(cache), url=url)
+    assert url in str(excinfo.value)
+    assert str(cache) in str(excinfo.value)
+    assert not fs.fsaverage_available(
+        freesurfer_home=str(tmp_path / "nofs"), cache_dir=str(cache)
+    )
+
+
+def test_archive_missing_member_becomes_runtime_error(tmp_path, monkeypatch):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as archive:
+        archive.writestr("fsaverage/mri/aseg.mgz", b"aseg-bytes")
+    payload = buf.getvalue()
+    monkeypatch.setattr(fs.urllib.request, "urlopen", _fake_urlopen(payload, []))
+    cache = tmp_path / "cache" / "mri"
+    with pytest.raises(RuntimeError, match="aparc"):
+        fs.download_fsaverage_mri(
+            cache_dir=str(cache), md5=hashlib.md5(payload).hexdigest()
+        )
+    assert not fs.fsaverage_available(
+        freesurfer_home=str(tmp_path / "nofs"), cache_dir=str(cache)
+    )
+
+
+def test_partial_cache_is_not_available_and_download_completes_it(
+    tmp_path, monkeypatch
+):
+    payload = _zip_bytes()
+    cache = tmp_path / "cache" / "mri"
+    cache.mkdir(parents=True)
+    (cache / "aseg.mgz").write_bytes(b"aseg-bytes")
+    (cache / "aparc+aseg.mgz.part").write_bytes(b"stale")
+    nofs = str(tmp_path / "nofs")
+    assert not fs.fsaverage_available(freesurfer_home=nofs, cache_dir=str(cache))
+
+    monkeypatch.setattr(fs.urllib.request, "urlopen", _fake_urlopen(payload, []))
+    got = fs.download_fsaverage_mri(
+        cache_dir=str(cache), md5=hashlib.md5(payload).hexdigest()
+    )
+    assert got == str(cache)
+    assert fs.fsaverage_available(freesurfer_home=nofs, cache_dir=str(cache))
+    assert (cache / "aparc+aseg.mgz").read_bytes() == b"aparc-bytes"
+    assert not (cache / "aparc+aseg.mgz.part").exists()

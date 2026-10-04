@@ -87,6 +87,9 @@ jobs:
             ~/.cache/swane
             ~/.dipy
           key: heavy-${{ inputs.os }}-${{ hashFiles('setup.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
+      - name: Fetch fsaverage for the phantom tests
+        shell: bash
+        run: python -c "from swane.tests.helpers.phantom.fsaverage_source import resolve_fsaverage_mri_dir as r; print(r())"
       - name: Heavy tests
         shell: bash
         run: >

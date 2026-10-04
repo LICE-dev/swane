@@ -40,7 +40,7 @@ pytestmark = [
     pytest.mark.heavy,
     pytest.mark.skipif(
         not _has_fsaverage(),
-        reason="needs $FREESURFER_HOME/subjects/fsaverage to build the phantom",
+        reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
     ),
 ]
 

@@ -185,7 +185,7 @@ def test_deform_preserves_field_over_whole_support_not_just_cst():
 @pytest.mark.heavy
 @pytest.mark.skipif(
     not _has_fsaverage(),
-    reason="needs $FREESURFER_HOME/subjects/fsaverage to build the phantom",
+    reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
 )
 def test_built_model_field_spans_whole_wm_and_is_coherent():
     """A freshly built phantom carries a direction across (nearly) all of WM.
