@@ -9,8 +9,6 @@ Two layers, matching the two ways the ground truth is obtained:
   sweep from rebuild to load cannot change a single graded coordinate.
 """
 
-import os
-
 import numpy as np
 import pytest
 
@@ -25,10 +23,9 @@ from swane.tests.helpers.phantom.tissue import TissueClass, TissueModel
 
 
 def _has_fsaverage() -> bool:
-    home = os.environ.get("FREESURFER_HOME")
-    if not home:
-        return False
-    return os.path.isdir(os.path.join(home, "subjects", "fsaverage", "mri"))
+    from swane.tests.helpers.phantom.fsaverage_source import fsaverage_available
+
+    return fsaverage_available()
 
 
 def _synthetic_model() -> TissueModel:
