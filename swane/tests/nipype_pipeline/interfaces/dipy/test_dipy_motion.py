@@ -22,6 +22,7 @@ Three layers, mirroring the design's "DipyMotionCorrection equivalence":
   sides with BLAS pinned to one thread, asserting exact equality.
 """
 
+import multiprocessing
 import os
 
 import numpy as np
@@ -308,6 +309,10 @@ class TestPoolContext:
     inheritance — so every start method leaves workers correctly pinned.
     """
 
+    @pytest.mark.skipif(
+        "fork" not in multiprocessing.get_all_start_methods(),
+        reason="the fork start method does not exist on this host",
+    )
     def test_linux_uses_fork(self):
         assert motion_module._pool_context("linux").get_start_method() == "fork"
 
