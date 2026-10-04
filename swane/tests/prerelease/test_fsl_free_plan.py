@@ -98,11 +98,12 @@ def test_fsl_free_host_defers_nothing(no_fsl_host):
 
 def test_cuda_is_unreachable_without_fsl(no_fsl_host):
     """Only the FSL diffusion chain (eddy, BEDPOSTX, probtrackx) reads cuda, so
-    on an FSL-free host cuda=true is unreachable even with a GPU -- never
-    claimed by a pass whose engines ignore it."""
+    on an FSL-free host both values are unreachable (cuda=true even with a
+    GPU) -- never claimed by a pass whose engines ignore it."""
     report = coverage(build_plan(no_fsl_host), no_fsl_host)
-    assert "true" in report["cuda"].unreachable
-    assert "true" not in report["cuda"].covered
+    for value in ("false", "true"):
+        assert value in report["cuda"].unreachable, value
+        assert value not in report["cuda"].covered, value
     no_gpu = _no_fsl_caps()
     no_gpu.add("cuda", False, "no GPU detected")
     report = coverage(build_plan(no_gpu), no_gpu)
@@ -226,3 +227,49 @@ def test_dti_classic_builds_eddy_correct_on_an_fsl_host(tmp_path, monkeypatch):
     nodes = _build_pass_graph(item, tmp_path, monkeypatch, with_fsl=True)
     eddy = [n.fullname for n in nodes if isinstance(n.interface, EddyCorrect)]
     assert eddy, "dti_classic builds no eddy_correct node"
+
+
+def test_dti_synthmorph_builds_the_fsl_diffusion_chain_with_synth(
+    tmp_path, monkeypatch
+):
+    """dti_synthmorph covers old_eddy_correct=false and the probtrackx transform
+    bridge with SYNTH registration only if its graph really holds eddy,
+    BEDPOSTX and probtrackx next to SynthStrip/SynthMorph nodes."""
+    from nipype.interfaces.fsl import BEDPOSTX5, ProbTrackX2
+
+    from swane.nipype_pipeline.interfaces.freesurfer.SynthMorphApply import (
+        SynthMorphApply,
+    )
+    from swane.nipype_pipeline.interfaces.freesurfer.SynthMorphReg import (
+        SynthMorphReg,
+    )
+    from swane.nipype_pipeline.interfaces.freesurfer.SynthStrip import SynthStrip
+    from swane.nipype_pipeline.interfaces.fsl.CustomEddy import CustomEddy
+    from swane.nipype_pipeline.workflows import tractography_workflow
+    from swane.tests.prerelease.subject import SWEEP_TRACT
+    from swane.tests.prerelease.test_plan_integrity import _all_capable_caps
+
+    # A stub XTRACT protocol for the sweep tract, so probtrackx is built on a
+    # host (or CI runner) without the FSL data: construction only checks that
+    # the seed and target files exist.
+    xtract = tmp_path / "xtract"
+    for side in ("l", "r"):
+        protocol = xtract / ("%s_%s" % (SWEEP_TRACT, side))
+        protocol.mkdir(parents=True)
+        for name in ("seed.nii.gz", "target.nii.gz", "exclude.nii.gz"):
+            (protocol / name).write_bytes(b"")
+    monkeypatch.setattr(tractography_workflow, "XTRACT_DATA_DIR", str(xtract))
+
+    item = {p.name: p for p in build_plan(_all_capable_caps())}["dti_synthmorph"]
+    assert not item.skipped, item.skip_reason
+    nodes = _build_pass_graph(item, tmp_path, monkeypatch, with_fsl=True)
+
+    def built(interface_class):
+        return [n.fullname for n in nodes if isinstance(n.interface, interface_class)]
+
+    assert built(CustomEddy), "dti_synthmorph builds no eddy node"
+    assert built(BEDPOSTX5), "dti_synthmorph builds no BEDPOSTX node"
+    assert built(ProbTrackX2), "dti_synthmorph builds no probtrackx node"
+    assert built(SynthStrip), "dti_synthmorph builds no SynthStrip node"
+    assert built(SynthMorphReg), "dti_synthmorph builds no SynthMorph registration"
+    assert built(SynthMorphApply), "dti_synthmorph applies no SynthMorph transform"

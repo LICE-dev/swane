@@ -190,13 +190,18 @@ def test_structural_ants_pass_forces_the_ants_backend():
 # No two running passes may be the same execution
 # --------------------------------------------------------------------------- #
 def _duplicate_passes(plan) -> list:
-    """Pairs of non-skipped passes that resolve to the same (inputs, values)."""
+    """Pairs of non-skipped passes that resolve to the same (inputs, effective
+    values): a value the resolved engines never read (plan.unread_axes) cannot
+    make two executions differ, so it is left out of the comparison."""
+    from swane.tests.prerelease import plan as plan_module
+
     seen = {}
     duplicates = []
     for item in plan:
         if item.skipped:
             continue
-        key = (tuple(item.inputs), tuple(sorted(item.values.items())))
+        effective = plan_module.effective_values(item.values, item.inputs)
+        key = (tuple(item.inputs), tuple(sorted(effective.items())))
         if key in seen:
             duplicates.append((seen[key], item.name))
         else:
@@ -242,3 +247,97 @@ def test_old_eddy_correct_is_not_claimed_without_xtract(all_capable):
     assert plan["dti_classic"].skipped
     cover = coverage(list(plan.values()), caps)
     assert "true" not in cover["old_eddy_correct"].covered
+
+
+# --------------------------------------------------------------------------- #
+# Values a pass sets but its resolved engines never read
+# --------------------------------------------------------------------------- #
+def _resolved(name, **values):
+    """A stand-in resolved pass for the effective-value rules."""
+    from swane.tests.prerelease.plan import ResolvedPass
+
+    spec = {spec.name: spec for spec in PASSES}[name]
+    merged = dict(spec.values)
+    merged.update(values)
+    return ResolvedPass(spec=spec, values=merged)
+
+
+def test_duplicate_rule_ignores_only_unread_values():
+    """Two DTI executions on the dipy chain that differ only in cuda /
+    old_eddy_correct (which only the FSL chain reads) are the same execution;
+    on the FSL chain the same difference is real. A BET parameter counts only
+    when deskull_engine is BET."""
+    dipy = dict(tractography_engine="DIPY_RECOBUNDLES")
+    fsl = dict(tractography_engine="FSL_XTRACT")
+    first = _resolved(
+        "dti_tractography", cuda="false", old_eddy_correct="false", **dipy
+    )
+    second = _resolved("dti_tractography", cuda="true", old_eddy_correct="true", **dipy)
+    assert _duplicate_passes([first, second]) == [(first.name, second.name)]
+    first = _resolved("dti_tractography", cuda="false", **fsl)
+    second = _resolved("dti_tractography", cuda="true", **fsl)
+    assert _duplicate_passes([first, second]) == []
+
+    first = _resolved("structural_ants", ref_bet_thr="0.3")
+    second = _resolved("structural_ants", ref_bet_thr="0.5")
+    assert _duplicate_passes([first, second]) == [(first.name, second.name)]
+    first = _resolved("structural_fsl", ref_bet_thr="0.3")
+    second = _resolved("structural_fsl", ref_bet_thr="0.5")
+    assert _duplicate_passes([first, second]) == []
+    # A difference in a value that is read is never hidden.
+    first = _resolved("structural_ants", flat1="true")
+    second = _resolved("structural_ants", flat1="false")
+    assert _duplicate_passes([first, second]) == []
+
+
+def _host_caps(host):
+    from swane.tests.prerelease.test_fsl_free_plan import _no_fsl_caps
+
+    return {
+        "all_capable": _all_capable_caps,
+        "no_fsl": _no_fsl_caps,
+        "fsl_without_xtract": lambda: _fsl_without_xtract(_all_capable_caps()),
+    }[host]()
+
+
+@pytest.mark.parametrize("host", ["all_capable", "no_fsl", "fsl_without_xtract"])
+def test_no_running_pass_sets_a_value_it_never_reads(host):
+    """A pinned value the resolved engines never read (cuda / old_eddy_correct
+    off the FSL diffusion chain, a BET parameter off BET) would be counted as
+    covered by coverage() without being exercised."""
+    from swane.tests.prerelease import plan as plan_module
+
+    caps = _host_caps(host)
+    claims = {
+        item.name: sorted(plan_module.unread_axes(item.values, item.inputs))
+        for item in build_plan(caps, with_reconall=True)
+        if not item.skipped
+    }
+    claims = {name: axes for name, axes in claims.items() if axes}
+    assert not claims, "running passes set values they never read on %s: %s" % (
+        host,
+        claims,
+    )
+
+
+def test_dti_synthmorph_runs_the_fsl_diffusion_chain(all_capable):
+    """dti_synthmorph is the only pass driving SynthStrip/SynthMorph through
+    eddy, BEDPOSTX and the probtrackx transform bridge, so it must pin the
+    FSL_XTRACT engine instead of riding the dipy default."""
+    spec = {spec.name: spec for spec in PASSES}["dti_synthmorph"]
+    assert spec.values["tractography_engine"] == "FSL_XTRACT"
+    assert spec.values["registration_engine"] == "SYNTH"
+    assert set(_PASS_REQUIREMENTS["dti_synthmorph"]) >= {"synth_morph", "xtract"}
+    item = {p.name: p for p in build_plan(all_capable)}["dti_synthmorph"]
+    assert not item.skipped, item.skip_reason
+    assert item.values["tractography_engine"] == "FSL_XTRACT"
+
+
+def test_dti_tractography_ants_is_skipped_without_xtract():
+    """Without XTRACT its FSL_XTRACT pin would downgrade to the dipy chain and
+    claim old_eddy_correct=false without building eddy."""
+    assert set(_PASS_REQUIREMENTS["dti_tractography_ants"]) >= {"antspyx", "xtract"}
+    caps = _host_caps("fsl_without_xtract")
+    item = {p.name: p for p in build_plan(caps)}["dti_tractography_ants"]
+    assert item.skipped
+    assert "xtract" in item.skip_reason
