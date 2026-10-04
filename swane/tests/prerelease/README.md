@@ -183,9 +183,12 @@ recon-all values.
 The other passes that set FSL-diffusion values are pinned the same way:
 
 * `dti_synthmorph` pins `tractography_engine=FSL_XTRACT`, so it runs eddy,
-  BEDPOSTX and probtrackx (with its externalized transforms) through
-  SynthStrip/SynthMorph — the only pass exercising that transform bridge with
-  SYNTH registration. It needs `synth_morph` and `xtract`.
+  BEDPOSTX and probtrackx (with its externalized transforms) with the SYNTH
+  registration engine: SynthStrip deskulls the b0, SynthMorph drives the MNI
+  and tract (probtrackx bridge) transforms, and the dif2ref registration stays
+  on ANTS (the diffusion registration never uses SynthMorph). It is the only
+  pass exercising that bridge with SynthMorph, and needs `synth_morph` and
+  `xtract`.
 * `dti_tractography_ants` (ANTS plus the externalized probtrackx transforms)
   needs `antspyx` and `xtract`; without XTRACT data or FSL it is skipped
   instead of silently running the dipy chain.

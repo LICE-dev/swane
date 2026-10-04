@@ -868,9 +868,11 @@ PASSES = (
         },
     ),
     # SynthMorph/SynthStrip coverage for diffusion: dti_preproc_workflow uses
-    # SynthStrip (b0 deskull) and SynthMorph (dif2ref / fa_2_ref), and
-    # tractography_workflow uses SynthMorph for the tract registrations. No
-    # other pass drives synth on the diffusion chain. Needs the SynthMorph RAM
+    # SynthStrip for the b0 deskull, while its dif2ref registration stays on
+    # ANTS (resolve_registration_engine(..., allow_synth=False)); SynthMorph
+    # drives the subject->MNI (mni1) registration and the tract ROI
+    # transforms of the probtrackx bridge (tractography_workflow). No other
+    # pass drives synth on the diffusion chain. Needs the SynthMorph RAM
     # floor, so it is skipped on smaller hosts. CPU only (cuda=false).
     # tractography_engine is pinned to FSL_XTRACT (see dti_classic): the engine
     # selects the diffusion chain, and only the FSL one runs eddy, BEDPOSTX and
@@ -880,8 +882,9 @@ PASSES = (
         name="dti_synthmorph",
         description=(
             "The FSL diffusion chain (modern eddy, BEDPOSTX, corticospinal "
-            "probtrackx with its externalized transforms) with SynthStrip/"
-            "SynthMorph registration instead of FLIRT/FNIRT."
+            "probtrackx with its externalized transforms) with SynthStrip "
+            "deskull and SynthMorph for the MNI and tract transforms; the "
+            "dif2ref registration stays on ANTS."
         ),
         inputs=(DIL.T13D, DIL.DTI),
         values={
