@@ -1,5 +1,4 @@
 import os
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -121,11 +120,14 @@ def test_run_detects_slicer_and_modules(monkeypatch, tmp_path):
     monkeypatch.setattr(os.path, "exists", lambda p: True)
 
     # monkeypatch subprocess.run to return different outputs depending on command
-    def fake_run(cmd, shell, stdout):
+    def fake_run(cmd, **kwargs):
+        assert isinstance(cmd, list), "Slicer must be invoked with an argv list"
+        assert not kwargs.get("shell"), "no shell: paths with spaces must survive"
         s = b""
-        if b"--version" in str(cmd).encode():
+        joined = " ".join(cmd)
+        if "--version" in cmd:
             s = b"Slicer 5.0\n"
-        elif b"slicer_script_module_install.py" in str(cmd).encode():
+        elif "slicer_script_module_install.py" in joined:
             s = b"MODULE FOUND\n"
         else:
             s = b""
@@ -164,11 +166,14 @@ def test_module_install_command_keeps_script_path_separate(monkeypatch):
 
     commands = []
 
-    def fake_run(cmd, shell, stdout):
+    def fake_run(cmd, **kwargs):
+        assert isinstance(cmd, list), "Slicer must be invoked with an argv list"
+        assert not kwargs.get("shell"), "no shell: paths with spaces must survive"
         commands.append(cmd)
+        joined = " ".join(cmd)
         if "--version" in cmd:
             s = b"Slicer 5.0\n"
-        elif "slicer_script_module_install.py" in cmd:
+        elif "slicer_script_module_install.py" in joined:
             s = b"MODULE FOUND\n"
         else:
             s = b""
@@ -178,13 +183,52 @@ def test_module_install_command_keeps_script_path_separate(monkeypatch):
 
     w.run()
 
-    install_cmd = next(c for c in commands if "slicer_script_module_install.py" in c)
-    tokens = shlex.split(install_cmd)
-    idx = tokens.index("--python-script")
-    # the token right after --python-script is the script path on its own
-    assert tokens[idx + 1].endswith("slicer_script_module_install.py")
-    # modules are passed as their own argument, not glued onto the script path
-    assert tokens[idx + 2] == ",".join(DependencyManager.SLICER_MODULES)
+    install_cmd = next(
+        c for c in commands if any("slicer_script_module_install.py" in t for t in c)
+    )
+    idx = install_cmd.index("--python-script")
+    assert install_cmd[idx + 1].endswith("slicer_script_module_install.py")
+    assert install_cmd[idx + 2] == ",".join(DependencyManager.SLICER_MODULES)
+
+
+def test_find_slicer_python_windows_searches_localappdata(monkeypatch, tmp_path):
+    install = tmp_path / "slicer.org" / "Slicer 5.8.1"
+    (install / "bin").mkdir(parents=True)
+    (install / "bin" / "PythonSlicer.exe").write_bytes(b"")
+    (install / "Slicer.exe").write_bytes(b"")
+    monkeypatch.setattr(platform, "system", lambda: "Windows")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.delenv("ProgramFiles", raising=False)
+    monkeypatch.delenv("ProgramW6432", raising=False)
+
+    def no_find(*args, **kwargs):
+        raise AssertionError("GNU find must not be used on Windows")
+
+    monkeypatch.setattr(subprocess, "run", no_find)
+
+    paths, rel = SlicerCheckWorker.find_slicer_python("")
+    assert rel == "../Slicer.exe"
+    assert paths == [str(install / "bin" / "PythonSlicer.exe")]
+    slicer = os.path.abspath(os.path.join(os.path.dirname(paths[0]), rel))
+    assert slicer == str(install / "Slicer.exe")
+
+
+def test_find_slicer_python_windows_prefers_newest_and_user_path(monkeypatch, tmp_path):
+    for version in ("Slicer 5.6.2", "Slicer 5.8.1"):
+        (tmp_path / "slicer.org" / version / "bin").mkdir(parents=True)
+        (tmp_path / "slicer.org" / version / "bin" / "PythonSlicer.exe").write_bytes(
+            b""
+        )
+    monkeypatch.setattr(platform, "system", lambda: "Windows")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    paths, _ = SlicerCheckWorker.find_slicer_python("")
+    assert "Slicer 5.8.1" in paths[0]
+
+    # A user-chosen install folder (or its Slicer.exe) restricts the search.
+    chosen = tmp_path / "slicer.org" / "Slicer 5.6.2"
+    paths, _ = SlicerCheckWorker.find_slicer_python(str(chosen))
+    assert paths == [str(chosen / "bin" / "PythonSlicer.exe")]
 
 
 class TestSlicerCheckWorkerReal:

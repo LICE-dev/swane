@@ -1,4 +1,3 @@
-import shlex
 import subprocess
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 
@@ -23,7 +22,9 @@ def test_slicer_export_emits_progress(monkeypatch, tmp_path):
             pass
 
     class FakePopen:
-        def __init__(self, cmd, cwd, shell, stdout, universal_newlines):
+        def __init__(self, cmd, **kwargs):
+            assert isinstance(cmd, list)
+            assert not kwargs.get("shell")
             # store cmd for inspection
             self.cmd = cmd
             self.stdout = FakeStdout(["SLICERLOADER: 10\n", "SLICERLOADER: 50\n", ""])
@@ -55,7 +56,9 @@ def test_slicer_export_keeps_script_path_separate(monkeypatch, tmp_path):
             pass
 
     class FakePopen:
-        def __init__(self, cmd, cwd, shell, stdout, universal_newlines):
+        def __init__(self, cmd, **kwargs):
+            assert isinstance(cmd, list)
+            assert not kwargs.get("shell")
             captured["cmd"] = cmd
             self.stdout = FakeStdout()
 
@@ -67,10 +70,10 @@ def test_slicer_export_keeps_script_path_separate(monkeypatch, tmp_path):
     w = SlicerExportWorker("slicer", str(tmp_path), ".mrml", FakeConfig())
     w.run()
 
-    tokens = shlex.split(captured["cmd"])
-    idx = tokens.index("--python-script")
-    # the token right after --python-script is the script path on its own
-    assert tokens[idx + 1].endswith("slicer_script_result.py")
-    # thresholds are separate tokens, not concatenated onto the path
+    cmd = captured["cmd"]
+    idx = cmd.index("--python-script")
+    # the element right after --python-script is the script path on its own
+    assert cmd[idx + 1].endswith("slicer_script_result.py")
+    # thresholds are separate elements, not concatenated onto the path
     for flag in ("--dti_threshold", "--vein_threshold_mr", "--vein_threshold_ct"):
-        assert flag in tokens
+        assert flag in cmd
