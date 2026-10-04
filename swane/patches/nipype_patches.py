@@ -48,6 +48,23 @@ keep identical behaviour, while SWANe's tunable estimators (dipy) subclass
 ``RamEstimator`` and override ``negotiate`` to walk their ladder. The plan is
 consumed SWANe-side by :meth:`MonitoredMultiProcPlugin._negotiate_ram`.
 
+Windows command-line quoting
+----------------------------
+:class:`nipype.interfaces.base.core.CommandLine` quotes path arguments with
+``shlex.quote`` (POSIX single quotes) and finds the executable with
+``shlex.split(cmd)[0]`` (POSIX rules, backslashes are escapes), then runs the
+command line with ``shell=True`` -- ``cmd.exe`` on Windows, where single quotes
+are literal and every path contains backslashes. On Windows only,
+:func:`install_windows_cmdline_quoting` rebinds the module-level ``shlex``
+name of ``nipype.interfaces.base.core`` (its only ``shlex`` user among the
+modules SWANe's command-line interfaces run through) to
+:data:`swane.patches.windows_compat.WINDOWS_SHLEX`, whose ``quote`` and
+``split`` follow the MSVCRT argv rules. Scalar path arguments therefore become
+``"C:\\...\\in.nii.gz"`` and the executable lookup keeps backslashes. Nipype
+computes quoted list-of-path ``%s`` elements but never uses them (the result
+is discarded), so list elements stay bare on every platform, exactly as stock
+Nipype. On Linux/macOS nothing is rebound.
+
 Why this is ``spawn``-safe
 --------------------------
 ``swane_run_node`` lives in *this* module and is the callable submitted to the
@@ -77,12 +94,15 @@ from time import time
 from dataclasses import dataclass, field
 
 from nipype import config as _nipype_config
+from nipype.interfaces.base import core as _nipype_core
 from nipype.interfaces.base import Undefined, isdefined
 from nipype.interfaces.fsl.epi import EddyInputSpec
 from nipype.utils.profiler import ResourceMonitor
 from nipype.utils.ram_estimator import RamEstimator
 from nipype.pipeline.plugins import multiproc as _nipype_multiproc
 from nipype.pipeline.plugins.multiproc import run_node as _orig_run_node
+
+from swane.patches import windows_compat
 
 
 @dataclass
@@ -226,6 +246,15 @@ def swane_process_initializer(*args, **kwargs):
     return _orig_process_initializer(*args, **kwargs)
 
 
+def install_windows_cmdline_quoting():
+    """On Windows, make Nipype's CommandLine quote and split with the MSVCRT
+    rules (see the module docstring). Returns True when installed."""
+    if not windows_compat.is_windows():
+        return False
+    _nipype_core.shlex = windows_compat.WINDOWS_SHLEX
+    return True
+
+
 def apply_patches():
     """Install SWANe's Nipype runtime patches (idempotent)."""
     global _PATCHED
@@ -239,6 +268,7 @@ def apply_patches():
     RamEstimator.negotiate = _ram_estimator_negotiate
     # MultiProcPlugin.__init__ reads this module global when it builds the pool.
     _nipype_multiproc.process_initializer = swane_process_initializer
+    install_windows_cmdline_quoting()
     _PATCHED = True
 
 

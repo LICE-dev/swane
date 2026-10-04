@@ -7,8 +7,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 import os
-import shlex
-import subprocess
+
+from swane.patches.windows_compat import cmdline_quote
 
 
 class SegmentEndocraniumInputSpec(CommandLineInputSpec):
@@ -73,16 +73,11 @@ class SegmentEndocranium(CommandLine):
         if not os.path.exists(worker_path):
             raise FileNotFoundError(f"Worker not found: {worker_path}")
         # nipype runs _cmd through a shell: quote both paths (Slicer's install
-        # dir contains a space on Windows).
-        if os.name == "nt":
-            # nipype validates the executable with shlex.split (POSIX rules),
-            # which would eat backslashes: use forward slashes inside the quotes.
-            quote = lambda p: subprocess.list2cmdline([p.replace("\\", "/")])
-        else:
-            quote = shlex.quote
+        # dir contains a space on Windows). cmdline_quote matches the quoting
+        # SWANe's Nipype patch uses for every other argument on each platform.
         self._cmd = (
-            f"{quote(str(self.inputs.slicer_cmd))} --no-splash --no-main-window "
-            f"--python-script {quote(worker_path)}"
+            f"{cmdline_quote(str(self.inputs.slicer_cmd))} --no-splash "
+            f"--no-main-window --python-script {cmdline_quote(worker_path)}"
         )
 
     def _format_arg(self, name, spec, value):

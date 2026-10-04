@@ -89,3 +89,21 @@ def worker_import_order():
         "windows_compat": _position("swane.patches.windows_compat"),
         "sge": _position("nipype.pipeline.plugins.sge"),
     }
+
+
+def worker_cmdline_quoting_state():
+    """
+    Task run in a worker pool process: report whether SWANe's Nipype patches
+    (which install the Windows command-line quoting) were applied before the
+    task, and which ``shlex`` nipype's CommandLine core is using.
+    """
+    import shlex
+    import sys
+
+    npx = sys.modules.get("swane.patches.nipype_patches")
+    from nipype.interfaces.base import core
+
+    return {
+        "patched": bool(npx is not None and npx._PATCHED),
+        "nipype_shlex_is_stdlib": core.shlex is shlex,
+    }
