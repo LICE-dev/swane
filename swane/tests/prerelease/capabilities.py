@@ -437,17 +437,25 @@ def _probe_ram_budget(caps: Capabilities) -> None:
 
 
 def _probe_freesurfer_subject(caps: Capabilities) -> None:
-    """The phantom anatomy is derived from the fsaverage subject."""
-    fs_home = os.environ.get("FREESURFER_HOME")
-    path = os.path.join(fs_home, "subjects", "fsaverage") if fs_home else ""
-    ok = bool(fs_home) and os.path.isdir(path)
+    """The phantom anatomy is derived from fsaverage (FreeSurfer or MNE mirror)."""
+    from swane.tests.helpers.phantom.fsaverage_source import (
+        DEFAULT_CACHE_DIR,
+        freesurfer_fsaverage_mri_dir,
+        fsaverage_available,
+    )
+
+    local = freesurfer_fsaverage_mri_dir()
     caps.add(
         "fsaverage",
-        ok,
+        True,
         (
-            "fsaverage present"
-            if ok
-            else "no $FREESURFER_HOME/subjects/fsaverage; the phantom cannot be built"
+            "fsaverage from FreeSurfer (%s)" % local
+            if local
+            else (
+                "fsaverage from the MNE mirror cache (%s)" % DEFAULT_CACHE_DIR
+                if fsaverage_available()
+                else "fsaverage will be downloaded from the MNE mirror"
+            )
         ),
     )
 

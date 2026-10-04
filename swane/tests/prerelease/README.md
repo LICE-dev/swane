@@ -140,7 +140,8 @@ automated checks cover is graded from measured margins, not eyeballed.
 ### Requirements
 
 The blocking ones — without these nothing runs — are dcm2niix,
-`$FREESURFER_HOME/subjects/fsaverage` (the phantom anatomy) and a RAM budget
+`fsaverage` (the phantom anatomy; from FreeSurfer or, if absent, downloaded
+from the MNE mirror) and a RAM budget
 (`--ram`) the machine physically has. FSL is blocking only in a build where
 `swane.config.dependency_policy.FSL_MANDATORY` is True. Everything else
 degrades gracefully: a missing capability drops the axes that need it, with the
@@ -155,8 +156,14 @@ never covered by a pass that silently ran another engine. The FSL baseline
 passes are skipped with a "needs fsl" reason; tractography stays covered by the
 dipy RecoBundles pass (the `tractography` capability is XTRACT *or* dipy).
 
-`$FREESURFER_HOME` must be set even when FreeSurfer passes are not requested,
-because the phantom is built from `fsaverage`.
+The phantom is built from `fsaverage` even when FreeSurfer passes are not
+requested: without FreeSurfer it is downloaded once (network needed).
+
+The anatomy files are FreeSurfer data, distributed under the FreeSurfer Software
+License (https://github.com/freesurfer/freesurfer/blob/dev/LICENSE.txt); the
+MNE mirror repository's own license does not change that. SWANe only fetches
+`aseg.mgz` and `aparc+aseg.mgz` to build a local phantom: they are never
+committed, packaged or uploaded.
 
 ### Commands
 

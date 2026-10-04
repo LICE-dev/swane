@@ -6,7 +6,8 @@ isotropic 256^3 conformed volume in MNI305 space).  Every later stage only ever
 looks at these class codes, never at fsaverage intensities, so the phantom is
 fully under our control and reproducible.
 
-Only ``fsaverage`` is read (it ships with FreeSurfer), so nothing subject- or
+Only ``fsaverage`` is read (from FreeSurfer, or from the md5-pinned MNE mirror
+when FreeSurfer is absent; see ``fsaverage_source``), so nothing subject- or
 licence-restricted is involved.
 
 Extracerebral tissue (CSF gap, skull, scalp, background air) is *not* copied
@@ -95,16 +96,9 @@ class TissueModel:
 
 
 def _fsaverage_dir(freesurfer_home: str | None = None) -> str:
-    home = freesurfer_home or os.environ.get("FREESURFER_HOME")
-    if not home:
-        raise RuntimeError(
-            "FREESURFER_HOME is not set; cannot locate the fsaverage subject "
-            "needed to build the phantom anatomy."
-        )
-    path = os.path.join(home, "subjects", "fsaverage", "mri")
-    if not os.path.isdir(path):
-        raise RuntimeError("fsaverage not found at %s" % path)
-    return path
+    from swane.tests.helpers.phantom.fsaverage_source import resolve_fsaverage_mri_dir
+
+    return resolve_fsaverage_mri_dir(freesurfer_home)
 
 
 def _load(fs_mri: str, name: str) -> np.ndarray:
