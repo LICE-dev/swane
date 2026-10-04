@@ -15,6 +15,7 @@ from swane.tests.nipype_pipeline.matrix._snapshot import (
     _normalise,
     _normalise_conn_field,
     _normalise_function_source,
+    _render_cmd,
     build_replacements,
 )
 
@@ -78,3 +79,21 @@ def test_system_site_packages_is_tokenised():
     purelib = sysconfig.get_paths()["purelib"].replace("\\", "/").rstrip("/")
     leaked = purelib + "/dcm2niix/resources/x.nii.gz"
     assert _normalise(leaked, repl) == "<SITE>/dcm2niix/resources/x.nii.gz"
+
+
+def test_render_cmd_windows_quoted_executable_matches_linux():
+    """On Windows SWANe quotes an absolute executable path for cmd.exe
+    (``windows_compat.shell_executable``), so the command is
+    ``"C:\\...\\dcm2niix.exe"``. It must render exactly like the bare Linux
+    path, otherwise every golden containing that command differs on Windows.
+    """
+    repl = build_replacements(tmp_root=os.getcwd())
+    linux = _render_cmd("/opt/env/site-packages/dcm2niix/dcm2niix", repl)
+    windows = _render_cmd(
+        '"C:\\Users\\Name Surname\\env\\Lib\\site-packages\\dcm2niix\\dcm2niix.exe"',
+        repl,
+    )
+    assert linux == "dcm2niix"
+    assert windows == linux
+    assert _render_cmd('"niimath"', repl) == "niimath"
+    assert _render_cmd("niimath", repl) == "niimath"
