@@ -57,6 +57,18 @@ that import applies the ``ResourceMonitor`` patch in the fresh interpreter
 *before* the callable runs. The target directory travels with the pickled
 ``node`` (``node.config``), so nothing relies on ``fork`` inheritance,
 environment variables or ``sitecustomize``.
+
+Worker pool initializer
+-----------------------
+Before a pool worker receives any task, it unpickles the pool's
+``initializer``. Nipype's ``MultiProcPlugin.__init__`` passes its module-level
+``process_initializer``, looked up at call time, so a ``spawn`` worker would
+import ``nipype.pipeline.plugins`` (whose ``sge.py`` does ``import pwd``) before
+swane -- on Windows, before SWANe's ``pwd`` stub exists, which kills the pool.
+:func:`apply_patches` therefore replaces that module global with
+:func:`swane_process_initializer`, which lives in this module: unpickling it
+imports ``swane`` (and ``swane.patches``, which installs the stub) first, and it
+then delegates to Nipype's original initializer.
 """
 
 import os
@@ -69,6 +81,7 @@ from nipype.interfaces.base import Undefined, isdefined
 from nipype.interfaces.fsl.epi import EddyInputSpec
 from nipype.utils.profiler import ResourceMonitor
 from nipype.utils.ram_estimator import RamEstimator
+from nipype.pipeline.plugins import multiproc as _nipype_multiproc
 from nipype.pipeline.plugins.multiproc import run_node as _orig_run_node
 
 
@@ -129,6 +142,7 @@ proc_dir = None
 # :func:`apply_patches` is (idempotently) called more than once.
 _orig_rm_init = ResourceMonitor.__init__
 _orig_eddy_get_hashval = EddyInputSpec.get_hashval
+_orig_process_initializer = _nipype_multiproc.process_initializer
 
 _EDDY_NTHR_PATTERN = re.compile(r"--nthr=\d+")
 
@@ -199,6 +213,19 @@ def swane_run_node(node, updatehash, taskid):
     return _orig_run_node(node, updatehash, taskid)
 
 
+def swane_process_initializer(*args, **kwargs):
+    """
+    Drop-in replacement for Nipype's MultiProc pool ``process_initializer``.
+
+    It does nothing beyond delegating to the original; its only purpose is to
+    live in a swane module. A ``spawn`` worker unpickles the initializer before
+    any task, so with this one it imports ``swane`` -- and with it the Windows
+    ``pwd`` stub -- before ``nipype.pipeline.plugins`` (see the module
+    docstring, "Worker pool initializer").
+    """
+    return _orig_process_initializer(*args, **kwargs)
+
+
 def apply_patches():
     """Install SWANe's Nipype runtime patches (idempotent)."""
     global _PATCHED
@@ -210,6 +237,8 @@ def apply_patches():
     # Subclasses with quality-neutral levers override it; the FSL estimators
     # inherit this default, which wraps __call__ with empty tuning.
     RamEstimator.negotiate = _ram_estimator_negotiate
+    # MultiProcPlugin.__init__ reads this module global when it builds the pool.
+    _nipype_multiproc.process_initializer = swane_process_initializer
     _PATCHED = True
 
 

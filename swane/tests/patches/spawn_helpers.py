@@ -70,3 +70,22 @@ def eddy_hash_worker(queue):
             "same_hash": two_thread_hash == eight_thread_hash,
         }
     )
+
+
+def worker_import_order():
+    """
+    Task run in a worker pool process: report, in ``sys.modules`` insertion
+    order, which of SWANe's ``pwd`` stub module and Nipype's ``sge`` plugin (the
+    ``import pwd`` that fails on Windows) were imported first.
+    """
+    import sys
+
+    names = list(sys.modules)
+
+    def _position(name):
+        return names.index(name) if name in names else None
+
+    return {
+        "windows_compat": _position("swane.patches.windows_compat"),
+        "sge": _position("nipype.pipeline.plugins.sge"),
+    }
