@@ -183,7 +183,6 @@ def _segfault_worker():
     os.kill(os.getpid(), signal.SIGSEGV)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="Nipype MultiProc requires POSIX")
 def test_sigsegv_worker_fails_run_pass_without_waiting_for_timeout(
     monkeypatch, tmp_path
 ):

@@ -16,6 +16,12 @@ import shutil
 
 import pytest
 
+# On Windows, nipype.pipeline.plugins only imports once SWANe's pwd stub is in
+# place; some test modules import nipype before swane, so install it here first.
+from swane.patches.windows_compat import install_pwd_stub
+
+install_pwd_stub()
+
 # Qt must be head-less *before* any QApplication is created by pytest-qt.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
