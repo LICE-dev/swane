@@ -6,6 +6,8 @@ the percentile-threshold mask (``%s_getthresh`` / ``%s_threshold``) is not built
 The FSL engine keeps the percentile-threshold mask.
 """
 
+import tempfile
+
 from swane.config.config_enums import SliceTiming, FmriEngine
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 
@@ -26,7 +28,7 @@ class MockConfig:
 def _build(engine: FmriEngine, name: str):
     return fMRI_preproc_workflow(
         name=name,
-        dicom_dir="/tmp",
+        dicom_dir=tempfile.gettempdir(),
         TR=2.0,
         slice_timing=SliceTiming.UNKNOWN,
         n_vols=100,
