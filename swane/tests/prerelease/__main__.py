@@ -75,6 +75,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--list", action="store_true", help="list the passes and exit"
     )
     selection.add_argument(
+        "--list-json",
+        action="store_true",
+        help="probe the host and print, as a JSON list on stdout, the names of "
+        "the passes that can run here (everything else goes to stderr); for "
+        "CI job matrices",
+    )
+    selection.add_argument(
         "--dry-run",
         action="store_true",
         help="show the plan and the host capabilities, run nothing",
@@ -174,6 +181,9 @@ def main(argv=None) -> int:
             tag = " (opt-in: --with-reconall)" if spec.heavy_freesurfer else ""
             print("%-28s %s%s" % (spec.name, spec.description, tag))
         return 0
+
+    if args.list_json:
+        return _list_json(args)
 
     work_dir = os.path.abspath(args.work_dir)
     os.makedirs(work_dir, exist_ok=True)
@@ -314,6 +324,33 @@ def main(argv=None) -> int:
     print("Results kept under: %s" % work_dir)
 
     return 0 if report_mod.overall_success(report) else 1
+
+
+def _list_json(args) -> int:
+    """Print the runnable pass names as a JSON list, and nothing else, on stdout.
+
+    Probing and planning chatter is sent to stderr so a CI step can capture
+    stdout straight into a job output.
+    """
+    import contextlib
+    import json
+
+    from swane.tests.prerelease import capabilities as caps_mod
+    from swane.tests.prerelease.plan import build_plan
+
+    with contextlib.redirect_stdout(sys.stderr):
+        slicer_path = args.slicer or user_slicer_path()
+        caps = caps_mod.probe(
+            global_config=_slicer_probe_config(slicer_path),
+            cores=args.cores,
+            ram_gb=args.ram,
+            test_run=not args.full_accuracy,
+        )
+        if args.no_cuda:
+            caps.add("cuda", False, "forced off by --no-cuda")
+        plan = build_plan(caps, with_reconall=args.with_reconall, only=args.only)
+    print(json.dumps([p.name for p in plan if not p.skipped]))
+    return 0
 
 
 def view_pass(pass_name: str, work_dir: str, slicer_path: str) -> int:
