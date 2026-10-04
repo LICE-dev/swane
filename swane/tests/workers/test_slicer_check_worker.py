@@ -352,3 +352,70 @@ class TestSlicerCheckWorkerReal:
         assert (
             blocker.args[3] == DependenceStatus.WARNING
         ), "Slicer outdated version error"
+
+
+def _patch_found_slicer(monkeypatch):
+    monkeypatch.setattr(
+        SlicerCheckWorker,
+        "find_slicer_python",
+        staticmethod(lambda p: (["/fake/path/bin/PythonSlicer"], "../Slicer")),
+    )
+    monkeypatch.setattr(os.path, "exists", lambda p: True)
+    monkeypatch.setattr(
+        SlicerCheckWorker, "add_slicer_startup_patch", staticmethod(lambda: None)
+    )
+
+
+def test_run_version_oserror_emits_single_non_detected_result(monkeypatch):
+    """Slicer path found but not executable: signal still emitted exactly once."""
+    _patch_found_slicer(monkeypatch)
+    results = []
+    w = SlicerCheckWorker(current_slicer_path="")
+    w.signal.slicer.connect(lambda *a: results.append(a))
+
+    def raising_run(cmd, **kwargs):
+        raise PermissionError(13, "Permission denied", cmd[0])
+
+    monkeypatch.setattr(subprocess, "run", raising_run)
+    w.run()
+    assert len(results) == 1
+    assert results[0][3] != DependenceStatus.DETECTED
+
+
+def test_run_module_install_oserror_emits_single_warning(monkeypatch):
+    _patch_found_slicer(monkeypatch)
+    monkeypatch.setattr(
+        DependencyManager, "check_slicer_version", staticmethod(lambda v: True)
+    )
+    results = []
+    w = SlicerCheckWorker(current_slicer_path="")
+    w.signal.slicer.connect(lambda *a: results.append(a))
+
+    def fake_run(cmd, **kwargs):
+        if "--version" in cmd:
+            return type("P", (), {"stdout": b"Slicer 5.6.2\n"})
+        raise OSError("boom")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    w.run()
+    assert len(results) == 1
+    assert results[0][3] != DependenceStatus.DETECTED
+
+
+def test_run_version_with_crlf_is_stripped(monkeypatch):
+    _patch_found_slicer(monkeypatch)
+    monkeypatch.setattr(
+        DependencyManager, "check_slicer_version", staticmethod(lambda v: True)
+    )
+    results = []
+    w = SlicerCheckWorker(current_slicer_path="")
+    w.signal.slicer.connect(lambda *a: results.append(a))
+
+    def fake_run(cmd, **kwargs):
+        if "--version" in cmd:
+            return type("P", (), {"stdout": b"Slicer 5.6.2\r\n"})
+        return type("P", (), {"stdout": b"MODULE FOUND\r\n"})
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    w.run()
+    assert results[0][1] == "5.6.2"
