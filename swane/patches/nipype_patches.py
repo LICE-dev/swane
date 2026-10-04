@@ -65,6 +65,35 @@ computes quoted list-of-path ``%s`` elements but never uses them (the result
 is discarded), so list elements stay bare on every platform, exactly as stock
 Nipype. On Linux/macOS nothing is rebound.
 
+Windows total-RAM probe
+-----------------------
+``nipype.utils.profiler.get_system_total_memory_gb`` reads ``/proc/meminfo``
+(Linux) or ``sysctl`` (macOS) and raises ``Exception("System platform: %s is
+not supported")`` elsewhere. ``MultiProcPlugin.__init__`` (and the legacy
+plugin's) evaluates it as the *eager* default of ``plugin_args.get("memory_gb",
+...)``, so on Windows no workflow can start even when ``memory_gb`` is given.
+On Windows only, :func:`install_windows_memory_probe` rebinds that name in the
+profiler module and in the two plugin modules that imported it with
+``from ... import`` to :func:`swane_system_total_memory_gb`, which asks
+``psutil`` (already used by Nipype's resource monitor). Linux/macOS keep the
+stock probe.
+
+Windows ``stream`` terminal output
+----------------------------------
+``nipype.utils.subprocess.run_command`` reads the child's pipes with
+``select.select`` when ``output == "stream"`` (the CommandLine default). On
+Windows ``select`` accepts only sockets (``WinError 10038``), so every
+CommandLine node fails. On Windows only, :func:`install_windows_run_command`
+rebinds ``run_command`` in ``nipype.utils.subprocess`` and in
+``nipype.interfaces.base.core`` (the module that calls it) to
+:func:`swane_windows_run_command`, which runs ``"stream"`` through Nipype's own
+``"allatonce"`` path (``Popen.communicate``) and then rebuilds what ``"stream"``
+adds on top: each line is logged on ``nipype.interface`` and ``runtime.merged``
+holds ``"<stream> <timestamp>:<line>"`` rows (stdout rows first, then stderr;
+the per-line timestamps become the completion time). ``runtime.stdout``,
+``runtime.stderr`` and ``runtime.returncode`` are identical to ``"stream"``.
+Every other output mode is passed through unchanged.
+
 Why this is ``spawn``-safe
 --------------------------
 ``swane_run_node`` lives in *this* module and is the callable submitted to the
@@ -88,17 +117,22 @@ imports ``swane`` (and ``swane.patches``, which installs the stub) first, and it
 then delegates to Nipype's original initializer.
 """
 
+import datetime
 import os
 import re
 from time import time
 from dataclasses import dataclass, field
 
+import psutil
 from nipype import config as _nipype_config
 from nipype.interfaces.base import core as _nipype_core
 from nipype.interfaces.base import Undefined, isdefined
 from nipype.interfaces.fsl.epi import EddyInputSpec
+from nipype.utils import profiler as _nipype_profiler
+from nipype.utils import subprocess as _nipype_subprocess
 from nipype.utils.profiler import ResourceMonitor
 from nipype.utils.ram_estimator import RamEstimator
+from nipype.pipeline.plugins import legacymultiproc as _nipype_legacymultiproc
 from nipype.pipeline.plugins import multiproc as _nipype_multiproc
 from nipype.pipeline.plugins.multiproc import run_node as _orig_run_node
 
@@ -163,6 +197,11 @@ proc_dir = None
 _orig_rm_init = ResourceMonitor.__init__
 _orig_eddy_get_hashval = EddyInputSpec.get_hashval
 _orig_process_initializer = _nipype_multiproc.process_initializer
+_orig_get_system_total_memory_gb = _nipype_profiler.get_system_total_memory_gb
+_orig_run_command = _nipype_subprocess.run_command
+
+# Modules holding their own ``get_system_total_memory_gb`` binding.
+_MEMORY_PROBE_MODULES = (_nipype_profiler, _nipype_multiproc, _nipype_legacymultiproc)
 
 _EDDY_NTHR_PATTERN = re.compile(r"--nthr=\d+")
 
@@ -255,6 +294,53 @@ def install_windows_cmdline_quoting():
     return True
 
 
+def swane_system_total_memory_gb():
+    """Total system RAM in GB, from ``psutil`` (any platform)."""
+    return psutil.virtual_memory().total / (1024.0**3)
+
+
+def install_windows_memory_probe():
+    """On Windows, give Nipype a working total-RAM probe (see the module
+    docstring). Returns True when installed."""
+    if not windows_compat.is_windows():
+        return False
+    for module in _MEMORY_PROBE_MODULES:
+        module.get_system_total_memory_gb = swane_system_total_memory_gb
+    return True
+
+
+def swane_windows_run_command(runtime, output=None, timeout=0.01, write_cmdline=False):
+    """``run_command`` for Windows: ``"stream"`` without ``select`` on pipes
+    (see the module docstring); every other mode is delegated unchanged."""
+    if output != "stream":
+        return _orig_run_command(
+            runtime, output=output, timeout=timeout, write_cmdline=write_cmdline
+        )
+    runtime = _orig_run_command(
+        runtime, output="allatonce", timeout=timeout, write_cmdline=write_cmdline
+    )
+    now = datetime.datetime.now().isoformat()
+    merged = []
+    for name in ("stdout", "stderr"):
+        text = getattr(runtime, name)
+        for line in text.split("\n") if text else []:
+            row = f"{name} {now}:{line}"
+            _nipype_subprocess.iflogger.info(row)
+            merged.append(row)
+    runtime.merged = "\n".join(merged)
+    return runtime
+
+
+def install_windows_run_command():
+    """On Windows, route Nipype's CommandLine through
+    :func:`swane_windows_run_command`. Returns True when installed."""
+    if not windows_compat.is_windows():
+        return False
+    _nipype_subprocess.run_command = swane_windows_run_command
+    _nipype_core.run_command = swane_windows_run_command
+    return True
+
+
 def apply_patches():
     """Install SWANe's Nipype runtime patches (idempotent)."""
     global _PATCHED
@@ -269,6 +355,8 @@ def apply_patches():
     # MultiProcPlugin.__init__ reads this module global when it builds the pool.
     _nipype_multiproc.process_initializer = swane_process_initializer
     install_windows_cmdline_quoting()
+    install_windows_memory_probe()
+    install_windows_run_command()
     _PATCHED = True
 
 
