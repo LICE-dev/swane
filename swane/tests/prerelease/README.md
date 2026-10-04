@@ -124,7 +124,8 @@ Its quality is graded by:
   of sane magnitude (a degenerate FNIRT gives ~0, a diverged one tens of mm);
 * `nonlinear.target_alignment.<space>` — the warped subject that SWANe writes
   into the target space is compared against the **real target**, read at run
-  time from `$FSLDIR` (MNI152) or `swane.resources` (the symmetric template).
+  time from the TemplateFlow cache (MNI152NLin6Asym, and MNI152NLin2009cSym
+  for the symmetric template).
   Measured against the real MNI152 1 mm brain: Dice 0.94, intensity NCC 0.78
   (gates 0.85 / 0.5). Reading the target to score the result is licence-clean —
   the tools are run and their output inspected; no atlas image or code is copied
@@ -138,10 +139,21 @@ automated checks cover is graded from measured margins, not eyeballed.
 
 ### Requirements
 
-The blocking ones — without these nothing runs — are FSL, dcm2niix, and
-`$FREESURFER_HOME/subjects/fsaverage` (the phantom anatomy). Everything else
+The blocking ones — without these nothing runs — are dcm2niix,
+`$FREESURFER_HOME/subjects/fsaverage` (the phantom anatomy) and a RAM budget
+(`--ram`) the machine physically has. FSL is blocking only in a build where
+`swane.config.dependency_policy.FSL_MANDATORY` is True. Everything else
 degrades gracefully: a missing capability drops the axes that need it, with the
 reason recorded in the report.
+
+On a host without FSL the sweep still runs every FSL-free pass. FSL-only axis
+values — `deskull_engine=BET`, `registration_engine=FSL`, `fmri_engine=FSL`,
+`segmentation_engine=FSL`, `tractography_engine=FSL_XTRACT`, and every value of
+the BET parameters (`ref_bet_thr`, `ref_bet_bias_correction`,
+`venous_mr_bet_thr`) and of `old_eddy_correct` — are reported **unreachable**,
+never covered by a pass that silently ran another engine. The FSL baseline
+passes are skipped with a "needs fsl" reason; tractography stays covered by the
+dipy RecoBundles pass (the `tractography` capability is XTRACT *or* dipy).
 
 `$FREESURFER_HOME` must be set even when FreeSurfer passes are not requested,
 because the phantom is built from `fsaverage`.
