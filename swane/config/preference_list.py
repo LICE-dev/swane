@@ -6,6 +6,7 @@ from swane.utils.ResourceManager import ResourceManager
 from swane.resources import strings
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import *
+from swane.config.dependency_policy import FSL_MANDATORY, default_engines
 from swane.nipype_pipeline.workflows.dipy_bundle_workflow import DIPY_TRACT_ATLAS
 
 try:
@@ -62,7 +63,13 @@ if os.path.exists(structure_file):
 
 for k in list(TRACTS.keys()):
     if TRACTS[k][2] == 0:
-        del TRACTS[k]
+        if k in DIPY_TRACT_ATLAS:
+            # Not in the XTRACT data (e.g. FSL is not installed): the dipy engine
+            # does not need it, and the FSL engine skips tracts whose XTRACT
+            # protocol is missing.
+            TRACTS[k][2] = DEFAULT_N_SAMPLES
+        else:
+            del TRACTS[k]
 
 from psutil import virtual_memory
 import math
@@ -778,11 +785,12 @@ GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
 )
 category = GlobalPrefCategoryList.SYNTH
 GLOBAL_PREFERENCES[category] = {}
+DEFAULT_ENGINES = default_engines(FSL_MANDATORY)
 GLOBAL_PREFERENCES[category]["deskull_engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Brain extraction engine",
     value_enum=DeskullEngine,
-    default=DeskullEngine.ANTSPYNET,
+    default=DEFAULT_ENGINES["deskull_engine"],
     option_dependency={
         DeskullEngine.ANTSPYNET: [
             "is_antspynet",
@@ -821,7 +829,7 @@ GLOBAL_PREFERENCES[category]["engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Registration engine",
     value_enum=RegistrationEngine,
-    default=RegistrationEngine.ANTS,
+    default=DEFAULT_ENGINES["engine"],
     option_dependency={
         RegistrationEngine.SYNTH: [
             "is_freesurfer_synth",
@@ -860,11 +868,15 @@ GLOBAL_PREFERENCES[category]["tractography_engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Tractography engine",
     value_enum=TractographyEngine,
-    default=TractographyEngine.DIPY_RECOBUNDLES,
+    default=DEFAULT_ENGINES["tractography_engine"],
     option_dependency={
         TractographyEngine.DIPY_RECOBUNDLES: [
             "is_dipy",
             "dipy tractography requires the dipy package",
+        ],
+        TractographyEngine.FSL_XTRACT: [
+            "is_fsl",
+            "FSL XTRACT/probtrackx2 requires the FSL software suite",
         ],
     },
     option_pref_requirement={
@@ -884,11 +896,15 @@ GLOBAL_PREFERENCES[category]["segmentation_engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Segmentation engine",
     value_enum=SegmentationEngine,
-    default=SegmentationEngine.ANTS,
+    default=DEFAULT_ENGINES["segmentation_engine"],
     option_dependency={
         SegmentationEngine.ANTS: [
             "is_antspyx",
             "Atropos segmentation requires the antspyx package",
+        ],
+        SegmentationEngine.FSL: [
+            "is_fsl",
+            "FSL FAST requires the FSL software suite",
         ],
     },
     option_pref_requirement={
@@ -908,7 +924,7 @@ GLOBAL_PREFERENCES[category]["fmri_engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="fMRI engine",
     value_enum=FmriEngine,
-    default=FmriEngine.NILEARN,
+    default=DEFAULT_ENGINES["fmri_engine"],
     option_dependency={
         FmriEngine.FSL: [
             "is_fsl",

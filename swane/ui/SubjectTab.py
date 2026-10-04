@@ -35,6 +35,7 @@ from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.ui.NipypeNodeRuntimeWidget import NipypeNodeRuntimeWidget
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.DataInputList import DataInputList
 from swane.utils.DependencyManager import DependencyManager
@@ -666,7 +667,7 @@ class SubjectTab(QTabWidget):
         if generate_workflow_return == SubjectRet.GenWfMissingRequisites:
             self.generate_workflow_button.setEnabled(True)
             error_dialog = QErrorMessage(parent=self)
-            error_dialog.showMessage(strings.subj_tab_missing_fsl_error)
+            error_dialog.showMessage(strings.subj_tab_missing_dependencies_error)
             return
         elif generate_workflow_return == SubjectRet.GenWfError:
             self.generate_workflow_button.setEnabled(True)
@@ -1659,9 +1660,9 @@ class SubjectTab(QTabWidget):
             The new tab status
         """
         if index == SubjectTab.EXECTAB and not enabled:
-            if (
-                not self.subject.dependency_manager.is_fsl()
-                or not self.subject.dependency_manager.is_dcm2niix()
+            if not self.subject.dependency_manager.is_dcm2niix() or (
+                dependency_policy.FSL_MANDATORY
+                and not self.subject.dependency_manager.is_fsl()
             ):
                 self.setTabToolTip(
                     index, strings.subj_tab_tabtooltip_exec_disabled_dependency

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from swane.resources import strings
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.config.config_enums import (
     FreesurferStep,
     GlobalPrefCategoryList,
@@ -1028,8 +1029,11 @@ class PreferenceWizardWindow(QDialog):
         # Brain extraction engine: antspynet is the general default and does not
         # require the advanced-models opt-in. SynthStrip stays gated behind that
         # opt-in, like the other FreeSurfer Synth tools (reconall/synthseg); FSL
-        # BET is the fallback when neither is available.
-        if self.dependency_manager.is_antspynet() and (available_ram >= 5.0):
+        # BET is the fallback when neither is available. When FSL is a mandatory
+        # dependency, FSL BET is always the brain extraction engine.
+        if dependency_policy.FSL_MANDATORY:
+            deskull_engine = DeskullEngine.BET
+        elif self.dependency_manager.is_antspynet() and (available_ram >= 5.0):
             deskull_engine = DeskullEngine.ANTSPYNET
         elif (
             self.user_prefs.use_advanced_models
