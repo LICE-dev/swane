@@ -1,3 +1,4 @@
+import tempfile
 import pytest
 from swane.config.config_enums import FmriEngine, BlockDesign
 from swane.nipype_pipeline.workflows.fMRI_task_workflow import fMRI_task_workflow
@@ -49,7 +50,7 @@ def test_fmri_task_nilearn_engine_nodes():
 
     wf = fMRI_task_workflow(
         name="test_task_nilearn",
-        dicom_dir="/tmp",
+        dicom_dir=tempfile.gettempdir(),
         config=config,
         synth_config=config,
         test_run=False,
@@ -86,7 +87,7 @@ def test_fmri_task_fsl_engine_nodes():
 
     wf = fMRI_task_workflow(
         name="test_task_fsl",
-        dicom_dir="/tmp",
+        dicom_dir=tempfile.gettempdir(),
         config=config,
         synth_config=config,
         test_run=False,
@@ -113,7 +114,7 @@ def test_fmri_task_nilearn_glm_thread_budget(max_cpu, budget):
     config = MockConfig(FmriEngine.NILEARN, BlockDesign.RARB)
     wf = fMRI_task_workflow(
         name="test_task_nilearn",
-        dicom_dir="/tmp",
+        dicom_dir=tempfile.gettempdir(),
         config=config,
         synth_config=config,
         test_run=False,
@@ -133,7 +134,7 @@ def test_fmri_task_nilearn_glm_slice_time_ref(timing, expected):
     config = MockConfig(FmriEngine.NILEARN, BlockDesign.RARB, SliceTiming[timing])
     wf = fMRI_task_workflow(
         name="test_task_nilearn",
-        dicom_dir="/tmp",
+        dicom_dir=tempfile.gettempdir(),
         config=config,
         synth_config=config,
         test_run=False,
