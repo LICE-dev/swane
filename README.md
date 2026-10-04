@@ -57,6 +57,8 @@ A few of the analyses you can do with SWANe:
 
 **macOS**: SWANe is developed and optimized for macOS > 12.5.XX.
 
+**Windows (experimental)**: FSL-free pipelines only; FSL and FreeSurfer are not available natively; 3D Slicer integration is best-effort.
+
 ### Mandatory Dependencies
 | **Software** | **Minimum Version** | **Official Installation Guide** |
 | --- | --- | --- |

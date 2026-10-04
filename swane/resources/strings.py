@@ -312,6 +312,7 @@ wizard_advanced_models_text = (
     "They may require additional memory and processing power."
 )
 wizard_advanced_models_macos_warn = "<b>Please note</b>: The synth tools consume a significant amount of RAM on macOS. For this reason, we do <b>not recommend</b> using them on this platform."
+windows_experimental_warn = "<b>Please note</b>: Windows support is <b>experimental</b>. FSL and FreeSurfer are not available natively on Windows; 3D Slicer integration is best-effort."
 advanced_models_enabled = "Use FreeSurfer advanced models when supported"
 advanced_models_enabled_tooltip = (
     "Enable FreeSurfer advanced models when the system can handle them reliably."

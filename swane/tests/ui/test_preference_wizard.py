@@ -83,6 +83,26 @@ class TestPreferenceWizard:
             == FreesurferStep.SYNTHSEG
         )
 
+    def test_welcome_page_warns_on_windows_only(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        import swane.ui.PreferenceWizardWindow as wizard_module
+        from PySide6.QtWidgets import QLabel
+
+        def texts(wizard):
+            page = wizard._stack.widget(0)
+            return " ".join(label.text() for label in page.findChildren(QLabel))
+
+        monkeypatch.setattr(wizard_module, "is_windows", lambda: True)
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
+        qtbot.addWidget(wizard)
+        assert "experimental" in texts(wizard)
+
+        monkeypatch.setattr(wizard_module, "is_windows", lambda: False)
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
+        qtbot.addWidget(wizard)
+        assert "experimental" not in texts(wizard)
+
 
 class TestPreferenceWizardRegistrationEngine:
     """D2: the wizard writes the ``engine`` preference instead of ``morph``.

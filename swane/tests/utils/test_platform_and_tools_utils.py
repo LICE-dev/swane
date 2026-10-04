@@ -21,6 +21,7 @@ def test_os_type_helpers(monkeypatch):
     assert pu.is_mac() is True
 
     monkeypatch.setattr(pu.platform, "system", lambda: "Windows")
-    assert pu.get_os_type() == "other"
+    assert pu.get_os_type() == "windows"
+    assert pu.is_windows() is True
     assert pu.is_linux() is False
     assert pu.is_mac() is False

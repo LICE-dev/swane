@@ -13,16 +13,21 @@ class ResourceManager:
     MAXIMUM_RAM_PERC = 95
     DEFAULT_RAM_PERC = 70
 
-    SYNTH_STRIP_RAM_REQUIREMENT = {"mac": 30, "linux": 5, "other": 5}
-    SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 20, "linux": 14, "other": 14}
-    SYNTH_SEG_RAM_REQUIREMENT = {"mac": 30, "linux": 14, "other": 14}
-    SYNTH_RECONALL_RAM_REQUIREMENT = {"mac": 20, "linux": 20, "other": 20}
+    SYNTH_STRIP_RAM_REQUIREMENT = {"mac": 30, "linux": 5, "other": 5, "windows": 5}
+    SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 20, "linux": 14, "other": 14, "windows": 14}
+    SYNTH_SEG_RAM_REQUIREMENT = {"mac": 30, "linux": 14, "other": 14, "windows": 14}
+    SYNTH_RECONALL_RAM_REQUIREMENT = {
+        "mac": 20,
+        "linux": 20,
+        "other": 20,
+        "windows": 20,
+    }
     #: Placeholder pending real antspyx memory profiling: started at the same
     #: magnitude as SYNTH_MORPH_RAM_REQUIREMENT (Phase 1 CP-A, to confirm).
-    ANTS_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
+    ANTS_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5, "windows": 5}
     #: antspynet brain extraction; fixed at 5 GB for now (revisit later).
-    ANTSPYNET_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5}
-    ATROPOS_RAM_REQUIREMENT = {"mac": 3, "linux": 3, "other": 3}
+    ANTSPYNET_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5, "windows": 5}
+    ATROPOS_RAM_REQUIREMENT = {"mac": 3, "linux": 3, "other": 3, "windows": 3}
     #: Minimum RAM to select the dipy tractography engine. It covers every dipy
     #: node's negotiated bottom rung so the workflow can run; the heavier nodes
     #: (motion, tracking) tune their parallelism/levers down to fit it, and
@@ -31,10 +36,10 @@ class ResourceManager:
     #: classifier (no lever, linear in T1 voxels, ~5.7 GB) is the binding floor.
     #: DipySlrRamEstimator.STATIC_FALLBACK_GB reads this constant directly. See
     #: the dipy RAM report.
-    DIPY_TRACTOGRAPHY_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6}
+    DIPY_TRACTOGRAPHY_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6, "windows": 6}
     #: Minimum RAM to select the nilearn fMRI engine (covers antspynet BOLD
     #: extraction + CanICA).
-    NILEARN_FMRI_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6}
+    NILEARN_FMRI_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6, "windows": 6}
 
     #: In prerelease test_run mode ONLY, the SynthSeg (--fast, robust=False) and
     #: SynthMorph (steps=5) paths do genuinely less work and use less RAM, so
