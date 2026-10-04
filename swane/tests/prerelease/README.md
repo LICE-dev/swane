@@ -151,10 +151,12 @@ On a host without FSL the sweep still runs every FSL-free pass. FSL-only axis
 values — `deskull_engine=BET`, `registration_engine=FSL`, `fmri_engine=FSL`,
 `segmentation_engine=FSL`, `tractography_engine=FSL_XTRACT`, and every value of
 the BET parameters (`ref_bet_thr`, `ref_bet_bias_correction`,
-`venous_mr_bet_thr`) and of `old_eddy_correct` — are reported **unreachable**,
-never covered by a pass that silently ran another engine. So is `cuda=true`:
-only the FSL diffusion chain (eddy, BEDPOSTX, probtrackx) reads it, so its gate
-needs both a GPU and FSL. The FSL baseline passes are skipped with a "needs
+`venous_mr_bet_thr`), of `old_eddy_correct` and of `cuda` — are reported
+**unreachable**, never covered by a pass that silently ran another engine. Only
+the FSL diffusion chain (eddy, BEDPOSTX, probtrackx) reads `cuda`, so both
+values need FSL (`cuda=true` a GPU too), and only the passes running that chain
+pin it; every other pass rides the config default (`false`), which nothing else
+reads. The FSL baseline passes are skipped with a "needs
 fsl" reason (`fmri_task_and_rest` too: without FSL it would resolve to exactly
 `fmri_task_and_rest_ants`); tractography stays covered by the dipy RecoBundles
 pass (the `tractography` capability is XTRACT *or* dipy).
@@ -177,6 +179,25 @@ selects the diffusion preprocessing chain, and only the FSL chain builds
 where either is missing it is skipped and its stand-in runs instead. With every
 non-FSL capability present, an FSL-free host defers nothing but the opt-in
 recon-all values.
+
+The other passes that set FSL-diffusion values are pinned the same way:
+
+* `dti_synthmorph` pins `tractography_engine=FSL_XTRACT`, so it runs eddy,
+  BEDPOSTX and probtrackx (with its externalized transforms) through
+  SynthStrip/SynthMorph — the only pass exercising that transform bridge with
+  SYNTH registration. It needs `synth_morph` and `xtract`.
+* `dti_tractography_ants` (ANTS plus the externalized probtrackx transforms)
+  needs `antspyx` and `xtract`; without XTRACT data or FSL it is skipped
+  instead of silently running the dipy chain.
+
+`plan.unread_axes` holds the small rule table of values a resolved pass sets
+but never reads: an axis whose input is not loaded; `old_eddy_correct` and
+`cuda` off the FSL diffusion chain (DTI loaded and `tractography_engine`
+resolved to `FSL_XTRACT`); the BET parameters when `deskull_engine` is not
+`BET`. The plan tests use it on a capable host, an FSL-free host and an FSL host
+without XTRACT to check that no running pass pins such a value (it would count
+as coverage without being exercised) and that no two running passes are the
+same execution once those values are ignored.
 
 The phantom is built from `fsaverage` even when FreeSurfer passes are not
 requested: without FreeSurfer it is downloaded once (network needed).

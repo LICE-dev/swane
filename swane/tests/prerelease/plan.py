@@ -213,11 +213,14 @@ AXES = (
         values=("false", "true"),
         # Only the FSL diffusion chain reads it (eddy, BEDPOSTX, probtrackx:
         # dti_preproc_workflow / tractography_workflow); the dipy chain and every
-        # other workflow ignore it. So cuda=true needs a GPU *and* FSL: on an
-        # FSL-free host it is reported unreachable rather than claimed by a pass
-        # whose engines never look at it. "cuda" is listed first so a GPU-less
-        # FSL host keeps reporting the missing GPU.
-        gates={"true": ("cuda", "fsl")},
+        # other workflow ignore it. Like the BET parameters, then, both values
+        # need FSL and only the passes running that chain pin it (see
+        # unread_axes): on an FSL-free host the axis is reported unreachable
+        # rather than claimed by a pass whose engines never look at it.
+        # cuda=true also needs a GPU; "cuda" is listed first so a GPU-less FSL
+        # host keeps reporting the missing GPU. Unpinned passes ride the config
+        # default (false), which nothing outside that chain reads.
+        gates={"false": "fsl", "true": ("cuda", "fsl")},
         note="MainWorkflow propagates this into the DTI 'cuda' preference",
     ),
     # ---- structural reference and linear registration ----------------------
@@ -505,7 +508,6 @@ PASSES = (
             "registration_engine": "FSL",
             "segmentation_engine": "FSL",
             "synth_reconall": "false",
-            "cuda": "false",
             "ref_bet_bias_correction": "false",
             "ref_bet_thr": "0.3",
             "flat1": "true",
@@ -542,7 +544,6 @@ PASSES = (
             "registration_engine": "ANTS",
             "segmentation_engine": "ANTS",
             "synth_reconall": "false",
-            "cuda": "false",
             # No ref_bet_*/venous_mr_bet_thr pins: ANTSPYNET runs no BET, so
             # those FSL-gated values would be claimed without being exercised
             # (and would skip this FSL-free pass on a host without FSL).
@@ -569,7 +570,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "BET",
             "registration_engine": "FSL",
-            "cuda": "false",
             "ref_bet_bias_correction": "true",
             "ref_bet_thr": "0.5",
             "flat1": "false",
@@ -597,7 +597,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
-            "cuda": "false",
             "flat1": "false",
             "venous_mr_shape": "two_series",
             "vein_detection_mode": "SD",
@@ -617,7 +616,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "FSL",
-            "cuda": "false",
         },
     ),
     PassSpec(
@@ -634,7 +632,6 @@ PASSES = (
             "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "SYNTH",
             "segmentation_engine": "ANTS",
-            "cuda": "false",
             # flat1 pulls in the nonlinear subject->MNI (mni1) path, so
             # SynthMorph is exercised on a nonlinear registration too, not only
             # the rigid FLAIR->reference one.
@@ -652,7 +649,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "BET",
             "registration_engine": "FSL",
-            "cuda": "false",
             "venous_ct_contrasts": "2",
             "skull_threshold": "-1",
         },
@@ -681,7 +677,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
-            "cuda": "false",
             "venous_ct_contrasts": "1",
             "skull_threshold": "1500",
         },
@@ -699,7 +694,6 @@ PASSES = (
             "freesurfer_step": "SYNTHSEG",
             "deskull_engine": "BET",
             "registration_engine": "FSL",
-            "cuda": "false",
             "asl_ai": "false",
             "pet_ai": "false",
         },
@@ -720,7 +714,6 @@ PASSES = (
         values={
             "freesurfer_step": "DISABLED",
             "deskull_engine": "ANTSPYNET",
-            "cuda": "false",
             "asl_ai": "true",
             "pet_ai": "true",
         },
@@ -737,7 +730,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "SYNTH",
-            "cuda": "false",
             "asl_ai": "false",
             "pet_ai": "false",
         },
@@ -763,15 +755,15 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "ANTSPYNET",
             "registration_engine": "FSL",
-            "cuda": "false",
             "old_eddy_correct": "true",
             "tractography": "false",
             "tractography_engine": "FSL_XTRACT",
+            "cuda": "false",
         },
     ),
     # The FSL-free stand-in for dti_classic: diffusion without tractography on
-    # the dipy chain. No old_eddy_correct pin (the dipy chain ignores it, and
-    # eddy_correct is an FSL tool). Runs only where dti_classic is skipped.
+    # the dipy chain. No old_eddy_correct or cuda pin (the dipy chain ignores
+    # both; eddy_correct is an FSL tool). Runs only where dti_classic is skipped.
     PassSpec(
         name="dti_classic_fsl_free",
         description=(
@@ -784,7 +776,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
-            "cuda": "false",
             "tractography": "false",
             "tractography_engine": "DIPY_RECOBUNDLES",
         },
@@ -801,8 +792,7 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "BET",
             "registration_engine": "FSL",
-            "cuda": "false",
-            # No old_eddy_correct pin: the dipy chain ignores it (FSL-only).
+            # No old_eddy_correct/cuda pin: the dipy chain ignores both (FSL-only).
             "tractography": "true",
             "tractography_engine": "DIPY_RECOBUNDLES",
         },
@@ -826,10 +816,10 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "BET",
             "registration_engine": "FSL",
-            "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
             "tractography_engine": "FSL_XTRACT",
+            "cuda": "false",
         },
     ),
     # The GPU counterpart: same chain with cuda=true. It requires a usable GPU
@@ -847,10 +837,10 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "BET",
             "registration_engine": "FSL",
-            "cuda": "true",
             "old_eddy_correct": "false",
             "tractography": "true",
             "tractography_engine": "FSL_XTRACT",
+            "cuda": "true",
         },
     ),
     # The explicit ANTS twin of dti_tractography (Phase 3): the externalized
@@ -871,10 +861,10 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
-            "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
             "tractography_engine": "FSL_XTRACT",
+            "cuda": "false",
         },
     ),
     # SynthMorph/SynthStrip coverage for diffusion: dti_preproc_workflow uses
@@ -882,20 +872,26 @@ PASSES = (
     # tractography_workflow uses SynthMorph for the tract registrations. No
     # other pass drives synth on the diffusion chain. Needs the SynthMorph RAM
     # floor, so it is skipped on smaller hosts. CPU only (cuda=false).
+    # tractography_engine is pinned to FSL_XTRACT (see dti_classic): the engine
+    # selects the diffusion chain, and only the FSL one runs eddy, BEDPOSTX and
+    # the externalized probtrackx transforms this pass exists to drive through
+    # SynthMorph -- on the dipy default it would build none of them.
     PassSpec(
         name="dti_synthmorph",
         description=(
-            "Diffusion (modern eddy, BEDPOSTX, corticospinal tractography) with "
-            "SynthStrip/SynthMorph registration instead of FLIRT/FNIRT."
+            "The FSL diffusion chain (modern eddy, BEDPOSTX, corticospinal "
+            "probtrackx with its externalized transforms) with SynthStrip/"
+            "SynthMorph registration instead of FLIRT/FNIRT."
         ),
         inputs=(DIL.T13D, DIL.DTI),
         values={
             "freesurfer_step": "DISABLED",
             "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "SYNTH",
-            "cuda": "false",
             "old_eddy_correct": "false",
             "tractography": "true",
+            "tractography_engine": "FSL_XTRACT",
+            "cuda": "false",
         },
     ),
     # Phase 3 lifted fMRI_preproc/task/resting_state's FSL pin (func->ref, and
@@ -915,7 +911,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "BET",
             "registration_engine": "FSL",
-            "cuda": "false",
             "fmri0_block_design": "RARA",
             "fmri1_block_design": "RARB",
             "fmri0_slice_timing": "UNKNOWN",
@@ -937,7 +932,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "BET",
             "registration_engine": "FSL",
-            "cuda": "false",
             "fmri0_block_design": "RARA",
             "fmri1_block_design": "RARB",
             "fmri0_slice_timing": "UNKNOWN",
@@ -966,7 +960,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "ANTSPYNET",
             "registration_engine": "ANTS",
-            "cuda": "false",
             "fmri0_block_design": "RARA",
             "fmri1_block_design": "RARB",
             "fmri0_slice_timing": "UNKNOWN",
@@ -988,7 +981,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "ANTSPYNET",
             "registration_engine": "FSL",
-            "cuda": "false",
             "fmri0_block_design": "RARA",
             "fmri1_block_design": "RARB",
             "fmri0_slice_timing": "UP",
@@ -1010,7 +1002,6 @@ PASSES = (
             "freesurfer_step": "DISABLED",
             "deskull_engine": "SYNTHSTRIP",
             "registration_engine": "SYNTH",
-            "cuda": "false",
             "venous_mr_shape": "single_series",
             "vein_detection_mode": "SD",
         },
@@ -1023,7 +1014,6 @@ PASSES = (
         values={
             "freesurfer_step": "AUTORECON_PIAL",
             "deskull_engine": "ANTSPYNET",
-            "cuda": "false",
             "asl_ai": "false",
         },
         heavy_freesurfer=True,
@@ -1050,7 +1040,6 @@ PASSES = (
             "deskull_engine": "ANTSPYNET",
             "hippo_amyg_labels": "true",
             "synth_reconall": "false",
-            "cuda": "false",
             "asl_ai": "true",
             "pet_ai": "true",
         },
@@ -1067,7 +1056,6 @@ PASSES = (
             "freesurfer_step": "RECONALL",
             "deskull_engine": "ANTSPYNET",
             "synth_reconall": "true",
-            "cuda": "false",
             "asl_ai": "true",
             "pet_ai": "true",
         },
@@ -1197,7 +1185,10 @@ _PASS_REQUIREMENTS = {
     # downgrade ANTS->FSL, exactly duplicating fmri_task_and_rest /
     # dti_tractography, so they are skipped with a clear reason instead.
     "fmri_task_and_rest_ants": ("antspyx", "nilearn"),
-    "dti_tractography_ants": ("antspyx",),
+    # dti_tractography_ants exists for ANTS + the externalized probtrackx
+    # transforms: without xtract (which implies FSL) its FSL_XTRACT pin would
+    # downgrade to the dipy chain and claim old_eddy_correct=false unread.
+    "dti_tractography_ants": ("antspyx", "xtract"),
     "structural_synthstrip": ("synth_strip",),
     "structural_synthmorph": ("synth_morph",),
     "func_map_synthmorph": ("synth_morph",),
@@ -1226,6 +1217,62 @@ _PASS_REQUIREMENTS = {
     # freesurfer_reconall pass already covers recon-all, so skip this one.
     "freesurfer_reconall_synth": ("synth_reconall", "reconall_expert"),
 }
+
+
+# --------------------------------------------------------------------------- #
+# Effective values: what the resolved engines actually read
+# --------------------------------------------------------------------------- #
+#: Axes read only by the FSL diffusion chain (eddy / eddy_correct, BEDPOSTX,
+#: probtrackx: dti_preproc_workflow, tractography_workflow), which runs only
+#: when DTI is loaded and tractography_engine resolves to FSL_XTRACT
+#: (MainWorkflow.launch_dti_analysis); the dipy chain and every other workflow
+#: ignore them.
+FSL_DIFFUSION_ONLY_AXES = ("old_eddy_correct", "cuda")
+#: BET parameters: get_deskull_node reads them only when deskull_engine is BET.
+BET_ONLY_AXES = ("ref_bet_bias_correction", "ref_bet_thr", "venous_mr_bet_thr")
+
+
+def _engine(values: dict, option: str) -> str:
+    """The engine a pass resolves to: its own value, else the config default."""
+    if option in values:
+        return values[option]
+    from swane.config.preference_list import GLOBAL_PREFERENCES
+
+    default = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH][option].default
+    return getattr(default, "name", default)
+
+
+def unread_axes(values: dict, inputs) -> set:
+    """The axes ``values`` sets that a pass loading ``inputs`` never reads.
+
+    The rule table is deliberately small; a value outside it always counts:
+
+    * an axis whose ``needs_input`` is not loaded;
+    * ``old_eddy_correct`` and ``cuda`` unless the FSL diffusion chain runs
+      (DTI loaded and tractography_engine resolved to FSL_XTRACT);
+    * the BET parameters unless deskull_engine is BET.
+    """
+    fsl_diffusion = (
+        DIL.DTI in inputs
+        and _engine(values, "tractography_engine") == TractographyEngine.FSL_XTRACT.name
+    )
+    bet = _engine(values, "deskull_engine") == DeskullEngine.BET.name
+    unread = set()
+    for axis_name in values:
+        axis = AXES_BY_NAME[axis_name]
+        if axis.needs_input is not None and axis.needs_input not in inputs:
+            unread.add(axis_name)
+        elif axis_name in FSL_DIFFUSION_ONLY_AXES and not fsl_diffusion:
+            unread.add(axis_name)
+        elif axis_name in BET_ONLY_AXES and not bet:
+            unread.add(axis_name)
+    return unread
+
+
+def effective_values(values: dict, inputs) -> dict:
+    """``values`` without the axes the resolved engines never read."""
+    unread = unread_axes(values, inputs)
+    return {name: value for name, value in values.items() if name not in unread}
 
 
 def _skip_if_pointless(item: ResolvedPass, caps) -> None:
