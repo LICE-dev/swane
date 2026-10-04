@@ -426,6 +426,7 @@ def test_list_json_prints_only_the_runnable_pass_names(monkeypatch, capsys):
         return caps
 
     monkeypatch.setattr(caps_mod, "probe", fake_probe)
+    monkeypatch.setattr(caps_mod, "blocking_failures", lambda c: [])
     monkeypatch.setattr(cli, "user_slicer_path", lambda: "")
     plan = [
         SimpleNamespace(name="runs", skipped=False),
@@ -440,3 +441,26 @@ def test_list_json_prints_only_the_runnable_pass_names(monkeypatch, capsys):
     out = capsys.readouterr()
     assert json.loads(out.out) == ["runs", "also_runs"]
     assert "chatter" in out.err
+
+
+def test_list_json_blocking_failure_exits_nonzero_without_pass_list(
+    monkeypatch, capsys
+):
+    """A host that cannot run anything must fail the CI planning step instead of
+    silently yielding an empty (green) matrix."""
+    from swane.tests.prerelease import __main__ as cli
+    from swane.tests.prerelease import capabilities as caps_mod
+
+    caps = caps_mod.Capabilities(cores=4, ram_gb=14.0)
+    monkeypatch.setattr(caps_mod, "probe", lambda **kwargs: caps)
+    monkeypatch.setattr(cli, "user_slicer_path", lambda: "")
+    monkeypatch.setattr(
+        caps_mod,
+        "blocking_failures",
+        lambda c: [SimpleNamespace(name="dcm2niix", reason="not installed")],
+    )
+
+    assert cli.main(["--list-json"]) != 0
+    out = capsys.readouterr()
+    assert out.out.strip() == ""
+    assert "dcm2niix" in out.err and "not installed" in out.err

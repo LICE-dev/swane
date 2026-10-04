@@ -348,7 +348,15 @@ def _list_json(args) -> int:
         )
         if args.no_cuda:
             caps.add("cuda", False, "forced off by --no-cuda")
-        plan = build_plan(caps, with_reconall=args.with_reconall, only=args.only)
+        blocking = caps_mod.blocking_failures(caps)
+        if blocking:
+            print("Cannot run:")
+            for cap in blocking:
+                print("  - %s: %s" % (cap.name, cap.reason))
+        else:
+            plan = build_plan(caps, with_reconall=args.with_reconall, only=args.only)
+    if blocking:
+        return 2
     print(json.dumps([p.name for p in plan if not p.skipped]))
     return 0
 
