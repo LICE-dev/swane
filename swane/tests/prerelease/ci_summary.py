@@ -1,7 +1,8 @@
 """Merge the per-pass results of a CI prerelease sweep into one summary.
 
 Stdlib only, so the CI summary job needs no SWANe install. Each matrix job
-uploads an artifact holding ``<pass>/pass_result.json`` (see
+uploads an artifact holding ``<pass>/pass_result.json`` and
+``prerelease_report.json`` (the latter carries the check results) (see
 :class:`swane.tests.prerelease.runner.PassResult`); the plan job uploads
 ``dry-run.txt``. After ``actions/download-artifact`` the files sit in one folder
 per artifact, so this script just walks the tree.
@@ -21,6 +22,10 @@ import os
 import sys
 
 PASS_RESULT_FILE = "pass_result.json"
+#: Written by report.write_json AFTER the checks ran; pass_result.json is written
+#: before them (its ``checks`` is always empty), so the report is the single
+#: source of truth for check outcomes.
+REPORT_FILE = "prerelease_report.json"
 DRY_RUN_FILE = "dry-run.txt"
 _ERROR = "error"
 
@@ -48,6 +53,25 @@ def load_results(root: str) -> list:
                 }
             )
     return results
+
+
+def _attach_report_checks(results: list, root: str) -> list:
+    """Fold each pass's checks from the uploaded sweep report into its result."""
+    by_name = {r.get("name", "?"): r for r in results}
+    for path in find_files(root, REPORT_FILE):
+        try:
+            with open(path, encoding="utf-8") as handle:
+                report = json.load(handle)
+        except (OSError, ValueError):
+            continue
+        for entry in report.get("passes", []):
+            name = entry.get("name", "?")
+            if entry.get("status") == "skipped":
+                continue
+            # a pass with a report but no pass_result.json (crash) still counts
+            target = by_name.setdefault(name, dict(entry))
+            target["checks"] = entry.get("checks", [])
+    return list(by_name.values())
 
 
 def failed_checks(result: dict) -> list:
@@ -89,7 +113,7 @@ def coverage_section(dry_run_text: str) -> str:
 
 def build_summary(root: str, expected=None) -> tuple:
     """Return ``(markdown, ok)``."""
-    results = load_results(root)
+    results = _attach_report_checks(load_results(root), root)
     by_name = {r.get("name", "?"): r for r in results}
     missing = sorted(set(expected or []) - set(by_name))
 

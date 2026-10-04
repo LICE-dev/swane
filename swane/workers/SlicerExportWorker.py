@@ -61,6 +61,7 @@ class SlicerExportWorker(QRunnable):
             str(vein_threshold_ct),
         ]
 
+        popen = None
         try:
             popen = subprocess.Popen(
                 cmd,
@@ -84,4 +85,8 @@ class SlicerExportWorker(QRunnable):
                 "3D Slicer export failed to run %s: %s", self.slicer_path, e
             )
         finally:
+            if popen is not None and popen.poll() is None:
+                # an exception interrupted the read loop: do not leak Slicer
+                popen.kill()
+                popen.wait()
             self.signal.export.emit(self.END_MSG)

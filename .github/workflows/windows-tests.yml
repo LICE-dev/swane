@@ -215,7 +215,7 @@ jobs:
 
   prerelease-summary:
     needs: [prerelease-plan, prerelease-run]
-    if: ${{ always() && needs.prerelease-plan.result == 'success' }}
+    if: ${{ !cancelled() && needs.prerelease-plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

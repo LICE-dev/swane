@@ -29,6 +29,9 @@ def test_slicer_export_emits_progress(monkeypatch, tmp_path):
             self.cmd = cmd
             self.stdout = FakeStdout(["SLICERLOADER: 10\n", "SLICERLOADER: 50\n", ""])
 
+        def poll(self):
+            return 0
+
         def wait(self):
             return 0
 
@@ -62,6 +65,9 @@ def test_slicer_export_keeps_script_path_separate(monkeypatch, tmp_path):
             captured["cmd"] = cmd
             self.stdout = FakeStdout()
 
+        def poll(self):
+            return 0
+
         def wait(self):
             return 0
 
@@ -92,4 +98,36 @@ def test_slicer_export_emits_end_msg_when_executable_missing(monkeypatch, tmp_pa
     w = SlicerExportWorker("/stale/Slicer", str(tmp_path), ".mrml", FakeConfig())
     w.signal.export.connect(lambda msg: emitted.append(msg))
     w.run()
+    assert emitted == [SlicerExportWorker.END_MSG]
+
+
+def test_slicer_export_kills_child_if_reading_fails(monkeypatch, tmp_path):
+    emitted = []
+    state = {"killed": False, "waited": False}
+
+    class BadStdout:
+        def readline(self):
+            raise OSError("pipe broke")
+
+        def close(self):
+            pass
+
+    class FakePopen:
+        def __init__(self, cmd, **kwargs):
+            self.stdout = BadStdout()
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            state["killed"] = True
+
+        def wait(self):
+            state["waited"] = True
+
+    monkeypatch.setattr(subprocess, "Popen", FakePopen)
+    w = SlicerExportWorker("slicer", str(tmp_path), ".mrml", FakeConfig())
+    w.signal.export.connect(emitted.append)
+    w.run()
+    assert state == {"killed": True, "waited": True}
     assert emitted == [SlicerExportWorker.END_MSG]
