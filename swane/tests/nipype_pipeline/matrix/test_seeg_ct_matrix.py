@@ -116,7 +116,9 @@ def test_seeg_ct_fsl_construction(subject_config, global_config, make_input_dir)
         assert (flirt, "out_file", "in_file") in _incoming(wf, thr)
 
 
-def test_seeg_ct_synth_falls_back_to_ants(subject_config, global_config, make_input_dir):
+def test_seeg_ct_synth_falls_back_to_ants(
+    subject_config, global_config, make_input_dir
+):
     """SynthMorph underperforms on CT, so a SYNTH config builds the FSL graph."""
     wf = _build(subject_config, global_config, make_input_dir, "SYNTH")
     ifaces = [_iface(n) for n in wf._graph.nodes()]
