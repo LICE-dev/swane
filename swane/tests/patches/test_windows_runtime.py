@@ -133,11 +133,16 @@ def test_stock_stream_fails_on_windows_pipes(tmp_path, windows_select):
     assert err.value.errno == 10038
 
 
-@pytest.mark.parametrize("code", [0, 3])
-def test_windows_stream_captures_like_linux(tmp_path, code, monkeypatch):
-    # Reference: stock "stream" with the real select (Linux behaviour).
-    reference = npx._orig_run_command(_runtime(tmp_path, code), output="stream")
+def _untimed(merged):
+    """``"<stream> <iso timestamp>:<line>"`` rows -> sorted (stream, line)."""
+    return sorted(
+        (row.split(" ", 1)[0], row.split(":", 3)[-1]) for row in merged.split("\n")
+    )
 
+
+def _run_patched_stream(tmp_path, code, monkeypatch):
+    """Run ``"stream"`` through the installed Windows shim, with a select that
+    fails on pipes exactly like Windows (on a real Windows host it would)."""
     monkeypatch.setattr(
         nipype_subprocess, "select", types.SimpleNamespace(select=_not_a_socket)
     )
@@ -145,24 +150,40 @@ def test_windows_stream_captures_like_linux(tmp_path, code, monkeypatch):
     monkeypatch.setattr(nipype_core, "run_command", nipype_core.run_command)
     monkeypatch.setattr(nipype_subprocess, "run_command", nipype_subprocess.run_command)
     assert npx.install_windows_run_command() is True
-    runtime = nipype_core.run_command(
+    return nipype_core.run_command(
         _runtime(tmp_path, code), output="stream", write_cmdline=True
     )
 
-    assert runtime.returncode == reference.returncode == code
-    assert runtime.stdout == reference.stdout == "out1\nout2"
-    assert runtime.stderr == reference.stderr == "err1"
 
-    def _untimed(merged):
-        # "<stream> <iso timestamp>:<line>" -> (stream, line)
-        return sorted(
-            (row.split(" ", 1)[0], row.split(":", 3)[-1]) for row in merged.split("\n")
-        )
+@pytest.mark.parametrize("code", [0, 3])
+def test_windows_stream_captures_expected_output(tmp_path, code, monkeypatch):
+    """Valid on every host, real Windows included: hard-coded expectations."""
+    runtime = _run_patched_stream(tmp_path, code, monkeypatch)
 
-    assert _untimed(runtime.merged) == _untimed(reference.merged)
+    assert runtime.returncode == code
+    assert runtime.stdout == "out1\nout2"
+    assert runtime.stderr == "err1"
+    assert _untimed(runtime.merged) == [
+        ("stderr", "err1"),
+        ("stdout", "out1"),
+        ("stdout", "out2"),
+    ]
     assert (tmp_path / "command.txt").read_text(encoding="utf-8") == _runtime(
         tmp_path, code
     ).cmdline
+
+
+@posix_only
+@pytest.mark.parametrize("code", [0, 3])
+def test_windows_stream_captures_like_linux(tmp_path, code, monkeypatch):
+    """Same capture as stock ``"stream"`` (real select, POSIX hosts only)."""
+    reference = npx._orig_run_command(_runtime(tmp_path, code), output="stream")
+    runtime = _run_patched_stream(tmp_path, code, monkeypatch)
+
+    assert runtime.returncode == reference.returncode == code
+    assert runtime.stdout == reference.stdout
+    assert runtime.stderr == reference.stderr
+    assert _untimed(runtime.merged) == _untimed(reference.merged)
 
 
 def test_windows_commandline_node_runs(tmp_path, simulated_windows, windows_select):
@@ -175,7 +196,9 @@ def test_windows_commandline_node_runs(tmp_path, simulated_windows, windows_sele
     assert result.runtime.stderr == "err1"
 
 
-@pytest.mark.parametrize("output", ["allatonce", "none", "file", "file_split"])
+@pytest.mark.parametrize(
+    "output", ["allatonce", "none", "file", "file_split", "file_stdout", "file_stderr"]
+)
 def test_windows_other_outputs_delegate_unchanged(tmp_path, simulated_windows, output):
     runtime = nipype_core.run_command(_runtime(tmp_path, 0), output=output)
     reference = npx._orig_run_command(_runtime(tmp_path, 0), output=output)

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import ast
 import os
+import re
 import site
 import sysconfig
 import tempfile
@@ -204,6 +205,22 @@ def _format_value(value: Any) -> str:
     return repr(value)
 
 
+_WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+
+
+def _is_quoted_windows_executable(cmd: Any) -> bool:
+    """True for ``"<path>"`` whose path looks like a Windows one (backslash,
+    drive letter, UNC prefix or ``.exe`` suffix)."""
+    if not isinstance(cmd, str) or len(cmd) < 2 or not cmd[0] == cmd[-1] == '"':
+        return False
+    inner = cmd[1:-1]
+    return (
+        "\\" in inner
+        or bool(_WINDOWS_PATH.match(inner))
+        or inner.lower().endswith(".exe")
+    )
+
+
 def _render_cmd(cmd: str, repl: list[tuple[str, str]]) -> str:
     """Render an interface command stably across machines and OSes.
 
@@ -230,8 +247,9 @@ def _render_cmd(cmd: str, repl: list[tuple[str, str]]) -> str:
     text = _normalise(cmd, repl)
     # On Windows an absolute executable is double-quoted for cmd.exe
     # (``windows_compat.shell_executable``); drop the quotes so it renders
-    # exactly like the bare Linux/macOS path.
-    if len(text) >= 2 and text[0] == text[-1] == '"':
+    # exactly like the bare Linux/macOS path. Only a Windows-looking value is
+    # unquoted, so a quoting regression on POSIX stays visible in the goldens.
+    if _is_quoted_windows_executable(cmd):
         text = text[1:-1]
     if text == "eddy_cuda":
         return "eddy"
