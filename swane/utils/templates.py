@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 import logging
 
@@ -98,8 +99,13 @@ def get_swane_template(
         axcodes = nib.aff2axcodes(img.affine)
 
         if axcodes == ("L", "A", "S"):
-            # It is already LAS, just create a symlink to avoid copying
-            os.symlink(tf_path, str(las_path))
+            # It is already LAS, just link it to avoid copying. Windows without
+            # Developer Mode (or a filesystem without links) refuses symlinks:
+            # copy instead, the file is small.
+            try:
+                os.symlink(tf_path, str(las_path))
+            except (OSError, NotImplementedError):
+                shutil.copy2(tf_path, str(las_path))
             return str(las_path)
 
         logging.getLogger(__name__).info(f"Reorienting {name} to LAS convention...")
