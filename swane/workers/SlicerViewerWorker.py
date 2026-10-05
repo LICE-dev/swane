@@ -30,13 +30,11 @@ class SlicerViewerWorker(QRunnable):
         # timecourse viewer is wired up by the SWANe slicerrc bootstrap
         # (see SlicerCheckWorker), so it also works when the user opens the
         # scene manually, outside SWANe.
-        cmd = self.slicer_path + " " + self.scene_path
         # Discard stdout instead of piping it: nobody drains the pipe here, so a
         # PIPE would fill its OS buffer and deadlock Slicer once it prints enough.
         subprocess.Popen(
-            cmd,
+            [self.slicer_path, self.scene_path],
             cwd=os.getcwd(),
-            shell=True,
             stdout=subprocess.DEVNULL,
             universal_newlines=True,
         )

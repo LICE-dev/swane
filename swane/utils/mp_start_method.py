@@ -36,7 +36,7 @@ def worker_pool_start_method() -> str:
         The :data:`START_METHOD_ENV_VAR` override when it names a start method
         available on this platform, otherwise ``forkserver`` on macOS and
         ``fork`` elsewhere. Falls back to ``spawn`` when neither is available
-        (Windows, which SWANe does not support for workflow execution).
+        (Windows, where ``spawn`` is the only start method).
     """
     available = multiprocessing.get_all_start_methods()
 

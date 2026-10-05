@@ -1,6 +1,7 @@
 import logging
 import multiprocessing as mp
 import os
+import sys
 from multiprocessing import Queue
 
 import pytest
@@ -124,20 +125,29 @@ def test_workflow_without_antspynet_nodes_skips_the_preload(monkeypatch):
     assert calls == [], "no antspynet node: nothing to pre-fetch"
 
 
+#: Module registered in ``sys.modules`` by the test process only at run time:
+#: a ``fork`` worker inherits it, a fresh (``spawn``/``forkserver``) one does not.
+_PARENT_ONLY_SENTINEL = "_swane_start_method_check_sentinel"
+
+
 def _record_worker_parent(out_dir):
-    """Function node body: record which process started this worker."""
+    """Function node body: record which process started this worker and
+    whether it inherited the test process's memory."""
     import os
+    import sys
 
     ppid = os.getppid()
+    inherited = "_swane_start_method_check_sentinel" in sys.modules
     with open(os.path.join(out_dir, "ppid.txt"), "w") as handle:
         handle.write(str(ppid))
+    with open(os.path.join(out_dir, "inherited.txt"), "w") as handle:
+        handle.write(str(int(inherited)))
     return ppid
 
 
-@pytest.mark.skipif(os.name == "nt", reason="Nipype MultiProc requires POSIX")
 @pytest.mark.parametrize(
     "start_method",
-    [m for m in ("fork", "forkserver") if m in mp.get_all_start_methods()],
+    [m for m in ("fork", "forkserver", "spawn") if m in mp.get_all_start_methods()],
 )
 def test_real_worker_pool_uses_the_selected_start_method(
     monkeypatch, tmp_path, start_method
@@ -147,12 +157,19 @@ def test_real_worker_pool_uses_the_selected_start_method(
     MultiProc plugin. Under ``fork`` the worker is a child of this process;
     under ``forkserver`` it is a child of the fork server, never of this
     (Qt-holding, on macOS) process -- which is what keeps macOS workers clear
-    of the frameworks that are not fork-safe.
+    of the frameworks that are not fork-safe. Under ``spawn`` (Windows' only
+    start method) the worker is again a child of this process, but a fresh
+    interpreter that must re-import swane, and with it the ``pwd`` stub, before
+    unpickling the node runner: it does not inherit a module this process
+    registered at run time.
     """
     from nipype import Node, Workflow
     from nipype.interfaces.utility import Function
 
     monkeypatch.setenv(START_METHOD_ENV_VAR, start_method)
+    monkeypatch.setitem(
+        sys.modules, _PARENT_ONLY_SENTINEL, types.ModuleType(_PARENT_ONLY_SENTINEL)
+    )
 
     workflow = Workflow(name="start_method_check", base_dir=str(tmp_path))
     node = Node(
@@ -182,10 +199,16 @@ def test_real_worker_pool_uses_the_selected_start_method(
     ppid_file = tmp_path / "ppid.txt"
     assert ppid_file.exists(), "the node did not run in a worker"
     worker_parent = int(ppid_file.read_text())
+    inherited = (tmp_path / "inherited.txt").read_text() == "1"
     if start_method == "fork":
         assert worker_parent == os.getpid()
-    else:
+        assert inherited, "a fork worker must inherit the test process memory"
+    elif start_method == "forkserver":
         assert worker_parent != os.getpid()
+        assert not inherited
+    else:  # spawn: a fresh interpreter launched directly by this process
+        assert worker_parent == os.getpid()
+        assert not inherited, "a spawn worker must start from a fresh interpreter"
 
 
 def test_run_advertises_monitoring_on_workflow_config(monkeypatch, tmp_path):

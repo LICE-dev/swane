@@ -7,7 +7,8 @@ data.
 
 Nothing is committed to the repository: the anatomy is derived at run time from
 `$FREESURFER_HOME/subjects/fsaverage` (shipped with every FreeSurfer install)
-and the generated DICOM is cached on disk between runs.
+or, when FreeSurfer is absent, from the md5-pinned fsaverage archive that
+MNE-Python mirrors (downloaded once into `~/.cache/swane/fsaverage`), and the generated DICOM is cached on disk between runs.
 
 ## Quick start
 
@@ -24,7 +25,15 @@ Convert every series to NIfTI (same dcm2niix SWANe uses) for visual inspection:
 python3 -m swane.tests.helpers.phantom.to_nifti <subject_dir> <out_dir>
 ```
 
-`$FREESURFER_HOME` must be set (the anatomy comes from `fsaverage`).
+The anatomy comes from `fsaverage`: `$FREESURFER_HOME/subjects/fsaverage` if
+present, otherwise the MNE mirror download (network needed on first use).
+
+The anatomy files are FreeSurfer data, distributed under the FreeSurfer Software
+License (https://github.com/freesurfer/freesurfer/blob/dev/LICENSE.txt); the
+MNE mirror repository's own license does not change that. SWANe only fetches
+`aseg.mgz` and `aparc+aseg.mgz` to build a local phantom: they are never
+committed, packaged or uploaded.
+
 
 ## How it is built
 

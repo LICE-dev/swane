@@ -54,3 +54,10 @@ def test_atropos_ram_requirement_is_positive_number():
 def test_nilearn_fmri_ram_requirement_is_positive_number():
     assert isinstance(ResourceManager.nilearn_fmri_ram_requirements(), (int, float))
     assert ResourceManager.nilearn_fmri_ram_requirements() > 0
+
+
+def test_every_ram_requirement_has_a_windows_value():
+    for name in dir(ResourceManager):
+        if name.endswith("_RAM_REQUIREMENT"):
+            table = getattr(ResourceManager, name)
+            assert table["windows"] == table["other"], name

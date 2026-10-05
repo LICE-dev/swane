@@ -1,5 +1,5 @@
+import glob
 import os
-import shlex
 import subprocess
 from swane.utils.qt_compat import QRunnable, Signal, QObject
 from swane.resources import strings
@@ -71,15 +71,18 @@ if _swane_os.path.isdir(_swane_workers_dir):
 
     @staticmethod
     def find_slicer_python(current_slicer_path: str) -> tuple[list[str], str]:
-        # TODO: this search relies on GNU `find` (-executable/-wholename) and does
-        #  not work on Windows. Consider a Windows-compatible branch in the future
-        #  (e.g. os.walk/glob or `where`) if/when Windows support is needed.
         # If current_slicer_path doeas not exists, replace with a blank string
         # If it is a file, search in its directory
         if not os.path.exists(current_slicer_path):
             current_slicer_path = ""
         elif os.path.isfile(current_slicer_path):
             current_slicer_path = os.path.dirname(current_slicer_path)
+
+        if platform.system() == "Windows":
+            return (
+                SlicerCheckWorker._find_slicer_python_windows(current_slicer_path),
+                "../Slicer.exe",
+            )
 
         is_macos = platform.system() == "Darwin"
         if is_macos:
@@ -131,6 +134,33 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 return result, rel_path
 
         return [], rel_path
+
+    @staticmethod
+    def _find_slicer_python_windows(current_slicer_path: str) -> list[str]:
+        """Locate PythonSlicer.exe without GNU find.
+
+        Slicer's Windows installer puts each version in its own folder, by
+        default ``%LOCALAPPDATA%\\slicer.org\\Slicer <version>`` (per user) or
+        ``%ProgramFiles%\\Slicer <version>`` (all users). Newest version first.
+        """
+        if current_slicer_path:
+            roots = [current_slicer_path]
+        else:
+            roots = [
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), "slicer.org"),
+                os.environ.get("ProgramW6432", ""),
+                os.environ.get("ProgramFiles", ""),
+            ]
+        for root in roots:
+            if not root or not os.path.isdir(root):
+                continue
+            found = []
+            for depth in ("", "*", os.path.join("*", "*")):
+                pattern = os.path.join(root, depth, "bin", "PythonSlicer.exe")
+                found.extend(glob.glob(pattern))
+            if found:
+                return sorted(set(found), reverse=True)
+        return []
 
     @staticmethod
     def read_slicerrc(slicerrc_path):
@@ -247,7 +277,17 @@ if _swane_os.path.isdir(_swane_workers_dir):
             for entry in split:
                 cmd = os.path.abspath(os.path.join(os.path.dirname(entry), rel_path))
                 break
-            if cmd == "" or not os.path.exists(cmd):
+            output2 = None
+            if cmd != "" and os.path.exists(cmd):
+                try:
+                    output2 = subprocess.run(
+                        [cmd, "--version"], stdout=subprocess.PIPE
+                    ).stdout.decode("utf-8")
+                except OSError:
+                    # stale path / not executable: treat as not found
+                    output2 = None
+                    cmd = ""
+            if output2 is None:
                 # if slicer executable is not found, search entire filesystem if we were searchng a specific folder
                 # otherwise stop loop, slicer is not detectable on system
                 if self.current_slicer_path != "":
@@ -258,11 +298,7 @@ if _swane_os.path.isdir(_swane_workers_dir):
             else:
                 # if slicer command is found, version check
                 repeat = False
-                cmd2 = cmd + " --version"
-                output2 = subprocess.run(
-                    cmd2, shell=True, stdout=subprocess.PIPE
-                ).stdout.decode("utf-8")
-                slicer_version = output2.replace("Slicer ", "").replace("\n", "")
+                slicer_version = output2.replace("Slicer ", "").strip()
                 if not DependencyManager.check_slicer_version(slicer_version):
                     label = strings.check_dep_slicer_wrong_version % (
                         version_with_license(SLICER, slicer_version),
@@ -271,23 +307,26 @@ if _swane_os.path.isdir(_swane_workers_dir):
                     state = DependenceStatus.WARNING
                 else:
                     # Try to automatically install Slicer extensions.
-                    # The script path is quoted and kept separate from its
-                    # argument so an install dir containing spaces does not break
-                    # the shell word-splitting.
+                    # Run without a shell: the script path is a separate argv
+                    # element, so an install dir containing spaces survives.
                     module_install_script = os.path.join(
                         os.path.dirname(__file__),
                         "slicer_script_module_install.py",
                     )
-                    cmd3 = (
-                        cmd
-                        + " --no-splash --no-main-window --python-script "
-                        + shlex.quote(module_install_script)
-                        + " "
-                        + ",".join(DependencyManager.SLICER_MODULES)
-                    )
-                    output3 = subprocess.run(
-                        cmd3, shell=True, stdout=subprocess.PIPE
-                    ).stdout.decode("utf-8")
+                    cmd3 = [
+                        cmd,
+                        "--no-splash",
+                        "--no-main-window",
+                        "--python-script",
+                        module_install_script,
+                        ",".join(DependencyManager.SLICER_MODULES),
+                    ]
+                    try:
+                        output3 = subprocess.run(
+                            cmd3, stdout=subprocess.PIPE
+                        ).stdout.decode("utf-8")
+                    except OSError:
+                        output3 = ""
                     if "MODULE FOUND" in output3:
                         state = DependenceStatus.DETECTED
                         label = strings.check_dep_slicer_found % version_with_license(

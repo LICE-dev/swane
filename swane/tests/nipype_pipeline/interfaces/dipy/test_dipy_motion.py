@@ -22,6 +22,7 @@ Three layers, mirroring the design's "DipyMotionCorrection equivalence":
   sides with BLAS pinned to one thread, asserting exact equality.
 """
 
+import multiprocessing
 import os
 
 import numpy as np
@@ -39,7 +40,9 @@ from swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection import (
 )
 
 # Output root for heavy tests; never committed.
-ORACLE_ROOT = "/home/mau/test_swane/dipy_test/motion_oracle"
+ORACLE_ROOT = os.path.join(
+    os.path.expanduser("~"), "test_swane", "dipy_test", "motion_oracle"
+)
 
 
 def _write_bval_bvec(directory, bvals, bvecs):
@@ -308,6 +311,10 @@ class TestPoolContext:
     inheritance — so every start method leaves workers correctly pinned.
     """
 
+    @pytest.mark.skipif(
+        "fork" not in multiprocessing.get_all_start_methods(),
+        reason="the fork start method does not exist on this host",
+    )
     def test_linux_uses_fork(self):
         assert motion_module._pool_context("linux").get_start_method() == "fork"
 

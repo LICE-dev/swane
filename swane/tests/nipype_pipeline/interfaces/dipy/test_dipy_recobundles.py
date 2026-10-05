@@ -434,10 +434,10 @@ class TestThreadLimiting:
         node.inputs.tractogram_chunk = subject
         node.inputs.atlas_dir = atlas_dir
         node.inputs.model_bundle_name = "IFOF_R"
-        node.inputs.num_threads = 4
+        node.inputs.num_threads = 2
         node.run()
 
-        assert seen == [4]
+        assert seen == [2]
 
     def test_refine_slr_pinned_via_dipy_patch(
         self, workspace, atlas_dir, tmp_path, monkeypatch

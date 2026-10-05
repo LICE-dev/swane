@@ -270,3 +270,20 @@ class TestSubjectConfig:
         config.set_workflow_option(WorkflowTypes.STRUCTURAL)
         assert config[DataInputList.T13D]["wf_type"] == WorkflowTypes.STRUCTURAL.name
         assert config.get_subject_workflow_type() == WorkflowTypes.STRUCTURAL
+
+
+def test_config_file_is_utf8_with_non_ascii_values(tmp_path):
+    """Windows' default text encoding is cp1252: SWANe's own config must be
+    written and read as UTF-8 so non-ASCII folders survive a round trip."""
+    config = ConfigManager(global_base_folder=str(tmp_path))
+    folder = str(tmp_path / "Niccolò Brontë 測試")
+    os.makedirs(folder)
+    config.set_main_working_directory(folder)
+    config.save()
+
+    with open(config.config_file, "rb") as f:
+        raw = f.read()
+    assert "Niccolò Brontë 測試".encode("utf-8") in raw
+
+    reloaded = ConfigManager(global_base_folder=str(tmp_path))
+    assert reloaded.get_main_working_directory() == folder

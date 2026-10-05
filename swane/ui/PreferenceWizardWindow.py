@@ -31,7 +31,7 @@ from swane.config.config_enums import (
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.DependencyManager import DependencyManager
-from swane.utils.platform_and_tools_utils import get_os_type, is_mac
+from swane.utils.platform_and_tools_utils import get_os_type, is_mac, is_windows
 
 
 @dataclass
@@ -324,9 +324,10 @@ class PreferenceWizardWindow(QDialog):
 
         page = QWidget()
         lay = QVBoxLayout()
-        lay.addWidget(
-            self._make_title(strings.wizard_welcome_title, strings.wizard_welcome_text)
-        )
+        welcome_text = strings.wizard_welcome_text
+        if is_windows():
+            welcome_text += "<br><br>" + strings.windows_experimental_warn
+        lay.addWidget(self._make_title(strings.wizard_welcome_title, welcome_text))
 
         lay.addStretch(1)
         page.setLayout(lay)

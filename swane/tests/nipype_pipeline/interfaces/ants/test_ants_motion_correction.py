@@ -1,3 +1,4 @@
+import tempfile
 import os
 import numpy as np
 import nibabel as nib
@@ -128,7 +129,7 @@ def test_nilearn_preproc_motion_correct_node_uses_one_core():
 
     wf = fMRI_preproc_workflow(
         name="fmri_0",
-        dicom_dir="/tmp",
+        dicom_dir=tempfile.gettempdir(),
         TR=2.0,
         slice_timing=SliceTiming.UNKNOWN,
         n_vols=100,

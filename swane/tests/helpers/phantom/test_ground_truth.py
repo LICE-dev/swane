@@ -9,8 +9,6 @@ Two layers, matching the two ways the ground truth is obtained:
   sweep from rebuild to load cannot change a single graded coordinate.
 """
 
-import os
-
 import numpy as np
 import pytest
 
@@ -25,10 +23,9 @@ from swane.tests.helpers.phantom.tissue import TissueClass, TissueModel
 
 
 def _has_fsaverage() -> bool:
-    home = os.environ.get("FREESURFER_HOME")
-    if not home:
-        return False
-    return os.path.isdir(os.path.join(home, "subjects", "fsaverage", "mri"))
+    from swane.tests.helpers.phantom.fsaverage_source import fsaverage_available
+
+    return fsaverage_available()
 
 
 def _synthetic_model() -> TissueModel:
@@ -166,7 +163,7 @@ def test_ground_truth_load_none_dir_builds(monkeypatch):
 @pytest.mark.heavy
 @pytest.mark.skipif(
     not _has_fsaverage(),
-    reason="needs $FREESURFER_HOME/subjects/fsaverage to build the phantom",
+    reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
 )
 def test_real_af_or_corridors_are_anatomically_placed():
     """The AF/OR corridors built on fsaverage land where the anatomy demands.
@@ -199,7 +196,7 @@ def test_real_af_or_corridors_are_anatomically_placed():
 @pytest.mark.heavy
 @pytest.mark.skipif(
     not _has_fsaverage(),
-    reason="needs $FREESURFER_HOME/subjects/fsaverage to build the phantom",
+    reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
 )
 def test_cached_sidecar_matches_rebuild(tmp_path):
     """The whole point: load == rebuild, to the coordinate.

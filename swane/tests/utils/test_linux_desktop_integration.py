@@ -3,10 +3,18 @@
 import os
 import subprocess
 
+import pytest
+
 import swane.utils.linux_desktop_integration as mod
 from swane.utils.linux_desktop_integration import (
     ensure_desktop_entry,
     remove_desktop_entry,
+)
+
+# The entry is Linux-only; these tests simulate Linux and rely on POSIX host
+# semantics (realpath of a POSIX argv[0], running the launcher with ``sh``).
+posix_host = pytest.mark.skipif(
+    os.name == "nt", reason="needs POSIX path semantics and a POSIX sh"
 )
 
 
@@ -19,6 +27,7 @@ def test_noop_on_non_linux(monkeypatch, tmp_path):
     assert not (tmp_path / "applications" / "swane.desktop").exists()
 
 
+@posix_host
 def test_writes_desktop_entry_and_launcher_on_linux(monkeypatch, tmp_path):
     monkeypatch.setattr(mod, "is_linux", lambda: True)
     monkeypatch.setattr(mod, "is_command_available", lambda cmd: False)
@@ -84,6 +93,7 @@ def test_never_raises_on_write_failure(monkeypatch, tmp_path):
     ensure_desktop_entry("/opt/swane/icon.png")
 
 
+@posix_host
 def test_launcher_self_heals_when_real_executable_is_gone(monkeypatch, tmp_path):
     """Simulates the launcher being clicked after `pip uninstall`: the real
     executable no longer exists, so the launcher must remove itself and the
