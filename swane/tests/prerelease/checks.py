@@ -803,12 +803,16 @@ def _check_nilearn_resting(result, files: list) -> list:
                 )
             )
     if n_components is not None or not ic_paths:
+        # A fixed dimensionality (ic_dim > 0) is honoured as is; only the
+        # estimated one (ic_dim 0, the default) has a recorded phantom count.
+        fixed_dim = int(result.values.get("ic_dim", "0") or 0)
+        expected = fixed_dim if fixed_dim > 0 else NILEARN_RS_EXPECTED_COMPONENTS
         checks.append(
             CheckResult(
                 "fmri.determinism.rs_components",
-                n_components == NILEARN_RS_EXPECTED_COMPONENTS,
+                n_components == expected,
                 "expected %d resting state components, got %s"
-                % (NILEARN_RS_EXPECTED_COMPONENTS, n_components),
+                % (expected, n_components),
             )
         )
 

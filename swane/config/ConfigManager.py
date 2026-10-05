@@ -75,7 +75,7 @@ class ConfigManager(configparser.ConfigParser):
             try:
                 # main.last_swane_version should exist in both global and  subject config file
                 temp_config = configparser.ConfigParser()
-                temp_config.read(self.config_file)
+                temp_config.read(self.config_file, encoding="utf-8")
                 last_swane_version = temp_config[str(GlobalPrefCategoryList.MAIN)][
                     "last_swane_version"
                 ]
@@ -86,7 +86,7 @@ class ConfigManager(configparser.ConfigParser):
                 reset_pref = True
 
         if not reset_pref and os.path.exists(self.config_file):
-            self.read(self.config_file)
+            self.read(self.config_file, encoding="utf-8")
 
             # Migrate options renamed in a later SWANe version, in place, before
             # the re-validation loop below relies on the current option names.
@@ -125,7 +125,7 @@ class ConfigManager(configparser.ConfigParser):
         """
         Reload the configuration file
         """
-        self.read(self.config_file)
+        self.read(self.config_file, encoding="utf-8")
 
     def reset_to_defaults(self):
         """
@@ -220,7 +220,7 @@ class ConfigManager(configparser.ConfigParser):
         """
         Save the current preferences to the config file
         """
-        with open(self.config_file, "w") as openedFile:
+        with open(self.config_file, "w", encoding="utf-8") as openedFile:
             self.write(openedFile)
 
     def get_main_working_directory(self) -> str:

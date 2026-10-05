@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import ast
 import os
+import re
 import site
 import sysconfig
 import tempfile
@@ -204,13 +205,30 @@ def _format_value(value: Any) -> str:
     return repr(value)
 
 
+_WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+
+
+def _is_quoted_windows_executable(cmd: Any) -> bool:
+    """True for ``"<path>"`` whose path looks like a Windows one (backslash,
+    drive letter, UNC prefix or ``.exe`` suffix)."""
+    if not isinstance(cmd, str) or len(cmd) < 2 or not cmd[0] == cmd[-1] == '"':
+        return False
+    inner = cmd[1:-1]
+    return (
+        "\\" in inner
+        or bool(_WINDOWS_PATH.match(inner))
+        or inner.lower().endswith(".exe")
+    )
+
+
 def _render_cmd(cmd: str, repl: list[tuple[str, str]]) -> str:
     """Render an interface command stably across machines and OSes.
 
     Bare commands (``flirt``, ``bet``, ``eddy`` ...) are kept verbatim. A command
     resolved to an absolute path — e.g. the ``dcm2niix`` binary bundled in
     ``site-packages`` — is reduced to its stem so the value neither leaks the
-    install location nor differs by the Windows ``.exe`` suffix.
+    install location nor differs by the Windows ``.exe`` suffix or by the
+    double quotes SWANe adds around it for ``cmd.exe``.
 
     ``Eddy`` resolves its GPU variant to ``eddy_cuda`` when that binary
     is on ``PATH``, falling back to the bare ``eddy`` otherwise — a machine
@@ -227,6 +245,12 @@ def _render_cmd(cmd: str, repl: list[tuple[str, str]]) -> str:
     is identical across FSL versions, mirroring the ``eddy`` handling above.
     """
     text = _normalise(cmd, repl)
+    # On Windows an absolute executable is double-quoted for cmd.exe
+    # (``windows_compat.shell_executable``); drop the quotes so it renders
+    # exactly like the bare Linux/macOS path. Only a Windows-looking value is
+    # unquoted, so a quoting regression on POSIX stays visible in the goldens.
+    if _is_quoted_windows_executable(cmd):
+        text = text[1:-1]
     if text == "eddy_cuda":
         return "eddy"
     if text == "cluster":

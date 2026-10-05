@@ -109,12 +109,12 @@ def _save(path, data):
     nib.save(nib.Nifti1Image(np.asarray(data, dtype=np.float32), np.eye(4)), path)
 
 
-def _rs_result(subject_dir, engine="NILEARN"):
+def _rs_result(subject_dir, engine="NILEARN", **values):
     return PassResult(
         name="fmri_task_and_rest",
         subject_dir=subject_dir,
         inputs=["t13d", "fmri_resting_state"],
-        values={"fmri_engine": engine},
+        values={"fmri_engine": engine, **values},
     )
 
 
@@ -187,6 +187,24 @@ def test_nilearn_resting_component_count_mismatch_fails(tmp_path):
     files = _rs_layout(str(tmp_path), n_components=NILEARN_RS_EXPECTED_COMPONENTS + 1)
     checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
     assert checks["fmri.rs.ica_source"].passed
+    assert not checks["fmri.determinism.rs_components"].passed
+
+
+def test_nilearn_resting_fixed_ic_dim_expects_that_many_components(tmp_path):
+    # Without FSL, fmri_alt_settings downgrades to NILEARN but keeps ic_dim=20:
+    # the fixed dimensionality, not the estimated phantom count, is expected.
+    files = _rs_layout(str(tmp_path), n_components=20)
+    checks = _by_name(
+        _check_nilearn_resting(_rs_result(str(tmp_path), ic_dim="20"), files)
+    )
+    assert checks["fmri.determinism.rs_components"].passed
+
+
+def test_nilearn_resting_fixed_ic_dim_mismatch_fails(tmp_path):
+    files = _rs_layout(str(tmp_path), n_components=NILEARN_RS_EXPECTED_COMPONENTS)
+    checks = _by_name(
+        _check_nilearn_resting(_rs_result(str(tmp_path), ic_dim="20"), files)
+    )
     assert not checks["fmri.determinism.rs_components"].passed
 
 

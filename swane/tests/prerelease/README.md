@@ -124,7 +124,8 @@ Its quality is graded by:
   of sane magnitude (a degenerate FNIRT gives ~0, a diverged one tens of mm);
 * `nonlinear.target_alignment.<space>` — the warped subject that SWANe writes
   into the target space is compared against the **real target**, read at run
-  time from `$FSLDIR` (MNI152) or `swane.resources` (the symmetric template).
+  time from the TemplateFlow cache (MNI152NLin6Asym, and MNI152NLin2009cSym
+  for the symmetric template).
   Measured against the real MNI152 1 mm brain: Dice 0.94, intensity NCC 0.78
   (gates 0.85 / 0.5). Reading the target to score the result is licence-clean —
   the tools are run and their output inspected; no atlas image or code is copied
@@ -138,13 +139,80 @@ automated checks cover is graded from measured margins, not eyeballed.
 
 ### Requirements
 
-The blocking ones — without these nothing runs — are FSL, dcm2niix, and
-`$FREESURFER_HOME/subjects/fsaverage` (the phantom anatomy). Everything else
+The blocking ones — without these nothing runs — are dcm2niix,
+`fsaverage` (the phantom anatomy; from FreeSurfer or, if absent, downloaded
+from the MNE mirror) and a RAM budget
+(`--ram`) the machine physically has. FSL is blocking only in a build where
+`swane.config.dependency_policy.FSL_MANDATORY` is True. Everything else
 degrades gracefully: a missing capability drops the axes that need it, with the
 reason recorded in the report.
 
-`$FREESURFER_HOME` must be set even when FreeSurfer passes are not requested,
-because the phantom is built from `fsaverage`.
+On a host without FSL the sweep still runs every FSL-free pass. FSL-only axis
+values — `deskull_engine=BET`, `registration_engine=FSL`, `fmri_engine=FSL`,
+`segmentation_engine=FSL`, `tractography_engine=FSL_XTRACT`, and every value of
+the BET parameters (`ref_bet_thr`, `ref_bet_bias_correction`,
+`venous_mr_bet_thr`), of `old_eddy_correct` and of `cuda` — are reported
+**unreachable**, never covered by a pass that silently ran another engine. Only
+the FSL diffusion chain (eddy, BEDPOSTX, probtrackx) reads `cuda`, so both
+values need FSL (`cuda=true` a GPU too), and only the passes running that chain
+pin it; every other pass rides the config default (`false`), which nothing else
+reads. The FSL baseline passes are skipped with a "needs
+fsl" reason (`fmri_task_and_rest` too: without FSL it would resolve to exactly
+`fmri_task_and_rest_ants`); tractography stays covered by the dipy RecoBundles
+pass (the `tractography` capability is XTRACT *or* dipy).
+
+The FSL-free values that only an FSL-pinned pass sets are kept exercised by
+**stand-in passes** (`PassSpec.stands_in_for`). A stand-in runs only where its
+FSL original is skipped, so on an FSL host the sweep is unchanged (the stand-ins
+are listed as skipped, "stand-in for …, which runs on this host"):
+
+* `structural_alt_settings_fsl_free` stands in for `structural_alt_settings`:
+  `flat1=false`, the two-series venous MR shape, `electrode_threshold=2500`,
+  `erode_kernel_size=8` on the ANTSPYNET/ANTS backends, without the BET-only
+  parameters;
+* `dti_classic_fsl_free` stands in for `dti_classic`: diffusion on the dipy
+  chain with `tractography=false`, without `old_eddy_correct` (an FSL tool).
+
+`dti_classic` itself pins `tractography_engine=FSL_XTRACT`: the engine also
+selects the diffusion preprocessing chain, and only the FSL chain builds
+`eddy_correct` (`old_eddy_correct=true`). It therefore needs `fsl` and `xtract`;
+where either is missing it is skipped and its stand-in runs instead. With every
+non-FSL capability present, an FSL-free host defers nothing but the opt-in
+recon-all values.
+
+The other passes that set FSL-diffusion values are pinned the same way:
+
+* `dti_synthmorph` pins `tractography_engine=FSL_XTRACT`, so it runs eddy,
+  BEDPOSTX and probtrackx (with its externalized transforms) with the SYNTH
+  registration engine: SynthStrip deskulls the b0, SynthMorph drives the MNI
+  and tract (probtrackx bridge) transforms, and the dif2ref registration stays
+  on ANTS (the diffusion registration never uses SynthMorph). It is the only
+  pass exercising that bridge with SynthMorph, and needs `synth_morph` and
+  `xtract`.
+* `dti_tractography_ants` (ANTS plus the externalized probtrackx transforms)
+  needs `antspyx` and `xtract`; without XTRACT data or FSL it is skipped
+  instead of silently running the dipy chain.
+
+`plan.unread_axes` holds the small rule table of values a resolved pass sets
+but never reads: an axis whose input is not loaded; `old_eddy_correct` and
+`cuda` off the FSL diffusion chain (DTI loaded and `tractography_engine`
+resolved to `FSL_XTRACT`); the BET parameters when `deskull_engine` is not
+`BET`. The plan tests use it on a capable host, an FSL-free host and an FSL host
+without XTRACT to check that no running pass pins such a value (it would count
+as coverage without being exercised) and that no two running passes are the
+same execution once those values are ignored.
+
+The phantom is built from `fsaverage` even when FreeSurfer passes are not
+requested: without FreeSurfer it is downloaded once (network needed).
+Phantom caches are now keyed by the fsaverage content, so old
+`phantom_<key>` folders under `~/test_swane/phantom` from earlier versions are
+orphaned and can be deleted.
+
+The anatomy files are FreeSurfer data, distributed under the FreeSurfer Software
+License (https://github.com/freesurfer/freesurfer/blob/dev/LICENSE.txt); the
+MNE mirror repository's own license does not change that. SWANe only fetches
+`aseg.mgz` and `aparc+aseg.mgz` to build a local phantom: they are never
+committed, packaged or uploaded.
 
 ### Commands
 
