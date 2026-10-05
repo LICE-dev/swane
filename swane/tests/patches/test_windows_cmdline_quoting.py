@@ -9,6 +9,7 @@ simulated here without touching the global ``os.name`` (which breaks the
 standard library): only ``windows_compat.is_windows`` is made to answer True.
 """
 
+import os
 import shlex
 import subprocess
 import sys
@@ -136,6 +137,10 @@ def test_nipype_executable_lookup_uses_windows_split(simulated_windows):
     )
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="on real Windows the quoting proxy is installed at import time",
+)
 def test_posix_is_byte_identical_to_stock_nipype(monkeypatch):
     monkeypatch.setattr(windows_compat, "is_windows", lambda: False)
     monkeypatch.setattr(nipype_core, "shlex", nipype_core.shlex)
@@ -222,4 +227,5 @@ def test_spawn_pool_worker_has_nipype_patches_applied_before_tasks(
         plugin.pool.shutdown(wait=True)
 
     assert state["patched"] is True, state
-    assert state["nipype_shlex_is_stdlib"] is True, state  # Linux/macOS: no-op
+    # Linux/macOS: the install is a no-op (stock shlex); Windows: the proxy is in.
+    assert state["nipype_shlex_is_stdlib"] is (os.name != "nt"), state
