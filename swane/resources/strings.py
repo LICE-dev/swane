@@ -53,6 +53,10 @@ mainwindow_new_subj_config_error = (
 )
 mainwindow_new_subj_created = "New subject created: "
 mainwindow_new_subj_name_error = "Invalid name: "
+mainwindow_new_subj_name_windows_rules = (
+    ". On Windows a subject name cannot start or end with a blank space, end with"
+    r" a dot or contain \ / : * ? < > |"
+)
 mainwindow_subj_exists_error = "This subject already exists: "
 mainwindow_home_tab_name = "Home"
 mainwindow_wf_executing_error_1 = "Cannot close a subject during workflow execution!"

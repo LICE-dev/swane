@@ -40,6 +40,13 @@ def is_mac() -> bool:
 def is_windows() -> bool:
     """
     Check if the operating system is Windows.
+
+    SWANe has a second switch, ``swane.patches.windows_compat.is_windows``
+    (``os.name == "nt"``): it drives the Nipype runtime patches and the
+    command-line quoting, and lives there because that module must not import
+    anything from SWANe (it runs before Nipype is imported). This one drives
+    the application-level choices (UI, folder name rules). Both answer True on
+    Windows; tests simulating Windows patch the one their code path reads.
     """
     return get_os_type() == "windows"
 
