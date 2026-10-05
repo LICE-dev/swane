@@ -24,9 +24,8 @@ DCM2NIIX_CMD = shell_executable(str(_dcm2niix_binary))
 
 # dcm2niix reports each converted file as "Convert <n> DICOM as <path> (<dims>)".
 # Nipype extracts <path> with ``\S+/\S+``, which needs a forward slash and no
-# blank space; on Windows dcm2niix writes ``.\name`` and SWANe allows blank
-# spaces in subject paths. This pattern takes everything between "as " and the
-# final dimension group instead.
+# blank space; on Windows dcm2niix writes ``.\name``. This pattern takes
+# everything between "as " and the final dimension group instead.
 _CONVERT_LINE = re.compile(r"^Convert \d+ DICOM as (.+) \(\d+(?:x\d+)*\)\s*$")
 
 
