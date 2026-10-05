@@ -319,25 +319,10 @@ class TestAntsRegistrationRealRun:
     """A real (tiny) antspyx registration; opt-in via ``--run-heavy``."""
 
     def test_linear_inverse_needs_the_invert_flag(
-        self, workspace, make_nifti, monkeypatch
+        self, workspace, make_nifti, dense_ants_affine
     ):
         import ants
         import nibabel as nib
-
-        # On a binary 24^3 cube antspyx's default affine metric (MI on a random
-        # sample of voxels) converges run-to-run anywhere between ~0.2 and 1.0
-        # on every OS. Dense mean-squares sampling makes this tiny problem
-        # deterministic; what is under test is the node's inverse transforms
-        # and invert flags, not antspyx's optimiser.
-        real_registration = ants.registration
-
-        def dense_registration(*args, **kwargs):
-            kwargs.update(
-                aff_metric="meansquares", aff_sampling=32, aff_random_sampling_rate=1.0
-            )
-            return real_registration(*args, **kwargs)
-
-        monkeypatch.setattr(ants, "registration", dense_registration)
 
         fixed_data = np.zeros((24, 24, 24), dtype=np.float32)
         fixed_data[6:18, 6:18, 6:18] = 1.0
