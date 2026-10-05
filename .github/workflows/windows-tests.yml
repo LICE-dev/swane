@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e . pytest pytest-qt
+          python -m pip install -e . pytest pytest-qt SimpleITK
       - name: Environment report
         shell: bash
         run: |
@@ -49,11 +49,12 @@ jobs:
           python -m pip freeze > pip-freeze.txt
       - name: Light suite
         shell: bash
-        # The base temp contains a space on purpose: Windows home folders often
-        # do, and unquoted command lines must not split it.
+        # The base temp must NOT contain a space: SWANe rejects subject folders
+        # whose path has blank spaces (SubjectRet.PathBlankSpaces). Spaces in
+        # executable paths stay covered by the quoting unit tests.
         run: >
           python -m pytest swane/tests -m "not heavy"
-          --basetemp "${{ runner.temp }}/swane tmp"
+          --basetemp "${{ runner.temp }}/swane_tmp"
           --junitxml=junit-light.xml -p no:cacheprovider -rfEs
       - if: always()
         uses: actions/upload-artifact@v4
@@ -76,7 +77,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e . pytest pytest-qt
+          python -m pip install -e . pytest pytest-qt SimpleITK
       - name: Restore model/data caches
         uses: actions/cache@v4
         with:
@@ -94,7 +95,7 @@ jobs:
         shell: bash
         run: >
           python -m pytest swane/tests --run-heavy -m heavy
-          --basetemp "${{ runner.temp }}/swane tmp"
+          --basetemp "${{ runner.temp }}/swane_tmp"
           --junitxml=junit-heavy.xml -p no:cacheprovider -rfEs
       - if: always()
         uses: actions/upload-artifact@v4
