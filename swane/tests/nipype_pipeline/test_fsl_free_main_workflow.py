@@ -163,7 +163,9 @@ def _fake_value(name, trait, fake_dir, make_nifti):
     if kind == "file":
         return make_nifti("%s file.nii.gz" % name)
     if kind == "list":
-        return [make_nifti("%s file.nii.gz" % name)]
+        # Several distinct files: interfaces may treat the first element
+        # differently from the others (e.g. SumMultiVols).
+        return [make_nifti("%s file %d.nii.gz" % (name, i)) for i in range(3)]
     if trait.is_trait_type(traits.Float):
         return 1.5
     if trait.is_trait_type(traits.Int):
@@ -173,7 +175,7 @@ def _fake_value(name, trait, fake_dir, make_nifti):
     raise AssertionError("no representative value for input %r (%s)" % (name, trait))
 
 
-def _set_from_connect_function(inputs, dest, source, fake_path):
+def _set_from_connect_function(inputs, dest, source, fake_paths):
     """Set ``dest`` from a ``(output, function_source, args)`` connection
     evaluated on a representative source value: path lists/paths for path
     inputs, a ``[number, path]`` Merge output (the high-pass builder) or a
@@ -184,9 +186,9 @@ def _set_from_connect_function(inputs, dest, source, fake_path):
 
     _, function_source, args = source
     if _path_kind(inputs.trait(dest)):
-        candidates = ([fake_path] * 10, fake_path)
+        candidates = (fake_paths, fake_paths[0])
     else:
-        candidates = ([1.5, fake_path], 1.5)
+        candidates = ([1.5] + fake_paths, 1.5)
     for first_arg in candidates:
         try:
             value = evaluate_connect_function(function_source, args, first_arg)
@@ -289,8 +291,10 @@ def test_windows_command_lines_keep_spaced_paths_intact(
         for _, _, data in graph.in_edges(node, data=True):
             for source, dest in data["connect"]:
                 if isinstance(source, tuple):
-                    fake_path = make_nifti("%s source.nii.gz" % dest)
-                    _set_from_connect_function(inputs, dest, source, fake_path)
+                    fake_paths = [
+                        make_nifti("%s source %d.nii.gz" % (dest, i)) for i in range(10)
+                    ]
+                    _set_from_connect_function(inputs, dest, source, fake_paths)
                 else:
                     value = _fake_value(dest, inputs.trait(dest), fake_dir, make_nifti)
                     setattr(inputs, dest, value)
@@ -314,8 +318,10 @@ def test_windows_command_lines_keep_spaced_paths_intact(
             values = value if kind == "list" else [value]
             # Inputs without argstr (e.g. slicer_cmd) only count when the
             # interface writes them into the command line itself.
-            if inputs.trait(name).argstr or str(values[0]) in cmdline:
+            if inputs.trait(name).argstr:
                 paths.extend(str(v) for v in values)
+            else:
+                paths.extend(str(v) for v in values if str(v) in cmdline)
         broken = _broken_paths(cmdline, paths)
         if broken:
             failures[node.fullname] = (cmdline, broken)
@@ -335,6 +341,7 @@ def test_windows_command_lines_keep_spaced_paths_intact(
         "SegmentEndocranium",
         "SpatialFilter",
         "ThrROI",
+        "SumMultiVols",
     } <= kinds, kinds
     # The high-pass filters embed the mean image path in their op_string.
     assert any(name.endswith("highpass_clean") for name in checked)

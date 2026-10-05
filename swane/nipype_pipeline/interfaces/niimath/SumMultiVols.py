@@ -4,6 +4,17 @@ from nipype.interfaces.fsl.utils import ImageMathsInputSpec
 from swane.nipype_pipeline.interfaces.niimath.maths import ImageMaths
 from nipype.interfaces.base import InputMultiPath, File
 
+from swane.patches import windows_compat
+
+
+def _operand(path: str) -> str:
+    """A volume path written into the op_string, which Nipype does not quote.
+    On Windows, where blank spaces are allowed in subject paths, it is quoted
+    for cmd.exe; elsewhere it is written as is, as SWANe always has."""
+    if windows_compat.is_windows():
+        return windows_compat.windows_quote(path)
+    return path
+
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.utils.ImageMathsInputSpec)  -*-
 class SumMultiVolsInputSpec(ImageMathsInputSpec):
@@ -36,7 +47,7 @@ class SumMultiVols(ImageMaths):
                 self.inputs.in_file = vol
                 first = False
             else:
-                self.inputs.op_string += "-add " + vol + " "
+                self.inputs.op_string += "-add " + _operand(vol) + " "
 
         parse = super(SumMultiVols, self)._parse_inputs(skip)
 
