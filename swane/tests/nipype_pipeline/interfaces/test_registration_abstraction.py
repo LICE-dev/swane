@@ -1142,7 +1142,11 @@ class TestAntsStackRoundTrip:
         # three spaces: func -> ref (linear) -> mni (nonlinear), as in the
         # resting-state concatenation.
         shape = (40, 40, 40)
-        func = make_nifti("func.nii.gz", data=self._sphere(shape, (20, 20, 20), 7))
+        # Both steps are close to translations, which commute: a reversed stack
+        # only goes wrong through SyN's 7->9 radius scaling of the func->ref
+        # shift. A ~12 mm shift puts the reversed error at ~3.5 mm (a ~4.5 mm
+        # shift left it at ~1 mm, on the negative-control bound itself).
+        func = make_nifti("func.nii.gz", data=self._sphere(shape, (14, 24, 20), 7))
         ref = make_nifti("ref.nii.gz", data=self._sphere(shape, (24, 18, 20), 7))
         mni = make_nifti("mni.nii.gz", data=self._sphere(shape, (24, 18, 26), 9))
 
