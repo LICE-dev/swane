@@ -7,9 +7,6 @@ now fed by phantom DICOMs) and the lightweight folder-validation checks.
 import os
 from types import SimpleNamespace
 
-import pytest
-
-import swane.utils.platform_and_tools_utils as platform_utils
 import swane.utils.Subject as subject_module
 from swane.utils.DicomTree import DicomTree
 from swane.utils.Subject import Subject, SubjectRet
@@ -28,24 +25,10 @@ def _scan_first_series(dicom_path):
     return worker.tree.get_series(subject, study, series_id)
 
 
-@pytest.fixture
-def posix_space_rules(monkeypatch):
-    """Linux/macOS rules: blank spaces rejected (also when run on Windows CI)."""
-    monkeypatch.setattr(platform_utils, "is_windows", lambda: False)
-
-
-@pytest.fixture
-def windows_space_rules(monkeypatch):
-    """Simulated Windows: blank spaces allowed in subject paths and names."""
-    monkeypatch.setattr(platform_utils, "is_windows", lambda: True)
-
-
 class TestSubjectFolders:
     """Folder creation / validation, no DICOM import."""
 
-    def test_create_new_subject_dir_validation(
-        self, global_config, dependency_manager, posix_space_rules
-    ):
+    def test_create_new_subject_dir_validation(self, global_config, dependency_manager):
         subject = Subject(global_config, dependency_manager)
         assert (
             subject.create_new_subject_dir("Invalid with space")
@@ -61,61 +44,7 @@ class TestSubjectFolders:
             subject.create_new_subject_dir("subj_01") == SubjectRet.FolderAlreadyExists
         )
 
-    def test_create_new_subject_dir_allows_inner_spaces_on_windows(
-        self, global_config, dependency_manager, windows_space_rules
-    ):
-        main = global_config.get_main_working_directory()
-        subject = Subject(global_config, dependency_manager)
-        assert subject.create_new_subject_dir("subj with space") == (
-            SubjectRet.ValidFolder
-        )
-        assert os.path.isdir(os.path.join(main, "subj with space"))
-        assert subject.folder == os.path.abspath(os.path.join(main, "subj with space"))
-
-    @pytest.mark.parametrize(
-        "name",
-        [
-            "   ",  # only whitespace
-            " leading",  # leading blank
-            "trailing ",  # Windows strips trailing blanks from folder names
-            "trailing.",  # Windows strips trailing dots from folder names
-            "in valid*char",
-            "a/b c",
-        ],
-    )
-    def test_create_new_subject_dir_windows_rejections(
-        self, global_config, dependency_manager, windows_space_rules, name
-    ):
-        main = global_config.get_main_working_directory()
-        subject = Subject(global_config, dependency_manager)
-        assert subject.create_new_subject_dir(name) == SubjectRet.PathBlankSpaces
-        assert os.listdir(main) == []
-
-    def test_create_new_subject_dir_windows_missing_name(
-        self, global_config, dependency_manager, windows_space_rules
-    ):
-        subject = Subject(global_config, dependency_manager)
-        assert subject.create_new_subject_dir(None) == SubjectRet.FolderNotFound
-        assert subject.create_new_subject_dir("") == SubjectRet.FolderNotFound
-
-    def test_posix_keeps_rejecting_trailing_dot_unchanged(
-        self, global_config, dependency_manager, posix_space_rules
-    ):
-        """The Windows-only trailing dot rule does not leak to Linux/macOS."""
-        subject = Subject(global_config, dependency_manager)
-        assert subject.create_new_subject_dir("subj.") == SubjectRet.ValidFolder
-
-    def test_check_subject_folder_allows_spaces_on_windows(
-        self, global_config, dependency_manager, windows_space_rules
-    ):
-        subject = Subject(global_config, dependency_manager)
-        assert subject.create_new_subject_dir("sub space") == SubjectRet.ValidFolder
-        checker = Subject(global_config, dependency_manager)
-        assert checker.check_subject_folder(subject.folder) == SubjectRet.ValidFolder
-
-    def test_check_and_fix_subject_folder(
-        self, global_config, dependency_manager, posix_space_rules
-    ):
+    def test_check_and_fix_subject_folder(self, global_config, dependency_manager):
         main = global_config.get_main_working_directory()
         subject = Subject(global_config, dependency_manager)
 

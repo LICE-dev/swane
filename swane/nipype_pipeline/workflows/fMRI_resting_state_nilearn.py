@@ -41,9 +41,7 @@ from swane.nipype_pipeline.interfaces.utils import (
     resolve_segmentation_engine,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import (
-    highpass_op_string_function,
-)
+from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import highpass_op_string
 from swane.nipype_pipeline.workflows.fMRI_resting_state_aroma import (
     build_aroma_classification,
     build_ref_2_mni,
@@ -594,7 +592,7 @@ def build_nilearn_resting(
     highpass_clean.inputs.suffix = "_tempfilt"
     workflow.connect(
         merge_tr_mean,
-        ("out", highpass_op_string_function(), HP_CUTOFF),
+        ("out", highpass_op_string, HP_CUTOFF),
         highpass_clean,
         "op_string",
     )

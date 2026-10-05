@@ -14,7 +14,6 @@ import traceback
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from multiprocessing import Queue
 from swane.utils.ToolReference import tool_reference_list
-from swane.utils.platform_and_tools_utils import blank_spaces_allowed
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -470,7 +469,7 @@ class Subject:
         if not os.path.exists(subject_folder):
             return SubjectRet.FolderNotFound
 
-        if " " in subject_folder and not blank_spaces_allowed():
+        if " " in subject_folder:
             return SubjectRet.PathBlankSpaces
 
         if not os.path.abspath(subject_folder).startswith(
@@ -575,31 +574,6 @@ class Subject:
                     exist_ok=True,
                 )
 
-    @staticmethod
-    def name_has_forbidden_blanks(subject_name: str) -> bool:
-        """
-        Check the blank spaces of a new subject folder name.
-
-        Where blank spaces are not allowed (see ``blank_spaces_allowed``) any
-        blank space is forbidden. Where they are allowed (Windows) only inner
-        blank spaces are: Windows silently strips trailing blank spaces and dots
-        from folder names, so such a name would not match the created folder,
-        and leading/trailing blanks are rejected as typing mistakes.
-
-        Parameters
-        ----------
-        subject_name : str
-            The subject folder name.
-
-        Returns
-        -------
-        True if the name must be rejected.
-
-        """
-        if not blank_spaces_allowed():
-            return " " in subject_name
-        return subject_name != subject_name.strip() or subject_name.endswith(".")
-
     def create_new_subject_dir(self, subject_name: str) -> SubjectRet:
         """
         Create a new subject folder and subfolders.
@@ -621,7 +595,7 @@ class Subject:
         elif (
             any(char in invalid_chars for char in subject_name)
             or subject_name.isspace()
-            or Subject.name_has_forbidden_blanks(subject_name)
+            or " " in subject_name
         ):
             return SubjectRet.PathBlankSpaces
         elif os.path.exists(

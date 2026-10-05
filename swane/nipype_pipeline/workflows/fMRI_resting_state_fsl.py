@@ -3,9 +3,7 @@ from nipype.interfaces.fsl import MELODIC, FilterRegressor
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.niimath import ImageMaths
-from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import (
-    highpass_op_string_function,
-)
+from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import highpass_op_string
 from swane.nipype_pipeline.workflows.fMRI_resting_state_aroma import (
     build_aroma_classification,
 )
@@ -178,7 +176,7 @@ def build_fsl_resting(
             (
                 merge_tr_meanfunc_denoised,
                 highpass_denoised,
-                [(("out", highpass_op_string_function(), hpcutoff), "op_string")],
+                [(("out", highpass_op_string, hpcutoff), "op_string")],
             )
         ]
     )
