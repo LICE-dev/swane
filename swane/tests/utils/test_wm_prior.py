@@ -164,4 +164,6 @@ def test_wm_prior_write_is_atomic(tmp_path, monkeypatch):
     monkeypatch.setattr("ants.image_write", real_write)
     assert nlin6_wm_prior(cache_dir=str(cache)) == out
     assert np.asarray(nib.load(out).dataobj).all()
-    assert sorted(os.listdir(cache)) == sorted([PRIOR, ".templateflow_fetch.lock"])
+    # No leftover temporary/partial file. The filelock lock file is ignored: it
+    # persists on POSIX but is deleted on release on Windows.
+    assert [n for n in os.listdir(cache) if n != ".templateflow_fetch.lock"] == [PRIOR]
