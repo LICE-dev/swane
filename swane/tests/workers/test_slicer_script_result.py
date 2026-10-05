@@ -88,7 +88,11 @@ def normalise(log, **paths):
     out = []
     for line in log:
         for token, path in paths.items():
-            line = line.replace(str(path), f"<{token}>")
+            # On Windows the recorder shows repr() paths: backslashes doubled.
+            for form in (str(path).replace("\\", "\\\\"), str(path)):
+                for sep in ("\\\\", "\\"):
+                    line = line.replace(form + sep, f"<{token}>/")
+                line = line.replace(form, f"<{token}>")
         out.append(line)
     return out
 
