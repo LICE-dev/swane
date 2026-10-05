@@ -343,8 +343,11 @@ class MainWindow(QMainWindow):
             create_subject_ret == SubjectRet.FolderNotFound
             or create_subject_ret == SubjectRet.PathBlankSpaces
         ):
+            message = strings.mainwindow_new_subj_name_error + subject_name
+            if blank_spaces_allowed():
+                message += strings.mainwindow_new_subj_name_windows_rules
             msg_box = QMessageBox()
-            msg_box.setText(strings.mainwindow_new_subj_name_error + subject_name)
+            msg_box.setText(message)
             msg_box.exec()
             return
         elif create_subject_ret == SubjectRet.FolderAlreadyExists:

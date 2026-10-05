@@ -159,3 +159,32 @@ def test_new_subject_name_blank_spaces(
     main = main_window.global_config.get_main_working_directory()
     assert opened == [os.path.abspath(os.path.join(main, expected))]
     assert os.path.isdir(os.path.join(main, expected))
+
+
+@pytest.mark.parametrize("windows", [False, True])
+def test_new_subject_name_error_explains_windows_rules(
+    main_window, monkeypatch, silent_dialogs, windows
+):
+    import swane.ui.MainWindow as main_window_module
+    import swane.utils.platform_and_tools_utils as platform_utils
+    from swane.resources import strings
+
+    monkeypatch.setattr(platform_utils, "is_windows", lambda: windows)
+    monkeypatch.setattr(
+        main_window_module.QInputDialog,
+        "getText",
+        staticmethod(lambda *args, **kwargs: ("subj.", True)),
+    )
+    monkeypatch.setattr(main_window, "open_subject_tab", lambda *a, **k: None)
+    main_window.choose_new_subject_dir()
+
+    if windows:
+        # Windows strips a trailing dot from folder names: rejected, with the
+        # Windows naming rules in the message.
+        assert silent_dialogs == [
+            strings.mainwindow_new_subj_name_error
+            + "subj."
+            + strings.mainwindow_new_subj_name_windows_rules
+        ]
+    else:
+        assert silent_dialogs == [strings.mainwindow_new_subj_created + "subj."]
