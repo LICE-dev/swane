@@ -16,6 +16,10 @@ import types
 
 import pytest
 
+# slicer_script_result imports SimpleITK at module level (it normally runs inside
+# 3D Slicer); SimpleITK is not a SWANe dependency, so skip when it is absent.
+pytest.importorskip("SimpleITK", reason="SimpleITK is not installed")
+
 import swane
 
 MODULE_PATH = os.path.join(
