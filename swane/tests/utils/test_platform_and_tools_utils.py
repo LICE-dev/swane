@@ -25,3 +25,21 @@ def test_os_type_helpers(monkeypatch):
     assert pu.is_windows() is True
     assert pu.is_linux() is False
     assert pu.is_mac() is False
+
+
+def test_blank_spaces_allowed_only_on_windows(monkeypatch):
+    from swane.config import dependency_policy
+
+    monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", False)
+    for system, allowed in (("Windows", True), ("Linux", False), ("Darwin", False)):
+        monkeypatch.setattr(pu.platform, "system", lambda: system)
+        assert pu.blank_spaces_allowed() is allowed
+
+
+def test_blank_spaces_rejected_on_windows_when_fsl_is_mandatory(monkeypatch):
+    """A mandatory FSL means FSL tools would run, and they break on spaces."""
+    from swane.config import dependency_policy
+
+    monkeypatch.setattr(pu, "is_windows", lambda: True)
+    monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", True)
+    assert pu.blank_spaces_allowed() is False

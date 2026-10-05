@@ -57,7 +57,7 @@ A few of the analyses you can do with SWANe:
 
 **macOS**: SWANe is developed and optimized for macOS > 12.5.XX.
 
-**Windows (experimental)**: FSL-free pipelines only; FSL and FreeSurfer are not available natively; 3D Slicer integration is best-effort.
+**Windows (experimental)**: FSL-free pipelines only; FSL and FreeSurfer are not available natively; 3D Slicer integration is best-effort. Unlike Linux and macOS, blank spaces are allowed in the main working directory and subject folder names (e.g. under `C:\Users\Name Surname`).
 
 ### Mandatory Dependencies
 | **Software** | **Minimum Version** | **Official Installation Guide** |

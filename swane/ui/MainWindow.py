@@ -48,7 +48,11 @@ from swane.utils.Subject import Subject, SubjectRet
 from swane.config.ConfigManager import ConfigManager
 from swane.config import dependency_policy
 from swane.config.config_enums import GlobalPrefCategoryList
-from swane.utils.platform_and_tools_utils import is_mac, is_windows
+from swane.utils.platform_and_tools_utils import (
+    blank_spaces_allowed,
+    is_mac,
+    is_windows,
+)
 
 
 class MainWindow(QMainWindow):
@@ -324,7 +328,12 @@ class MainWindow(QMainWindow):
         if not ok:
             return
 
-        subject_name = str(text).replace(" ", "_")
+        if blank_spaces_allowed():
+            # Windows: keep inner blank spaces, trim the surrounding ones
+            # (Windows would silently drop the trailing ones from the folder).
+            subject_name = str(text).strip()
+        else:
+            subject_name = str(text).replace(" ", "_")
         subject = Subject(
             self.global_config, dependency_manager=self.dependency_manager
         )
@@ -372,7 +381,7 @@ class MainWindow(QMainWindow):
         if not os.path.exists(folder_path):
             return
 
-        if " " in folder_path:
+        if " " in folder_path and not blank_spaces_allowed():
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_working_dir_space_error)
             msg_box.exec()
