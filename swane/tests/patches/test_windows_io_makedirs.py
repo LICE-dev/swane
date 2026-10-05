@@ -37,8 +37,14 @@ def lost_race(monkeypatch, tmp_path):
     results = tmp_path / "results"
     results.mkdir()
 
+    stale = [True]
+
     def stale_exists(path):
-        if os.path.abspath(path) == str(results):
+        # Lie once, for the sink's own pre-check: the window of the real race.
+        if stale[0] and os.path.normcase(os.path.abspath(path)) == os.path.normcase(
+            str(results)
+        ):
+            stale[0] = False
             return False
         return _REAL_EXISTS(path)
 
@@ -77,8 +83,12 @@ def test_stock_datasink_fails_on_the_windows_message(monkeypatch, lost_race):
 
 def test_patched_datasink_survives_the_race(simulated_windows, lost_race):
     results, source = lost_race
-    _sink(results, source).run()
-    assert (results / "in.txt").read_text() == "x"
+    copied = _sink(results, source).run().outputs.out_file
+    copied = copied if isinstance(copied, list) else [copied]
+    assert len(copied) == 1
+    assert os.path.commonpath([copied[0], str(results)]) == str(results)
+    with open(copied[0]) as handle:
+        assert handle.read() == "x"
 
 
 def test_tolerant_makedirs_accepts_an_existing_directory(tmp_path):
