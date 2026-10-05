@@ -19,6 +19,35 @@ from swane.config.ConfigManager import ConfigManager
 # inspected — without DICOM data, FSL/FreeSurfer execution, or network access.
 # --------------------------------------------------------------------------- #
 @pytest.fixture
+def dense_ants_affine(monkeypatch):
+    """Make real antspyx affine stages deterministic in the heavy tests.
+
+    On the tiny synthetic blobs these tests register, antspyx's default affine
+    metric (MI on a random voxel sample) converges anywhere from excellent to
+    useless run to run, on every OS, even with a fixed seed. Dense mean-squares
+    sampling, plus antspyx's own deterministic mode (fixed seed, one ITK
+    thread) for the SyN stage, makes them converge the same way every time.
+    What the tests check is SWANe's transform bookkeeping (lists, invert flags,
+    stacking), not antspyx's optimiser.
+    """
+    import ants
+
+    monkeypatch.setattr(ants.config, "_deterministic", ants.config._deterministic)
+    monkeypatch.setattr(ants.config, "_random_seed", ants.config._random_seed)
+    monkeypatch.setenv("ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS", "1")
+    ants.config.set_ants_deterministic(True, seed_value=123)
+    real_registration = ants.registration
+
+    def dense_registration(*args, **kwargs):
+        kwargs.update(
+            aff_metric="meansquares", aff_sampling=32, aff_random_sampling_rate=1.0
+        )
+        return real_registration(*args, **kwargs)
+
+    monkeypatch.setattr(ants, "registration", dense_registration)
+
+
+@pytest.fixture
 def fsl_engine_available(monkeypatch):
     """Make ``resolve_fmri_engine`` keep an explicit ``FmriEngine.FSL`` choice.
 

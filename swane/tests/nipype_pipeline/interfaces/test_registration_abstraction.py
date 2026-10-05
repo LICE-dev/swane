@@ -1004,6 +1004,7 @@ class TestApplyRegistrationNodeStack:
 #      the very mistake it exists to catch.
 # --------------------------------------------------------------------------- #
 @pytest.mark.heavy
+@pytest.mark.usefixtures("dense_ants_affine")
 class TestAntsStackRoundTrip:
     @staticmethod
     def _sphere(shape, center, radius):
