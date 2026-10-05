@@ -40,7 +40,9 @@ from swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection import (
 )
 
 # Output root for heavy tests; never committed.
-ORACLE_ROOT = "/home/mau/test_swane/dipy_test/motion_oracle"
+ORACLE_ROOT = os.path.join(
+    os.path.expanduser("~"), "test_swane", "dipy_test", "motion_oracle"
+)
 
 
 def _write_bval_bvec(directory, bvals, bvecs):

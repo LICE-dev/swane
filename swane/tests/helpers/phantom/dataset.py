@@ -151,7 +151,7 @@ def get_phantom_subject(
     shutil.rmtree(staging, ignore_errors=True)
     os.makedirs(staging, exist_ok=True)
 
-    manifest = build_phantom(staging, profile, fs_home)
+    manifest = build_phantom(staging, profile, freesurfer_home)
 
     with open(os.path.join(staging, "manifest.json"), "w") as handle:
         json.dump(manifest, handle, indent=2)
