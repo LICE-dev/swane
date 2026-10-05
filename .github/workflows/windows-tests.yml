@@ -134,6 +134,20 @@ jobs:
         if: steps.phantom.outputs.cache-hit != 'true'
         shell: bash
         run: python -c "from swane.tests.prerelease.subject import load_phantom; print(load_phantom().root)"
+      # The capability probe only offers the DIPY_RECOBUNDLES tractography
+      # passes when ~/.dipy/bundle_atlas_hcp842 already exists; SWANe would
+      # fetch it at run time, so fetch it once here and share it via cache.
+      - name: HCP842 atlas cache
+        id: hcp842
+        uses: actions/cache@v4
+        with:
+          path: ~/.dipy/bundle_atlas_hcp842
+          key: dipy-hcp842-v1
+          enableCrossOsArchive: true
+      - name: Fetch HCP842 atlas
+        if: steps.hcp842.outputs.cache-hit != 'true'
+        shell: bash
+        run: python -c "import os; from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import ensure_atlas as e; print(e(os.path.join(os.path.expanduser('~'), '.dipy')))"
       - name: Plan
         id: plan
         shell: bash
@@ -183,6 +197,12 @@ jobs:
             D:\swp_phantom
             ~/.cache/swane/fsaverage
           key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.dipy/bundle_atlas_hcp842
+          key: dipy-hcp842-v1
           enableCrossOsArchive: true
           fail-on-cache-miss: true
       - uses: actions/cache@v4
