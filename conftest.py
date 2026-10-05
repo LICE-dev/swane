@@ -4,7 +4,7 @@
 imports ``swane.patches`` and through it ``nipype.interfaces.fsl``) *before*
 ``swane/tests/conftest.py`` can run. Anything that has to precede that first
 nipype import therefore lives here, in a module that imports neither swane nor
-nipype at load time: the Windows ``pwd`` stub and the nipype version fallback.
+nipype.interfaces.fsl at load time: the Windows ``pwd`` stub and the nipype version fallback.
 """
 
 import importlib.util
@@ -36,8 +36,9 @@ _windows_compat.install_pwd_stub()
 # code. Patch nipype's common PackageInfo.version() so *only* FSL interface
 # classes (nipype.interfaces.fsl.*), and only when the real detection comes
 # up empty, report a modern FSL version (>= 6.0, matching the
-# FSLOUTPUTTYPE default in swane/tests/conftest.py) instead of None. Where a real FSL install is present (e.g. the
-# heavy/integration tests), real detection wins and this fallback never
+# FSLOUTPUTTYPE default in swane/tests/conftest.py) instead of None. Where a
+# real FSL install is present (e.g. the heavy/integration tests),
+# real detection wins and this fallback never
 # triggers. Must run before anything below imports nipype.interfaces.fsl
 # (importing swane does, via swane.patches).
 #

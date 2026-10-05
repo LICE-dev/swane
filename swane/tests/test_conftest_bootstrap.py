@@ -7,6 +7,7 @@ must be installed by the root ``conftest.py``; otherwise a box without FSL gets
 the reduced spec that lacks ``tcon_file``/``fcon_file``.
 """
 
+import os
 import subprocess
 import sys
 import textwrap
@@ -22,8 +23,6 @@ def test_root_conftest_runs_before_swane_import(tmp_path):
     """Fresh interpreter without FSL: loading the root conftest first must give
     the full FILMGLS spec even though importing swane pulls nipype's FSL
     package in."""
-    import os
-
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     code = textwrap.dedent("""
         import sys
@@ -34,9 +33,7 @@ def test_root_conftest_runs_before_swane_import(tmp_path):
         from nipype.interfaces.fsl.model import FILMGLS
         assert "tcon_file" in FILMGLS().inputs.trait_names()
         """ % root)
-    env = {
-        k: v for k, v in os.environ.items() if not k.startswith("FSL") and k != "FSLDIR"
-    }
+    env = {k: v for k, v in os.environ.items() if not k.startswith("FSL")}
     env["PATH"] = os.pathsep.join(
         p for p in env.get("PATH", "").split(os.pathsep) if "fsl" not in p.lower()
     )

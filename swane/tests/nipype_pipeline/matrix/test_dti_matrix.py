@@ -54,9 +54,13 @@ def test_dti_matrix(
     # CustomEddy only switches to the GPU command when nipype sees a GPU, so the
     # rendered command would depend on the box (eddy_openmp on a GPU-less CI
     # runner, eddy/eddy_cuda elsewhere). Pin a GPU so the CUDA scenario is the
-    # same everywhere; the non-CUDA scenarios never consult it.
+    # same everywhere; the non-CUDA scenarios never consult it. Likewise hide
+    # any eddy_cuda binary so the eddy/eddy_cuda choice is machine independent.
     monkeypatch.setattr(
         "swane.nipype_pipeline.interfaces.fsl.CustomEddy.gpu_count", lambda: 1
+    )
+    monkeypatch.setattr(
+        "swane.nipype_pipeline.interfaces.fsl.CustomEddy.which", lambda name: None
     )
     cuda, old_eddy, tractography = SCENARIOS[scenario]
     section = subject_config[DataInputList.DTI]
