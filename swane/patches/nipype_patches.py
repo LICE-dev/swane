@@ -94,6 +94,18 @@ the per-line timestamps become the completion time). ``runtime.stdout``,
 ``runtime.stderr`` and ``runtime.returncode`` are identical to ``"stream"``.
 Every other output mode is passed through unchanged.
 
+Windows ``DataSink`` folder creation
+------------------------------------
+``nipype.interfaces.io`` creates sink folders with ``os.makedirs`` after an
+``os.path.exists`` check and ignores the resulting ``OSError`` only when its
+``strerror`` contains ``"File exists"`` (the POSIX message). Sibling
+``DataSink`` nodes sharing a results folder race on that check; on Windows the
+message is ``"Cannot create a file when that file already exists"``, so the
+loser fails the node. On Windows only, :func:`install_windows_io_makedirs`
+rebinds the module-level ``os`` name of ``nipype.interfaces.io`` to
+:data:`swane.patches.windows_compat.WINDOWS_OS`, whose ``makedirs`` treats an
+existing directory as success -- what Nipype already does on Linux/macOS.
+
 Why this is ``spawn``-safe
 --------------------------
 ``swane_run_node`` lives in *this* module and is the callable submitted to the
@@ -126,6 +138,7 @@ from dataclasses import dataclass, field
 import psutil
 from nipype import config as _nipype_config
 from nipype.interfaces.base import core as _nipype_core
+from nipype.interfaces import io as _nipype_io
 from nipype.interfaces.base import Undefined, isdefined
 from nipype.interfaces.fsl.epi import EddyInputSpec
 from nipype.utils import profiler as _nipype_profiler
@@ -341,6 +354,15 @@ def install_windows_run_command():
     return True
 
 
+def install_windows_io_makedirs():
+    """On Windows, make Nipype's DataSink tolerate sink folders created by a
+    sibling node (see the module docstring). Returns True when installed."""
+    if not windows_compat.is_windows():
+        return False
+    _nipype_io.os = windows_compat.WINDOWS_OS
+    return True
+
+
 def apply_patches():
     """Install SWANe's Nipype runtime patches (idempotent)."""
     global _PATCHED
@@ -357,6 +379,7 @@ def apply_patches():
     install_windows_cmdline_quoting()
     install_windows_memory_probe()
     install_windows_run_command()
+    install_windows_io_makedirs()
     _PATCHED = True
 
 

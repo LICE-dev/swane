@@ -155,6 +155,29 @@ class _WindowsShlex(types.ModuleType):
 WINDOWS_SHLEX = _WindowsShlex("swane_windows_shlex")
 
 
+def tolerant_makedirs(name, mode=0o777, exist_ok=False):
+    """``os.makedirs`` that treats a directory created concurrently by another
+    process as success, whatever the platform's error message says."""
+    try:
+        os.makedirs(name, mode, exist_ok)
+    except FileExistsError:
+        if not os.path.isdir(name):
+            raise
+
+
+class _WindowsOs(types.ModuleType):
+    """``os`` stand-in whose ``makedirs`` is :func:`tolerant_makedirs`;
+    everything else (``path``, ``listdir``, ...) is the real module's."""
+
+    makedirs = staticmethod(tolerant_makedirs)
+
+    def __getattr__(self, attr):
+        return getattr(os, attr)
+
+
+WINDOWS_OS = _WindowsOs("swane_windows_os")
+
+
 def cmdline_quote(value: str) -> str:
     """Quote one argument for a shell command line built for Nipype:
     :func:`windows_quote` on Windows, ``shlex.quote`` elsewhere."""
