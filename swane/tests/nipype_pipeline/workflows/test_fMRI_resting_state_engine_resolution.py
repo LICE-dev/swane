@@ -1,6 +1,8 @@
 import pytest
 from swane.config.config_enums import FmriEngine, RegistrationEngine
-from swane.nipype_pipeline.workflows.fMRI_resting_state_workflow import fMRI_resting_state_workflow
+from swane.nipype_pipeline.workflows.fMRI_resting_state_workflow import (
+    fMRI_resting_state_workflow,
+)
 
 # ---------------------------------------------------------------------------
 # Dispatcher, shared AROMA module and FSL builder.
@@ -13,7 +15,9 @@ from nipype.utils.functions import getsource
 
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.utils.DataInputList import DataInputList
-from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import highpass_op_string
+from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import (
+    highpass_op_string_function,
+)
 
 NAME = "fmri_rs"
 
@@ -112,7 +116,7 @@ def test_fsl_aroma_highpass_after_denoising(
     assert src is merge_den
     # Same function (same source) and cutoff as the preprocessing high-pass.
     assert src_field[0] == "out"
-    assert src_field[1] == getsource(highpass_op_string)
+    assert src_field[1] == getsource(highpass_op_string_function())
     assert tuple(src_field[2]) == (100,)
     preproc_hp_op = [
         sf

@@ -228,7 +228,7 @@ def test_nuisance_and_highpass(
     subject_config, global_config, make_input_dir, aroma, reg
 ):
     from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import (
-        highpass_op_string,
+        highpass_op_string_function,
     )
 
     wf = _build(subject_config, global_config, make_input_dir, aroma, reg)
@@ -280,7 +280,7 @@ def test_nuisance_and_highpass(
     assert _source(wf, hp, "in_file") == (nuisance, "out_file")
     op_src, op_field = _source(wf, hp, "op_string")
     assert op_field[0] == "out"
-    assert op_field[1] == getsource(highpass_op_string)
+    assert op_field[1] == getsource(highpass_op_string_function())
     assert tuple(op_field[2]) == (100,)
     assert sorted((s.name, sf, df) for s, sf, df in _incoming(wf, op_src)) == sorted(
         [
