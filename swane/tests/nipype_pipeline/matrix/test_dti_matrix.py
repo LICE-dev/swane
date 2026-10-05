@@ -44,8 +44,20 @@ def _bool(value):
 
 @pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
 def test_dti_matrix(
-    scenario, subject_config, global_config, make_input_dir, graph_snapshot
+    scenario,
+    subject_config,
+    global_config,
+    make_input_dir,
+    graph_snapshot,
+    monkeypatch,
 ):
+    # CustomEddy only switches to the GPU command when nipype sees a GPU, so the
+    # rendered command would depend on the box (eddy_openmp on a GPU-less CI
+    # runner, eddy/eddy_cuda elsewhere). Pin a GPU so the CUDA scenario is the
+    # same everywhere; the non-CUDA scenarios never consult it.
+    monkeypatch.setattr(
+        "swane.nipype_pipeline.interfaces.fsl.CustomEddy.gpu_count", lambda: 1
+    )
     cuda, old_eddy, tractography = SCENARIOS[scenario]
     section = subject_config[DataInputList.DTI]
     section["cuda"] = _bool(cuda)
@@ -261,7 +273,6 @@ def test_dti_synth_falls_back_to_ants(subject_config, global_config, make_input_
     assert "SynthMorphReg" not in ifaces
     assert "LTAConvert" not in ifaces
     assert "FLIRT" not in ifaces
-    
 
     outputnode = _node_by_name(wf, "outputnode")
     dst_fields = {df for _, _, df in _incoming(wf, outputnode)}
