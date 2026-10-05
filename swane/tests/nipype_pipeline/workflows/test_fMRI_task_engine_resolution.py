@@ -82,7 +82,7 @@ def test_fmri_task_nilearn_engine_nodes():
     assert hasattr(outputnode.inputs, "threshold_file_cont2_thresh3")
 
 
-def test_fmri_task_fsl_engine_nodes():
+def test_fmri_task_fsl_engine_nodes(fsl_engine_available):
     config = MockConfig(FmriEngine.FSL, BlockDesign.RARB)
 
     wf = fMRI_task_workflow(

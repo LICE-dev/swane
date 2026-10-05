@@ -19,6 +19,21 @@ from swane.config.ConfigManager import ConfigManager
 # inspected — without DICOM data, FSL/FreeSurfer execution, or network access.
 # --------------------------------------------------------------------------- #
 @pytest.fixture
+def fsl_engine_available(monkeypatch):
+    """Make ``resolve_fmri_engine`` keep an explicit ``FmriEngine.FSL`` choice.
+
+    Without a real FSL install (e.g. a CI runner) the resolver falls back to the
+    nilearn engine, so a test that asserts the FSL-engine graph (the golden
+    snapshots, the FSL node classes) would silently build a different workflow.
+    These tests only *construct* the graph and never run FSL, so presence of the
+    tool is pinned instead of depended upon.
+    """
+    from swane.utils.DependencyManager import DependencyManager
+
+    monkeypatch.setattr(DependencyManager, "is_fsl", lambda self=None: True)
+
+
+@pytest.fixture
 def isolated_home(tmp_path, monkeypatch):
     """Redirect the home directory so config writes never touch the real one.
 

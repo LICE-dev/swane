@@ -16,11 +16,10 @@ import shutil
 
 import pytest
 
-# On Windows, nipype.pipeline.plugins only imports once SWANe's pwd stub is in
-# place; some test modules import nipype before swane, so install it here first.
-from swane.patches.windows_compat import install_pwd_stub
-
-install_pwd_stub()
+# NOTE: the Windows ``pwd`` stub and the FSL/FreeSurfer version fallback for
+# nipype live in the repository-root ``conftest.py``: pytest imports the
+# ``swane`` package (and so ``swane.patches`` -> nipype.interfaces.fsl) before
+# this file runs, which is too late for either of them.
 
 # Qt must be head-less *before* any QApplication is created by pytest-qt.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -48,47 +47,6 @@ if not os.environ.get("SUBJECTS_DIR") or not os.path.exists(os.environ["SUBJECTS
     import tempfile
 
     os.environ["SUBJECTS_DIR"] = tempfile.mkdtemp(prefix="swane_tests_subjects_")
-
-# Some nipype FSL interfaces pick their *input spec class* once, at import
-# time, based on nipype.interfaces.fsl.base.Info.version() (e.g. FILMGLS:
-# FSL <=5.0.6 lacks the tcon_file/fcon_file inputs swane wires — see
-# fMRI_task_workflow). On a box without a real FSL install (e.g. the
-# Windows dev machine these tests must also run on) that version is None
-# and nipype silently falls back to the old/reduced interface, breaking
-# workflow construction for reasons that have nothing to do with swane's
-# code. Patch nipype's common PackageInfo.version() so *only* FSL interface
-# classes (nipype.interfaces.fsl.*), and only when the real detection comes
-# up empty, report a modern FSL version (>= 6.0, matching FSLOUTPUTTYPE
-# above) instead of None. Where a real FSL install is present (e.g. the
-# heavy/integration tests), real detection wins and this fallback never
-# triggers. Must run before anything below imports nipype.interfaces.fsl
-# (swane.utils.DependencyManager does, transitively).
-#
-# The same reasoning applies to FreeSurfer, for a different trait: nipype's
-# FSCommand fills ``subjects_dir`` from SUBJECTS_DIR *only when FreeSurfer is
-# detected* (freesurfer.base.Info.subjectsdir), so the assembled graph — and
-# therefore the golden snapshots — would otherwise depend on whether the tool
-# happens to be installed. Faking the version here makes construction identical
-# on both, and the snapshot renderer rewrites the directory to a token.
-_FALLBACK_VERSIONS = {
-    "nipype.interfaces.fsl": "6.0.7.22",
-    "nipype.interfaces.freesurfer": "8.0.0",
-}
-from nipype.interfaces.base import core as _nipype_core
-
-_real_package_version = _nipype_core.PackageInfo.version.__func__
-
-
-def _package_version_with_fallback(klass):
-    version = _real_package_version(klass)
-    if version is None:
-        for prefix, fallback in _FALLBACK_VERSIONS.items():
-            if klass.__module__.startswith(prefix):
-                return fallback
-    return version
-
-
-_nipype_core.PackageInfo.version = classmethod(_package_version_with_fallback)
 
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DependencyManager import DependencyManager
