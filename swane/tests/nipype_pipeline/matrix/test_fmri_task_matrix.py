@@ -35,7 +35,12 @@ SCENARIOS = {
 
 @pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
 def test_fmri_task_matrix(
-    scenario, subject_config, global_config, make_input_dir, graph_snapshot
+    scenario,
+    subject_config,
+    global_config,
+    make_input_dir,
+    graph_snapshot,
+    fsl_engine_available,
 ):
     block_design = SCENARIOS[scenario]
     section = subject_config[DataInputList.FMRI_0]
@@ -70,7 +75,11 @@ def test_fmri_task_matrix(
 
 
 def test_fmri_task_matrix_test_run(
-    subject_config, global_config, make_input_dir, graph_snapshot
+    subject_config,
+    global_config,
+    make_input_dir,
+    graph_snapshot,
+    fsl_engine_available,
 ):
     """test_run=True on the single-contrast baseline: exercises the shared
     fMRI_preproc_workflow's MCFLIRT speed knobs through the task path too
