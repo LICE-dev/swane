@@ -20,7 +20,6 @@ from swane.nipype_pipeline.interfaces.ants.AntsMotionCorrection import (
 )
 from swane.nipype_pipeline.interfaces.fmri.NilearnSmooth import NilearnSmooth
 from configparser import SectionProxy
-from swane.patches import windows_compat
 from swane.config.config_enums import (
     SliceTiming,
     RegistrationEngine,
@@ -45,34 +44,6 @@ from swane.nipype_pipeline.interfaces.utils import (
 def highpass_op_string(merged, real_hpcutoff):
     hp_sigma_vol = real_hpcutoff / (2 * merged[0])
     return "-bptf %f -1 -add %s" % (hp_sigma_vol, merged[1])
-
-
-# Windows variant of highpass_op_string. The mean image path is written inside
-# the op_string, which Nipype passes to the shell unquoted; on Windows the path
-# may contain blank spaces (they are allowed there), so it is quoted for
-# cmd.exe. Same formula: it delegates to highpass_op_string. Imports are inside
-# the body because Nipype rebuilds connection functions from their source.
-def windows_highpass_op_string(merged, real_hpcutoff):
-    from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import (
-        highpass_op_string,
-    )
-    from swane.patches.windows_compat import windows_quote
-
-    return highpass_op_string([merged[0], windows_quote(merged[1])], real_hpcutoff)
-
-
-def highpass_op_string_function():
-    """
-    Return the high-pass op_string builder to wire for this platform.
-
-    Returns
-    -------
-    windows_highpass_op_string on Windows, highpass_op_string elsewhere, so
-    the Linux/macOS graphs are unchanged.
-    """
-    if windows_compat.is_windows():
-        return windows_highpass_op_string
-    return highpass_op_string
 
 
 def fMRI_preproc_workflow(
@@ -476,7 +447,7 @@ def fMRI_preproc_workflow(
                 highpass,
                 [
                     (
-                        ("out", highpass_op_string_function(), hpcutoff),
+                        ("out", highpass_op_string, hpcutoff),
                         "op_string",
                     )
                 ],

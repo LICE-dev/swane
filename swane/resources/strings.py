@@ -53,10 +53,6 @@ mainwindow_new_subj_config_error = (
 )
 mainwindow_new_subj_created = "New subject created: "
 mainwindow_new_subj_name_error = "Invalid name: "
-mainwindow_new_subj_name_windows_rules = (
-    ". On Windows a subject name cannot start or end with a blank space, end with"
-    r" a dot or contain \ / : * ? < > |"
-)
 mainwindow_subj_exists_error = "This subject already exists: "
 mainwindow_home_tab_name = "Home"
 mainwindow_wf_executing_error_1 = "Cannot close a subject during workflow execution!"
@@ -316,7 +312,7 @@ wizard_advanced_models_text = (
     "They may require additional memory and processing power."
 )
 wizard_advanced_models_macos_warn = "<b>Please note</b>: The synth tools consume a significant amount of RAM on macOS. For this reason, we do <b>not recommend</b> using them on this platform."
-windows_experimental_warn = "<b>Please note</b>: Windows support is <b>experimental</b>. FSL and FreeSurfer are not available natively on Windows; 3D Slicer integration is best-effort. Blank spaces are allowed in the main working directory and subject folder names."
+windows_experimental_warn = "<b>Please note</b>: Windows support is <b>experimental</b>. FSL and FreeSurfer are not available natively on Windows; 3D Slicer integration is best-effort."
 advanced_models_enabled = "Use FreeSurfer advanced models when supported"
 advanced_models_enabled_tooltip = (
     "Enable FreeSurfer advanced models when the system can handle them reliably."
