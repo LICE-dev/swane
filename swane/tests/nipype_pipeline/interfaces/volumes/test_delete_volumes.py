@@ -1,5 +1,4 @@
-"""Unit tests for :class:`swane.nipype_pipeline.interfaces.volumes.DeleteVolumes.DeleteVolumes`.
-"""
+"""Unit tests for :class:`swane.nipype_pipeline.interfaces.volumes.DeleteVolumes.DeleteVolumes`."""
 
 import os
 

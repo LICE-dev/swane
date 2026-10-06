@@ -1,6 +1,8 @@
 import pytest
 from swane.config.config_enums import FmriEngine, RegistrationEngine
-from swane.nipype_pipeline.workflows.fMRI_resting_state_workflow import fMRI_resting_state_workflow
+from swane.nipype_pipeline.workflows.fMRI_resting_state_workflow import (
+    fMRI_resting_state_workflow,
+)
 
 # ---------------------------------------------------------------------------
 # Dispatcher, shared AROMA module and FSL builder.
