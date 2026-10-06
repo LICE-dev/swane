@@ -6,8 +6,8 @@ import platform
 
 import pytest
 
-from swane.utils.qt_compat import QThreadPool
 from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+from swane.workers.worker_pool import start_worker
 from swane.utils.DependencyManager import DependencyManager, DependenceStatus
 
 
@@ -272,7 +272,7 @@ class TestSlicerCheckWorkerReal:
         with qtbot.waitSignal(
             slicer_check_worker.signal.slicer, timeout=2000000
         ) as blocker:
-            QThreadPool.globalInstance().start(slicer_check_worker)
+            start_worker(slicer_check_worker)
         assert blocker.args[3] == DependenceStatus.DETECTED, "slicer presence error"
 
         real_slicer = blocker.args[0]
@@ -290,7 +290,7 @@ class TestSlicerCheckWorkerReal:
             with qtbot.waitSignal(
                 slicer_check_worker.signal.slicer, timeout=2000000
             ) as blocker:
-                QThreadPool.globalInstance().start(slicer_check_worker)
+                start_worker(slicer_check_worker)
             assert blocker.args[3] == DependenceStatus.MISSING, "slicer absence error"
         finally:
             shutil.move(slicer_python_bk, slicer_python)
@@ -311,7 +311,7 @@ class TestSlicerCheckWorkerReal:
         with qtbot.waitSignal(
             slicer_check_worker.signal.slicer, timeout=2000000
         ) as blocker:
-            QThreadPool.globalInstance().start(slicer_check_worker)
+            start_worker(slicer_check_worker)
         assert (
             slicer_dir_copy in blocker.args[0]
         ), "Error in specifing custom Slicer executable"
@@ -326,7 +326,7 @@ class TestSlicerCheckWorkerReal:
         with qtbot.waitSignal(
             slicer_check_worker.signal.slicer, timeout=2000000
         ) as blocker:
-            QThreadPool.globalInstance().start(slicer_check_worker)
+            start_worker(slicer_check_worker)
         assert (
             blocker.args[3] == DependenceStatus.DETECTED
         ), "Cannot reinstall SlicerFreeSurfer error"
@@ -337,7 +337,7 @@ class TestSlicerCheckWorkerReal:
         with qtbot.waitSignal(
             slicer_check_worker.signal.slicer, timeout=2000000
         ) as blocker:
-            QThreadPool.globalInstance().start(slicer_check_worker)
+            start_worker(slicer_check_worker)
         assert (
             blocker.args[3] == DependenceStatus.WARNING
         ), "Missing module not raising error"
@@ -348,7 +348,7 @@ class TestSlicerCheckWorkerReal:
         with qtbot.waitSignal(
             slicer_check_worker.signal.slicer, timeout=2000000
         ) as blocker:
-            QThreadPool.globalInstance().start(slicer_check_worker)
+            start_worker(slicer_check_worker)
         assert (
             blocker.args[3] == DependenceStatus.WARNING
         ), "Slicer outdated version error"

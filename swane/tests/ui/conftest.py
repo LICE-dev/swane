@@ -18,9 +18,6 @@ if QT_AVAILABLE:
     import swane.ui.MainWindow as main_window_mod
     from swane.ui.MainWindow import MainWindow
 
-    # Dummy runnables kept alive for the whole session; see _DummyUpdateWorker.
-    _STARTED_DUMMIES = []
-
     class _DummySignal(QObject):
         last_available = Signal(str)
 
@@ -30,14 +27,6 @@ if QT_AVAILABLE:
         def __init__(self):
             super().__init__()
             self.signal = _DummySignal()
-            # A Python QRunnable whose run() returns at once, auto-deleted by
-            # the global pool, races its own Python wrapper: Qt frees the C++
-            # object on the pool thread while the GUI thread still holds it,
-            # and the next processEvents() (pytest-qt teardown) segfaults or
-            # aborts on heap corruption, intermittently on every OS. Ownership
-            # stays on the Python side instead.
-            self.setAutoDelete(False)
-            _STARTED_DUMMIES.append(self)
 
         def run(self):
             pass

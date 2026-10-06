@@ -8,7 +8,7 @@ from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane.resources import strings
 from packaging import version
 from swane.config.ConfigManager import ConfigManager
-from swane.utils.qt_compat import QThreadPool
+from swane.workers.worker_pool import start_worker
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux
@@ -332,7 +332,7 @@ class DependencyManager:
 
         check_slicer_work = SlicerCheckWorker(current_slicer_path)
         check_slicer_work.signal.slicer.connect(callback_func)
-        QThreadPool.globalInstance().start(check_slicer_work)
+        start_worker(check_slicer_work)
 
     @staticmethod
     def check_dcm2niix() -> Dependence:

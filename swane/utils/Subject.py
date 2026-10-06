@@ -8,7 +8,7 @@ from swane.config import dependency_policy
 from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DependencyManager import DependencyManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
-from swane.utils.qt_compat import QThreadPool
+from swane.workers.worker_pool import start_worker
 from swane.resources import strings
 import traceback
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
@@ -246,7 +246,7 @@ class Subject:
                     i, maximum
                 )
             )
-        QThreadPool.globalInstance().start(dicom_src_work)
+        start_worker(dicom_src_work)
 
     def check_input_folder_step3(
         self,
@@ -881,7 +881,7 @@ class Subject:
         self.workflow_monitor_work = WorkflowMonitorWorker(queue)
         if update_node_callback is not None:
             self.workflow_monitor_work.signal.log_msg.connect(update_node_callback)
-        QThreadPool.globalInstance().start(self.workflow_monitor_work)
+        start_worker(self.workflow_monitor_work)
 
         # Starts the workflow on a new process
         from swane.workers.WorkflowProcess import WorkflowProcess
@@ -950,4 +950,4 @@ class Subject:
         )
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)
-        QThreadPool.globalInstance().start(slicer_thread)
+        start_worker(slicer_thread)
