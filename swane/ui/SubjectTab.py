@@ -1,7 +1,7 @@
 import os
 from functools import partial
 from datetime import datetime
-from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher, QTimer, QUrl
+from PySide6.QtCore import Qt, QFileSystemWatcher, QTimer, QUrl
 from PySide6.QtGui import QFont, QDesktopServices
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
@@ -29,6 +29,7 @@ from swane.resources import strings
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.workers.SlicerViewerWorker import SlicerViewerWorker
+from swane.workers.worker_pool import start_worker
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
@@ -501,7 +502,7 @@ class SubjectTab(QTabWidget):
                 lambda i: progress.increase_value(i)
             )
             self._dicom_worker.signal.sig_finish.connect(self.show_scan_result)
-            QThreadPool.globalInstance().start(self._dicom_worker)
+            start_worker(self._dicom_worker)
 
         else:
             msg_box = QMessageBox()
@@ -655,7 +656,7 @@ class SubjectTab(QTabWidget):
         self._generate_worker.signal.finished.connect(
             lambda ret: self._on_workflow_generated(ret, progress)
         )
-        QThreadPool.globalInstance().start(self._generate_worker)
+        start_worker(self._generate_worker)
 
     def _on_workflow_generated(self, generate_workflow_return: SubjectRet, progress):
         """
@@ -1646,7 +1647,7 @@ class SubjectTab(QTabWidget):
         slicer_open_thread = SlicerViewerWorker(
             self.global_config.get_slicer_path(), self.subject.scene_path()
         )
-        QThreadPool.globalInstance().start(slicer_open_thread)
+        start_worker(slicer_open_thread)
 
     def setTabEnabled(self, index: int, enabled: bool):
         """

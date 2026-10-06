@@ -19,10 +19,11 @@ from PySide6.QtWidgets import (
     QProgressDialog,
 )
 from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent, QDesktopServices
-from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl, QEventLoop
+from PySide6.QtCore import QCoreApplication, Qt, QUrl, QEventLoop
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
+from swane.workers.worker_pool import start_worker
 from swane.ui.ToolReferenceWindow import ToolReferenceWindow
 from swane.utils.DependencyManager import (
     DependencyManager,
@@ -100,7 +101,7 @@ class MainWindow(QMainWindow):
         update_thread.signal.last_available.connect(
             lambda pip_version: self.update_available(pip_version)
         )
-        QThreadPool.globalInstance().start(update_thread)
+        start_worker(update_thread)
 
     def update_available(self, pip_version: str):
         """
@@ -553,7 +554,7 @@ class MainWindow(QMainWindow):
         worker.signal.failed.connect(_on_failed)
         worker.signal.finished.connect(loop.quit)
         try:
-            QThreadPool.globalInstance().start(worker)
+            start_worker(worker)
             loop.exec()
         finally:
             progress.close()

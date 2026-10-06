@@ -87,11 +87,9 @@ class TestSubjectTab:
         )
 
         # Since generate_workflow is now async, we must wait for the finished signal
-        # and we can't intercept the worker creation easily, so we just run the QThreadPool
-        # inline for this test
-        from PySide6.QtCore import QThreadPool
-
-        monkeypatch.setattr(QThreadPool.globalInstance(), "start", lambda w: w.run())
+        # and we can't intercept the worker creation easily, so we just run the
+        # worker inline for this test
+        monkeypatch.setattr("swane.ui.SubjectTab.start_worker", lambda w: w.run())
 
         tab.generate_workflow()
         assert tab.exec_button.isEnabled() is True
