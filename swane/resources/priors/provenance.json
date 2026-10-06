@@ -1,0 +1,10 @@
+{
+ "moving": "TemplateFlow tpl-MNI152NLin2009cAsym_res-02_T1w x desc-brain_mask",
+ "fixed": "TemplateFlow tpl-MNI152NLin6Asym_res-02_T1w x desc-brain_mask",
+ "registration": "antspyx 0.6.3 SyN, random_seed=1, 1 ITK thread",
+ "apply_order": [
+  "tpl-MNI152NLin6Asym_from-MNI152NLin2009cAsym_desc-swaneSyN_warp.nii.gz",
+  "tpl-MNI152NLin6Asym_from-MNI152NLin2009cAsym_desc-swaneSyN_affine.mat"
+ ],
+ "brain_mask_dice": 0.979
+}

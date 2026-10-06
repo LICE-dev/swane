@@ -1,7 +1,8 @@
 """Settings matrix for
 :func:`swane.nipype_pipeline.workflows.fMRI_resting_state_workflow.fMRI_resting_state_workflow`.
 
-Wires MELODIC ICA on the preprocessed data. The ``aroma=True`` path additionally
+Wires the ICA chain of the selected fMRI engine (FSL MELODIC or the NILEARN
+chain) on the preprocessed data. The ``aroma=True`` path additionally
 reads the ``$FSLDIR`` MNI 2mm template at construction and adds the ICA-AROMA
 denoising branch: on a fully-equipped box that is the norm and is snapshotted;
 on a box without the template it degrades to a skip (see
@@ -22,11 +23,16 @@ from swane.tests.nipype_pipeline.matrix.conftest import fsl_data_path, require_f
 
 SUBDIR = "fmri_resting_state"
 
-# name -> (melodic_dim, melodic_thr, aroma)
+# name -> (fmri_engine, registration engine, ic_dim, melodic_thr, aroma).
+# ``melodic_thr`` is read by the FSL engine only; the NILEARN scenarios echo
+# ``spatial_z_thr`` instead (its default).
 SCENARIOS = {
-    "melodic_auto_dim": ("0", "0.5", False),
-    "melodic_fixed_dim": ("30", "0.9", False),
-    "aroma_on": ("0", "0.5", True),
+    "ic_auto_dim": ("FSL", "FSL", "0", "0.5", False),
+    "ic_fixed_dim": ("FSL", "FSL", "30", "0.9", False),
+    "aroma_on": ("FSL", "FSL", "0", "0.5", True),
+    "nilearn_aroma_on_ants": ("NILEARN", "ANTS", "0", "0.5", True),
+    "nilearn_aroma_off_ants": ("NILEARN", "ANTS", "0", "0.5", False),
+    "nilearn_aroma_on_fsl_registration": ("NILEARN", "FSL", "0", "0.5", True),
 }
 
 
@@ -34,7 +40,7 @@ SCENARIOS = {
 def test_fmri_resting_state_matrix(
     scenario, subject_config, global_config, make_input_dir, graph_snapshot
 ):
-    melodic_dim, melodic_thr, aroma = SCENARIOS[scenario]
+    fmri_engine, reg_engine, ic_dim, melodic_thr, aroma = SCENARIOS[scenario]
     if aroma:
         # aroma=True reads the MNI 2mm brain template at construction time.
         require_fsl_data(
@@ -42,12 +48,12 @@ def test_fmri_resting_state_matrix(
         )
     section = subject_config[DataInputList.FMRI_RS]
     section["aroma"] = "true" if aroma else "false"
-    section["melodic_dim"] = melodic_dim
+    section["ic_dim"] = ic_dim
     section["melodic_thr"] = melodic_thr
-    # These byte snapshots describe the FSL construction; pin the engine so the
-    # golden files stay valid. The ANTS-default snapshots are Session F's job.
+    # Pin both engines so the golden files do not follow the global defaults.
     synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["engine"] = "FSL"
+    synth["engine"] = reg_engine
+    synth["fmri_engine"] = fmri_engine
 
     wf = fMRI_resting_state_workflow(
         "fmri_rs",
@@ -58,9 +64,14 @@ def test_fmri_resting_state_matrix(
 
     config_echo = {
         "aroma": section["aroma"],
-        "melodic_dim": melodic_dim,
-        "melodic_thr": melodic_thr,
+        "ic_dim": ic_dim,
     }
+    if fmri_engine == "FSL":
+        config_echo["melodic_thr"] = melodic_thr
+    else:
+        config_echo["fmri_engine"] = fmri_engine
+        config_echo["registration_engine"] = reg_engine
+        config_echo["spatial_z_thr"] = section["spatial_z_thr"]
     graph_snapshot(
         wf,
         subdir=SUBDIR,
@@ -75,7 +86,7 @@ def test_fmri_resting_state_matrix_test_run(
 ):
     """test_run=True with aroma on: the ref_2_mni_fnirt node (built only in
     the aroma branch) is the only place in this workflow test_run touches,
-    getting the same FNIRT strategy A as get_registration_node. melodic_dim
+    getting the same FNIRT strategy A as get_registration_node. ic_dim
     stays untouched -- the phantom dataset is built to yield a specific
     component count, forcing a fixed dim would defeat that (see
     fMRI_resting_state_workflow.py).
@@ -84,10 +95,11 @@ def test_fmri_resting_state_matrix_test_run(
 
     section = subject_config[DataInputList.FMRI_RS]
     section["aroma"] = "true"
-    section["melodic_dim"] = "0"
+    section["ic_dim"] = "0"
     section["melodic_thr"] = "0.5"
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = "FSL"
+    synth["fmri_engine"] = "FSL"
 
     wf = fMRI_resting_state_workflow(
         "fmri_rs",
@@ -99,7 +111,7 @@ def test_fmri_resting_state_matrix_test_run(
 
     config_echo = {
         "aroma": "true",
-        "melodic_dim": "0",
+        "ic_dim": "0",
         "melodic_thr": "0.5",
         "test_run": True,
     }
@@ -147,10 +159,11 @@ def _build_engine(engine_name, subject_config, global_config, make_input_dir):
     require_fsl_data(fsl_data_path("data", "standard", "MNI152_T1_2mm_brain.nii.gz"))
     section = subject_config[DataInputList.FMRI_RS]
     section["aroma"] = "true"
-    section["melodic_dim"] = "0"
+    section["ic_dim"] = "0"
     section["melodic_thr"] = "0.5"
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = engine_name
+    synth["fmri_engine"] = "FSL"
     return fMRI_resting_state_workflow(
         "fmri_rs",
         dicom_dir=make_input_dir(),
@@ -243,17 +256,17 @@ def test_fmri_resting_state_fsl_keeps_convert_warp(
     assert "AntsApplyTransforms" not in [_iface(n) for n in wf._graph.nodes()]
 
 
-def test_fmri_resting_state_synth_falls_back_to_fsl(
+def test_fmri_resting_state_synth_falls_back_to_ants(
     subject_config, global_config, make_input_dir
 ):
     """EPI avoids SynthMorph: SYNTH resolves to FSL for func->ref, ref->mni and
     every apply, so the ConvertWarp path is kept."""
     wf = _build_engine("SYNTH", subject_config, global_config, make_input_dir)
-    assert wf.reg_2_ref.engine == RegistrationEngine.FSL
+    assert wf.reg_2_ref.engine == RegistrationEngine.ANTS
     ifaces = [_iface(n) for n in wf._graph.nodes()]
-    assert "ConvertWarp" in ifaces
-    assert "ApplyXFM" in ifaces
-    assert "ApplyWarp" in ifaces
+    assert "ConvertWarp" not in ifaces
+    assert "ApplyXFM" not in ifaces
+    assert "ApplyWarp" not in ifaces
     assert "SynthMorphReg" not in ifaces
     assert "SynthMorphApply" not in ifaces
-    assert "AntsApplyTransforms" not in ifaces
+    assert "AntsApplyTransforms" in ifaces

@@ -154,17 +154,17 @@ def test_venous_ct_fsl_construction(
     assert apply_xfm.inputs.out_file == "r-veins_ct_inskull.nii.gz"
 
 
-def test_venous_ct_synth_falls_back_to_fsl(
+def test_venous_ct_synth_falls_back_to_ants(
     subject_config, global_config, make_input_dir, make_file
 ):
-    """SynthMorph underperforms on CT, so a SYNTH config builds the FSL graph
+    """SynthMorph underperforms on CT, so a SYNTH config builds the ANTS graph
     (FLIRT), never a SynthMorph registration."""
     wf = _build(subject_config, global_config, make_input_dir, make_file, "SYNTH")
     ifaces = [_iface(n) for n in wf._graph.nodes()]
-    assert ifaces.count("FLIRT") == 2
+    assert ifaces.count("AntsRegistration") == 2
     assert "SynthMorphReg" not in ifaces
     assert "SynthMorphApply" not in ifaces
-    assert "AntsRegistration" not in ifaces
+    assert "FLIRT" not in ifaces
 
 
 def test_venous_ct_test_run_segment_override(

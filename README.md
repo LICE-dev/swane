@@ -24,7 +24,7 @@ SWANe is a software designed and developed to improve and simplify the managemen
 
 It consists of a library of predefinied workflows that can be managed through a user-friendly Graphical User Interface, which guides the users step by step to all the operations without any text-based command interface.
 
-SWANe straightforward pipeline can be used to manage imaging for epileptic patients of all ages (including pediatric patients). Its structure in indipendent modules permits to be diffusely adopted overcoming the difficulties to collect advanced imaging (especially metabolic and functional) in small epileptic centers.
+SWANe is a research tool, not a medical device. Its straightforward pipeline can process imaging data of subjects of all ages, including pediatric subjects. Its structure in independent modules allows wide adoption, also by small research groups that find it difficult to run advanced imaging analyses (especially metabolic and functional).
 
 Each module is completely independent from the others and is dedicated to one imaging modality/analysis, starting from a 3D-T1 weighted image, which represent the “base image” for all the analysis.
 
@@ -44,6 +44,7 @@ A few of the analyses you can do with SWANe:
 * **Tractography**: perrforms tractography execution for chosen tract using FSL xtract protocols;
 * **dipy Tractography**: performs CSD tractography and bundle recognition using dipy and the HCP842 atlas (RecoBundles);
 * **Task fMRI**: performs fMRI first level analysis for a single or double task with constant task-rest paradigm;
+* **Resting State fMRI**: performs single-subject spatial ICA with optional ICA-AROMA denoising, with a Python engine (nilearn/scikit-learn) or FSL MELODIC, and returns the thresholded component maps in reference space;
 * **Venous MRA**: performs analysis of phase contrasts image (in single or two series) to obtain in-skull veins in reference space.
 
 
@@ -56,12 +57,13 @@ A few of the analyses you can do with SWANe:
 
 **macOS**: SWANe is developed and optimized for macOS > 12.5.XX.
 
+**Windows (experimental)**: FSL-free pipelines only; FSL and FreeSurfer are not available natively; 3D Slicer integration is best-effort.
+
 ### Mandatory Dependencies
 | **Software** | **Minimum Version** | **Official Installation Guide** |
 | --- | --- | --- |
 | [python](https://www.python.org/) | [3.10](https://www.python.org/downloads/) |   |
 | [dcm2niix](https://github.com/rordenlab/dcm2niix) | [1.0.20220720](https://github.com/rordenlab/dcm2niix/tree/v1.0.20220720) | [Link](https://github.com/rordenlab/dcm2niix#install) |
-| [fsl](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/) | [6.0.6](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation) | [Link](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation#Installing_FSL) |
 
 > [!WARNING]
 The installation of some of these dependencies can be tricky. If you're not handy with Mac or Linux OS we recommend you to read our [Wiki](https://github.com/LICE-dev/swane/wiki) for a full installation guide of each one of these softwares.
@@ -70,6 +72,7 @@ The installation of some of these dependencies can be tricky. If you're not hand
 
 | **Software** | **Minimum Version** | **Official Installation Guide** |
 | --- | --- | --- |
+| [fsl](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/) | [6.0.6](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation) | [Link](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation#Installing_FSL) |
 | [FreeSurfer](https://surfer.nmr.mgh.harvard.edu/) | [7.3.2](https://github.com/freesurfer/freesurfer/tree/v7.3.2) | [Linux](https://surfer.nmr.mgh.harvard.edu/fswiki/FS7_linux) - [macOS](https://surfer.nmr.mgh.harvard.edu/fswiki/FS7_mac) |
 | [3D Slicer](https://www.slicer.org/) | [5.2.1](https://www.slicer.org/wiki/Documentation/Nightly/FAQ/General#Where_can_I_download_Slicer.3F) | [Linux](https://slicer.readthedocs.io/en/latest/user_guide/getting_started.html#linux) - [macOS](https://slicer.readthedocs.io/en/latest/user_guide/getting_started.html#mac) |
 | [graphviz](https://graphviz.org/) | [0.2.2](https://github.com/graphp/graphviz/tree/v0.2.2) | [Linux](https://graphviz.org/download/#linux) - [macOS](https://graphviz.org/download/#mac) |
@@ -141,9 +144,22 @@ This project includes subsection derived from other software, which licenses can
 - Acoustic radiation (`ar`) produces no dipy bundle and remains FSL-only.
 - Low-confidence bundles are flagged rather than hidden: bundles that remain poorly matched to the atlas model after recovery retry generate a `r-<tract>_<side>.lowconf.json` sidecar (or `r-fx.lowconf.json` for fornix) and are labeled with `(LOW CONFIDENCE)` in 3D Slicer.
 - The dipy tractography engine requires a 6 GB RAM floor (`DIPY_TRACTOGRAPHY_RAM_REQUIREMENT`).
+- Resting state fMRI, Python engine (fMRI engine preference "Python (nilearn/scikit-learn)", the default): after the optional ICA-AROMA denoising, the data are regressed for linear trend and mean WM and CSF signals (plus the 24 Friston motion regressors when ICA-AROMA is off) and high-pass filtered (100 s); the model order is estimated on an unsmoothed copy of the same data; the final decomposition is FastICA with ICASSO (10 runs); maps are dual-regression z maps, thresholded by spatial z and by a per-subject Monte Carlo cluster extent, and resampled to the reference without creating sub-threshold edges.
+- New resting state preference `spatial_z_thr` (spatial z threshold, default 1.95, Python engine only). The spatial z of an IC map is a descriptive standardisation, not a statistical test.
+
+#### Changed
+
+- Resting state preference `melodic_dim` renamed `ic_dim`; existing configurations are migrated automatically. `melodic_thr` is used by the FSL engine only.
+- Resting state results: the component time courses are saved as `ica_mix` by both engines (FSL results used `melodic_mix`); 3D Slicer still loads older result folders. Component maps remain `r-thresh_zstatNN.nii.gz`.
+- Resting state, FSL engine with ICA-AROMA: the ICA-AROMA decomposition and the denoising now use the data before the temporal high-pass, and the high-pass is applied after denoising, before the final MELODIC.
+- Python fMRI engine: motion correction now uses a fixed random seed and a single thread, so the same input always gives the same output. It is slower, and results of earlier versions are not reproduced.
+- The FSL license is always shown at first launch, also when FSL is not installed, because it covers the MNI152NLin6Asym template used by SWANe.
+- FSL is now a recommended dependency instead of a mandatory one: workflows can be generated and executed without FSL using the default FSL-free engines (ANTs, antspynet, dipy, nilearn). The FSL engines are disabled in the preferences when FSL is not installed, and stored FSL engine choices fall back to the default. A build-time flag (`FSL_MANDATORY` in `swane/config/dependency_policy.py`) restores FSL as a mandatory dependency and makes it the default brain extraction, tractography, segmentation and fMRI engine.
 
 #### Fixed
 
+- Without the FSL XTRACT data, the tracts supported by the dipy tractography engine are no longer removed from the DTI preferences.
+- niimath-based nodes always write compressed `.nii.gz` images, also when the FSL environment (`FSLOUTPUTTYPE`) is not set.
 - License consent preparation no longer repeats dependency detection on the GUI thread and keeps the interface responsive while license texts are resolved.
 - Changing the DTI CPU allocation no longer invalidates cached Eddy results.
 - DTI: FSL `eddy`'s rotated b-vectors are now used for tensor fitting (dtifit)

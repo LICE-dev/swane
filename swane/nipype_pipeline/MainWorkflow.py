@@ -270,6 +270,7 @@ class MainWorkflow(CustomWorkflow):
 
         sym_inputnode = self.sym.get_node("inputnode")
         from swane.utils.templates import get_swane_template
+
         sym_inputnode.inputs.atlas = get_swane_template(
             name="MNI152NLin2009cSym", resolution=1, desc="brain", enforce_las=True
         )
@@ -395,11 +396,9 @@ class MainWorkflow(CustomWorkflow):
             The MNI1mm brain atlas path (also needed as a FLAT1 input).
         """
         from swane.utils.templates import get_swane_template
+
         mni1_path = get_swane_template(
-            name="MNI152NLin6Asym",
-            resolution=1,
-            desc="brain",
-            enforce_las=True
+            name="MNI152NLin6Asym", resolution=1, desc="brain", enforce_las=True
         )
 
         if getattr(self, "mni1", None) is not None:
@@ -1309,6 +1308,7 @@ class MainWorkflow(CustomWorkflow):
         self.fMRI_resting_state.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
-            result_name="mel_mix",
+            result_name="ic_mix",
             sub_folder=os.path.join(self.Result_DIR, "fMRI_resting_state"),
+            regexp_substitutions=[(r"melodic_mix$", "ica_mix")],
         )

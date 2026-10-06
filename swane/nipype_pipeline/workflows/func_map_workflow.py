@@ -105,7 +105,7 @@ def func_map_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
+    engine = resolve_registration_engine(synth_config)
 
     # Input Node
     inputnode = Node(
@@ -271,11 +271,9 @@ def func_map_workflow(
 
     if is_ai:
         from swane.utils.templates import get_swane_template
+
         sym_template = get_swane_template(
-            name="MNI152NLin2009cSym",
-            resolution=1,
-            desc="brain",
-            enforce_las=True
+            name="MNI152NLin2009cSym", resolution=1, desc="brain", enforce_las=True
         )
 
         func_2_sym_warp = apply_registration_node(

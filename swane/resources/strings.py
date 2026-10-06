@@ -143,7 +143,12 @@ subj_tab_no_dicom_error = "No DICOM file in "
 subj_tab_multi_subj_error = "Dicom file from more than one subject in "
 subj_tab_multi_exam_error = "DICOM file from more than one examination in "
 subj_tab_multi_series_error = "DICOM file from more than one series in "
-subj_tab_missing_fsl_error = "FSL is required to generate " + APPNAME + " Workflow!"
+subj_tab_missing_dependencies_error = (
+    "Mandatory dependencies are required to generate " + APPNAME + " Workflow!"
+)
+subj_tab_wf_gen_start = "Generating the Workflow..."
+subj_tab_wf_gen_templates = "Downloading templates..."
+subj_tab_wf_gen_models = "Downloading ANTsPyNet deskull models..."
 subj_tab_wf_gen_error = "Error generating the Workflow!"
 subj_tab_old_wf_found = (
     "This subject has already been analyzed by "
@@ -307,6 +312,7 @@ wizard_advanced_models_text = (
     "They may require additional memory and processing power."
 )
 wizard_advanced_models_macos_warn = "<b>Please note</b>: The synth tools consume a significant amount of RAM on macOS. For this reason, we do <b>not recommend</b> using them on this platform."
+windows_experimental_warn = "<b>Please note</b>: Windows support is <b>experimental</b>. FSL and FreeSurfer are not available natively on Windows; 3D Slicer integration is best-effort."
 advanced_models_enabled = "Use FreeSurfer advanced models when supported"
 advanced_models_enabled_tooltip = (
     "Enable FreeSurfer advanced models when the system can handle them reliably."
@@ -400,15 +406,16 @@ check_dep_antspynet_wrong_version = (
 )
 check_dep_antspynet_found = "antspynet detected (%s)"
 check_dep_dipy_error = (
-    "dipy not detected (<a href='https://dipy.org/documentation/1.12.0/installation/"
-    "'>installation info</a>)"
+    "dipy not detected (<a href='https://docs.dipy.org/stable/user_guide/"
+    "installation.html'>installation info</a>)"
 )
 check_dep_dipy_no_version = "dipy detected, but its version could not be determined"
 check_dep_dipy_wrong_version = (
     "dipy version outdated (found %s, required %s). Please "
-    "<a href='https://dipy.org/documentation/1.12.0/installation/'>update</a>"
+    "<a href='https://docs.dipy.org/stable/user_guide/installation.html'>update</a>"
 )
 check_dep_dipy_found = "dipy detected (%s)"
+check_dep_nilearn_found = "nilearn detected (%s)"
 check_dep_fs_found = "FreeSurfer detected (%s)"
 check_dep_fs_error1 = (
     "FreeSurfer not detected (<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall"
@@ -522,6 +529,7 @@ node_names["CustomLabel2Vol"] = "linear transformation"
 node_names["SegmentHA"] = "hippocampal segmentation"
 node_names["MCFLIRT"] = "motion correction"
 node_names["CustomSliceTimer"] = "slice timing correction"
+node_names["NiiMathSliceTimer"] = "slice timing correction"
 node_names["SUSAN"] = "noise reduction"
 node_names["FMRIGenSpec"] = "functional model generation"
 node_names["ArtifactDetect"] = "outliers detection"
@@ -558,6 +566,20 @@ node_names["DipyBundleUnion"] = "bundle parts concatenation"
 node_names["DipyBundleRecovery"] = "bundle refine"
 node_names["DipyBundlesToRef"] = "bundle reference transformation"
 node_names["AffineToRAS"] = "affine RAS conversion"
+node_names["AntsMotionCorrection"] = "motion correction"
+node_names["AntsComposeTransform"] = "transform composition"
+node_names["NilearnSmooth"] = "spatial smoothing"
+node_names["NilearnAutoDim"] = "dimensionality estimation"
+node_names["NilearnCanICA"] = "CanICA decomposition"
+node_names["DualRegressionZStat"] = "dual regression"
+node_names["GgmThreshold"] = "mixture model thresholding"
+node_names["IcaDenoise"] = "denoising"
+node_names["FastIcaIcasso"] = "ICASSO ICA decomposition"
+node_names["NuisanceRegression"] = "nuisance regression"
+node_names["ClusterExtentMC"] = "cluster extent estimation"
+node_names["SpatialZThreshold"] = "spatial z thresholding"
+node_names["MaskedResampleCombine"] = "resampled map combination"
+node_names["NilearnFirstLevel"] = "first-level GLM estimation"
 
 license_consent_title = "Third-party tool licenses"
 license_consent_banner = (
@@ -582,4 +604,12 @@ license_consent_source_online = (
 license_consent_source_bundled = (
     "Could not load the online license for {tool}; showing a bundled copy that "
     "may differ from your installed version."
+)
+license_consent_fsl_not_installed = (
+    "FSL is not installed. SWANe still asks you to accept its license because "
+    "it also covers the MNI152NLin6Asym template SWANe downloads and uses "
+    "(AROMA registration target, XTRACT/FLAT1)."
+)
+subj_tab_wf_crashed = (
+    "Workflow execution crashed unexpectedly. Check the logs for details."
 )

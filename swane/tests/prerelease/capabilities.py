@@ -84,7 +84,7 @@ def _probe_fsl(dependency_manager: DependencyManager, caps: Capabilities) -> Non
         (
             "FSL %s" % os.environ.get("FSLDIR", "?")
             if dependency_manager.is_fsl()
-            else "no usable FSL (>= %s) found; nothing can run"
+            else "no usable FSL (>= %s) found; FSL engines are dropped"
             % DependencyManager.MIN_FSL_VERSION
         ),
     )
@@ -338,6 +338,16 @@ def _probe_dipy(caps: Capabilities) -> None:
         )
 
 
+def _probe_tractography(caps: Capabilities) -> None:
+    """Tractography runs with either engine: FSL XTRACT or dipy RecoBundles."""
+    ok = caps.has("xtract") or caps.has("dipy")
+    caps.add(
+        "tractography",
+        ok,
+        "XTRACT or dipy available" if ok else "neither XTRACT nor dipy is usable",
+    )
+
+
 def _probe_gpu(caps: Capabilities) -> None:
     try:
         is_cuda = ResourceManager.is_cuda()
@@ -350,9 +360,13 @@ def _probe_gpu(caps: Capabilities) -> None:
     )
 
 
-def _probe_xtract(caps: Capabilities) -> None:
+def _probe_xtract(dependency_manager: DependencyManager, caps: Capabilities) -> None:
     # A real tract graph needs the per-tract protocol folders. The suite only
-    # sweeps the corticospinal tract, so that is what must be present.
+    # sweeps the corticospinal tract, so that is what must be present. XTRACT
+    # runs FSL's probtrackx (and the FSL diffusion chain), so FSL is needed too.
+    if not dependency_manager.is_fsl():
+        caps.add("xtract", False, "no usable FSL; the XTRACT engine is dropped")
+        return
     tract_dir = os.path.join(XTRACT_DATA_DIR, "cst_l") if XTRACT_DATA_DIR else ""
     ok = bool(XTRACT_DATA_DIR) and os.path.isdir(tract_dir)
     caps.add(
@@ -361,7 +375,7 @@ def _probe_xtract(caps: Capabilities) -> None:
         (
             "XTRACT protocols at %s" % XTRACT_DATA_DIR
             if ok
-            else "no XTRACT protocol data; the tractography axis is dropped"
+            else "no XTRACT protocol data; the XTRACT engine is dropped"
         ),
     )
 
@@ -371,6 +385,7 @@ def _probe_mni(caps: Capabilities) -> None:
     missing = []
     try:
         from swane.utils.templates import get_swane_template
+
         get_swane_template(name="MNI152NLin6Asym", resolution=1, desc="brain")
         get_swane_template(name="MNI152NLin6Asym", resolution=2, desc="brain")
         get_swane_template(name="MNI152NLin2009cSym", resolution=1, desc="brain")
@@ -422,17 +437,38 @@ def _probe_ram_budget(caps: Capabilities) -> None:
 
 
 def _probe_freesurfer_subject(caps: Capabilities) -> None:
-    """The phantom anatomy is derived from the fsaverage subject."""
-    fs_home = os.environ.get("FREESURFER_HOME")
-    path = os.path.join(fs_home, "subjects", "fsaverage") if fs_home else ""
-    ok = bool(fs_home) and os.path.isdir(path)
+    """The phantom anatomy is derived from fsaverage (FreeSurfer or MNE mirror)."""
+    from swane.tests.helpers.phantom.fsaverage_source import (
+        DEFAULT_CACHE_DIR,
+        freesurfer_fsaverage_mri_dir,
+        fsaverage_available,
+    )
+
+    local = freesurfer_fsaverage_mri_dir()
     caps.add(
         "fsaverage",
-        ok,
+        True,
         (
-            "fsaverage present"
-            if ok
-            else "no $FREESURFER_HOME/subjects/fsaverage; the phantom cannot be built"
+            "fsaverage from FreeSurfer (%s)" % local
+            if local
+            else (
+                "fsaverage from the MNE mirror cache (%s)" % DEFAULT_CACHE_DIR
+                if fsaverage_available()
+                else "fsaverage will be downloaded from the MNE mirror"
+            )
+        ),
+    )
+
+
+def _probe_nilearn(caps: Capabilities) -> None:
+    has_nilearn = DependencyManager.is_nilearn()
+    caps.add(
+        "nilearn",
+        has_nilearn,
+        (
+            "nilearn present"
+            if has_nilearn
+            else "nilearn not importable; the NILEARN fMRI engine is dropped"
         ),
     )
 
@@ -470,10 +506,12 @@ def probe(
     _probe_antspyx(caps)
     _probe_antspynet(caps)
     _probe_gpu(caps)
-    _probe_xtract(caps)
+    _probe_xtract(dependency_manager, caps)
     _probe_dipy(caps)
+    _probe_tractography(caps)
     _probe_mni(caps)
     _probe_slicer(global_config, caps)
+    _probe_nilearn(caps)
 
     caps.add(
         "graphviz",
@@ -483,10 +521,14 @@ def probe(
     return caps
 
 
-#: Capabilities without which nothing can run at all.
-BLOCKING = ("fsl", "dcm2niix", "fsaverage", "ram_budget")
+#: Capabilities without which nothing can run at all. FSL joins them only when
+#: the build makes it mandatory (swane.config.dependency_policy.FSL_MANDATORY).
+BLOCKING = ("dcm2niix", "fsaverage", "ram_budget")
 
 
 def blocking_failures(caps: Capabilities) -> list:
     """Return the capabilities that make a run pointless, if any."""
-    return [caps.items[name] for name in BLOCKING if not caps.has(name)]
+    from swane.config import dependency_policy
+
+    names = (("fsl",) if dependency_policy.FSL_MANDATORY else ()) + BLOCKING
+    return [caps.items[name] for name in names if not caps.has(name)]

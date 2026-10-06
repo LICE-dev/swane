@@ -6,6 +6,7 @@ class WorkflowSignals(Enum):
     NODE_COMPLETED = auto()
     NODE_ERROR = auto()
     WORKFLOW_INSUFFICIENT_RESOURCES = auto()
+    WORKFLOW_CRASHED = auto()
     WORKFLOW_STOP = auto()
     INVALID_SIGNAL = auto()
 

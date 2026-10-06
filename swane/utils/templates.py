@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 import logging
 
@@ -35,7 +36,13 @@ def get_swane_template(
     str
         Path to the requested template (in LAS if requested).
     """
-    
+    # Check SWANe cache first if enforcing LAS to avoid slow TemplateFlow initialization
+    if enforce_las:
+        las_filename = f"{name}_res-{resolution}_desc-{desc}_{suffix}_LAS.nii.gz"
+        las_path = _SWANE_TEMPLATE_CACHE / las_filename
+        if las_path.exists():
+            return str(las_path)
+
     # We use a global lock file to prevent concurrent TemplateFlow downloads
     # and concurrent RAS-to-LAS conversions.
     lock_path = _SWANE_TEMPLATE_CACHE / ".templateflow_fetch.lock"
@@ -56,20 +63,24 @@ def get_swane_template(
             tf_path_obj = tf.get(name, resolution=resolution, desc=desc, suffix=suffix)
         except Exception:
             tf_path_obj = []
-        
+
         # tf.get might return a list if multiple files match. We want a single file.
         if isinstance(tf_path_obj, list):
             if not tf_path_obj:
                 if desc == "brain" and suffix == "T1w":
                     # Fallback: compute it from the whole-head T1w and brain mask
                     return _compute_brain_template(name, resolution, enforce_las)
-                raise ValueError(f"TemplateFlow returned no matches for {name} res-{resolution} {desc} {suffix}")
+                raise ValueError(
+                    f"TemplateFlow returned no matches for {name} res-{resolution} {desc} {suffix}"
+                )
             tf_path = str(tf_path_obj[0])
         else:
             tf_path = str(tf_path_obj)
-            
+
         if not tf_path or not os.path.exists(tf_path):
-            raise FileNotFoundError(f"Failed to retrieve template: {name} from TemplateFlow.")
+            raise FileNotFoundError(
+                f"Failed to retrieve template: {name} from TemplateFlow."
+            )
 
         if not enforce_las:
             return tf_path
@@ -79,6 +90,7 @@ def get_swane_template(
         las_filename = f"{name}_res-{resolution}_desc-{desc}_{suffix}_LAS.nii.gz"
         las_path = _SWANE_TEMPLATE_CACHE / las_filename
 
+        # If it was cached during another process's lock hold, return it
         if las_path.exists():
             return str(las_path)
 
@@ -87,12 +99,17 @@ def get_swane_template(
         axcodes = nib.aff2axcodes(img.affine)
 
         if axcodes == ("L", "A", "S"):
-            # It is already LAS, just create a symlink to avoid copying
-            os.symlink(tf_path, str(las_path))
+            # It is already LAS, just link it to avoid copying. Windows without
+            # Developer Mode (or a filesystem without links) refuses symlinks:
+            # copy instead, the file is small.
+            try:
+                os.symlink(tf_path, str(las_path))
+            except (OSError, NotImplementedError):
+                shutil.copy2(tf_path, str(las_path))
             return str(las_path)
 
         logging.getLogger(__name__).info(f"Reorienting {name} to LAS convention...")
-        
+
         # Find the transform from current orientation to LAS
         current_ornt = nib.orientations.io_orientation(img.affine)
         target_ornt = nib.orientations.axcodes2ornt(("L", "A", "S"))
@@ -100,7 +117,7 @@ def get_swane_template(
 
         # Apply the transform
         las_img = img.as_reoriented(transform)
-        
+
         las_path.parent.mkdir(parents=True, exist_ok=True)
         nib.save(las_img, str(las_path))
 
@@ -109,9 +126,20 @@ def get_swane_template(
 
 def _compute_brain_template(name: str, resolution: int, enforce_las: bool) -> str:
     """Compute a skull-stripped template by multiplying the T1w and brain mask."""
+
+    cache_name = f"{name}_res-{resolution}_desc-brain_T1w"
+    if enforce_las:
+        cache_name += "_LAS.nii.gz"
+    else:
+        cache_name += ".nii.gz"
+
+    out_path = _SWANE_TEMPLATE_CACHE / cache_name
+    if out_path.exists():
+        return str(out_path)
+
     import templateflow.api as tf
     import nibabel as nib
-    
+
     try:
         t1w_obj = tf.get(name, resolution=resolution, desc=None, suffix="T1w")
     except Exception:
@@ -120,35 +148,29 @@ def _compute_brain_template(name: str, resolution: int, enforce_las: bool) -> st
         mask_obj = tf.get(name, resolution=resolution, desc="brain", suffix="mask")
     except Exception:
         mask_obj = []
-        
+
     if isinstance(t1w_obj, list):
         if not t1w_obj:
-            raise ValueError(f"TemplateFlow returned no matches for {name} res-{resolution} T1w")
+            raise ValueError(
+                f"TemplateFlow returned no matches for {name} res-{resolution} T1w"
+            )
         t1w_obj = t1w_obj[0]
-        
+
     if isinstance(mask_obj, list):
         if not mask_obj:
-            raise ValueError(f"TemplateFlow returned no matches for {name} res-{resolution} brain mask")
+            raise ValueError(
+                f"TemplateFlow returned no matches for {name} res-{resolution} brain mask"
+            )
         mask_obj = mask_obj[0]
 
-    cache_name = f"{name}_res-{resolution}_desc-brain_T1w"
-    if enforce_las:
-        cache_name += "_LAS.nii.gz"
-    else:
-        cache_name += ".nii.gz"
-        
-    out_path = _SWANE_TEMPLATE_CACHE / cache_name
-    if out_path.exists():
-        return str(out_path)
-        
     # Multiply
     t1w_img = nib.load(str(t1w_obj))
     mask_img = nib.load(str(mask_obj))
-    
+
     data = t1w_img.get_fdata() * (mask_img.get_fdata() > 0)
-    
+
     brain_img = nib.Nifti1Image(data, t1w_img.affine, t1w_img.header)
-    
+
     if enforce_las:
         current_axcodes = nib.orientations.aff2axcodes(brain_img.affine)
         if current_axcodes != ("L", "A", "S"):

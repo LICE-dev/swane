@@ -62,6 +62,7 @@ setup(
             "resources/icons/*",
             "resources/atlas/*",
             "resources/atlas/FLAT1/*",
+            "resources/priors/*",
         ]
     },
     classifiers=[
@@ -77,21 +78,30 @@ setup(
         "networkx==3.4.2",
         "nipype==1.12.0",
         "PySide6",
-        "pydicom==3.0.1",
+        "pydicom==3.0.2",
         "psutil==7.0.0",
         "matplotlib==3.10.1",
         # todo: SET NIBABEL 5.2 as minimum to be more inclusive?
         "nibabel>=5.3.0,<6",
         "nitransforms>=25.1.0",
         "dcm2niix>=1.0.20241211,<=1.0.20260724",
-        "niimath==1.0.20260720",
+        "niimath==1.0.20260924",
         "packaging",
         "PySide6_VerticalQTabWidget==0.0.3",
-        "dipy==1.12.0",
+        # 1.12.1, not 1.12.0: the 1.12.0 macosx_15_0_arm64 wheel (preferred by pip
+        # on Apple Silicon with macOS >= 15) does not bundle libomp and links
+        # /opt/homebrew/opt/libomp/lib/libomp.dylib, so importing dipy fails
+        # without Homebrew libomp. 1.12.1 ships only macosx_11_0 wheels, which
+        # bundle it.
+        "dipy==1.12.1",
         "dicom-sequence-classifier==1.0.5",
-        "ica_aroma_py==0.1.2",
+        # 0.1.4 fixes AromaClassification returning a scalar (TraitError)
+        # when exactly one component is classified as motion.
+        "ica_aroma_py==0.1.4",
+        "nilearn==0.10.4",
+        "scikit-learn==1.5.0",
         # Intel macOS: antspyx 0.6.1 provides x86_64 wheels for macOS 13 (Ventura)
-        # and later (including 14 and 15). Versions >=0.6.2 only provide wheels 
+        # and later (including 14 and 15). Versions >=0.6.2 only provide wheels
         # for macOS 15, which forces older Macs to build from source (taking hours).
         "antspyx==0.6.1; sys_platform=='darwin' and platform_machine=='x86_64'",
         "antspyx>=0.6.2; sys_platform!='darwin' or platform_machine!='x86_64'",
@@ -99,6 +109,9 @@ setup(
         # Keep >=0.3.2 to ensure compatibility with the antspyx version
         # required for Intel macOS.
         "antspynet>=0.3.2",
+        # CA bundle for the antspynet weights download (python.org macOS builds
+        # have no system certificates): see swane/utils/antspynet_weights.py.
+        "certifi",
         # Nipype 1.12 requires numpy >= 2.2.0.
         "numpy>=2.2.0",
         # For macOS Intel, TensorFlow is checked at the top of this script
@@ -111,7 +124,10 @@ setup(
         # BLAS pool in DipyMotionCorrection, filelock serialises the HCP842 atlas
         # fetch in DipyAtlasSLR.
         "threadpoolctl==3.6.0",
-        "filelock==3.17.0",
+        # scipy>=1.17.1 prevent a macos bug with PROPACK, but it conflicts
+        # with antspyx < 0.6.4 (which forces scipy < 1.16). We now handle the
+        # PROPACK bug with a monkeypatch in swane.patches.scipy_patches instead.
+        "filelock>=3.20.3,<4",
         "templateflow>=24.0.0",
         "vtk",
     ],

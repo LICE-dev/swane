@@ -24,7 +24,7 @@ Read this reference for application lifecycle, general Qt components, GUI state,
 
 ## Background execution models
 
-- Use `QRunnable` with `QThreadPool.globalInstance()` for bounded background operations such as DICOM scans, update checks, Slicer checks/exports, scene viewing, and queue monitoring.
+- Use `QRunnable` workers on `QThreadPool.globalInstance()` for bounded background operations such as DICOM scans, update checks, Slicer checks/exports, scene viewing, and queue monitoring, launched **only** through `swane.workers.worker_pool.start_worker()`. Never pass a Python `QRunnable` to `QThreadPool.start()` directly: Qt takes ownership and either destroys it (and the GUI-thread signal `QObject` it holds) on the pool thread while Python still references it — heap corruption/segfault — or, with `setAutoDelete(False)`, PySide never releases it (leak). `start_worker` hands the pool a plain callable, keeps the worker in a registry, and drops the last reference on the GUI thread after `run()` returns.
 - Use explicit signal-holder `QObject` instances for worker results and progress, following the existing worker pattern.
 - Keep full Nipype execution inside `WorkflowProcess`, not a Qt thread. The multiprocessing boundary exists so the process and its descendants can be terminated safely.
 - Keep the multiprocessing `Queue` -> `WorkflowMonitorWorker` -> Qt signal path for workflow reports.

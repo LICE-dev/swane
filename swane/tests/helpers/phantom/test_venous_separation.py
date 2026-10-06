@@ -17,7 +17,6 @@ this is a ``heavy`` test (opt in with ``--run-heavy``); it also needs the
 ``fsaverage`` subject, so it skips cleanly where FreeSurfer is not installed.
 """
 
-import os
 from dataclasses import replace
 
 import nibabel as nib
@@ -32,17 +31,16 @@ from swane.tests.helpers.phantom.sequences import render_structural
 
 
 def _has_fsaverage() -> bool:
-    home = os.environ.get("FREESURFER_HOME")
-    if not home:
-        return False
-    return os.path.isdir(os.path.join(home, "subjects", "fsaverage", "mri"))
+    from swane.tests.helpers.phantom.fsaverage_source import fsaverage_available
+
+    return fsaverage_available()
 
 
 pytestmark = [
     pytest.mark.heavy,
     pytest.mark.skipif(
         not _has_fsaverage(),
-        reason="needs $FREESURFER_HOME/subjects/fsaverage to build the phantom",
+        reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
     ),
 ]
 

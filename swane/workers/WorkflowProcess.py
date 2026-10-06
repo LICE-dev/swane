@@ -2,6 +2,7 @@
 
 from nipype import logging as nipype_log, config
 import os
+import sys
 import traceback
 from multiprocessing import Process, Event, Queue
 from threading import Thread
@@ -10,6 +11,7 @@ from nipype.external.cloghandler import ConcurrentRotatingFileHandler
 import logging as orig_log
 from typing import TYPE_CHECKING
 from swane.config.config_enums import FreesurferStep
+from swane.utils.mp_start_method import worker_pool_start_method
 
 if TYPE_CHECKING:
     from swane.nipype_pipeline.MainWorkflow import MainWorkflow
@@ -64,18 +66,50 @@ class WorkflowProcess(Process):
         for channel in WorkflowProcess.LOG_CHANNELS:
             nipype_log.getLogger(channel).addHandler(handler)
 
+    def preload_antspynet_weights(self):
+        """
+        Download the antspynet weights the workflow needs before any worker
+        starts, so no node downloads them itself (see
+        swane.utils.antspynet_weights). A failure is logged, never fatal: the
+        node that needs the weights then fails with its own diagnostics.
+        """
+        from subprocess import CalledProcessError
+        from swane.utils.antspynet_weights import (
+            preload_weights,
+            weight_names,
+            workflow_modalities,
+        )
+
+        logger = nipype_log.getLogger("nipype.workflow")
+        try:
+            names = weight_names(workflow_modalities(self.workflow))
+            if not names:
+                return
+            logger.info("Pre-fetching antspynet weights: %s", ", ".join(names))
+            preload_weights(names)
+        except CalledProcessError as error:
+            logger.warning(
+                "antspynet weights pre-fetch failed (exit code %s); nodes will "
+                "try to download them themselves:\n%s",
+                error.returncode,
+                (error.stderr or "")[-2000:],
+            )
+        except Exception:
+            logger.warning(
+                "antspynet weights pre-fetch failed; nodes will try to download "
+                "them themselves:\n%s",
+                traceback.format_exc(),
+            )
+
     def workflow_run_worker(self):
         """
         Thread that run the workflow
         """
 
-        # TODO: reassess why we explicitly use "fork" as the start method.
-        #  "fork" does not exist on Windows and is not the default on recent macOS
-        #  (spawn): figure out whether it is a real requirement (e.g. sharing
-        #  nipype state/handlers) or a leftover, and possibly make it platform
-        #  dependent.
+        # "forkserver" on macOS (fork is not safe there), "fork" on Linux: see
+        # swane.utils.mp_start_method.
         plugin_args = {
-            "mp_context": "fork",
+            "mp_context": worker_pool_start_method(),
             "queue": self.queue,
             "status_callback": swane_log_nodes_cb,
         }
@@ -87,9 +121,14 @@ class WorkflowProcess(Process):
         # Assign to niype specified RAM
         plugin_args["memory_gb"] = self.workflow.memory_gb
 
+        self.run_raised = False
         try:
             # this is useful to generate resource monitor files in subject directory
             os.chdir(self.workflow.base_dir)
+
+            # Runs in this thread, not in run(): a stop request kills the
+            # download child together with the other subprocesses.
+            self.preload_antspynet_weights()
 
             from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
                 MonitoredMultiProcPlugin,
@@ -98,6 +137,7 @@ class WorkflowProcess(Process):
             self.workflow.run(plugin=MonitoredMultiProcPlugin(plugin_args=plugin_args))
 
         except:
+            self.run_raised = True
             traceback.print_exc()
         finally:
             # TODO implement nipype.utils.draw_gantt_chart.generate_gantt_chart but maybe it's bugged
@@ -191,6 +231,9 @@ class WorkflowProcess(Process):
         if self.workflow.is_resource_monitor:
             callback_logger.removeHandler(resource_log_handler)
 
+        if getattr(self, "run_raised", False):
+            self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_CRASHED))
+
         # Signal workflow_stop to GUI and close queue
         self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_STOP))
         self.queue.close()
@@ -202,6 +245,9 @@ class WorkflowProcess(Process):
         # If the thread is alive at this point the stop_event was set from GUI, so the user asked to kill the process
         if workflow_run_work.is_alive():
             WorkflowProcess.kill_with_subprocess()
+
+        if getattr(self, "run_raised", False):
+            sys.exit(1)
 
 
 # Log node stats function

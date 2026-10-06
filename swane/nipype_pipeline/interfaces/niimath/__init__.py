@@ -21,10 +21,14 @@ from swane.nipype_pipeline.interfaces.niimath.maths import (
 from swane.nipype_pipeline.interfaces.niimath.NiiMathRobustFov import (
     NiiMathRobustFov,
 )
+from swane.nipype_pipeline.interfaces.niimath.NiiMathSliceTimer import (
+    NiiMathSliceTimer,
+)
 
 __all__ = [
     "NIIMATH_CMD",
     "NiiMathRobustFov",
+    "NiiMathSliceTimer",
     "ImageMaths",
     "BinaryMaths",
     "ApplyMask",

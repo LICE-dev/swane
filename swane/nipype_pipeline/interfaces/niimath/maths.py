@@ -16,6 +16,7 @@ plus ``ImageMaths`` which the ``ThrROI`` and ``SumMultiVols`` interfaces extend.
 
 import niimath
 
+from swane.patches.windows_compat import shell_executable
 from nipype.interfaces.fsl import (
     ImageMaths as _ImageMaths,
     BinaryMaths as _BinaryMaths,
@@ -29,8 +30,16 @@ from nipype.interfaces.fsl import (
 
 # Absolute path to the niimath binary bundled with the pip package. The package
 # resolves the platform-specific binary name (e.g. ``niimath.exe`` on Windows),
-# so pointing ``_cmd`` at it works on Linux, macOS and Windows.
-NIIMATH_CMD = niimath.bin
+# so pointing ``_cmd`` at it works on Linux, macOS and Windows. Nipype runs
+# ``_cmd`` through a shell, so on Windows the path is quoted (it may contain
+# spaces); elsewhere it is used unchanged.
+NIIMATH_CMD = shell_executable(niimath.bin)
+
+# Nipype's FSLCommand takes the default output type from the FSLOUTPUTTYPE
+# environment variable set by the FSL setup, falling back to uncompressed NIFTI
+# when it is unset. niimath does not need FSL, so pin the compressed NIFTI_GZ
+# that SWANe's result filenames expect regardless of the FSL environment.
+NIIMATH_OUTPUT_TYPE = "NIFTI_GZ"
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.ImageMaths)  -*-
@@ -38,6 +47,7 @@ class ImageMaths(_ImageMaths):
     """``fslmaths`` generic maths, executed through the niimath binary."""
 
     _cmd = NIIMATH_CMD
+    _output_type = NIIMATH_OUTPUT_TYPE
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.BinaryMaths)  -*-
@@ -45,6 +55,7 @@ class BinaryMaths(_BinaryMaths):
     """``fslmaths`` binary maths, executed through the niimath binary."""
 
     _cmd = NIIMATH_CMD
+    _output_type = NIIMATH_OUTPUT_TYPE
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.ApplyMask)  -*-
@@ -52,6 +63,7 @@ class ApplyMask(_ApplyMask):
     """``fslmaths -mas`` masking, executed through the niimath binary."""
 
     _cmd = NIIMATH_CMD
+    _output_type = NIIMATH_OUTPUT_TYPE
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.Threshold)  -*-
@@ -59,6 +71,7 @@ class Threshold(_Threshold):
     """``fslmaths`` thresholding, executed through the niimath binary."""
 
     _cmd = NIIMATH_CMD
+    _output_type = NIIMATH_OUTPUT_TYPE
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.ErodeImage)  -*-
@@ -66,6 +79,7 @@ class ErodeImage(_ErodeImage):
     """``fslmaths -ero`` erosion, executed through the niimath binary."""
 
     _cmd = NIIMATH_CMD
+    _output_type = NIIMATH_OUTPUT_TYPE
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.DilateImage)  -*-
@@ -73,6 +87,7 @@ class DilateImage(_DilateImage):
     """``fslmaths`` dilation, executed through the niimath binary."""
 
     _cmd = NIIMATH_CMD
+    _output_type = NIIMATH_OUTPUT_TYPE
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.IsotropicSmooth)  -*-
@@ -80,6 +95,7 @@ class IsotropicSmooth(_IsotropicSmooth):
     """``fslmaths -s`` Gaussian smoothing, executed through the niimath binary."""
 
     _cmd = NIIMATH_CMD
+    _output_type = NIIMATH_OUTPUT_TYPE
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.SpatialFilter)  -*-
@@ -87,3 +103,4 @@ class SpatialFilter(_SpatialFilter):
     """``fslmaths`` spatial filtering, executed through the niimath binary."""
 
     _cmd = NIIMATH_CMD
+    _output_type = NIIMATH_OUTPUT_TYPE

@@ -16,6 +16,7 @@ from swane.config.config_enums import (
     BlockDesign,
     GlobalPrefCategoryList,
     RegistrationEngine,
+    SliceTiming,
 )
 from swane.utils.DataInputList import DataInputList
 from swane.tests.nipype_pipeline.matrix.conftest import import_workflow_or_skip
@@ -34,7 +35,12 @@ SCENARIOS = {
 
 @pytest.mark.parametrize("scenario", list(SCENARIOS), ids=list(SCENARIOS))
 def test_fmri_task_matrix(
-    scenario, subject_config, global_config, make_input_dir, graph_snapshot
+    scenario,
+    subject_config,
+    global_config,
+    make_input_dir,
+    graph_snapshot,
+    fsl_engine_available,
 ):
     block_design = SCENARIOS[scenario]
     section = subject_config[DataInputList.FMRI_0]
@@ -43,6 +49,7 @@ def test_fmri_task_matrix(
     # golden files stay valid. The ANTS-default snapshots are Session F's job.
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = "FSL"
+    synth["fmri_engine"] = "FSL"
 
     wf = fMRI_task_workflow(
         "fmri_0",
@@ -68,7 +75,11 @@ def test_fmri_task_matrix(
 
 
 def test_fmri_task_matrix_test_run(
-    subject_config, global_config, make_input_dir, graph_snapshot
+    subject_config,
+    global_config,
+    make_input_dir,
+    graph_snapshot,
+    fsl_engine_available,
 ):
     """test_run=True on the single-contrast baseline: exercises the shared
     fMRI_preproc_workflow's MCFLIRT speed knobs through the task path too
@@ -78,6 +89,7 @@ def test_fmri_task_matrix_test_run(
     section["block_design"] = BlockDesign.RARA.name
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = "FSL"
+    synth["fmri_engine"] = "FSL"
 
     wf = fMRI_task_workflow(
         "fmri_0",
@@ -101,6 +113,81 @@ def test_fmri_task_matrix_test_run(
         name="test_run",
         config=config_echo,
         title="fmri_task / test_run",
+    )
+
+
+def test_fmri_task_matrix_nilearn(
+    subject_config, global_config, make_input_dir, graph_snapshot
+):
+    """NILEARN engine with ANTS registration on the single-contrast design: the
+    nilearn first-level GLM path, on the NILEARN preprocessing."""
+    section = subject_config[DataInputList.FMRI_0]
+    section["block_design"] = BlockDesign.RARA.name
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["engine"] = "ANTS"
+    synth["fmri_engine"] = "NILEARN"
+
+    wf = fMRI_task_workflow(
+        "fmri_0",
+        dicom_dir=make_input_dir(),
+        config=section,
+        synth_config=synth,
+    )
+
+    config_echo = {
+        "block_design": BlockDesign.RARA.name,
+        "task_a_name": section["task_a_name"],
+        "task_b_name": section["task_b_name"],
+        "task_duration": section["task_duration"],
+        "rest_duration": section["rest_duration"],
+        "fmri_engine": "NILEARN",
+        "registration_engine": "ANTS",
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="nilearn_rara_ants",
+        config=config_echo,
+        title="fmri_task / nilearn_rara_ants",
+    )
+
+
+def test_fmri_task_matrix_nilearn_slice_timing(
+    subject_config, global_config, make_input_dir, graph_snapshot
+):
+    """NILEARN engine with a known slice timing: the niimath slice-timing node
+    is built in the preprocessing and the GLM samples the design at the middle
+    of the TR (slice_time_ref = 0.5)."""
+    section = subject_config[DataInputList.FMRI_0]
+    section["block_design"] = BlockDesign.RARA.name
+    section["slice_timing"] = SliceTiming.UP.name
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["engine"] = "ANTS"
+    synth["fmri_engine"] = "NILEARN"
+
+    wf = fMRI_task_workflow(
+        "fmri_0",
+        dicom_dir=make_input_dir(),
+        config=section,
+        synth_config=synth,
+    )
+
+    config_echo = {
+        "block_design": BlockDesign.RARA.name,
+        "task_a_name": section["task_a_name"],
+        "task_b_name": section["task_b_name"],
+        "task_duration": section["task_duration"],
+        "rest_duration": section["rest_duration"],
+        "fmri_engine": "NILEARN",
+        "registration_engine": "ANTS",
+        "slice_timing": SliceTiming.UP.name,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name="nilearn_rara_ants_slicetiming_up",
+        config=config_echo,
+        title="fmri_task / nilearn_rara_ants_slicetiming_up",
     )
 
 
@@ -146,6 +233,7 @@ def _build_engine(engine_name, subject_config, global_config, make_input_dir):
     section["block_design"] = BlockDesign.RARA.name
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = engine_name
+    synth["fmri_engine"] = "FSL"
     return fMRI_task_workflow(
         "fmri_0",
         dicom_dir=make_input_dir(),
@@ -199,15 +287,15 @@ def test_fmri_task_fsl_cluster_applies_unchanged(
     assert "AntsApplyTransforms" not in [_iface(n) for n in wf._graph.nodes()]
 
 
-def test_fmri_task_synth_falls_back_to_fsl(
+def test_fmri_task_synth_falls_back_to_ants(
     subject_config, global_config, make_input_dir
 ):
-    """EPI avoids SynthMorph: SYNTH resolves to FSL for both the func->ref
+    """EPI avoids SynthMorph: SYNTH resolves to ANTS for both the func->ref
     registration and the cluster applies."""
     wf = _build_engine("SYNTH", subject_config, global_config, make_input_dir)
-    assert wf.reg_2_ref.engine == RegistrationEngine.FSL
+    assert wf.reg_2_ref.engine == RegistrationEngine.ANTS
     ifaces = [_iface(n) for n in wf._graph.nodes()]
-    assert "ApplyXFM" in ifaces
+    assert "ApplyXFM" not in ifaces
     assert "SynthMorphApply" not in ifaces
     assert "SynthMorphReg" not in ifaces
-    assert "AntsApplyTransforms" not in ifaces
+    assert "AntsApplyTransforms" in ifaces

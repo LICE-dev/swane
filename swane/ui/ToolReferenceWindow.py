@@ -109,7 +109,16 @@ class ToolReferenceWindow(QDialog):
         )
 
         for idx, pkg in enumerate(
-            (Package.FSL, Package.FREESURFER, Package.ANTS, Package.NIPY, Package.OTHER)
+            (
+                Package.FSL,
+                Package.FREESURFER,
+                Package.ANTS,
+                Package.NIPY,
+                Package.DIPY,
+                Package.NIIMATH,
+                Package.NILEARN,
+                Package.OTHER,
+            )
         ):
             tab = self._build_package_tab(pkg)
             self._tab_widget.addTab(tab, pkg.value.upper())
@@ -417,22 +426,23 @@ class ToolReferenceWindow(QDialog):
         lay.addWidget(cmd_label)
 
         # --- Documentation URL
-        url_label = QLabel(
-            f"<a href='{ref.url}' style='text-decoration:none;'>" f"{ref.url}</a>"
-        )
-        url_label.setTextFormat(Qt.RichText)
-        url_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        url_label.setOpenExternalLinks(True)
-        url_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: 600;
-                margin-top: 6px;
-                color: #555;
-            }
-            """)
+        if ref.url:
+            url_label = QLabel(
+                f"<a href='{ref.url}' style='text-decoration:none;'>" f"{ref.url}</a>"
+            )
+            url_label.setTextFormat(Qt.RichText)
+            url_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+            url_label.setOpenExternalLinks(True)
+            url_label.setStyleSheet("""
+                QLabel {
+                    font-size: 14px;
+                    font-weight: 600;
+                    margin-top: 6px;
+                    color: #555;
+                }
+                """)
 
-        lay.addWidget(url_label)
+            lay.addWidget(url_label)
 
         # --- References section
         if ref.references:

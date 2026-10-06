@@ -83,6 +83,11 @@ class SegmentationEngine(Enum):
     FSL = "FSL (FAST)"
 
 
+class FmriEngine(Enum):
+    NILEARN = "Python (nilearn/scikit-learn)"
+    FSL = "FSL (MELODIC/FEAT)"
+
+
 class DeskullModality(Enum):
     T1 = "t1"
     FLAIR = "flair"
@@ -124,7 +129,7 @@ class Planes(Enum):
 class GlobalPrefCategoryList(Enum):
     MAIN = PrefCategory("main", "Global settings")
     PERFORMANCE = PrefCategory("performance", "Performance")
-    SYNTH = PrefCategory("synth", "Synth tools")
+    SYNTH = PrefCategory("synth", "Processing engines")
     OPTIONAL_SERIES = PrefCategory("optional_series", "Optional series")
     MAIL_SETTINGS = PrefCategory("mail_settings", "Mail settings")
 

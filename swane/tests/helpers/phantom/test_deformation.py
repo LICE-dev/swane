@@ -6,8 +6,6 @@ direction vectors by a proper rotation. If any of these break, the phantom is
 no longer a trustworthy non-linear-registration target.
 """
 
-import os
-
 import numpy as np
 import pytest
 
@@ -22,10 +20,9 @@ from swane.tests.helpers.phantom.tissue import TissueClass, _wm_background_field
 
 
 def _has_fsaverage() -> bool:
-    home = os.environ.get("FREESURFER_HOME")
-    if not home:
-        return False
-    return os.path.isdir(os.path.join(home, "subjects", "fsaverage", "mri"))
+    from swane.tests.helpers.phantom.fsaverage_source import fsaverage_available
+
+    return fsaverage_available()
 
 
 def _adjacent_mean_cosine(field, mask):
@@ -188,7 +185,7 @@ def test_deform_preserves_field_over_whole_support_not_just_cst():
 @pytest.mark.heavy
 @pytest.mark.skipif(
     not _has_fsaverage(),
-    reason="needs $FREESURFER_HOME/subjects/fsaverage to build the phantom",
+    reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
 )
 def test_built_model_field_spans_whole_wm_and_is_coherent():
     """A freshly built phantom carries a direction across (nearly) all of WM.

@@ -15,6 +15,8 @@ from swane.config.config_enums import (
     DeskullEngine,
     DeskullModality,
     SegmentationEngine,
+    FmriEngine,
+    GlobalPrefCategoryList,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.freesurfer.SynthMorphApply import SynthMorphApply
@@ -29,6 +31,7 @@ from swane.nipype_pipeline.interfaces.ants.AntsPyNetBrainExtraction import (
 )
 from swane.nipype_pipeline.interfaces.ram_estimators import *
 from swane.utils.ResourceManager import ResourceManager
+from swane.utils.DependencyManager import DependencyManager
 from nipype.utils.filemanip import fname_presuffix
 
 # FSL FLIRT cost -> antspyx affine metric. antspyx has no "MI"/"mutualinfo"
@@ -47,21 +50,16 @@ _ANTS_AFF_METRIC_BY_FLIRT_COST = {
 
 
 def resolve_registration_engine(
-    synth_config, allow_ants: bool = True
+    synth_config, allow_synth: bool = True
 ) -> RegistrationEngine:
     """
-    Resolve the configured registration engine from a Synth-tools config section.
+    Resolve the configured registration engine from Engine config section.
 
-    ``allow_ants=False`` keeps a workflow that has not yet been ported to the
-    ANTs ordered-transform-list format on FSL when the (default) engine is ANTS,
-    preserving that workflow's Phase-1 behaviour. SYNTH and FSL are honoured
-    either way. Only ``linear_reg_workflow``/``nonlinear_reg_workflow`` pass
-    ``allow_ants=True``; every other caller passes ``allow_ants=False`` until
-    its own phase ports it.
+    ``allow_synth=False`` falls back to ANTS.
     """
     engine = synth_config.getenum_safe("engine")
-    if not allow_ants and engine == RegistrationEngine.ANTS:
-        return RegistrationEngine.FSL
+    if not allow_synth and engine == RegistrationEngine.SYNTH:
+        return RegistrationEngine.ANTS
     return engine
 
 
@@ -85,10 +83,46 @@ def resolve_deskull_engine(
 def resolve_segmentation_engine(synth_config) -> SegmentationEngine:
     """
     Resolve the configured tissue-segmentation engine from a Synth-tools config
-    section. Only flat1 consumes it; there is no phased-migration fallback like
-    ``resolve_registration_engine``'s ``allow_ants``.
+    section. It is consumed by flat1 and by the Python (NILEARN) resting-state
+    builder; there is no phased-migration fallback like
+    ``resolve_registration_engine``'s ``allow_synth``.
     """
     return synth_config.getenum_safe("segmentation_engine")
+
+
+def resolve_fmri_engine(global_config) -> FmriEngine:
+    """
+    Resolve the configured fMRI engine from a global configuration or Synth section.
+
+    Returns the configured engine, falling back to an available engine per the
+    dependency gate (NILEARN -> FSL if nilearn is unavailable, and FSL -> NILEARN
+    if FSL is unavailable).
+    """
+    if hasattr(global_config, "getenum_safe"):
+        try:
+            engine = global_config.getenum_safe("fmri_engine")
+        except (TypeError, Exception):
+            engine = global_config.getenum_safe(
+                GlobalPrefCategoryList.SYNTH, "fmri_engine"
+            )
+    elif (
+        hasattr(global_config, "__getitem__")
+        and GlobalPrefCategoryList.SYNTH in global_config
+    ):
+        engine = global_config[GlobalPrefCategoryList.SYNTH].getenum_safe("fmri_engine")
+    else:
+        engine = FmriEngine.NILEARN
+
+    if engine == FmriEngine.NILEARN:
+        if not DependencyManager.is_nilearn():
+            return FmriEngine.FSL
+        return FmriEngine.NILEARN
+    elif engine == FmriEngine.FSL:
+        if not DependencyManager.is_fsl() and DependencyManager.is_nilearn():
+            return FmriEngine.NILEARN
+        return FmriEngine.FSL
+
+    return engine
 
 
 def getn(result_list, index):

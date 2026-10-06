@@ -4,8 +4,11 @@ from nipype.interfaces.base import (
     TraitedSpec,
     File,
     traits,
+    isdefined,
 )
 import os
+
+from swane.patches.windows_compat import cmdline_quote
 
 
 class SegmentEndocraniumInputSpec(CommandLineInputSpec):
@@ -56,6 +59,8 @@ class SegmentEndocranium(CommandLine):
     def __init__(self, **inputs):
         super().__init__(**inputs)
         self.inputs.on_trait_change(self._cmd_update, "slicer_cmd")
+        if isdefined(self.inputs.slicer_cmd):
+            self._cmd_update()
 
     def _cmd_update(self):
         this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -67,7 +72,13 @@ class SegmentEndocranium(CommandLine):
 
         if not os.path.exists(worker_path):
             raise FileNotFoundError(f"Worker not found: {worker_path}")
-        self._cmd = f"{self.inputs.slicer_cmd} --no-splash --no-main-window --python-script {worker_path}"
+        # nipype runs _cmd through a shell: quote both paths (Slicer's install
+        # dir contains a space on Windows). cmdline_quote matches the quoting
+        # SWANe's Nipype patch uses for every other argument on each platform.
+        self._cmd = (
+            f"{cmdline_quote(str(self.inputs.slicer_cmd))} --no-splash "
+            f"--no-main-window --python-script {cmdline_quote(worker_path)}"
+        )
 
     def _format_arg(self, name, spec, value):
         return super()._format_arg(name, spec, value)

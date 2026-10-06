@@ -100,11 +100,8 @@ def dti_preproc_workflow(
 
     # Follow the configured engine (ANTs by default). SynthMorph is avoided for
     # the diffusion registration (non-deterministic, and its diff<->ref outputs
-    # are now emitted as the ANTs transform-list view, not an FSL .mat), so
-    # SYNTH falls back to FSL as it does for the EPI/CT registrations.
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
-    if engine == RegistrationEngine.SYNTH:
-        engine = RegistrationEngine.FSL
+    # are now emitted as the ANTs transform-list view, not an FSL .mat).
+    engine = resolve_registration_engine(synth_config, allow_synth=False)
 
     # Input Node
     inputnode = Node(
