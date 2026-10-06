@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import ants  # real antspyx (installed)
+from swane.nipype_pipeline.interfaces.ants import DEFAULT_RANDOM_SEED
 from swane.nipype_pipeline.interfaces.ants.AntsPyNetBrainExtraction import (
     AntsPyNetBrainExtraction,
 )
@@ -271,11 +272,15 @@ def test_non_positive_num_threads_does_not_export_zero(tmp_path, fake_antspynet)
     assert seen["omp"] != "0"
 
 
-def test_random_seed_sets_ants_config(tmp_path, fake_antspynet):
+@pytest.mark.parametrize("seed", [None, 99])
+def test_random_seed_is_set_then_restored(tmp_path, fake_antspynet, monkeypatch, seed):
+    monkeypatch.setattr(ants.config, "_random_seed", None)
     seen = {}
     real_be = sys.modules["antspynet"].brain_extraction
 
     def spy(image, modality=None, **kwargs):
+        # ants.registration, run by antspynet for some modalities, reads this
+        # module setting for --random-seed
         seen["ants_seed"] = ants.config._random_seed
         return real_be(image, modality=modality, **kwargs)
 
@@ -285,63 +290,59 @@ def test_random_seed_sets_ants_config(tmp_path, fake_antspynet):
     node = AntsPyNetBrainExtraction()
     node.inputs.in_file = in_file
     node.inputs.modality = "t1"
-    node.inputs.random_seed = 99
+    if seed is not None:
+        node.inputs.random_seed = seed
     node.inputs.out_file = str(tmp_path / "brain.nii.gz")
     node.run()
-    assert seen["ants_seed"] == 99
+
+    assert seen["ants_seed"] == (DEFAULT_RANDOM_SEED if seed is None else seed)
+    assert ants.config._random_seed is None
 
 
-def test_random_seed_sets_tensorflow_seed(tmp_path, fake_antspynet, monkeypatch):
-    tf_calls = {}
+def test_global_random_state_is_left_untouched(tmp_path, fake_antspynet):
+    import random
 
-    class FakeTF:
-        class random:
-            @staticmethod
-            def set_seed(seed):
-                tf_calls["seed"] = seed
-
-    monkeypatch.setitem(sys.modules, "tensorflow", FakeTF)
+    random.seed(7)
+    np.random.seed(7)
+    expected_python = random.getstate()
+    expected_numpy = np.random.get_state()
 
     in_file = _write_image(str(tmp_path / "in.nii.gz"))
     node = AntsPyNetBrainExtraction()
     node.inputs.in_file = in_file
     node.inputs.modality = "t1"
-    node.inputs.random_seed = 99
     node.inputs.out_file = str(tmp_path / "brain.nii.gz")
     node.run()
 
-    assert tf_calls.get("seed") == 99
+    assert random.getstate() == expected_python
+    numpy_state = np.random.get_state()
+    assert numpy_state[0] == expected_numpy[0]
+    assert np.array_equal(numpy_state[1], expected_numpy[1])
+    assert numpy_state[2:] == expected_numpy[2:]
 
 
 @pytest.mark.heavy
 class TestAntsPyNetBrainExtractionReproducibility:
-    def _run_be(self, in_file, seed, tmp_path):
+    def _run_be(self, in_file, out_name):
         node = AntsPyNetBrainExtraction()
         node.inputs.in_file = in_file
         node.inputs.modality = "t1"
-        node.inputs.random_seed = seed
-        node.inputs.out_file = str(tmp_path / f"brain_{seed}.nii.gz")
+        node.inputs.num_threads = 1
+        node.inputs.out_file = out_name
         node.run()
-        outputs = node._list_outputs()
         import nibabel as nib
-        return nib.load(outputs["out_file"]).get_fdata()
+
+        return nib.load(node._list_outputs()["out_file"]).get_fdata()
 
     def test_reproducibility(self, tmp_path):
+        import nibabel as nib
+
         arr = np.zeros((96, 96, 96), dtype="float32")
         arr[24:72, 24:72, 24:72] = 100.0
-        in_file = _write_image(str(tmp_path / "t1.nii.gz"))
-        
-        # Override data since _write_image writes 6x6x6
-        import nibabel as nib
-        img = nib.Nifti1Image(arr, np.eye(4))
-        nib.save(img, in_file)
+        in_file = str(tmp_path / "t1.nii.gz")
+        nib.save(nib.Nifti1Image(arr, np.eye(4)), in_file)
 
-        out1 = self._run_be(in_file, 42, tmp_path)
-        out2 = self._run_be(in_file, 42, tmp_path)
-        out3 = self._run_be(in_file, 99, tmp_path)
+        out1 = self._run_be(in_file, str(tmp_path / "brain_1.nii.gz"))
+        out2 = self._run_be(in_file, str(tmp_path / "brain_2.nii.gz"))
 
         np.testing.assert_array_equal(out1, out2)
-        # Brain extraction uses deterministic inference unless stochastic layers are active
-        np.testing.assert_array_equal(out1, out3)
-
-

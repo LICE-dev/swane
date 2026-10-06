@@ -45,6 +45,7 @@
     aff_metric = 'mattes'
     num_threads = 0
     out_prefix = 'ants_reg_'
+    random_seed = 123
     syn_metric = 'mattes'
     transform_type = 'Rigid'
 - fmri_rs_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
@@ -123,6 +124,7 @@
     mask_file = 'brain_mask.nii.gz'
     modality = 'bold'
     num_threads = 0
+    random_seed = 123
     threshold = 0.5
 - fmri_rs_medianval [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = [50.0]
@@ -191,6 +193,7 @@
     fixed = '<SWANE_TEMPLATES>/MNI152NLin6Asym_res-2_desc-brain_T1w_LAS.nii.gz'
     num_threads = 0
     out_prefix = 'ants_reg_'
+    random_seed = 123
     syn_metric = 'mattes'
     transform_type = 'SyN'
 - survivors_neg_2_ref_ants_apply [AntsApplyTransforms] mapnode(iterfield=input_image) mem_gb=0.2 n_procs=1

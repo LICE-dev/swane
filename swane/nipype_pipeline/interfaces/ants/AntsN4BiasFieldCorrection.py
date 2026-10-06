@@ -37,10 +37,10 @@ class AntsN4BiasFieldCorrectionInputSpec(BaseInterfaceInputSpec):
         desc="maximum number of iterations per resolution level "
         "(antspyx default is [50, 50, 50, 50])",
     )
+    # More than one thread can make the output vary slightly run to run
+    # (multithreaded ITK sums are not guaranteed to run in a fixed order).
+    # Accepted for speed; the thread count is the user's choice.
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
-    random_seed = traits.Int(
-        42, usedefault=True, desc="Seed to initialize the random number generator"
-    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -63,14 +63,8 @@ class AntsN4BiasFieldCorrection(BaseInterface):
         previous_threads = os.environ.get(ITK_THREADS_VAR)
         if isdefined(self.inputs.num_threads):
             os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
-        ants = None
-        previous_random_seed = None
         try:
             import ants
-
-            previous_random_seed = ants.config._random_seed
-            if isdefined(self.inputs.random_seed):
-                ants.config._random_seed = self.inputs.random_seed
 
             out_file = self._gen_outfilename()
 
@@ -124,8 +118,6 @@ class AntsN4BiasFieldCorrection(BaseInterface):
                 os.environ.pop(ITK_THREADS_VAR, None)
             else:
                 os.environ[ITK_THREADS_VAR] = previous_threads
-            if ants is not None:
-                ants.config._random_seed = previous_random_seed
 
         # save output
         ants.image_write(corrected, out_file)
