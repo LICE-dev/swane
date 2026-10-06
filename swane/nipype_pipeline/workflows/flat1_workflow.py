@@ -2,7 +2,6 @@ from configparser import SectionProxy
 
 from swane import resources
 
-from nipype.interfaces.fsl import FAST
 from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
     BinaryMaths,
@@ -16,13 +15,8 @@ from swane.nipype_pipeline.interfaces.niimath.ThrROI import ThrROI
 from nipype.interfaces.utility import IdentityInterface, Function
 
 from swane.config.config_enums import SegmentationEngine
-from swane.utils.ResourceManager import ResourceManager
-from swane.nipype_pipeline.interfaces.ants.AntsAtropos import AntsAtropos
-from swane.nipype_pipeline.interfaces.ram_estimators import FastRamEstimator
 from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
-    apply_tool_num_threads,
-    get_tool_cpu_config,
     resolve_registration_engine,
     resolve_segmentation_engine,
 )
@@ -33,8 +27,6 @@ def flat1_workflow(
     mni1_dir: str,
     synth_config: SectionProxy,
     base_dir: str = "/",
-    test_run: bool = False,
-    max_cpu: int = 0,
 ) -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
@@ -47,19 +39,20 @@ def flat1_workflow(
     mni1_dir : path
         The file path of the MNI1 template.
     synth_config: SectionProxy
-        reeSurfer Synth tools settings.
+        FreeSurfer Synth tools settings (registration engine; the
+        segmentation engine that produced tissue_pve).
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
-    test_run : bool, optional
-        If True, cut segmentation iterations to speed up prerelease
-        test runs at the cost of accuracy. The default is False.
-    max_cpu : int, optional
-        CPU budget for the ITK-based Atropos node (0 = unset, leave the tool
-        unbudgeted). Ignored by the FSL FAST branch. The default is 0.
+
     Input Node Fields
     ----------
     reference_brain : path
-        Betted T13D reference file.
+        Betted T13D reference file (reference space of the output maps).
+    tissue_pve : list of path
+        Tissue partial volume / posterior maps of the T13D ordered
+        [CSF, GM, WM], from the shared reference segmentation.
+    tissue_restored : path
+        Bias-corrected betted T13D matching tissue_pve.
     flair_brain : path
         Betted FLAIR3D.
     ref_2_mni1_warp : path
@@ -100,6 +93,8 @@ def flat1_workflow(
         IdentityInterface(
             fields=[
                 "reference_brain",
+                "tissue_pve",
+                "tissue_restored",
                 "flair_brain",
                 "ref_2_mni1_warp",
                 "ref_2_mni1_inverse_warp",
@@ -114,45 +109,8 @@ def flat1_workflow(
         name="outputnode",
     )
 
-    # NODE 1: three-class tissue segmentation (engine-selectable)
-    if segmentation_engine == SegmentationEngine.ANTS:
-        segment = Node(
-            AntsAtropos(),
-            name="%s_atropos" % name,
-            mem_gb=ResourceManager.atropos_ram_requirements(),
-        )
-        if test_run:
-            # cut EM iterations to speed prerelease runs at the cost of accuracy
-            segment.inputs.iterations = 3
-        if max_cpu != 0:
-            # Atropos runs on ITK: its thread count flows only through
-            # num_threads (a nipype-aware reservation the node exports as
-            # ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS at run time), exactly like
-            # the antspynet deskull node. Left unbudgeted when max_cpu is 0.
-            limit_synth_cores = synth_config.getboolean_safe("limit_cores")
-            threads = get_tool_cpu_config(max_cpu, limit_synth_cores)
-            apply_tool_num_threads(segment, threads, max_cpu=max_cpu)
-        workflow.add_nodes([segment])
-        workflow.connect(inputnode, "reference_brain", segment, "in_file")
-        restored_source = (inputnode, "reference_brain")
-    else:  # SegmentationEngine.FSL -- unchanged FAST node
-        segment = Node(FAST(), name="%s_fast" % name, mem_gb=4)
-        segment.ram_estimator = FastRamEstimator()
-        segment.inputs.img_type = 1  # param -t
-        segment.inputs.number_classes = 3  # param n
-        segment.inputs.hyper = 0.1  # param -H
-        segment.inputs.bias_lowpass = 40  # param -l
-        segment.inputs.output_biascorrected = True  # param -B
-        if test_run:
-            # FSL defaults: -I 4, -W 15, -O 4. Aggressively cut all three.
-            segment.inputs.bias_iters = 1  # param -I
-            segment.inputs.segment_iters = 5  # param -W
-            segment.inputs.iters_afterbias = 1  # param -O
-        else:
-            segment.inputs.bias_iters = 4  # param -I
-        workflow.add_nodes([segment])
-        workflow.connect(inputnode, "reference_brain", segment, "in_files")
-        restored_source = (segment, "restored_image")
+    # NODE 1: the three-class tissue segmentation (engine-selectable) runs once
+    # in the reference workflow and arrives through tissue_pve/tissue_restored.
 
     def pick_first_two(file_list):
         return file_list[1], file_list[2]
@@ -166,7 +124,7 @@ def flat1_workflow(
         name="fast_segment_split",
     )
     fast_segment_split.long_name = "Segment identification"
-    workflow.connect(segment, "partial_volume_files", fast_segment_split, "file_list")
+    workflow.connect(inputnode, "tissue_pve", fast_segment_split, "file_list")
 
     flair_2_mni1 = apply_registration_node(
         name="flair_2_mni1",
@@ -187,7 +145,7 @@ def flat1_workflow(
         engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
-        moving=list(restored_source),
+        moving=[inputnode, "tissue_restored"],
         reference=mni1_dir,
         non_linear=True,
     )

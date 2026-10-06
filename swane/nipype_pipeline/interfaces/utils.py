@@ -83,8 +83,10 @@ def resolve_deskull_engine(
 def resolve_segmentation_engine(synth_config) -> SegmentationEngine:
     """
     Resolve the configured tissue-segmentation engine from a Synth-tools config
-    section. It is consumed by flat1 and by the Python (NILEARN) resting-state
-    builder; there is no phased-migration fallback like
+    section. It selects the shared reference tissue segmentation of
+    ref_workflow (consumed by flat1, dipy tractography and the Python (NILEARN)
+    resting-state builder) and flat1's posterior threshold; there is no
+    phased-migration fallback like
     ``resolve_registration_engine``'s ``allow_synth``.
     """
     return synth_config.getenum_safe("segmentation_engine")

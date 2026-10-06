@@ -173,12 +173,6 @@ tool_reference_list = {
         url="https://docs.dipy.org/stable/reference/dipy.reconst.html#module-dipy.reconst.dti",
         references=[],
     ),
-    "DipyTissueClassifier": ToolReference(
-        command="TissueClassifierHMRF [dipy]",
-        package=Package.DIPY,
-        url="https://docs.dipy.org/stable/reference/dipy.segment.html#module-dipy.segment.tissue",
-        references=[],
-    ),
     "DipyCsdFit": ToolReference(
         command="ConstrainedSphericalDeconvModel [dipy]",
         package=Package.DIPY,

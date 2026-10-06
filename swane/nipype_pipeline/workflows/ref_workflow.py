@@ -5,17 +5,24 @@ from swane.nipype_pipeline.interfaces.geometry.CropFov import CropFov
 from swane.nipype_pipeline.interfaces.ants.AntsN4BiasFieldCorrection import (
     AntsN4BiasFieldCorrection,
 )
+from swane.nipype_pipeline.interfaces.ants.AntsAtropos import AntsAtropos
 from swane.nipype_pipeline.interfaces.stats.ZIntNorm import ZIntNorm
+from swane.nipype_pipeline.interfaces.ram_estimators import FastRamEstimator
 from swane.nipype_pipeline.interfaces.utils import (
+    apply_tool_num_threads,
     get_deskull_node,
+    get_tool_cpu_config,
     resolve_deskull_engine,
+    resolve_segmentation_engine,
 )
 from configparser import SectionProxy
 from swane.nipype_pipeline.interfaces.niimath import NiiMathRobustFov
 from swane.nipype_pipeline.interfaces.niimath import ApplyMask
+from nipype.interfaces.fsl import FAST
 from nipype.interfaces.utility import IdentityInterface
 from nipype import Node
-from swane.config.config_enums import DeskullModality
+from swane.config.config_enums import DeskullModality, SegmentationEngine
+from swane.utils.ResourceManager import ResourceManager
 
 
 def ref_workflow(
@@ -27,6 +34,7 @@ def ref_workflow(
     deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
     test_run: bool = False,
+    tissue_segmentation: bool = False,
 ) -> CustomWorkflow:
     """
     T13D workflow to use as reference.
@@ -47,10 +55,16 @@ def ref_workflow(
         antspynet brain-extraction modality for the deskull node. The default
         is DeskullModality.T1.
     max_cpu : int, optional
-        If greater than 0, limit the core usage of Synth tools. The default is 0.
+        If greater than 0, limit the core usage of Synth tools and of the
+        ITK-based Atropos segmentation node. The default is 0.
     test_run : bool, optional
-        If True, cap the N4 bias field correction iterations to speed up
+        If True, cap the N4 bias field correction iterations (and, when
+        tissue_segmentation is True, the segmentation iterations) to speed up
         prerelease test runs at the cost of accuracy. The default is False.
+    tissue_segmentation : bool, optional
+        If True, add a single three-class tissue segmentation of the reference
+        brain (engine from the ``segmentation_engine`` Synth preference),
+        shared by every workflow that needs tissue maps. The default is False.
 
     Input Node Fields
     ----------
@@ -73,6 +87,13 @@ def ref_workflow(
         Uncorrected T13D.
     uncorrected_reference_brain : path
         Uncorrected betted T13D.
+    tissue_pve : list of path
+        Tissue partial volume / posterior maps ordered [CSF, GM, WM]
+        (tissue_segmentation only).
+    tissue_restored : path
+        Bias-corrected betted T13D matching tissue_pve: the FAST restored
+        image (FSL engine) or reference_brain (ANTS engine)
+        (tissue_segmentation only).
 
     """
 
@@ -87,6 +108,8 @@ def ref_workflow(
                 "ref_mask",
                 "uncorrected_reference",
                 "uncorrected_reference_brain",
+                "tissue_pve",
+                "tissue_restored",
             ]
         ),
         name="outputnode",
@@ -154,5 +177,59 @@ def ref_workflow(
     workflow.connect(ref_deskull, "mask_file", outputnode, "ref_mask")
     workflow.connect(ref_reScale, "out_file", outputnode, "uncorrected_reference")
     workflow.connect(ref_deskull, "out_file", outputnode, "uncorrected_reference_brain")
+
+    if tissue_segmentation:
+        # NODE 6: three-class tissue segmentation shared by every consumer
+        # (FLAT1, dipy tractography seeding, NILEARN resting-state nuisance
+        # ROIs), engine-selectable.
+        segmentation_engine = resolve_segmentation_engine(synth_config)
+        if segmentation_engine == SegmentationEngine.ANTS:
+            # Atropos has no internal bias correction: feed it the N4-corrected
+            # brain, which is also the matching restored image.
+            segmentation = Node(
+                AntsAtropos(),
+                name="ref_segmentation",
+                mem_gb=ResourceManager.atropos_ram_requirements(),
+            )
+            if test_run:
+                # cut EM iterations to speed prerelease runs at the cost of accuracy
+                segmentation.inputs.iterations = 3
+            if max_cpu != 0:
+                # Atropos runs on ITK: its thread count flows only through
+                # num_threads (a nipype-aware reservation the node exports as
+                # ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS at run time), exactly
+                # like the antspynet deskull node. Left unbudgeted when max_cpu
+                # is 0.
+                threads = get_tool_cpu_config(
+                    max_cpu, synth_config.getboolean_safe("limit_cores")
+                )
+                apply_tool_num_threads(segmentation, threads, max_cpu=max_cpu)
+            workflow.connect(ref_corrected_deskull, "out_file", segmentation, "in_file")
+            workflow.connect(
+                ref_corrected_deskull, "out_file", outputnode, "tissue_restored"
+            )
+        else:  # SegmentationEngine.FSL
+            # FAST runs its own bias correction: feed it the uncorrected brain
+            # and expose its restored image.
+            segmentation = Node(FAST(), name="ref_segmentation", mem_gb=4)
+            segmentation.ram_estimator = FastRamEstimator()
+            segmentation.inputs.img_type = 1  # param -t
+            segmentation.inputs.number_classes = 3  # param n
+            segmentation.inputs.hyper = 0.1  # param -H
+            segmentation.inputs.bias_lowpass = 40  # param -l
+            segmentation.inputs.output_biascorrected = True  # param -B
+            if test_run:
+                # FSL defaults: -I 4, -W 15, -O 4. Aggressively cut all three.
+                segmentation.inputs.bias_iters = 1  # param -I
+                segmentation.inputs.segment_iters = 5  # param -W
+                segmentation.inputs.iters_afterbias = 1  # param -O
+            else:
+                segmentation.inputs.bias_iters = 4  # param -I
+            workflow.connect(ref_deskull, "out_file", segmentation, "in_files")
+            workflow.connect(
+                segmentation, "restored_image", outputnode, "tissue_restored"
+            )
+        segmentation.long_name = "Reference tissue segmentation"
+        workflow.connect(segmentation, "partial_volume_files", outputnode, "tissue_pve")
 
     return workflow

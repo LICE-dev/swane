@@ -211,3 +211,19 @@ def test_build_aroma_classification_returns_node_and_registration(
     assert callable(fMRI_resting_state_aroma.build_aroma_classification)
     assert callable(fMRI_resting_state_fsl.build_fsl_resting)
     assert callable(fMRI_resting_state_nilearn.build_nilearn_resting)
+
+
+@pytest.mark.parametrize("fmri_engine", ["FSL", "NILEARN"])
+def test_tissue_pve_input_only_for_nilearn(
+    subject_config, global_config, make_input_dir, fmri_engine
+):
+    """Only the NILEARN builder consumes the shared reference tissue
+    segmentation, so only it declares the ``tissue_pve`` input."""
+    from swane.nipype_pipeline.interfaces.utils import resolve_fmri_engine
+
+    wf = _build(
+        subject_config, global_config, make_input_dir, fmri_engine, True, "ANTS"
+    )
+    resolved = resolve_fmri_engine(global_config[GlobalPrefCategoryList.SYNTH])
+    fields = _node(wf, "inputnode").interface._fields
+    assert ("tissue_pve" in fields) == (resolved == FmriEngine.NILEARN)

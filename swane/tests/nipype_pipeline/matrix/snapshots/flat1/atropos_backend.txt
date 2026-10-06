@@ -1,9 +1,8 @@
 # workflow snapshot: flat1 / atropos_backend
 #
 #   segmentation_engine = ANTS
-#   test_run = False
 #
-# nodes=32 edges=45
+# nodes=31 edges=44
 
 - binary_flair_2_ref_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
@@ -19,11 +18,6 @@
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     ref_file = '<TMP>/mni1.nii.gz'
-- flat1_atropos [AntsAtropos] mem_gb=3 n_procs=1
-    iterations = 10
-    mrf_radius = 1
-    mrf_smoothing = 0.0
-    number_classes = 3
 - flat1_binaryFLAIR [ThrROI] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'binary_flair.nii.gz'
@@ -145,7 +139,6 @@ extension_z_2_ref_apply_warp.out_file -> outputnode.extension_z
 fast_segment_split.gm_seg -> gm_2_mni1_apply_warp.in_file
 fast_segment_split.wm_seg -> wm_2_mni1_apply_warp.in_file
 flair_2_mni1_apply_warp.out_file -> flat1_flairDIVref.in_file
-flat1_atropos.partial_volume_files -> fast_segment_split.file_list
 flat1_binaryFLAIR.out_file -> binary_flair_2_ref_apply_warp.in_file
 flat1_binaryFLAIR.out_file -> flat1_convolution_flair.in_file
 flat1_cerebellum_mean.mean -> flat1_normalised_GM_mask.operand_value
@@ -182,9 +175,9 @@ inputnode.ref_2_mni1_warp -> restore_2_mni1_apply_warp.field_file
 inputnode.ref_2_mni1_warp -> wm_2_mni1_apply_warp.field_file
 inputnode.reference_brain -> binary_flair_2_ref_apply_warp.ref_file
 inputnode.reference_brain -> extension_z_2_ref_apply_warp.ref_file
-inputnode.reference_brain -> flat1_atropos.in_file
 inputnode.reference_brain -> junction_z_2_ref_apply_warp.ref_file
-inputnode.reference_brain -> restore_2_mni1_apply_warp.in_file
+inputnode.tissue_pve -> fast_segment_split.file_list
+inputnode.tissue_restored -> restore_2_mni1_apply_warp.in_file
 junction_z_2_ref_apply_warp.out_file -> outputnode.junction_z
 restore_2_mni1_apply_warp.out_file -> flat1_flairDIVref.operand_file
 restore_2_mni1_apply_warp.out_file -> flat1_masked_cerebellum.in_file

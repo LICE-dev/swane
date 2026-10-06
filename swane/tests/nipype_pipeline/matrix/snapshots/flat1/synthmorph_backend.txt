@@ -3,7 +3,7 @@
 #   registration_engine = SYNTH
 #   synth_morph = true
 #
-# nodes=30 edges=44
+# nodes=29 edges=42
 
 - binary_flair_2_ref_morph_apply [SynthMorphApply] cmd=mri_synthmorph apply mem_gb=0.2 n_procs=1
     environ = {SUBJECTS_DIR='<SUBJECTS_DIR>'}
@@ -34,15 +34,6 @@
 - flat1_cortexMask [ApplyMask] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     mask_file = '<RESOURCES>/atlas/FLAT1/brain_cortex_mas_OK.nii.gz'
-    output_type = 'NIFTI_GZ'
-- flat1_fast [FAST] cmd=fast mem_gb=4 n_procs=1
-    bias_iters = 4
-    bias_lowpass = 40
-    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    hyper = 0.1
-    img_type = 1
-    number_classes = 3
-    output_biascorrected = True
     output_type = 'NIFTI_GZ'
 - flat1_flairDIVref [BinaryMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
@@ -142,8 +133,6 @@ flat1_convolution_flair.out_file -> flat1_junction_mean.in_file
 flat1_cortexMask.out_file -> flat1_binaryFLAIR.in_file
 flat1_cortexMask.out_file -> flat1_gmMask.in_file
 flat1_cortexMask.out_file -> flat1_wmMask.in_file
-flat1_fast.partial_volume_files -> fast_segment_split.file_list
-flat1_fast.restored_image -> restore_2_mni1_morph_apply.in_file
 flat1_flairDIVref.out_file -> flat1_outliers_mask.in_file
 flat1_gmMask.out_file -> flat1_gm_mean.in_file
 flat1_gm_mean.mean -> flat1_binaryFLAIR.seg_val_max
@@ -169,7 +158,8 @@ inputnode.ref_2_mni1_warp -> flair_2_mni1_morph_apply.warp_file
 inputnode.ref_2_mni1_warp -> gm_2_mni1_morph_apply.warp_file
 inputnode.ref_2_mni1_warp -> restore_2_mni1_morph_apply.warp_file
 inputnode.ref_2_mni1_warp -> wm_2_mni1_morph_apply.warp_file
-inputnode.reference_brain -> flat1_fast.in_files
+inputnode.tissue_pve -> fast_segment_split.file_list
+inputnode.tissue_restored -> restore_2_mni1_morph_apply.in_file
 junction_z_2_ref_morph_apply.out_file -> outputnode.junction_z
 restore_2_mni1_morph_apply.out_file -> flat1_flairDIVref.operand_file
 restore_2_mni1_morph_apply.out_file -> flat1_masked_cerebellum.in_file
