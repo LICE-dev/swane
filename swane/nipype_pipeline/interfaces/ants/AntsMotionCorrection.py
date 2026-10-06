@@ -16,8 +16,9 @@ from swane.nipype_pipeline.interfaces.ants import DEFAULT_RANDOM_SEED
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class AntsMotionCorrectionInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc="4D EPI NIfTI image")
-    random_seed = traits.Int(
-        DEFAULT_RANDOM_SEED,
+    random_seed = traits.Range(
+        low=1,
+        value=DEFAULT_RANDOM_SEED,
         usedefault=True,
         desc="Non-zero seed of the random metric sampling of every per-volume "
         "registration; with single-threaded ITK it makes the output "

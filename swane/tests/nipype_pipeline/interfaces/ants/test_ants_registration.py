@@ -251,6 +251,13 @@ class TestAntsRegistrationRuntime:
         assert seen["threads"] == "3"
         assert var not in os.environ
 
+    def test_random_seed_must_be_non_zero(self):
+        # antsRegistration treats --random-seed 0 as "no seed" (clock-seeded)
+        from traits.api import TraitError
+
+        with pytest.raises(TraitError):
+            AntsRegistration().inputs.random_seed = 0
+
     @pytest.mark.parametrize("seed", [None, 99])
     def test_random_seed_is_set_then_restored(
         self, workspace, make_nifti, monkeypatch, seed
@@ -385,24 +392,19 @@ class TestAntsRegistrationRealRun:
         assert np.allclose(warped.affine, nib.load(fixed).affine, atol=1e-4)
 
 
-# A child interpreter, not this one: ITK reads the thread count once per
-# process, so in a pytest session that already ran an ITK filter num_threads=1
-# would not take effect and the outputs would differ for that reason alone.
 _REPRO_CHILD = """
-import sys
 import nibabel as nib
 import numpy as np
-from swane.nipype_pipeline.interfaces.ants import DEFAULT_RANDOM_SEED
 from swane.nipype_pipeline.interfaces.ants.AntsRegistration import AntsRegistration
-fixed, moving, out = sys.argv[1:4]
+fixed, moving, out = sys.argv[5:8]
 node = AntsRegistration()
 node.inputs.fixed = fixed
 node.inputs.moving = moving
 node.inputs.transform_type = "Affine"
 node.inputs.num_threads = 1
 node.inputs.test_run = True
-if len(sys.argv) > 4:
-    node.inputs.random_seed = int(sys.argv[4])
+if len(sys.argv) > 8:
+    node.inputs.random_seed = int(sys.argv[8])
 node.run()
 np.save(out, nib.load(node._list_outputs()["warped_file"]).get_fdata())
 """
@@ -413,24 +415,14 @@ class TestAntsRegistrationReproducibility:
     """With one ITK thread a fixed seed gives bit-identical registrations."""
 
     @staticmethod
-    def _run_reg(tmp_path, fixed, moving, name, seed=None):
-        import subprocess
-        import sys
-
+    def _run_reg(run_child, tmp_path, fixed, moving, name, *seed):
         run_dir = tmp_path / name
         run_dir.mkdir()
-        out = str(run_dir / "warped.npy")
-        args = [sys.executable, "-c", _REPRO_CHILD, fixed, moving, out]
-        if seed is not None:
-            args.append(str(seed))
-        env = dict(os.environ, ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS="1")
-        proc = subprocess.run(
-            args, cwd=run_dir, env=env, capture_output=True, text=True
-        )
-        assert proc.returncode == 0, proc.stderr[-4000:]
+        out = run_dir / "warped.npy"
+        run_child(_REPRO_CHILD, fixed, moving, out, *seed, cwd=run_dir)
         return np.load(out)
 
-    def test_reproducibility(self, tmp_path, make_nifti):
+    def test_reproducibility(self, tmp_path, make_nifti, run_single_thread_child):
         fixed_data = np.zeros((24, 24, 24), dtype=np.float32)
         fixed_data[6:18, 6:18, 6:18] = 1.0
         moving_data = np.zeros((24, 24, 24), dtype=np.float32)
@@ -438,9 +430,10 @@ class TestAntsRegistrationReproducibility:
         fixed = make_nifti("f.nii.gz", data=fixed_data)
         moving = make_nifti("m.nii.gz", data=moving_data)
 
-        out1 = self._run_reg(tmp_path, fixed, moving, "default_1")
-        out2 = self._run_reg(tmp_path, fixed, moving, "default_2")
-        out3 = self._run_reg(tmp_path, fixed, moving, "other_seed", seed=99)
+        run = run_single_thread_child
+        out1 = self._run_reg(run, tmp_path, fixed, moving, "default_1")
+        out2 = self._run_reg(run, tmp_path, fixed, moving, "default_2")
+        out3 = self._run_reg(run, tmp_path, fixed, moving, "other_seed", 99)
 
         # the default seed is fixed, so two runs are bit-identical
         np.testing.assert_array_equal(out1, out2)
