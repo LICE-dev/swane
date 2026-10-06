@@ -118,6 +118,11 @@ class AntsAtropos(BaseInterface):
                 i=self._init_string(),
                 m=self._mrf_string(),
                 c=self._convergence_string(),
+                # Atropos defaults to a clock-seeded random number generator
+                # (--use-random-seed 1), used by the MRF update when
+                # mrf_smoothing > 0; 0 uses its constant seed, so the same
+                # input gives the same segmentation.
+                r=0,
             )
         finally:
             if previous_threads is None:

@@ -10,7 +10,10 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
-from swane.nipype_pipeline.interfaces.ants import DEFAULT_RANDOM_SEED
+from swane.nipype_pipeline.interfaces.ants import (
+    DEFAULT_RANDOM_SEED,
+    ants_random_seed,
+)
 
 # antspyx is imported lazily inside _run_interface so that merely importing this
 # module (as the workflow builders and the graph tests do) never pays the cost of
@@ -72,8 +75,9 @@ class AntsRegistrationInputSpec(BaseInterfaceInputSpec):
     # yet, gives bit-identical results.
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
     initial_transform = File(exists=True, desc="initial moving transform")
-    random_seed = traits.Int(
-        DEFAULT_RANDOM_SEED,
+    random_seed = traits.Range(
+        low=1,
+        value=DEFAULT_RANDOM_SEED,
         usedefault=True,
         desc="Seed of the random metric sampling (antsRegistration --random-seed)",
     )
@@ -137,15 +141,8 @@ class AntsRegistration(BaseInterface):
         previous_threads = os.environ.get(ITK_THREADS_VAR)
         if isdefined(self.inputs.num_threads):
             os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
-        ants = None
-        previous_random_seed = None
         try:
             import ants
-
-            # ants.registration passes this module setting as --random-seed;
-            # it is restored below.
-            previous_random_seed = ants.config._random_seed
-            ants.config._random_seed = self.inputs.random_seed
 
             kwargs = {
                 "aff_metric": self.inputs.aff_metric,
@@ -170,22 +167,21 @@ class AntsRegistration(BaseInterface):
                 kwargs["aff_iterations"] = (2100, 1200, 1200, 10)
                 kwargs["reg_iterations"] = (100, 70, 50, 20)
 
-            result = ants.registration(
-                fixed=ants.image_read(self.inputs.fixed),
-                moving=ants.image_read(self.inputs.moving),
-                type_of_transform=self.inputs.transform_type,
-                # keep the products inside the node directory so nipype can
-                # hash, cache and clean them like any other node output
-                outprefix=os.path.join(os.getcwd(), self.inputs.out_prefix),
-                **kwargs,
-            )
+            with ants_random_seed(self.inputs.random_seed):
+                result = ants.registration(
+                    fixed=ants.image_read(self.inputs.fixed),
+                    moving=ants.image_read(self.inputs.moving),
+                    type_of_transform=self.inputs.transform_type,
+                    # keep the products inside the node directory so nipype can
+                    # hash, cache and clean them like any other node output
+                    outprefix=os.path.join(os.getcwd(), self.inputs.out_prefix),
+                    **kwargs,
+                )
         finally:
             if previous_threads is None:
                 os.environ.pop(ITK_THREADS_VAR, None)
             else:
                 os.environ[ITK_THREADS_VAR] = previous_threads
-            if ants is not None:
-                ants.config._random_seed = previous_random_seed
 
         self._fwd = [os.path.abspath(path) for path in result["fwdtransforms"]]
         self._inv = [os.path.abspath(path) for path in result["invtransforms"]]
