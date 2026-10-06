@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import ants  # real antspyx (installed)
+from swane.nipype_pipeline.interfaces.ants import DEFAULT_RANDOM_SEED
 from swane.nipype_pipeline.interfaces.ants.AntsPyNetBrainExtraction import (
     AntsPyNetBrainExtraction,
 )
@@ -269,3 +270,134 @@ def test_non_positive_num_threads_does_not_export_zero(tmp_path, fake_antspynet)
     node.inputs.out_file = str(tmp_path / "brain.nii.gz")
     node.run()
     assert seen["omp"] != "0"
+
+
+@pytest.mark.parametrize("seed", [None, 99])
+def test_random_seed_is_set_then_restored(tmp_path, fake_antspynet, monkeypatch, seed):
+    monkeypatch.setattr(ants.config, "_random_seed", None)
+    seen = {}
+    real_be = sys.modules["antspynet"].brain_extraction
+
+    def spy(image, modality=None, **kwargs):
+        # ants.registration, run by antspynet for some modalities, reads this
+        # module setting for --random-seed
+        seen["ants_seed"] = ants.config._random_seed
+        return real_be(image, modality=modality, **kwargs)
+
+    sys.modules["antspynet"].brain_extraction = spy
+
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    if seed is not None:
+        node.inputs.random_seed = seed
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+
+    assert seen["ants_seed"] == (DEFAULT_RANDOM_SEED if seed is None else seed)
+    assert ants.config._random_seed is None
+
+
+def test_global_random_state_is_left_untouched(tmp_path, fake_antspynet):
+    """The node must not reseed the process-wide Python/NumPy generators."""
+    import random
+
+    saved_python, saved_numpy = random.getstate(), np.random.get_state()
+    try:
+        _check_global_random_state_is_left_untouched(tmp_path)
+    finally:
+        random.setstate(saved_python)
+        np.random.set_state(saved_numpy)
+
+
+def _check_global_random_state_is_left_untouched(tmp_path):
+    import random
+
+    random.seed(7)
+    np.random.seed(7)
+    expected_python = random.getstate()
+    expected_numpy = np.random.get_state()
+
+    in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = in_file
+    node.inputs.modality = "t1"
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+
+    assert random.getstate() == expected_python
+    numpy_state = np.random.get_state()
+    assert numpy_state[0] == expected_numpy[0]
+    assert np.array_equal(numpy_state[1], expected_numpy[1])
+    assert numpy_state[2:] == expected_numpy[2:]
+
+
+def test_failed_antspynet_import_keeps_the_process_seed(tmp_path, monkeypatch):
+    monkeypatch.setattr(ants.config, "_random_seed", 42)
+    monkeypatch.setitem(sys.modules, "antspynet", None)  # import raises
+
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node.inputs.modality = "t1"
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    with pytest.raises(ImportError):
+        node.run()
+    assert ants.config._random_seed == 42
+
+
+def test_random_seed_must_be_non_zero():
+    from traits.api import TraitError
+
+    with pytest.raises(TraitError):
+        AntsPyNetBrainExtraction().inputs.random_seed = 0
+
+
+_REPRO_CHILD = """
+import nibabel as nib
+import numpy as np
+from swane.nipype_pipeline.interfaces.ants.AntsPyNetBrainExtraction import (
+    AntsPyNetBrainExtraction,
+)
+in_file, out = sys.argv[5:7]
+node = AntsPyNetBrainExtraction()
+node.inputs.in_file = in_file
+node.inputs.modality = "t1"
+node.inputs.num_threads = 1
+node.inputs.out_file = "brain.nii.gz"
+node.run()
+np.save(out, nib.load(node._list_outputs()["out_file"]).get_fdata())
+"""
+
+
+@pytest.mark.heavy
+class TestAntsPyNetBrainExtractionReproducibility:
+    """Same input, same settings, separate single-threaded processes: the
+    brain image is bit-identical.
+
+    This checks run-to-run determinism of the node, not the seed: the "t1"
+    model runs no registration. Seed forwarding is covered by
+    test_random_seed_is_set_then_restored.
+    """
+
+    def test_reproducibility(self, tmp_path, run_single_thread_child):
+        import antspynet
+
+        # A real T1 head image: a synthetic phantom is not recognised as a brain
+        # by the network (empty mask). S_template3 is the template antspynet
+        # itself downloads to reorient the input, so no extra download.
+        in_file = str(tmp_path / "t1.nii.gz")
+        ants.image_write(
+            ants.image_read(antspynet.get_antsxnet_data("S_template3")), in_file
+        )
+
+        outs = []
+        for name in ("run_1", "run_2"):
+            run_dir = tmp_path / name
+            run_dir.mkdir()
+            out = run_dir / "brain.npy"
+            run_single_thread_child(_REPRO_CHILD, in_file, out, cwd=run_dir)
+            outs.append(np.load(out))
+
+        assert outs[0].any()
+        np.testing.assert_array_equal(outs[0], outs[1])

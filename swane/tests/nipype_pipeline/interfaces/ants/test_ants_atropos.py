@@ -133,6 +133,13 @@ class TestAntsAtroposOutputs:
         assert seen["threads"] == "3"
         assert var not in os.environ
 
+    def test_constant_atropos_seed(self, workspace, make_nifti, monkeypatch):
+        # Atropos defaults to a clock-seeded generator (--use-random-seed 1)
+        node = AntsAtropos()
+        node.inputs.in_file = make_nifti("t1.nii.gz", shape=(6, 6, 6))
+        created = _run(node, monkeypatch)
+        assert created["kwargs"]["r"] == 0
+
 
 @pytest.mark.heavy
 class TestAntsAtroposRealRun:
@@ -170,3 +177,46 @@ class TestAntsAtroposRealRun:
                 ]
             )
             assert in_plateau > others
+
+
+_REPRO_CHILD = """
+import nibabel as nib
+import numpy as np
+from swane.nipype_pipeline.interfaces.ants.AntsAtropos import AntsAtropos
+in_file, out = sys.argv[5:7]
+node = AntsAtropos()
+node.inputs.in_file = in_file
+node.inputs.num_threads = 1
+# the random generator is used only by the MRF update (smoothing > 0)
+node.inputs.mrf_smoothing = 0.2
+node.run()
+np.save(out, np.stack([nib.load(p).get_fdata()
+                       for p in node._list_outputs()["partial_volume_files"]]))
+"""
+
+
+@pytest.mark.heavy
+class TestAntsAtroposReproducibility:
+    """Single-threaded runs in separate processes give identical posteriors
+    with MRF smoothing on: with Atropos' default clock-seeded generator they
+    differ slightly."""
+
+    def test_reproducibility(self, tmp_path, make_nifti, run_single_thread_child):
+        shape = (24, 24, 24)
+        data = np.zeros(shape, dtype=np.float32)
+        data[:, :, 4:10] = 30.0
+        data[:, :, 10:16] = 90.0
+        data[:, :, 16:22] = 160.0
+        rng = np.random.default_rng(0)
+        data = data + rng.normal(0.0, 25.0, shape).astype(np.float32)
+        in_file = make_nifti("phantom.nii.gz", data=data)
+
+        outs = []
+        for name in ("run_1", "run_2"):
+            run_dir = tmp_path / name
+            run_dir.mkdir()
+            out = run_dir / "posteriors.npy"
+            run_single_thread_child(_REPRO_CHILD, in_file, out, cwd=run_dir)
+            outs.append(np.load(out))
+
+        np.testing.assert_array_equal(outs[0], outs[1])

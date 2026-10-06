@@ -11,6 +11,7 @@
     aff_metric = 'mattes'
     num_threads = 1
     out_prefix = 'ants_reg_'
+    random_seed = 123
     syn_metric = 'mattes'
     transform_type = 'Rigid'
 - dif2ref_to_ras [AffineToRAS] mem_gb=1 n_procs=1
@@ -47,6 +48,7 @@
     modality = 'bold'
     num_threads = 1
     out_file = 'nodif_brain.nii.gz'
+    random_seed = 123
     threshold = 0.5
 - dipy_motion [DipyMotionCorrection] mem_gb=4.5 n_procs=1
     num_threads = 1

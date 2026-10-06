@@ -28,6 +28,7 @@
     aff_metric = 'mattes'
     num_threads = 4
     out_prefix = 'ants_reg_'
+    random_seed = 123
     syn_metric = 'mattes'
     transform_type = 'Rigid'
 - flair3d_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
@@ -49,6 +50,7 @@
     mask_file = 'brain_mask.nii.gz'
     modality = 't1'
     num_threads = 4
+    random_seed = 123
     threshold = 0.5
 - flair3d_reorient [ForceOrient] mem_gb=0.2 n_procs=1
 - flair3d_robustfov [NiiMathRobustFov] cmd=niimath mem_gb=0.2 n_procs=1

@@ -37,6 +37,9 @@ class AntsN4BiasFieldCorrectionInputSpec(BaseInterfaceInputSpec):
         desc="maximum number of iterations per resolution level "
         "(antspyx default is [50, 50, 50, 50])",
     )
+    # More than one thread can make the output vary slightly run to run
+    # (multithreaded ITK sums are not guaranteed to run in a fixed order).
+    # Accepted for speed; the thread count is the user's choice.
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
 
 
