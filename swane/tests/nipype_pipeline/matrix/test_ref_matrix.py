@@ -111,3 +111,52 @@ def test_ref_matrix_test_run(
         config=config_echo,
         title="ref / test_run",
     )
+
+
+# name -> (segmentation_engine, test_run). The shared reference tissue
+# segmentation (``ref_segmentation``) is built only when a consumer requests
+# it (tissue_segmentation=True): Atropos on the N4-corrected brain (ANTS) or
+# FAST on the uncorrected brain (FSL).
+SEGMENTATION_SCENARIOS = {
+    "segmentation_ants": ("ANTS", False),
+    "segmentation_ants_test_run": ("ANTS", True),
+    "segmentation_fsl": ("FSL", False),
+    "segmentation_fsl_test_run": ("FSL", True),
+}
+
+
+@pytest.mark.parametrize(
+    "scenario", list(SEGMENTATION_SCENARIOS), ids=list(SEGMENTATION_SCENARIOS)
+)
+def test_ref_segmentation_matrix(
+    scenario, subject_config, global_config, make_input_dir, graph_snapshot
+):
+    segmentation_engine, test_run = SEGMENTATION_SCENARIOS[scenario]
+    section = subject_config[DataInputList.T13D]
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["segmentation_engine"] = segmentation_engine
+
+    wf = ref_workflow(
+        "ref",
+        dicom_dir=make_input_dir(),
+        config=section,
+        synth_config=synth,
+        max_cpu=MAX_CPU,
+        test_run=test_run,
+        tissue_segmentation=True,
+    )
+
+    config_echo = {
+        "deskull_engine": synth["deskull_engine"],
+        "segmentation_engine": segmentation_engine,
+        "limit_synth_cores": synth["limit_cores"],
+        "max_cpu": MAX_CPU,
+        "test_run": test_run,
+    }
+    graph_snapshot(
+        wf,
+        subdir=SUBDIR,
+        name=scenario,
+        config=config_echo,
+        title="ref / %s" % scenario,
+    )

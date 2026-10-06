@@ -6,7 +6,7 @@
 #   registration_engine = FSL
 #   spatial_z_thr = 1.95
 #
-# nodes=73 edges=150
+# nodes=72 edges=149
 
 - aroma_classification [AromaClassification] mem_gb=0.2 n_procs=1
 - count_motion_ics [Function] mem_gb=0.2 n_procs=1
@@ -137,6 +137,7 @@
     mask_file = 'brain_mask.nii.gz'
     modality = 'bold'
     num_threads = 0
+    random_seed = 123
     threshold = 0.5
 - fmri_rs_medianval [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = [50.0]
@@ -258,11 +259,6 @@
     datatype = 'float'
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
-- t1_segmentation [AntsAtropos] mem_gb=3 n_procs=1
-    iterations = 10
-    mrf_radius = 1
-    mrf_smoothing = 0.0
-    number_classes = 3
 - wm_prior_2_func_apply_warp [ApplyWarp] cmd=applywarp mem_gb=0.2 n_procs=1
     datatype = 'float'
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
@@ -406,13 +402,14 @@ ica_spatialz.survivor_neg_files -> ica_output.survivor_neg_files
 ica_spatialz.survivor_pos_files -> ica_output.survivor_pos_files
 ica_spatialz.thresh_zstat_files -> ica_output.thresh_zstat_files
 ica_zstat_split.out_files -> zstats_unthr_2_ref_apply_xfm.in_file
+inputnode.('tissue_pve', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (0,)) -> csf_subject_thr.in_file
+inputnode.('tissue_pve', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (2,)) -> wm_subject_thr.in_file
 inputnode.reference_brain -> fmri_rs_2_ref_flirt.reference
 inputnode.reference_brain -> ref_2_mni_flirt.in_file
 inputnode.reference_brain -> ref_2_mni_fnirt.in_file
 inputnode.reference_brain -> ref_2_mni_invwarp.reference
 inputnode.reference_brain -> survivors_neg_2_ref_apply_xfm.reference
 inputnode.reference_brain -> survivors_pos_2_ref_apply_xfm.reference
-inputnode.reference_brain -> t1_segmentation.in_file
 inputnode.reference_brain -> zstats_unthr_2_ref_apply_xfm.reference
 meanfunc_clean.out_file -> merge_tr_meanfunc_clean.in2
 merge_tr_meanfunc_clean.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (100,)) -> highpass_clean.op_string
@@ -444,8 +441,6 @@ ref_2_mni_fnirt.fieldcoeff_file -> ref_2_mni_invwarp.warp
 ref_2_mni_invwarp.inverse_warp -> mni_2_func_warp.warp1
 survivors_neg_2_ref_apply_xfm.out_file -> zstats_combine.neg_mask_file
 survivors_pos_2_ref_apply_xfm.out_file -> zstats_combine.pos_mask_file
-t1_segmentation.('partial_volume_files', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (0,)) -> csf_subject_thr.in_file
-t1_segmentation.('partial_volume_files', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (2,)) -> wm_subject_thr.in_file
 wm_prior_2_func_apply_warp.out_file -> wm_prior_thr_bin.in_file
 wm_prior_mni.prior_file -> wm_prior_2_func_apply_warp.in_file
 wm_prior_thr_bin.out_file -> wm_roi.in_file2

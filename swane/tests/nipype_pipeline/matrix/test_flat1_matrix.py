@@ -58,43 +58,6 @@ def test_flat1_matrix(scenario, global_config, make_file, graph_snapshot):
     )
 
 
-TEST_RUN_SCENARIOS = {
-    "fsl_backend_test_run": False,
-    "synthmorph_backend_test_run": True,
-}
-
-
-@pytest.mark.parametrize(
-    "scenario", list(TEST_RUN_SCENARIOS), ids=list(TEST_RUN_SCENARIOS)
-)
-def test_flat1_matrix_test_run(scenario, global_config, make_file, graph_snapshot):
-    """test_run=True on both backends: FAST gets cut iterations (-I=1 -W=5
-    -O=1, unvalidated -- see prerelease/TODO.md) regardless of backend.
-    """
-    synth_morph = TEST_RUN_SCENARIOS[scenario]
-    synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["morph"] = "true" if synth_morph else "false"
-    # ANTS is exercised separately by test_flat1_ants_construction; pin these
-    # scenarios so they keep matching their existing golden snapshots.
-    synth["engine"] = "SYNTH" if synth_morph else "FSL"
-    synth["segmentation_engine"] = "FSL"
-
-    wf = flat1_workflow(
-        "flat1",
-        mni1_dir=make_file("mni1.nii.gz", "x"),
-        synth_config=synth,
-        test_run=True,
-    )
-
-    graph_snapshot(
-        wf,
-        subdir=SUBDIR,
-        name=scenario,
-        config={"synth_morph": synth["morph"], "test_run": True},
-        title="flat1 / %s" % scenario,
-    )
-
-
 # --------------------------------------------------------------------------- #
 # ANTS-default construction (node/edge assertions, independent of the
 # ``ants_backend`` byte snapshot above): the 7 nonlinear applies (4 forward via
@@ -164,107 +127,48 @@ def test_flat1_fsl_construction_unchanged(global_config, make_file):
 
 
 # --------------------------------------------------------------------------- #
-# Segmentation-engine axis (independent of the registration axis above): with
-# ``segmentation_engine="ANTS"`` the FAST node is replaced by an AntsAtropos
-# node feeding the same ``fast_segment_split``; ``restore_2_mni1`` then takes
-# its moving image straight from ``inputnode.reference_brain``. FSL keeps the
-# byte-identical FAST node.
+# Segmentation-engine axis (independent of the registration axis above): the
+# tissue segmentation itself runs once in ref_workflow (``ref_segmentation``)
+# and reaches FLAT1 through ``inputnode.tissue_pve`` / ``tissue_restored``, so
+# FLAT1 builds no segmentation node for either engine. The engine still
+# selects the 0.1 posterior threshold applied to the dense Atropos posteriors
+# before they are used as GM/WM masks (FSL FAST PVE are used directly).
 # --------------------------------------------------------------------------- #
-def test_flat1_atropos_construction(global_config, make_file):
+@pytest.mark.parametrize("segmentation", ["ANTS", "FSL"])
+def test_flat1_consumes_shared_segmentation(global_config, make_file, segmentation):
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = "FSL"  # isolate the segmentation change
-    synth["segmentation_engine"] = "ANTS"
+    synth["segmentation_engine"] = segmentation
     wf = flat1_workflow(
         "flat1", mni1_dir=make_file("mni1.nii.gz", "x"), synth_config=synth
     )
     ifaces = [_iface(n) for n in wf._graph.nodes()]
-    assert "AntsAtropos" in ifaces
-    assert "FAST" not in ifaces
-
-    names = {n.name for n in wf._graph.nodes()}
-    assert "flat1_atropos" in names and "flat1_fast" not in names
+    assert "AntsAtropos" not in ifaces and "FAST" not in ifaces
 
     node_by_name = {n.name: n for n in wf._graph.nodes()}
-    # split node still fed by the segmentation node's partial_volume_files
+    assert "flat1_atropos" not in node_by_name and "flat1_fast" not in node_by_name
+    inputnode = node_by_name["inputnode"]
+    assert {"tissue_pve", "tissue_restored"} <= set(inputnode.interface._fields)
+
+    # split node fed by the shared [CSF, GM, WM] tissue maps
     split_in = _incoming(wf, node_by_name["fast_segment_split"])
-    assert any(
-        src.name == "flat1_atropos"
-        and sf == "partial_volume_files"
-        and df == "file_list"
-        for src, sf, df in split_in
-    )
-    # restore_2_mni1 moving image comes straight from reference_brain (inputnode).
+    assert split_in == [(inputnode, "tissue_pve", "file_list")]
+    # restore_2_mni1 moves the shared restored (bias-corrected) T1.
     # The FSL apply node names itself "<name>_apply_warp" (non_linear ApplyWarp).
     restore_in = _incoming(wf, node_by_name["restore_2_mni1_apply_warp"])
-    assert any(
-        src.name == "inputnode" and sf == "reference_brain"
-        for src, sf, df in restore_in
-    )
+    assert (inputnode, "tissue_restored", "in_file") in restore_in
+
+    # dense Atropos posteriors are thresholded at 0.1; FAST PVE are not
+    thresholds = {"flat1_gm_bin", "flat1_wm_bin"}
+    if segmentation == "ANTS":
+        assert thresholds <= set(node_by_name)
+        for thr in thresholds:
+            assert node_by_name[thr].inputs.thresh == 0.1
+    else:
+        assert not thresholds & set(node_by_name)
 
 
-def test_flat1_fast_construction_unchanged(global_config, make_file):
-    synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["engine"] = "FSL"
-    synth["segmentation_engine"] = "FSL"
-    wf = flat1_workflow(
-        "flat1", mni1_dir=make_file("mni1.nii.gz", "x"), synth_config=synth
-    )
-    ifaces = [_iface(n) for n in wf._graph.nodes()]
-    assert "FAST" in ifaces and "AntsAtropos" not in ifaces
-    node_by_name = {n.name: n for n in wf._graph.nodes()}
-    restore_in = _incoming(wf, node_by_name["restore_2_mni1_apply_warp"])
-    assert any(
-        src.name == "flat1_fast" and sf == "restored_image"
-        for src, sf, df in restore_in
-    )
-
-
-def test_flat1_atropos_num_threads_budgeted(global_config, make_file):
-    """Atropos (ITK) gets a real num_threads/n_procs reservation from the CPU
-    budget, like the antspynet deskull node -- so it cannot oversubscribe."""
-    from nipype.interfaces.base import isdefined
-
-    synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["engine"] = "FSL"
-    synth["segmentation_engine"] = "ANTS"
-    wf = flat1_workflow(
-        "flat1",
-        mni1_dir=make_file("mni1.nii.gz", "x"),
-        synth_config=synth,
-        max_cpu=4,
-    )
-    atropos = {n.name: n for n in wf._graph.nodes()}["flat1_atropos"]
-    assert isdefined(atropos.inputs.num_threads)
-    assert atropos.inputs.num_threads == 4
-    assert atropos.n_procs == 4
-
-
-def test_flat1_atropos_unbudgeted_when_max_cpu_zero(global_config, make_file):
-    """Default max_cpu (0) leaves Atropos unbudgeted: no num_threads is set,
-    so the graph default build is unchanged."""
-    from nipype.interfaces.base import isdefined
-
-    synth = global_config[GlobalPrefCategoryList.SYNTH]
-    synth["engine"] = "FSL"
-    synth["segmentation_engine"] = "ANTS"
-    wf = flat1_workflow(
-        "flat1", mni1_dir=make_file("mni1.nii.gz", "x"), synth_config=synth
-    )
-    atropos = {n.name: n for n in wf._graph.nodes()}["flat1_atropos"]
-    assert not isdefined(atropos.inputs.num_threads)
-
-
-SEGMENTATION_SCENARIOS = {
-    "atropos_backend": False,  # full iterations
-    "atropos_backend_test_run": True,  # iterations cut to 3
-}
-
-
-@pytest.mark.parametrize(
-    "scenario", list(SEGMENTATION_SCENARIOS), ids=list(SEGMENTATION_SCENARIOS)
-)
-def test_flat1_atropos_matrix(scenario, global_config, make_file, graph_snapshot):
-    test_run = SEGMENTATION_SCENARIOS[scenario]
+def test_flat1_atropos_matrix(global_config, make_file, graph_snapshot):
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["morph"] = "false"
     synth["engine"] = "FSL"  # isolate the segmentation change
@@ -273,12 +177,11 @@ def test_flat1_atropos_matrix(scenario, global_config, make_file, graph_snapshot
         "flat1",
         mni1_dir=make_file("mni1.nii.gz", "x"),
         synth_config=synth,
-        test_run=test_run,
     )
     graph_snapshot(
         wf,
         subdir=SUBDIR,
-        name=scenario,
-        config={"segmentation_engine": "ANTS", "test_run": test_run},
-        title="flat1 / %s" % scenario,
+        name="atropos_backend",
+        config={"segmentation_engine": "ANTS"},
+        title="flat1 / atropos_backend",
     )

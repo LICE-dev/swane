@@ -184,10 +184,12 @@ AXES = (
         values=_enum_values(FmriEngine, "NILEARN", "FSL"),
         gates={"NILEARN": "nilearn", "FSL": "fsl"},
     ),
-    # The tissue-segmentation backend used by FLAT1: ANTS (antspyx Atropos, the
-    # default, gated on antspyx) and FSL (FAST, gated on FSL). Only
-    # meaningful when a pass runs FLAT1; the two structural twins pin it (FSL on
-    # structural_fsl, ANTS on structural_ants) so both engines stay covered.
+    # The backend of the shared reference tissue segmentation (consumed by
+    # FLAT1, dipy tractography and the NILEARN resting state): ANTS (antspyx
+    # Atropos, the default, gated on antspyx) and FSL (FAST, gated on FSL).
+    # Only meaningful when a pass runs one of those consumers; the two
+    # structural twins pin it (FSL on structural_fsl, ANTS on structural_ants)
+    # so both engines stay covered.
     Axis(
         name="segmentation_engine",
         scope=GLOBAL,
@@ -195,7 +197,8 @@ AXES = (
         option="segmentation_engine",
         values=_enum_values(SegmentationEngine, "ANTS", "FSL"),
         gates={"ANTS": "antspyx", "FSL": "fsl"},
-        note="only exercised when a pass runs FLAT1 (flat1=true)",
+        note="only exercised when a pass runs FLAT1 (flat1=true), dipy "
+        "tractography or the NILEARN resting state",
     ),
     Axis(
         name="synth_reconall",

@@ -6,7 +6,7 @@ the subject tractogram, applies the affine to the full tractogram in place and
 streams the write, so the peak tracks the full tractogram's point count.
 ``num_threads`` only pins BLAS/OMP threading and the subsample size is fixed --
 so this estimator is one-way, like
-:class:`DipyTissueRamEstimator`/:class:`RecoBundlesRamEstimator`, keyed on the
+:class:`RecoBundlesRamEstimator`, keyed on the
 subject tractogram's point count.
 
 Everything runs against tiny synthetic ``.trx`` phantoms (nibabel/numpy/dipy)

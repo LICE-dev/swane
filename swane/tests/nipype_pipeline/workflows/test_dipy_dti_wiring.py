@@ -104,7 +104,6 @@ class TestNodePresence:
             "dipy_bias",
             "dipy_tensorfit",
             "dipy_csd",
-            "dipy_tissue",
             "dipy_tracking",
             "dipy_slr",
             "dif2ref_antsreg",
@@ -222,12 +221,19 @@ class TestDwiChainOrder:
 
 class TestTissueBranchAndTracking:
     def test_pve_wm_resampled_ref_to_diff_and_reaches_tracking(self, dipy_wf):
-        tissue = _node_by_name(dipy_wf, "dipy_tissue")
+        inputnode = _node_by_name(dipy_wf, "inputnode")
         tracking = _node_by_name(dipy_wf, "dipy_tracking")
         apply_node = _node_by_name(dipy_wf, "pve_wm_2_diff_ants_apply")
 
-        # tissue classifier PVE -> ref->diff ANTs resample
-        assert (tissue, "pve_wm", "input_image") in _incoming(dipy_wf, apply_node)
+        # WM channel (index 2 of [CSF, GM, WM]) of the shared reference
+        # segmentation -> ref->diff ANTs resample
+        incoming = _incoming(dipy_wf, apply_node)
+        pve_src = [(src, sf) for src, sf, df in incoming if df == "input_image"]
+        assert len(pve_src) == 1
+        src, field = pve_src[0]
+        assert src is inputnode
+        assert field[0] == "tissue_pve"
+        assert tuple(field[2]) == (2,)
         # resampled PVE -> tracking (the seed mask)
         assert (apply_node, "out_file", "pve_wm") in _incoming(dipy_wf, tracking)
 
@@ -249,10 +255,16 @@ class TestTissueBranchAndTracking:
         assert (tensorfit, "fa", "fa") in track_inc
         assert not any(src.name == "fa_2_ref_ants_apply" for src, _, _ in track_inc)
 
-    def test_tissue_classifier_runs_on_reference_brain(self, dipy_wf):
-        tissue = _node_by_name(dipy_wf, "dipy_tissue")
+    def test_no_own_tissue_segmentation(self, dipy_wf):
+        """The tissue maps come from the shared reference segmentation: the
+        workflow builds no segmentation node of its own and advertises the
+        ``tissue_pve`` input."""
+        names = {n.name for n in dipy_wf._graph.nodes()}
+        assert "dipy_tissue" not in names
+        ifaces = {_iface(n) for n in dipy_wf._graph.nodes()}
+        assert not ifaces & {"DipyTissueClassifier", "AntsAtropos", "FAST"}
         inputnode = _node_by_name(dipy_wf, "inputnode")
-        assert (inputnode, "reference_brain", "in_file") in _incoming(dipy_wf, tissue)
+        assert "tissue_pve" in inputnode.interface._fields
 
     def test_wm_seed_mask_is_wired_not_whole_brain(self, dipy_wf):
         """Seeding is the WM PVE channel: the WM apply node feeds tracking's
@@ -362,6 +374,8 @@ class TestSharedRecoBundlesBuild:
         assert "dipy_chunker" not in names
         assert "dipy_recobundles_build" not in names
         assert "dipy_slr" not in names
+        # no tractography -> the shared tissue maps have no consumer
+        assert not any(n.startswith("pve_wm_2_diff") for n in names)
 
 
 class TestRasAffineWiring:
