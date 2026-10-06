@@ -10,13 +10,13 @@ _SCIPY_PATCHED = False
 def apply_scipy_patches():
     """
     Install a mock for scipy.sparse.linalg._propack to avoid a crash on macOS.
-    
+
     Because antspyx < 0.6.4 strictly requires scipy < 1.16, pip forces the installation
     of older scipy wheels. These older wheels contain broken binary modules
     (_spropack.cpython-312-darwin.so, etc.) that cause an immediate ImportError: dlopen
     crash with a "__DATA/__thread_bss has a zero-fill section type" error on recent
     macOS versions (like Sequoia or with recent toolchains).
-    
+
     Since SWANe and Nipype never actually use the 'propack' SVD solver, we can bypass
     this crash entirely by injecting a dummy module into sys.modules BEFORE scipy
     is fully imported.
