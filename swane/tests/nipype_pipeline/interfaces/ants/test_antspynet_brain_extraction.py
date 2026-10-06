@@ -335,14 +335,18 @@ class TestAntsPyNetBrainExtractionReproducibility:
         return nib.load(node._list_outputs()["out_file"]).get_fdata()
 
     def test_reproducibility(self, tmp_path):
-        import nibabel as nib
+        import antspynet
 
-        arr = np.zeros((96, 96, 96), dtype="float32")
-        arr[24:72, 24:72, 24:72] = 100.0
+        # A real T1 head image: a synthetic phantom is not recognised as a brain
+        # by the network (empty mask). S_template3 is the template antspynet
+        # itself downloads to reorient the input, so no extra download.
         in_file = str(tmp_path / "t1.nii.gz")
-        nib.save(nib.Nifti1Image(arr, np.eye(4)), in_file)
+        ants.image_write(
+            ants.image_read(antspynet.get_antsxnet_data("S_template3")), in_file
+        )
 
         out1 = self._run_be(in_file, str(tmp_path / "brain_1.nii.gz"))
         out2 = self._run_be(in_file, str(tmp_path / "brain_2.nii.gz"))
 
+        assert out1.any()
         np.testing.assert_array_equal(out1, out2)
