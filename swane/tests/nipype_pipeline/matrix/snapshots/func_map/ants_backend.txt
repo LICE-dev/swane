@@ -12,6 +12,7 @@
     aff_metric = 'mattes'
     num_threads = 0
     out_prefix = 'ants_reg_'
+    random_seed = 123
     syn_metric = 'mattes'
     transform_type = 'Rigid'
 - asl_2_sym_warp_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1

@@ -42,6 +42,7 @@
     modality = 't1'
     num_threads = 4
     out_file = 'nodif_brain.nii.gz'
+    random_seed = 123
     threshold = 0.5
 - dti_dtifit [DTIFit] cmd=dtifit mem_gb=0.2 n_procs=1
     base_name = 'dtifit_'

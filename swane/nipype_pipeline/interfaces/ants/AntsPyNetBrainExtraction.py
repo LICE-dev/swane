@@ -11,6 +11,11 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.ants import (
+    DEFAULT_RANDOM_SEED,
+    ants_random_seed,
+)
+
 # antspyx and antspynet are imported lazily inside _run_interface, as in
 # AntsN4BiasFieldCorrection, so importing this module never loads tensorflow.
 
@@ -31,7 +36,17 @@ class AntsPyNetBrainExtractionInputSpec(BaseInterfaceInputSpec):
     )
     out_file = File(desc="the skull-stripped brain image")
     mask_file = File(desc="the binary brain mask")
+    # More than one thread can make the output vary slightly run to run
+    # (multithreaded ITK and TensorFlow sums are not guaranteed to run in a
+    # fixed order). Accepted for speed; the thread count is the user's choice.
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
+    random_seed = traits.Range(
+        low=1,
+        value=DEFAULT_RANDOM_SEED,
+        usedefault=True,
+        desc="Seed of the random metric sampling of the ANTs registrations that "
+        "antspynet runs for some modalities",
+    )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -77,7 +92,11 @@ class AntsPyNetBrainExtraction(BaseInterface):
             out_file = self._gen_outfilename()
             img = ants.image_read(self.inputs.in_file, pixeltype="float")
 
-            prob = antspynet.brain_extraction(img, modality=self.inputs.modality)
+            # The network inference draws no random numbers; the only random
+            # step is the metric sampling of the ANTs registrations antspynet
+            # runs for some modalities.
+            with ants_random_seed(self.inputs.random_seed):
+                prob = antspynet.brain_extraction(img, modality=self.inputs.modality)
 
             if not isinstance(prob, ANTsImage):
                 raise TypeError(

@@ -17,6 +17,7 @@ import os
 import numpy as np
 import pytest
 
+from swane.nipype_pipeline.interfaces.ants import DEFAULT_RANDOM_SEED
 from swane.nipype_pipeline.interfaces.ants.AntsRegistration import AntsRegistration
 
 
@@ -250,6 +251,42 @@ class TestAntsRegistrationRuntime:
         assert seen["threads"] == "3"
         assert var not in os.environ
 
+    def test_random_seed_must_be_non_zero(self):
+        # antsRegistration treats --random-seed 0 as "no seed" (clock-seeded)
+        from traits.api import TraitError
+
+        with pytest.raises(TraitError):
+            AntsRegistration().inputs.random_seed = 0
+
+    @pytest.mark.parametrize("seed", [None, 99])
+    def test_random_seed_is_set_then_restored(
+        self, workspace, make_nifti, monkeypatch, seed
+    ):
+        import ants
+
+        monkeypatch.setattr(ants.config, "_random_seed", None)
+        seen = {}
+
+        node = AntsRegistration()
+        node.inputs.moving = make_nifti("m.nii.gz", shape=(6, 6, 6))
+        node.inputs.fixed = make_nifti("f.nii.gz", shape=(6, 6, 6))
+        node.inputs.transform_type = "Affine"
+        if seed is not None:
+            node.inputs.random_seed = seed
+
+        real_fake = _fake_registration({}, LINEAR_FILES)
+
+        def _spy(*args, **kwargs):
+            # ants.registration reads this module setting for --random-seed
+            seen["seed"] = ants.config._random_seed
+            return real_fake(*args, **kwargs)
+
+        monkeypatch.setattr(ants, "registration", _spy)
+        node.run()
+
+        assert seen["seed"] == (DEFAULT_RANDOM_SEED if seed is None else seed)
+        assert ants.config._random_seed is None
+
     def test_initial_transform_is_forwarded(
         self, workspace, make_nifti, make_file, monkeypatch
     ):
@@ -350,7 +387,55 @@ class TestAntsRegistrationRealRun:
         recovered = np.corrcoef(back.numpy().ravel(), moving_data.ravel())[0, 1]
         assert recovered > 0.9
 
-        # and the warped output really lives in the fixed image's grid
         warped = nib.load(outputs["warped_file"])
         assert warped.shape == nib.load(fixed).shape
         assert np.allclose(warped.affine, nib.load(fixed).affine, atol=1e-4)
+
+
+_REPRO_CHILD = """
+import nibabel as nib
+import numpy as np
+from swane.nipype_pipeline.interfaces.ants.AntsRegistration import AntsRegistration
+fixed, moving, out = sys.argv[5:8]
+node = AntsRegistration()
+node.inputs.fixed = fixed
+node.inputs.moving = moving
+node.inputs.transform_type = "Affine"
+node.inputs.num_threads = 1
+node.inputs.test_run = True
+if len(sys.argv) > 8:
+    node.inputs.random_seed = int(sys.argv[8])
+node.run()
+np.save(out, nib.load(node._list_outputs()["warped_file"]).get_fdata())
+"""
+
+
+@pytest.mark.heavy
+class TestAntsRegistrationReproducibility:
+    """With one ITK thread a fixed seed gives bit-identical registrations."""
+
+    @staticmethod
+    def _run_reg(run_child, tmp_path, fixed, moving, name, *seed):
+        run_dir = tmp_path / name
+        run_dir.mkdir()
+        out = run_dir / "warped.npy"
+        run_child(_REPRO_CHILD, fixed, moving, out, *seed, cwd=run_dir)
+        return np.load(out)
+
+    def test_reproducibility(self, tmp_path, make_nifti, run_single_thread_child):
+        fixed_data = np.zeros((24, 24, 24), dtype=np.float32)
+        fixed_data[6:18, 6:18, 6:18] = 1.0
+        moving_data = np.zeros((24, 24, 24), dtype=np.float32)
+        moving_data[10:22, 4:16, 6:18] = 1.0
+        fixed = make_nifti("f.nii.gz", data=fixed_data)
+        moving = make_nifti("m.nii.gz", data=moving_data)
+
+        run = run_single_thread_child
+        out1 = self._run_reg(run, tmp_path, fixed, moving, "default_1")
+        out2 = self._run_reg(run, tmp_path, fixed, moving, "default_2")
+        out3 = self._run_reg(run, tmp_path, fixed, moving, "other_seed", 99)
+
+        # the default seed is fixed, so two runs are bit-identical
+        np.testing.assert_array_equal(out1, out2)
+        # and the seed really reaches the random metric sampling
+        assert not np.array_equal(out1, out3)
