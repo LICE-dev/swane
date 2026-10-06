@@ -10,6 +10,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.ants import DEFAULT_RANDOM_SEED
+
 # antspyx is imported lazily inside _run_interface so that merely importing this
 # module (as the workflow builders and the graph tests do) never pays the cost of
 # loading the ITK bindings.
@@ -63,10 +65,17 @@ class AntsRegistrationInputSpec(BaseInterfaceInputSpec):
         usedefault=True,
         desc="metric for the deformable stage",
     )
+    # More than one thread makes the output vary slightly run to run even with
+    # a fixed random_seed: the metric sums are accumulated in parallel in a
+    # non-deterministic order. Accepted for speed; the thread count is the
+    # user's choice. Only num_threads=1, in a process whose ITK has not run
+    # yet, gives bit-identical results.
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
     initial_transform = File(exists=True, desc="initial moving transform")
     random_seed = traits.Int(
-        42, usedefault=True, desc="Seed to initialize the random number generator"
+        DEFAULT_RANDOM_SEED,
+        usedefault=True,
+        desc="Seed of the random metric sampling (antsRegistration --random-seed)",
     )
     moving_mask = File(
         exists=True,
@@ -133,9 +142,10 @@ class AntsRegistration(BaseInterface):
         try:
             import ants
 
+            # ants.registration passes this module setting as --random-seed;
+            # it is restored below.
             previous_random_seed = ants.config._random_seed
-            if isdefined(self.inputs.random_seed):
-                ants.config._random_seed = self.inputs.random_seed
+            ants.config._random_seed = self.inputs.random_seed
 
             kwargs = {
                 "aff_metric": self.inputs.aff_metric,

@@ -15,6 +15,7 @@
     aff_metric = 'mattes'
     num_threads = 0
     out_prefix = 'ants_reg_'
+    random_seed = 123
     syn_metric = 'mattes'
     transform_type = 'Rigid'
 - fmri_0_art [ArtifactDetect] mem_gb=0.2 n_procs=1
@@ -117,6 +118,7 @@
     mask_file = 'brain_mask.nii.gz'
     modality = 'bold'
     num_threads = 0
+    random_seed = 123
     threshold = 0.5
 - fmri_0_medianval [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = [50.0]

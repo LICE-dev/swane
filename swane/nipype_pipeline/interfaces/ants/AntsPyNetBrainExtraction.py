@@ -11,6 +11,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.ants import DEFAULT_RANDOM_SEED
+
 # antspyx and antspynet are imported lazily inside _run_interface, as in
 # AntsN4BiasFieldCorrection, so importing this module never loads tensorflow.
 
@@ -31,9 +33,15 @@ class AntsPyNetBrainExtractionInputSpec(BaseInterfaceInputSpec):
     )
     out_file = File(desc="the skull-stripped brain image")
     mask_file = File(desc="the binary brain mask")
+    # More than one thread can make the output vary slightly run to run
+    # (multithreaded ITK and TensorFlow sums are not guaranteed to run in a
+    # fixed order). Accepted for speed; the thread count is the user's choice.
     num_threads = traits.Int(nohash=True, desc="number of ITK threads")
     random_seed = traits.Int(
-        42, usedefault=True, desc="Seed to initialize the random number generator"
+        DEFAULT_RANDOM_SEED,
+        usedefault=True,
+        desc="Seed of the random metric sampling of the ANTs registrations that "
+        "antspynet runs for some modalities",
     )
 
 
@@ -77,20 +85,13 @@ class AntsPyNetBrainExtraction(BaseInterface):
         try:
             import ants
             import antspynet
-            import random
-            import numpy as np
             from ants.core.ants_image import ANTsImage
 
+            # The network inference draws no random numbers; the only random
+            # step is the metric sampling of the ANTs registrations, seeded by
+            # this module setting (restored below).
             previous_random_seed = ants.config._random_seed
-            if isdefined(self.inputs.random_seed):
-                ants.config._random_seed = self.inputs.random_seed
-                random.seed(self.inputs.random_seed)
-                np.random.seed(self.inputs.random_seed)
-                try:
-                    import tensorflow as tf
-                    tf.random.set_seed(self.inputs.random_seed)
-                except ImportError:
-                    pass
+            ants.config._random_seed = self.inputs.random_seed
 
             out_file = self._gen_outfilename()
             img = ants.image_read(self.inputs.in_file, pixeltype="float")
