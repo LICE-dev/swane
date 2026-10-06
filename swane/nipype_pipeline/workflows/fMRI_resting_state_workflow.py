@@ -54,6 +54,10 @@ def fMRI_resting_state_workflow(
     ----------
     reference_brain : path
         Betted T13D.
+    tissue_pve : list of path
+        Tissue partial volume / posterior maps of the T13D ordered
+        [CSF, GM, WM], from the shared reference segmentation (NILEARN engine
+        only).
 
     Output Node Fields
     ----------
@@ -106,6 +110,10 @@ def fMRI_resting_state_workflow(
         base_dir=base_dir,
         max_cpu=max_cpu,
         test_run=test_run,
+        # The NILEARN nuisance ROIs consume the shared reference segmentation.
+        extra_input_fields=(
+            ("tissue_pve",) if fmri_engine == FmriEngine.NILEARN else ()
+        ),
     )
 
     # Output Node

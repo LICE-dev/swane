@@ -1,6 +1,6 @@
 # SWANe workflow settings matrix
 
-Overview of 90 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
+Overview of 91 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
 > Generated from the golden snapshots by `python3 swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
@@ -19,8 +19,8 @@ Overview of 90 construction scenarios across 16 workflow families. Each row is o
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
 | [no_tractography](snapshots/dipy_dti_preproc/no_tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=false; tractography_engine=DIPY_RECOBUNDLES | 13 / 18 | `dcm2niix` | — |
-| [tractography](snapshots/dipy_dti_preproc/tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 21 / 41 | `dcm2niix` | — |
-| [tractography_single_thread](snapshots/dipy_dti_preproc/tractography_single_thread.txt) | deskull_engine=ANTSPYNET; max_cpu=1; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 21 / 41 | `dcm2niix` | — |
+| [tractography](snapshots/dipy_dti_preproc/tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 20 / 40 | `dcm2niix` | — |
+| [tractography_single_thread](snapshots/dipy_dti_preproc/tractography_single_thread.txt) | deskull_engine=ANTSPYNET; max_cpu=1; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 20 / 40 | `dcm2niix` | — |
 
 ## dti_preproc
 
@@ -36,13 +36,10 @@ Overview of 90 construction scenarios across 16 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [ants_backend](snapshots/flat1/ants_backend.txt) | registration_engine=ANTS; synth_morph=false | 37 / 55 | `fast`, `niimath` | — |
-| [atropos_backend](snapshots/flat1/atropos_backend.txt) | segmentation_engine=ANTS; test_run=False | 32 / 45 | `applywarp`, `niimath` | — |
-| [atropos_backend_test_run](snapshots/flat1/atropos_backend_test_run.txt) | segmentation_engine=ANTS; test_run=True | 32 / 45 | `applywarp`, `niimath` | — |
-| [fsl_backend](snapshots/flat1/fsl_backend.txt) | registration_engine=FSL; synth_morph=false | 30 / 44 | `applywarp`, `fast`, `niimath` | — |
-| [fsl_backend_test_run](snapshots/flat1/fsl_backend_test_run.txt) | synth_morph=false; test_run=True | 30 / 44 | `applywarp`, `fast`, `niimath` | — |
-| [synthmorph_backend](snapshots/flat1/synthmorph_backend.txt) | registration_engine=SYNTH; synth_morph=true | 30 / 44 | `fast`, `mri_synthmorph`, `niimath` | — |
-| [synthmorph_backend_test_run](snapshots/flat1/synthmorph_backend_test_run.txt) | synth_morph=true; test_run=True | 30 / 44 | `fast`, `mri_synthmorph`, `niimath` | — |
+| [ants_backend](snapshots/flat1/ants_backend.txt) | registration_engine=ANTS; synth_morph=false | 36 / 54 | `niimath` | — |
+| [atropos_backend](snapshots/flat1/atropos_backend.txt) | segmentation_engine=ANTS | 31 / 44 | `applywarp`, `niimath` | — |
+| [fsl_backend](snapshots/flat1/fsl_backend.txt) | registration_engine=FSL; synth_morph=false | 29 / 42 | `applywarp`, `niimath` | — |
+| [synthmorph_backend](snapshots/flat1/synthmorph_backend.txt) | registration_engine=SYNTH; synth_morph=true | 29 / 42 | `mri_synthmorph`, `niimath` | — |
 
 ## fmri_preproc
 
@@ -62,9 +59,9 @@ Overview of 90 construction scenarios across 16 workflow families. Each row is o
 | [aroma_on](snapshots/fmri_resting_state/aroma_on.txt) | aroma=true; ic_dim=0; melodic_thr=0.5 | 47 / 80 | `applywarp`, `convertwarp`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `mcflirt`, `melodic`, `niimath`, `susan` | — |
 | [ic_auto_dim](snapshots/fmri_resting_state/ic_auto_dim.txt) | aroma=false; ic_dim=0; melodic_thr=0.5 | 31 / 49 | `dcm2niix`, `flirt`, `mcflirt`, `melodic`, `niimath`, `susan` | — |
 | [ic_fixed_dim](snapshots/fmri_resting_state/ic_fixed_dim.txt) | aroma=false; ic_dim=30; melodic_thr=0.9 | 31 / 49 | `dcm2niix`, `flirt`, `mcflirt`, `melodic`, `niimath`, `susan` | — |
-| [nilearn_aroma_off_ants](snapshots/fmri_resting_state/nilearn_aroma_off_ants.txt) | aroma=false; fmri_engine=NILEARN; ic_dim=0; registration_engine=ANTS; spatial_z_thr=1.95 | 58 / 114 | `dcm2niix`, `niimath` | — |
-| [nilearn_aroma_on_ants](snapshots/fmri_resting_state/nilearn_aroma_on_ants.txt) | aroma=true; fmri_engine=NILEARN; ic_dim=0; registration_engine=ANTS; spatial_z_thr=1.95 | 74 / 155 | `dcm2niix`, `niimath` | — |
-| [nilearn_aroma_on_fsl_registration](snapshots/fmri_resting_state/nilearn_aroma_on_fsl_registration.txt) | aroma=true; fmri_engine=NILEARN; ic_dim=0; registration_engine=FSL; spatial_z_thr=1.95 | 73 / 150 | `applywarp`, `convert_xfm`, `convertwarp`, `dcm2niix`, `flirt`, `fnirt`, `invwarp`, `niimath` | — |
+| [nilearn_aroma_off_ants](snapshots/fmri_resting_state/nilearn_aroma_off_ants.txt) | aroma=false; fmri_engine=NILEARN; ic_dim=0; registration_engine=ANTS; spatial_z_thr=1.95 | 57 / 113 | `dcm2niix`, `niimath` | — |
+| [nilearn_aroma_on_ants](snapshots/fmri_resting_state/nilearn_aroma_on_ants.txt) | aroma=true; fmri_engine=NILEARN; ic_dim=0; registration_engine=ANTS; spatial_z_thr=1.95 | 73 / 154 | `dcm2niix`, `niimath` | — |
+| [nilearn_aroma_on_fsl_registration](snapshots/fmri_resting_state/nilearn_aroma_on_fsl_registration.txt) | aroma=true; fmri_engine=NILEARN; ic_dim=0; registration_engine=FSL; spatial_z_thr=1.95 | 72 / 149 | `applywarp`, `convert_xfm`, `convertwarp`, `dcm2niix`, `flirt`, `fnirt`, `invwarp`, `niimath` | — |
 | [test_run](snapshots/fmri_resting_state/test_run.txt) | aroma=true; ic_dim=0; melodic_thr=0.5; test_run=True | 47 / 80 | `applywarp`, `convertwarp`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `mcflirt`, `melodic`, `niimath`, `susan` | — |
 
 ## fmri_task
@@ -138,6 +135,10 @@ Overview of 90 construction scenarios across 16 workflow families. Each row is o
 | [bet_bias_thr0](snapshots/ref/bet_bias_thr0.txt) | bet_bias_correction=true; bet_thr=0.0; deskull_engine=BET; limit_synth_cores=false; max_cpu=4 | 8 / 12 | `bet`, `dcm2niix`, `niimath` | — |
 | [bet_default](snapshots/ref/bet_default.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=BET; limit_synth_cores=false; max_cpu=4 | 8 / 12 | `bet`, `dcm2niix`, `niimath` | — |
 | [bet_thr_high](snapshots/ref/bet_thr_high.txt) | bet_bias_correction=false; bet_thr=1.0; deskull_engine=BET; limit_synth_cores=false; max_cpu=4 | 8 / 12 | `bet`, `dcm2niix`, `niimath` | — |
+| [segmentation_ants](snapshots/ref/segmentation_ants.txt) | deskull_engine=ANTSPYNET; limit_synth_cores=False; max_cpu=4; segmentation_engine=ANTS; test_run=False | 9 / 14 | `dcm2niix`, `niimath` | — |
+| [segmentation_ants_test_run](snapshots/ref/segmentation_ants_test_run.txt) | deskull_engine=ANTSPYNET; limit_synth_cores=False; max_cpu=4; segmentation_engine=ANTS; test_run=True | 9 / 14 | `dcm2niix`, `niimath` | — |
+| [segmentation_fsl](snapshots/ref/segmentation_fsl.txt) | deskull_engine=ANTSPYNET; limit_synth_cores=False; max_cpu=4; segmentation_engine=FSL; test_run=False | 9 / 14 | `dcm2niix`, `fast`, `niimath` | — |
+| [segmentation_fsl_test_run](snapshots/ref/segmentation_fsl_test_run.txt) | deskull_engine=ANTSPYNET; limit_synth_cores=False; max_cpu=4; segmentation_engine=FSL; test_run=True | 9 / 14 | `dcm2niix`, `fast`, `niimath` | — |
 | [synthstrip](snapshots/ref/synthstrip.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=SYNTHSTRIP; limit_synth_cores=false; max_cpu=4 | 8 / 12 | `dcm2niix`, `mri_synthstrip`, `niimath` | — |
 | [synthstrip_limit_cores](snapshots/ref/synthstrip_limit_cores.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=SYNTHSTRIP; limit_synth_cores=true; max_cpu=4 | 8 / 12 | `dcm2niix`, `mri_synthstrip`, `niimath` | — |
 | [test_run](snapshots/ref/test_run.txt) | bet_bias_correction=false; bet_thr=0.3; deskull_engine=ANTSPYNET; test_run=True | 8 / 12 | `dcm2niix`, `niimath` | — |

@@ -1,5 +1,5 @@
 from nipype import Node, MapNode, IdentityInterface, Merge
-from nipype.interfaces.fsl import FAST, ConvertWarp, ConvertXFM, InvWarp
+from nipype.interfaces.fsl import ConvertWarp, ConvertXFM, InvWarp
 from nipype.interfaces.utility import Function
 from configparser import SectionProxy
 from ica_aroma_py import aroma_mask_csf
@@ -21,13 +21,11 @@ from swane.nipype_pipeline.interfaces.fmri.SpatialZThreshold import (
 from swane.nipype_pipeline.interfaces.fmri.MaskedResampleCombine import (
     MaskedResampleCombine,
 )
-from swane.nipype_pipeline.interfaces.ants.AntsAtropos import AntsAtropos
 from swane.nipype_pipeline.interfaces.niimath import ImageMaths
 from swane.nipype_pipeline.interfaces.ram_estimators import (
     ClusterExtentMCRamEstimator,
     DualRegressionRamEstimator,
     FastIcaIcassoRamEstimator,
-    FastRamEstimator,
     InvWarpRamEstimator,
     NilearnAutoDimRamEstimator,
     NilearnCanICARamEstimator,
@@ -35,10 +33,7 @@ from swane.nipype_pipeline.interfaces.ram_estimators import (
 )
 from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
-    apply_tool_num_threads,
-    get_tool_cpu_config,
     getn,
-    resolve_segmentation_engine,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import highpass_op_string
@@ -46,8 +41,7 @@ from swane.nipype_pipeline.workflows.fMRI_resting_state_aroma import (
     build_aroma_classification,
     build_ref_2_mni,
 )
-from swane.config.config_enums import RegistrationEngine, SegmentationEngine
-from swane.utils.ResourceManager import ResourceManager
+from swane.config.config_enums import RegistrationEngine
 
 # High-pass cutoff (seconds) of the preprocessing and of the cleaned data.
 HP_CUTOFF = 100
@@ -181,7 +175,8 @@ def build_nilearn_resting(
        maps for the spatial features, AROMA classification, then
        non-aggressive removal of the motion components from the smoothed
        data and from the twin, with the same mixing matrix.
-    3. Nuisance ROIs: subject tissue posterior > 0.95 (Atropos or FAST) in
+    3. Nuisance ROIs: subject tissue posterior > 0.95 (Atropos or FAST, from
+       the shared reference segmentation ``inputnode.tissue_pve``) in
        reference space, moved to functional space; MNI152NLin6Asym CSF
        (ICA-AROMA) and WM priors moved to functional space; both with linear
        interpolation, re-binarised at 0.5 and intersected with the tight
@@ -208,13 +203,12 @@ def build_nilearn_resting(
         The resting-state workflow settings (``aroma``, ``ic_dim``,
         ``spatial_z_thr``).
     synth_config : SectionProxy
-        The Synth-tools configuration section (``segmentation_engine``,
-        ``limit_cores``).
+        The Synth-tools configuration section, forwarded to the
+        reference-to-atlas registration.
     engine : RegistrationEngine
         The resolved EPI registration engine (ANTS or FSL).
     test_run : bool, optional
-        If True, speed up the registration and the segmentation. The default
-        is False.
+        If True, speed up the registration. The default is False.
     max_cpu : int, optional
         Per-subject CPU budget. The default is 0.
 
@@ -400,38 +394,10 @@ def build_nilearn_resting(
     # ------------------------------------------------------------------
     # Nuisance ROIs in functional space.
     # ------------------------------------------------------------------
-    segmentation_engine = resolve_segmentation_engine(synth_config)
-    if segmentation_engine == SegmentationEngine.ANTS:
-        segment = Node(
-            AntsAtropos(),
-            name="t1_segmentation",
-            mem_gb=ResourceManager.atropos_ram_requirements(),
-        )
-        if test_run:
-            segment.inputs.iterations = 3
-        if max_cpu != 0:
-            threads = get_tool_cpu_config(
-                max_cpu, synth_config.getboolean_safe("limit_cores")
-            )
-            apply_tool_num_threads(segment, threads, max_cpu=max_cpu)
-        # No mask input: AntsAtropos segments reference_brain > 0.
-        workflow.connect(inputnode, "reference_brain", segment, "in_file")
-    else:
-        segment = Node(FAST(), name="t1_segmentation", mem_gb=4)
-        segment.ram_estimator = FastRamEstimator()
-        segment.inputs.img_type = 1
-        segment.inputs.number_classes = 3
-        segment.inputs.hyper = 0.1
-        segment.inputs.bias_lowpass = 40
-        segment.inputs.output_biascorrected = True
-        if test_run:
-            segment.inputs.bias_iters = 1
-            segment.inputs.segment_iters = 5
-            segment.inputs.iters_afterbias = 1
-        else:
-            segment.inputs.bias_iters = 4
-        workflow.connect(inputnode, "reference_brain", segment, "in_files")
-    segment.long_name = "Reference tissue segmentation"
+    # Subject tissue posteriors [CSF, GM, WM] come from the shared reference
+    # segmentation (inputnode.tissue_pve): Atropos on the N4-corrected
+    # reference_brain, or FAST on the uncorrected brain (FAST runs its own
+    # bias correction).
 
     wm_prior = Node(
         Function(input_names=[], output_names=["prior_file"], function=get_wm_prior),
@@ -478,9 +444,7 @@ def build_nilearn_resting(
         subject_thr.long_name = "%s posterior threshold" % tissue.upper()
         subject_thr.inputs.op_string = "-thr %g -bin" % TISSUE_PROB_THR
         subject_thr.inputs.suffix = "_thr"
-        workflow.connect(
-            segment, ("partial_volume_files", getn, index), subject_thr, "in_file"
-        )
+        workflow.connect(inputnode, ("tissue_pve", getn, index), subject_thr, "in_file")
 
         if engine == RegistrationEngine.ANTS:
             subject_2_func = apply_registration_node(

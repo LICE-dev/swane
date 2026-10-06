@@ -59,6 +59,7 @@ def fMRI_preproc_workflow(
     base_dir: str = "/",
     max_cpu: int = 0,
     test_run: bool = False,
+    extra_input_fields: tuple = (),
 ) -> CustomWorkflow:
     """
     fMRI first level anlysis for a single task with constant task-rest paradigm.
@@ -93,11 +94,17 @@ def fMRI_preproc_workflow(
         If True, cut MCFLIRT motion-correction search levels and switch to
         trilinear interpolation to speed up prerelease test runs at the cost
         of accuracy. The default is False.
+    extra_input_fields : tuple of str, optional
+        Additional inputnode fields declared for the analysis built on top of
+        this workflow (e.g. ``tissue_pve`` for the NILEARN resting state). The
+        default is no additional field.
 
     Input Node Fields
     ----------
     reference_brain : path
         Betted T13D.
+    <extra_input_fields> : any
+        The fields requested through ``extra_input_fields``.
 
     Output Node Fields
     ----------
@@ -137,7 +144,10 @@ def fMRI_preproc_workflow(
     fmri_engine = resolve_fmri_engine(synth_config)
 
     # Input Node
-    inputnode = Node(IdentityInterface(fields=["reference_brain"]), name="inputnode")
+    inputnode = Node(
+        IdentityInterface(fields=["reference_brain", *extra_input_fields]),
+        name="inputnode",
+    )
 
     # NODE 1: Conversion dicom -> nifti
     conversion = Node(CustomDcm2niix(), name="%s_conv" % name)
