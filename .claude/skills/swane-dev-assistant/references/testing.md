@@ -18,6 +18,8 @@ python3 -m black --check <changed-python-files>
 python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
 ```
 
+**Pytest configuration.** `pytest.ini` and a root `conftest.py` live at the repository root (not in `swane/tests/`). The root conftest runs before pytest imports the `swane` package: it installs the Windows `pwd` stub and nipype's FSL-version fallback, which must exist before `swane` (and therefore `nipype.interfaces.fsl`) is imported. `swane/tests/conftest.py` keeps the fixtures, markers handling and `--run-heavy`.
+
 **Interpreter / environment.** Use an interpreter that has SWANe's runtime dependencies (nipype, PySide6, etc.) — a dedicated virtualenv/conda env — and never a neuroimaging tool's bundled Python (FSL's fslpython / FreeSurfer's fspython); see the interpreter rule in `CLAUDE.md` and verify with `python -c "import sys; print(sys.executable)"` before a general test run. If the environment carries a broken `datalad` pytest plugin (`ModuleNotFoundError: fasteners` at collection), add `-p no:datalad` to the pytest commands.
 
 ## Matrix — construction-only golden snapshots (delicate)
@@ -46,13 +48,15 @@ python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
 `swane/tests/prerelease/` (`python3 -m swane.tests.prerelease`) runs the **real** workflows (dcm2niix, FSL, FreeSurfer, Slicer) over a synthetic phantom exam generated on the machine that runs it — no DICOM is committed or required. It is the only suite that proves scientific/numeric correctness rather than just graph construction, via layered checks: execution (no failed node/crash), integrity (finite, non-constant, on the reference grid), and plausibility (registration overlap, FA/tractography localization, vein localization — quantitative, graded against the phantom's known ground truth, not eyeballed).
 
 - Always resolve and verify the working root before running: default `~/test_swane/prerelease`, disposable — **never point it at a clinical working directory.**
-- Blocking requirements (nothing runs without them): FSL, dcm2niix, `$FREESURFER_HOME/subjects/fsaverage` (needed to build the phantom, even if FreeSurfer passes are not requested). Everything else (CUDA, Synth tools, Slicer, XTRACT data) degrades gracefully — a missing capability drops only the axes that need it, with the reason recorded in the report.
+- Blocking requirements (nothing runs without them): dcm2niix, the fsaverage segmentations used to build the phantom, and the RAM budget. FSL is blocking only when `swane.config.dependency_policy.FSL_MANDATORY` is True; otherwise a host without FSL reports every FSL-only axis value as **unreachable** and runs the FSL-free passes, including the stand-in twins declared with `PassSpec.stands_in_for` (they run only where their FSL original is skipped, so FSL hosts run the same passes as before). Everything else (CUDA, Synth tools, Slicer, XTRACT data) degrades gracefully — a missing capability drops only the axes that need it, with the reason recorded in the report.
+- fsaverage comes from `$FREESURFER_HOME/subjects/fsaverage` when FreeSurfer is installed; otherwise `swane/tests/helpers/phantom/fsaverage_source.py` downloads the md5-pinned MNE mirror (`mne-tools/mne-data`, release `fsaverage-1.0`) and keeps only `aseg.mgz` and `aparc+aseg.mgz` in `~/.cache/swane/fsaverage/mri`. They are FreeSurfer data under the FreeSurfer Software License: fetched at runtime, never committed, packaged or uploaded. The phantom cache key depends on their content, not on where they came from.
 - Commands:
   ```bash
   python3 -m swane.tests.prerelease --dry-run                 # what would run / what this host cannot do
   python3 -m swane.tests.prerelease --cores 8 --ram 10         # the default sweep
   python3 -m swane.tests.prerelease --cores 8 --ram 10 --with-reconall   # + slow FreeSurfer passes (hours each)
   python3 -m swane.tests.prerelease --only <pass_name> --cores 8 --ram 10  # a single pass, see --list
+  python3 -m swane.tests.prerelease --list-json --cores 8 --ram 10   # runnable passes as JSON (CI matrices); fails if a blocking capability is missing
   python3 -m swane.tests.prerelease --checks-only              # re-check results already on disk
   python3 -m swane.tests.prerelease --view <pass_name>         # open finished pass in Slicer
   ```
@@ -79,4 +83,13 @@ python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
 4. For execution/scientific changes, run the relevant `prerelease/` pass(es) when the required tools are available.
 5. Review the test diff/output yourself — "no errors" is not sufficient without checking the test actually exercises the changed behavior.
 6. Note any check that could not run and why (missing tool, no display, no dataset).
-7. Confirm the change has been exercised on both Linux and macOS where the change can plausibly behave differently (subprocess paths, filesystem case-sensitivity, Qt/Slicer integration); state explicitly if only one platform was available.
+7. Confirm the change has been exercised on both Linux and macOS where the change can plausibly behave differently (subprocess paths, filesystem case-sensitivity, Qt/Slicer integration); state explicitly if only one platform was available. Windows support is experimental: when a change can behave differently there (paths, quoting, subprocesses, multiprocessing), run the manual workflow below on Windows too.
+
+## Windows and macOS CI (manual workflow)
+
+`.github/workflows/windows-tests.yml` runs only on demand (`workflow_dispatch`, from the Actions page or `gh workflow run windows-tests.yml -r <branch> -f suite=<suite> -f os=<os>`); runs use the workflow and code of the selected branch.
+
+- `suite`: `light`, `heavy`, `prerelease` or `all`; `os`: `windows-latest` or `macos-latest` for light/heavy (prerelease always runs on Windows, so do not combine `all` with macOS).
+- Prerelease runs one matrix job per runnable pass (from `--list-json`), `--timeout 5` hours each under the 6 h job limit, and a `prerelease-summary` job that merges the per-pass reports (`swane/tests/prerelease/ci_summary.py`). Phantom, fsaverage, model weights and the HCP842 atlas live only in the repository's Actions cache; artifacts carry reports and logs only.
+- Leave `rebuild_cache` off unless a cache is corrupt: it creates a new cache entry per run.
+- Windows-only behaviour lives behind `swane.patches.windows_compat` / `swane.utils.platform_and_tools_utils.is_windows()` and must leave Linux/macOS command lines and snapshots byte-identical. In Linux tests simulate Windows by patching those helpers; never reassign `os.name` globally.
