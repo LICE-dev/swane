@@ -8,7 +8,7 @@ from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane.resources import strings
 from packaging import version
 from swane.config.ConfigManager import ConfigManager
-from swane.utils.qt_compat import QThreadPool
+from swane.workers.worker_pool import start_worker
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux
@@ -100,11 +100,11 @@ class DependencyManager:
 
     MIN_FSL_VERSION = "6.0.6"
     # Kept in sync with the antspyx pin in setup.py.
-    MIN_ANTSPYX_VERSION = "0.6.2"
+    MIN_ANTSPYX_VERSION = "0.6.1"
     # Kept in sync with the antspynet pin in setup.py.
     MIN_ANTSPYNET_VERSION = "0.3.2"
     # Kept in sync with the dipy pin in setup.py.
-    MIN_DIPY_VERSION = "1.12.0"
+    MIN_DIPY_VERSION = "1.12.1"
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"
@@ -123,14 +123,16 @@ class DependencyManager:
         self.freesurfer = DependencyManager.check_freesurfer()
         self.graphviz = DependencyManager.check_graphviz()
 
-    def is_fsl(self) -> bool:
+    def is_fsl(self=None) -> bool:
         """
         Returns
         -------
         True if fsl is detected (even if outdated).
 
         """
-        return self.fsl.state != DependenceStatus.MISSING
+        if self is not None:
+            return self.fsl.state != DependenceStatus.MISSING
+        return DependencyManager.check_fsl().state != DependenceStatus.MISSING
 
     def is_dcm2niix(self) -> bool:
         """
@@ -219,6 +221,19 @@ class DependencyManager:
 
         """
         return DependencyManager.check_dipy().state != DependenceStatus.MISSING
+
+    @staticmethod
+    def is_nilearn() -> bool:
+        """
+        Returns
+        -------
+        True if the nilearn package is importable.
+
+        """
+        try:
+            return importlib.util.find_spec("nilearn") is not None
+        except Exception:
+            return False
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -317,7 +332,7 @@ class DependencyManager:
 
         check_slicer_work = SlicerCheckWorker(current_slicer_path)
         check_slicer_work.signal.slicer.connect(callback_func)
-        QThreadPool.globalInstance().start(check_slicer_work)
+        start_worker(check_slicer_work)
 
     @staticmethod
     def check_dcm2niix() -> Dependence:

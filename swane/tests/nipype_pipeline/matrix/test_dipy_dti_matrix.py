@@ -59,9 +59,6 @@ def test_dipy_dti_matrix(
     section["tractography"] = _bool(tractography)
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["tractography_engine"] = TractographyEngine.DIPY_RECOBUNDLES.name
-    # The dipy pipeline never touches FSL; a non-FSL deskull engine keeps the
-    # shared head FSL-free (registration is forced to ANTs by the factory
-    # regardless of the SYNTH engine, so no engine axis is swept here).
     synth["deskull_engine"] = DeskullEngine.ANTSPYNET.name
 
     wf = dipy_dti_preproc_workflow(

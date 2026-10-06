@@ -57,3 +57,14 @@ class TestPreferencesWindow:
         qtbot.addWidget(dialog)
         assert isinstance(dialog, QDialog)
         assert dialog.windowTitle() != ""
+
+
+def test_home_tab_shows_windows_notice(monkeypatch, request):
+    import swane.ui.MainWindow as main_window_module
+
+    monkeypatch.setattr(main_window_module, "is_windows", lambda: True)
+    window = request.getfixturevalue("main_window")
+    from PySide6.QtWidgets import QLabel
+
+    texts = [w.text() for w in window.homeTab.findChildren(QLabel)]
+    assert any("experimental" in t for t in texts)

@@ -24,20 +24,12 @@ from types import SimpleNamespace
 
 import pytest
 
-# nipype's MultiProcPlugin (the base class under test) imports the Unix-only
-# ``pwd`` module transitively (via its sge plugin), so it cannot be imported on
-# Windows — where MonitoredMultiProcPlugin falls back to ``object`` and cannot be
-# constructed. Skip the whole module with a clear reason there: workflow
-# execution (and this plugin) only runs on Linux/macOS.
-try:
-    from nipype.pipeline.plugins.multiproc import (
-        MultiProcPlugin as _RealMultiProcPlugin,
-    )  # noqa: F401
-except Exception as _exc:  # pragma: no cover - platform dependent
-    pytest.skip(
-        "nipype MultiProcPlugin unavailable in this environment (%s)" % _exc,
-        allow_module_level=True,
-    )
+# nipype's plugin package imports the Unix-only ``pwd`` module (via its sge
+# plugin); swane's pwd stub (swane.patches.windows_compat, installed by
+# conftest) makes it importable on Windows too, so nothing is skipped here.
+from nipype.pipeline.plugins.multiproc import (  # noqa: F401
+    MultiProcPlugin as _RealMultiProcPlugin,
+)
 
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
     MonitoredMultiProcPlugin,

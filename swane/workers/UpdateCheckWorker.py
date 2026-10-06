@@ -22,14 +22,14 @@ class UpdateCheckWorker(QRunnable):
 
     def run(self):
 
-        cmd = sys.executable + " -m pip index versions swane"
+        # argv list, no shell: an interpreter path containing a space survives
+        cmd = [sys.executable, "-m", "pip", "index", "versions", "swane"]
         output = subprocess.run(
             cmd,
-            shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         ).stdout.decode("utf-8")
-        for stdout_line in output.split("\n"):
+        for stdout_line in output.splitlines():
             regex_pattern = r"^swane \((.+)\)$"
             match = re.match(regex_pattern, stdout_line)
             if match:

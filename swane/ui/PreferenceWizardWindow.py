@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from swane.resources import strings
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.config.config_enums import (
     FreesurferStep,
     GlobalPrefCategoryList,
@@ -30,7 +31,7 @@ from swane.config.config_enums import (
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.DependencyManager import DependencyManager
-from swane.utils.platform_and_tools_utils import get_os_type, is_mac
+from swane.utils.platform_and_tools_utils import get_os_type, is_mac, is_windows
 
 
 @dataclass
@@ -323,9 +324,10 @@ class PreferenceWizardWindow(QDialog):
 
         page = QWidget()
         lay = QVBoxLayout()
-        lay.addWidget(
-            self._make_title(strings.wizard_welcome_title, strings.wizard_welcome_text)
-        )
+        welcome_text = strings.wizard_welcome_text
+        if is_windows():
+            welcome_text += "<br><br>" + strings.windows_experimental_warn
+        lay.addWidget(self._make_title(strings.wizard_welcome_title, welcome_text))
 
         lay.addStretch(1)
         page.setLayout(lay)
@@ -1028,8 +1030,11 @@ class PreferenceWizardWindow(QDialog):
         # Brain extraction engine: antspynet is the general default and does not
         # require the advanced-models opt-in. SynthStrip stays gated behind that
         # opt-in, like the other FreeSurfer Synth tools (reconall/synthseg); FSL
-        # BET is the fallback when neither is available.
-        if self.dependency_manager.is_antspynet() and (available_ram >= 5.0):
+        # BET is the fallback when neither is available. When FSL is a mandatory
+        # dependency, FSL BET is always the brain extraction engine.
+        if dependency_policy.FSL_MANDATORY:
+            deskull_engine = DeskullEngine.BET
+        elif self.dependency_manager.is_antspynet() and (available_ram >= 5.0):
             deskull_engine = DeskullEngine.ANTSPYNET
         elif (
             self.user_prefs.use_advanced_models

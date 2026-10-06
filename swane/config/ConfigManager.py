@@ -75,7 +75,7 @@ class ConfigManager(configparser.ConfigParser):
             try:
                 # main.last_swane_version should exist in both global and  subject config file
                 temp_config = configparser.ConfigParser()
-                temp_config.read(self.config_file)
+                temp_config.read(self.config_file, encoding="utf-8")
                 last_swane_version = temp_config[str(GlobalPrefCategoryList.MAIN)][
                     "last_swane_version"
                 ]
@@ -86,7 +86,22 @@ class ConfigManager(configparser.ConfigParser):
                 reset_pref = True
 
         if not reset_pref and os.path.exists(self.config_file):
-            self.read(self.config_file)
+            self.read(self.config_file, encoding="utf-8")
+
+            # Migrate options renamed in a later SWANe version, in place, before
+            # the re-validation loop below relies on the current option names.
+            # The new option name is already present at this point with its
+            # default value (populated by _load_defaults above), so the old
+            # persisted value must overwrite it unconditionally, not only when
+            # the new key is still missing.
+            for section, renames in RENAMED_PREFERENCES.items():
+                if section not in self:
+                    continue
+                for old, new in renames.items():
+                    if old in self[section]:
+                        self[section][new] = self[section][old]
+                        self.remove_option(section, old)
+
             # Cycle all read values and reassign them to invoke validate_type without rewriting read method
             for section in self._section_defaults.keys():
                 for option in self._section_defaults[section].keys():
@@ -110,7 +125,7 @@ class ConfigManager(configparser.ConfigParser):
         """
         Reload the configuration file
         """
-        self.read(self.config_file)
+        self.read(self.config_file, encoding="utf-8")
 
     def reset_to_defaults(self):
         """
@@ -205,7 +220,7 @@ class ConfigManager(configparser.ConfigParser):
         """
         Save the current preferences to the config file
         """
-        with open(self.config_file, "w") as openedFile:
+        with open(self.config_file, "w", encoding="utf-8") as openedFile:
             self.write(openedFile)
 
     def get_main_working_directory(self) -> str:
@@ -491,31 +506,10 @@ class ConfigManager(configparser.ConfigParser):
                         changed = True
                         continue
 
-                if (
-                    WF_PREFERENCES[section][option].input_type == InputTypes.ENUM
-                    and self[section][option]
-                    in WF_PREFERENCES[section][option].value_enum.__members__
+                if self._reset_unavailable_enum_option(
+                    section, option, WF_PREFERENCES[section][option], dependency_manager
                 ):
-                    enum_cls = WF_PREFERENCES[section][option].value_enum
-                    value_enum = enum_cls[self[section][option]]
-                    if value_enum in WF_PREFERENCES[section][option].option_dependency:
-                        dep_check = getattr(
-                            dependency_manager,
-                            WF_PREFERENCES[section][option].option_dependency[
-                                value_enum
-                            ][0],
-                            None,
-                        )
-                        if (
-                            dep_check is not None
-                            and callable(dep_check)
-                            and not dep_check()
-                        ):
-                            self[section][option] = str(
-                                self._section_defaults[str(section)][
-                                    str(option)
-                                ].default
-                            )
+                    changed = True
 
                 if WF_PREFERENCES[section][option].resource is not None:
                     resource_check = getattr(
@@ -530,8 +524,65 @@ class ConfigManager(configparser.ConfigParser):
                     ):
                         self[section][option] = "false"
                         changed = True
+
+        # Global-only engine choices (e.g. the Synth-tools engines) are not part
+        # of WF_PREFERENCES: reset any whose selected option lost its dependency
+        # (e.g. an FSL engine when FSL is not installed) to the default.
+        if self.global_config:
+            for category in GLOBAL_PREFERENCES:
+                for option in GLOBAL_PREFERENCES[category]:
+                    if self._reset_unavailable_enum_option(
+                        category,
+                        option,
+                        GLOBAL_PREFERENCES[category][option],
+                        dependency_manager,
+                    ):
+                        changed = True
+
         if changed:
             self.save()
+
+    def _reset_unavailable_enum_option(
+        self, section, option: str, entry, dependency_manager
+    ) -> bool:
+        """
+        Reset an enum preference to its default if the dependency of its current
+        option is not met.
+
+        Parameters
+        ----------
+        section: GlobalPrefCategoryList | DataInputList
+            The preference section
+        option: str
+            The preference key
+        entry: PreferenceEntry
+            The preference metadata
+        dependency_manager: DependencyManager
+            The application dependencies
+
+        Returns
+        -------
+        True if the preference was reset.
+        """
+        if (
+            entry.input_type != InputTypes.ENUM
+            or not self.has_option(str(section), option)
+            or self[section][option] not in entry.value_enum.__members__
+        ):
+            return False
+        value_enum = entry.value_enum[self[section][option]]
+        if value_enum not in entry.option_dependency:
+            return False
+        dep_check = getattr(
+            dependency_manager, entry.option_dependency[value_enum][0], None
+        )
+        if dep_check is None or not callable(dep_check) or dep_check():
+            return False
+        default = self._section_defaults[str(section)][option].default
+        self[section][option] = (
+            default.name if isinstance(default, Enum) else str(default)
+        )
+        return True
 
     def get_last_pid(self) -> tuple[int, str | None]:
         """

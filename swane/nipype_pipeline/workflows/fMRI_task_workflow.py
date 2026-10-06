@@ -15,8 +15,15 @@ from swane.nipype_pipeline.interfaces.fmri.FMRIGenSpec import FMRIGenSpec
 from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     resolve_registration_engine,
+    resolve_fmri_engine,
 )
-from swane.config.config_enums import BlockDesign, RegistrationEngine
+from swane.config.config_enums import (
+    BlockDesign,
+    RegistrationEngine,
+    FmriEngine,
+    SliceTiming,
+)
+from swane.nipype_pipeline.interfaces.fmri.NilearnFirstLevel import NilearnFirstLevel
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 
 
@@ -89,10 +96,10 @@ def fMRI_task_workflow(
 
     # The EPI registration engine, resolved once for the shared func->ref
     # registration built by fMRI_preproc_workflow and for every apply below.
-    # EPI avoids SynthMorph (see spec 1), so SYNTH falls back to FSL.
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
-    if engine == RegistrationEngine.SYNTH:
-        engine = RegistrationEngine.FSL
+    # EPI avoids SynthMorph (see spec 1), so SYNTH falls back to ANTS.
+    engine = resolve_registration_engine(synth_config, allow_synth=False)
+
+    fmri_engine = resolve_fmri_engine(synth_config)
 
     workflow = fMRI_preproc_workflow(
         name=name,
@@ -149,60 +156,86 @@ def fMRI_task_workflow(
     art.inputs.use_norm = True
     art.inputs.norm_threshold = 1
     art.inputs.zintensity_threshold = 3
-    art.inputs.parameter_source = "FSL"
+    # MCFLIRT writes rotations-then-translations; AntsMotionCorrection writes
+    # translations-then-rotations (SPM ordering). ArtifactDetect's composite-norm
+    # (use_norm) is column-order sensitive, so the parameter source must match the
+    # motion-correction engine feeding par_file.
+    art.inputs.parameter_source = "FSL" if fmri_engine == FmriEngine.FSL else "SPM"
     art.inputs.mask_type = "file"
     workflow.connect(motion_correct, "par_file", art, "realignment_parameters")
     workflow.connect(motion_correct, "out_file", art, "realigned_files")
     workflow.connect(dilatemask, "out_file", art, "mask_file")
 
-    # NODE 29: Generate design information.
-    modelspec = Node(SpecifyModel(), name="%s_modelspec" % name)
-    modelspec.inputs.input_units = "secs"
-    modelspec.inputs.high_pass_filter_cutoff = hpcutoff
-    workflow.connect(genSpec, "evs_run", modelspec, "subject_info")
-    workflow.connect(getTR, "TR", modelspec, "time_repetition")
-    workflow.connect(highpass, "out_file", modelspec, "functional_runs")
-    workflow.connect(art, "outlier_files", modelspec, "outlier_files")
-    workflow.connect(motion_correct, "par_file", modelspec, "realignment_parameters")
+    # Generate design information / GLM models
+    if fmri_engine == FmriEngine.FSL:
+        # NODE 29: Generate design information.
+        modelspec = Node(SpecifyModel(), name="%s_modelspec" % name)
+        modelspec.inputs.input_units = "secs"
+        modelspec.inputs.high_pass_filter_cutoff = hpcutoff
+        workflow.connect(genSpec, "evs_run", modelspec, "subject_info")
+        workflow.connect(getTR, "TR", modelspec, "time_repetition")
+        workflow.connect(highpass, "out_file", modelspec, "functional_runs")
+        workflow.connect(art, "outlier_files", modelspec, "outlier_files")
+        workflow.connect(
+            motion_correct, "par_file", modelspec, "realignment_parameters"
+        )
 
-    # NODE 30: Generate a run specific fsf file for analysis
-    level_1_design = Node(Level1Design(), name="%s_level_1_design" % name)
-    level_1_design.inputs.bases = {"dgamma": {"derivs": False}}
-    level_1_design.inputs.model_serial_correlations = True
-    workflow.connect(genSpec, "contrasts", level_1_design, "contrasts")
-    workflow.connect(getTR, "TR", level_1_design, "interscan_interval")
-    workflow.connect(modelspec, "session_info", level_1_design, "session_info")
+        # NODE 30: Generate a run specific fsf file for analysis
+        level_1_design = Node(Level1Design(), name="%s_level_1_design" % name)
+        level_1_design.inputs.bases = {"dgamma": {"derivs": False}}
+        level_1_design.inputs.model_serial_correlations = True
+        workflow.connect(genSpec, "contrasts", level_1_design, "contrasts")
+        workflow.connect(getTR, "TR", level_1_design, "interscan_interval")
+        workflow.connect(modelspec, "session_info", level_1_design, "session_info")
 
-    # NODE 31: Generate a run specific mat file for use by FILMGLS
-    modelgen = Node(FEATModel(), name="%s_modelgen" % name)
-    workflow.connect(level_1_design, "fsf_files", modelgen, "fsf_file")
-    workflow.connect(level_1_design, "ev_files", modelgen, "ev_files")
+        # NODE 31: Generate a run specific mat file for use by FILMGLS
+        modelgen = Node(FEATModel(), name="%s_modelgen" % name)
+        workflow.connect(level_1_design, "fsf_files", modelgen, "fsf_file")
+        workflow.connect(level_1_design, "ev_files", modelgen, "ev_files")
 
-    # NODE 32: estimate a model specified by a mat file and a functional run
-    modelestimate = Node(FILMGLS(), name="%s_modelestimate" % name)
-    modelestimate.inputs.smooth_autocorr = True
-    modelestimate.inputs.mask_size = 5
-    modelestimate.inputs.threshold = 1000
-    workflow.connect(highpass, "out_file", modelestimate, "in_file")
-    workflow.connect(modelgen, "design_file", modelestimate, "design_file")
-    workflow.connect(modelgen, "con_file", modelestimate, "tcon_file")
+        # NODE 32: estimate a model specified by a mat file and a functional run
+        modelestimate = Node(FILMGLS(), name="%s_modelestimate" % name)
+        modelestimate.inputs.smooth_autocorr = True
+        modelestimate.inputs.mask_size = 5
+        modelestimate.inputs.threshold = 1000
+        workflow.connect(highpass, "out_file", modelestimate, "in_file")
+        workflow.connect(modelgen, "design_file", modelestimate, "design_file")
+        workflow.connect(modelgen, "con_file", modelestimate, "tcon_file")
 
-    # NODE 33: Get smoothness parameters
-    smoothness = Node(SmoothEstimate(), name="%s_smoothness" % name)
-    workflow.connect(modelestimate, "residual4d", smoothness, "residual_fit_file")
+        # NODE 33: Get smoothness parameters
+        smoothness = Node(SmoothEstimate(), name="%s_smoothness" % name)
+        workflow.connect(modelestimate, "residual4d", smoothness, "residual_fit_file")
 
-    # Function to read degree of freedom file
-    def dof_from_file(dofFile):
-        # Function used out of the box. Import needed
-        import os  # TODO find a way to suppress warning
+        # Function to read degree of freedom file
+        def dof_from_file(dofFile):
+            import os
 
-        if os.path.exists(dofFile):
-            with open(dofFile, "r") as file:
-                for line in file.readlines():
-                    return int(line)
+            if os.path.exists(dofFile):
+                with open(dofFile, "r") as file:
+                    for line in file.readlines():
+                        return int(line)
 
-    workflow.connect(modelestimate, ("dof_file", dof_from_file), smoothness, "dof")
-    workflow.connect(dilatemask, "out_file", smoothness, "mask_file")
+        workflow.connect(modelestimate, ("dof_file", dof_from_file), smoothness, "dof")
+        workflow.connect(dilatemask, "out_file", smoothness, "mask_file")
+    else:
+        # NILEARN branch (NilearnFirstLevel integrates modelspec, design, glm and clustering)
+        nilearn_glm = Node(NilearnFirstLevel(), name="%s_nilearn_glm" % name)
+        # The GLM fit is BLAS-bound: the whole per-node budget, as num_threads
+        # (Nipype derives n_procs from it); max_cpu == 0 ("auto") clamps to 1.
+        nilearn_glm.inputs.num_threads = max_cpu if max_cpu and max_cpu > 0 else 1
+        # The preprocessing shifts every slice to the middle of the TR when the
+        # slice timing is known, so the design is sampled there too.
+        if slice_timing != SliceTiming.UNKNOWN:
+            nilearn_glm.inputs.slice_time_ref = 0.5
+        workflow.connect(highpass, "out_file", nilearn_glm, "in_file")
+        workflow.connect(dilatemask, "out_file", nilearn_glm, "mask_file")
+        workflow.connect(getTR, "TR", nilearn_glm, "tr")
+        workflow.connect(genSpec, "evs_run", nilearn_glm, "subject_info")
+        workflow.connect(
+            motion_correct, "par_file", nilearn_glm, "realignment_parameters"
+        )
+        workflow.connect(art, "outlier_files", nilearn_glm, "outlier_files")
+        workflow.connect(genSpec, "contrasts", nilearn_glm, "contrasts")
 
     n_contrasts = 1
     if block_design == BlockDesign.RARB:
@@ -210,24 +243,6 @@ def fMRI_task_workflow(
     cont = 0
     while cont < n_contrasts:
         cont += 1
-
-        # NODE 34: Select all result file from filmgls output folder
-        results_select = Node(
-            SelectFiles(
-                {"cope": "cope%d.nii.gz" % cont, "zstat": "zstat%d.nii.gz" % cont}
-            ),
-            name="%s_results_select_%d" % (name, cont),
-        )
-        results_select.long_name = "contrast %d result selection" % cont
-        workflow.connect(modelestimate, "results_dir", results_select, "base_directory")
-
-        # NODE 35: Mask z-stat with the dilated mask
-        maskfunc4 = Node(ImageMaths(), name="%s_maskfunc4_%d" % (name, cont))
-        maskfunc4.long_name = "Zstat masking"
-        maskfunc4.inputs.suffix = "_mask"
-        maskfunc4.inputs.op_string = "-mas"
-        workflow.connect(results_select, "zstat", maskfunc4, "in_file")
-        workflow.connect(dilatemask, "out_file", maskfunc4, "in_file2")
 
         # Function to generate the name for the file of output cluster
         def cluster_file_name(contrasts, thres, run_name, x):
@@ -237,56 +252,134 @@ def fMRI_task_workflow(
                 thres,
             )
 
-        # NODE 36a: Perform clustering on statistical output
-        threshold = 3.1
-        cluster1 = Node(Cluster(), name="%s_cluster_t3_%d" % (name, cont))
-        cluster1.long_name = (
-            "contrast "
-            + str(cont)
-            + " threshold "
-            + str(threshold)
-            + " %s in reference space"
-        )
-        cluster1.inputs.threshold = threshold
-        cluster1.inputs.connectivity = 26
-        cluster1.inputs.pthreshold = 0.05
-        cluster1.inputs.out_localmax_txt_file = True
+        if fmri_engine == FmriEngine.FSL:
+            # NODE 34: Select all result file from filmgls output folder
+            results_select = Node(
+                SelectFiles(
+                    {"cope": "cope%d.nii.gz" % cont, "zstat": "zstat%d.nii.gz" % cont}
+                ),
+                name="%s_results_select_%d" % (name, cont),
+            )
+            results_select.long_name = "contrast %d result selection" % cont
+            workflow.connect(
+                modelestimate, "results_dir", results_select, "base_directory"
+            )
 
-        workflow.connect(
-            [
-                (
-                    genSpec,
-                    cluster1,
-                    [
-                        (
-                            ("contrasts", cluster_file_name, threshold, name, cont),
-                            "out_threshold_file",
-                        )
-                    ],
-                )
-            ]
-        )
-        workflow.connect(maskfunc4, "out_file", cluster1, "in_file")
-        workflow.connect(results_select, "cope", cluster1, "cope_file")
-        workflow.connect(smoothness, "volume", cluster1, "volume")
-        workflow.connect(smoothness, "dlh", cluster1, "dlh")
+            # NODE 35: Mask z-stat with the dilated mask
+            maskfunc4 = Node(ImageMaths(), name="%s_maskfunc4_%d" % (name, cont))
+            maskfunc4.long_name = "Zstat masking"
+            maskfunc4.inputs.suffix = "_mask"
+            maskfunc4.inputs.op_string = "-mas"
+            workflow.connect(results_select, "zstat", maskfunc4, "in_file")
+            workflow.connect(dilatemask, "out_file", maskfunc4, "in_file2")
+
+            # NODE 36a: Perform clustering on statistical output
+            cluster1 = Node(Cluster(), name="%s_cluster_t3_%d" % (name, cont))
+            cluster1.long_name = (
+                "contrast " + str(cont) + " threshold 3.1 %s in reference space"
+            )
+            cluster1.inputs.threshold = 3.1
+            cluster1.inputs.connectivity = 26
+            cluster1.inputs.pthreshold = 0.05
+            cluster1.inputs.out_localmax_txt_file = True
+
+            workflow.connect(
+                [
+                    (
+                        genSpec,
+                        cluster1,
+                        [
+                            (
+                                ("contrasts", cluster_file_name, 3.1, name, cont),
+                                "out_threshold_file",
+                            )
+                        ],
+                    )
+                ]
+            )
+            workflow.connect(maskfunc4, "out_file", cluster1, "in_file")
+            workflow.connect(results_select, "cope", cluster1, "cope_file")
+            workflow.connect(smoothness, "volume", cluster1, "volume")
+            workflow.connect(smoothness, "dlh", cluster1, "dlh")
+
+            # NODE 36b: Perform clustering on statistical output
+            cluster2 = Node(Cluster(), name="%s_cluster_t5_%d" % (name, cont))
+            cluster2.long_name = (
+                "contrast " + str(cont) + " threshold 5 %s in reference space"
+            )
+            cluster2.inputs.threshold = 5
+            cluster2.inputs.connectivity = 26
+            cluster2.inputs.pthreshold = 0.05
+            cluster2.inputs.out_localmax_txt_file = True
+
+            workflow.connect(
+                [
+                    (
+                        genSpec,
+                        cluster2,
+                        [
+                            (
+                                ("contrasts", cluster_file_name, 5, name, cont),
+                                "out_threshold_file",
+                            )
+                        ],
+                    )
+                ]
+            )
+            workflow.connect(maskfunc4, "out_file", cluster2, "in_file")
+            workflow.connect(results_select, "cope", cluster2, "cope_file")
+            workflow.connect(smoothness, "volume", cluster2, "volume")
+            workflow.connect(smoothness, "dlh", cluster2, "dlh")
+
+            # NODE 36c: Perform clustering on statistical output
+            cluster3 = Node(Cluster(), name="%s_cluster_t7_%d" % (name, cont))
+            cluster3.long_name = (
+                "contrast " + str(cont) + " threshold 7 %s in reference space"
+            )
+            cluster3.inputs.threshold = 7
+            cluster3.inputs.connectivity = 26
+            cluster3.inputs.pthreshold = 0.05
+            cluster3.inputs.out_localmax_txt_file = True
+
+            workflow.connect(
+                [
+                    (
+                        genSpec,
+                        cluster3,
+                        [
+                            (
+                                ("contrasts", cluster_file_name, 7, name, cont),
+                                "out_threshold_file",
+                            )
+                        ],
+                    )
+                ]
+            )
+            workflow.connect(maskfunc4, "out_file", cluster3, "in_file")
+            workflow.connect(results_select, "cope", cluster3, "cope_file")
+            workflow.connect(smoothness, "volume", cluster3, "volume")
+            workflow.connect(smoothness, "dlh", cluster3, "dlh")
+
+            moving1 = [cluster1, "threshold_file"]
+            moving2 = [cluster2, "threshold_file"]
+            moving3 = [cluster3, "threshold_file"]
+        else:
+            moving1 = [nilearn_glm, "threshold_file_cont%d_thresh1" % cont]
+            moving2 = [nilearn_glm, "threshold_file_cont%d_thresh2" % cont]
+            moving3 = [nilearn_glm, "threshold_file_cont%d_thresh3" % cont]
 
         # NODE 37a: Transformation in ref space
         cluster1_2_ref = apply_registration_node(
             name="%s_cluster_t3_%d_to_ref" % (name, cont),
             engine=engine,
             workflow=workflow,
-            # The func->ref transform comes from the wrapper fMRI_preproc
-            # exposes: on ANTs registration= feeds the whole ordered transform
-            # list plus its which_to_invert flags (wire_transforms), while the
-            # FSL/Synth branches keep reading the single-file .mat view.
             warp=[workflow.reg_2_ref.out_registered_node, workflow.reg_2_ref.warp],
             registration=workflow.reg_2_ref,
-            moving=[cluster1, "threshold_file"],
+            moving=moving1,
             reference=[inputnode, "reference_brain"],
-            out_file=[genSpec, ("contrasts", cluster_file_name, threshold, name, cont)],
+            out_file=[genSpec, ("contrasts", cluster_file_name, 3.1, name, cont)],
             non_linear=False,
-            name_prefix="contrast " + str(cont) + " threshold " + str(threshold),
+            name_prefix="contrast " + str(cont) + " threshold 3.1",
             name_suffix="to reference",
             iterfield=["in_file", "out_file"],
         )
@@ -298,56 +391,18 @@ def fMRI_task_workflow(
             "threshold_file_cont%s_thresh1" % cont,
         )
 
-        # NODE 36b: Perform clustering on statistical output
-        threshold = 5
-        cluster2 = Node(Cluster(), name="%s_cluster_t5_%d" % (name, cont))
-        cluster2.long_name = (
-            "contrast "
-            + str(cont)
-            + " threshold "
-            + str(threshold)
-            + " %s in reference space"
-        )
-        cluster2.inputs.threshold = threshold
-        cluster2.inputs.connectivity = 26
-        cluster2.inputs.pthreshold = 0.05
-        cluster2.inputs.out_localmax_txt_file = True
-
-        workflow.connect(
-            [
-                (
-                    genSpec,
-                    cluster2,
-                    [
-                        (
-                            ("contrasts", cluster_file_name, threshold, name, cont),
-                            "out_threshold_file",
-                        )
-                    ],
-                )
-            ]
-        )
-        workflow.connect(maskfunc4, "out_file", cluster2, "in_file")
-        workflow.connect(results_select, "cope", cluster2, "cope_file")
-        workflow.connect(smoothness, "volume", cluster2, "volume")
-        workflow.connect(smoothness, "dlh", cluster2, "dlh")
-
         # NODE 37b: Transformation in ref space
         cluster2_2_ref = apply_registration_node(
             name="%s_cluster_t5_%d_to_ref" % (name, cont),
             engine=engine,
             workflow=workflow,
-            # The func->ref transform comes from the wrapper fMRI_preproc
-            # exposes: on ANTs registration= feeds the whole ordered transform
-            # list plus its which_to_invert flags (wire_transforms), while the
-            # FSL/Synth branches keep reading the single-file .mat view.
             warp=[workflow.reg_2_ref.out_registered_node, workflow.reg_2_ref.warp],
             registration=workflow.reg_2_ref,
-            moving=[cluster2, "threshold_file"],
+            moving=moving2,
             reference=[inputnode, "reference_brain"],
-            out_file=[genSpec, ("contrasts", cluster_file_name, threshold, name, cont)],
+            out_file=[genSpec, ("contrasts", cluster_file_name, 5, name, cont)],
             non_linear=False,
-            name_prefix="contrast " + str(cont) + " threshold " + str(threshold),
+            name_prefix="contrast " + str(cont) + " threshold 5",
             name_suffix="to reference",
             iterfield=["in_file", "out_file"],
         )
@@ -359,56 +414,18 @@ def fMRI_task_workflow(
             "threshold_file_cont%s_thresh2" % cont,
         )
 
-        # NODE 36c: Perform clustering on statistical output
-        threshold = 7
-        cluster3 = Node(Cluster(), name="%s_cluster_t7_%d" % (name, cont))
-        cluster3.long_name = (
-            "contrast "
-            + str(cont)
-            + " threshold "
-            + str(threshold)
-            + " %s in reference space"
-        )
-        cluster3.inputs.threshold = threshold
-        cluster3.inputs.connectivity = 26
-        cluster3.inputs.pthreshold = 0.05
-        cluster3.inputs.out_localmax_txt_file = True
-
-        workflow.connect(
-            [
-                (
-                    genSpec,
-                    cluster3,
-                    [
-                        (
-                            ("contrasts", cluster_file_name, threshold, name, cont),
-                            "out_threshold_file",
-                        )
-                    ],
-                )
-            ]
-        )
-        workflow.connect(maskfunc4, "out_file", cluster3, "in_file")
-        workflow.connect(results_select, "cope", cluster3, "cope_file")
-        workflow.connect(smoothness, "volume", cluster3, "volume")
-        workflow.connect(smoothness, "dlh", cluster3, "dlh")
-
         # NODE 37c: Transformation in ref space
         cluster3_2_ref = apply_registration_node(
             name="%s_cluster_t7_%d_to_ref" % (name, cont),
             engine=engine,
             workflow=workflow,
-            # The func->ref transform comes from the wrapper fMRI_preproc
-            # exposes: on ANTs registration= feeds the whole ordered transform
-            # list plus its which_to_invert flags (wire_transforms), while the
-            # FSL/Synth branches keep reading the single-file .mat view.
             warp=[workflow.reg_2_ref.out_registered_node, workflow.reg_2_ref.warp],
             registration=workflow.reg_2_ref,
-            moving=[cluster3, "threshold_file"],
+            moving=moving3,
             reference=[inputnode, "reference_brain"],
-            out_file=[genSpec, ("contrasts", cluster_file_name, threshold, name, cont)],
+            out_file=[genSpec, ("contrasts", cluster_file_name, 7, name, cont)],
             non_linear=False,
-            name_prefix="contrast " + str(cont) + " threshold " + str(threshold),
+            name_prefix="contrast " + str(cont) + " threshold 7",
             name_suffix="to reference",
             iterfield=["in_file", "out_file"],
         )

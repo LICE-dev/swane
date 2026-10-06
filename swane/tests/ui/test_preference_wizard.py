@@ -16,6 +16,7 @@ from swane.config.config_enums import (
     RegistrationEngine,
     DeskullEngine,
 )
+from swane.config import dependency_policy
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
 from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow, UserPreferences
@@ -81,6 +82,26 @@ class TestPreferenceWizard:
             global_config.getenum_safe(DataInputList.T13D, "freesurfer_step")
             == FreesurferStep.SYNTHSEG
         )
+
+    def test_welcome_page_warns_on_windows_only(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        import swane.ui.PreferenceWizardWindow as wizard_module
+        from PySide6.QtWidgets import QLabel
+
+        def texts(wizard):
+            page = wizard._stack.widget(0)
+            return " ".join(label.text() for label in page.findChildren(QLabel))
+
+        monkeypatch.setattr(wizard_module, "is_windows", lambda: True)
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
+        qtbot.addWidget(wizard)
+        assert "experimental" in texts(wizard)
+
+        monkeypatch.setattr(wizard_module, "is_windows", lambda: False)
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
+        qtbot.addWidget(wizard)
+        assert "experimental" not in texts(wizard)
 
 
 class TestPreferenceWizardRegistrationEngine:
@@ -244,6 +265,22 @@ class TestPreferenceWizardDeskullEngine:
         assert (
             global_config.getenum_safe(GlobalPrefCategoryList.SYNTH, "deskull_engine")
             == DeskullEngine.SYNTHSTRIP
+        )
+
+    def test_fsl_mandatory_always_sets_bet(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        wizard = self._wizard(qtbot, global_config, dependency_manager, monkeypatch)
+        monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", True)
+        monkeypatch.setattr(dependency_manager, "is_antspynet", lambda: True)
+        global_config[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = "64"
+        wizard.user_prefs.use_advanced_models = True
+
+        wizard._apply_settings_config()
+
+        assert (
+            global_config.getenum_safe(GlobalPrefCategoryList.SYNTH, "deskull_engine")
+            == DeskullEngine.BET
         )
 
     def test_neither_available_falls_back_to_bet(

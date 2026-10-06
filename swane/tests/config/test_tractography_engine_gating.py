@@ -27,8 +27,8 @@ def test_engine_pref_default_and_dependency():
     entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["tractography_engine"]
     assert entry.default == TractographyEngine.DIPY_RECOBUNDLES
     assert entry.option_dependency[TractographyEngine.DIPY_RECOBUNDLES][0] == "is_dipy"
-    # FSL_XTRACT has no dependency clause: FSL is the pre-existing global requirement
-    assert TractographyEngine.FSL_XTRACT not in entry.option_dependency
+    # FSL is only a recommended dependency: FSL_XTRACT is gated on FSL itself
+    assert entry.option_dependency[TractographyEngine.FSL_XTRACT][0] == "is_fsl"
 
 
 def test_new_dipy_prefs_exist():

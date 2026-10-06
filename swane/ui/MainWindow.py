@@ -19,10 +19,11 @@ from PySide6.QtWidgets import (
     QProgressDialog,
 )
 from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent, QDesktopServices
-from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl, QEventLoop
+from PySide6.QtCore import QCoreApplication, Qt, QUrl, QEventLoop
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
+from swane.workers.worker_pool import start_worker
 from swane.ui.ToolReferenceWindow import ToolReferenceWindow
 from swane.utils.DependencyManager import (
     DependencyManager,
@@ -46,8 +47,9 @@ from swane import __version__, EXIT_CODE_REBOOT
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
 from swane.utils.Subject import Subject, SubjectRet
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.config.config_enums import GlobalPrefCategoryList
-from swane.utils.platform_and_tools_utils import is_mac
+from swane.utils.platform_and_tools_utils import is_mac, is_windows
 
 
 class MainWindow(QMainWindow):
@@ -99,7 +101,7 @@ class MainWindow(QMainWindow):
         update_thread.signal.last_available.connect(
             lambda pip_version: self.update_available(pip_version)
         )
-        QThreadPool.globalInstance().start(update_thread)
+        start_worker(update_thread)
 
     def update_available(self, pip_version: str):
         """
@@ -490,7 +492,10 @@ class MainWindow(QMainWindow):
         if not needing:
             return True
 
-        context = {"slicer_path": self.global_config.get_slicer_path()}
+        context = {
+            "slicer_path": self.global_config.get_slicer_path(),
+            "fsl_installed": self.dependency_manager.is_fsl(),
+        }
         resolved = self._resolve_licenses(needing, context)
         if resolved is None or len(resolved) != len(needing):
             return False
@@ -549,7 +554,7 @@ class MainWindow(QMainWindow):
         worker.signal.failed.connect(_on_failed)
         worker.signal.finished.connect(loop.quit)
         try:
-            QThreadPool.globalInstance().start(worker)
+            start_worker(worker)
             loop.exec()
         finally:
             progress.close()
@@ -931,6 +936,11 @@ class MainWindow(QMainWindow):
         x += 1
         self.home_grid_layout.addWidget(label_welcome3, x, 0, 1, 5)
         x += 1
+        if is_windows():
+            label_windows = QLabel(strings.windows_experimental_warn)
+            label_windows.setWordWrap(True)
+            self.home_grid_layout.addWidget(label_windows, x, 0, 1, 5)
+            x += 1
         self.home_grid_layout.addWidget(label_welcome4, x, 0, 1, 5)
         x += 1
 
@@ -959,13 +969,25 @@ class MainWindow(QMainWindow):
 
         x = self.add_home_entry(self.dependency_manager.dcm2niix, x)
 
-        x = self.add_home_entry(self.dependency_manager.fsl, x)
+        if dependency_policy.FSL_MANDATORY:
+            x = self.add_home_entry(self.dependency_manager.fsl, x)
 
         x = self.add_home_entry(self.dependency_manager.antspyx, x)
 
         x = self.add_home_entry(self.dependency_manager.antspynet, x)
 
         x = self.add_home_entry(self.dependency_manager.dipy, x)
+
+        from swane.utils.license_consent import _nilearn_version
+        from swane.utils.DependencyManager import version_with_license
+        from swane.utils.LicenseReference import NILEARN
+
+        nilearn_version = _nilearn_version()
+        if nilearn_version:
+            lbl = strings.check_dep_nilearn_found % version_with_license(
+                NILEARN, nilearn_version
+            )
+            x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, lbl), x)
 
         self.optional_grid_layout = QGridLayout()
         self.home_v_layout.addLayout(self.optional_grid_layout)
@@ -977,6 +999,11 @@ class MainWindow(QMainWindow):
         label_main_dep.setFont(bold_font)
         self.optional_grid_layout.addWidget(label_main_dep, opt_x, 0, 1, 2)
         opt_x += 1
+
+        if not dependency_policy.FSL_MANDATORY:
+            opt_x = self.add_home_entry(
+                self.dependency_manager.fsl, opt_x, self.optional_grid_layout
+            )
 
         opt_x = self.add_home_entry(
             self.dependency_manager.freesurfer, opt_x, self.optional_grid_layout

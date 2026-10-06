@@ -6,6 +6,7 @@ from swane.utils.ResourceManager import ResourceManager
 from swane.resources import strings
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import *
+from swane.config.dependency_policy import FSL_MANDATORY, default_engines
 from swane.nipype_pipeline.workflows.dipy_bundle_workflow import DIPY_TRACT_ATLAS
 
 try:
@@ -62,7 +63,13 @@ if os.path.exists(structure_file):
 
 for k in list(TRACTS.keys()):
     if TRACTS[k][2] == 0:
-        del TRACTS[k]
+        if k in DIPY_TRACT_ATLAS:
+            # Not in the XTRACT data (e.g. FSL is not installed): the dipy engine
+            # does not need it, and the FSL engine skips tracts whose XTRACT
+            # protocol is missing.
+            TRACTS[k][2] = DEFAULT_N_SAMPLES
+        else:
+            del TRACTS[k]
 
 from psutil import virtual_memory
 import math
@@ -603,7 +610,7 @@ WF_PREFERENCES[category]["del_end_vols"] = PreferenceEntry(
     default=0,
     range=[0, 500],
 )
-WF_PREFERENCES[category]["melodic_dim"] = PreferenceEntry(
+WF_PREFERENCES[category]["ic_dim"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Independent Components to estimate",
     tooltip="Set 0 for automatic detection",
@@ -611,10 +618,18 @@ WF_PREFERENCES[category]["melodic_dim"] = PreferenceEntry(
     range=[0, 200],
     special_value_text="Auto",
 )
+WF_PREFERENCES[category]["spatial_z_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Spatial z threshold",
+    tooltip="Spatial z threshold for the final IC maps (Python engine only)",
+    default=1.95,
+    decimals=2,
+    range=[1.0, 5.0],
+)
 WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold for mixture model estimation",
-    tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives",
+    tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives (FSL engine only)",
     default=0.50,
     decimals=2,
     range=[0, 1],
@@ -624,6 +639,11 @@ WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
     label="ICA-AROMA denoising",
     default="true",
 )
+
+# Preference keys renamed across a SWANe version: {section: {old_key: new_key}}.
+# ConfigManager migrates them in place on load so that existing subject and
+# global config files keep working.
+RENAMED_PREFERENCES = {str(DataInputList.FMRI_RS): {"melodic_dim": "ic_dim"}}
 
 GLOBAL_PREFERENCES = {}
 
@@ -765,11 +785,12 @@ GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
 )
 category = GlobalPrefCategoryList.SYNTH
 GLOBAL_PREFERENCES[category] = {}
+DEFAULT_ENGINES = default_engines(FSL_MANDATORY)
 GLOBAL_PREFERENCES[category]["deskull_engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Brain extraction engine",
     value_enum=DeskullEngine,
-    default=DeskullEngine.ANTSPYNET,
+    default=DEFAULT_ENGINES["deskull_engine"],
     option_dependency={
         DeskullEngine.ANTSPYNET: [
             "is_antspynet",
@@ -778,6 +799,10 @@ GLOBAL_PREFERENCES[category]["deskull_engine"] = PreferenceEntry(
         DeskullEngine.SYNTHSTRIP: [
             "is_freesurfer_synth",
             "SynthStrip requires FreeSurfer 8.1.0",
+        ],
+        DeskullEngine.BET: [
+            "is_fsl",
+            "FSL BET requires the FSL software suite",
         ],
     },
     option_pref_requirement={
@@ -804,7 +829,7 @@ GLOBAL_PREFERENCES[category]["engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Registration engine",
     value_enum=RegistrationEngine,
-    default=RegistrationEngine.ANTS,
+    default=DEFAULT_ENGINES["engine"],
     option_dependency={
         RegistrationEngine.SYNTH: [
             "is_freesurfer_synth",
@@ -813,6 +838,10 @@ GLOBAL_PREFERENCES[category]["engine"] = PreferenceEntry(
         RegistrationEngine.ANTS: [
             "is_antspyx",
             "ANTs registration requires the antspyx package",
+        ],
+        RegistrationEngine.FSL: [
+            "is_fsl",
+            "FSL FLIRT/FNIRT requires the FSL software suite",
         ],
     },
     option_pref_requirement={
@@ -839,11 +868,15 @@ GLOBAL_PREFERENCES[category]["tractography_engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Tractography engine",
     value_enum=TractographyEngine,
-    default=TractographyEngine.DIPY_RECOBUNDLES,
+    default=DEFAULT_ENGINES["tractography_engine"],
     option_dependency={
         TractographyEngine.DIPY_RECOBUNDLES: [
             "is_dipy",
             "dipy tractography requires the dipy package",
+        ],
+        TractographyEngine.FSL_XTRACT: [
+            "is_fsl",
+            "FSL XTRACT/probtrackx2 requires the FSL software suite",
         ],
     },
     option_pref_requirement={
@@ -863,11 +896,15 @@ GLOBAL_PREFERENCES[category]["segmentation_engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Segmentation engine",
     value_enum=SegmentationEngine,
-    default=SegmentationEngine.ANTS,
+    default=DEFAULT_ENGINES["segmentation_engine"],
     option_dependency={
         SegmentationEngine.ANTS: [
             "is_antspyx",
             "Atropos segmentation requires the antspyx package",
+        ],
+        SegmentationEngine.FSL: [
+            "is_fsl",
+            "FSL FAST requires the FSL software suite",
         ],
     },
     option_pref_requirement={
@@ -880,6 +917,34 @@ GLOBAL_PREFERENCES[category]["segmentation_engine"] = PreferenceEntry(
     option_pref_requirement_fail_tooltip={
         SegmentationEngine.ANTS: "Atropos segmentation requires at least %.1f GB RAM"
         % ResourceManager.atropos_ram_requirements(),
+    },
+    section=True,
+)
+GLOBAL_PREFERENCES[category]["fmri_engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="fMRI engine",
+    value_enum=FmriEngine,
+    default=DEFAULT_ENGINES["fmri_engine"],
+    option_dependency={
+        FmriEngine.FSL: [
+            "is_fsl",
+            "FSL fMRI requires FSL",
+        ],
+        FmriEngine.NILEARN: [
+            "is_nilearn",
+            "nilearn fMRI requires the nilearn/antspyx packages",
+        ],
+    },
+    option_pref_requirement={
+        FmriEngine.NILEARN: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.nilearn_fmri_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        FmriEngine.NILEARN: "nilearn fMRI requires at least %.1f GB RAM"
+        % ResourceManager.nilearn_fmri_ram_requirements(),
     },
     section=True,
 )

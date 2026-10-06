@@ -40,8 +40,8 @@ def test_resolve_leaves_antspynet_and_bet_under_exclusion():
         assert resolve_deskull_engine(cfg, allow_synthstrip=False) == eng
 
 
-def test_get_deskull_node_dispatches_by_engine(monkeypatch):
-    monkeypatch.setenv("SUBJECTS_DIR", "/tmp")
+def test_get_deskull_node_dispatches_by_engine(monkeypatch, tmp_path):
+    monkeypatch.setenv("SUBJECTS_DIR", str(tmp_path))
     a = get_deskull_node(
         name="x",
         deskull_engine=DeskullEngine.ANTSPYNET,

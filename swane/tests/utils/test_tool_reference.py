@@ -84,3 +84,14 @@ def test_dipy_recobundles_recognize_cites_recobundles_and_atlas():
     assert any(
         "Yeh" in reference and "2018" in reference for reference in ref.references
     )
+
+
+def test_niimath_slice_timer_is_registered():
+    from swane.nipype_pipeline.interfaces.niimath import NiiMathSliceTimer
+    from swane.resources import strings
+
+    key = NiiMathSliceTimer.__name__
+    ref = get_command_info(key)
+    assert ref is not None
+    assert ref.package == Package.NIIMATH
+    assert strings.node_names[key] == strings.node_names["CustomSliceTimer"]

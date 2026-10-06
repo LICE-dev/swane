@@ -76,6 +76,21 @@ class TestSubjectTab:
         # enabled first -- normally done by data loading, out of scope here.
         tab.setTabEnabled(SubjectTab.EXECTAB, True)
 
+        # Mock preload methods to avoid network requests and subprocesses in tests
+        from swane.workers.WorkflowGenerateWorker import WorkflowGenerateWorker
+
+        monkeypatch.setattr(
+            WorkflowGenerateWorker, "_preload_templates", lambda *args: None
+        )
+        monkeypatch.setattr(
+            WorkflowGenerateWorker, "_preload_models", lambda *args: None
+        )
+
+        # Since generate_workflow is now async, we must wait for the finished signal
+        # and we can't intercept the worker creation easily, so we just run the
+        # worker inline for this test
+        monkeypatch.setattr("swane.ui.SubjectTab.start_worker", lambda w: w.run())
+
         tab.generate_workflow()
         assert tab.exec_button.isEnabled() is True
         assert tab.generate_workflow_button.isEnabled() is False
@@ -127,3 +142,22 @@ class TestSubjectTab:
 
         progress = tab.generate_scene()
         assert progress.isVisible() is False
+
+
+def test_workflow_crash_signal_updates_tab_states(
+    qtbot, monkeypatch, main_window, tmp_path
+):
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_crash",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
+
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_CRASHED))
+    assert tab.workflow_had_error is True

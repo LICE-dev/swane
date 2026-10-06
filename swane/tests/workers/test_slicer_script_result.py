@@ -16,6 +16,10 @@ import types
 
 import pytest
 
+# slicer_script_result imports SimpleITK at module level (it normally runs inside
+# 3D Slicer); SimpleITK is not a SWANe dependency, so skip when it is absent.
+pytest.importorskip("SimpleITK", reason="SimpleITK is not installed")
+
 import swane
 
 MODULE_PATH = os.path.join(
@@ -84,7 +88,11 @@ def normalise(log, **paths):
     out = []
     for line in log:
         for token, path in paths.items():
-            line = line.replace(str(path), f"<{token}>")
+            # On Windows the recorder shows repr() paths: backslashes doubled.
+            for form in (str(path).replace("\\", "\\\\"), str(path)):
+                for sep in ("\\\\", "\\"):
+                    line = line.replace(form + sep, f"<{token}>/")
+                line = line.replace(form, f"<{token}>")
         out.append(line)
     return out
 

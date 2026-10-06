@@ -70,3 +70,40 @@ def eddy_hash_worker(queue):
             "same_hash": two_thread_hash == eight_thread_hash,
         }
     )
+
+
+def worker_import_order():
+    """
+    Task run in a worker pool process: report, in ``sys.modules`` insertion
+    order, which of SWANe's ``pwd`` stub module and Nipype's ``sge`` plugin (the
+    ``import pwd`` that fails on Windows) were imported first.
+    """
+    import sys
+
+    names = list(sys.modules)
+
+    def _position(name):
+        return names.index(name) if name in names else None
+
+    return {
+        "windows_compat": _position("swane.patches.windows_compat"),
+        "sge": _position("nipype.pipeline.plugins.sge"),
+    }
+
+
+def worker_cmdline_quoting_state():
+    """
+    Task run in a worker pool process: report whether SWANe's Nipype patches
+    (which install the Windows command-line quoting) were applied before the
+    task, and which ``shlex`` nipype's CommandLine core is using.
+    """
+    import shlex
+    import sys
+
+    npx = sys.modules.get("swane.patches.nipype_patches")
+    from nipype.interfaces.base import core
+
+    return {
+        "patched": bool(npx is not None and npx._PATCHED),
+        "nipype_shlex_is_stdlib": core.shlex is shlex,
+    }

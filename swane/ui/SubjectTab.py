@@ -1,7 +1,7 @@
 import os
 from functools import partial
 from datetime import datetime
-from PySide6.QtCore import Qt, QThreadPool, QFileSystemWatcher, QTimer, QUrl
+from PySide6.QtCore import Qt, QFileSystemWatcher, QTimer, QUrl
 from PySide6.QtGui import QFont, QDesktopServices
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
@@ -29,12 +29,14 @@ from swane.resources import strings
 from swane.config.config_enums import GlobalPrefCategoryList
 from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.workers.SlicerViewerWorker import SlicerViewerWorker
+from swane.workers.worker_pool import start_worker
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.ui.NipypeNodeRuntimeWidget import NipypeNodeRuntimeWidget
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.utils.DataInputList import DataInputList
 from swane.utils.DependencyManager import DependencyManager
@@ -162,6 +164,16 @@ class SubjectTab(QTabWidget):
                 pass
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_wf_insufficient_resources)
+            msg_box.exec()
+            self.workflow_had_error = True
+            return
+        elif wf_report.signal_type == WorkflowSignals.WORKFLOW_CRASHED:
+            try:
+                self.workflow_process.stop_event.set()
+            except Exception:
+                pass
+            msg_box = QMessageBox()
+            msg_box.setText(strings.subj_tab_wf_crashed)
             msg_box.exec()
             self.workflow_had_error = True
             return
@@ -470,25 +482,27 @@ class SubjectTab(QTabWidget):
         if not os.path.exists(folder_path):
             return
 
-        dicom_src_work = DicomSearchWorker(
+        self._dicom_worker = DicomSearchWorker(
             folder_path,
             classify=self.global_config.getboolean_safe(
                 GlobalPrefCategoryList.MAIN, "auto_import"
             ),
         )
-        dicom_src_work.load_dir()
+        self._dicom_worker.load_dir()
 
-        if dicom_src_work.get_files_len() > 0:
+        if self._dicom_worker.get_files_len() > 0:
             self.clear_scan_result()
             self.dicom_scan_series_list = []
             progress = PersistentProgressDialog(
                 strings.subj_tab_dicom_scan, 0, 0, parent=self.parent()
             )
             progress.show()
-            progress.setMaximum(dicom_src_work.get_files_len() + 1)
-            dicom_src_work.signal.sig_loop.connect(lambda i: progress.increase_value(i))
-            dicom_src_work.signal.sig_finish.connect(self.show_scan_result)
-            QThreadPool.globalInstance().start(dicom_src_work)
+            progress.setMaximum(self._dicom_worker.get_files_len() + 1)
+            self._dicom_worker.signal.sig_loop.connect(
+                lambda i: progress.increase_value(i)
+            )
+            self._dicom_worker.signal.sig_finish.connect(self.show_scan_result)
+            start_worker(self._dicom_worker)
 
         else:
             msg_box = QMessageBox()
@@ -504,6 +518,7 @@ class SubjectTab(QTabWidget):
         None.
 
         """
+        self._dicom_worker = None
 
         layout = QGridLayout()
 
@@ -625,13 +640,38 @@ class SubjectTab(QTabWidget):
 
         """
 
-        generate_workflow_return = self.subject.generate_workflow()
+        self.generate_workflow_button.setEnabled(False)
+
+        from swane.ui.PersistentProgressDialog import PersistentProgressDialog
+
+        progress = PersistentProgressDialog(
+            strings.subj_tab_wf_gen_start, 0, 0, parent=self
+        )
+        progress.show()
+
+        from swane.workers.WorkflowGenerateWorker import WorkflowGenerateWorker
+
+        self._generate_worker = WorkflowGenerateWorker(self.subject)
+        self._generate_worker.signal.progress_msg.connect(progress.setLabelText)
+        self._generate_worker.signal.finished.connect(
+            lambda ret: self._on_workflow_generated(ret, progress)
+        )
+        start_worker(self._generate_worker)
+
+    def _on_workflow_generated(self, generate_workflow_return: SubjectRet, progress):
+        """
+        Callback for workflow generation completion.
+        """
+        self._generate_worker = None
+        progress.accept()
 
         if generate_workflow_return == SubjectRet.GenWfMissingRequisites:
+            self.generate_workflow_button.setEnabled(True)
             error_dialog = QErrorMessage(parent=self)
-            error_dialog.showMessage(strings.subj_tab_missing_fsl_error)
+            error_dialog.showMessage(strings.subj_tab_missing_dependencies_error)
             return
         elif generate_workflow_return == SubjectRet.GenWfError:
+            self.generate_workflow_button.setEnabled(True)
             error_dialog = QErrorMessage(parent=self)
             error_dialog.showMessage(strings.subj_tab_wf_gen_error)
             return
@@ -665,7 +705,6 @@ class SubjectTab(QTabWidget):
         self.exec_button_set_enabled(True)
         self.node_runtime_widget.hide()
         self.exec_graph.hide()
-        self.generate_workflow_button.setEnabled(False)
 
     def tree_item_changed(
         self, current: CustomTreeWidgetItem, previous: CustomTreeWidgetItem
@@ -1608,7 +1647,7 @@ class SubjectTab(QTabWidget):
         slicer_open_thread = SlicerViewerWorker(
             self.global_config.get_slicer_path(), self.subject.scene_path()
         )
-        QThreadPool.globalInstance().start(slicer_open_thread)
+        start_worker(slicer_open_thread)
 
     def setTabEnabled(self, index: int, enabled: bool):
         """
@@ -1622,9 +1661,9 @@ class SubjectTab(QTabWidget):
             The new tab status
         """
         if index == SubjectTab.EXECTAB and not enabled:
-            if (
-                not self.subject.dependency_manager.is_fsl()
-                or not self.subject.dependency_manager.is_dcm2niix()
+            if not self.subject.dependency_manager.is_dcm2niix() or (
+                dependency_policy.FSL_MANDATORY
+                and not self.subject.dependency_manager.is_fsl()
             ):
                 self.setTabToolTip(
                     index, strings.subj_tab_tabtooltip_exec_disabled_dependency

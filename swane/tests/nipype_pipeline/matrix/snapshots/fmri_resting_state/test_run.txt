@@ -1,11 +1,11 @@
 # workflow snapshot: fmri_resting_state / test_run
 #
 #   aroma = true
-#   melodic_dim = 0
+#   ic_dim = 0
 #   melodic_thr = 0.5
 #   test_run = True
 #
-# nodes=44 edges=75
+# nodes=47 edges=80
 
 - aroma_classification [AromaClassification] mem_gb=0.2 n_procs=1
 - feature_frequency [FeatureFrequency] mem_gb=0.2 n_procs=1
@@ -15,6 +15,7 @@
     mask_out = '<SITE>/ica_aroma_py/resources/mask_out.nii.gz'
 - feature_spatial_prep [FeatureSpatialPrep] mem_gb=0.2 n_procs=1
 - feature_time_series [FeatureTimeSeries] mem_gb=0.2 n_procs=1
+    seed = 0
 - fmri_rs_2_ref_flirt [FLIRT] cmd=flirt mem_gb=0.2 n_procs=1
     cost = 'corratio'
     dof = 6
@@ -58,6 +59,10 @@
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     output_type = 'NIFTI_GZ'
     suffix = '_tempfilt'
+- fmri_rs_highpass_denoised [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    output_type = 'NIFTI_GZ'
+    suffix = '_tempfilt'
 - fmri_rs_img2float [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     op_string = ''
@@ -98,6 +103,11 @@
     op_string = '-Tmean'
     output_type = 'NIFTI_GZ'
     suffix = '_mean'
+- fmri_rs_meanfunc_denoised [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
+    environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
+    op_string = '-Tmean'
+    output_type = 'NIFTI_GZ'
+    suffix = '_mean'
 - fmri_rs_meanfuncmask_antspynet [AntsPyNetBrainExtraction] mem_gb=5 n_procs=0
     mask_file = 'brain_mask.nii.gz'
     modality = 'bold'
@@ -106,6 +116,10 @@
 - fmri_rs_medianval [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = [50.0]
 - fmri_rs_merge_tr_meanfunc3 [Merge] mem_gb=0.2 n_procs=1
+    axis = 'vstack'
+    no_flatten = False
+    ravel_inputs = False
+- fmri_rs_merge_tr_meanfunc_denoised [Merge] mem_gb=0.2 n_procs=1
     axis = 'vstack'
     no_flatten = False
     ravel_inputs = False
@@ -223,15 +237,17 @@ fmri_rs_dilatemask.out_file -> melodic.mask
 fmri_rs_extract_ref.out_file -> fmri_rs_motion_correct.ref_file
 fmri_rs_getTR.TR -> feature_frequency.TR
 fmri_rs_getTR.TR -> fmri_rs_merge_tr_meanfunc3.in1
+fmri_rs_getTR.TR -> fmri_rs_merge_tr_meanfunc_denoised.in1
 fmri_rs_getTR.TR -> melodic.tr_sec
 fmri_rs_getTR.TR -> preproc_melodic.tr_sec
 fmri_rs_getthresh.('percentile_values', "def get_thresh_op(thresh):\n    return '-thr %.10f -Tmin -bin' % (0.1 * thresh[0])", ()) -> fmri_rs_threshold.op_string
-fmri_rs_highpass.out_file -> merge_node.in1
-fmri_rs_highpass.out_file -> nonaggr_denoising.in_file
+fmri_rs_highpass_denoised.out_file -> input_list_denoised.in1
 fmri_rs_img2float.out_file -> fmri_rs_extract_ref.in_file
 fmri_rs_img2float.out_file -> fmri_rs_motion_correct.in_file
 fmri_rs_intnorm.out_file -> fmri_rs_highpass.in_file
 fmri_rs_intnorm.out_file -> fmri_rs_meanfunc3.in_file
+fmri_rs_intnorm.out_file -> merge_node.in1
+fmri_rs_intnorm.out_file -> nonaggr_denoising.in_file
 fmri_rs_maskfunc.out_file -> fmri_rs_getthresh.in_file
 fmri_rs_maskfunc.out_file -> fmri_rs_threshold.in_file
 fmri_rs_maskfunc2.out_file -> fmri_rs_meanfunc2.in_file
@@ -241,6 +257,7 @@ fmri_rs_meanfunc.out_file -> fmri_rs_meanfuncmask_antspynet.in_file
 fmri_rs_meanfunc2.out_file -> fmri_rs_2_ref_flirt.in_file
 fmri_rs_meanfunc2.out_file -> fmri_rs_mergenode.in1
 fmri_rs_meanfunc3.out_file -> fmri_rs_merge_tr_meanfunc3.in2
+fmri_rs_meanfunc_denoised.out_file -> fmri_rs_merge_tr_meanfunc_denoised.in2
 fmri_rs_meanfuncmask_antspynet.mask_file -> feature_spatial_prep.mask_file
 fmri_rs_meanfuncmask_antspynet.mask_file -> fmri_rs_maskfunc.in_file2
 fmri_rs_meanfuncmask_antspynet.mask_file -> preproc_melodic.mask
@@ -248,6 +265,7 @@ fmri_rs_medianval.('percentile_values', "def get_inorm_scale(percentile_values):
 fmri_rs_medianval.('percentile_values', 'def get_bt_thresh(percentile_values):\n    return 0.75 * percentile_values[0]', ()) -> fmri_rs_smooth.brightness_threshold
 fmri_rs_medianval.('percentile_values', 'def get_first_percentile(percentile_values):\n    return percentile_values[0]', ()) -> fmri_rs_mergenode.in2
 fmri_rs_merge_tr_meanfunc3.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (100,)) -> fmri_rs_highpass.op_string
+fmri_rs_merge_tr_meanfunc_denoised.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (100,)) -> fmri_rs_highpass_denoised.op_string
 fmri_rs_mergenode.('out', 'def get_usans(x):\n    return [tuple([x[0], 0.75 * x[1]])]', ()) -> fmri_rs_smooth.usans
 fmri_rs_motion_correct.out_file -> fmri_rs_maskfunc.in_file
 fmri_rs_motion_correct.out_file -> fmri_rs_maskfunc2.in_file
@@ -270,10 +288,11 @@ inputnode.reference_brain -> zstats_apply_xfm.reference
 melodic.out_dir -> melodic_output.base_directory
 melodic.out_dir -> melodic_output.melodic_dir
 melodic_output.('thresh_zstat_files', 'def registered_file_name(in_file_names):\n    """\n    Adds prefix \'r-\' and use 2 digid number at end.\n    Example: \'zstat1.nii.gz\' -> \'r-zstat01.nii.gz\'\n    """\n    from os.path import basename\n    import re\n    out_files = []\n    for f in in_file_names:\n        base_name = basename(f)\n        m = re.search(\'(//d+)(//.nii(?://.gz)?)$\', base_name)\n        if m:\n            num = int(m.group(1))\n            ext = m.group(2)\n            new_name = re.sub(\'//d+(//.nii(?://.gz)?)$\', f\'{num:02d}{ext}\', base_name)\n        else:\n            new_name = base_name\n        out_files.append(\'r-\' + new_name)\n    return out_files', ()) -> zstats_apply_xfm.out_file
-melodic_output.mel_mix -> outputnode.mel_mix
+melodic_output.ic_mix -> outputnode.ic_mix
 melodic_output.thresh_zstat_files -> zstats_apply_xfm.in_file
 merge_node.out -> preproc_melodic.in_files
-nonaggr_denoising.out_file -> input_list_denoised.in1
+nonaggr_denoising.out_file -> fmri_rs_highpass_denoised.in_file
+nonaggr_denoising.out_file -> fmri_rs_meanfunc_denoised.in_file
 preproc_melodic.out_dir -> preproc_melodic_output.base_directory
 preproc_melodic.out_dir -> preproc_melodic_output.melodic_dir
 preproc_melodic_output.mel_ft_mix -> feature_frequency.mel_ft_mix

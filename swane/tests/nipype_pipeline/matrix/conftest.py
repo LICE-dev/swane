@@ -71,6 +71,20 @@ def import_workflow_or_skip(module_name, attr):
     return getattr(module, attr)
 
 
+@pytest.fixture(autouse=True)
+def snapshot_os_type(monkeypatch):
+    """Render every snapshot with the Linux RAM tables.
+
+    ``ResourceManager`` sizes some nodes per OS by design (e.g. SynthSeg
+    reserves 30 GB on macOS, 14 GB elsewhere). The golden files describe the
+    graph SWANe builds, not the host running the test, so the per-OS lookup is
+    pinned to the platform they were recorded on.
+    """
+    import swane.utils.ResourceManager as resource_manager
+
+    monkeypatch.setattr(resource_manager, "get_os_type", lambda: "linux")
+
+
 @pytest.fixture
 def graph_snapshot(tmp_path):
     """Return ``check(workflow, subdir, name, config, title=None)``.

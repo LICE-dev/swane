@@ -88,16 +88,6 @@ def dipy_dti_preproc_workflow(
     single whole-brain SLR aligns the resulting tractogram to the HCP842
     atlas.
 
-    The dipy engine's own steps (denoise, motion, bias, CSD, tracking, SLR) are
-    FSL-free by design (spec Goal). The two *abstracted* steps -- brain
-    extraction and diffusion<->reference registration -- keep honouring the
-    user's global engine choice, FSL included (spec section 1). The
-    diffusion->reference affine the tracker needs is produced as a plain 4x4 RAS
-    text file by :class:`AffineToRAS`, which handles both the ITK/LPS transform
-    ANTs emits and the FLIRT ``.mat`` FSL emits (either inverted and expressed in
-    RAS); it is never an FSL ``.mat`` on output -- that was a probtrackx
-    requirement the dipy tracker does not share.
-
     New dipy nodes implement HARD_CAP only, so this factory takes no
     CPU preference.
 
@@ -156,11 +146,8 @@ def dipy_dti_preproc_workflow(
     # Registration is an abstracted step: it follows the user's global engine
     # choice, FSL included (spec section 1). SynthMorph is avoided for the
     # diffusion registration (non-deterministic, and its diff<->ref outputs are
-    # emitted as the ANTs transform-list view, not an FSL .mat), so SYNTH falls
-    # back to FSL exactly as dti_preproc_workflow does.
-    engine = resolve_registration_engine(synth_config, allow_ants=True)
-    if engine == RegistrationEngine.SYNTH:
-        engine = RegistrationEngine.FSL
+    # emitted as the ANTs transform-list view, not an FSL .mat).
+    engine = resolve_registration_engine(synth_config, allow_synth=False)
 
     # A per-node core budget for the parallel dipy nodes; each sets num_threads,
     # from which nipype derives a real n_procs reservation (HARD_CAP). max_cpu==0

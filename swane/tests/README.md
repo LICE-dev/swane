@@ -5,9 +5,8 @@
 Tests are grouped by the package area they exercise, one folder per area:
 
 ```
-swane/tests/
+swane/tests/            # (pytest.ini and a bootstrap conftest.py live in the repo root)
 ├── conftest.py            # shared fixtures + marker auto-skip
-├── pytest.ini             # marker registration / warning filters
 ├── helpers/               # test-only utilities (NOT tests)
 │   ├── dicom_factory.py   #   header-only phantom DICOM (unit tests, no pixel data)
 │   ├── dicom_scenarios.py #   ready-made scenarios + expected metadata

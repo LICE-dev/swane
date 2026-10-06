@@ -23,6 +23,10 @@ import numpy as np
 
 from swane.tests.helpers.phantom.catalog import build_catalog
 from swane.tests.helpers.phantom.dicom_writer import write_volume_series
+from swane.tests.helpers.phantom.fsaverage_source import (
+    fsaverage_fingerprint,
+    resolve_fsaverage_mri_dir,
+)
 from swane.tests.helpers.phantom.sequences import (
     render_bold,
     render_dwi,
@@ -90,27 +94,18 @@ class PhantomProfile:
     ct_slice_mm: float = 2.0
 
 
-def _cache_key(profile: PhantomProfile, freesurfer_home: str) -> str:
-    stamp = ""
-    stamp_file = os.path.join(freesurfer_home, "build-stamp.txt")
-    if os.path.isfile(stamp_file):
-        with open(stamp_file) as handle:
-            stamp = handle.read().strip()
+def _cache_key(profile: PhantomProfile, fsaverage_mri: str) -> str:
     payload = json.dumps(
-        {"version": GENERATOR_VERSION, "profile": asdict(profile), "fs": stamp},
+        {
+            "version": GENERATOR_VERSION,
+            "profile": asdict(profile),
+            # Content, not location: FreeSurfer's fsaverage and the MNE mirror
+            # are byte-identical and must give the same cached phantom.
+            "fsaverage": fsaverage_fingerprint(fsaverage_mri),
+        },
         sort_keys=True,
     )
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
-
-
-def _resolve_freesurfer_home(freesurfer_home=None) -> str:
-    home = freesurfer_home or os.environ.get("FREESURFER_HOME")
-    if not home:
-        raise RuntimeError(
-            "FREESURFER_HOME is not set; the phantom anatomy is derived from "
-            "the fsaverage subject shipped with FreeSurfer."
-        )
-    return home
 
 
 def get_phantom_subject(
@@ -135,10 +130,10 @@ def get_phantom_subject(
         Rebuild even if a valid cache entry exists.
     """
     profile = profile or PhantomProfile()
-    fs_home = _resolve_freesurfer_home(freesurfer_home)
+    fs_mri = resolve_fsaverage_mri_dir(freesurfer_home)
     root = cache_root or os.environ.get("SWANE_PHANTOM_DIR") or DEFAULT_CACHE_ROOT
 
-    key = _cache_key(profile, fs_home)
+    key = _cache_key(profile, fs_mri)
     subject_dir = os.path.join(root, "phantom_%s" % key)
     manifest_path = os.path.join(subject_dir, "manifest.json")
 
@@ -156,7 +151,7 @@ def get_phantom_subject(
     shutil.rmtree(staging, ignore_errors=True)
     os.makedirs(staging, exist_ok=True)
 
-    manifest = build_phantom(staging, profile, fs_home)
+    manifest = build_phantom(staging, profile, freesurfer_home)
 
     with open(os.path.join(staging, "manifest.json"), "w") as handle:
         json.dump(manifest, handle, indent=2)

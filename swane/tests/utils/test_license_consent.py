@@ -146,6 +146,7 @@ def _patch_versions(
     antspynet="0.2.4",
     dipy="1.12.0",
     niimath="1.0.20260720",
+    nilearn="0.10.4",
 ):
     monkeypatch.setattr(lc, "_fsl_version", lambda: fsl)
     monkeypatch.setattr(lc, "_freesurfer_version", lambda: fs)
@@ -154,6 +155,7 @@ def _patch_versions(
     monkeypatch.setattr(lc, "_antspynet_version", lambda: antspynet)
     monkeypatch.setattr(lc, "_dipy_version", lambda: dipy)
     monkeypatch.setattr(lc, "_niimath_version", lambda: niimath)
+    monkeypatch.setattr(lc, "_nilearn_version", lambda: nilearn)
     monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
 
 
@@ -168,6 +170,7 @@ def test_first_run_all_detected_need_consent(monkeypatch):
         "antspynet",
         "dipy",
         "niimath",
+        "nilearn",
     ]
 
 
@@ -183,6 +186,7 @@ def test_unchanged_versions_need_no_consent(monkeypatch):
             "antspynet": "0.2.4",
             "dipy": "1.12.0",
             "niimath": "1.0.20260720",
+            "nilearn": "0.10.4",
         }
     )
     assert lc.tools_needing_consent(dm, cfg) == []
@@ -214,13 +218,14 @@ def test_upgraded_tool_reprompts_only_that_tool(monkeypatch):
             "antspynet": "0.2.4",
             "dipy": "1.12.0",
             "niimath": "1.0.20260720",
+            "nilearn": "0.10.4",
         }
     )
     assert lc.tools_needing_consent(dm, cfg) == ["fsl"]
 
 
 def test_undeterminable_version_uses_sentinel(monkeypatch):
-    _patch_versions(monkeypatch, fsl=None, niimath=None)
+    _patch_versions(monkeypatch, fsl=None, niimath=None, nilearn=None)
     dm = _FakeDM(fs=False, dcm=False, antspyx=False, antspynet=False, dipy=False)
     cfg = _FakeConfig()
     assert lc.detected_tool_versions(dm, cfg) == {"fsl": lc.UNKNOWN_VERSION}
@@ -228,6 +233,7 @@ def test_undeterminable_version_uses_sentinel(monkeypatch):
 
 def test_dcm2niix_version_reads_package_attribute(monkeypatch):
     import importlib.metadata
+
     monkeypatch.setattr(
         importlib.metadata,
         "version",
@@ -239,8 +245,9 @@ def test_dcm2niix_version_reads_package_attribute(monkeypatch):
 def test_dcm2niix_version_none_when_package_missing(monkeypatch):
     def mock_version(name):
         raise Exception("missing")
-    
+
     import importlib.metadata
+
     monkeypatch.setattr(
         importlib.metadata,
         "version",
@@ -258,6 +265,7 @@ def test_dcm2niix_version_does_not_spawn_subprocess(monkeypatch):
     """
     fake_dcm2niix = SimpleNamespace(__version__="1.0.20260724")
     import importlib.metadata
+
     monkeypatch.setattr(
         importlib.metadata,
         "version",
@@ -277,6 +285,7 @@ def test_detected_versions_reuse_dependency_check_results(monkeypatch):
     cfg = _FakeConfig()
     monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
     monkeypatch.setattr(lc, "_niimath_version", lambda: None)
+    monkeypatch.setattr(lc, "_nilearn_version", lambda: None)
     monkeypatch.setattr(
         lc,
         "_fsl_version",
@@ -305,3 +314,138 @@ def test_antspynet_detected_is_offered(monkeypatch):
     dm, cfg = _FakeDM(), _FakeConfig()
     assert "antspynet" in lc.detected_tool_versions(dm, cfg)
     assert "antspynet" in lc.tools_needing_consent(dm, cfg)
+
+
+def test_nilearn_version_reads_package_attribute(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    fake_nilearn = SimpleNamespace(__version__="0.10.4")
+    monkeypatch.setitem(sys.modules, "nilearn", fake_nilearn)
+    assert lc._nilearn_version() == "0.10.4"
+
+
+# --- FSL is always in the consent gate, even when FSL is not installed -----
+# FSL's license also covers the MNI152NLin6Asym template SWANe downloads and
+# uses (AROMA registration target, XTRACT/FLAT1).
+
+
+def _fake_dm_no_optional_tools(**overrides):
+    kwargs = dict(
+        fsl=False, fs=False, dcm=False, antspyx=False, antspynet=False, dipy=False
+    )
+    kwargs.update(overrides)
+    return _FakeDM(**kwargs)
+
+
+def test_fsl_not_installed_marker_is_stable_across_calls():
+    assert lc._fsl_not_installed_marker() == lc._fsl_not_installed_marker()
+
+
+def test_fsl_not_installed_marker_changes_with_bundled_text(monkeypatch, tmp_path):
+    original = lc._fsl_not_installed_marker()
+    alt = tmp_path / "fsl.txt"
+    alt.write_text("a different FSL license snapshot", encoding="utf-8")
+    monkeypatch.setattr(lc, "bundled_license_path", lambda info: str(alt))
+    assert lc._fsl_not_installed_marker() != original
+
+
+def test_fsl_is_offered_even_when_not_installed(monkeypatch):
+    dm = _fake_dm_no_optional_tools()
+    monkeypatch.setattr(lc, "_niimath_version", lambda: None)
+    monkeypatch.setattr(lc, "_nilearn_version", lambda: None)
+    monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
+    cfg = _FakeConfig()
+
+    detected = lc.detected_tool_versions(dm, cfg)
+    assert detected == {"fsl": lc._fsl_not_installed_marker()}
+    assert lc.tools_needing_consent(dm, cfg, detected) == ["fsl"]
+
+
+def test_fsl_not_installed_marker_accepted_suppresses_reprompt(monkeypatch):
+    dm = _fake_dm_no_optional_tools()
+    monkeypatch.setattr(lc, "_niimath_version", lambda: None)
+    monkeypatch.setattr(lc, "_nilearn_version", lambda: None)
+    monkeypatch.setattr(lc, "_is_slicer_detected", lambda config: False)
+    marker = lc._fsl_not_installed_marker()
+    cfg = _FakeConfig(accepted={"fsl": marker})
+
+    detected = lc.detected_tool_versions(dm, cfg)
+    assert lc.tools_needing_consent(dm, cfg, detected) == []
+
+
+def test_fsl_installed_after_not_installed_marker_reprompts(monkeypatch):
+    # A "not installed" marker was accepted previously; FSL is now installed
+    # with a real, different version -> re-prompt once, same as any other
+    # tool version change.
+    _patch_versions(monkeypatch, fsl="6.0.6")
+    dm = _FakeDM(fs=False, dcm=False, antspyx=False, antspynet=False, dipy=False)
+    monkeypatch.setattr(lc, "_niimath_version", lambda: None)
+    monkeypatch.setattr(lc, "_nilearn_version", lambda: None)
+    marker = lc._fsl_not_installed_marker()
+    cfg = _FakeConfig(accepted={"fsl": marker})
+
+    detected = lc.detected_tool_versions(dm, cfg)
+    assert detected["fsl"] == "6.0.6"
+    assert lc.tools_needing_consent(dm, cfg, detected) == ["fsl"]
+
+
+def test_resolve_fsl_not_installed_forces_bundled_text_only(monkeypatch):
+    # No installed/online resolution should even be attempted: the FSL
+    # license shown when FSL is absent must always be the bundled snapshot,
+    # so its identity matches _fsl_not_installed_marker() exactly.
+    monkeypatch.setattr(
+        lc,
+        "fetch_online_license",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("unexpected online fetch")
+        ),
+    )
+    info = LR.LICENSES[LR.FSL]
+    result = lc.resolve_license_text(info, {"fsl_installed": False})
+    assert result.source is lc.LicenseSource.BUNDLED
+    assert result.tool_id == "fsl"
+    assert result.extra_note
+    # The bundled fsl.txt snapshot is HTML (the official license page saved
+    # verbatim), so it must be rendered as such, not as plain text.
+    assert result.is_html is True
+    with open(LR.bundled_license_path(info), encoding="utf-8", errors="replace") as fh:
+        assert result.text == fh.read()
+
+
+def test_resolve_fsl_installed_context_uses_normal_cascade(tmp_path, monkeypatch):
+    # fsl_installed=True (or absent, as in every other test above) must not
+    # change the existing installed/online/bundled resolution order.
+    installed = tmp_path / "LICENCE.FSL"
+    installed.write_text("INSTALLED FSL TEXT", encoding="utf-8")
+    info = _fake_info(tmp_path, installed=str(installed))
+    result = lc.resolve_license_text(info, {"fsl_installed": True})
+    assert result.source is lc.LicenseSource.INSTALLED
+    assert "INSTALLED FSL TEXT" in result.text
+
+
+def test_bundled_fallback_keeps_the_html_format_of_fsl(monkeypatch):
+    """FSL installed but its licence file missing, and offline: the bundled
+    fsl.txt is the licence page's HTML and must be shown as HTML."""
+    import dataclasses
+
+    info = dataclasses.replace(
+        LR.LICENSES[LR.FSL], installed_path_candidates=lambda ctx: []
+    )
+    monkeypatch.setattr(lc, "fetch_online_license", lambda *a, **k: None)
+    result = lc.resolve_license_text(info, {"fsl_installed": True})
+    assert result.source is lc.LicenseSource.BUNDLED
+    assert result.text.lstrip().lower().startswith("<!doctype html")
+    assert result.is_html is True
+
+
+def test_bundled_fallback_keeps_plain_text_licences_plain(monkeypatch):
+    import dataclasses
+
+    info = dataclasses.replace(
+        LR.LICENSES[LR.FREESURFER], installed_path_candidates=lambda ctx: []
+    )
+    monkeypatch.setattr(lc, "fetch_online_license", lambda *a, **k: None)
+    result = lc.resolve_license_text(info, {})
+    assert result.source is lc.LicenseSource.BUNDLED
+    assert result.is_html is False

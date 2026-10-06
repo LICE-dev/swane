@@ -13,6 +13,7 @@ def test_registry_has_all_tools():
         "antspynet",
         "dipy",
         "niimath",
+        "nilearn",
     }
 
 

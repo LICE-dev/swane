@@ -318,7 +318,9 @@ class TestAntsRegistrationTestRun:
 class TestAntsRegistrationRealRun:
     """A real (tiny) antspyx registration; opt-in via ``--run-heavy``."""
 
-    def test_linear_inverse_needs_the_invert_flag(self, workspace, make_nifti):
+    def test_linear_inverse_needs_the_invert_flag(
+        self, workspace, make_nifti, dense_ants_affine
+    ):
         import ants
         import nibabel as nib
 

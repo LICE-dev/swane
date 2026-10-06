@@ -4,13 +4,13 @@ import shutil
 from swane.utils.DataInputList import DataInputList, ImageModality
 from enum import Enum, auto
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DependencyManager import DependencyManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
-from swane.utils.qt_compat import QThreadPool
+from swane.workers.worker_pool import start_worker
 from swane.resources import strings
 import traceback
-from threading import Thread
 from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
 from multiprocessing import Queue
 from swane.utils.ToolReference import tool_reference_list
@@ -246,7 +246,7 @@ class Subject:
                     i, maximum
                 )
             )
-        QThreadPool.globalInstance().start(dicom_src_work)
+        start_worker(dicom_src_work)
 
     def check_input_folder_step3(
         self,
@@ -634,7 +634,9 @@ class Subject:
         """
         return (
             self.input_state_list.is_ref_loaded()
-            and self.dependency_manager.is_fsl()
+            and (
+                not dependency_policy.FSL_MANDATORY or self.dependency_manager.is_fsl()
+            )
             and self.dependency_manager.is_dcm2niix()
         )
 
@@ -745,17 +747,13 @@ class Subject:
             for node in node_list.keys():
                 if len(node_list[node].node_list.keys()) > 0:
                     if self.dependency_manager.is_graphviz():
-                        thread = Thread(
-                            target=self.workflow.get_node(node).write_graph,
-                            kwargs={
-                                "graph2use": self.GRAPH_TYPE,
-                                "format": Subject.GRAPH_FILE_EXT,
-                                "dotfilename": os.path.join(
-                                    self.graph_file(node_list[node].long_name)
-                                ),
-                            },
+                        self.workflow.get_node(node).write_graph(
+                            graph2use=self.GRAPH_TYPE,
+                            format=Subject.GRAPH_FILE_EXT,
+                            dotfilename=os.path.join(
+                                self.graph_file(node_list[node].long_name)
+                            ),
                         )
-                        thread.start()
 
         return SubjectRet.GenWfCompleted
 
@@ -883,7 +881,7 @@ class Subject:
         self.workflow_monitor_work = WorkflowMonitorWorker(queue)
         if update_node_callback is not None:
             self.workflow_monitor_work.signal.log_msg.connect(update_node_callback)
-        QThreadPool.globalInstance().start(self.workflow_monitor_work)
+        start_worker(self.workflow_monitor_work)
 
         # Starts the workflow on a new process
         from swane.workers.WorkflowProcess import WorkflowProcess
@@ -952,4 +950,4 @@ class Subject:
         )
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)
-        QThreadPool.globalInstance().start(slicer_thread)
+        start_worker(slicer_thread)
