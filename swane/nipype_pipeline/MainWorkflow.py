@@ -15,6 +15,7 @@ from swane.config.config_enums import (
     FreesurferStep,
     DeskullModality,
     TractographyEngine,
+    FmriEngine,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -40,6 +41,7 @@ from swane.nipype_pipeline.workflows.dipy_bundle_workflow import (
     DIPY_TRACT_ATLAS,
 )
 from swane.nipype_pipeline.workflows.seeg_ct_workflow import seeg_ct_workflow
+from swane.nipype_pipeline.interfaces.utils import resolve_fmri_engine
 from swane.nipype_pipeline.workflows.tractography_workflow import (
     tractography_workflow,
     SIDES,
@@ -68,6 +70,7 @@ class MainWorkflow(CustomWorkflow):
     is_synthseg_fast: bool = False
     is_flat1: bool = False
     is_tractography: bool = False
+    is_tissue_segmentation: bool = False
     is_slicer: bool = False
     t1: CustomWorkflow
     freesurfer: CustomWorkflow = None
@@ -221,6 +224,39 @@ class MainWorkflow(CustomWorkflow):
         )
         # Check if Slicer is installed to allow venous ct segmente_endocranium
         self.is_slicer = self.dependency_manager.is_slicer(self.global_config)
+        # The reference tissue segmentation runs once in ref_workflow, only if
+        # at least one consumer will be built.
+        self.is_tissue_segmentation = self.is_tissue_segmentation_needed()
+
+    def is_tissue_segmentation_needed(self) -> bool:
+        """
+        Whether a consumer of the shared reference tissue segmentation will be
+        built. Mirrors the gates of launch_flat1_analysis,
+        launch_dipy_dti_analysis (tractography branch) and
+        launch_fMRI_resting_state_analysis (NILEARN engine).
+        """
+        if self.is_flat1:
+            return True
+
+        synth_config = self.global_config[GlobalPrefCategoryList.SYNTH]
+        if (
+            self.subject_input_state_list[DIL.DTI].loaded
+            and self.is_tractography
+            and self.global_config.getenum_safe(
+                GlobalPrefCategoryList.SYNTH, "tractography_engine"
+            )
+            == TractographyEngine.DIPY_RECOBUNDLES
+        ):
+            return True
+
+        if (
+            DIL.FMRI_RS in self.subject_input_state_list
+            and self.subject_input_state_list[DIL.FMRI_RS].loaded
+            and resolve_fmri_engine(synth_config) == FmriEngine.NILEARN
+        ):
+            return True
+
+        return False
 
     def launch_3dt1_analysis(self):
         ref_dir = self.subject_input_state_list.get_dicom_dir(DIL.T13D)
@@ -232,6 +268,7 @@ class MainWorkflow(CustomWorkflow):
             deskull_modality=DeskullModality.T1,
             max_cpu=self.max_cpu,
             test_run=self.test_run,
+            tissue_segmentation=self.is_tissue_segmentation,
         )
         self.t1.long_name = "3D T1w analysis"
         self.add_nodes([self.t1])
@@ -432,8 +469,6 @@ class MainWorkflow(CustomWorkflow):
             name="FLAT1",
             mni1_dir=mni1_path,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
-            test_run=self.test_run,
-            max_cpu=self.max_cpu,
         )
         self.flat1.long_name = "FLAT1 analysis"
 
@@ -442,6 +477,18 @@ class MainWorkflow(CustomWorkflow):
             "outputnode.uncorrected_reference_brain",
             self.flat1,
             "inputnode.reference_brain",
+        )
+        self.connect(
+            self.t1,
+            "outputnode.tissue_pve",
+            self.flat1,
+            "inputnode.tissue_pve",
+        )
+        self.connect(
+            self.t1,
+            "outputnode.tissue_restored",
+            self.flat1,
+            "inputnode.tissue_restored",
         )
         self.connect(
             self.flair,
@@ -1133,6 +1180,13 @@ class MainWorkflow(CustomWorkflow):
         )
 
         if self.is_tractography:
+            # WM seed mask from the shared reference tissue segmentation.
+            self.connect(
+                self.t1,
+                "outputnode.tissue_pve",
+                self.dti_preproc,
+                "inputnode.tissue_pve",
+            )
             # Global tractogram outputs consumed by the per-tract bundle
             # workflows. The shared RecoBundles build ran once inside the preproc
             # workflow (chunker -> build MapNode); each tract below only
@@ -1296,6 +1350,17 @@ class MainWorkflow(CustomWorkflow):
             self.fMRI_resting_state,
             "inputnode.reference_brain",
         )
+        if (
+            resolve_fmri_engine(self.global_config[GlobalPrefCategoryList.SYNTH])
+            == FmriEngine.NILEARN
+        ):
+            # NILEARN nuisance ROIs from the shared reference tissue segmentation.
+            self.connect(
+                self.t1,
+                "outputnode.tissue_pve",
+                self.fMRI_resting_state,
+                "inputnode.tissue_pve",
+            )
 
         self.fMRI_resting_state.sink_result(
             save_path=self.base_dir,

@@ -100,7 +100,7 @@ class DipyCropRamEstimator(RamEstimator):
 
     ``median_otsu``'s thread count is not a lever here (numpy/scipy single-
     threaded work; ``num_threads`` only pins the OMP/OpenBLAS env vars), so
-    this estimator is one-way like :class:`DipyTissueRamEstimator`.
+    this estimator is one-way (no tunable lever).
 
     Calibration
     -----------
@@ -624,76 +624,6 @@ class DipyTrackingRamEstimator(RamEstimator):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
-class DipyTissueRamEstimator(RamEstimator):
-    """
-    RAM estimator for :class:`DipyTissueClassifier` -- deliberately **classic**
-    (one-way), not tunable.
-
-    Why one-way
-    -----------
-    Unlike motion, tracking and CSD, this node has no quality-neutral lever to
-    walk. It runs dipy's ``TissueClassifierHMRF.classify`` on the T1
-    ``reference_brain`` and already pins ``OMP_NUM_THREADS=1`` inside
-    ``classify`` (see :class:`DipyTissueClassifier`); it exposes no thread or
-    worker trait. Peak RSS is **byte-identical across threads** and
-    wall time is flat too: the HMRF classify is a serial Python/numpy loop that
-    OMP/BLAS threads do not parallelise. A thread lever would tune nothing, so
-    this estimator inherits the default :meth:`negotiate` (empty ``tuned_params``,
-    ``n_procs=None``): it reserves RAM and applies no bidirectional correction.
-
-    Model
-    -----
-    The same probes showed peak RSS is **linear in the input voxel count**. The
-    HMRF holds the T1 (float64) plus its per-iteration working arrays (the
-    segmented image and the ``voxels x nclasses`` PVE/energy buffers), all
-    allocated up front, so the peak tracks spatial voxels alone::
-
-        mem_gb = OVERHEAD_GB + BYTES_PER_VOXEL * voxels / 2**30
-
-    computed by the base :meth:`RamEstimator.__call__` from
-    ``input_multipliers={"in_file": BYTES_PER_VOXEL}``.
-
-    Parameters
-    ----------
-    Per the RAM design's estimation philosophy the constants are a deliberate
-    conservative **over-estimate**, not a fitted curve, providing safe margin
-    across input dimensions.
-    """
-
-    #: Bytes per spatial voxel of the T1 ``in_file``. Fit ~260 B, rounded up.
-    BYTES_PER_VOXEL = 280
-
-    #: Fixed overhead (interpreter, numpy/dipy/nibabel). Fit ~0.36 GB, rounded up.
-    OVERHEAD_GB = 0.4
-
-    #: No classification fits in less than this, whatever the input.
-    MIN_GB = 0.5
-
-    #: Static reservation the workflow declares on the node. Read only when the
-    #: negotiation cannot run at all (see
-    #: ``MonitoredMultiProcPlugin._negotiate_ram``) -- e.g. the input header could
-    #: not be read, a state in which the node itself cannot run. A conservative
-    #: representative peak with margin. This node has no
-    #: lever (unlike motion/tracking/CSD), but it is no longer the dipy engine's
-    #: binding floor -- real-tractogram measurement showed DipyAtlasSLR's own
-    #: no-lever floor is higher (see DipySlrRamEstimator), so
-    #: ResourceManager.DIPY_TRACTOGRAPHY_RAM_REQUIREMENT is sourced from SLR now.
-    STATIC_FALLBACK_GB = 6.0
-
-    def __init__(self):
-        # max_gb is deliberately None: clamping the estimate down would make the
-        # node under-reserve and silently co-schedule with other heavy work,
-        # which is the exact failure this estimator exists to prevent. Deciding
-        # that a node cannot fit is the scheduler's job, not the estimator's.
-        super().__init__(
-            input_multipliers={"in_file": self.BYTES_PER_VOXEL},
-            overhead_gb=self.OVERHEAD_GB,
-            min_gb=self.MIN_GB,
-            max_gb=None,
-        )
-
-
-# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
 class DipyCsdRamEstimator(RamEstimator):
     """
     Tunable RAM estimator for :class:`DipyCsdFit`, with the
@@ -1003,9 +933,9 @@ class DipySlrRamEstimator(RamEstimator):
     load/write machinery); the constants below round up to keep a ~1.16x
     margin over every measured point.
 
-    :class:`DipyTissueRamEstimator`'s one-way floor is now higher, so
-    ``ResourceManager.DIPY_TRACTOGRAPHY_RAM_REQUIREMENT`` is no longer sourced
-    from this node; the estimator still reads it for its static fall-back.
+    ``ResourceManager.DIPY_TRACTOGRAPHY_RAM_REQUIREMENT`` is sourced from
+    this node's no-lever floor; the estimator still reads it for its static
+    fall-back.
     """
 
     #: Bytes per subject-tractogram point. Fit ~14 B, rounded up.

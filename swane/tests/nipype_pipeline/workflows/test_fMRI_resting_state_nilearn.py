@@ -192,9 +192,12 @@ def test_unsmoothed_twin(subject_config, global_config, make_input_dir, aroma):
 # ROIs, nuisance regression and high-pass
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("segmentation", ["ANTS", "FSL"])
-def test_segmentation_engine(
+def test_tissue_pve_from_shared_segmentation(
     subject_config, global_config, make_input_dir, segmentation
 ):
+    """The subject tissue posteriors come from the shared reference
+    segmentation (inputnode.tissue_pve) for every segmentation engine: the
+    workflow builds no segmentation node of its own."""
     wf = _build(
         subject_config,
         global_config,
@@ -203,22 +206,17 @@ def test_segmentation_engine(
         "ANTS",
         segmentation=segmentation,
     )
-    seg = _node(wf, "t1_segmentation")
+    assert "t1_segmentation" not in _names(wf)
+    ifaces = {_iface(n) for n in wf._graph.nodes()}
+    assert "AntsAtropos" not in ifaces and "FAST" not in ifaces
     inputnode = _node(wf, "inputnode")
-    if segmentation == "ANTS":
-        assert _iface(seg) == "AntsAtropos"
-        assert _source(wf, seg, "in_file") == (inputnode, "reference_brain")
-        # mask left unset: AntsAtropos uses reference_brain > 0
-        assert "mask_file" not in {df for _, _, df in _incoming(wf, seg)}
-    else:
-        assert _iface(seg) == "FAST"
-        assert _source(wf, seg, "in_files") == (inputnode, "reference_brain")
+    assert "tissue_pve" in inputnode.interface._fields
     for tissue, index in (("csf", 0), ("wm", 2)):
         thr = _node(wf, "%s_subject_thr" % tissue)
         assert thr.inputs.op_string == "-thr 0.95 -bin"
         src, field = _source(wf, thr, "in_file")
-        assert src is seg
-        assert field[0] == "partial_volume_files"
+        assert src is inputnode
+        assert field[0] == "tissue_pve"
         assert tuple(field[2]) == (index,)
 
 

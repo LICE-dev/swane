@@ -50,7 +50,7 @@ structural `../workflows/` tests.
 
 | Module | Builder | Main axes swept |
 |--------|---------|-----------------|
-| `test_ref_matrix` | `ref_workflow` (T13D) | BET vs SynthStrip, bias reduction, bet threshold |
+| `test_ref_matrix` | `ref_workflow` (T13D) | BET vs SynthStrip, bias reduction, bet threshold; shared tissue segmentation (Atropos vs FAST) |
 | `test_linear_reg_matrix` | `linear_reg_workflow` (FLAIR3D/T2/MDC/2D) | volumetric, partial coverage, bias, Synth backend |
 | `test_nonlinear_reg_matrix` | `nonlinear_reg_workflow` | FSL vs SynthMorph backend |
 | `test_freesurfer_matrix` | `freesurfer_workflow` | step enum, hippo/amygdala, Synth recon-all |
@@ -58,7 +58,7 @@ structural `../workflows/` tests.
 | `test_venous_mr_matrix` | `venous_mr_workflow` | single/two series, detection mode, Synth backend |
 | `test_venous_ct_matrix` | `venous_ct_workflow` | contrast series count, skull threshold |
 | `test_seeg_ct_matrix` | `seeg_ct_workflow` | electrode threshold, erosion kernel |
-| `test_flat1_matrix` | `flat1_workflow` | FSL vs SynthMorph backend |
+| `test_flat1_matrix` | `flat1_workflow` | FSL vs SynthMorph vs ANTs backend; Atropos posterior threshold |
 | `test_dti_matrix` | `dti_preproc_workflow` | **CUDA on/off**, eddy backend, CPU core-limit, tractography (needs FSL data) |
 | `test_fmri_preproc_matrix` | `fMRI_preproc_workflow` | slice timing, volume trimming |
 | `test_fmri_resting_state_matrix` | `fMRI_resting_state_workflow` | MELODIC dim/threshold; AROMA on (needs FSL data) |

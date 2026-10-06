@@ -3,8 +3,7 @@
 
 ``DwiCrop`` loads the whole 4D series as float32 and holds it alongside the
 mean-volume mask and the cropped copy -- single-threaded numpy/scipy work, no
-quality-neutral lever -- so this estimator is one-way, like
-:class:`DipyTissueRamEstimator`, but keyed on voxel x volume count (the 4D
+quality-neutral lever -- so this estimator is one-way, but keyed on voxel x volume count (the 4D
 regressor family shared with :class:`DipyMotionRamEstimator`/
 :class:`DipyCsdRamEstimator`) rather than spatial voxels alone.
 

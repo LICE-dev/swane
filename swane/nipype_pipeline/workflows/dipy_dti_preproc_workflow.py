@@ -21,9 +21,6 @@ from swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection import (
 from swane.nipype_pipeline.interfaces.dti.DwiBiasCorrection import DwiBiasCorrection
 from swane.nipype_pipeline.interfaces.dipy.DipyTensorFit import DipyTensorFit
 from swane.nipype_pipeline.interfaces.dipy.DipyCsdFit import DipyCsdFit
-from swane.nipype_pipeline.interfaces.dipy.DipyTissueClassifier import (
-    DipyTissueClassifier,
-)
 from swane.nipype_pipeline.interfaces.dipy.DipyTracking import DipyTracking
 from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import DipyAtlasSLR
 from swane.nipype_pipeline.interfaces.dipy.DipyTractogramChunker import (
@@ -35,7 +32,6 @@ from swane.nipype_pipeline.interfaces.ram_estimators import (
     DipyCsdRamEstimator,
     DipyMotionRamEstimator,
     DipySlrRamEstimator,
-    DipyTissueRamEstimator,
     DipyTrackingRamEstimator,
     RecoBundlesRamEstimator,
     DipyRecoBundlesChunkerRamEstimator,
@@ -44,15 +40,16 @@ from swane.nipype_pipeline.interfaces.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,
+    getn,
     resolve_deskull_engine,
     resolve_registration_engine,
 )
 
 # Per-node memory reservations (GB) for static nodes.
 #
-# motion, tracking, tissue and csd are sized at scheduling time by their
-# respective estimators: DipyMotionRamEstimator, DipyTrackingRamEstimator,
-# DipyTissueRamEstimator, and DipyCsdRamEstimator.
+# motion, tracking and csd are sized at scheduling time by their respective
+# estimators: DipyMotionRamEstimator, DipyTrackingRamEstimator and
+# DipyCsdRamEstimator.
 # crop and slr are sized by DipyCropRamEstimator and DipySlrRamEstimator.
 _MEM_GB = {
     "denoise": 2,
@@ -84,7 +81,8 @@ def dipy_dti_preproc_workflow(
     tensor-fitted; the FA map is resampled into reference space (and, in
     diffusion space, drives tracking's own stopping criterion). The fODF
     (adaptive ``sh_order_max`` CSD) drives probabilistic tractography
-    (FA-threshold stopping) seeded from the white-matter PVE mask, and a
+    (FA-threshold stopping) seeded from the white-matter PVE mask of the
+    shared reference tissue segmentation (``tissue_pve``), and a
     single whole-brain SLR aligns the resulting tractogram to the HCP842
     atlas.
 
@@ -120,6 +118,10 @@ def dipy_dti_preproc_workflow(
         T13D reference file.
     reference_brain : path
         Betted T13D reference file.
+    tissue_pve : list of path
+        Tissue partial volume / posterior maps of the T13D ordered
+        [CSF, GM, WM], from the shared reference segmentation (tractography
+        only; the WM map seeds the tracking).
 
     Returns
     -------
@@ -156,7 +158,8 @@ def dipy_dti_preproc_workflow(
 
     # Input Node
     inputnode = Node(
-        IdentityInterface(fields=["reference_brain", "reference"]), name="inputnode"
+        IdentityInterface(fields=["reference_brain", "reference", "tissue_pve"]),
+        name="inputnode",
     )
 
     # Output Node
@@ -326,19 +329,8 @@ def dipy_dti_preproc_workflow(
 
     is_tractography = config.getboolean_safe("tractography")
     if is_tractography:
-        # -- Tissue side branch: HMRF on the T1 reference_brain -> 3 PVE maps -- #
-        tissue = Node(DipyTissueClassifier(), name="dipy_tissue")
-        # RAM is reserved at scheduling time from the T1 voxel count: HMRF peak
-        # is linear in voxels. The estimator is classic (one-way) -- the node
-        # pins OMP=1 internally and has no thread lever, so there is nothing to
-        # tune.
-        # The static value below is only the fail-safe used when the negotiation
-        # cannot run (see MonitoredMultiProcPlugin._negotiate_ram).
-        tissue._mem_gb = DipyTissueRamEstimator.STATIC_FALLBACK_GB
-        tissue.ram_estimator = DipyTissueRamEstimator()
-        tissue.n_procs = 1
-        workflow.connect(inputnode, "reference_brain", tissue, "in_file")
-
+        # -- WM seed: the WM channel (index 2 of [CSF, GM, WM]) of the shared
+        # reference tissue segmentation, computed once in the reference workflow.
         # The WM PVE map is resampled ref->diff into the diffusion grid (the
         # b0), so the seed mask lives in tracking space. Both inverse
         # transform views are passed: the ANTs apply consumes ``registration``
@@ -354,7 +346,7 @@ def dipy_dti_preproc_workflow(
             warp=[dif2ref.inv_warp_node, dif2ref.inv_warp],
             registration=dif2ref,
             inverse=True,
-            moving=[tissue, "pve_wm"],
+            moving=[inputnode, ("tissue_pve", getn, 2)],
             reference=[nodif, "out_file"],
             out_file="r-pve_wm.nii.gz",
             non_linear=False,

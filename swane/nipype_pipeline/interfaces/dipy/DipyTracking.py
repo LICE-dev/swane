@@ -20,8 +20,8 @@ channel survives, for seeding.
 
 Seeds are placed in the **white-matter PVE mask only**: whole-brain seeding was
 measured at a 7 GB peak and roughly 5x the runtime (spec Measurements), so the
-tractography seeds from the WM channel of the tissue classifier's partial-volume
-estimates and nowhere else.
+tractography seeds from the WM channel of the shared reference tissue segmentation
+(Atropos or FAST) partial-volume estimates and nowhere else.
 
 ``seed_buffer_fraction`` is passed to ``probabilistic_tracking`` so seeds are
 streamed to the tracker in chunks rather than materialised all at once, which

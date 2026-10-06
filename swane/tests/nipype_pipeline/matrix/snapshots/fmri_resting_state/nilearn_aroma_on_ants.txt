@@ -6,7 +6,7 @@
 #   registration_engine = ANTS
 #   spatial_z_thr = 1.95
 #
-# nodes=74 edges=155
+# nodes=73 edges=154
 
 - aroma_classification [AromaClassification] mem_gb=0.2 n_procs=1
 - count_motion_ics [Function] mem_gb=0.2 n_procs=1
@@ -55,6 +55,7 @@
     aff_metric = 'mattes'
     num_threads = 0
     out_prefix = 'ants_reg_'
+    random_seed = 123
     syn_metric = 'mattes'
     transform_type = 'Rigid'
 - fmri_rs_conv [CustomDcm2niix] cmd=dcm2niix mem_gb=0.2 n_procs=1
@@ -133,6 +134,7 @@
     mask_file = 'brain_mask.nii.gz'
     modality = 'bold'
     num_threads = 0
+    random_seed = 123
     threshold = 0.5
 - fmri_rs_medianval [ImageStatistics] mem_gb=0.2 n_procs=1
     percentiles = [50.0]
@@ -232,17 +234,13 @@
     fixed = '<SWANE_TEMPLATES>/MNI152NLin6Asym_res-2_desc-brain_T1w_LAS.nii.gz'
     num_threads = 0
     out_prefix = 'ants_reg_'
+    random_seed = 123
     syn_metric = 'mattes'
     transform_type = 'SyN'
 - survivors_neg_2_ref_ants_apply [AntsApplyTransforms] mapnode(iterfield=input_image) mem_gb=0.2 n_procs=1
     interpolator = 'linear'
 - survivors_pos_2_ref_ants_apply [AntsApplyTransforms] mapnode(iterfield=input_image) mem_gb=0.2 n_procs=1
     interpolator = 'linear'
-- t1_segmentation [AntsAtropos] mem_gb=3 n_procs=1
-    iterations = 10
-    mrf_radius = 1
-    mrf_smoothing = 0.0
-    number_classes = 3
 - wm_prior_2_func_ants_apply [AntsApplyTransforms] mem_gb=0.2 n_procs=1
     interpolator = 'linear'
 - wm_prior_2_func_transformlist [Merge] mem_gb=0.2 n_procs=1
@@ -396,11 +394,12 @@ ica_spatialz.survivor_neg_files -> ica_output.survivor_neg_files
 ica_spatialz.survivor_pos_files -> ica_output.survivor_pos_files
 ica_spatialz.thresh_zstat_files -> ica_output.thresh_zstat_files
 ica_zstat_split.out_files -> zstats_unthr_2_ref_ants_apply.input_image
+inputnode.('tissue_pve', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (0,)) -> csf_subject_thr.in_file
+inputnode.('tissue_pve', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (2,)) -> wm_subject_thr.in_file
 inputnode.reference_brain -> fmri_rs_2_ref_antsreg.fixed
 inputnode.reference_brain -> ref_2_mni_antsreg.moving
 inputnode.reference_brain -> survivors_neg_2_ref_ants_apply.reference_image
 inputnode.reference_brain -> survivors_pos_2_ref_ants_apply.reference_image
-inputnode.reference_brain -> t1_segmentation.in_file
 inputnode.reference_brain -> zstats_unthr_2_ref_ants_apply.reference_image
 meanfunc_clean.out_file -> merge_tr_meanfunc_clean.in2
 merge_tr_meanfunc_clean.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (100,)) -> highpass_clean.op_string
@@ -432,8 +431,6 @@ ref_2_mni_antsreg.inv_which_to_invert -> csf_prior_2_func_which_to_invert.in2
 ref_2_mni_antsreg.inv_which_to_invert -> wm_prior_2_func_which_to_invert.in2
 survivors_neg_2_ref_ants_apply.out_file -> zstats_combine.neg_mask_file
 survivors_pos_2_ref_ants_apply.out_file -> zstats_combine.pos_mask_file
-t1_segmentation.('partial_volume_files', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (0,)) -> csf_subject_thr.in_file
-t1_segmentation.('partial_volume_files', 'def getn(result_list, index):\n    """\n    Extracts an element from a list for a single input of a Node (eg. aparcaseg from reconAll).\n\n    """\n    return result_list[index]', (2,)) -> wm_subject_thr.in_file
 wm_prior_2_func_ants_apply.out_file -> wm_prior_thr_bin.in_file
 wm_prior_2_func_transformlist.out -> wm_prior_2_func_ants_apply.transformlist
 wm_prior_2_func_which_to_invert.out -> wm_prior_2_func_ants_apply.which_to_invert
