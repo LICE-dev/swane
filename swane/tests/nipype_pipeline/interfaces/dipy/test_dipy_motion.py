@@ -39,11 +39,6 @@ from swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection import (
     _parallel_motion_correction,
 )
 
-# Output root for heavy tests; never committed.
-ORACLE_ROOT = os.path.join(
-    os.path.expanduser("~"), "test_swane", "dipy_test", "motion_oracle"
-)
-
 
 def _write_bval_bvec(directory, bvals, bvecs):
     """Write FSL-format bval/bvec files (bvecs as 3 rows x N cols)."""
@@ -701,9 +696,9 @@ class TestSerialParallelOracle:
         result = node.run()
         return result.outputs
 
-    def test_parallel_matches_serial_bit_for_bit(self):
-        os.makedirs(ORACLE_ROOT, exist_ok=True)
-        in_file, bval, bvec, n_total = _make_synthetic_dwi(ORACLE_ROOT)
+    def test_parallel_matches_serial_bit_for_bit(self, tmp_path):
+        out_dir = str(tmp_path)
+        in_file, bval, bvec, n_total = _make_synthetic_dwi(out_dir)
 
         # BLAS pinned to one thread on both sides so the deterministic optimiser
         # yields identical floats; loosening this would mask real bugs.
@@ -713,14 +708,14 @@ class TestSerialParallelOracle:
         os.environ[OPENBLAS_THREADS_VAR] = "1"
         try:
             serial = self._run_node(
-                ORACLE_ROOT, in_file, bval, bvec, parallel=False, num_threads=1
+                out_dir, in_file, bval, bvec, parallel=False, num_threads=1
             )
             parallel1 = self._run_node(
-                ORACLE_ROOT, in_file, bval, bvec, parallel=True, num_threads=1
+                out_dir, in_file, bval, bvec, parallel=True, num_threads=1
             )
             # Multiple workers must still reassemble to the same bytes.
             parallel2 = self._run_node(
-                ORACLE_ROOT, in_file, bval, bvec, parallel=True, num_threads=2
+                out_dir, in_file, bval, bvec, parallel=True, num_threads=2
             )
         finally:
             for var, val in (
@@ -749,10 +744,10 @@ class TestSerialParallelOracle:
         for i in range(serial_data.shape[-1]):
             assert np.any(serial_data[..., i] != 0), f"volume {i} is entirely zero"
 
-    def test_bval_passthrough_unchanged(self):
-        os.makedirs(ORACLE_ROOT, exist_ok=True)
-        in_file, bval, bvec, _ = _make_synthetic_dwi(ORACLE_ROOT, seed=1)
+    def test_bval_passthrough_unchanged(self, tmp_path):
+        out_dir = str(tmp_path)
+        in_file, bval, bvec, _ = _make_synthetic_dwi(out_dir, seed=1)
         outputs = self._run_node(
-            ORACLE_ROOT, in_file, bval, bvec, parallel=True, num_threads=1
+            out_dir, in_file, bval, bvec, parallel=True, num_threads=1
         )
         assert np.array_equal(np.loadtxt(outputs.out_bval), np.loadtxt(bval))

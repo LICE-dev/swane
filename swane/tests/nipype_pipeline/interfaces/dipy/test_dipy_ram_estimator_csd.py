@@ -32,11 +32,6 @@ the *measured* oracle peaks on purpose -- lowering a multiplier below what
 covers the oracles must fail.
 """
 
-import glob
-import gzip
-import os
-import pickle
-
 import numpy as np
 import nibabel as nib
 import pytest
@@ -432,30 +427,21 @@ class TestPluginIntegration:
 # --------------------------------------------------------------------------- #
 # Tuned-vs-untuned scientific equivalence (heavy: real dipy CSD)
 # --------------------------------------------------------------------------- #
-ORACLE_DIR = os.environ.get(
-    "SWANE_DIPY_ORACLE_DIR",
-    os.path.join(os.path.expanduser("~"), "test_swane", "dipy_test", "dipy_dti"),
-)
+def _sample_dwi(tmp_path):
+    """dipy's bundled ``small_64D`` DWI (10x10x10, b=0 + 64 directions at
+    b=1000) and a mask of every voxel with non-zero b0 signal.
 
+    The sample ships inside the dipy package, so the test needs no download
+    and no local data tree.
+    """
+    from dipy.data import get_fnames
 
-def _oracle_inputs():
-    """The CSD inputs, or ``None`` when the test data tree is absent."""
-    csd_dir = os.path.join(ORACLE_DIR, "dipy_csd")
-    bias_dir = os.path.join(ORACLE_DIR, "dipy_bias")
-    if not (os.path.isdir(csd_dir) and os.path.isdir(bias_dir)):
-        return None
-    dwi = sorted(glob.glob(os.path.join(bias_dir, "*.nii.gz")))
-    inputs_pklz = os.path.join(csd_dir, "_inputs.pklz")
-    if not dwi or not os.path.isfile(inputs_pklz):
-        return None
-    with gzip.open(inputs_pklz, "rb") as handle:
-        recorded = pickle.load(handle)
-    return {
-        "in_file": dwi[0],
-        "bval": recorded["bval"],
-        "bvec": recorded["bvec"],
-        "mask": recorded["mask"],
-    }
+    in_file, bval, bvec = get_fnames(name="small_64D")
+    img = nib.load(in_file)
+    b0 = np.asanyarray(img.dataobj)[..., 0]
+    mask_path = str(tmp_path / "mask.nii.gz")
+    nib.save(nib.Nifti1Image((b0 > 0).astype(np.uint8), img.affine), mask_path)
+    return {"in_file": in_file, "bval": bval, "bvec": bvec, "mask": mask_path}
 
 
 @pytest.mark.heavy
@@ -467,46 +453,28 @@ class TestTunedEquivalence:
     the same index, every worker runs the identical serial per-voxel fit, and
     :class:`DipyCsdFit` pins BLAS to one thread before the pool starts so the
     arithmetic is thread-count-independent on both sides. This runs the node
-    twice on the **real oracle DWI** -- once at the declared top rung (4 worker
+    twice on a **real DWI** -- once at the declared top rung (4 worker
     processes, the parallel branch) and once after the *real* plugin negotiation
     has forced the bottom rung (1 process, the serial branch) -- and demands a
     bit-for-bit identical ``shm_coeff``, the node's only output.
 
-    The mask is narrowed to a few axial slices so the two fits finish in
-    minutes rather than an hour. The property under test is per-voxel, so it
-    does not depend on how many voxels are fitted; the input, gradient table and
-    response fit are the real ones.
+    The input is dipy's small bundled sample DWI, so the two fits take seconds.
+    The property under test is per-voxel, so it does not depend on how many
+    voxels are fitted; the parallel branch still splits the volume into
+    ``P**2`` chunks.
     """
-
-    SLICES = 3
 
     def test_serial_and_parallel_shm_coeff_are_identical(self, tmp_path):
         from nipype.pipeline.engine import Node
 
-        oracle = _oracle_inputs()
-        if oracle is None:
-            pytest.skip(f"dipy oracle inputs not found under {ORACLE_DIR}")
-
-        # Narrow the real mask to a central slab; everything else stays real.
-        mask_img = nib.load(oracle["mask"])
-        mask = np.asanyarray(mask_img.dataobj) > 0
-        slab = np.zeros_like(mask)
-        mid = mask.shape[2] // 2
-        lo, hi = mid - self.SLICES // 2, mid - self.SLICES // 2 + self.SLICES
-        slab[:, :, lo:hi] = mask[:, :, lo:hi]
-        assert slab.sum() > 0, "the oracle mask is empty in the central slab"
-        slab_path = str(tmp_path / "mask_slab.nii.gz")
-        nib.save(
-            nib.Nifti1Image(slab.astype(np.uint8), mask_img.affine, mask_img.header),
-            slab_path,
-        )
+        sample = _sample_dwi(tmp_path)
 
         def _build(name, base):
             node = Node(DipyCsdFit(), name=name, base_dir=str(base))
-            node.inputs.in_file = oracle["in_file"]
-            node.inputs.bval = oracle["bval"]
-            node.inputs.bvec = oracle["bvec"]
-            node.inputs.mask = slab_path
+            node.inputs.in_file = sample["in_file"]
+            node.inputs.bval = sample["bval"]
+            node.inputs.bvec = sample["bvec"]
+            node.inputs.mask = sample["mask"]
             node.inputs.num_threads = 4
             node._mem_gb = DipyCsdRamEstimator.STATIC_FALLBACK_GB
             node.ram_estimator = DipyCsdRamEstimator()
@@ -524,4 +492,5 @@ class TestTunedEquivalence:
         parallel = nib.load(top.result.outputs.shm_coeff).get_fdata()
         serial = nib.load(bottom.result.outputs.shm_coeff).get_fdata()
         assert parallel.shape == serial.shape
+        assert np.isfinite(parallel).all() and np.abs(parallel).sum() > 0
         assert np.array_equal(parallel, serial)
