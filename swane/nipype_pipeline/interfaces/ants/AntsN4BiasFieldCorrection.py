@@ -37,6 +37,10 @@ class AntsN4BiasFieldCorrectionInputSpec(BaseInterfaceInputSpec):
         desc="maximum number of iterations per resolution level "
         "(antspyx default is [50, 50, 50, 50])",
     )
+    spline_distance = traits.Int(
+        desc="B-spline mesh distance in mm (antspyx spline_param); "
+        "antspyx default if unset",
+    )
     # More than one thread can make the output vary slightly run to run
     # (multithreaded ITK sums are not guaranteed to run in a fixed order).
     # Accepted for speed; the thread count is the user's choice.
@@ -111,6 +115,8 @@ class AntsN4BiasFieldCorrection(BaseInterface):
                     "iters": list(self.inputs.max_iterations),
                     "tol": N4_DEFAULT_TOL,
                 }
+            if isdefined(self.inputs.spline_distance):
+                kwargs["spline_param"] = self.inputs.spline_distance
 
             corrected = ants.n4_bias_field_correction(img, mask=mask, **kwargs)
         finally:
