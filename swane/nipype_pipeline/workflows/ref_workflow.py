@@ -159,11 +159,27 @@ def ref_workflow(
         AntsN4BiasFieldCorrection(), name="ref_bias_correction", mem_gb=2
     )
     ref_bias_correction.inputs.out_file = "ref.nii.gz"
+    # The reference N4 is tuned towards FSL FAST, the engine the FLAT1 atlas
+    # was built with, rather than towards a full correction: an N4-corrected
+    # brain brings the Atropos segmentation and the FLAIR/T1 ratio closer to
+    # FAST, but FAST removes the bias field only partially and a full-strength
+    # N4 inflates the FLAT1 junction/extension maps. Among the N4/Atropos
+    # settings evaluated (B-spline distance, resolution levels, iterations,
+    # convergence tolerance, alternating N4/Atropos rounds), a coarse 150 mm
+    # B-spline mesh with two short levels ([20, 10]) came closest to FAST. It
+    # is an approximation, not an equivalent: FAST corrects proportionally
+    # less when the bias is mild, which no N4 setting reproduces, so a
+    # residual offset remains, and strongly biased acquisitions (e.g.
+    # multichannel head coils without vendor intensity normalization) still
+    # diverge from the atlas engine. This same N4 output is the reference
+    # used by the registrations.
+    ref_bias_correction.inputs.spline_distance = 150
+    ref_bias_correction.inputs.max_iterations = [20, 10]
     if max_cpu != 0:
         ref_bias_correction.inputs.num_threads = max_cpu
     if test_run:
-        # antspyx default is [50, 50, 50, 50] per resolution level.
-        ref_bias_correction.inputs.max_iterations = [30, 20, 10, 5]
+        # halve the per-level iterations to speed prerelease runs
+        ref_bias_correction.inputs.max_iterations = [10, 5]
     workflow.connect(ref_reScale, "out_file", ref_bias_correction, "in_file")
     workflow.connect(ref_deskull, "mask_file", ref_bias_correction, "mask_file")
 
@@ -184,8 +200,8 @@ def ref_workflow(
         # ROIs), engine-selectable.
         segmentation_engine = resolve_segmentation_engine(synth_config)
         if segmentation_engine == SegmentationEngine.ANTS:
-            # Atropos has no internal bias correction: feed it the N4-corrected
-            # brain, which is also the matching restored image.
+            # Atropos segments the N4-corrected brain (see ref_bias_correction),
+            # which is also the matching restored image.
             segmentation = Node(
                 AntsAtropos(),
                 name="ref_segmentation",
