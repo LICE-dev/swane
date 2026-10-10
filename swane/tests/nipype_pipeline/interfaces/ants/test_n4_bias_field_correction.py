@@ -62,6 +62,10 @@ class TestN4BiasFieldCorrectionSpec:
         node = AntsN4BiasFieldCorrection()
         assert not isdefined(node.inputs.max_iterations)
 
+    def test_spline_distance_optional_and_undefined_by_default(self):
+        node = AntsN4BiasFieldCorrection()
+        assert not isdefined(node.inputs.spline_distance)
+
     def test_output_declared(self):
         out = AntsN4BiasFieldCorrection().output_spec().get()
         assert "out_file" in out
@@ -167,6 +171,26 @@ class TestN4BiasFieldCorrectionRuntime:
         node.inputs.skull_stripped = True
         created = _run(node, monkeypatch)
         assert "convergence" not in created["kwargs"]
+
+    def test_spline_distance_becomes_spline_param(
+        self, workspace, make_nifti, monkeypatch
+    ):
+        node = AntsN4BiasFieldCorrection()
+        node.inputs.in_file = make_nifti("img.nii.gz", shape=(6, 6, 6))
+        node.inputs.skull_stripped = True
+        node.inputs.spline_distance = 150
+        created = _run(node, monkeypatch)
+        assert created["kwargs"]["spline_param"] == 150
+
+    def test_no_spline_param_kwarg_when_spline_distance_unset(
+        self, workspace, make_nifti, monkeypatch
+    ):
+        """Leaving spline_distance alone must keep antspyx's own default."""
+        node = AntsN4BiasFieldCorrection()
+        node.inputs.in_file = make_nifti("img.nii.gz", shape=(6, 6, 6))
+        node.inputs.skull_stripped = True
+        created = _run(node, monkeypatch)
+        assert "spline_param" not in created["kwargs"]
 
     def test_num_threads_is_exported_then_restored(
         self, workspace, make_nifti, monkeypatch
