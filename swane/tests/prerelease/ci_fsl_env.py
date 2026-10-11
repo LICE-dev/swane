@@ -40,8 +40,7 @@ DEPENDENCY_MANAGER = os.path.join(
 #: Their own dependencies (fsl-base, fsl-avwutils, fsl-fugue for applywarp and
 #: convertwarp, fsl-fast4, fsl-melodic for melodic and fsl_regfilt) come in
 #: through the solver. No CUDA package: none is built for macOS, and the CPU
-#: commands cover every engine. The FSL MNI templates (fsl-data_standard) are
-#: not needed: SWANe reads its templates from TemplateFlow.
+#: commands cover every engine.
 FSL_PACKAGES = (
     "fsl-bet2",  # bet
     "fsl-flirt",  # flirt, convert_xfm
@@ -56,6 +55,10 @@ FSL_PACKAGES = (
     "fsl-fdt",  # eddy_correct, dtifit, bedpostx
     "fsl-ptx2",  # probtrackx2
     "fsl-xtract_data",  # XTRACT protocols under $FSLDIR/data/xtract_data
+    # $FSLDIR/data/standard MNI152 images: SWANe reads its own templates from
+    # TemplateFlow, but bet itself reads these for -A (betsurf) and -B
+    # (standard_space_roi).
+    "fsl-data_standard",
 )
 #: Pinned too, so the FSL Python scripts run on the interpreter of the release.
 EXTRA_PACKAGES = ("python",)
