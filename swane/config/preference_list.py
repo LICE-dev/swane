@@ -289,6 +289,10 @@ WF_PREFERENCES[category]["cost_func"] = PreferenceEntry(
     label="FLIRT between modalities cost function",
     value_enum=BetweenModFlirtCost,
     default=BetweenModFlirtCost.NORMALIZED_MUTUAL_INFORMATION,
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("engine", RegistrationEngine.FSL)]
+    },
+    pref_requirement_fail_tooltip="Only used when the registration engine is FSL",
 )
 WF_PREFERENCES[category]["ai"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -313,6 +317,10 @@ WF_PREFERENCES[category]["cost_func"] = PreferenceEntry(
     label="FLIRT between modalities cost function",
     value_enum=BetweenModFlirtCost,
     default=BetweenModFlirtCost.MUTUAL_INFORMATION,
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("engine", RegistrationEngine.FSL)]
+    },
+    pref_requirement_fail_tooltip="Only used when the registration engine is FSL",
 )
 WF_PREFERENCES[category]["ai"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
