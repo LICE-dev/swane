@@ -20,6 +20,7 @@ from swane.tests.prerelease.checks import (
     _check_dipy_bundle_recovery,
     _check_fmri_activation,
     NILEARN_TASK_EXPECTED_VOXELS,
+    NILEARN_TASK_VOXEL_TOLERANCE,
     _check_nilearn_resting,
     NILEARN_RS_EXPECTED_COMPONENTS,
     RESULTS_DIR,
@@ -239,12 +240,12 @@ def _task_result(subject_dir, registration="FSL", deskull="BET"):
     )
 
 
-def _task_maps(root, offset=0):
-    """Cluster maps of fmri_0 with the expected voxel counts (+ offset)."""
+def _task_maps(root, scale=1.0):
+    """Cluster maps of fmri_0 with the expected voxel counts (times scale)."""
     files = []
     for name, count in NILEARN_TASK_EXPECTED_VOXELS["fmri_0"].items():
         data = np.zeros(64 * 64 * 16, dtype=np.float32)
-        data[: count + offset] = 1.0
+        data[: round(count * scale)] = 1.0
         path = os.path.join(root, RESULTS_DIR, "fMRI_0", name)
         _save(path, data.reshape(64, 64, 16))
         files.append(path)
@@ -267,8 +268,18 @@ def test_task_voxel_counts_pass_on_the_pinned_configuration(tmp_path):
         assert check.passed, check
 
 
-def test_task_voxel_counts_mismatch_fails(tmp_path):
-    files = _task_maps(str(tmp_path), offset=1)
+def test_task_voxel_counts_within_tolerance_pass(tmp_path):
+    # Registration differs slightly across platforms and FSL versions: a count
+    # inside the tolerance band is still a pass.
+    scale = 1 + NILEARN_TASK_VOXEL_TOLERANCE / 2
+    files = _task_maps(str(tmp_path), scale=scale)
+    checks = _determinism(_check_fmri_activation(_task_result(str(tmp_path)), files))
+    assert checks and all(c.passed for c in checks.values())
+
+
+def test_task_voxel_counts_beyond_tolerance_fail(tmp_path):
+    scale = 1 + 2 * NILEARN_TASK_VOXEL_TOLERANCE
+    files = _task_maps(str(tmp_path), scale=scale)
     checks = _determinism(_check_fmri_activation(_task_result(str(tmp_path)), files))
     assert checks and not any(c.passed for c in checks.values())
 

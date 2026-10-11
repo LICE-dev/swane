@@ -123,8 +123,12 @@ class TestToolChecksMocked:
         monkeypatch.setattr(dm.fsl.base.Info, "version", lambda: None)
         assert DependencyManager.check_fsl().state == DependenceStatus.MISSING
 
-        monkeypatch.setattr(dm.fsl.base.Info, "version", lambda: "6.0.7")
+        monkeypatch.setattr(dm.fsl.base.Info, "version", lambda: "6.0.7.8")
         assert DependencyManager.check_fsl().state == DependenceStatus.DETECTED
+
+        # eddy gained --nthr (which SWANe passes) in FSL 6.0.7.8
+        monkeypatch.setattr(dm.fsl.base.Info, "version", lambda: "6.0.7.7")
+        assert DependencyManager.check_fsl().state == DependenceStatus.WARNING
 
         monkeypatch.setattr(dm.fsl.base.Info, "version", lambda: "5.0.0")
         assert DependencyManager.check_fsl().state == DependenceStatus.WARNING
