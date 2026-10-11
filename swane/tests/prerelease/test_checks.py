@@ -18,9 +18,8 @@ from nipype.utils.filemanip import savepkl
 
 from swane.tests.prerelease.checks import (
     _check_dipy_bundle_recovery,
-    _check_fmri_activation,
-    NILEARN_TASK_EXPECTED_VOXELS,
-    NILEARN_TASK_VOXEL_TOLERANCE,
+    _check_fmri_task_location,
+    GroundTruth,
     _check_nilearn_resting,
     NILEARN_RS_EXPECTED_COMPONENTS,
     RESULTS_DIR,
@@ -227,66 +226,123 @@ def test_nilearn_resting_all_empty_maps_fail(tmp_path):
     assert not checks["fmri.rs.zstat_maps"].passed
 
 
-def _task_result(subject_dir, registration="FSL", deskull="BET"):
+def _task_result(subject_dir):
     return PassResult(
         name="fmri_task_and_rest",
         subject_dir=subject_dir,
-        inputs=["t13d", "fmri_0"],
-        values={
-            "fmri_engine": "NILEARN",
-            "registration_engine": registration,
-            "deskull_engine": deskull,
-        },
+        inputs=["t13d", "fmri_1"],
+        values={"fmri_engine": "NILEARN"},
     )
 
 
-def _task_maps(root, scale=1.0):
-    """Cluster maps of fmri_0 with the expected voxel counts (times scale)."""
-    files = []
-    for name, count in NILEARN_TASK_EXPECTED_VOXELS["fmri_0"].items():
-        data = np.zeros(64 * 64 * 16, dtype=np.float32)
-        data[: round(count * scale)] = 1.0
-        path = os.path.join(root, RESULTS_DIR, "fMRI_0", name)
-        _save(path, data.reshape(64, 64, 16))
-        files.append(path)
-    return files
-
-
-def _determinism(checks):
-    return {n: c for n, c in _by_name(checks).items() if "determinism" in n}
-
-
-def test_task_voxel_counts_pass_on_the_pinned_configuration(tmp_path):
-    files = _task_maps(str(tmp_path))
-    checks = _determinism(_check_fmri_activation(_task_result(str(tmp_path)), files))
-    assert set(checks) == {
-        "fmri.determinism.fmri_0_3",
-        "fmri.determinism.fmri_0_5",
-        "fmri.determinism.fmri_0_7",
+#: Synthetic motor cortex centres on a grid whose world x = voxel i - 32
+#: (affine below): left at x = -20, right at x = +20.
+_TRUTH = GroundTruth(
+    centres={
+        "brain": np.zeros(3),
+        "precentral_L": np.array([-20.0, 0.0, 0.0]),
+        "precentral_R": np.array([20.0, 0.0, 0.0]),
     }
-    for check in checks.values():
-        assert check.passed, check
+)
+_AFFINE = np.array(
+    [[1, 0, 0, -32], [0, 1, 0, -32], [0, 0, 1, -8], [0, 0, 0, 1]], dtype=float
+)
 
 
-def test_task_voxel_counts_within_tolerance_pass(tmp_path):
-    # Registration differs slightly across platforms and FSL versions: a count
-    # inside the tolerance band is still a pass.
-    scale = 1 + NILEARN_TASK_VOXEL_TOLERANCE / 2
-    files = _task_maps(str(tmp_path), scale=scale)
-    checks = _determinism(_check_fmri_activation(_task_result(str(tmp_path)), files))
-    assert checks and all(c.passed for c in checks.values())
+def _blob(x_world):
+    """A 5x5x5 suprathreshold cube centred at world (x_world, 0, 0)."""
+    data = np.zeros((64, 64, 16), dtype=np.float32)
+    i, j, k = int(x_world + 32), 32, 8
+    data[i - 2 : i + 3, j - 2 : j + 3, k - 2 : k + 3] = 4.0
+    return data
 
 
-def test_task_voxel_counts_beyond_tolerance_fail(tmp_path):
-    scale = 1 + 2 * NILEARN_TASK_VOXEL_TOLERANCE
-    files = _task_maps(str(tmp_path), scale=scale)
-    checks = _determinism(_check_fmri_activation(_task_result(str(tmp_path)), files))
-    assert checks and not any(c.passed for c in checks.values())
+def _cluster_map(root, contrast, threshold, data):
+    path = os.path.join(
+        root,
+        RESULTS_DIR,
+        "fMRI_1",
+        "r-fmri_1_cluster_%s_threshold%.1f.nii.gz" % (contrast, threshold),
+    )
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    nib.save(nib.Nifti1Image(data, _AFFINE), path)
+    return path
 
 
-def test_task_voxel_counts_skip_other_registrations(tmp_path):
-    # The counts depend on the func->ref registration: they are pinned only for
-    # the configuration they were obtained with.
-    files = _task_maps(str(tmp_path))
-    result = _task_result(str(tmp_path), registration="ANTS", deskull="ANTSPYNET")
-    assert _determinism(_check_fmri_activation(result, files)) == {}
+def _location(checks):
+    return {
+        n: c
+        for n, c in _by_name(checks).items()
+        if n.startswith(("fmri.location", "fmri.lateralization"))
+    }
+
+
+def test_task_activation_on_the_contralateral_motor_cortex_passes(tmp_path):
+    root = str(tmp_path)
+    files = [
+        _cluster_map(root, "Task_A_versus_Task_B", 3.1, _blob(-20)),
+        _cluster_map(root, "Task_B_versus_Task_A", 3.1, _blob(20)),
+    ]
+    checks = _location(_check_fmri_task_location(_task_result(root), files, _TRUTH))
+    assert set(checks) == {
+        "fmri.lateralization.fmri_1_Task_A_versus_Task_B",
+        "fmri.location.fmri_1_Task_A_versus_Task_B",
+        "fmri.lateralization.fmri_1_Task_B_versus_Task_A",
+        "fmri.location.fmri_1_Task_B_versus_Task_A",
+    }
+    assert all(c.passed for c in checks.values()), checks
+
+
+def test_task_activation_on_the_wrong_side_fails(tmp_path):
+    root = str(tmp_path)
+    files = [_cluster_map(root, "Task_A_versus_Task_B", 3.1, _blob(20))]
+    checks = _location(_check_fmri_task_location(_task_result(root), files, _TRUTH))
+    assert not checks["fmri.lateralization.fmri_1_Task_A_versus_Task_B"].passed
+    assert not checks["fmri.location.fmri_1_Task_A_versus_Task_B"].passed
+
+
+def test_task_activation_far_from_the_motor_cortex_fails(tmp_path):
+    # Right hemisphere for B, but far from the precentral centre.
+    root = str(tmp_path)
+    data = _blob(28)
+    data = np.roll(data, 20, axis=1)  # 20 mm anterior
+    files = [_cluster_map(root, "Task_B_versus_Task_A", 3.1, data)]
+    checks = _location(_check_fmri_task_location(_task_result(root), files, _TRUTH))
+    assert checks["fmri.lateralization.fmri_1_Task_B_versus_Task_A"].passed
+    assert not checks["fmri.location.fmri_1_Task_B_versus_Task_A"].passed
+
+
+def test_task_location_uses_the_lowest_nonempty_threshold(tmp_path):
+    # The lowest threshold is empty and the next one is on the right side: the
+    # check grades the first non-empty map, not the empty one.
+    root = str(tmp_path)
+    empty = np.zeros((64, 64, 16), dtype=np.float32)
+    files = [
+        _cluster_map(root, "Task_A_versus_Task_B", 3.1, empty),
+        _cluster_map(root, "Task_A_versus_Task_B", 5.0, _blob(-20)),
+        _cluster_map(root, "Task_A_versus_Task_B", 7.0, _blob(20)),
+    ]
+    checks = _location(_check_fmri_task_location(_task_result(root), files, _TRUTH))
+    assert all(c.passed for c in checks.values()), checks
+
+
+def test_task_contrast_empty_at_every_threshold_fails(tmp_path):
+    root = str(tmp_path)
+    empty = np.zeros((64, 64, 16), dtype=np.float32)
+    files = [_cluster_map(root, "Task_A_versus_Task_B", 3.1, empty)]
+    checks = _location(_check_fmri_task_location(_task_result(root), files, _TRUTH))
+    assert not checks["fmri.location.fmri_1_Task_A_versus_Task_B"].passed
+
+
+def test_old_ground_truth_sidecar_is_recomputed(tmp_path, monkeypatch):
+    # A sidecar cached before the per-side motor cortex existed lacks it: the
+    # loader must rebuild instead of silently skipping the location check.
+    from swane.tests.helpers.phantom.ground_truth import save_ground_truth
+    from swane.tests.prerelease import checks as checks_mod
+
+    save_ground_truth(str(tmp_path), {"brain": np.zeros(3)})
+    monkeypatch.setattr(
+        checks_mod, "build_centres", lambda _fs=None: dict(_TRUTH.centres)
+    )
+    truth = GroundTruth.load(str(tmp_path))
+    assert "precentral_L" in truth.centres
