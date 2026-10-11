@@ -7,9 +7,11 @@ The SLR is the most expensive part of RecoBundles, so it runs **once** here
 tractogram, and both the aligned tractogram and the inverse transform are
 published for the per-tract bundle recognition in Phase 2.
 
-The 649 MB HCP842 atlas is fetched into a local ``DIPY_HOME`` on first use. Since
-SWANe processes subjects in parallel, two workflows finding an empty atlas
-directory must not both download it: :func:`ensure_atlas` guards the fetch with a
+The 649 MB HCP842 atlas is fetched into a local ``DIPY_HOME``
+(:data:`DEFAULT_ATLAS_DIR`) while the workflow is generated (see
+``WorkflowGenerateWorker``); the node fetches it itself only as a fallback, e.g.
+when that pre-fetch failed. Since SWANe processes subjects in parallel, two
+workflows finding an empty atlas directory must not both download it: :func:`ensure_atlas` guards the fetch with a
 cross-process file lock, raises a readable :class:`AtlasFetchError` when offline
 instead of an opaque traceback, and removes a partial directory left by a failed
 attempt before retrying. The whole-brain tractogram is addressed by its explicit
@@ -41,6 +43,8 @@ from swane.patches.dipy_patches import dipy_slr_num_threads
 # tractogram is addressed by this explicit name -- never by a glob over the
 # sibling ``bundles`` directory, which contains the misspelled duplicate
 # ``IF0F_R.trk`` alongside the correct ``IFOF_R.trk``.
+# Default DIPY_HOME holding the atlas, shared by every subject.
+DEFAULT_ATLAS_DIR = os.path.join(os.path.expanduser("~"), ".dipy")
 ATLAS_SUBDIR = "bundle_atlas_hcp842"
 ATLAS_NAME = "Atlas_80_Bundles"
 WHOLE_BRAIN_FILENAME = "whole_brain_MNI.trk"
