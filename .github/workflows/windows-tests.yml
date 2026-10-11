@@ -1,4 +1,8 @@
-name: Windows tests
+name: Tests (Windows / macOS)
+
+# Run title in the Actions list: suite, runner OS and optional prerelease passes.
+run-name: >-
+  ${{ inputs.suite }} tests on ${{ inputs.suite == 'prerelease' && 'windows-latest' || inputs.os }}${{ inputs.passes && format(' (passes: {0})', inputs.passes) || '' }}
 
 # Manual only: never runs on push or pull_request.
 on:
