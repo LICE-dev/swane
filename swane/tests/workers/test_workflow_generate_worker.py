@@ -45,3 +45,97 @@ def test_preload_models_only_when_antspynet(monkeypatch):
     mock_resolve.return_value = DeskullEngine.ANTSPYNET
     worker._preload_models(strings_mock)
     mock_preload_weights.assert_called_once()
+
+
+def _dipy_subject(engine, dti_loaded, tractography):
+    from swane.utils.DataInputList import DataInputList as DIL
+
+    subject = MagicMock()
+    subject.global_config.getenum_safe.return_value = engine
+    subject.input_state_list = {DIL.DTI: MagicMock(loaded=dti_loaded)}
+    subject.config.getboolean_safe.return_value = tractography
+    return subject
+
+
+@pytest.fixture
+def mock_atlas(monkeypatch, tmp_path):
+    """Point the atlas at an empty tmp dir and mock the fetch."""
+    import swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR as slr
+
+    mock_ensure = MagicMock()
+    monkeypatch.setattr(slr, "default_atlas_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(slr, "ensure_atlas", mock_ensure)
+    return mock_ensure, tmp_path
+
+
+@pytest.mark.parametrize(
+    "engine, dti_loaded, tractography",
+    [
+        ("FSL_XTRACT", True, True),
+        ("DIPY_RECOBUNDLES", False, True),
+        ("DIPY_RECOBUNDLES", True, False),
+    ],
+)
+def test_preload_dipy_atlas_skipped_without_dipy_tractography(
+    mock_atlas, engine, dti_loaded, tractography
+):
+    from swane.config.config_enums import TractographyEngine
+
+    mock_ensure, _ = mock_atlas
+    subject = _dipy_subject(TractographyEngine[engine], dti_loaded, tractography)
+    worker = WorkflowGenerateWorker(subject)
+
+    worker._preload_dipy_atlas(MagicMock())
+
+    mock_ensure.assert_not_called()
+
+
+def test_preload_dipy_atlas_fetches_when_dipy_tractography(mock_atlas):
+    from swane.config.config_enums import TractographyEngine
+
+    mock_ensure, atlas_dir = mock_atlas
+    subject = _dipy_subject(TractographyEngine.DIPY_RECOBUNDLES, True, True)
+    worker = WorkflowGenerateWorker(subject)
+
+    worker._preload_dipy_atlas(MagicMock())
+
+    mock_ensure.assert_called_once_with(str(atlas_dir))
+
+
+def test_preload_dipy_atlas_skipped_when_already_fetched(mock_atlas):
+    from swane.config.config_enums import TractographyEngine
+    from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import (
+        atlas_wholebrain_path,
+    )
+
+    mock_ensure, atlas_dir = mock_atlas
+    wholebrain = atlas_wholebrain_path(atlas_dir)
+    wholebrain.parent.mkdir(parents=True)
+    wholebrain.touch()
+    subject = _dipy_subject(TractographyEngine.DIPY_RECOBUNDLES, True, True)
+    worker = WorkflowGenerateWorker(subject)
+
+    worker._preload_dipy_atlas(MagicMock())
+
+    mock_ensure.assert_not_called()
+
+
+def test_failed_preload_does_not_skip_the_others(monkeypatch):
+    subject = MagicMock()
+    worker = WorkflowGenerateWorker(subject)
+    calls = []
+
+    def _failing(_strings):
+        calls.append("templates")
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(worker, "_preload_templates", _failing)
+    monkeypatch.setattr(worker, "_preload_models", lambda _s: calls.append("models"))
+    monkeypatch.setattr(
+        worker, "_preload_dipy_atlas", lambda _s: calls.append("dipy_atlas")
+    )
+
+    worker.run()
+
+    assert calls == ["templates", "models", "dipy_atlas"]
+    subject.generate_workflow.assert_called_once()
