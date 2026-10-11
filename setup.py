@@ -80,7 +80,9 @@ setup(
         "PySide6",
         "pydicom==3.0.2",
         "psutil==7.0.0",
-        "matplotlib==3.10.1",
+        # 3.10.7 is the first release with CPython 3.14 wheels: the 3.10.1 pin
+        # forces a source build there. Range keeps ica_aroma_py[plots] (>=3.10.1) valid.
+        "matplotlib>=3.10.1,<3.11",
         # todo: SET NIBABEL 5.2 as minimum to be more inclusive?
         "nibabel>=5.3.0,<6",
         "nitransforms>=25.1.0",
