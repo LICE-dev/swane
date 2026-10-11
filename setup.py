@@ -99,7 +99,7 @@ setup(
         # when exactly one component is classified as motion.
         "ica_aroma_py==0.1.4",
         "nilearn==0.10.4",
-        "scikit-learn==1.5.0",
+        "scikit-learn>=1.5.0",
         # Intel macOS: antspyx 0.6.1 provides x86_64 wheels for macOS 13 (Ventura)
         # and later (including 14 and 15). Versions >=0.6.2 only provide wheels
         # for macOS 15, which forces older Macs to build from source (taking hours).
