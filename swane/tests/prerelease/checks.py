@@ -657,6 +657,24 @@ NILEARN_TASK_EXPECTED_VOXELS = {
     },
 }
 
+#: Relative tolerance on NILEARN_TASK_EXPECTED_VOXELS. The counts are exact on
+#: the host they were obtained on, but the func->ref registration (BET + FLIRT)
+#: moves slightly across platforms and FSL versions, and the registered cluster
+#: maps with it.
+NILEARN_TASK_VOXEL_TOLERANCE = 0.10
+#: Absolute floor of the tolerance, in voxels, so that a near-empty expected map
+#: is not held to an exact count.
+NILEARN_TASK_VOXEL_TOLERANCE_MIN = 50
+
+
+def _voxel_count_matches(count: int, expected: int) -> bool:
+    """True if ``count`` is within the tolerance band around ``expected``."""
+    band = max(
+        NILEARN_TASK_VOXEL_TOLERANCE * expected, NILEARN_TASK_VOXEL_TOLERANCE_MIN
+    )
+    return abs(count - expected) <= band
+
+
 #: Pass values the NILEARN task voxel counts were obtained with.
 NILEARN_TASK_PINNED_CONFIGURATION = {
     "registration_engine": "FSL",
@@ -733,9 +751,13 @@ def _check_fmri_activation(result, files: list) -> list:
                                 input_name.lower(),
                                 basename.split("_threshold")[-1].split(".")[0],
                             ),
-                            count == expected[basename],
-                            "expected %d suprathreshold voxels, got %d"
-                            % (expected[basename], count),
+                            _voxel_count_matches(count, expected[basename]),
+                            "expected %d suprathreshold voxels (±%d%%), got %d"
+                            % (
+                                expected[basename],
+                                round(NILEARN_TASK_VOXEL_TOLERANCE * 100),
+                                count,
+                            ),
                         )
                     )
 
