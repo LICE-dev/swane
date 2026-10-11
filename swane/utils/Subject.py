@@ -750,9 +750,13 @@ class Subject:
                         self.workflow.get_node(node).write_graph(
                             graph2use=self.GRAPH_TYPE,
                             format=Subject.GRAPH_FILE_EXT,
-                            dotfilename=os.path.join(
+                            # The dot source must not share the output path:
+                            # nipype runs "dot -o <base>.svg <dotfile>" and on
+                            # Windows dot cannot overwrite its own open input
+                            dotfilename=os.path.splitext(
                                 self.graph_file(node_list[node].long_name)
-                            ),
+                            )[0]
+                            + ".dot",
                         )
 
         return SubjectRet.GenWfCompleted
