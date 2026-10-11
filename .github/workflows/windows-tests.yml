@@ -2,7 +2,7 @@ name: Tests (Windows / macOS)
 
 # Run title in the Actions list: suite, runner OS and optional prerelease passes.
 run-name: >-
-  ${{ inputs.suite }} tests on ${{ inputs.suite == 'prerelease' && 'windows-latest' || inputs.os }}${{ inputs.passes && format(' (passes: {0})', inputs.passes) || '' }}
+  ${{ inputs.suite }} tests on ${{ inputs.os }}${{ inputs.passes && format(' (passes: {0})', inputs.passes) || '' }}
 
 # Manual only: never runs on push or pull_request.
 on:
@@ -14,7 +14,7 @@ on:
         options: [light, heavy, prerelease, all]
         default: light
       os:
-        description: "Runner OS for light/heavy (prerelease is Windows-only)"
+        description: "Runner OS (macOS prerelease also installs a minimal FSL)"
         type: choice
         options: [windows-latest, macos-latest]
         default: windows-latest
@@ -26,6 +26,10 @@ on:
         description: "Rebuild phantom/weights caches"
         type: boolean
         default: false
+      fsl_release:
+        description: "macOS prerelease: FSL release to install (empty = oldest supported)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -113,12 +117,17 @@ jobs:
 
   prerelease-plan:
     if: ${{ inputs.suite == 'prerelease' || inputs.suite == 'all' }}
-    runs-on: windows-latest
+    runs-on: ${{ inputs.os }}
     timeout-minutes: 120
     outputs:
       passes: ${{ steps.plan.outputs.passes }}
     env:
-      SWANE_PHANTOM_DIR: D:\swp_phantom
+      # Space-free paths (SWANe rejects subject folders with blank spaces).
+      SWANE_PHANTOM_DIR: ${{ inputs.os == 'windows-latest' && 'D:\swp_phantom' || '/Users/runner/swp_phantom' }}
+      SWP_WORK_DIR: ${{ inputs.os == 'windows-latest' && 'D:/swp' || '/Users/runner/swp' }}
+      # Standard runners: windows 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
+      SWP_CORES: ${{ inputs.os == 'windows-latest' && '4' || '3' }}
+      SWP_RAM: ${{ inputs.os == 'windows-latest' && '14' || '6' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -129,12 +138,26 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt
+      # macOS only: Windows has no FSL build, so its sweep stays FSL-free.
+      - name: Install FSL
+        if: ${{ runner.os == 'macOS' }}
+        uses: ./.github/actions/install-fsl
+        with:
+          release: ${{ inputs.fsl_release }}
+      - name: Check FSL
+        if: ${{ runner.os == 'macOS' }}
+        shell: bash
+        # Fail here rather than let the sweep silently drop every FSL pass.
+        run: |
+          cat "$FSLDIR/etc/fslversion"
+          which bet flirt fnirt eddy_cpu dtifit bedpostx probtrackx2 melodic
+          python -c "from swane.utils.DependencyManager import DependencyManager as D; d = D.check_fsl(); print(d.state, d.label); assert d.state.name == 'DETECTED'"
       - name: Phantom cache
         id: phantom
         uses: actions/cache@v4
         with:
           path: |
-            D:\swp_phantom
+            ${{ env.SWANE_PHANTOM_DIR }}
             ~/.cache/swane/fsaverage
           key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
           enableCrossOsArchive: true
@@ -162,12 +185,12 @@ jobs:
         env:
           REQUESTED_PASSES: ${{ inputs.passes }}
         run: |
-          python -m swane.tests.prerelease --dry-run --cores 4 --ram 14 | tee dry-run.txt
+          python -m swane.tests.prerelease --dry-run --cores "$SWP_CORES" --ram "$SWP_RAM" | tee dry-run.txt
           if [ -n "$REQUESTED_PASSES" ]; then
             passes=$(python -c "import json,sys; print(json.dumps([p.strip() for p in sys.argv[1].split(',') if p.strip()]))" "$REQUESTED_PASSES" | tr -d '\r')
           else
             # stdout carries only the JSON list; probe chatter goes to stderr
-            passes=$(python -m swane.tests.prerelease --list-json --cores 4 --ram 14 | tr -d '\r')
+            passes=$(python -m swane.tests.prerelease --list-json --cores "$SWP_CORES" --ram "$SWP_RAM" | tr -d '\r')
           fi
           echo "passes=$passes" >> "$GITHUB_OUTPUT"
       - if: always()
@@ -180,7 +203,7 @@ jobs:
   prerelease-run:
     needs: prerelease-plan
     if: ${{ needs.prerelease-plan.outputs.passes != '[]' }}
-    runs-on: windows-latest
+    runs-on: ${{ inputs.os }}
     timeout-minutes: 350
     strategy:
       fail-fast: false
@@ -188,7 +211,13 @@ jobs:
       matrix:
         pass: ${{ fromJSON(needs.prerelease-plan.outputs.passes) }}
     env:
-      SWANE_PHANTOM_DIR: D:\swp_phantom
+      # Same paths and budget as prerelease-plan.
+      # Space-free paths (SWANe rejects subject folders with blank spaces).
+      SWANE_PHANTOM_DIR: ${{ inputs.os == 'windows-latest' && 'D:\swp_phantom' || '/Users/runner/swp_phantom' }}
+      SWP_WORK_DIR: ${{ inputs.os == 'windows-latest' && 'D:/swp' || '/Users/runner/swp' }}
+      # Standard runners: windows 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
+      SWP_CORES: ${{ inputs.os == 'windows-latest' && '4' || '3' }}
+      SWP_RAM: ${{ inputs.os == 'windows-latest' && '14' || '6' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -199,10 +228,24 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt
+      # macOS only: Windows has no FSL build, so its sweep stays FSL-free.
+      - name: Install FSL
+        if: ${{ runner.os == 'macOS' }}
+        uses: ./.github/actions/install-fsl
+        with:
+          release: ${{ inputs.fsl_release }}
+      - name: Check FSL
+        if: ${{ runner.os == 'macOS' }}
+        shell: bash
+        # Fail here rather than let the sweep silently drop every FSL pass.
+        run: |
+          cat "$FSLDIR/etc/fslversion"
+          which bet flirt fnirt eddy_cpu dtifit bedpostx probtrackx2 melodic
+          python -c "from swane.utils.DependencyManager import DependencyManager as D; d = D.check_fsl(); print(d.state, d.label); assert d.state.name == 'DETECTED'"
       - uses: actions/cache/restore@v4
         with:
           path: |
-            D:\swp_phantom
+            ${{ env.SWANE_PHANTOM_DIR }}
             ~/.cache/swane/fsaverage
           key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
           enableCrossOsArchive: true
@@ -225,9 +268,9 @@ jobs:
         shell: bash
         run: >
           python -m swane.tests.prerelease --only ${{ matrix.pass }}
-          --cores 4 --ram 14 --work-dir "D:/swp" --timeout 5
+          --cores "$SWP_CORES" --ram "$SWP_RAM" --work-dir "$SWP_WORK_DIR" --timeout 5
       # Reports and logs only: never dicom/, the phantom or result volumes.
-      # Per-pass layout: D:/swp/<pass>/{pass_result.json,log/}; crash files
+      # Per-pass layout: <work dir>/<pass>/{pass_result.json,log/}; crash files
       # are text (crashfile_format=txt) in log/, beside pypeline.log[.N].
       - if: always()
         uses: actions/upload-artifact@v4
@@ -235,12 +278,12 @@ jobs:
           name: prerelease-${{ matrix.pass }}
           if-no-files-found: ignore
           path: |
-            D:/swp/prerelease_report.html
-            D:/swp/prerelease_report.json
-            D:/swp/prerelease_state.json
-            D:/swp/*/pass_result.json
-            D:/swp/*/log/*.txt
-            D:/swp/*/log/pypeline.log*
+            ${{ env.SWP_WORK_DIR }}/prerelease_report.html
+            ${{ env.SWP_WORK_DIR }}/prerelease_report.json
+            ${{ env.SWP_WORK_DIR }}/prerelease_state.json
+            ${{ env.SWP_WORK_DIR }}/*/pass_result.json
+            ${{ env.SWP_WORK_DIR }}/*/log/*.txt
+            ${{ env.SWP_WORK_DIR }}/*/log/pypeline.log*
 
   prerelease-summary:
     needs: [prerelease-plan, prerelease-run]
