@@ -36,7 +36,7 @@ from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_wor
 from swane.nipype_pipeline.workflows.dipy_dti_preproc_workflow import (
     dipy_dti_preproc_workflow,
 )
-from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import DEFAULT_ATLAS_DIR
+from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import default_atlas_dir
 from swane.nipype_pipeline.workflows.dipy_bundle_workflow import (
     dipy_bundle_workflow,
     DIPY_TRACT_ATLAS,
@@ -1200,7 +1200,7 @@ class MainWorkflow(CustomWorkflow):
                     sub_folder=os.path.join(self.Result_DIR, "dti"),
                 )
 
-            atlas_dir = DEFAULT_ATLAS_DIR
+            atlas_dir = default_atlas_dir()
             num_threads = self.max_cpu if self.max_cpu and self.max_cpu > 0 else 1
 
             def add_bundle_workflow(tract, long_label):

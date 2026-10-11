@@ -121,14 +121,16 @@ class WorkflowGenerateWorker(QRunnable):
             return
 
         from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import (
-            DEFAULT_ATLAS_DIR,
             atlas_wholebrain_path,
+            default_atlas_dir,
             ensure_atlas,
         )
 
+        atlas_dir = default_atlas_dir()
+
         # Fast check, without importing dipy's fetcher
-        if atlas_wholebrain_path(DEFAULT_ATLAS_DIR).exists():
+        if atlas_wholebrain_path(atlas_dir).exists():
             return
 
         self.signal.progress_msg.emit(strings.subj_tab_wf_gen_dipy_atlas)
-        ensure_atlas(DEFAULT_ATLAS_DIR)
+        ensure_atlas(atlas_dir)
