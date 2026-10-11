@@ -16,6 +16,7 @@ def main():
     from swane.config.config_enums import GlobalPrefCategoryList
     from swane.utils.last_pid_is_running import last_pid_is_running
     from swane.utils.linux_desktop_integration import ensure_desktop_entry
+    from swane.utils.main_workflow_preload import start_main_workflow_preload
 
     # Exit Code definition for automatic reboot
     current_exit_code = EXIT_CODE_REBOOT
@@ -74,6 +75,10 @@ def main():
         try:
             widget = MainWindow(global_config)
             widget.setWindowIcon(QIcon(QPixmap(resources.appIcon_file)))
+
+            # Import the Nipype main workflow off the GUI thread once the event
+            # loop runs, so opening the first subject does not stall the GUI
+            QTimer.singleShot(0, start_main_workflow_preload)
 
             # Start the regular Qt event loop before running the modal license
             # gate. This lets the already-visible main window paint and process
