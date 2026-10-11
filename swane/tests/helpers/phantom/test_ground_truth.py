@@ -41,8 +41,9 @@ def _synthetic_model() -> TissueModel:
     # A slab of venous sinus spanning x, so both hemispheres are populated.
     labels[1:9, 5, 6] = TissueClass.VENOUS_SINUS
 
+    # Motor cortex in both hemispheres (x from -3 to +3), like the real one.
     precentral = np.zeros(shape, dtype=bool)
-    precentral[4:6, 4:6, 7] = True
+    precentral[2:9, 4:6, 7] = True
     cst = np.zeros(shape, dtype=bool)
     cst[5, 5, 2:8] = True
 
@@ -84,6 +85,9 @@ def test_compute_centres_returns_expected_features():
     # sit on the correct sides.
     assert centres["venous_sinus_L"][0] < 0
     assert centres["venous_sinus_R"][0] > 0
+    # Same split for the motor cortex (the task fMRI side ground truth).
+    assert centres["precentral_L"][0] < 0
+    assert centres["precentral_R"][0] > 0
 
 
 def test_compute_centres_returns_af_or_corridors():

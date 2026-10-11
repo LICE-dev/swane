@@ -1,8 +1,8 @@
 """Phantom anatomy centroids — the pre-release "ground truth", built with the phantom.
 
 The pre-release sweep grades every result against what the phantom *actually*
-contains: the RAS-millimetre centre of mass of the brain, the motor cortex, the
-corticospinal corridor, the venous sinuses (whole and per hemisphere) and the
+contains: the RAS-millimetre centre of mass of the brain, the motor cortex
+(whole and per hemisphere), the corticospinal corridor, the venous sinuses (whole and per hemisphere) and the
 SEEG contacts. All of these are a deterministic function of the very
 :class:`~swane.tests.helpers.phantom.tissue.TissueModel` the generator renders
 the DICOM from (plus the pure-geometry SEEG trajectories), so the ground truth
@@ -80,6 +80,10 @@ def compute_centres(model) -> dict:
     features = [
         ("brain", np.isin(model.labels, [TC.CORTICAL_GM, TC.DEEP_GM, TC.WM])),
         ("precentral", model.precentral),
+        # Per hemisphere too: the task fMRI phantom activates the left motor
+        # cortex for condition A and the right one for B (sequences.py).
+        ("precentral_L", model.precentral & (wx < 0)),
+        ("precentral_R", model.precentral & (wx > 0)),
         ("cst", model.cst),
         ("venous_sinus", sinus),
         ("venous_sinus_L", sinus & (wx < 0)),
