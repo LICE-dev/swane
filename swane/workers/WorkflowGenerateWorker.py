@@ -22,20 +22,25 @@ class WorkflowGenerateWorker(QRunnable):
     def run(self):
         from swane.resources import strings
 
-        try:
-            self._preload_templates(strings)
-            self._preload_models(strings)
-        except Exception as e:
-            from subprocess import CalledProcessError
+        # Each preload is independent: one failure must not skip the others.
+        for preload in (
+            self._preload_templates,
+            self._preload_models,
+            self._preload_dipy_atlas,
+        ):
+            try:
+                preload(strings)
+            except Exception as e:
+                from subprocess import CalledProcessError
 
-            if isinstance(e, CalledProcessError):
-                print(
-                    f"Warning: antspynet weights pre-fetch failed (exit code {e.returncode}):"
-                )
-                print((e.stderr or "")[-2000:])
-            else:
-                print(f"Warning: dependency preload failed: {e}")
-            # Continue even if preload fails, generate_workflow will handle errors
+                if isinstance(e, CalledProcessError):
+                    print(
+                        f"Warning: antspynet weights pre-fetch failed (exit code {e.returncode}):"
+                    )
+                    print((e.stderr or "")[-2000:])
+                else:
+                    print(f"Warning: dependency preload failed: {e}")
+                # Continue even if preload fails, generate_workflow will handle errors
 
         self.signal.progress_msg.emit(strings.subj_tab_wf_gen_start)
         ret = self.subject.generate_workflow(generate_graphs=self.generate_graphs)
@@ -92,3 +97,38 @@ class WorkflowGenerateWorker(QRunnable):
         if not weights_are_fetched(all_weights):
             self.signal.progress_msg.emit(strings.subj_tab_wf_gen_models)
             preload_weights(all_weights)
+
+    def _preload_dipy_atlas(self, strings):
+        """
+        Pre-downloads the HCP842 bundle atlas used by the dipy tractography
+        engine, only when this subject's workflow will run the dipy
+        tractography (DTI loaded, tractography enabled, dipy engine selected).
+        """
+        from swane.config.config_enums import (
+            GlobalPrefCategoryList,
+            TractographyEngine,
+        )
+        from swane.utils.DataInputList import DataInputList as DIL
+
+        if (
+            self.subject.global_config.getenum_safe(
+                GlobalPrefCategoryList.SYNTH, "tractography_engine"
+            )
+            != TractographyEngine.DIPY_RECOBUNDLES
+            or not self.subject.input_state_list[DIL.DTI].loaded
+            or not self.subject.config.getboolean_safe(DIL.DTI, "tractography")
+        ):
+            return
+
+        from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import (
+            DEFAULT_ATLAS_DIR,
+            atlas_wholebrain_path,
+            ensure_atlas,
+        )
+
+        # Fast check, without importing dipy's fetcher
+        if atlas_wholebrain_path(DEFAULT_ATLAS_DIR).exists():
+            return
+
+        self.signal.progress_msg.emit(strings.subj_tab_wf_gen_dipy_atlas)
+        ensure_atlas(DEFAULT_ATLAS_DIR)
