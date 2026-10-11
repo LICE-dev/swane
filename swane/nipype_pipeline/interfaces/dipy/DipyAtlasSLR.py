@@ -8,7 +8,7 @@ tractogram, and both the aligned tractogram and the inverse transform are
 published for the per-tract bundle recognition in Phase 2.
 
 The 649 MB HCP842 atlas is fetched into a local ``DIPY_HOME``
-(:data:`DEFAULT_ATLAS_DIR`) while the workflow is generated (see
+(:func:`default_atlas_dir`) while the workflow is generated (see
 ``WorkflowGenerateWorker``); the node fetches it itself only as a fallback, e.g.
 when that pre-fetch failed. Since SWANe processes subjects in parallel, two
 workflows finding an empty atlas directory must not both download it: :func:`ensure_atlas` guards the fetch with a
@@ -43,8 +43,6 @@ from swane.patches.dipy_patches import dipy_slr_num_threads
 # tractogram is addressed by this explicit name -- never by a glob over the
 # sibling ``bundles`` directory, which contains the misspelled duplicate
 # ``IF0F_R.trk`` alongside the correct ``IFOF_R.trk``.
-# Default DIPY_HOME holding the atlas, shared by every subject.
-DEFAULT_ATLAS_DIR = os.path.join(os.path.expanduser("~"), ".dipy")
 ATLAS_SUBDIR = "bundle_atlas_hcp842"
 ATLAS_NAME = "Atlas_80_Bundles"
 WHOLE_BRAIN_FILENAME = "whole_brain_MNI.trk"
@@ -58,6 +56,14 @@ _LOCK_TIMEOUT_SECONDS = 3600
 
 class AtlasFetchError(RuntimeError):
     """Raised when the HCP842 atlas cannot be made available (e.g. offline)."""
+
+
+def default_atlas_dir():
+    """Default DIPY_HOME holding the atlas, shared by every subject.
+
+    Resolved at call time, not import time, so it follows the current home.
+    """
+    return os.path.join(os.path.expanduser("~"), ".dipy")
 
 
 def atlas_wholebrain_path(atlas_dir):

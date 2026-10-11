@@ -63,7 +63,7 @@ def mock_atlas(monkeypatch, tmp_path):
     import swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR as slr
 
     mock_ensure = MagicMock()
-    monkeypatch.setattr(slr, "DEFAULT_ATLAS_DIR", str(tmp_path))
+    monkeypatch.setattr(slr, "default_atlas_dir", lambda: str(tmp_path))
     monkeypatch.setattr(slr, "ensure_atlas", mock_ensure)
     return mock_ensure, tmp_path
 

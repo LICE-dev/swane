@@ -24,7 +24,7 @@ from swane.nipype_pipeline.interfaces.dipy.DipyCsdFit import DipyCsdFit
 from swane.nipype_pipeline.interfaces.dipy.DipyTracking import DipyTracking
 from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import (
     DipyAtlasSLR,
-    DEFAULT_ATLAS_DIR,
+    default_atlas_dir,
 )
 from swane.nipype_pipeline.interfaces.dipy.DipyTractogramChunker import (
     DipyTractogramChunker,
@@ -430,7 +430,7 @@ def dipy_dti_preproc_workflow(
         atlas_slr.ram_estimator = DipySlrRamEstimator()
         # num_threads=1 already makes nipype's derived n_procs == 1.
         atlas_slr.inputs.num_threads = 1
-        atlas_slr.inputs.atlas_dir = DEFAULT_ATLAS_DIR
+        atlas_slr.inputs.atlas_dir = default_atlas_dir()
         workflow.connect(tracking, "tractogram", atlas_slr, "tractogram")
         workflow.connect(atlas_slr, "tractogram_atlas", outputnode, "tractogram_atlas")
         workflow.connect(atlas_slr, "atlas2native", outputnode, "atlas2native")
