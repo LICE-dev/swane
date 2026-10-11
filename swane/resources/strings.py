@@ -149,6 +149,7 @@ subj_tab_missing_dependencies_error = (
 subj_tab_wf_gen_start = "Generating the Workflow..."
 subj_tab_wf_gen_templates = "Downloading templates..."
 subj_tab_wf_gen_models = "Downloading ANTsPyNet deskull models..."
+subj_tab_wf_gen_dipy_atlas = "Downloading the dipy HCP842 bundle atlas..."
 subj_tab_wf_gen_error = "Error generating the Workflow!"
 subj_tab_old_wf_found = (
     "This subject has already been analyzed by "
