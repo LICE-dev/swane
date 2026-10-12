@@ -168,13 +168,15 @@ jobs:
       # The capability probe only offers the DIPY_RECOBUNDLES tractography
       # passes when ~/.dipy/bundle_atlas_hcp842 already exists; SWANe would
       # fetch it at run time, so fetch it once here and share it via cache.
+      # One cache per runner OS: the archive stores ~/.dipy relative to the
+      # workspace, and the home directory sits elsewhere on each OS, so an
+      # archive saved on macOS lands outside ~/.dipy when restored on Windows.
       - name: HCP842 atlas cache
         id: hcp842
         uses: actions/cache@v6
         with:
           path: ~/.dipy/bundle_atlas_hcp842
-          key: dipy-hcp842-v1
-          enableCrossOsArchive: true
+          key: dipy-hcp842-${{ runner.os }}-v1
       - name: Fetch HCP842 atlas
         if: steps.hcp842.outputs.cache-hit != 'true'
         shell: bash
@@ -253,8 +255,7 @@ jobs:
       - uses: actions/cache/restore@v6
         with:
           path: ~/.dipy/bundle_atlas_hcp842
-          key: dipy-hcp842-v1
-          enableCrossOsArchive: true
+          key: dipy-hcp842-${{ runner.os }}-v1
           fail-on-cache-miss: true
       - uses: actions/cache@v6
         with:
