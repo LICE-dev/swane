@@ -129,3 +129,65 @@ class TestDataSinkSubstitution:
             "/path/thresh_zstat01.nii.gz",
         ):
             assert re.sub(pattern, replacement, path) == path
+
+
+class TestTimecourseViewerRetry:
+    """A failed ``_show`` (mix table not loaded yet) must not be cached."""
+
+    def test_ic_not_cached_until_plotted(self, slicer_mod, monkeypatch):
+        viewer = slicer_mod.TimecourseViewer()
+        volume = types.SimpleNamespace(GetName=lambda: "r-thresh_zstat01")
+        monkeypatch.setattr(slicer_mod, "_get_active_zstat", lambda node: (volume, 1))
+        results = iter([False, True])
+        shown = []
+
+        def fake_show(ic, name):
+            shown.append(ic)
+            return next(results)
+
+        monkeypatch.setattr(viewer, "_show", fake_show)
+
+        viewer._on_composite_modified(object(), None)  # table not ready
+        assert viewer._last_ic is None
+        viewer._on_composite_modified(object(), None)  # same IC retried
+        assert viewer._last_ic == 1
+        viewer._on_composite_modified(object(), None)  # now cached
+        assert shown == [1, 1]
+
+
+class TestTimecourseViewerLayout:
+    """The layout restored on hide must never be a plot layout."""
+
+    @staticmethod
+    def _setup(slicer_mod, monkeypatch, start_layout):
+        plot_layout = 36
+        layout_node = types.SimpleNamespace(
+            SlicerLayoutConventionalView=2,
+            SlicerLayoutConventionalPlotView=plot_layout,
+            SlicerLayoutFourUpPlotView=37,
+            SlicerLayoutFourUpPlotTableView=38,
+            SlicerLayoutOneUpPlotView=39,
+            SlicerLayoutThreeOverThreePlotView=40,
+        )
+        manager = types.SimpleNamespace(layout=start_layout)
+        manager.setLayout = lambda value: setattr(manager, "layout", value)
+        fake_slicer = types.SimpleNamespace(
+            vtkMRMLLayoutNode=layout_node,
+            app=types.SimpleNamespace(layoutManager=lambda: manager),
+        )
+        monkeypatch.setattr(slicer_mod, "slicer", fake_slicer)
+        viewer = slicer_mod.TimecourseViewer()
+        viewer._previous_layout = None
+        return viewer, manager
+
+    def test_plot_layout_not_remembered(self, slicer_mod, monkeypatch):
+        viewer, manager = self._setup(slicer_mod, monkeypatch, 36)
+        viewer._hide()
+        assert manager.layout == 2
+
+    def test_user_layout_restored(self, slicer_mod, monkeypatch):
+        viewer, manager = self._setup(slicer_mod, monkeypatch, 3)
+        viewer._previous_layout = 3
+        manager.layout = 36
+        viewer._hide()
+        assert manager.layout == 3
