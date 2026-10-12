@@ -697,9 +697,9 @@ TASK_SIDE_BY_CONDITION = {"task_a_name": "L", "task_b_name": "R"}
 
 #: Minimum share of a contrast's suprathreshold voxels that must lie in the
 #: expected hemisphere. Measured over the four fMRI passes (NILEARN, FSL, ANTs,
-#: alt settings) on the CerebrA phantom (generator v10), Linux x86_64: 98-100%,
-#: centres 0.5-4.3 mm from the precentral centre of their side (gate
-#: FEATURE_TOLERANCE_MM). A map
+#: alt settings) on the CerebrA phantom (generator v10): 98-100% with centres
+#: 0.5-4.3 mm from the precentral centre of their side on Linux x86_64, 95-100%
+#: with centres 0.7-8.0 mm on macOS arm64 (gate FEATURE_TOLERANCE_MM). A map
 #: on the wrong side scores ~0% and lands tens of millimetres away.
 TASK_LATERALIZATION_MIN_SHARE = 0.9
 
