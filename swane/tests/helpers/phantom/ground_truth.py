@@ -65,6 +65,7 @@ def compute_centres(model) -> dict:
     and by the ground-truth fallback (which rebuilds the model first), so the
     cached answer and the recomputed one are identical by construction.
     """
+    from swane.tests.helpers.phantom.sequences import RS_POSTERIOR_BOX
     from swane.tests.helpers.phantom.tissue import TissueClass as TC
 
     sinus = model.labels == TC.VENOUS_SINUS
@@ -77,6 +78,19 @@ def compute_centres(model) -> dict:
     # RAS x sign, the same convention used for the venous sinuses above.
     af = getattr(model, "af", None)
     orad = getattr(model, "optic_radiation", None)
+    # Posterior resting-state network: cortical grey matter inside the RAS box
+    # the BOLD generator draws it from (the motor network is ``precentral``).
+    ii, jj, kk = np.indices(model.labels.shape, dtype=np.float32)
+    world = [
+        model.affine[a, 0] * ii
+        + model.affine[a, 1] * jj
+        + model.affine[a, 2] * kk
+        + model.affine[a, 3]
+        for a in range(3)
+    ]
+    rs_posterior = np.isin(model.labels, [TC.CORTICAL_GM, TC.PRECENTRAL_GM])
+    for coord, (low, high) in zip(world, (RS_POSTERIOR_BOX[k] for k in "ras")):
+        rs_posterior &= (coord >= low) & (coord <= high)
     features = [
         ("brain", np.isin(model.labels, [TC.CORTICAL_GM, TC.DEEP_GM, TC.WM])),
         ("precentral", model.precentral),
@@ -85,6 +99,7 @@ def compute_centres(model) -> dict:
         ("precentral_L", model.precentral & (wx < 0)),
         ("precentral_R", model.precentral & (wx > 0)),
         ("cst", model.cst),
+        ("rs_posterior", rs_posterior),
         ("venous_sinus", sinus),
         ("venous_sinus_L", sinus & (wx < 0)),
         ("venous_sinus_R", sinus & (wx > 0)),

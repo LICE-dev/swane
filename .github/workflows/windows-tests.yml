@@ -301,6 +301,13 @@ jobs:
           path: ~/.dipy/bundle_atlas_hcp842
           key: dipy-hcp842-${{ runner.os }}-v1
           fail-on-cache-miss: true
+      # On a models-cache miss the phantom cache creates TEMPLATEFLOW_HOME with
+      # tpl-MNI152NLin2009cSym only: TemplateFlow then skips its skeleton and
+      # finds no other template (e.g. the MNI152NLin6Asym of the resting-state
+      # AROMA registration). Add the missing skeleton without overwriting files.
+      - name: Complete the TemplateFlow skeleton
+        shell: bash
+        run: python -c "from templateflow import conf; conf.update(local=True, overwrite=False, silent=True)"
       - name: Run pass
         shell: bash
         run: >
