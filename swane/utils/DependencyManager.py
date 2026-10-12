@@ -98,7 +98,8 @@ class DependencyManager:
     Manager for checking dependencies and reporting messages about them
     """
 
-    MIN_FSL_VERSION = "6.0.6"
+    # 6.0.7.8 ships eddy 2401, the first to accept --nthr (CustomEddy passes it).
+    MIN_FSL_VERSION = "6.0.7.8"
     # Kept in sync with the antspyx pin in setup.py.
     MIN_ANTSPYX_VERSION = "0.6.1"
     # Kept in sync with the antspynet pin in setup.py.

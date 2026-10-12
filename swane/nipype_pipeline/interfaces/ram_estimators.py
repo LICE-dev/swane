@@ -449,9 +449,11 @@ class DipyTrackingRamEstimator(RamEstimator):
     #: Static reservation the workflow declares on the node. Read only when the
     #: negotiation cannot run at all (see ``MonitoredMultiProcPlugin._negotiate_ram``)
     #: -- e.g. an input could not be read, a state in which the node cannot run
-    #: either. A conservative representative top-rung value; the dipy engine's RAM
-    #: floor is settled jointly at the end of Phase 2 and may revise it.
-    STATIC_FALLBACK_GB = 7.5
+    #: either. Sourced from ``ResourceManager.dipy_tractography_ram_requirements``
+    #: like :class:`RecoBundlesRamEstimator`: Nipype checks static reservations
+    #: against the budget before the workflow starts, so a larger value would
+    #: refuse every host the dipy preference gate admits below it.
+    STATIC_FALLBACK_GB = ResourceManager.dipy_tractography_ram_requirements()
 
     def __init__(self):
         # max_gb is deliberately None: clamping the estimate down would make the

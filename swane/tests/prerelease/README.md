@@ -214,6 +214,15 @@ MNE mirror repository's own license does not change that. SWANe only fetches
 `aseg.mgz` and `aparc+aseg.mgz` to build a local phantom: they are never
 committed, packaged or uploaded.
 
+On GitHub Actions (`.github/workflows/windows-tests.yml`) the Windows sweep is
+FSL-free, while the macOS sweep installs a minimal FSL from FSL's own conda
+channel (`.github/actions/install-fsl`) and so runs the FSL passes too.
+`ci_fsl_env.py` pins only the FSL packages SWANe runs, at the versions of the
+oldest FSL release ≥ `DependencyManager.MIN_FSL_VERSION` published for the
+runner platform, and that release is written to `$FSLDIR/etc/fslversion`: the
+CI exercises the minimum SWANe claims to support, and follows it when it is
+raised.
+
 ### Commands
 
 ```bash

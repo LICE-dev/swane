@@ -388,3 +388,16 @@ class TestRasAffineWiring:
         assert (ants_reg, "fwd_transforms", "in_transform") in inc
         assert (deskull, "out_file", "source_file") in inc
         assert (inputnode, "reference_brain", "reference_file") in inc
+
+
+class TestStaticRamReservations:
+    def test_no_node_reserves_more_than_the_dipy_requirement(self, dipy_wf):
+        # Nipype rejects the whole workflow before it starts when any node's
+        # static mem_gb exceeds the RAM budget, before the estimators can
+        # negotiate a smaller reservation. The static values are fall-backs
+        # only, so none may exceed the RAM the dipy preference gate guarantees.
+        from swane.utils.ResourceManager import ResourceManager
+
+        required = ResourceManager.dipy_tractography_ram_requirements()
+        over = {n.name: n.mem_gb for n in dipy_wf._graph.nodes() if n.mem_gb > required}
+        assert over == {}
