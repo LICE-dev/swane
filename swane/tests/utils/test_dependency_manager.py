@@ -91,6 +91,78 @@ class TestSlicerHelpers:
         assert DependencyManager.need_slicer_check(config) is True
         assert DependencyManager.need_slicer_check(None) is False
 
+    def _valid_slicer_config(self, tmp_path):
+        """A config whose cached Slicer data would skip the full check."""
+        import json
+
+        exe = tmp_path / "Slicer"
+        exe.write_text("x")
+        exe.chmod(0o755)
+        paths = {}
+        for name in DependencyManager.SLICER_MODULES:
+            (tmp_path / name).mkdir()
+            paths[name] = str(tmp_path / name)
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        config.set_slicer_path(str(exe))
+        config.set_slicer_version("5.6.2")
+        config.set_slicer_validator(False)
+        config.set_slicer_extensions_state(
+            json.dumps({"revision": "1", "paths": paths})
+        )
+        return config
+
+    def test_need_slicer_check_trusts_intact_cache(self, tmp_path, monkeypatch):
+        from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+        patched = []
+        monkeypatch.setattr(
+            SlicerCheckWorker,
+            "add_slicer_startup_patch",
+            staticmethod(lambda: patched.append(True)),
+        )
+        config = self._valid_slicer_config(tmp_path)
+        assert DependencyManager.need_slicer_check(config) is False
+        assert patched == [True]
+
+    def test_need_slicer_check_detects_removed_extension(self, tmp_path, monkeypatch):
+        import shutil
+        from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+        monkeypatch.setattr(
+            SlicerCheckWorker, "add_slicer_startup_patch", staticmethod(lambda: None)
+        )
+        config = self._valid_slicer_config(tmp_path)
+        shutil.rmtree(tmp_path / DependencyManager.SLICER_MODULES[0])
+        assert DependencyManager.need_slicer_check(config) is True
+
+    def test_need_slicer_check_without_recorded_extensions(self, tmp_path, monkeypatch):
+        """Preferences written by an older SWANe have no extension state."""
+        from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+        monkeypatch.setattr(
+            SlicerCheckWorker, "add_slicer_startup_patch", staticmethod(lambda: None)
+        )
+        config = self._valid_slicer_config(tmp_path)
+        config.set_slicer_extensions_state("")
+        assert DependencyManager.need_slicer_check(config) is True
+
+    def test_need_slicer_check_executable_replaced_by_folder(
+        self, tmp_path, monkeypatch
+    ):
+        from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+        monkeypatch.setattr(
+            SlicerCheckWorker, "add_slicer_startup_patch", staticmethod(lambda: None)
+        )
+        config = self._valid_slicer_config(tmp_path)
+        config.set_slicer_path(str(tmp_path))
+        assert DependencyManager.need_slicer_check(config) is True
+
+    def test_extensions_state_survives_percent_in_path(self, tmp_path):
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        config.set_slicer_extensions_state('{"paths": {"A": "/100%/x"}}')
+        assert config.get_slicer_extensions_state() == '{"paths": {"A": "/100%/x"}}'
+
 
 class TestToolChecksMocked:
 

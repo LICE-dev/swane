@@ -419,3 +419,188 @@ def test_run_version_with_crlf_is_stripped(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
     w.run()
     assert results[0][1] == "5.6.2"
+
+
+# --- Cheap revalidation of what a full check recorded -----------------------
+
+REPORT = (
+    "noise\n"
+    "SLICER REVISION:34045\n"
+    "MODULE PATH:SlicerFreeSurfer=/ext/Extensions-34045/SlicerFreeSurfer\n"
+    "MODULE PATH:SurfaceWrapSolidify=C:\\ext\\Extensions-34045\\SurfaceWrapSolidify\r\n"
+    "MODULE FOUND\n"
+)
+
+
+def test_parse_extension_report():
+    state = SlicerCheckWorker.parse_extension_report(REPORT)
+    assert state["revision"] == "34045"
+    assert state["paths"] == {
+        "SlicerFreeSurfer": "/ext/Extensions-34045/SlicerFreeSurfer",
+        "SurfaceWrapSolidify": "C:\\ext\\Extensions-34045\\SurfaceWrapSolidify",
+    }
+    assert SlicerCheckWorker.parse_extension_report("") == {
+        "revision": "",
+        "paths": {},
+    }
+
+
+def _state(paths):
+    import json
+
+    return json.dumps({"revision": "1", "paths": {k: str(v) for k, v in paths.items()}})
+
+
+def test_extensions_state_is_valid(tmp_path):
+    a = tmp_path / "A"
+    b = tmp_path / "B"
+    a.mkdir()
+    b.mkdir()
+    ok = _state({"A": a, "B": b})
+    assert SlicerCheckWorker.extensions_state_is_valid(ok, ["A", "B"]) is True
+
+    # an extension folder removed by the user
+    b.rmdir()
+    assert SlicerCheckWorker.extensions_state_is_valid(ok, ["A", "B"]) is False
+    # a required module the recorded state never listed
+    assert SlicerCheckWorker.extensions_state_is_valid(ok, ["A", "C"]) is False
+    # nothing recorded yet / garbage / wrong shape
+    for bad in ["", "not json", "{}", "[]", '{"paths": []}', None]:
+        assert SlicerCheckWorker.extensions_state_is_valid(bad, ["A"]) is False
+
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="POSIX exec bit")
+def test_is_slicer_executable_posix(tmp_path):
+    exe = tmp_path / "Slicer"
+    exe.write_text("x")
+    exe.chmod(0o644)
+    assert SlicerCheckWorker.is_slicer_executable(str(exe)) is False
+    exe.chmod(0o755)
+    assert SlicerCheckWorker.is_slicer_executable(str(exe)) is True
+    assert SlicerCheckWorker.is_slicer_executable(str(tmp_path)) is False
+    assert SlicerCheckWorker.is_slicer_executable(str(tmp_path / "gone")) is False
+
+
+def test_is_slicer_executable_windows_ignores_exec_bit(monkeypatch, tmp_path):
+    exe = tmp_path / "Slicer.exe"
+    exe.write_text("x")
+    exe.chmod(0o644)
+    monkeypatch.setattr(platform, "system", lambda: "Windows")
+    assert SlicerCheckWorker.is_slicer_executable(str(exe)) is True
+    assert SlicerCheckWorker.is_slicer_executable(str(tmp_path)) is False
+
+
+def test_run_emits_extensions_state_before_result(monkeypatch):
+    _patch_found_slicer(monkeypatch)
+    monkeypatch.setattr(
+        DependencyManager, "check_slicer_version", staticmethod(lambda v: True)
+    )
+    events = []
+    w = SlicerCheckWorker(current_slicer_path="")
+    w.signal.extensions.connect(lambda s: events.append(("ext", s)))
+    w.signal.slicer.connect(lambda *a: events.append(("slicer", a)))
+
+    def fake_run(cmd, **kwargs):
+        if "--version" in cmd:
+            return type("P", (), {"stdout": b"Slicer 5.6.2\n"})
+        return type("P", (), {"stdout": REPORT.encode()})
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    w.run()
+    assert [e[0] for e in events] == ["ext", "slicer"]
+    import json
+
+    assert json.loads(events[0][1])["revision"] == "34045"
+
+
+def test_run_does_not_emit_extensions_state_when_module_missing(monkeypatch):
+    _patch_found_slicer(monkeypatch)
+    monkeypatch.setattr(
+        DependencyManager, "check_slicer_version", staticmethod(lambda v: True)
+    )
+    events = []
+    w = SlicerCheckWorker(current_slicer_path="")
+    w.signal.extensions.connect(lambda s: events.append(s))
+
+    def fake_run(cmd, **kwargs):
+        if "--version" in cmd:
+            return type("P", (), {"stdout": b"Slicer 5.6.2\n"})
+        return type("P", (), {"stdout": b"MODULE MISSING:SlicerFreeSurfer\n"})
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    w.run()
+    assert events == []
+
+
+def _quick_result(monkeypatch, fake_run, expected="5.6.2"):
+    from swane.workers.SlicerCheckWorker import SlicerQuickCheckWorker
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    results = []
+    w = SlicerQuickCheckWorker("/fake/Slicer", expected)
+    w.signal.done.connect(results.append)
+    w.run()
+    return results
+
+
+def test_quick_check_version_match(monkeypatch):
+    out = lambda cmd, **kw: type("P", (), {"stdout": b"Slicer 5.6.2\r\n"})
+    assert _quick_result(monkeypatch, out) == [True]
+
+
+def test_quick_check_version_changed(monkeypatch):
+    out = lambda cmd, **kw: type("P", (), {"stdout": b"Slicer 5.8.0\n"})
+    assert _quick_result(monkeypatch, out) == [False]
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        PermissionError(13, "denied"),
+        subprocess.TimeoutExpired("Slicer", 1),
+    ],
+)
+def test_quick_check_failure_requests_full_check(monkeypatch, exc):
+    def raising(cmd, **kw):
+        raise exc
+
+    assert _quick_result(monkeypatch, raising) == [False]
+
+
+def test_module_install_script_reports_revision_and_paths(tmp_path):
+    """The script run inside Slicer prints the markers the worker parses."""
+    import importlib.util
+    import io
+    import sys
+    import types
+    from contextlib import redirect_stdout
+
+    ext_dir = tmp_path / "SlicerFreeSurfer"
+    ext_dir.mkdir()
+
+    class EM:
+        interactive = True
+
+        def extensionInstallPath(self, name):
+            return str(tmp_path / name)
+
+    fake_slicer = types.SimpleNamespace(
+        app=types.SimpleNamespace(extensionsManagerModel=lambda: EM(), revision=34045),
+        moduleNames=types.SimpleNamespace(SlicerFreeSurfer=True),
+    )
+    import swane.workers as workers_pkg
+
+    script = os.path.join(
+        os.path.dirname(workers_pkg.__file__), "slicer_script_module_install.py"
+    )
+    spec = importlib.util.spec_from_file_location("slicer_install_under_test", script)
+    mod = importlib.util.module_from_spec(spec)
+    mod.slicer = fake_slicer
+    spec.loader.exec_module(mod)
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = mod.install_extensions_from_args(["x", "SlicerFreeSurfer"])
+    assert rc == 0
+    state = SlicerCheckWorker.parse_extension_report(buf.getvalue())
+    assert state["revision"] == "34045"
+    assert state["paths"] == {"SlicerFreeSurfer": str(ext_dir)}
