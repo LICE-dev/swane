@@ -147,3 +147,23 @@ def test_cache_key_depends_on_anatomy_fingerprint(fake_tf, tmp_path):
     alt.write_bytes(b"different anatomy")
     changed["csf"] = str(alt)
     assert dataset._cache_key(profile, changed) != key
+
+
+def test_wrong_content_file_is_refetched(fake_tf):
+    home, _payload, calls = fake_tf
+    src.resolve_anatomy_files()
+    calls.clear()
+    # a truncated / partial download: non-empty, so it counts as present
+    (home / TPL_DIR / src.ANATOMY_FILES["wm"][0]).write_bytes(b"partial")
+    files = src.resolve_anatomy_files()
+    assert calls == ["wm"]
+    assert src._md5(files["wm"]) == src.ANATOMY_MD5["wm"]
+
+
+def test_file_still_wrong_after_refetch_raises(fake_tf, monkeypatch):
+    _home, _payload, calls = fake_tf
+    monkeypatch.setattr(src, "ANATOMY_MD5", dict(src.ANATOMY_MD5, wm="0" * 32))
+    with pytest.raises(RuntimeError, match="corrupted or partial download") as err:
+        src.resolve_anatomy_files()
+    assert "re-pin ANATOMY_MD5" in str(err.value)
+    assert calls.count("wm") == 2  # first fetch plus one re-fetch

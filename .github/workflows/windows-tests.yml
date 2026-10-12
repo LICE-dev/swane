@@ -244,6 +244,16 @@ jobs:
           cat "$FSLDIR/etc/fslversion"
           which bet flirt fnirt eddy_cpu dtifit bedpostx probtrackx2 melodic
           python -c "from swane.utils.DependencyManager import DependencyManager as D; d = D.check_fsl(); print(d.state, d.label); assert d.state.name == 'DETECTED'"
+      # Restore this broad cache first: its ~/.cache/templateflow holds 0-byte
+      # placeholders that would overwrite the phantom's real anatomy files.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.keras
+            ~/.antspy
+            ~/.cache/templateflow
+            ~/.dipy
+          key: prerelease-models-${{ hashFiles('setup.py') }}
       - uses: actions/cache/restore@v6
         with:
           path: |
@@ -257,14 +267,6 @@ jobs:
           path: ~/.dipy/bundle_atlas_hcp842
           key: dipy-hcp842-${{ runner.os }}-v1
           fail-on-cache-miss: true
-      - uses: actions/cache@v6
-        with:
-          path: |
-            ~/.keras
-            ~/.antspy
-            ~/.cache/templateflow
-            ~/.dipy
-          key: prerelease-models-${{ hashFiles('setup.py') }}
       - name: Run pass
         shell: bash
         run: >
