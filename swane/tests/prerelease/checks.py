@@ -81,6 +81,11 @@ class CheckResult:
         return "    [%-7s] %-38s %s" % (mark, self.name, self.detail)
 
 
+#: Features every ground truth must carry; a cached sidecar missing any of them
+#: predates the feature and is recomputed.
+REQUIRED_CENTRES = ("brain", "precentral_L", "precentral_R")
+
+
 @dataclass
 class GroundTruth:
     """Phantom anatomy in RAS millimetres, used as the reference for layer 3."""
@@ -102,7 +107,9 @@ class GroundTruth:
         """
         if subject_dir:
             centres = load_centres(subject_dir)
-            if centres is not None:
+            # A sidecar written before a feature was added lacks it: recompute
+            # rather than silently skip the checks that need it.
+            if centres is not None and all(k in centres for k in REQUIRED_CENTRES):
                 return cls(centres=centres)
         return cls.build(freesurfer_home)
 
@@ -633,37 +640,6 @@ def _is_activation_map(name: str) -> bool:
     return "cluster" in lowered or "zstat" in lowered
 
 
-#: Suprathreshold voxel counts of the registered task cluster maps on the
-#: phantom (NILEARN engine). Obtained from two runs of ``python3 -m
-#: swane.tests.prerelease --only fmri_task_and_rest --cores 3 --ram 10``, which
-#: gave identical maps (same counts, bit-identical data): the NILEARN motion
-#: correction runs with a fixed seed and one ITK thread. They hold only for the
-#: registration configuration of that pass (NILEARN_TASK_PINNED_CONFIGURATION).
-#: fmri_1 runs with INTERLEAVED slice timing, so its counts include the niimath
-#: slice-timing correction (niimath 1.0.20260924); fmri_0 (UNKNOWN) has none.
-NILEARN_TASK_EXPECTED_VOXELS = {
-    "fmri_0": {
-        "r-fmri_0_cluster_Task_A_versus_Rest_threshold3.1.nii.gz": 11165,
-        "r-fmri_0_cluster_Task_A_versus_Rest_threshold5.0.nii.gz": 7901,
-        "r-fmri_0_cluster_Task_A_versus_Rest_threshold7.0.nii.gz": 2010,
-    },
-    "fmri_1": {
-        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold3.1.nii.gz": 8975,
-        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold5.0.nii.gz": 5849,
-        "r-fmri_1_cluster_Task_A_versus_Task_B_threshold7.0.nii.gz": 0,
-        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold3.1.nii.gz": 8598,
-        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold5.0.nii.gz": 1351,
-        "r-fmri_1_cluster_Task_B_versus_Task_A_threshold7.0.nii.gz": 0,
-    },
-}
-
-#: Pass values the NILEARN task voxel counts were obtained with.
-NILEARN_TASK_PINNED_CONFIGURATION = {
-    "registration_engine": "FSL",
-    "deskull_engine": "BET",
-}
-
-
 def _check_fmri_activation(result, files: list) -> list:
     """Confirm the fMRI workflows actually produced activation.
 
@@ -708,37 +684,106 @@ def _check_fmri_activation(result, files: list) -> list:
             )
         )
 
-        # Phantom determinism for the NILEARN engine, only for the
-        # configuration the counts were obtained with (the registered maps
-        # depend on the func->ref registration).
-        values = result.values
-        if (
-            values.get("fmri_engine", "NILEARN") == "NILEARN"
-            and all(
-                values.get(key) == value
-                for key, value in NILEARN_TASK_PINNED_CONFIGURATION.items()
-            )
-            and input_name.lower() in NILEARN_TASK_EXPECTED_VOXELS
-        ):
-            expected = NILEARN_TASK_EXPECTED_VOXELS[input_name.lower()]
-            for f in maps:
-                basename = os.path.basename(f)
-                if basename in expected:
-                    _, data = _load(f)
-                    count = int((data != 0).sum())
-                    checks.append(
-                        CheckResult(
-                            "fmri.determinism.%s_%s"
-                            % (
-                                input_name.lower(),
-                                basename.split("_threshold")[-1].split(".")[0],
-                            ),
-                            count == expected[basename],
-                            "expected %d suprathreshold voxels, got %d"
-                            % (expected[basename], count),
-                        )
-                    )
+    return checks
 
+
+#: The task fMRI phantom activates the motor cortex contralateral to the task
+#: hand (helpers/phantom/sequences.py): condition A (right hand) lights the
+#: left precentral cortex, B (left hand) the right one. A contrast is named
+#: ``<lead>_versus_<other>`` (FMRIGenSpec), so its activation sits on the side
+#: of its leading condition.
+TASK_SIDE_BY_CONDITION = {"task_a_name": "L", "task_b_name": "R"}
+
+#: Minimum share of a contrast's suprathreshold voxels that must lie in the
+#: expected hemisphere. Measured over the four fMRI passes (NILEARN, FSL, ANTs,
+#: alt settings) on Linux x86_64 and macOS arm64: 93-100%, centres 0.4-7.3 mm
+#: from the precentral centre of their side (gate FEATURE_TOLERANCE_MM). A map
+#: on the wrong side scores ~0% and lands tens of millimetres away.
+TASK_LATERALIZATION_MIN_SHARE = 0.9
+
+_CLUSTER_MAP = re.compile(r"^r-(fmri_\d+)_cluster_(.+)_threshold([\d.]+)\.nii(\.gz)?$")
+
+
+def _task_condition_sides(input_name: str) -> dict:
+    """``condition name -> 'L'/'R'`` for one task input, from its defaults.
+
+    The sweep keeps the default condition names, so the result filenames carry
+    them.
+    """
+    from swane.config.preference_list import WF_PREFERENCES
+
+    prefs = WF_PREFERENCES[DIL[input_name.upper()]]
+    return {
+        str(prefs[key].default): side for key, side in TASK_SIDE_BY_CONDITION.items()
+    }
+
+
+def _check_fmri_task_location(result, files: list, truth: GroundTruth) -> list:
+    """Each task contrast must activate the phantom's motor cortex on its side.
+
+    For every contrast, the lowest-threshold registered cluster map (the
+    largest suprathreshold set) is graded on two counts: the share of its
+    voxels in the expected hemisphere (judged on the result's own affine, as
+    ``_check_venous_ct_bilateral`` does), and the distance of its centre of
+    mass from the phantom's precentral cortex on that side. Both are
+    properties of the phantom, so they hold on every platform and fMRI engine,
+    unlike exact voxel counts, which drift with the floating-point arithmetic
+    of each build.
+    """
+    if not all(k in truth.centres for k in ("precentral_L", "precentral_R")):
+        return []
+    by_contrast = {}
+    for path in files:
+        match = _CLUSTER_MAP.match(os.path.basename(path))
+        if match is None or match.group(1) not in result.inputs:
+            continue
+        key = (match.group(1), match.group(2))
+        by_contrast.setdefault(key, []).append((float(match.group(3)), path))
+
+    checks = []
+    for (input_name, contrast), maps in sorted(by_contrast.items()):
+        sides = _task_condition_sides(input_name)
+        side = sides.get(contrast.split("_versus_")[0])
+        if side is None:
+            continue
+        name = "%s_%s" % (input_name, contrast)
+        positive = None
+        for _threshold, path in sorted(maps):
+            img, data = _load(path)
+            if (data > 0).any():
+                positive = data > 0
+                break
+        if positive is None:
+            checks.append(
+                CheckResult(
+                    "fmri.location.%s" % name,
+                    False,
+                    "no suprathreshold voxel at any threshold",
+                )
+            )
+            continue
+
+        world_x = _world_x_ras(positive.shape, img.affine)
+        on_side = positive & ((world_x < 0) if side == "L" else (world_x > 0))
+        share = float(on_side.sum()) / float(positive.sum())
+        checks.append(
+            CheckResult(
+                "fmri.lateralization.%s" % name,
+                share >= TASK_LATERALIZATION_MIN_SHARE,
+                "%.0f%% of %d voxel(s) in the %s hemisphere"
+                % (100 * share, int(positive.sum()), side),
+            )
+        )
+        centre = _centre_of_mass_ras(positive.astype(float), img.affine)
+        target = "precentral_%s" % side
+        distance = float(np.linalg.norm(centre - truth.centres[target]))
+        checks.append(
+            CheckResult(
+                "fmri.location.%s" % name,
+                distance <= FEATURE_TOLERANCE_MM,
+                "centre %.1f mm from the phantom %s" % (distance, target),
+            )
+        )
     return checks
 
 
@@ -1004,6 +1049,7 @@ def _check_plausibility(result, files: list, truth: GroundTruth) -> list:
     checks.extend(_check_feature(files, truth, "veins", "venous_sinus"))
     checks.extend(_check_venous_ct_bilateral(result, files, truth))
     checks.extend(_check_feature(files, truth, "seeg", "seeg"))
+    checks.extend(_check_fmri_task_location(result, files, truth))
     return checks
 
 
