@@ -139,8 +139,8 @@ notice provides that attribution.
 Brain Imaging Centre copyright and license as the "Images derived from ICBM
 2009c Nonlinear Symmetric Atlas" section above.
 
-All of these are permissive, attribution-style licenses with no acceptance flow
-of their own.
+All of these are permissive licenses (CC0, CC BY 4.0 and the MNI/McGill notice)
+with no acceptance flow of their own.
 
 ---
 ## External neuroimaging tools orchestrated by SWANe

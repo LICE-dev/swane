@@ -248,7 +248,7 @@ def build_tissue_model(
     files = anatomy_files or resolve_anatomy_files()
     ref_img = nib.load(files["cerebra"])
     cerebra = np.asarray(ref_img.dataobj).astype(np.int32)
-    gm, wm, csf = (
+    gm_prob, wm_prob, csf_prob = (
         np.asarray(nib.load(files[key]).dataobj, dtype=np.float32)
         for key in ("gm", "wm", "csf")
     )
@@ -256,12 +256,13 @@ def build_tissue_model(
     labels, precentral_base, affine = _cerebra_class_map(
         cerebra,
         _read_cerebra_names(files["tsv"]),
-        gm,
-        wm,
-        csf,
+        gm_prob,
+        wm_prob,
+        csf_prob,
         brain_mask,
         ref_img.affine,
     )
+    del gm_prob, wm_prob, csf_prob  # below, ``wm`` is only the bool WM mask
     zooms = tuple(float(z) for z in ref_img.header.get_zooms()[:3])
 
     brain = labels != TissueClass.AIR
@@ -400,22 +401,19 @@ def _crop_to_head(labels, affine, zooms, margin_mm, extra_masks):
 # margin - the waypoints themselves stay centred on the true course, since a
 # wide-but-centred bundle is what keeps automatic ROIs on target.
 _CST_WAYPOINTS_L = [
-    # (R, A, S) mm,                radius_mm,  lands in (CerebrA build)
-    ((-34.0, -12.0, 48.0), 11.0),  # M1 / precentral white matter -> CST corridor
-    ((-26.0, -14.0, 28.0), 10.0),  # corona radiata               -> CST corridor
-    ((-20.0, -14.0, 4.0), 8.0),  # posterior limb internal caps. -> CST corridor
-    (
-        (-12.0, -20.0, -14.0),
-        7.0,
-    ),  # cerebral peduncle             -> deep GM (ventral diencephalon)
-    (
-        (-8.0, -22.0, -30.0),
-        6.5,
-    ),  # basis pontis                  -> CST corridor (brainstem)
-    (
-        (-5.0, -30.0, -48.0),
-        5.5,
-    ),  # medullary pyramid             -> CST corridor (brainstem)
+    # (R, A, S) mm, radius_mm; above each: segment -> lands in (CerebrA build)
+    # M1 / precentral white matter -> CST corridor
+    ((-34.0, -12.0, 48.0), 11.0),
+    # corona radiata -> CST corridor
+    ((-26.0, -14.0, 28.0), 10.0),
+    # posterior limb internal capsule -> CST corridor
+    ((-20.0, -14.0, 4.0), 8.0),
+    # cerebral peduncle -> deep GM (ventral diencephalon)
+    ((-12.0, -20.0, -14.0), 7.0),
+    # basis pontis -> CST corridor (brainstem)
+    ((-8.0, -22.0, -30.0), 6.5),
+    # medullary pyramid -> CST corridor (brainstem)
+    ((-5.0, -30.0, -48.0), 5.5),
 ]
 
 
@@ -426,15 +424,17 @@ _CST_WAYPOINTS_L = [
 # x-mirror.  The waypoints stay lateral (|x| ~ 38-44 mm), sweep posteriorly in y
 # and rise then fall in z, tracing the arch.  Radii are generous, as for the CST.
 _AF_WAYPOINTS_L = [
-    # (R, A, S) mm,                 radius_mm,  segment
-    ((-38.0, 10.0, 26.0), 8.0),  # frontal terminus (IFG / precentral WM) -> cortical GM
-    ((-37.0, -2.0, 33.0), 7.5),  # ascending frontal limb -> WM
-    (
-        (-37.0, -18.0, 34.0),
-        7.0,
-    ),  # superior arch, above the Sylvian fissure -> CST corridor (crossing)
-    ((-40.0, -34.0, 26.0), 7.0),  # descending parieto-temporal limb -> WM
-    ((-43.0, -44.0, 10.0), 7.5),  # temporal terminus (posterior STG / MTG WM) -> WM
+    # (R, A, S) mm, radius_mm; above each: segment -> lands in (CerebrA build)
+    # frontal terminus (IFG / precentral WM) -> cortical GM
+    ((-38.0, 10.0, 26.0), 8.0),
+    # ascending frontal limb -> WM
+    ((-37.0, -2.0, 33.0), 7.5),
+    # superior arch, above the Sylvian fissure -> CST corridor (crossing)
+    ((-37.0, -18.0, 34.0), 7.0),
+    # descending parieto-temporal limb -> WM
+    ((-40.0, -34.0, 26.0), 7.0),
+    # temporal terminus (posterior STG / MTG WM) -> WM
+    ((-43.0, -44.0, 10.0), 7.5),
 ]
 
 # Optic radiation (OR): lateral geniculate nucleus (posterolateral thalamus) ->
@@ -443,12 +443,17 @@ _AF_WAYPOINTS_L = [
 # x-mirror.  The second waypoint is deliberately the most anterior and inferior
 # point (Meyer's loop) before the tract sweeps posteriorly to the occipital pole.
 _OR_WAYPOINTS_L = [
-    # (R, A, S) mm,                 radius_mm,  segment
-    ((-23.0, -26.0, 2.0), 6.0),  # LGN (posterolateral thalamus) -> deep GM (thalamus)
-    ((-30.0, -20.0, -8.0), 6.0),  # Meyer's loop (anterior temporal, inferior) -> WM
-    ((-34.0, -40.0, -6.0), 6.5),  # sagittal stratum along the temporal horn -> WM
-    ((-30.0, -66.0, 2.0), 6.5),  # posterior sweep toward the occipital lobe -> WM
-    ((-18.0, -84.0, 6.0), 6.0),  # calcarine / occipital terminus -> WM
+    # (R, A, S) mm, radius_mm; above each: segment -> lands in (CerebrA build)
+    # LGN (posterolateral thalamus) -> deep GM (thalamus)
+    ((-23.0, -26.0, 2.0), 6.0),
+    # Meyer's loop (anterior temporal, inferior) -> WM
+    ((-30.0, -20.0, -8.0), 6.0),
+    # sagittal stratum along the temporal horn -> WM
+    ((-34.0, -40.0, -6.0), 6.5),
+    # posterior sweep toward the occipital lobe -> WM
+    ((-30.0, -66.0, 2.0), 6.5),
+    # calcarine / occipital terminus -> WM
+    ((-18.0, -84.0, 6.0), 6.0),
 ]
 
 

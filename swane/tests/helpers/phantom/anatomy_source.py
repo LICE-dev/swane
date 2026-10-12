@@ -52,8 +52,8 @@ ANATOMY_FILES = {
 }
 
 #: md5 of each file as published by TemplateFlow (measured 2026-10-12).
-#: A mismatch means the upstream anatomy changed: re-validate the pre-release
-#: sweep on the new files, then update these pins.
+#: A mismatch that survives a re-fetch means the upstream anatomy changed:
+#: re-validate the pre-release sweep on the new files, then update these pins.
 ANATOMY_MD5 = {
     "cerebra": "7b69ad2478c6be7de12bb5b254b4cb7c",
     "tsv": "d0d4df1f90209fd0ebdf31355c89c780",
@@ -118,15 +118,44 @@ def anatomy_available() -> bool:
     return all(_present(p) for p in _cached_paths().values())
 
 
-def _verify(files: dict) -> None:
-    for key, path in files.items():
-        got = _md5(path)
-        if got != ANATOMY_MD5[key]:
-            raise RuntimeError(
-                "phantom anatomy file %s has md5 %s, expected %s: the upstream "
-                "TemplateFlow file changed. re-validate the pre-release sweep on "
-                "it, then update ANATOMY_MD5" % (path, got, ANATOMY_MD5[key])
-            )
+def _mismatch_error(key: str, path: str, got: str) -> RuntimeError:
+    return RuntimeError(
+        "phantom anatomy file %s has md5 %s, expected %s: a corrupted or partial "
+        "download, or an upstream TemplateFlow change. delete %s and retry; if it "
+        "persists, re-validate the pre-release sweep on the new file and re-pin "
+        "ANATOMY_MD5" % (path, got, ANATOMY_MD5[key], path)
+    )
+
+
+def _mismatched(files: dict) -> list:
+    return [k for k, p in files.items() if _md5(p) != ANATOMY_MD5[k]]
+
+
+def _fetch(key: str) -> str:
+    try:
+        return _tf_get(ANATOMY_FILES[key][1])
+    except Exception as exc:
+        raise RuntimeError(
+            "could not fetch %s from TemplateFlow (%s): %s"
+            % (ANATOMY_FILES[key][0], _templateflow_home(), exc)
+        ) from exc
+
+
+def _verify(files: dict, allow_download: bool) -> None:
+    bad = _mismatched(files)
+    if bad and allow_download:
+        # TemplateFlow streams into the final path, so an interrupted download
+        # (or one still running in another process) leaves a non-empty file
+        # that counts as present. Under the fetch lock, re-hash (a concurrent
+        # fetch may have finished meanwhile), then re-fetch what still differs.
+        with FileLock(str(_lock_path())).acquire(timeout=_LOCK_TIMEOUT_SECONDS):
+            for key in _mismatched({k: files[k] for k in bad}):
+                os.unlink(files[key])
+                files[key] = _fetch(key)
+        bad = _mismatched(files)
+    if bad:
+        key = bad[0]
+        raise _mismatch_error(key, files[key], _md5(files[key]))
 
 
 def resolve_anatomy_files(allow_download: bool = True) -> dict:
@@ -143,14 +172,8 @@ def resolve_anatomy_files(allow_download: bool = True) -> dict:
             for key in missing:
                 if _present(files[key]):
                     continue  # fetched by another process while we waited
-                try:
-                    files[key] = _tf_get(ANATOMY_FILES[key][1])
-                except Exception as exc:
-                    raise RuntimeError(
-                        "could not fetch %s from TemplateFlow (%s): %s"
-                        % (ANATOMY_FILES[key][0], _templateflow_home(), exc)
-                    ) from exc
-    _verify(files)
+                files[key] = _fetch(key)
+    _verify(files, allow_download)
     return files
 
 
