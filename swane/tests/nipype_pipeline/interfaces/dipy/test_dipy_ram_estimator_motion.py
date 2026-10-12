@@ -359,12 +359,12 @@ class TestTunedEquivalence:
 
     def test_bottom_rung_output_is_bit_for_bit_identical(self, tmp_path):
         from swane.tests.nipype_pipeline.interfaces.dipy.test_dipy_motion import (
-            ORACLE_ROOT,
             _make_synthetic_dwi,
         )
 
-        os.makedirs(ORACLE_ROOT, exist_ok=True)
-        in_file, bval, bvec, _ = _make_synthetic_dwi(ORACLE_ROOT, seed=7)
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        in_file, bval, bvec, _ = _make_synthetic_dwi(str(data_dir), seed=7)
         paths = (in_file, bval, bvec)
 
         # Matched BLAS environment on both sides: loosening this would let a
