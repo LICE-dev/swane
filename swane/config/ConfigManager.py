@@ -353,6 +353,32 @@ class ConfigManager(configparser.ConfigParser):
         if self.global_config:
             self[GlobalPrefCategoryList.MAIN]["slicer_version"] = slicer_version
 
+    def get_slicer_extensions_state(self) -> str:
+        """
+        Returns
+        -------
+        The JSON string recorded by the last full Slicer check (Slicer revision
+        and extension install folders), or "" if none was recorded
+        """
+        if self.global_config:
+            return self[GlobalPrefCategoryList.MAIN]["slicer_extensions_state"]
+        return ""
+
+    def set_slicer_extensions_state(self, state: str):
+        """
+        Set the JSON string describing where the Slicer extensions are installed
+
+        Parameters
+        ----------
+        state: str
+            JSON produced by SlicerCheckWorker.encode_extensions_state
+        """
+        if self.global_config:
+            # configparser interpolation: a literal "%" must be doubled
+            self[GlobalPrefCategoryList.MAIN]["slicer_extensions_state"] = (
+                state.replace("%", "%%")
+            )
+
     def get_accepted_license_version(self, tool_id: str) -> str:
         """
         Return the tool version whose license the user last accepted, or "".
