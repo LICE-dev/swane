@@ -30,7 +30,9 @@ FSL_ONLY = {"fsl", "xtract"}
 def _no_fsl_caps() -> Capabilities:
     caps = Capabilities(cores=4, ram_gb=14.0)
     needed = gate_capabilities()
-    needed.update({"dcm2niix", "fsaverage", "ram_budget", "slicer", "tractography"})
+    needed.update(
+        {"dcm2niix", "phantom_anatomy", "ram_budget", "slicer", "tractography"}
+    )
     needed.update(c for reqs in _PASS_REQUIREMENTS.values() for c in reqs)
     for name in needed - FSL_ONLY:
         caps.add(name, True, "assumed available in this test")

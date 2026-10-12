@@ -55,3 +55,28 @@ def test_tractography_false_when_neither():
     caps.add("dipy", False, "d")
     caps_mod._probe_tractography(caps)
     assert not caps.has("tractography")
+
+
+def test_phantom_anatomy_probe_cached(monkeypatch):
+    from swane.tests.helpers.phantom import anatomy_source
+
+    monkeypatch.setattr(anatomy_source, "anatomy_available", lambda: True)
+    caps = caps_mod.Capabilities(cores=1, ram_gb=1.0)
+    caps_mod._probe_phantom_anatomy(caps)
+    assert caps.has("phantom_anatomy")
+    assert "TemplateFlow cache" in caps.reason("phantom_anatomy")
+
+
+def test_phantom_anatomy_probe_will_download(monkeypatch):
+    from swane.tests.helpers.phantom import anatomy_source
+
+    monkeypatch.setattr(anatomy_source, "anatomy_available", lambda: False)
+    caps = caps_mod.Capabilities(cores=1, ram_gb=1.0)
+    caps_mod._probe_phantom_anatomy(caps)
+    assert caps.has("phantom_anatomy")
+    assert "downloaded from TemplateFlow" in caps.reason("phantom_anatomy")
+
+
+def test_phantom_anatomy_is_blocking():
+    assert "phantom_anatomy" in caps_mod.BLOCKING
+    assert "fsaverage" not in caps_mod.BLOCKING

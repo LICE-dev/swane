@@ -8,7 +8,7 @@ internally, so their cost is fixed; the target voxel size only speeds up the FSL
 path (BET/FLIRT/eddy/dtifit) and recon-all.  Hence the phantom defaults to a
 coarse "fast" geometry, tuned per modality.
 
-Nothing here reads fsaverage intensities: only the class codes from
+Nothing here reads template intensities: only the class codes from
 :mod:`swane.tests.helpers.phantom.tissue`.
 """
 

@@ -2,8 +2,8 @@
 
 Generating the whole exam costs a couple of minutes, so the result is cached on
 disk and reused across runs and across test sessions.  The cache key is a hash
-of the generator version, the profile and the fsaverage build, so retuning any
-parameter transparently invalidates it.
+of the generator version, the profile and the anatomy files' content, so
+retuning any parameter transparently invalidates it.
 
 Typical use from a test::
 
@@ -23,9 +23,9 @@ import numpy as np
 
 from swane.tests.helpers.phantom.catalog import build_catalog
 from swane.tests.helpers.phantom.dicom_writer import write_volume_series
-from swane.tests.helpers.phantom.fsaverage_source import (
-    fsaverage_fingerprint,
-    resolve_fsaverage_mri_dir,
+from swane.tests.helpers.phantom.anatomy_source import (
+    anatomy_fingerprint,
+    resolve_anatomy_files,
 )
 from swane.tests.helpers.phantom.sequences import (
     render_bold,
@@ -51,7 +51,9 @@ from swane.tests.helpers.phantom.tissue import TissueClass as TC, build_tissue_m
 #: v9: 15-direction DWI (lmax-4 floor) with anisotropy across the whole WM
 #: tensor field (CST + AF + OR + WM background), not only the CST corridor.
 #: This is a full cache invalidation: every install rebuilds on first run.
-GENERATOR_VERSION = "9"
+#: v10: anatomy from the CerebrA atlas + ICBM 2009c Nonlinear Symmetric tissue
+#: maps (TemplateFlow) instead of FreeSurfer's fsaverage.
+GENERATOR_VERSION = "10"
 
 #: Default cache root; ``SWANE_PHANTOM_DIR`` overrides it.
 DEFAULT_CACHE_ROOT = os.path.join(os.path.expanduser("~"), "test_swane", "phantom")
@@ -94,14 +96,14 @@ class PhantomProfile:
     ct_slice_mm: float = 2.0
 
 
-def _cache_key(profile: PhantomProfile, fsaverage_mri: str) -> str:
+def _cache_key(profile: PhantomProfile, anatomy_files: dict) -> str:
     payload = json.dumps(
         {
             "version": GENERATOR_VERSION,
             "profile": asdict(profile),
-            # Content, not location: FreeSurfer's fsaverage and the MNE mirror
-            # are byte-identical and must give the same cached phantom.
-            "fsaverage": fsaverage_fingerprint(fsaverage_mri),
+            # Content, not location: the same TemplateFlow files under another
+            # TEMPLATEFLOW_HOME must give the same cached phantom.
+            "anatomy": anatomy_fingerprint(anatomy_files),
         },
         sort_keys=True,
     )
@@ -111,7 +113,6 @@ def _cache_key(profile: PhantomProfile, fsaverage_mri: str) -> str:
 def get_phantom_subject(
     profile: PhantomProfile | None = None,
     cache_root: str | None = None,
-    freesurfer_home: str | None = None,
     force: bool = False,
 ) -> str:
     """Return the path of a ready phantom subject folder, building it if needed.
@@ -130,10 +131,10 @@ def get_phantom_subject(
         Rebuild even if a valid cache entry exists.
     """
     profile = profile or PhantomProfile()
-    fs_mri = resolve_fsaverage_mri_dir(freesurfer_home)
+    files = resolve_anatomy_files()
     root = cache_root or os.environ.get("SWANE_PHANTOM_DIR") or DEFAULT_CACHE_ROOT
 
-    key = _cache_key(profile, fs_mri)
+    key = _cache_key(profile, files)
     subject_dir = os.path.join(root, "phantom_%s" % key)
     manifest_path = os.path.join(subject_dir, "manifest.json")
 
@@ -151,7 +152,7 @@ def get_phantom_subject(
     shutil.rmtree(staging, ignore_errors=True)
     os.makedirs(staging, exist_ok=True)
 
-    manifest = build_phantom(staging, profile, freesurfer_home)
+    manifest = build_phantom(staging, profile, files)
 
     with open(os.path.join(staging, "manifest.json"), "w") as handle:
         json.dump(manifest, handle, indent=2)
@@ -162,7 +163,10 @@ def get_phantom_subject(
 
 
 def build_phantom(
-    subject_dir: str, profile: PhantomProfile, freesurfer_home: str, progress=None
+    subject_dir: str,
+    profile: PhantomProfile,
+    anatomy_files: dict | None = None,
+    progress=None,
 ) -> dict:
     """Render and write every series of the phantom exam into ``subject_dir``.
 
@@ -172,7 +176,7 @@ def build_phantom(
     """
     from pydicom.uid import generate_uid
 
-    tissue = build_tissue_model(freesurfer_home)
+    tissue = build_tissue_model(anatomy_files)
 
     # The pre-release ground truth (feature centroids) is a deterministic
     # function of this very tissue model, so derive it here -- the model is

@@ -436,26 +436,21 @@ def _probe_ram_budget(caps: Capabilities) -> None:
     )
 
 
-def _probe_freesurfer_subject(caps: Capabilities) -> None:
-    """The phantom anatomy is derived from fsaverage (FreeSurfer or MNE mirror)."""
-    from swane.tests.helpers.phantom.fsaverage_source import (
-        DEFAULT_CACHE_DIR,
-        freesurfer_fsaverage_mri_dir,
-        fsaverage_available,
+def _probe_phantom_anatomy(caps: Capabilities) -> None:
+    """The phantom anatomy is CerebrA + ICBM 2009c Sym, from TemplateFlow."""
+    from swane.tests.helpers.phantom.anatomy_source import (
+        _templateflow_home,
+        anatomy_available,
     )
 
-    local = freesurfer_fsaverage_mri_dir()
     caps.add(
-        "fsaverage",
+        "phantom_anatomy",
         True,
         (
-            "fsaverage from FreeSurfer (%s)" % local
-            if local
-            else (
-                "fsaverage from the MNE mirror cache (%s)" % DEFAULT_CACHE_DIR
-                if fsaverage_available()
-                else "fsaverage will be downloaded from the MNE mirror"
-            )
+            "CerebrA/ICBM 2009c Sym in the TemplateFlow cache (%s)"
+            % _templateflow_home()
+            if anatomy_available()
+            else "CerebrA/ICBM 2009c Sym will be downloaded from TemplateFlow"
         ),
     )
 
@@ -500,7 +495,7 @@ def probe(
     _probe_dcm2niix(dependency_manager, caps)
     _probe_freesurfer(dependency_manager, caps)
     _probe_reconall_expert(caps, test_run=test_run)
-    _probe_freesurfer_subject(caps)
+    _probe_phantom_anatomy(caps)
     _probe_ram_budget(caps)
     _probe_synth_ram(caps, test_run=test_run)
     _probe_antspyx(caps)
@@ -523,7 +518,7 @@ def probe(
 
 #: Capabilities without which nothing can run at all. FSL joins them only when
 #: the build makes it mandatory (swane.config.dependency_policy.FSL_MANDATORY).
-BLOCKING = ("dcm2niix", "fsaverage", "ram_budget")
+BLOCKING = ("dcm2niix", "phantom_anatomy", "ram_budget")
 
 
 def blocking_failures(caps: Capabilities) -> list:

@@ -99,9 +99,9 @@ jobs:
             ~/.cache/swane
             ~/.dipy
           key: heavy-${{ inputs.os }}-${{ hashFiles('setup.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
-      - name: Fetch fsaverage for the phantom tests
+      - name: Fetch the phantom anatomy (TemplateFlow)
         shell: bash
-        run: python -c "from swane.tests.helpers.phantom.fsaverage_source import resolve_fsaverage_mri_dir as r; print(r())"
+        run: python -c "from swane.tests.helpers.phantom.anatomy_source import resolve_anatomy_files as r; print(r())"
       - name: Heavy tests
         shell: bash
         run: >
@@ -158,7 +158,7 @@ jobs:
         with:
           path: |
             ${{ env.SWANE_PHANTOM_DIR }}
-            ~/.cache/swane/fsaverage
+            ~/.cache/templateflow/tpl-MNI152NLin2009cSym
           key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
           enableCrossOsArchive: true
       - name: Build phantom
@@ -246,7 +246,7 @@ jobs:
         with:
           path: |
             ${{ env.SWANE_PHANTOM_DIR }}
-            ~/.cache/swane/fsaverage
+            ~/.cache/templateflow/tpl-MNI152NLin2009cSym
           key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
           enableCrossOsArchive: true
           fail-on-cache-miss: true
