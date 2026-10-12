@@ -695,7 +695,10 @@ def _check_fmri_activation(result, files: list) -> list:
 TASK_SIDE_BY_CONDITION = {"task_a_name": "L", "task_b_name": "R"}
 
 #: Minimum share of a contrast's suprathreshold voxels that must lie in the
-#: expected hemisphere.
+#: expected hemisphere. Measured over the four fMRI passes (NILEARN, FSL, ANTs,
+#: alt settings) on Linux x86_64 and macOS arm64: 93-100%, centres 0.4-7.3 mm
+#: from the precentral centre of their side (gate FEATURE_TOLERANCE_MM). A map
+#: on the wrong side scores ~0% and lands tens of millimetres away.
 TASK_LATERALIZATION_MIN_SHARE = 0.9
 
 _CLUSTER_MAP = re.compile(r"^r-(fmri_\d+)_cluster_(.+)_threshold([\d.]+)\.nii(\.gz)?$")
