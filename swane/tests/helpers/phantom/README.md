@@ -5,10 +5,7 @@ covers **every** `DataInputList` input of SWANe, so workflow *execution* can be
 driven end to end (dcm2niix → FSL/FreeSurfer/Slicer) without any real subject
 data.
 
-Nothing is committed to the repository: the anatomy is derived at run time from
-`$FREESURFER_HOME/subjects/fsaverage` (shipped with every FreeSurfer install)
-or, when FreeSurfer is absent, from the md5-pinned fsaverage archive that
-MNE-Python mirrors (downloaded once into `~/.cache/swane/fsaverage`), and the generated DICOM is cached on disk between runs.
+Nothing is committed to the repository: the anatomy is derived at run time from the CerebrA atlas and the ICBM 2009c Nonlinear Symmetric GM/WM/CSF maps, fetched once from TemplateFlow (`tpl-MNI152NLin2009cSym`, md5-pinned, ~16 MB into `~/.cache/templateflow`), and the generated DICOM is cached on disk between runs.
 
 ## Quick start
 
@@ -25,29 +22,23 @@ Convert every series to NIfTI (same dcm2niix SWANe uses) for visual inspection:
 python3 -m swane.tests.helpers.phantom.to_nifti <subject_dir> <out_dir>
 ```
 
-The anatomy comes from `fsaverage`: `$FREESURFER_HOME/subjects/fsaverage` if
-present, otherwise the MNE mirror download (network needed on first use).
-
-The anatomy files are FreeSurfer data, distributed under the FreeSurfer Software
-License (https://github.com/freesurfer/freesurfer/blob/dev/LICENSE.txt); the
-MNE mirror repository's own license does not change that. SWANe only fetches
-`aseg.mgz` and `aparc+aseg.mgz` to build a local phantom: they are never
-committed, packaged or uploaded.
+The anatomy comes from TemplateFlow (network needed on first use; see `anatomy_source.py`). CerebrA is CC0 (labels derived from Mindboggle-101, CC BY 4.0) and the ICBM 2009c files carry the McConnell Brain Imaging Centre notice: see `NOTICE.md`. They are never committed, packaged or uploaded.
 
 
 ## How it is built
 
 | module            | stage                                                        |
 |-------------------|--------------------------------------------------------------|
-| `tissue.py`       | `fsaverage` segmentations → a tissue **class map** (real anatomical scale, cropped to the head) |
+| `anatomy_source.py` | fetch and md5-verify the six TemplateFlow files |
+| `tissue.py`       | CerebrA labels + ICBM 2009c probseg → a tissue **class map** (real anatomical scale, cropped to the head) |
 | `sequences.py`    | class map → per-modality intensity volumes (T1/FLAIR/T2/CT/PET/ASL/PC-MRA/DWI/BOLD) |
 | `dicom_writer.py` | intensity volumes → DICOM series dcm2niix converts correctly  |
 | `catalog.py`      | one entry per input: LUTs, geometry, timing, misalignment    |
 | `dataset.py`      | orchestration, `PhantomProfile`, on-disk cache               |
 | `to_nifti.py`     | dcm2niix conversion of a whole subject (dev aid / smoke check)|
 
-Only the tissue **class codes** ever reach the sequence layer — `fsaverage`
-intensities are never copied — so the phantom is fully under our control and
+Only the tissue **class codes** ever reach the sequence layer — template
+intensities are never read — so the phantom is fully under our control and
 carries no external, licence-restricted content.
 
 ## What is deliberately baked in
@@ -84,8 +75,9 @@ carries no external, licence-restricted content.
 
 Results live under `~/test_swane/phantom/phantom_<key>/` (override with
 `$SWANE_PHANTOM_DIR`). The `<key>` hashes the generator version, the
-`PhantomProfile`, and the `fsaverage` build, so retuning any parameter
+`PhantomProfile`, and the anatomy files' content, so retuning any parameter
 transparently invalidates the cache. Pass `force=True` to rebuild.
+Caches built before generator version 10 (fsaverage anatomy) are orphaned and can be deleted.
 
 **Always bump `GENERATOR_VERSION`** in `dataset.py` when the generated data
 changes, even for changes that don't touch `PhantomProfile`. The prerelease

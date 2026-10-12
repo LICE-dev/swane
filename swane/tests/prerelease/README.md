@@ -140,8 +140,7 @@ automated checks cover is graded from measured margins, not eyeballed.
 ### Requirements
 
 The blocking ones — without these nothing runs — are dcm2niix,
-`fsaverage` (the phantom anatomy; from FreeSurfer or, if absent, downloaded
-from the MNE mirror) and a RAM budget
+the phantom anatomy (CerebrA + ICBM 2009c Sym from TemplateFlow; downloaded once, capability `phantom_anatomy`) and a RAM budget
 (`--ram`) the machine physically has. FSL is blocking only in a build where
 `swane.config.dependency_policy.FSL_MANDATORY` is True. Everything else
 degrades gracefully: a missing capability drops the axes that need it, with the
@@ -202,17 +201,9 @@ without XTRACT to check that no running pass pins such a value (it would count
 as coverage without being exercised) and that no two running passes are the
 same execution once those values are ignored.
 
-The phantom is built from `fsaverage` even when FreeSurfer passes are not
-requested: without FreeSurfer it is downloaded once (network needed).
-Phantom caches are now keyed by the fsaverage content, so old
-`phantom_<key>` folders under `~/test_swane/phantom` from earlier versions are
-orphaned and can be deleted.
+The phantom is built from the CerebrA/ICBM 2009c Sym TemplateFlow files: they are downloaded once (network needed). Phantom caches are keyed by the anatomy content and the generator version, so `phantom_<key>` folders under `~/test_swane/phantom` from earlier versions (fsaverage anatomy) are orphaned and can be deleted.
 
-The anatomy files are FreeSurfer data, distributed under the FreeSurfer Software
-License (https://github.com/freesurfer/freesurfer/blob/dev/LICENSE.txt); the
-MNE mirror repository's own license does not change that. SWANe only fetches
-`aseg.mgz` and `aparc+aseg.mgz` to build a local phantom: they are never
-committed, packaged or uploaded.
+Licenses of the anatomy files: see `NOTICE.md`.
 
 On GitHub Actions (`.github/workflows/windows-tests.yml`) the Windows sweep is
 FSL-free, while the macOS sweep installs a minimal FSL from FSL's own conda

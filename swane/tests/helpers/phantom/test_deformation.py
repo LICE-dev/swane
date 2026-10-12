@@ -19,10 +19,10 @@ from swane.tests.helpers.phantom.deformation import (
 from swane.tests.helpers.phantom.tissue import TissueClass, _wm_background_field
 
 
-def _has_fsaverage() -> bool:
-    from swane.tests.helpers.phantom.fsaverage_source import fsaverage_available
+def _has_anatomy() -> bool:
+    from swane.tests.helpers.phantom.anatomy_source import anatomy_available
 
-    return fsaverage_available()
+    return anatomy_available()
 
 
 def _adjacent_mean_cosine(field, mask):
@@ -184,8 +184,8 @@ def test_deform_preserves_field_over_whole_support_not_just_cst():
 
 @pytest.mark.heavy
 @pytest.mark.skipif(
-    not _has_fsaverage(),
-    reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
+    not _has_anatomy(),
+    reason="CerebrA/ICBM 2009c Sym not in the TemplateFlow cache",
 )
 def test_built_model_field_spans_whole_wm_and_is_coherent():
     """A freshly built phantom carries a direction across (nearly) all of WM.

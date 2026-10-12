@@ -93,9 +93,7 @@ class GroundTruth:
     centres: dict = field(default_factory=dict)  # feature -> (x, y, z) in RAS mm
 
     @classmethod
-    def load(
-        cls, subject_dir: str = None, freesurfer_home: str = None
-    ) -> "GroundTruth":
+    def load(cls, subject_dir: str = None) -> "GroundTruth":
         """Load the centres cached beside the phantom, else recompute them.
 
         The ground truth is a deterministic property of the phantom, so it is
@@ -111,12 +109,12 @@ class GroundTruth:
             # rather than silently skip the checks that need it.
             if centres is not None and all(k in centres for k in REQUIRED_CENTRES):
                 return cls(centres=centres)
-        return cls.build(freesurfer_home)
+        return cls.build()
 
     @classmethod
-    def build(cls, freesurfer_home: str = None) -> "GroundTruth":
+    def build(cls) -> "GroundTruth":
         """Rebuild the phantom tissue model and derive the feature centres."""
-        return cls(centres=build_centres(freesurfer_home))
+        return cls(centres=build_centres())
 
 
 def _load(path: str):
@@ -393,8 +391,10 @@ def check_cpu_gpu_equivalence(cpu_result, gpu_result) -> list:
 
 
 #: Bounds (mm) on the mean magnitude of a non-linear warp's displacement field.
-#: FNIRT ref->MNI on the deformed phantom measures ~8 mm mean, which is the
-#: fsaverage->MNI152 baseline plus our injected deformation. The window is
+#: FNIRT ref->MNI on the deformed phantom measures ~9 mm mean (8.9-9.0 mm over
+#: the inverse fields of the CerebrA phantom sweep): the difference between the
+#: MNI152NLin2009cSym anatomy the phantom is built from and the registration
+#: target, plus our injected deformation. The window is
 #: deliberately wide: it only has to separate a real warp from a degenerate one
 #: (~0 mm, a silently-failed FNIRT) or a diverged one (tens of mm).
 NONLINEAR_WARP_MIN_MM = 0.5
@@ -425,8 +425,9 @@ def _check_nonlinear_registration(result) -> list:
 
     What this deliberately does *not* do is compare the recovered warp against
     the known deformation field voxel-by-voxel: SWANe registers to MNI, not to
-    the undeformed phantom, so the recovered warp also carries the (unknown)
-    fsaverage-to-MNI152 baseline, which cannot be separated out here. It reads
+    the undeformed phantom, so the recovered warp also carries the
+    template-to-template baseline (MNI152NLin2009cSym to the registration
+    target), which cannot be separated out here. It reads
     only SWANe's own outputs and derives nothing from the FSL atlases.
     """
     forward = glob.glob(
@@ -696,8 +697,9 @@ TASK_SIDE_BY_CONDITION = {"task_a_name": "L", "task_b_name": "R"}
 
 #: Minimum share of a contrast's suprathreshold voxels that must lie in the
 #: expected hemisphere. Measured over the four fMRI passes (NILEARN, FSL, ANTs,
-#: alt settings) on Linux x86_64 and macOS arm64: 93-100%, centres 0.4-7.3 mm
-#: from the precentral centre of their side (gate FEATURE_TOLERANCE_MM). A map
+#: alt settings) on the CerebrA phantom (generator v10): 98-100% with centres
+#: 0.5-4.3 mm from the precentral centre of their side on Linux x86_64, 95-100%
+#: with centres 0.7-8.0 mm on macOS arm64 (gate FEATURE_TOLERANCE_MM). A map
 #: on the wrong side scores ~0% and lands tens of millimetres away.
 TASK_LATERALIZATION_MIN_SHARE = 0.9
 
@@ -789,10 +791,11 @@ def _check_fmri_task_location(result, files: list, truth: GroundTruth) -> list:
 
 #: Final ICA component count on the resting-state phantom (NILEARN engine).
 #: Obtained from complete passes of ``python3 -m swane.tests.prerelease --only
-#: fmri_task_and_rest`` (AROMA on, registration FSL with BET), run twice from
-#: a clean pass directory with ica_aroma_py 0.1.4 (``ica_fastica_icasso``
-#: ``ica_IC.nii.gz`` has one volume in both runs; the final z-threshold maps
-#: were bit-identical between the runs). The AROMA classification flags exactly
+#: fmri_task_and_rest`` (AROMA on, registration FSL with BET) on the CerebrA
+#: phantom (generator v10), run twice from a clean pass directory on 2026-10-12
+#: with ica_aroma_py 0.1.4 (``ica_fastica_icasso`` ``ica_IC.nii.gz`` has one
+#: volume in both runs; the final z-threshold maps were bit-identical between
+#: the runs). The AROMA classification flags exactly
 #: one motion IC on the phantom, the case that ica_aroma_py 0.1.3 rejected. The
 #: ANTs registration pass (``fmri_task_and_rest_ants``) also completes with
 #: all checks green against this value.

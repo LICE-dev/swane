@@ -29,8 +29,8 @@ import numpy as np
 
 #: Sidecar file written into the phantom subject directory, next to the DICOM
 #: and ``manifest.json``. Keyed implicitly by the phantom's cache directory,
-#: which already hashes ``GENERATOR_VERSION`` + profile + FreeSurfer stamp, so a
-#: stale sidecar can never outlive the phantom it describes.
+#: which already hashes ``GENERATOR_VERSION`` + profile + anatomy fingerprint, so
+#: a stale sidecar can never outlive the phantom it describes.
 GROUND_TRUTH_FILENAME = "ground_truth.json"
 
 
@@ -109,7 +109,7 @@ def compute_centres(model) -> dict:
     return centres
 
 
-def build_centres(freesurfer_home: str = None) -> dict:
+def build_centres() -> dict:
     """Build the phantom tissue model from scratch and return its feature centres.
 
     The fallback path for a phantom cache that predates the on-disk sidecar:
@@ -118,7 +118,7 @@ def build_centres(freesurfer_home: str = None) -> dict:
     """
     from swane.tests.helpers.phantom.tissue import build_tissue_model
 
-    return compute_centres(build_tissue_model(freesurfer_home))
+    return compute_centres(build_tissue_model())
 
 
 def save_ground_truth(subject_dir: str, centres: dict) -> str:

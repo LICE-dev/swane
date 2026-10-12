@@ -379,7 +379,7 @@ def build_catalog(profile) -> list:
         )
 
     # Coronal T2 is prescribed over the temporal lobes only, like a real
-    # epilepsy protocol: the fsaverage temporal cortex spans A-P -81..+21 mm,
+    # epilepsy protocol: the CerebrA temporal cortex spans A-P -80..+26 mm,
     # so a -90..+32 mm slab covers it with a margin while leaving the frontal
     # and occipital poles out (~2/3 of the brain's A-P extent).
     entries.append(

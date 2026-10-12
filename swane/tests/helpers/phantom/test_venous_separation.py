@@ -14,7 +14,8 @@ venous LUTs is caught in the light suite instead of only in a full sweep:
 
 Building the tissue model and rendering the volumes takes tens of seconds, so
 this is a ``heavy`` test (opt in with ``--run-heavy``); it also needs the
-``fsaverage`` subject, so it skips cleanly where FreeSurfer is not installed.
+CerebrA/ICBM 2009c Sym files, so it skips cleanly where they are not in the
+TemplateFlow cache.
 """
 
 from dataclasses import replace
@@ -30,17 +31,17 @@ from swane.tests.helpers.phantom.dataset import PhantomProfile
 from swane.tests.helpers.phantom.sequences import render_structural
 
 
-def _has_fsaverage() -> bool:
-    from swane.tests.helpers.phantom.fsaverage_source import fsaverage_available
+def _has_anatomy() -> bool:
+    from swane.tests.helpers.phantom.anatomy_source import anatomy_available
 
-    return fsaverage_available()
+    return anatomy_available()
 
 
 pytestmark = [
     pytest.mark.heavy,
     pytest.mark.skipif(
-        not _has_fsaverage(),
-        reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
+        not _has_anatomy(),
+        reason="CerebrA/ICBM 2009c Sym not in the TemplateFlow cache",
     ),
 ]
 
