@@ -79,8 +79,12 @@ if _swane_os.path.isdir(_swane_workers_dir):
         # If it is a file, search in its directory
         if not os.path.exists(current_slicer_path):
             current_slicer_path = ""
-        elif os.path.isfile(current_slicer_path):
+        resolved_path = (
+            os.path.realpath(current_slicer_path) if current_slicer_path else ""
+        )
+        if os.path.isfile(current_slicer_path):
             current_slicer_path = os.path.dirname(current_slicer_path)
+            resolved_path = os.path.dirname(resolved_path)
 
         if platform.system() == "Windows":
             return (
@@ -117,9 +121,21 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 split.remove("")
             return split
 
-        # If the user specified a path, only search there
+        # If the user specified a path, only search there: the given folder
+        # first, then its symlink-resolved twin (e.g. a Slicer launcher
+        # linked into a bin folder) and, on macOS, the enclosing .app bundle
+        # (the recorded executable is Slicer.app/Contents/MacOS/Slicer, while
+        # PythonSlicer sits in the sibling Contents/bin).
         if current_slicer_path != "":
-            return run_find(current_slicer_path, xdev=False, timeout=15), rel_path
+            roots = [current_slicer_path, resolved_path]
+            if is_macos:
+                roots.append(SlicerCheckWorker._macos_bundle_root(resolved_path))
+            result = []
+            for root in dict.fromkeys(roots):
+                result = run_find(root, xdev=False, timeout=15)
+                if result:
+                    break
+            return result, rel_path
 
         # Staged search when there is no initial path:
         # 1) $HOME (fast, covers most common user installations)
@@ -138,6 +154,18 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 return result, rel_path
 
         return [], rel_path
+
+    @staticmethod
+    def _macos_bundle_root(path: str) -> str:
+        """The innermost ``*.app`` folder containing ``path``, else ``path``."""
+        candidate = os.path.abspath(path)
+        while True:
+            if candidate.endswith(".app"):
+                return candidate
+            parent = os.path.dirname(candidate)
+            if parent == candidate:
+                return path
+            candidate = parent
 
     @staticmethod
     def _find_slicer_python_windows(current_slicer_path: str) -> list[str]:
