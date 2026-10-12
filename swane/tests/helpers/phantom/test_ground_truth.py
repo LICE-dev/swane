@@ -90,6 +90,25 @@ def test_compute_centres_returns_expected_features():
     assert centres["precentral_R"][0] > 0
 
 
+def test_compute_centres_returns_rs_posterior_network():
+    """The posterior resting-state network centre is the centre of the cortical
+    grey matter inside the RAS box the BOLD generator draws it from."""
+    from swane.tests.helpers.phantom.sequences import RS_POSTERIOR_BOX
+
+    model = _synthetic_model()
+    # 10 mm voxels centring the cortical GM cube (voxels 4-5) in the posterior
+    # box; one more GM voxel 45 mm away on every axis lies outside it.
+    r, a, s = RS_POSTERIOR_BOX["r"], RS_POSTERIOR_BOX["a"], RS_POSTERIOR_BOX["s"]
+    target = np.array([np.mean(r), np.mean(a), np.mean(s)])
+    model.affine[:3, :3] = np.eye(3) * 10.0
+    model.affine[:3, 3] = target - 45.0
+    model.labels[0, 0, 0] = TissueClass.CORTICAL_GM
+
+    centres = compute_centres(model)
+
+    assert np.allclose(centres["rs_posterior"], target)
+
+
 def test_compute_centres_returns_af_or_corridors():
     """AF and OR centroids exist per hemisphere and sit where anatomy demands.
 

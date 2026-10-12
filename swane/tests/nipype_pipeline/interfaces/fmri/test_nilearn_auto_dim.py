@@ -1,7 +1,11 @@
 import os
 import numpy as np
 import nibabel as nib
-from swane.nipype_pipeline.interfaces.fmri.NilearnAutoDim import NilearnAutoDim
+import pytest
+from swane.nipype_pipeline.interfaces.fmri.NilearnAutoDim import (
+    NilearnAutoDim,
+    estimate_dim_mdl,
+)
 
 
 def test_nilearn_auto_dim(tmp_path):
@@ -127,3 +131,22 @@ def test_n_removed_at_or_above_t_warns_and_returns_one(tmp_path, caplog):
 
     assert result.outputs.n_components == 1
     assert "28" in caplog.text and str(T) in caplog.text
+
+
+@pytest.mark.parametrize("k", [0, 1, 2, 3, 5, 8])
+def test_mdl_recovers_exact_planted_rank(k):
+    """k strong rank-1 sources in white noise give exactly k components.
+
+    The MDL tail of a k-signal hypothesis is the eigenvalues k+1..p
+    (1-based), i.e. ``ev[k:rank]`` (Wax & Kailath 1985); a tail starting one
+    eigenvalue later returns k - 1 for every k.
+    """
+    rng = np.random.default_rng(0)
+    n_voxels, T = 20000, 120
+    Y = rng.standard_normal((n_voxels, T))
+    for _ in range(k):
+        spatial = np.zeros(n_voxels)
+        spatial[rng.choice(n_voxels, 1500, replace=False)] = 1.0
+        Y += np.outer(spatial, rng.standard_normal(T))
+
+    assert estimate_dim_mdl(Y, 1.0) == k

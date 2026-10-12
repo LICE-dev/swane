@@ -25,6 +25,7 @@ so a result never has to be resampled onto the ground truth to be judged.
 from __future__ import annotations
 
 import glob
+import itertools
 import os
 import re
 from dataclasses import dataclass, field
@@ -789,22 +790,102 @@ def _check_fmri_task_location(result, files: list, truth: GroundTruth) -> list:
     return checks
 
 
-#: Final ICA component count on the resting-state phantom (NILEARN engine).
-#: Obtained from complete passes of ``python3 -m swane.tests.prerelease --only
-#: fmri_task_and_rest`` (AROMA on, registration FSL with BET) on the CerebrA
-#: phantom (generator v10), run twice from a clean pass directory on 2026-10-12
-#: with ica_aroma_py 0.1.4 (``ica_fastica_icasso`` ``ica_IC.nii.gz`` has one
-#: volume in both runs; the final z-threshold maps were bit-identical between
-#: the runs). The AROMA classification flags exactly
-#: one motion IC on the phantom, the case that ica_aroma_py 0.1.3 rejected. The
-#: ANTs registration pass (``fmri_task_and_rest_ants``) also completes with
-#: all checks green against this value.
-NILEARN_RS_EXPECTED_COMPONENTS = 1
+#: Ground-truth centres of the two resting-state phantom networks
+#: (helpers/phantom/sequences.py): the bilateral motor cortex and the
+#: posterior-medial cortex.
+RS_NETWORK_CENTRES = ("precentral", "rs_posterior")
+
+
+def _check_fmri_resting_networks(result, files: list, truth: GroundTruth) -> list:
+    """Each resting-state phantom network must have its own component.
+
+    The centre of mass of every thresholded component map (all suprathreshold
+    voxels, either sign: the IC sign is arbitrary) is compared with the
+    centres of the networks the phantom drew. Networks and components are
+    paired one to one, so a single component fusing both networks -- whose
+    centre falls between them -- or two components on the same network
+    cannot cover both. Only the estimated dimensionality is graded: a fixed
+    ``ic_dim`` deliberately over-splits the two-network phantom.
+    """
+    if str(DIL.FMRI_RS) not in [str(i) for i in result.inputs]:
+        return []
+    if int(result.values.get("ic_dim", "0") or 0) > 0:
+        return []
+    networks = [n for n in RS_NETWORK_CENTRES if n in truth.centres]
+    if not networks:
+        return []
+
+    maps = sorted(
+        f
+        for f in files
+        if re.match(r"r-thresh_zstat\d+\.nii\.gz$", os.path.basename(f))
+    )
+    centres = []
+    for path in maps:
+        try:
+            img, data = _load(path)
+        except Exception:  # noqa: BLE001 - an unreadable map has no centre
+            centres.append(None)
+            continue
+        suprathreshold = np.isfinite(data) & (data != 0)
+        centres.append(_centre_of_mass_ras(suprathreshold.astype(float), img.affine))
+
+    distance = np.full((len(networks), len(centres)), np.inf)
+    for n, network in enumerate(networks):
+        for c, centre in enumerate(centres):
+            if centre is not None:
+                distance[n, c] = np.linalg.norm(centre - truth.centres[network])
+
+    # One-to-one pairing: most networks within tolerance, then closest overall.
+    # A missing component is a column of inf.
+    columns = list(range(len(centres))) + [None] * len(networks)
+    best, best_key = None, None
+    for pairing in itertools.permutations(columns, len(networks)):
+        dists = [
+            distance[n, c] if c is not None else np.inf for n, c in enumerate(pairing)
+        ]
+        within = sum(d <= FEATURE_TOLERANCE_MM for d in dists)
+        key = (-within, sum(min(d, 1e6) for d in dists))
+        if best_key is None or key < best_key:
+            best, best_key = pairing, key
+
+    checks = []
+    for network, component in zip(networks, best):
+        d = (
+            distance[networks.index(network), component]
+            if component is not None
+            else np.inf
+        )
+        checks.append(
+            CheckResult(
+                "fmri.rs.network.%s" % network,
+                d <= FEATURE_TOLERANCE_MM,
+                (
+                    "component %d centre %.1f mm from the phantom %s"
+                    % (component + 1, d, network)
+                    if np.isfinite(d)
+                    else "no component left for the phantom %s (%d map(s))"
+                    % (network, len(maps))
+                ),
+            )
+        )
+    return checks
+
+
+#: ICA component counts on the resting-state phantom (NILEARN engine, model
+#: order estimated). The phantom draws two networks and one nuisance component
+#: (``RestingDesign(n_networks=2, n_noise=1)`` in helpers/phantom/catalog.py):
+#: the AROMA-pass decomposition must find all three sources, and once AROMA has
+#: removed the nuisance the final decomposition must find the two networks
+#: (each one in its own component, see ``_check_fmri_resting_networks``).
+NILEARN_RS_EXPECTED_PRE_AROMA_COMPONENTS = 3
+NILEARN_RS_EXPECTED_COMPONENTS = 2
 
 
 def _check_nilearn_resting(result, files: list) -> list:
     """NILEARN resting-state checks: final ICA source and component count,
-    Monte Carlo cluster-extent threshold k, registered IC maps.
+    AROMA-pass component count (AROMA on), Monte Carlo cluster-extent
+    threshold k, registered IC maps.
 
     The Nipype work directory holds two ``ica_IC.nii.gz`` files (the AROMA-pass
     CanICA and the final FastICA/ICASSO): only the ``ica_fastica_icasso`` node
@@ -861,6 +942,31 @@ def _check_nilearn_resting(result, files: list) -> list:
                 n_components == expected,
                 "expected %d resting state components, got %s"
                 % (expected, n_components),
+            )
+        )
+
+    if str(result.values.get("aroma", "true")).lower() != "false":
+        # The AROMA pass always estimates its model order (ic_dim applies to
+        # the final decomposition only).
+        pre_paths = _work_files(os.path.join("preproc_ica_canica", "ica_IC.nii.gz"))
+        n_pre = None
+        if len(pre_paths) == 1:
+            try:
+                _, pre_data = _load(pre_paths[0])
+                n_pre = pre_data.shape[3] if pre_data.ndim == 4 else 1
+            except Exception:  # noqa: BLE001 - reported as a failed check
+                n_pre = None
+        checks.append(
+            CheckResult(
+                "fmri.determinism.rs_components_pre_aroma",
+                n_pre == NILEARN_RS_EXPECTED_PRE_AROMA_COMPONENTS,
+                (
+                    "expected %d AROMA-pass components, got %s"
+                    % (NILEARN_RS_EXPECTED_PRE_AROMA_COMPONENTS, n_pre)
+                    if len(pre_paths) == 1
+                    else "%d ica_IC.nii.gz under preproc_ica_canica (expected 1)"
+                    % len(pre_paths)
+                ),
             )
         )
 
@@ -1053,6 +1159,7 @@ def _check_plausibility(result, files: list, truth: GroundTruth) -> list:
     checks.extend(_check_venous_ct_bilateral(result, files, truth))
     checks.extend(_check_feature(files, truth, "seeg", "seeg"))
     checks.extend(_check_fmri_task_location(result, files, truth))
+    checks.extend(_check_fmri_resting_networks(result, files, truth))
     return checks
 
 
