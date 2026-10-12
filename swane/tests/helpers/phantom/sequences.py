@@ -594,6 +594,12 @@ def _task_components(design, tissue, spec, base, affine, psf, pose, n_vols, tr_s
     return components
 
 
+#: RAS millimetre box of the posterior-medial resting-state network: the
+#: cortical grey matter inside it carries the network (also the ground-truth
+#: ``rs_posterior`` centre, see ground_truth.py).
+RS_POSTERIOR_BOX = {"r": (-30, 30), "a": (-95, -45), "s": (-5, 45)}
+
+
 def _resting_components(
     design, tissue, spec, base, affine, psf, pose, n_vols, tr_s, frac, rng
 ):
@@ -602,6 +608,18 @@ def _resting_components(
 
     brain = base > (0.05 * float(base.max() or 1.0))
     components = []
+
+    # Grey-matter partial-volume fraction on the BOLD grid. The smoothed
+    # network maps are weighted by it, so the networks stay grey-matter
+    # signal and do not leak into the WM/CSF ROIs the resting-state nuisance
+    # regression samples (which would remove the networks themselves).
+    gm_native = np.isin(
+        tissue.labels, [int(TC.CORTICAL_GM), int(TC.PRECENTRAL_GM)]
+    ).astype(np.float32)
+    gm, _ = _resample(
+        gm_native, tissue.affine, spec.voxel_sizes(), psf, tissue.zooms, pose
+    )
+    gm = np.clip(gm, 0.0, 1.0)
 
     def low_freq_tc():
         freq = rng.uniform(0.01, 0.08)  # classic RSN band
@@ -614,7 +632,7 @@ def _resting_components(
     motor = _precentral_side_mask(
         tissue, spec, affine, psf, pose, "L"
     ) + _precentral_side_mask(tissue, spec, affine, psf, pose, "R")
-    motor = ndi.gaussian_filter(motor, 1.5)
+    motor = ndi.gaussian_filter(motor, 1.5) * gm
     if motor.max() > 0:
         components.append((frac * motor / motor.max(), low_freq_tc()))
 
@@ -627,12 +645,10 @@ def _resting_components(
             affine,
             psf,
             pose,
-            r=(-30, 30),
-            a=(-95, -45),
-            s=(-5, 45),
+            **RS_POSTERIOR_BOX,
             classes=(TC.CORTICAL_GM, TC.PRECENTRAL_GM),
         )
-        post = ndi.gaussian_filter(post, 1.5)
+        post = ndi.gaussian_filter(post, 1.5) * gm
         if post.max() > 0:
             components.append((frac * post / post.max(), low_freq_tc()))
 
