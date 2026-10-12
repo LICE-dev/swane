@@ -20,6 +20,7 @@ from swane.tests.prerelease.plan import (
     build_plan,
     coverage,
     gate_capabilities,
+    passes_needing,
     plan_holes,
 )
 
@@ -152,6 +153,23 @@ def test_missing_capability_downgrades_instead_of_failing():
         "losing one capability must not take unrelated axes down with it: %s"
         % plan_holes(cover)
     )
+
+
+def test_passes_needing_slicer_are_exactly_those_slicer_changes(all_capable):
+    """CI installs Slicer only on the runners of ``passes_needing("slicer")``:
+    every pass that would run differently without Slicer must be listed, or
+    its runner would lack Slicer and the pass would fail or silently change."""
+    with_slicer = {p.name: p for p in build_plan(all_capable, with_reconall=True)}
+    all_capable.add("slicer", False, "removed in this test")
+    without = {p.name: p for p in build_plan(all_capable, with_reconall=True)}
+    affected = [
+        spec.name
+        for spec in PASSES
+        if (with_slicer[spec.name].skipped, with_slicer[spec.name].values)
+        != (without[spec.name].skipped, without[spec.name].values)
+    ]
+    assert affected, "expected passes that need Slicer"
+    assert passes_needing("slicer") == affected
 
 
 def test_registration_engine_axis_has_the_three_backends():

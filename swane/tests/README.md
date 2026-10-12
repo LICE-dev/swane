@@ -76,7 +76,7 @@ is missing:
 | `requires_dcm2niix`  | `dcm2niix` on PATH                           |
 | `requires_fsl`       | `bet` on PATH or `FSLDIR` set                |
 | `requires_freesurfer`| `recon-all` on PATH or `FREESURFER_HOME` set |
-| `requires_slicer`    | `Slicer` on PATH or `SWANE_SLICER_PATH` set  |
+| `requires_slicer`    | `Slicer` on PATH, or an existing `SWANE_SLICER_PATH` or `~/.SWANe` Slicer path |
 | `requires_display`   | a real display is available                  |
 | `heavy`              | `--run-heavy` is passed                      |
 
