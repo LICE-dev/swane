@@ -284,10 +284,20 @@ class DependencyManager:
         if config.get_slicer_validator():
             return True
 
-        # If Slicer is valid, we need to check if the startup patch is present
-        # on every startup
+        # Fast filesystem-only revalidation of what the last full check
+        # recorded: any drift sends the application back to the full check.
         from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 
+        if not SlicerCheckWorker.is_slicer_executable(config.get_slicer_path()):
+            return True
+
+        if not SlicerCheckWorker.extensions_state_is_valid(
+            config.get_slicer_extensions_state(), DependencyManager.SLICER_MODULES
+        ):
+            return True
+
+        # If Slicer is valid, we need to check if the startup patch is present
+        # on every startup
         SlicerCheckWorker.add_slicer_startup_patch()
 
         return False
@@ -316,7 +326,11 @@ class DependencyManager:
             return False
 
     @staticmethod
-    def check_slicer(current_slicer_path: str, callback_func: callable):
+    def check_slicer(
+        current_slicer_path: str,
+        callback_func: callable,
+        extensions_callback: callable = None,
+    ):
         """
         Start a thread to scan the computer for Slicer
         Parameters
@@ -325,6 +339,9 @@ class DependencyManager:
             Current Slicer executable path
         callback_func: callable
             The UI function to call after the check thread
+        extensions_callback: callable
+            Optional, receives the JSON state of the extension install folders
+            when every required extension was found
         """
         from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 
@@ -333,7 +350,32 @@ class DependencyManager:
 
         check_slicer_work = SlicerCheckWorker(current_slicer_path)
         check_slicer_work.signal.slicer.connect(callback_func)
+        if extensions_callback is not None:
+            check_slicer_work.signal.extensions.connect(extensions_callback)
         start_worker(check_slicer_work)
+
+    @staticmethod
+    def quick_check_slicer_version(
+        slicer_path: str, expected_version: str, callback_func: callable
+    ):
+        """
+        Start a thread that confirms the Slicer executable still reports the
+        recorded version
+
+        Parameters
+        ----------
+        slicer_path: str
+            Slicer executable path
+        expected_version: str
+            The version recorded by the last full check
+        callback_func: callable
+            Called with True if the version matches, False otherwise
+        """
+        from swane.workers.SlicerCheckWorker import SlicerQuickCheckWorker
+
+        worker = SlicerQuickCheckWorker(slicer_path, expected_version)
+        worker.signal.done.connect(callback_func)
+        start_worker(worker)
 
     @staticmethod
     def check_dcm2niix() -> Dependence:

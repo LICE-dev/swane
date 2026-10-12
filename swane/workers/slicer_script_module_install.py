@@ -1,5 +1,6 @@
 # slicerpython script for module checking
 # Warning: slicer library is not required beacuse the script is executed in Slicer environment
+import os
 import sys
 
 
@@ -23,6 +24,19 @@ def install_extensions_from_args(argv):
                 em, "installExtensionFromServer"
             ) or not em.installExtensionFromServer(extensionName, restart):
                 errors.append(extensionName)
+
+    # Report where Slicer keeps each extension, so SWANe can later verify the
+    # install with a plain filesystem check instead of launching Slicer.
+    print("SLICER REVISION:" + str(slicer.app.revision))
+    for extensionName in extension_list:
+        if extensionName in errors:
+            continue
+        try:
+            ext_path = em.extensionInstallPath(extensionName)
+        except Exception:
+            continue
+        if ext_path and os.path.isdir(ext_path):
+            print("MODULE PATH:" + extensionName + "=" + ext_path)
 
     if len(errors) == 0:
         print("MODULE FOUND")
