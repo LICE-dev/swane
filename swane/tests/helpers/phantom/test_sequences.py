@@ -181,12 +181,12 @@ class TestRenderDwiBackgroundWmAnisotropy:
 
 
 class TestGeneratorVersionAndDirections:
-    """GENERATOR_VERSION and dwi_directions must match v9."""
+    """GENERATOR_VERSION and dwi_directions must match v10."""
 
-    def test_generator_version_is_9(self):
+    def test_generator_version_is_10(self):
         from swane.tests.helpers.phantom.dataset import GENERATOR_VERSION
 
-        assert GENERATOR_VERSION == "9"
+        assert GENERATOR_VERSION == "10"
 
     def test_default_dwi_directions_is_15(self):
         from swane.tests.helpers.phantom.dataset import PhantomProfile

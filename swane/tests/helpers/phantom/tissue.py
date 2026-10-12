@@ -1,25 +1,24 @@
-"""Stage A - build a tissue *class map* from the FreeSurfer ``fsaverage`` subject.
+"""Stage A - build a tissue *class map* from the CerebrA atlas and the ICBM
+2009c Nonlinear Symmetric tissue maps.
 
 The output is a single ``int16`` volume whose voxels hold a
-:class:`TissueClass` code, in real anatomical scale (fsaverage is a 1 mm
-isotropic 256^3 conformed volume in MNI305 space).  Every later stage only ever
-looks at these class codes, never at fsaverage intensities, so the phantom is
-fully under our control and reproducible.
+:class:`TissueClass` code, in real anatomical scale (the
+``MNI152NLin2009cSym`` template: 1 mm isotropic, RAS).  Every later stage only
+ever looks at these class codes, never at template intensities, so the phantom
+is fully under our control and reproducible.
 
-Only ``fsaverage`` is read (from FreeSurfer, or from the md5-pinned MNE mirror
-when FreeSurfer is absent; see ``fsaverage_source``), so nothing subject- or
-licence-restricted is involved.
+Only the md5-pinned TemplateFlow files of ``anatomy_source`` are read, so
+nothing subject- or licence-restricted is involved.
 
-Extracerebral tissue (CSF gap, skull, scalp, background air) is *not* copied
-from ``fsaverage`` (whose averaged T1 has a blurred, unusable skull); it is
-synthesised as clean concentric shells grown outward from the brain mask with a
-Euclidean distance transform.  Sharp shell edges are exactly what BET /
-SynthStrip need to behave like they do on real heads.
+Extracerebral tissue (CSF gap, skull, scalp, background air) is *not* taken
+from the template (whose averaged T1 has a blurred skull and stops at the
+medulla); it is synthesised as clean concentric shells grown outward from the
+brain mask with a Euclidean distance transform.  Sharp shell edges are exactly
+what BET / SynthStrip need to behave like they do on real heads.
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from enum import IntEnum
 
@@ -48,27 +47,144 @@ class TissueClass(IntEnum):
     VENOUS_SINUS = 14  # dural venous sinuses (venous MR/CT)
 
 
-# fsaverage / FreeSurfer aseg label ids we consume.
-_FS = {
-    "wm": (2, 41),
-    "cortex": (3, 42),
-    "thalamus": (10, 49),
-    "caudate": (11, 50),
-    "putamen": (12, 51),
-    "pallidum": (13, 52),
-    "hippocampus": (17, 53),
-    "amygdala": (18, 54),
-    "accumbens": (26, 58),
-    "ventral_dc": (28, 60),
-    "ventricle": (4, 43, 14, 15, 5, 44, 72),
-    "csf": (24,),
-    "cerebellum_wm": (7, 46),
-    "cerebellum_gm": (8, 47),
-    "brainstem": (16,),
+#: The 31 Desikan-Killiany-Tourville cortical parcels of CerebrA, by the
+#: ``name`` column of its label table (one entry per hemisphere upstream).
+_CORTICAL_PARCELS = (
+    "Caudal Anterior Cingulate",
+    "Caudal Middle Frontal",
+    "Cuneus",
+    "Entorhinal",
+    "Fusiform",
+    "Inferior Parietal",
+    "Inferior temporal",
+    "Insula",
+    "Isthmus Cingulate",
+    "Lateral Occipital",
+    "Lateral Orbitofrontal",
+    "Lingual",
+    "Medial Orbitofrontal",
+    "Middle Temporal",
+    "Paracentral",
+    "Parahippocampal",
+    "Pars Opercularis",
+    "Pars Orbitalis",
+    "Pars Triangularis",
+    "Pericalcarine",
+    "Postcentral",
+    "Posterior Cingulate",
+    "Precentral",
+    "Precuneus",
+    "Rostral Anterior Cingulate",
+    "Rostral Middle Frontal",
+    "Superior Frontal",
+    "Superior Parietal",
+    "Superior Temporal",
+    "Supramarginal",
+    "Transverse Temporal",
+)
+
+#: CerebrA label ``name`` -> tissue class. Every name of the label table must
+#: be listed: an unknown one means the atlas changed upstream. ``None`` leaves
+#: the label unconsumed (AIR), as the optic chiasm always was.
+_CEREBRA_CLASSES = {
+    **{name: TissueClass.CORTICAL_GM for name in _CORTICAL_PARCELS},
+    "Thalamus": TissueClass.DEEP_GM,
+    "Caudate": TissueClass.DEEP_GM,
+    "Putamen": TissueClass.DEEP_GM,
+    "Pallidum": TissueClass.DEEP_GM,
+    "Accumbens Area": TissueClass.DEEP_GM,
+    "Ventral Diencephalon": TissueClass.DEEP_GM,
+    "Hippocampus": TissueClass.DEEP_GM,
+    "Amygdala": TissueClass.DEEP_GM,
+    "Basal Forebrain": TissueClass.DEEP_GM,
+    "Lateral Ventricle": TissueClass.CSF_VENTRICLE,
+    "Inferior Lateral Ventricle": TissueClass.CSF_VENTRICLE,
+    "Third Ventricle": TissueClass.CSF_VENTRICLE,
+    "Fourth Ventricle": TissueClass.CSF_VENTRICLE,
+    "Cerebellum Gray Matter": TissueClass.CEREBELLUM_GM,
+    "Vermal lobules I-V": TissueClass.CEREBELLUM_GM,
+    "Vermal lobules VI-VII": TissueClass.CEREBELLUM_GM,
+    "Vermal lobules VIII-X": TissueClass.CEREBELLUM_GM,
+    "Cerebellum White Matter": TissueClass.CEREBELLUM_WM,
+    "Brainstem": TissueClass.BRAINSTEM,
+    "Optic Chiasm": None,
 }
 
-# aparc precentral gyrus (Desikan-Killiany): ctx-lh/rh-precentral.
-_PRECENTRAL = (1024, 2024)
+#: Motor cortex: fMRI activation source and CST origin.
+_PRECENTRAL_NAME = "Precentral"
+
+#: The template's field of view stops at the medulla: pad the grid so the
+#: synthetic CSF/skull/scalp shells can close below the cerebellum.
+_PAD_VOXELS = 30
+
+
+def _read_cerebra_names(tsv_path: str) -> dict:
+    """``label -> name`` from the CerebrA label table (tab separated)."""
+    import csv
+
+    with open(tsv_path, newline="") as handle:
+        return {
+            int(row["label"]): row["name"]
+            for row in csv.DictReader(handle, delimiter="\t")
+        }
+
+
+def _cerebra_class_map(cerebra, names, gm, wm, csf, brain_mask, affine):
+    """Tissue class map, precentral mask and affine from CerebrA + probseg.
+
+    CerebrA labels cortex, deep grey matter, ventricles, cerebellum and
+    brainstem, but has no cerebral white matter and no extra-axial CSF label.
+    Those come from the ICBM 2009c GM/WM/CSF probabilistic segmentations:
+
+    1. every labelled voxel takes the class of its label ``name``;
+    2. cortical-parcel voxels where WM is more likely than GM become WM (an
+       averaged template blurs the cortical ribbon into the white matter);
+    3. unlabelled voxels inside the brain mask, with a total tissue
+       probability above 0.5, take the dominant probseg class: WM -> WM,
+       GM -> unparcellated cortex, CSF -> extra-axial CSF;
+    4. the grid is padded by ``_PAD_VOXELS`` on every side, with the affine
+       moved so world coordinates are unchanged.
+
+    Returns ``(labels int16, precentral bool, affine)`` on the padded grid.
+    """
+    unknown = sorted(set(names.values()) - set(_CEREBRA_CLASSES))
+    if unknown:
+        raise ValueError(
+            "CerebrA label name(s) with no phantom tissue class: %s"
+            % ", ".join(unknown)
+        )
+    labels = np.full(cerebra.shape, TissueClass.AIR, dtype=np.int16)
+    cortex = np.zeros(cerebra.shape, dtype=bool)
+    precentral = np.zeros(cerebra.shape, dtype=bool)
+    for label, name in names.items():
+        cls = _CEREBRA_CLASSES[name]
+        if cls is None:
+            continue
+        sel = cerebra == label
+        labels[sel] = cls
+        if cls == TissueClass.CORTICAL_GM:
+            cortex |= sel
+        if name == _PRECENTRAL_NAME:
+            precentral |= sel
+
+    to_wm = cortex & (wm > gm)
+    labels[to_wm] = TissueClass.WM
+    precentral &= ~to_wm
+
+    free = (cerebra == 0) & brain_mask & ((gm + wm + csf) > 0.5)
+    dominant = np.argmax(np.stack([gm, wm, csf]), axis=0)
+    labels[free & (dominant == 0)] = TissueClass.CORTICAL_GM
+    labels[free & (dominant == 1)] = TissueClass.WM
+    labels[free & (dominant == 2)] = TissueClass.CSF_EXTRA
+
+    pad = _PAD_VOXELS
+    padded_affine = np.asarray(affine, dtype=float).copy()
+    padded_affine[:3, 3] -= padded_affine[:3, :3] @ np.full(3, float(pad))
+    return (
+        np.pad(labels, pad, constant_values=TissueClass.AIR),
+        np.pad(precentral, pad, constant_values=False),
+        padded_affine,
+    )
 
 
 @dataclass
@@ -76,8 +192,8 @@ class TissueModel:
     """Result of stage A."""
 
     labels: np.ndarray  # int16, TissueClass codes
-    affine: np.ndarray  # 4x4, voxel -> RAS (MNI305), from fsaverage
-    zooms: tuple  # mm, (1, 1, 1) for fsaverage
+    affine: np.ndarray  # 4x4, voxel -> RAS (MNI152NLin2009cSym), padded template grid
+    zooms: tuple  # mm, (1, 1, 1) for the template
     #: reference feature masks in the same grid, handy for later stages/tests
     precentral: np.ndarray  # bool, motor cortex
     cst: np.ndarray  # bool, cortico-spinal corridor
@@ -95,38 +211,24 @@ class TissueModel:
     optic_radiation: np.ndarray = None
 
 
-def _fsaverage_dir(freesurfer_home: str | None = None) -> str:
-    from swane.tests.helpers.phantom.fsaverage_source import resolve_fsaverage_mri_dir
-
-    return resolve_fsaverage_mri_dir(freesurfer_home)
-
-
-def _load(fs_mri: str, name: str) -> np.ndarray:
-    import nibabel as nib
-
-    return np.asarray(nib.load(os.path.join(fs_mri, name)).dataobj)
-
-
-def _in(vol: np.ndarray, labels) -> np.ndarray:
-    return np.isin(vol, np.asarray(labels, dtype=vol.dtype))
-
-
 def build_tissue_model(
-    freesurfer_home: str | None = None,
+    anatomy_files: dict | None = None,
     crop_margin_mm: float = 12.0,
     deform: bool = True,
 ) -> TissueModel:
-    """Construct the phantom tissue class map from ``fsaverage``.
+    """Construct the phantom tissue class map from CerebrA + ICBM 2009c Sym.
 
     Parameters
     ----------
-    freesurfer_home : str, optional
-        Overrides ``$FREESURFER_HOME``.
+    anatomy_files : dict, optional
+        ``key -> path`` as returned by
+        :func:`~swane.tests.helpers.phantom.anatomy_source.resolve_anatomy_files`;
+        resolved (and fetched if needed) when omitted.
     crop_margin_mm : float
-        The 256^3 fsaverage grid is cropped to the head bounding box plus this
+        The padded template grid is cropped to the head bounding box plus this
         air margin, which cuts memory and render time for the coarse "fast"
         profile without changing world coordinates.  Set to a negative value to
-        keep the full 256^3 grid.
+        keep the full grid.
     deform : bool
         Apply the fixed smooth non-linear deformation (see
         :mod:`swane.tests.helpers.phantom.deformation`) to the anatomy before
@@ -141,34 +243,26 @@ def build_tissue_model(
     import nibabel as nib
     from scipy import ndimage as ndi
 
-    fs_mri = _fsaverage_dir(freesurfer_home)
-    aseg = _load(fs_mri, "aseg.mgz").astype(np.int32)
-    aparc = _load(fs_mri, "aparc+aseg.mgz").astype(np.int32)
-    ref_img = nib.load(os.path.join(fs_mri, "aseg.mgz"))
-    affine = ref_img.affine.copy()
+    from swane.tests.helpers.phantom.anatomy_source import resolve_anatomy_files
+
+    files = anatomy_files or resolve_anatomy_files()
+    ref_img = nib.load(files["cerebra"])
+    cerebra = np.asarray(ref_img.dataobj).astype(np.int32)
+    gm, wm, csf = (
+        np.asarray(nib.load(files[key]).dataobj, dtype=np.float32)
+        for key in ("gm", "wm", "csf")
+    )
+    brain_mask = np.asarray(nib.load(files["mask"]).dataobj) > 0
+    labels, precentral_base, affine = _cerebra_class_map(
+        cerebra,
+        _read_cerebra_names(files["tsv"]),
+        gm,
+        wm,
+        csf,
+        brain_mask,
+        ref_img.affine,
+    )
     zooms = tuple(float(z) for z in ref_img.header.get_zooms()[:3])
-
-    labels = np.full(aseg.shape, TissueClass.AIR, dtype=np.int16)
-
-    # --- intracranial tissue from aseg (order matters: broad first) ---
-    labels[_in(aseg, _FS["wm"])] = TissueClass.WM
-    labels[_in(aseg, _FS["cortex"])] = TissueClass.CORTICAL_GM
-    for key in (
-        "thalamus",
-        "caudate",
-        "putamen",
-        "pallidum",
-        "accumbens",
-        "ventral_dc",
-        "hippocampus",
-        "amygdala",
-    ):
-        labels[_in(aseg, _FS[key])] = TissueClass.DEEP_GM
-    labels[_in(aseg, _FS["cerebellum_wm"])] = TissueClass.CEREBELLUM_WM
-    labels[_in(aseg, _FS["cerebellum_gm"])] = TissueClass.CEREBELLUM_GM
-    labels[_in(aseg, _FS["brainstem"])] = TissueClass.BRAINSTEM
-    labels[_in(aseg, _FS["ventricle"])] = TissueClass.CSF_VENTRICLE
-    labels[_in(aseg, _FS["csf"])] = TissueClass.CSF_EXTRA
 
     brain = labels != TissueClass.AIR
 
@@ -179,12 +273,7 @@ def build_tissue_model(
     csf_gap = (dist > 0) & (dist <= 5)
     bone = (dist > 5) & (dist <= 9.5)
     diploe = (dist > 6.3) & (dist <= 8.2)  # marrow core inside the bone table
-
-    # Scalp only on the superior/head side of the original fsaverage grid.
-    # IMPORTANT: this cutoff is intentionally expressed in ORIGINAL VOXEL
-    # coordinates, before the non-linear deformation and before cropping.
-    yy = np.arange(labels.shape[1], dtype=np.int32)[None, :, None]
-    scalp = (dist > 7.0) & (dist <= 12.0)  # & (yy < 150)
+    scalp = (dist > 7.0) & (dist <= 12.0)
 
     labels[csf_gap] = TissueClass.CSF_EXTRA
     labels[bone] = TissueClass.SKULL
@@ -193,8 +282,8 @@ def build_tissue_model(
     # everything farther out stays AIR
 
     # --- feature overlays ------------------------------------------------
-    precentral = _in(aparc, _PRECENTRAL) & _in(aseg, _FS["cortex"])
-    cst, cst_tan = _build_cst(brain, precentral, aseg, zooms, affine)
+    precentral = precentral_base
+    cst, cst_tan = _build_cst(brain, zooms, affine)
     af, af_tan = _build_tube_corridor(brain, _AF_WAYPOINTS_L, affine)
     orad, or_tan = _build_tube_corridor(brain, _OR_WAYPOINTS_L, affine)
 
@@ -228,7 +317,7 @@ def build_tissue_model(
     fiber_support = wm | cst_stampable | af_stampable | or_stampable
     fiber_dir[~fiber_support] = 0.0
 
-    venous = _build_venous_sinuses(brain, aseg, zooms, affine)
+    venous = _build_venous_sinuses(brain, zooms, affine)
     out[venous & (out == TissueClass.CSF_EXTRA)] = TissueClass.VENOUS_SINUS
 
     # Warp the whole subject by the fixed smooth field *before* cropping, so the
@@ -305,19 +394,28 @@ def _crop_to_head(labels, affine, zooms, margin_mm, extra_masks):
 
 # Cortico-spinal tract course, as RAS(mm) waypoints for the LEFT side; the
 # right side is the x-mirror.  Coordinates follow the classic descending route
-# and were checked against the fsaverage aseg (see comment per waypoint).
+# and were checked against the phantom built from CerebrA (see comment per waypoint).
 # ``radius_mm`` is deliberately generous: the phantom bundle must *contain* the
 # real tract so ROI-based tractography still intersects it.  Width is the safety
 # margin - the waypoints themselves stay centred on the true course, since a
 # wide-but-centred bundle is what keeps automatic ROIs on target.
 _CST_WAYPOINTS_L = [
-    # (R, A, S) mm,                radius_mm,  lands in (fsaverage aseg)
-    ((-34.0, -12.0, 48.0), 11.0),  # M1 / precentral white matter -> WM
-    ((-26.0, -14.0, 28.0), 10.0),  # corona radiata               -> WM
-    ((-20.0, -14.0, 4.0), 8.0),  # posterior limb internal caps. -> WM
-    ((-12.0, -20.0, -14.0), 7.0),  # cerebral peduncle             -> ventralDC
-    ((-8.0, -22.0, -30.0), 6.5),  # basis pontis                  -> brainstem
-    ((-5.0, -30.0, -48.0), 5.5),  # medullary pyramid             -> brainstem
+    # (R, A, S) mm,                radius_mm,  lands in (CerebrA build)
+    ((-34.0, -12.0, 48.0), 11.0),  # M1 / precentral white matter -> CST corridor
+    ((-26.0, -14.0, 28.0), 10.0),  # corona radiata               -> CST corridor
+    ((-20.0, -14.0, 4.0), 8.0),  # posterior limb internal caps. -> CST corridor
+    (
+        (-12.0, -20.0, -14.0),
+        7.0,
+    ),  # cerebral peduncle             -> deep GM (ventral diencephalon)
+    (
+        (-8.0, -22.0, -30.0),
+        6.5,
+    ),  # basis pontis                  -> CST corridor (brainstem)
+    (
+        (-5.0, -30.0, -48.0),
+        5.5,
+    ),  # medullary pyramid             -> CST corridor (brainstem)
 ]
 
 
@@ -329,11 +427,14 @@ _CST_WAYPOINTS_L = [
 # and rise then fall in z, tracing the arch.  Radii are generous, as for the CST.
 _AF_WAYPOINTS_L = [
     # (R, A, S) mm,                 radius_mm,  segment
-    ((-38.0, 10.0, 26.0), 8.0),  # frontal terminus (IFG / precentral WM)
-    ((-37.0, -2.0, 33.0), 7.5),  # ascending frontal limb
-    ((-37.0, -18.0, 34.0), 7.0),  # superior arch, above the Sylvian fissure
-    ((-40.0, -34.0, 26.0), 7.0),  # descending parieto-temporal limb
-    ((-43.0, -44.0, 10.0), 7.5),  # temporal terminus (posterior STG / MTG WM)
+    ((-38.0, 10.0, 26.0), 8.0),  # frontal terminus (IFG / precentral WM) -> cortical GM
+    ((-37.0, -2.0, 33.0), 7.5),  # ascending frontal limb -> WM
+    (
+        (-37.0, -18.0, 34.0),
+        7.0,
+    ),  # superior arch, above the Sylvian fissure -> CST corridor (crossing)
+    ((-40.0, -34.0, 26.0), 7.0),  # descending parieto-temporal limb -> WM
+    ((-43.0, -44.0, 10.0), 7.5),  # temporal terminus (posterior STG / MTG WM) -> WM
 ]
 
 # Optic radiation (OR): lateral geniculate nucleus (posterolateral thalamus) ->
@@ -343,11 +444,11 @@ _AF_WAYPOINTS_L = [
 # point (Meyer's loop) before the tract sweeps posteriorly to the occipital pole.
 _OR_WAYPOINTS_L = [
     # (R, A, S) mm,                 radius_mm,  segment
-    ((-23.0, -26.0, 2.0), 6.0),  # LGN (posterolateral thalamus)
-    ((-30.0, -20.0, -8.0), 6.0),  # Meyer's loop (anterior temporal, inferior)
-    ((-34.0, -40.0, -6.0), 6.5),  # sagittal stratum along the temporal horn
-    ((-30.0, -66.0, 2.0), 6.5),  # posterior sweep toward the occipital lobe
-    ((-18.0, -84.0, 6.0), 6.0),  # calcarine / occipital terminus
+    ((-23.0, -26.0, 2.0), 6.0),  # LGN (posterolateral thalamus) -> deep GM (thalamus)
+    ((-30.0, -20.0, -8.0), 6.0),  # Meyer's loop (anterior temporal, inferior) -> WM
+    ((-34.0, -40.0, -6.0), 6.5),  # sagittal stratum along the temporal horn -> WM
+    ((-30.0, -66.0, 2.0), 6.5),  # posterior sweep toward the occipital lobe -> WM
+    ((-18.0, -84.0, 6.0), 6.0),  # calcarine / occipital terminus -> WM
 ]
 
 
@@ -356,10 +457,10 @@ def _build_tube_corridor(brain, waypoints_l, affine):
 
     Shared machinery for every named bundle (CST, AF, OR): stamp a variable-radius
     tube through the LEFT ``waypoints_l`` and its x-mirror, in RAS millimetres so
-    it is independent of the array axis order (fsaverage is LIA, not RAS), and
-    give each voxel the unit tangent of its nearest curve point.  A single global
-    axis would make the bundle straight, and tractography would then leave it
-    wherever the real tract bends; the local tangent keeps fibres inside the curve.
+    it is independent of the array axis order, and give each voxel the unit
+    tangent of its nearest curve point.  A single global axis would make the
+    bundle straight, and tractography would then leave it wherever the real
+    tract bends; the local tangent keeps fibres inside the curve.
     """
     from scipy import ndimage as ndi
 
@@ -434,13 +535,13 @@ def _wm_background_field(wm, affine, zooms):
     return field
 
 
-def _build_cst(brain, precentral, aseg, zooms, affine):
+def _build_cst(brain, zooms, affine):
     """Cortico-spinal corridor following the real descending anatomy.
 
     The bundle is a smooth tube through anatomical waypoints (M1 -> corona
     radiata -> posterior limb of the internal capsule -> cerebral peduncle ->
-    basis pontis -> medullary pyramid), built in RAS millimetres so it does not
-    depend on the array axis order (fsaverage is LIA, not RAS).
+    basis pontis -> medullary pyramid), built in RAS millimetres so it is
+    independent of the array axis order.
     """
     return _build_tube_corridor(brain, _CST_WAYPOINTS_L, affine)
 
@@ -532,7 +633,7 @@ def _tube_ras(shape, affine, curve_ras, curve_radii, tangents=None, dir_out=None
     return out
 
 
-def _build_venous_sinuses(brain, aseg, zooms, affine):
+def _build_venous_sinuses(brain, zooms, affine):
     """Dural venous sinuses: superior sagittal + transverse, in RAS mm.
 
     Enough for the venous MR/CT workflows to have a hyperintense/hyperdense
