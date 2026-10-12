@@ -596,6 +596,24 @@ def _get_active_zstat(composite_node):
     return None, None
 
 
+def _plot_layouts():
+    """
+    Slicer layout ids that display a plot chart.
+
+    Returns
+    -------
+    set[int]
+    """
+    layout_node = slicer.vtkMRMLLayoutNode
+    return {
+        layout_node.SlicerLayoutConventionalPlotView,
+        layout_node.SlicerLayoutFourUpPlotView,
+        layout_node.SlicerLayoutFourUpPlotTableView,
+        layout_node.SlicerLayoutOneUpPlotView,
+        layout_node.SlicerLayoutThreeOverThreePlotView,
+    }
+
+
 class TimecourseViewer:
     """
     Keeps a single Plot chart in sync with whichever IC zstat map is
@@ -642,18 +660,27 @@ class TimecourseViewer:
             )
             self._chart_node.AddAndObservePlotSeriesNodeID(self._series_node.GetID())
 
-    def _show(self, ic: int, volume_name: str):
+    def _show(self, ic: int, volume_name: str) -> bool:
+        """
+        Plot the timecourse of ``ic``.
+
+        Returns
+        -------
+        bool
+            True if the chart was shown, False if nothing could be plotted
+            (plots module or mix table not available yet, IC not in table).
+        """
         plots_module = getattr(slicer.modules, "plots", None)
         if plots_module is None:
-            return
+            return False
 
         mix_table_node = _get_mix_table()
         if mix_table_node is None:
-            return
+            return False
         column = mix_table_node.GetTable().GetColumnByName(f"IC{ic}")
         if column is None:
             print(f"SLICERLOADER: No timecourse for IC{ic} in mix table")
-            return
+            return False
 
         self._ensure_plot_nodes()
         n = column.GetNumberOfTuples()
@@ -668,10 +695,17 @@ class TimecourseViewer:
 
         self._chart_node.SetTitle(f"IC {ic} - {volume_name}")
         layout_manager = slicer.app.layoutManager()
-        if self._previous_layout is None and layout_manager is not None:
-            # remember the layout the user had, to restore it in _hide()
+        if (
+            self._previous_layout is None
+            and layout_manager is not None
+            and layout_manager.layout not in _plot_layouts()
+        ):
+            # remember the layout the user had, to restore it in _hide().
+            # A layout already showing a plot (e.g. a scene saved while the
+            # chart was open) is not a valid restore target.
             self._previous_layout = layout_manager.layout
         slicer.modules.plots.logic().ShowChartInLayout(self._chart_node)
+        return True
 
     def _hide(self):
         """
@@ -679,8 +713,14 @@ class TimecourseViewer:
         the first timecourse was shown.
         """
         layout_manager = slicer.app.layoutManager()
-        if layout_manager is not None and self._previous_layout is not None:
-            layout_manager.setLayout(self._previous_layout)
+        if layout_manager is not None:
+            if self._previous_layout is not None:
+                layout_manager.setLayout(self._previous_layout)
+            elif layout_manager.layout in _plot_layouts():
+                # no usable layout remembered: leave the plot layout anyway
+                layout_manager.setLayout(
+                    slicer.vtkMRMLLayoutNode.SlicerLayoutConventionalView
+                )
         self._previous_layout = None
 
     def _find_zstat_in_other_views(self, exclude_composite_node):
@@ -705,8 +745,12 @@ class TimecourseViewer:
 
         if ic == self._last_ic:
             return
-        self._last_ic = ic
-        self._show(ic, volume.GetName())
+        # Remember the IC only once it was actually plotted: while a scene
+        # is still loading the mix table may not exist yet, and caching the
+        # IC then would turn every later selection of it (the only choice
+        # when there is a single IC) into a no-op.
+        if self._show(ic, volume.GetName()):
+            self._last_ic = ic
 
     def _observe_composite_node(self, node):
         tag = node.AddObserver(
