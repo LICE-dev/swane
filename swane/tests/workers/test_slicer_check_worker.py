@@ -26,6 +26,66 @@ def test_find_slicer_python_linux(monkeypatch):
     assert rel == "../Slicer"
 
 
+@pytest.fixture
+def fake_macos_bundle(monkeypatch, tmp_path):
+    """A minimal Slicer.app under ``tmp_path/Applications``, on "macOS"."""
+    contents = tmp_path / "Applications" / "Slicer.app" / "Contents"
+    (contents / "MacOS").mkdir(parents=True)
+    (contents / "bin").mkdir()
+    (contents / "MacOS" / "Slicer").write_text("")
+    (contents / "bin" / "PythonSlicer").write_text("")
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    return contents
+
+
+@pytest.mark.parametrize(
+    "given",
+    [
+        "Applications",  # the folder holding the bundle
+        "Applications/Slicer.app",  # the bundle itself
+        "Applications/Slicer.app/Contents/MacOS",  # the executable's folder
+        "Applications/Slicer.app/Contents/MacOS/Slicer",  # the executable
+    ],
+)
+def test_find_slicer_python_macos_accepts_any_path_in_or_above_the_bundle(
+    fake_macos_bundle, tmp_path, given
+):
+    split, _ = SlicerCheckWorker.find_slicer_python(str(tmp_path / given))
+    assert split == [str(fake_macos_bundle / "bin" / "PythonSlicer")]
+
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="POSIX symlinks")
+def test_find_slicer_python_macos_follows_a_symlinked_launcher(
+    fake_macos_bundle, tmp_path
+):
+    # e.g. a "Slicer" command linked into /usr/local/bin
+    link_dir = tmp_path / "bin"
+    link_dir.mkdir()
+    (link_dir / "Slicer").symlink_to(fake_macos_bundle / "MacOS" / "Slicer")
+    split, _ = SlicerCheckWorker.find_slicer_python(str(link_dir / "Slicer"))
+    assert split == [str(fake_macos_bundle / "bin" / "PythonSlicer")]
+
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="POSIX symlinks")
+def test_find_slicer_python_linux_follows_a_symlinked_launcher(monkeypatch, tmp_path):
+    install = tmp_path / "Slicer-5.12.4-linux-amd64"
+    (install / "bin").mkdir(parents=True)
+    (install / "Slicer").write_text("")
+    python = install / "bin" / "PythonSlicer"
+    python.write_text("")
+    python.chmod(0o755)
+    link_dir = tmp_path / "bin"
+    link_dir.mkdir()
+    (link_dir / "Slicer").symlink_to(install / "Slicer")
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    split, _ = SlicerCheckWorker.find_slicer_python(str(link_dir / "Slicer"))
+    assert split == [str(python)]
+
+
+def test_macos_bundle_root_outside_a_bundle_is_unchanged(tmp_path):
+    assert SlicerCheckWorker._macos_bundle_root(str(tmp_path)) == str(tmp_path)
+
+
 def test_patch_add_and_remove(monkeypatch, tmp_path):
     # use temp file as ~/.slicerrc.py
     slicerrc = tmp_path / ".slicerrc.py"
@@ -268,7 +328,11 @@ class TestSlicerCheckWorkerReal:
         monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
 
         # --- Real presence check: read-only, never mutates the real install.
-        slicer_check_worker = SlicerCheckWorker("")
+        # CI exports the Slicer it installed: start from it, as the app does
+        # from its recorded path (the full-filesystem search stays the
+        # fallback, and is what reports MISSING below).
+        start_path = os.environ.get("SWANE_SLICER_PATH", "")
+        slicer_check_worker = SlicerCheckWorker(start_path)
         with qtbot.waitSignal(
             slicer_check_worker.signal.slicer, timeout=2000000
         ) as blocker:
@@ -277,16 +341,22 @@ class TestSlicerCheckWorkerReal:
 
         real_slicer = blocker.args[0]
         assert os.access(real_slicer, os.W_OK) is True, "Slicer non writeable"
-        slicer_dir = os.path.dirname(real_slicer)
-        slicer_python = os.path.join(slicer_dir, "bin", "PythonSlicer")
-        assert os.path.exists(slicer_python) is True, "PythonSlicer not found"
+        # The install root: the .app bundle on macOS (the executable is in
+        # Contents/MacOS), the executable's folder elsewhere.
+        if platform.system() == "Darwin":
+            slicer_dir = SlicerCheckWorker._macos_bundle_root(real_slicer)
+        else:
+            slicer_dir = os.path.dirname(real_slicer)
+        found_list, _ = SlicerCheckWorker.find_slicer_python(slicer_dir)
+        assert found_list, "PythonSlicer not found"
+        slicer_python = found_list[0]
 
         # --- Simulated absence: the only scenario that must touch the real
         # install (see class docstring). Guarded so the restore always runs.
         slicer_python_bk = slicer_python + "_bk"
         shutil.move(slicer_python, slicer_python_bk)
         try:
-            slicer_check_worker = SlicerCheckWorker("")
+            slicer_check_worker = SlicerCheckWorker(start_path)
             with qtbot.waitSignal(
                 slicer_check_worker.signal.slicer, timeout=2000000
             ) as blocker:
@@ -300,11 +370,14 @@ class TestSlicerCheckWorkerReal:
         # path detection, module uninstall/reinstall, missing module, outdated
         # version. The real install is never touched again.
         slicer_dir_copy = os.path.join(str(tmp_path), os.path.basename(slicer_dir))
-        shutil.copytree(slicer_dir, slicer_dir_copy)
+        # symlinks=True keeps a macOS bundle's internal links intact.
+        shutil.copytree(slicer_dir, slicer_dir_copy, symlinks=True)
 
         found_list, _ = SlicerCheckWorker.find_slicer_python(slicer_dir_copy)
         assert found_list, "Error on duplicating Slicer"
-        copy_slicer = os.path.join(slicer_dir_copy, "Slicer")
+        copy_slicer = os.path.join(
+            slicer_dir_copy, os.path.relpath(real_slicer, slicer_dir)
+        )
         assert os.path.exists(copy_slicer), "Error on duplicating Slicer"
 
         slicer_check_worker = SlicerCheckWorker(copy_slicer)
@@ -317,10 +390,17 @@ class TestSlicerCheckWorkerReal:
         ), "Error in specifing custom Slicer executable"
         cmd = blocker.args[0]
 
-        # uninstall and reinstall module from the copy
-        os.system(
-            cmd
-            + " --no-main-window --python-code 'manager = slicer.app.extensionsManagerModel();manager.scheduleExtensionForUninstall(\"SlicerFreeSurfer\");import sys;sys.exit(0)'"
+        # uninstall and reinstall module from the copy (argv list: no shell
+        # quoting, so it runs the same on Windows and with spaces in cmd)
+        subprocess.run(
+            [
+                cmd,
+                "--no-main-window",
+                "--python-code",
+                "manager = slicer.app.extensionsManagerModel();"
+                'manager.scheduleExtensionForUninstall("SlicerFreeSurfer");'
+                "import sys;sys.exit(0)",
+            ]
         )
         slicer_check_worker = SlicerCheckWorker(cmd)
         with qtbot.waitSignal(
