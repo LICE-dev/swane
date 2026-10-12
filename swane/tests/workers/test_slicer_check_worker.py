@@ -38,6 +38,18 @@ def fake_macos_bundle(monkeypatch, tmp_path):
     return contents
 
 
+#: The macOS and Linux search shells out to ``find``: a simulated macOS needs a
+#: POSIX ``find`` (none on Windows), a simulated Linux the GNU ``-executable``
+#: test (absent from the BSD ``find`` of macOS).
+needs_posix_find = pytest.mark.skipif(
+    platform.system() == "Windows", reason="the macOS search runs POSIX find"
+)
+needs_gnu_find = pytest.mark.skipif(
+    platform.system() != "Linux", reason="the Linux search runs GNU find"
+)
+
+
+@needs_posix_find
 @pytest.mark.parametrize(
     "given",
     [
@@ -66,7 +78,7 @@ def test_find_slicer_python_macos_follows_a_symlinked_launcher(
     assert split == [str(fake_macos_bundle / "bin" / "PythonSlicer")]
 
 
-@pytest.mark.skipif(platform.system() == "Windows", reason="POSIX symlinks")
+@needs_gnu_find
 def test_find_slicer_python_linux_follows_a_symlinked_launcher(monkeypatch, tmp_path):
     install = tmp_path / "Slicer-5.12.4-linux-amd64"
     (install / "bin").mkdir(parents=True)
