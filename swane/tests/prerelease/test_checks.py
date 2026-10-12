@@ -18,10 +18,12 @@ from nipype.utils.filemanip import savepkl
 
 from swane.tests.prerelease.checks import (
     _check_dipy_bundle_recovery,
+    _check_fmri_resting_networks,
     _check_fmri_task_location,
     GroundTruth,
     _check_nilearn_resting,
     NILEARN_RS_EXPECTED_COMPONENTS,
+    NILEARN_RS_EXPECTED_PRE_AROMA_COMPONENTS,
     RESULTS_DIR,
     WARNING,
 )
@@ -121,6 +123,7 @@ def _rs_result(subject_dir, engine="NILEARN", **values):
 def _rs_layout(
     root,
     n_components=NILEARN_RS_EXPECTED_COMPONENTS,
+    n_pre_aroma=NILEARN_RS_EXPECTED_PRE_AROMA_COMPONENTS,
     ica_node="ica_fastica_icasso",
     k=12,
     maps_nonempty=True,
@@ -131,9 +134,11 @@ def _rs_layout(
     wf = os.path.join(root, "prerelease_wf", "fMRI_resting_state")
     _save(os.path.join(wf, ica_node, "ica_IC.nii.gz"), np.ones((4, 4, 4, n_components)))
     # The AROMA-pass CanICA writes a file with the same name: never the source.
-    _save(
-        os.path.join(wf, "preproc_ica_canica", "ica_IC.nii.gz"), np.ones((4, 4, 4, 7))
-    )
+    if n_pre_aroma is not None:
+        _save(
+            os.path.join(wf, "preproc_ica_canica", "ica_IC.nii.gz"),
+            np.ones((4, 4, 4, n_pre_aroma)),
+        )
     if k is not None:
         # Nipype removes the unconsumed JSON report (remove_unnecessary_outputs);
         # the node's result file keeps k.
@@ -162,6 +167,7 @@ def test_nilearn_resting_checks_pass_on_the_workflow_layout(tmp_path):
     assert set(checks) == {
         "fmri.rs.ica_source",
         "fmri.determinism.rs_components",
+        "fmri.determinism.rs_components_pre_aroma",
         "fmri.rs.cluster_extent",
         "fmri.rs.zstat_maps",
     }
@@ -177,7 +183,7 @@ def test_nilearn_resting_checks_skip_the_fsl_engine(tmp_path):
 def test_nilearn_resting_component_count_ignores_the_aroma_pass_ica(tmp_path):
     # Only the AROMA-pass CanICA output exists: the final ICA is missing, and
     # its 7 components must not be taken for the final count.
-    files = _rs_layout(str(tmp_path), ica_node="some_other_node")
+    files = _rs_layout(str(tmp_path), ica_node="some_other_node", n_pre_aroma=7)
     checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
     assert not checks["fmri.rs.ica_source"].passed
     assert not checks["fmri.determinism.rs_components"].passed
@@ -188,6 +194,30 @@ def test_nilearn_resting_component_count_mismatch_fails(tmp_path):
     checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
     assert checks["fmri.rs.ica_source"].passed
     assert not checks["fmri.determinism.rs_components"].passed
+
+
+def test_nilearn_resting_pre_aroma_count_mismatch_fails(tmp_path):
+    # The AROMA pass must see every phantom source (networks + nuisance).
+    files = _rs_layout(
+        str(tmp_path), n_pre_aroma=NILEARN_RS_EXPECTED_PRE_AROMA_COMPONENTS - 1
+    )
+    checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
+    assert not checks["fmri.determinism.rs_components_pre_aroma"].passed
+    assert checks["fmri.determinism.rs_components"].passed
+
+
+def test_nilearn_resting_pre_aroma_ica_missing_fails(tmp_path):
+    files = _rs_layout(str(tmp_path), n_pre_aroma=None)
+    checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
+    assert not checks["fmri.determinism.rs_components_pre_aroma"].passed
+
+
+def test_nilearn_resting_without_aroma_has_no_pre_aroma_count(tmp_path):
+    files = _rs_layout(str(tmp_path), n_pre_aroma=None)
+    checks = _by_name(
+        _check_nilearn_resting(_rs_result(str(tmp_path), aroma="false"), files)
+    )
+    assert "fmri.determinism.rs_components_pre_aroma" not in checks
 
 
 def test_nilearn_resting_fixed_ic_dim_expects_that_many_components(tmp_path):
@@ -346,3 +376,86 @@ def test_old_ground_truth_sidecar_is_recomputed(tmp_path, monkeypatch):
     )
     truth = GroundTruth.load(str(tmp_path))
     assert "precentral_L" in truth.centres
+
+
+# --------------------------------------------------------------------------- #
+# Resting-state network location (every engine)
+# --------------------------------------------------------------------------- #
+#: Motor and posterior network centres 40 mm apart on the _AFFINE grid: a
+#: component fusing both lands 20 mm from each, beyond FEATURE_TOLERANCE_MM.
+_RS_TRUTH = GroundTruth(
+    centres={
+        "brain": np.zeros(3),
+        "precentral": np.array([0.0, 20.0, 0.0]),
+        "rs_posterior": np.array([0.0, -20.0, 0.0]),
+    }
+)
+
+
+def _rs_blob(*y_worlds, value=4.0):
+    """5x5x5 suprathreshold cubes centred at world (0, y, 0) for each y."""
+    data = np.zeros((64, 64, 16), dtype=np.float32)
+    for y in y_worlds:
+        i, j, k = 32, int(y + 32), 8
+        data[i - 2 : i + 3, j - 2 : j + 3, k - 2 : k + 3] = value
+    return data
+
+
+def _rs_maps(root, *maps):
+    files = []
+    for idx, data in enumerate(maps, start=1):
+        path = os.path.join(
+            root, RESULTS_DIR, "fMRI_resting_state", "r-thresh_zstat%02d.nii.gz" % idx
+        )
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        nib.save(nib.Nifti1Image(data, _AFFINE), path)
+        files.append(path)
+    return files
+
+
+def _networks(root, files, engine="NILEARN", **values):
+    result = _rs_result(root, engine=engine, **values)
+    return _by_name(_check_fmri_resting_networks(result, files, _RS_TRUTH))
+
+
+def test_resting_networks_each_found_in_its_own_component_pass(tmp_path):
+    root = str(tmp_path)
+    # A broad noise component in between, then the two networks.
+    files = _rs_maps(root, _rs_blob(-5, 0, 5), _rs_blob(-20), _rs_blob(20, value=-4))
+    checks = _networks(root, files)
+    assert set(checks) == {
+        "fmri.rs.network.precentral",
+        "fmri.rs.network.rs_posterior",
+    }
+    assert all(c.passed for c in checks.values()), checks
+
+
+def test_resting_networks_fused_in_one_component_fail(tmp_path):
+    root = str(tmp_path)
+    files = _rs_maps(root, _rs_blob(20, -20))
+    checks = _networks(root, files)
+    assert not checks["fmri.rs.network.precentral"].passed
+    assert not checks["fmri.rs.network.rs_posterior"].passed
+
+
+def test_resting_network_found_twice_does_not_cover_the_other(tmp_path):
+    # Two components on the motor network: the posterior one is still missing.
+    root = str(tmp_path)
+    files = _rs_maps(root, _rs_blob(20), _rs_blob(19))
+    checks = _networks(root, files)
+    assert checks["fmri.rs.network.precentral"].passed
+    assert not checks["fmri.rs.network.rs_posterior"].passed
+
+
+def test_resting_networks_are_checked_on_the_fsl_engine(tmp_path):
+    root = str(tmp_path)
+    files = _rs_maps(root, _rs_blob(20, -20))
+    checks = _networks(root, files, engine="FSL")
+    assert not checks["fmri.rs.network.precentral"].passed
+
+
+def test_resting_networks_skip_a_fixed_dimensionality(tmp_path):
+    # ic_dim > 0 deliberately over-splits the two-network phantom.
+    root = str(tmp_path)
+    files = _rs_maps(root, _rs_blob(20, -20))
+    assert _networks(root, files, ic_dim="20") == {}

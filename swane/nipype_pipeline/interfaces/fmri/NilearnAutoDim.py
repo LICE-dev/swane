@@ -91,9 +91,10 @@ def estimate_dim_mdl(Y, subsample_factor, rank_max=None):
         rank = max(min(rank, int(rank_max)), 0)
     if rank == 0:
         return 0
+    # MDL(k) is evaluated on the p - k smallest eigenvalues (1-based k+1..p).
     mdl = np.full(rank, np.inf)
-    for k in range(rank - 1):
-        tail = ev[k + 1 : rank]
+    for k in range(rank):
+        tail = ev[k:rank]
         ratio = np.exp(np.mean(np.log(tail))) / np.mean(tail)  # geo/arith mean
         if ratio <= 0:
             continue
