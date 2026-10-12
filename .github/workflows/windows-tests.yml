@@ -79,6 +79,10 @@ jobs:
     if: ${{ inputs.suite == 'heavy' || inputs.suite == 'all' }}
     runs-on: ${{ inputs.os }}
     timeout-minutes: 240
+    env:
+      # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
+      # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
+      TEMPLATEFLOW_HOME: ${{ inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow' || '/Users/runner/.cache/templateflow' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -99,9 +103,9 @@ jobs:
             ~/.cache/swane
             ~/.dipy
           key: heavy-${{ inputs.os }}-${{ hashFiles('setup.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
-      - name: Fetch fsaverage for the phantom tests
+      - name: Fetch the phantom anatomy (TemplateFlow)
         shell: bash
-        run: python -c "from swane.tests.helpers.phantom.fsaverage_source import resolve_fsaverage_mri_dir as r; print(r())"
+        run: python -c "from swane.tests.helpers.phantom.anatomy_source import resolve_anatomy_files as r; print(r())"
       - name: Heavy tests
         shell: bash
         run: >
@@ -125,6 +129,9 @@ jobs:
       # Space-free paths (SWANe rejects subject folders with blank spaces).
       SWANE_PHANTOM_DIR: ${{ inputs.os == 'windows-latest' && 'D:\swp_phantom' || '/Users/runner/swp_phantom' }}
       SWP_WORK_DIR: ${{ inputs.os == 'windows-latest' && 'D:/swp' || '/Users/runner/swp' }}
+      # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
+      # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
+      TEMPLATEFLOW_HOME: ${{ inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow' || '/Users/runner/.cache/templateflow' }}
       # Standard runners: windows 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
       SWP_CORES: ${{ inputs.os == 'windows-latest' && '4' || '3' }}
       SWP_RAM: ${{ inputs.os == 'windows-latest' && '14' || '6' }}
@@ -158,7 +165,7 @@ jobs:
         with:
           path: |
             ${{ env.SWANE_PHANTOM_DIR }}
-            ~/.cache/swane/fsaverage
+            ~/.cache/templateflow/tpl-MNI152NLin2009cSym
           key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
           enableCrossOsArchive: true
       - name: Build phantom
@@ -168,13 +175,15 @@ jobs:
       # The capability probe only offers the DIPY_RECOBUNDLES tractography
       # passes when ~/.dipy/bundle_atlas_hcp842 already exists; SWANe would
       # fetch it at run time, so fetch it once here and share it via cache.
+      # One cache per runner OS: the archive stores ~/.dipy relative to the
+      # workspace, and the home directory sits elsewhere on each OS, so an
+      # archive saved on macOS lands outside ~/.dipy when restored on Windows.
       - name: HCP842 atlas cache
         id: hcp842
         uses: actions/cache@v6
         with:
           path: ~/.dipy/bundle_atlas_hcp842
-          key: dipy-hcp842-v1
-          enableCrossOsArchive: true
+          key: dipy-hcp842-${{ runner.os }}-v1
       - name: Fetch HCP842 atlas
         if: steps.hcp842.outputs.cache-hit != 'true'
         shell: bash
@@ -215,6 +224,9 @@ jobs:
       # Space-free paths (SWANe rejects subject folders with blank spaces).
       SWANE_PHANTOM_DIR: ${{ inputs.os == 'windows-latest' && 'D:\swp_phantom' || '/Users/runner/swp_phantom' }}
       SWP_WORK_DIR: ${{ inputs.os == 'windows-latest' && 'D:/swp' || '/Users/runner/swp' }}
+      # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
+      # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
+      TEMPLATEFLOW_HOME: ${{ inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow' || '/Users/runner/.cache/templateflow' }}
       # Standard runners: windows 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
       SWP_CORES: ${{ inputs.os == 'windows-latest' && '4' || '3' }}
       SWP_RAM: ${{ inputs.os == 'windows-latest' && '14' || '6' }}
@@ -242,20 +254,8 @@ jobs:
           cat "$FSLDIR/etc/fslversion"
           which bet flirt fnirt eddy_cpu dtifit bedpostx probtrackx2 melodic
           python -c "from swane.utils.DependencyManager import DependencyManager as D; d = D.check_fsl(); print(d.state, d.label); assert d.state.name == 'DETECTED'"
-      - uses: actions/cache/restore@v6
-        with:
-          path: |
-            ${{ env.SWANE_PHANTOM_DIR }}
-            ~/.cache/swane/fsaverage
-          key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
-          enableCrossOsArchive: true
-          fail-on-cache-miss: true
-      - uses: actions/cache/restore@v6
-        with:
-          path: ~/.dipy/bundle_atlas_hcp842
-          key: dipy-hcp842-v1
-          enableCrossOsArchive: true
-          fail-on-cache-miss: true
+      # Restore this broad cache first: its ~/.cache/templateflow may hold
+      # 0-byte placeholders that would overwrite the phantom's anatomy files.
       - uses: actions/cache@v6
         with:
           path: |
@@ -264,6 +264,19 @@ jobs:
             ~/.cache/templateflow
             ~/.dipy
           key: prerelease-models-${{ hashFiles('setup.py') }}
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ env.SWANE_PHANTOM_DIR }}
+            ~/.cache/templateflow/tpl-MNI152NLin2009cSym
+          key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - uses: actions/cache/restore@v6
+        with:
+          path: ~/.dipy/bundle_atlas_hcp842
+          key: dipy-hcp842-${{ runner.os }}-v1
+          fail-on-cache-miss: true
       - name: Run pass
         shell: bash
         run: >

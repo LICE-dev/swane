@@ -4,7 +4,7 @@ Two layers, matching the two ways the ground truth is obtained:
 
 * fast, no FreeSurfer -- ``compute_centres`` on a hand-built tiny tissue model,
   the JSON round-trip, and the load/fallback decision in ``GroundTruth.load``;
-* heavy, needs ``fsaverage`` -- the cached sidecar built with the phantom must
+* heavy, needs the CerebrA anatomy -- the cached sidecar built with the phantom must
   equal what ``GroundTruth.build`` recomputes from scratch, so switching the
   sweep from rebuild to load cannot change a single graded coordinate.
 """
@@ -22,10 +22,10 @@ from swane.tests.helpers.phantom.ground_truth import (
 from swane.tests.helpers.phantom.tissue import TissueClass, TissueModel
 
 
-def _has_fsaverage() -> bool:
-    from swane.tests.helpers.phantom.fsaverage_source import fsaverage_available
+def _has_anatomy() -> bool:
+    from swane.tests.helpers.phantom.anatomy_source import anatomy_available
 
-    return fsaverage_available()
+    return anatomy_available()
 
 
 def _synthetic_model() -> TissueModel:
@@ -166,11 +166,11 @@ def test_ground_truth_load_none_dir_builds(monkeypatch):
 
 @pytest.mark.heavy
 @pytest.mark.skipif(
-    not _has_fsaverage(),
-    reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
+    not _has_anatomy(),
+    reason="CerebrA/ICBM 2009c Sym not in the TemplateFlow cache",
 )
 def test_real_af_or_corridors_are_anatomically_placed():
-    """The AF/OR corridors built on fsaverage land where the anatomy demands.
+    """The AF/OR corridors built on the CerebrA anatomy land where the anatomy demands.
 
     Unlike the hand-built fast test, this stamps the corridors on the real WM
     and would catch waypoints that miss white matter entirely (empty mask ->
@@ -199,8 +199,8 @@ def test_real_af_or_corridors_are_anatomically_placed():
 
 @pytest.mark.heavy
 @pytest.mark.skipif(
-    not _has_fsaverage(),
-    reason="fsaverage not available locally (FreeSurfer or MNE mirror cache)",
+    not _has_anatomy(),
+    reason="CerebrA/ICBM 2009c Sym not in the TemplateFlow cache",
 )
 def test_cached_sidecar_matches_rebuild(tmp_path):
     """The whole point: load == rebuild, to the coordinate.

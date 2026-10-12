@@ -111,15 +111,36 @@ this repository's own root `LICENSE` (MIT) like the rest of the codebase.
 
 ---
 
-## fsaverage (FreeSurfer)
+## CerebrA atlas and MNI152NLin2009cSym probseg (TemplateFlow)
 
-SWANe's test suite builds a synthetic subject ("phantom") for automated
-testing, and its tissue-class map generator
-(`swane/tests/helpers/phantom/`) reads the `fsaverage` subject shipped with a
-locally installed FreeSurfer. `fsaverage` is never bundled with or committed
-to this repository; it is only read, at test time, from the user's own
-FreeSurfer installation, under the same FreeSurfer Software License Agreement
-already listed above.
+SWANe's test-suite phantom (`swane/tests/helpers/phantom/`) builds its
+tissue-class map from the CerebrA atlas and the GM/WM/CSF probabilistic
+segmentations and brain mask of the ICBM 2009c Nonlinear Symmetric template,
+fetched at test time from TemplateFlow (`tpl-MNI152NLin2009cSym`,
+`atlas-CerebrA_dseg`, `label-{GM,WM,CSF}_probseg`, `desc-brain_mask`). They are
+never bundled with or committed to this repository.
+
+**CerebrA**: Manera, A. L., Dadar, M., Fonov, V., & Collins, D. L. (2020).
+CerebrA, registration and manual label correction of Mindboggle-101 atlas for
+MNI-ICBM152 template. *Scientific Data*, 7(1).
+https://doi.org/10.1038/s41597-020-0557-9 —
+https://doi.org/10.12751/g-node.be5e62
+
+**License**: Creative Commons CC0 1.0 Public Domain Dedication.
+
+CerebrA's labels are derived from the Mindboggle-101 dataset (Klein, A., &
+Tourville, J. (2012). 101 labeled brain images and a consistent human cortical
+labeling protocol. *Frontiers in Neuroscience*, 6, 171.
+https://doi.org/10.3389/fnins.2012.00171), distributed under Creative Commons
+Attribution 4.0 International (CC BY 4.0, https://mindboggle.info/data); this
+notice provides that attribution.
+
+**ICBM 2009c Nonlinear Symmetric probseg and brain mask**: same McConnell
+Brain Imaging Centre copyright and license as the "Images derived from ICBM
+2009c Nonlinear Symmetric Atlas" section above.
+
+All of these are permissive licenses (CC0, CC BY 4.0 and the MNI/McGill notice)
+with no acceptance flow of their own.
 
 ---
 ## External neuroimaging tools orchestrated by SWANe
