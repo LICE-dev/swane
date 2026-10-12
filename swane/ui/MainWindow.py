@@ -1020,16 +1020,26 @@ class MainWindow(QMainWindow):
                 self.optional_grid_layout,
             )
             DependencyManager.check_slicer(
-                self.global_config.get_slicer_path(), self.slicer_row
+                self.global_config.get_slicer_path(),
+                self.slicer_row,
+                self.slicer_extensions_state_row,
             )
         else:
             label = strings.check_dep_slicer_found % version_with_license(
                 SLICER, self.global_config.get_slicer_version()
             )
+            self.slicer_x = opt_x
             opt_x = self.add_home_entry(
                 Dependence(DependenceStatus.DETECTED, label),
                 opt_x,
                 self.optional_grid_layout,
+            )
+            # The fast checks of need_slicer_check passed; confirm in background
+            # that the executable still reports the recorded version.
+            DependencyManager.quick_check_slicer_version(
+                self.global_config.get_slicer_path(),
+                self.global_config.get_slicer_version(),
+                self.slicer_quick_check_done,
             )
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
@@ -1138,6 +1148,41 @@ class MainWindow(QMainWindow):
         self.home_grid_layout.addWidget(label, y, 3, 1, 2)
 
         return y + 1
+
+    def slicer_quick_check_done(self, version_matches: bool):
+        """
+        Handle the background Slicer version confirmation: on a mismatch (e.g.
+        an in-place upgrade) the extensions may be gone, so run the full check.
+
+        Parameters
+        ----------
+        version_matches : bool
+            True if the executable still reports the recorded version.
+        """
+        if version_matches:
+            return
+        self.add_home_entry(
+            Dependence(DependenceStatus.CHECKING, strings.mainwindow_dep_slicer_src),
+            self.slicer_x,
+            self.optional_grid_layout,
+        )
+        DependencyManager.check_slicer(
+            self.global_config.get_slicer_path(),
+            self.slicer_row,
+            self.slicer_extensions_state_row,
+        )
+
+    def slicer_extensions_state_row(self, state: str):
+        """
+        Persist where the full Slicer check found the extensions.
+
+        Parameters
+        ----------
+        state : str
+            JSON with the Slicer revision and the extension install folders.
+        """
+        self.global_config.set_slicer_extensions_state(state)
+        self.global_config.save()
 
     def slicer_row(
         self, slicer_path: str, slicer_version: str, msg: str, state: DependenceStatus

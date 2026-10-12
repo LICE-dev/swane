@@ -682,6 +682,11 @@ GLOBAL_PREFERENCES[category]["slicer_version"] = PreferenceEntry(
     hidden=True,
     default="",
 )
+GLOBAL_PREFERENCES[category]["slicer_extensions_state"] = PreferenceEntry(
+    input_type=InputTypes.TEXT,
+    hidden=True,
+    default="",
+)
 GLOBAL_PREFERENCES[category]["last_pid"] = PreferenceEntry(
     input_type=InputTypes.INT,
     hidden=True,

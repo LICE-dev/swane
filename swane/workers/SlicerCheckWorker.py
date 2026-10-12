@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import subprocess
 from swane.utils.qt_compat import QRunnable, Signal, QObject
@@ -11,6 +12,9 @@ import platform
 
 class SlicerCheckSignaler(QObject):
     slicer = Signal(str, str, str, DependenceStatus)
+    # JSON state of the extension install folders, emitted before ``slicer``
+    # when every required extension was found
+    extensions = Signal(str)
 
 
 class SlicerCheckWorker(QRunnable):
@@ -161,6 +165,58 @@ if _swane_os.path.isdir(_swane_workers_dir):
             if found:
                 return sorted(set(found), reverse=True)
         return []
+
+    @staticmethod
+    def parse_extension_report(output: str) -> dict:
+        """
+        Parse the ``SLICER REVISION:`` / ``MODULE PATH:`` lines printed by
+        ``slicer_script_module_install.py``.
+
+        Returns
+        -------
+        dict
+            ``{"revision": str, "paths": {extension name: install folder}}``
+        """
+        state = {"revision": "", "paths": {}}
+        for line in output.splitlines():
+            line = line.strip()
+            if line.startswith("SLICER REVISION:"):
+                state["revision"] = line.split(":", 1)[1].strip()
+            elif line.startswith("MODULE PATH:"):
+                name, sep, path = line.split(":", 1)[1].partition("=")
+                if sep and name.strip() and path.strip():
+                    state["paths"][name.strip()] = path.strip()
+        return state
+
+    @staticmethod
+    def extensions_state_is_valid(raw_state: str, modules: list) -> bool:
+        """
+        Cheap, filesystem-only check of the state recorded by a full check.
+
+        Returns
+        -------
+        bool
+            True if the state lists every module and each install folder still
+            exists. An empty, malformed or incomplete state is not valid, so the
+            caller falls back to the full check.
+        """
+        try:
+            paths = json.loads(raw_state)["paths"]
+        except (TypeError, ValueError, KeyError):
+            return False
+        if not isinstance(paths, dict):
+            return False
+        return all(
+            isinstance(paths.get(module), str) and os.path.isdir(paths[module])
+            for module in modules
+        )
+
+    @staticmethod
+    def is_slicer_executable(slicer_path: str) -> bool:
+        """True if the path is a launchable Slicer file (not a folder or a stub)."""
+        if not os.path.isfile(slicer_path):
+            return False
+        return platform.system() == "Windows" or os.access(slicer_path, os.X_OK)
 
     @staticmethod
     def read_slicerrc(slicerrc_path):
@@ -328,6 +384,11 @@ if _swane_os.path.isdir(_swane_workers_dir):
                     except OSError:
                         output3 = ""
                     if "MODULE FOUND" in output3:
+                        self.signal.extensions.emit(
+                            json.dumps(
+                                SlicerCheckWorker.parse_extension_report(output3)
+                            )
+                        )
                         state = DependenceStatus.DETECTED
                         label = strings.check_dep_slicer_found % version_with_license(
                             SLICER, slicer_version
@@ -345,6 +406,42 @@ if _swane_os.path.isdir(_swane_workers_dir):
                         label = strings.check_dep_slicer_error2 % missing_modules
 
         self.signal.slicer.emit(cmd, slicer_version, label, state)
+
+    def terminate(self):
+        return
+
+
+class SlicerQuickCheckSignaler(QObject):
+    done = Signal(bool)
+
+
+class SlicerQuickCheckWorker(QRunnable):
+    """
+    Spawn a thread that confirms the known Slicer executable still reports the
+    version recorded by the last full check (catches an in-place upgrade).
+    """
+
+    TIMEOUT = 60
+
+    def __init__(self, slicer_path: str, expected_version: str):
+        super(SlicerQuickCheckWorker, self).__init__()
+        self.signal = SlicerQuickCheckSignaler()
+        self.slicer_path = slicer_path
+        self.expected_version = expected_version
+
+    def run(self):
+        ok = False
+        try:
+            output = subprocess.run(
+                [self.slicer_path, "--version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=self.TIMEOUT,
+            ).stdout.decode("utf-8")
+            ok = output.replace("Slicer ", "").strip() == self.expected_version
+        except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+            ok = False
+        self.signal.done.emit(ok)
 
     def terminate(self):
         return
