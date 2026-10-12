@@ -40,8 +40,8 @@ jobs:
     runs-on: ${{ inputs.os }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install SWANe
@@ -68,7 +68,7 @@ jobs:
           --junitxml=junit-light.xml -p no:cacheprovider -rfEs
           --timeout 600 -o faulthandler_timeout=300
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: light-${{ inputs.os }}
           path: |
@@ -80,8 +80,8 @@ jobs:
     runs-on: ${{ inputs.os }}
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install SWANe
@@ -90,7 +90,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
       - name: Restore model/data caches
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.keras
@@ -110,7 +110,7 @@ jobs:
           --junitxml=junit-heavy.xml -p no:cacheprovider -rfEs
           --timeout 1800 -o faulthandler_timeout=900
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: heavy-${{ inputs.os }}
           path: junit-heavy.xml
@@ -129,8 +129,8 @@ jobs:
       SWP_CORES: ${{ inputs.os == 'windows-latest' && '4' || '3' }}
       SWP_RAM: ${{ inputs.os == 'windows-latest' && '14' || '6' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install SWANe
@@ -154,7 +154,7 @@ jobs:
           python -c "from swane.utils.DependencyManager import DependencyManager as D; d = D.check_fsl(); print(d.state, d.label); assert d.state.name == 'DETECTED'"
       - name: Phantom cache
         id: phantom
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ env.SWANE_PHANTOM_DIR }}
@@ -170,7 +170,7 @@ jobs:
       # fetch it at run time, so fetch it once here and share it via cache.
       - name: HCP842 atlas cache
         id: hcp842
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.dipy/bundle_atlas_hcp842
           key: dipy-hcp842-v1
@@ -194,7 +194,7 @@ jobs:
           fi
           echo "passes=$passes" >> "$GITHUB_OUTPUT"
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: prerelease-plan
           path: dry-run.txt
@@ -219,8 +219,8 @@ jobs:
       SWP_CORES: ${{ inputs.os == 'windows-latest' && '4' || '3' }}
       SWP_RAM: ${{ inputs.os == 'windows-latest' && '14' || '6' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install SWANe
@@ -242,7 +242,7 @@ jobs:
           cat "$FSLDIR/etc/fslversion"
           which bet flirt fnirt eddy_cpu dtifit bedpostx probtrackx2 melodic
           python -c "from swane.utils.DependencyManager import DependencyManager as D; d = D.check_fsl(); print(d.state, d.label); assert d.state.name == 'DETECTED'"
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: |
             ${{ env.SWANE_PHANTOM_DIR }}
@@ -250,13 +250,13 @@ jobs:
           key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
           enableCrossOsArchive: true
           fail-on-cache-miss: true
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: ~/.dipy/bundle_atlas_hcp842
           key: dipy-hcp842-v1
           enableCrossOsArchive: true
           fail-on-cache-miss: true
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.keras
@@ -273,7 +273,7 @@ jobs:
       # Per-pass layout: <work dir>/<pass>/{pass_result.json,log/}; crash files
       # are text (crashfile_format=txt) in log/, beside pypeline.log[.N].
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: prerelease-${{ matrix.pass }}
           if-no-files-found: ignore
@@ -291,12 +291,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       # The merge script is stdlib only: no SWANe install needed.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: prerelease-*
           path: artifacts
@@ -313,7 +313,7 @@ jobs:
           cat prerelease-summary.md >> "$GITHUB_STEP_SUMMARY"
           exit $rc
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: prerelease-summary
           path: prerelease-summary.md
