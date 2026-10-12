@@ -85,7 +85,10 @@ _TOOL_MARKERS = {
     "requires_freesurfer": lambda: shutil.which("recon-all") is not None
     or bool(os.environ.get("FREESURFER_HOME")),
     "requires_slicer": lambda: shutil.which("Slicer") is not None
-    or bool(_configured_slicer_path() and os.path.exists(_configured_slicer_path())),
+    or any(
+        path and os.path.exists(path)
+        for path in (os.environ.get("SWANE_SLICER_PATH"), _configured_slicer_path())
+    ),
 }
 
 _MARKER_HELP = {

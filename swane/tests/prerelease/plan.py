@@ -1225,6 +1225,19 @@ _PASS_REQUIREMENTS = {
 }
 
 
+def passes_needing(capability: str) -> list:
+    """The passes gated on ``capability`` as a whole, in plan order.
+
+    CI uses it to install a tool (e.g. Slicer) only on the runners of the
+    passes that need it.
+    """
+    return [
+        spec.name
+        for spec in PASSES
+        if capability in _PASS_REQUIREMENTS.get(spec.name, ())
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # Effective values: what the resolved engines actually read
 # --------------------------------------------------------------------------- #
