@@ -29,7 +29,7 @@ runs:
         python swane/tests/prerelease/ci_fsl_env.py --release "$FSL_RELEASE" \
           --format github | tr -d '\r' >> "$GITHUB_OUTPUT"
 
-    - uses: mamba-org/setup-micromamba@v2
+    - uses: mamba-org/setup-micromamba@v3
       with:
         micromamba-root-path: ${{ runner.temp }}/mamba
         environment-name: fsl
