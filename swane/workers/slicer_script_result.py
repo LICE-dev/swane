@@ -608,6 +608,7 @@ class TimecourseViewer:
 
     def __init__(self):
         self._last_ic = None
+        self._previous_layout = None
         self._plot_table_node = None
         self._series_node = None
         self._chart_node = None
@@ -666,15 +667,21 @@ class TimecourseViewer:
         table.Modified()
 
         self._chart_node.SetTitle(f"IC {ic} - {volume_name}")
+        layout_manager = slicer.app.layoutManager()
+        if self._previous_layout is None and layout_manager is not None:
+            # remember the layout the user had, to restore it in _hide()
+            self._previous_layout = layout_manager.layout
         slicer.modules.plots.logic().ShowChartInLayout(self._chart_node)
 
     def _hide(self):
-        plots_module = getattr(slicer.modules, "plots", None)
-        if plots_module is None:
-            return
-        plot_widget = slicer.modules.plots.widgetRepresentation()
-        if plot_widget:
-            plot_widget.setVisible(False)
+        """
+        Close the plot view by restoring the layout that was active before
+        the first timecourse was shown.
+        """
+        layout_manager = slicer.app.layoutManager()
+        if layout_manager is not None and self._previous_layout is not None:
+            layout_manager.setLayout(self._previous_layout)
+        self._previous_layout = None
 
     def _find_zstat_in_other_views(self, exclude_composite_node):
         for node in slicer.util.getNodesByClass("vtkMRMLSliceCompositeNode"):
