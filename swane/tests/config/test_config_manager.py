@@ -200,11 +200,6 @@ class TestFmriRestingPreferenceMigration:
         assert "melodic_dim" not in reloaded[section]
         assert "melodic_dim" not in config_path.read_text()
 
-    def test_spatial_z_thr_default(self, tmp_path):
-        config, _ = self._new_subject_config(tmp_path)
-        section = str(DataInputList.FMRI_RS)
-        assert config.getfloat_safe(section, "spatial_z_thr") == 1.95
-
 
 class TestMailManagerFactory:
 

@@ -626,18 +626,10 @@ WF_PREFERENCES[category]["ic_dim"] = PreferenceEntry(
     range=[0, 200],
     special_value_text="Auto",
 )
-WF_PREFERENCES[category]["spatial_z_thr"] = PreferenceEntry(
-    input_type=InputTypes.FLOAT,
-    label="Spatial z threshold",
-    tooltip="Spatial z threshold for the final IC maps (Python engine only)",
-    default=1.95,
-    decimals=2,
-    range=[1.0, 5.0],
-)
 WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold for mixture model estimation",
-    tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives (FSL engine only)",
+    tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives",
     default=0.50,
     decimals=2,
     range=[0, 1],
@@ -935,7 +927,8 @@ GLOBAL_PREFERENCES[category]["segmentation_engine"] = PreferenceEntry(
 )
 GLOBAL_PREFERENCES[category]["fmri_engine"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
-    label="fMRI engine",
+    label="Task fMRI engine",
+    tooltip="Resting state fMRI always runs on FSL (MELODIC)",
     value_enum=FmriEngine,
     default=DEFAULT_ENGINES["fmri_engine"],
     option_dependency={
@@ -992,13 +985,25 @@ GLOBAL_PREFERENCES[category]["limit_cores"] = PreferenceEntry(
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}
+# External dependencies of optional series: {series: (dependency, fail tooltip)}
+OPTIONAL_SERIES_DEPENDENCIES = {
+    # Resting state fMRI runs on FSL (MELODIC) only
+    DataInputList.FMRI_RS: ("is_fsl", "Resting state fMRI requires FSL"),
+}
 for data_input in DataInputList:
     if data_input.value.optional:
+        dependency_kwargs = {}
+        if data_input in OPTIONAL_SERIES_DEPENDENCIES:
+            dependency, fail_tooltip = OPTIONAL_SERIES_DEPENDENCIES[data_input]
+            dependency_kwargs = dict(
+                dependency=dependency, dependency_fail_tooltip=fail_tooltip
+            )
         GLOBAL_PREFERENCES[category][data_input.value.name] = PreferenceEntry(
             input_type=InputTypes.BOOLEAN,
             label=data_input.value.label,
             default="false",
             restart=True,
+            **dependency_kwargs,
         )
 
 category = GlobalPrefCategoryList.MAIL_SETTINGS

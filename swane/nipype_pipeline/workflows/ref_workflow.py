@@ -196,8 +196,7 @@ def ref_workflow(
 
     if tissue_segmentation:
         # NODE 6: three-class tissue segmentation shared by every consumer
-        # (FLAT1, dipy tractography seeding, NILEARN resting-state nuisance
-        # ROIs), engine-selectable.
+        # (FLAT1, dipy tractography seeding), engine-selectable.
         segmentation_engine = resolve_segmentation_engine(synth_config)
         if segmentation_engine == SegmentationEngine.ANTS:
             # Atropos segments the N4-corrected brain (see ref_bias_correction),

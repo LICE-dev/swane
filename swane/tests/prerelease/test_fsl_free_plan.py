@@ -212,7 +212,11 @@ def test_fsl_free_pass_builds_without_fsl_nodes(pass_name, tmp_path, monkeypatch
 
 def test_fsl_free_stand_ins_run_without_fsl():
     """The FSL-free stand-ins replace their FSL originals on this host."""
-    for name in ("structural_alt_settings_fsl_free", "dti_classic_fsl_free"):
+    for name in (
+        "structural_alt_settings_fsl_free",
+        "dti_classic_fsl_free",
+        "fmri_alt_settings_fsl_free",
+    ):
         assert name in FSL_FREE_PASSES, name
 
 

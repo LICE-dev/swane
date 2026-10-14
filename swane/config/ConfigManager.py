@@ -557,6 +557,26 @@ class ConfigManager(configparser.ConfigParser):
         if self.global_config:
             for category in GLOBAL_PREFERENCES:
                 for option in GLOBAL_PREFERENCES[category]:
+                    # Boolean global preferences whose external dependency is
+                    # missing (e.g. an optional series that needs a tool) are
+                    # turned off.
+                    entry = GLOBAL_PREFERENCES[category][option]
+                    if (
+                        entry.input_type == InputTypes.BOOLEAN
+                        and entry.dependency is not None
+                        and self.has_option(str(category), option)
+                        and self.getboolean_safe(category, option)
+                    ):
+                        dep_check = getattr(dependency_manager, entry.dependency, None)
+                        if (
+                            dep_check is None
+                            or not callable(dep_check)
+                            or not dep_check()
+                        ):
+                            self[category][option] = "false"
+                            changed = True
+                            continue
+
                     if self._reset_unavailable_enum_option(
                         category,
                         option,

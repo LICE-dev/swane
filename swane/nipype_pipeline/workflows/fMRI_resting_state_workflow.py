@@ -3,14 +3,9 @@ from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import fMRI_preproc_workflow
 from swane.nipype_pipeline.workflows.fMRI_resting_state_fsl import build_fsl_resting
-from swane.nipype_pipeline.workflows.fMRI_resting_state_nilearn import (
-    build_nilearn_resting,
-    build_nilearn_output_space,
-)
 from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     resolve_registration_engine,
-    resolve_fmri_engine,
 )
 from swane.config.config_enums import SliceTiming, FmriEngine
 
@@ -37,7 +32,8 @@ def fMRI_resting_state_workflow(
         workflow settings.
     synth_config: SectionProxy
         The Synth-tools configuration section used to resolve the registration
-        engine. EPI avoids SynthMorph, so SYNTH falls back to ANTS; the resolved
+        engine. The fMRI engine preference is ignored: resting state always
+        runs on FSL (MELODIC). EPI avoids SynthMorph, so SYNTH falls back to ANTS; the resolved
         engine drives the shared func->ref registration, the ref->atlas
         registration and every apply below.
     base_dir : path, optional
@@ -54,19 +50,12 @@ def fMRI_resting_state_workflow(
     ----------
     reference_brain : path
         Betted T13D.
-    tissue_pve : list of path
-        Tissue partial volume / posterior maps of the T13D ordered
-        [CSF, GM, WM], from the shared reference segmentation (NILEARN engine
-        only).
 
     Output Node Fields
     ----------
     thresh_zstat_files : path
         Thresholded component maps in reference space
-        (``r-thresh_zstatNN``). FSL resamples MELODIC's thresholded maps;
-        NILEARN resamples the unthresholded z and the survivor masks of the
-        threshold decided in functional space
-        (``fMRI_resting_state_nilearn.build_nilearn_output_space``).
+        (``r-thresh_zstatNN``), MELODIC's thresholded maps resampled.
     aroma_classification : path
         ICA-AROMA classification overview (AROMA enabled only).
     ic_mix : path
@@ -75,11 +64,10 @@ def fMRI_resting_state_workflow(
     Returns
     -------
     workflow : CustomWorkflow
-        The fMRI workflow. This function builds the shared preprocessing and
-        dispatches the analysis to the builder of the resolved fMRI engine
-        (``fMRI_resting_state_fsl.build_fsl_resting`` or
-        ``fMRI_resting_state_nilearn.build_nilearn_resting``); both use the
-        shared ICA-AROMA module ``fMRI_resting_state_aroma``.
+        The fMRI workflow. This function builds the shared preprocessing (FSL
+        path) and the MELODIC analysis
+        (``fMRI_resting_state_fsl.build_fsl_resting``), which uses the
+        ICA-AROMA module ``fMRI_resting_state_aroma``.
 
     """
 
@@ -88,7 +76,6 @@ def fMRI_resting_state_workflow(
     del_start_vols = config.getint_safe("del_start_vols")
     del_end_vols = config.getint_safe("del_end_vols")
     run_aroma = config.getboolean_safe("aroma")
-    fmri_engine = resolve_fmri_engine(synth_config)
     hpcutoff = 100
 
     # The EPI registration engine, resolved once for the shared func->ref
@@ -110,10 +97,7 @@ def fMRI_resting_state_workflow(
         base_dir=base_dir,
         max_cpu=max_cpu,
         test_run=test_run,
-        # The NILEARN nuisance ROIs consume the shared reference segmentation.
-        extra_input_fields=(
-            ("tissue_pve",) if fmri_engine == FmriEngine.NILEARN else ()
-        ),
+        fmri_engine=FmriEngine.FSL,
     )
 
     # Output Node
@@ -126,27 +110,16 @@ def fMRI_resting_state_workflow(
 
     inputnode = workflow.get_node("inputnode")
 
-    if fmri_engine == FmriEngine.NILEARN:
-        ica_output = build_nilearn_resting(
-            workflow=workflow,
-            name=name,
-            config=config,
-            synth_config=synth_config,
-            engine=engine,
-            test_run=test_run,
-            max_cpu=max_cpu,
-        )
-    else:
-        ica_output = build_fsl_resting(
-            workflow=workflow,
-            name=name,
-            config=config,
-            synth_config=synth_config,
-            engine=engine,
-            test_run=test_run,
-            max_cpu=max_cpu,
-            hpcutoff=hpcutoff,
-        )
+    ica_output = build_fsl_resting(
+        workflow=workflow,
+        name=name,
+        config=config,
+        synth_config=synth_config,
+        engine=engine,
+        test_run=test_run,
+        max_cpu=max_cpu,
+        hpcutoff=hpcutoff,
+    )
 
     if run_aroma:
         workflow.connect(
@@ -156,38 +129,26 @@ def fMRI_resting_state_workflow(
             "aroma_classification",
         )
 
-    if fmri_engine == FmriEngine.NILEARN:
-        # The threshold is decided in functional space; the unthresholded z
-        # and the survivor masks are resampled and recombined.
-        zstats_combine = build_nilearn_output_space(
-            workflow=workflow,
-            ica_output=ica_output,
-            engine=engine,
-            inputnode=inputnode,
-            out_file_name=registered_file_name,
-        )
-        workflow.connect(zstats_combine, "out_file", outputnode, "thresh_zstat_files")
-    else:
-        zstats_2_ref = apply_registration_node(
-            name="zstats",
-            engine=engine,
-            workflow=workflow,
-            # The func->ref transform comes from the wrapper fMRI_preproc exposes:
-            # on ANTs registration= feeds the whole ordered transform list plus its
-            # which_to_invert flags (wire_transforms), while the FSL/Synth paths
-            # keep reading the single-file .mat view.
-            warp=[workflow.reg_2_ref.out_registered_node, workflow.reg_2_ref.warp],
-            registration=workflow.reg_2_ref,
-            moving=[ica_output, "thresh_zstat_files"],
-            reference=[inputnode, "reference_brain"],
-            out_file=[ica_output, ("thresh_zstat_files", registered_file_name)],
-            non_linear=False,
-            name_prefix="Zstat maps",
-            name_suffix="to reference",
-            iterfield=["in_file", "out_file"],
-        )
+    zstats_2_ref = apply_registration_node(
+        name="zstats",
+        engine=engine,
+        workflow=workflow,
+        # The func->ref transform comes from the wrapper fMRI_preproc exposes:
+        # on ANTs registration= feeds the whole ordered transform list plus its
+        # which_to_invert flags (wire_transforms), while the FSL/Synth paths
+        # keep reading the single-file .mat view.
+        warp=[workflow.reg_2_ref.out_registered_node, workflow.reg_2_ref.warp],
+        registration=workflow.reg_2_ref,
+        moving=[ica_output, "thresh_zstat_files"],
+        reference=[inputnode, "reference_brain"],
+        out_file=[ica_output, ("thresh_zstat_files", registered_file_name)],
+        non_linear=False,
+        name_prefix="Zstat maps",
+        name_suffix="to reference",
+        iterfield=["in_file", "out_file"],
+    )
 
-        workflow.connect(zstats_2_ref, "out_file", outputnode, "thresh_zstat_files")
+    workflow.connect(zstats_2_ref, "out_file", outputnode, "thresh_zstat_files")
     workflow.connect(ica_output, "ic_mix", outputnode, "ic_mix")
 
     return workflow

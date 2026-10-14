@@ -1,6 +1,6 @@
 """``MainWorkflow.set_analyses_request`` decides whether the reference
-workflow builds the shared tissue segmentation: only when FLAT1, dipy
-tractography or the NILEARN resting state will consume it.
+workflow builds the shared tissue segmentation: only when FLAT1 or dipy
+tractography will consume it (resting state runs on FSL and never does).
 
 Only the request gate is exercised (on a bare ``MainWorkflow`` instance); no
 graph is built and no external tool runs.
@@ -124,7 +124,7 @@ def test_dipy_tractography(request_gate, kwargs, expected):
 @pytest.mark.parametrize(
     "kwargs,expected",
     [
-        ({"fmri_rs": True, "fmri_engine": "NILEARN"}, True),
+        ({"fmri_rs": True, "fmri_engine": "NILEARN"}, False),
         ({"fmri_rs": True, "fmri_engine": "FSL"}, False),
         ({"fmri_rs": False, "fmri_engine": "NILEARN"}, False),
     ],
