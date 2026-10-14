@@ -462,15 +462,6 @@ tool_reference_list = {
         references=[],
     ),
     # NILEARN
-    "NilearnCanICA": ToolReference(
-        command="CanICA [nilearn]",
-        package=Package.NILEARN,
-        url="https://nilearn.github.io/stable/modules/generated/nilearn.decomposition.CanICA.html",
-        references=[
-            "Varoquaux G, Sadaghiani S, Poline JB, et al. A group model for stable multi-subject ICA on fMRI datasets. NeuroImage. 2010;51(1):288-299.",
-            "Hyvärinen A, Oja E. Independent component analysis: algorithms and applications. Neural Networks. 2000;13(4-5):411-430.",
-        ],
-    ),
     "NilearnFirstLevel": ToolReference(
         command="FirstLevelModel [nilearn]",
         package=Package.NILEARN,

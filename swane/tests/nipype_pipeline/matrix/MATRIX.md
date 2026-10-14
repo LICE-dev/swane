@@ -1,6 +1,6 @@
 # SWANe workflow settings matrix
 
-Overview of 91 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
+Overview of 88 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
 > Generated from the golden snapshots by `python3 swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
@@ -59,9 +59,6 @@ Overview of 91 construction scenarios across 16 workflow families. Each row is o
 | [aroma_on](snapshots/fmri_resting_state/aroma_on.txt) | aroma=true; ic_dim=0; melodic_thr=0.5 | 47 / 80 | `applywarp`, `convertwarp`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `mcflirt`, `melodic`, `niimath`, `susan` | — |
 | [ic_auto_dim](snapshots/fmri_resting_state/ic_auto_dim.txt) | aroma=false; ic_dim=0; melodic_thr=0.5 | 31 / 49 | `dcm2niix`, `flirt`, `mcflirt`, `melodic`, `niimath`, `susan` | — |
 | [ic_fixed_dim](snapshots/fmri_resting_state/ic_fixed_dim.txt) | aroma=false; ic_dim=30; melodic_thr=0.9 | 31 / 49 | `dcm2niix`, `flirt`, `mcflirt`, `melodic`, `niimath`, `susan` | — |
-| [nilearn_aroma_off_ants](snapshots/fmri_resting_state/nilearn_aroma_off_ants.txt) | aroma=false; fmri_engine=NILEARN; ic_dim=0; registration_engine=ANTS; spatial_z_thr=1.95 | 57 / 113 | `dcm2niix`, `niimath` | — |
-| [nilearn_aroma_on_ants](snapshots/fmri_resting_state/nilearn_aroma_on_ants.txt) | aroma=true; fmri_engine=NILEARN; ic_dim=0; registration_engine=ANTS; spatial_z_thr=1.95 | 73 / 154 | `dcm2niix`, `niimath` | — |
-| [nilearn_aroma_on_fsl_registration](snapshots/fmri_resting_state/nilearn_aroma_on_fsl_registration.txt) | aroma=true; fmri_engine=NILEARN; ic_dim=0; registration_engine=FSL; spatial_z_thr=1.95 | 72 / 149 | `applywarp`, `convert_xfm`, `convertwarp`, `dcm2niix`, `flirt`, `fnirt`, `invwarp`, `niimath` | — |
 | [test_run](snapshots/fmri_resting_state/test_run.txt) | aroma=true; ic_dim=0; melodic_thr=0.5; test_run=True | 47 / 80 | `applywarp`, `convertwarp`, `dcm2niix`, `flirt`, `fnirt`, `fsl_regfilt`, `mcflirt`, `melodic`, `niimath`, `susan` | — |
 
 ## fmri_task

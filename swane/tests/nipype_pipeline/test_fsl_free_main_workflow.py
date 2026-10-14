@@ -80,7 +80,10 @@ def test_default_engines_build_fsl_free_main_workflow(
     names = {node.fullname for node in nodes}
     # Sanity: the analyses with an FSL alternative are actually in the graph.
     assert any(name.startswith("bundle_") for name in names)
-    assert any(name.startswith("fmri_resting_state.") for name in names)
+    assert any(name.startswith("fmri_0.") for name in names)
+    # Resting state runs on FSL only: even with its series loaded (the optional
+    # series gate is bypassed above), it fails closed without FSL.
+    assert not any(name.startswith("fmri_resting_state.") for name in names)
 
     fsl_nodes = sorted(
         "%s (%s)" % (node.fullname, type(node.interface).__name__)

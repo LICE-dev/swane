@@ -156,8 +156,9 @@ the FSL diffusion chain (eddy, BEDPOSTX, probtrackx) reads `cuda`, so both
 values need FSL (`cuda=true` a GPU too), and only the passes running that chain
 pin it; every other pass rides the config default (`false`), which nothing else
 reads. The FSL baseline passes are skipped with a "needs
-fsl" reason (`fmri_task_and_rest` too: without FSL it would resolve to exactly
-`fmri_task_and_rest_ants`); tractography stays covered by the dipy RecoBundles
+fsl" reason, and so is every pass loading resting state, which runs on FSL
+MELODIC only (`aroma` and `ic_dim` are reported unreachable; the FSL-free task
+path stays covered by `fmri_task_ants`); tractography stays covered by the dipy RecoBundles
 pass (the `tractography` capability is XTRACT *or* dipy).
 
 The FSL-free values that only an FSL-pinned pass sets are kept exercised by

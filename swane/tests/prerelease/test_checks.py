@@ -10,20 +10,14 @@ nothing. A directory-shape regression must fail loudly instead of vanishing.
 
 import os
 
-from types import SimpleNamespace
-
 import nibabel as nib
 import numpy as np
-from nipype.utils.filemanip import savepkl
 
 from swane.tests.prerelease.checks import (
     _check_dipy_bundle_recovery,
     _check_fmri_resting_networks,
     _check_fmri_task_location,
     GroundTruth,
-    _check_nilearn_resting,
-    NILEARN_RS_EXPECTED_COMPONENTS,
-    NILEARN_RS_EXPECTED_PRE_AROMA_COMPONENTS,
     RESULTS_DIR,
     WARNING,
 )
@@ -103,157 +97,13 @@ def test_dipy_bundle_recovery_flags_a_low_confidence_bundle(tmp_path):
     assert checks["dipy.confidence.%s_rh" % SWEEP_TRACT].severity == WARNING
 
 
-# --------------------------------------------------------------------------- #
-# NILEARN resting-state checks
-# --------------------------------------------------------------------------- #
-def _save(path, data):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    nib.save(nib.Nifti1Image(np.asarray(data, dtype=np.float32), np.eye(4)), path)
-
-
-def _rs_result(subject_dir, engine="NILEARN", **values):
+def _rs_result(subject_dir, engine="FSL", **values):
     return PassResult(
         name="fmri_task_and_rest",
         subject_dir=subject_dir,
         inputs=["t13d", "fmri_resting_state"],
         values={"fmri_engine": engine, **values},
     )
-
-
-def _rs_layout(
-    root,
-    n_components=NILEARN_RS_EXPECTED_COMPONENTS,
-    n_pre_aroma=NILEARN_RS_EXPECTED_PRE_AROMA_COMPONENTS,
-    ica_node="ica_fastica_icasso",
-    k=12,
-    maps_nonempty=True,
-):
-    """Build the on-disk layout of a NILEARN resting-state run: the final ICA
-    and the cluster-extent report in the Nipype work dir, the registered maps
-    in the results folder. Returns the result image list."""
-    wf = os.path.join(root, "prerelease_wf", "fMRI_resting_state")
-    _save(os.path.join(wf, ica_node, "ica_IC.nii.gz"), np.ones((4, 4, 4, n_components)))
-    # The AROMA-pass CanICA writes a file with the same name: never the source.
-    if n_pre_aroma is not None:
-        _save(
-            os.path.join(wf, "preproc_ica_canica", "ica_IC.nii.gz"),
-            np.ones((4, 4, 4, n_pre_aroma)),
-        )
-    if k is not None:
-        # Nipype removes the unconsumed JSON report (remove_unnecessary_outputs);
-        # the node's result file keeps k.
-        node_dir = os.path.join(wf, "ica_cluster_extent")
-        os.makedirs(node_dir, exist_ok=True)
-        savepkl(
-            os.path.join(node_dir, "result_ica_cluster_extent.pklz"),
-            SimpleNamespace(outputs=SimpleNamespace(min_cluster_voxels=k)),
-        )
-    files = []
-    for idx in range(1, n_components + 1):
-        data = np.zeros((4, 4, 4))
-        if maps_nonempty and idx == 1:
-            data[1, 1, 1] = 3.0
-        path = os.path.join(
-            root, RESULTS_DIR, "fMRI_resting_state", "r-thresh_zstat%02d.nii.gz" % idx
-        )
-        _save(path, data)
-        files.append(path)
-    return files
-
-
-def test_nilearn_resting_checks_pass_on_the_workflow_layout(tmp_path):
-    files = _rs_layout(str(tmp_path))
-    checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
-    assert set(checks) == {
-        "fmri.rs.ica_source",
-        "fmri.determinism.rs_components",
-        "fmri.determinism.rs_components_pre_aroma",
-        "fmri.rs.cluster_extent",
-        "fmri.rs.zstat_maps",
-    }
-    for check in checks.values():
-        assert check.passed, check
-
-
-def test_nilearn_resting_checks_skip_the_fsl_engine(tmp_path):
-    files = _rs_layout(str(tmp_path))
-    assert _check_nilearn_resting(_rs_result(str(tmp_path), engine="FSL"), files) == []
-
-
-def test_nilearn_resting_component_count_ignores_the_aroma_pass_ica(tmp_path):
-    # Only the AROMA-pass CanICA output exists: the final ICA is missing, and
-    # its 7 components must not be taken for the final count.
-    files = _rs_layout(str(tmp_path), ica_node="some_other_node", n_pre_aroma=7)
-    checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
-    assert not checks["fmri.rs.ica_source"].passed
-    assert not checks["fmri.determinism.rs_components"].passed
-
-
-def test_nilearn_resting_component_count_mismatch_fails(tmp_path):
-    files = _rs_layout(str(tmp_path), n_components=NILEARN_RS_EXPECTED_COMPONENTS + 1)
-    checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
-    assert checks["fmri.rs.ica_source"].passed
-    assert not checks["fmri.determinism.rs_components"].passed
-
-
-def test_nilearn_resting_pre_aroma_count_mismatch_fails(tmp_path):
-    # The AROMA pass must see every phantom source (networks + nuisance).
-    files = _rs_layout(
-        str(tmp_path), n_pre_aroma=NILEARN_RS_EXPECTED_PRE_AROMA_COMPONENTS - 1
-    )
-    checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
-    assert not checks["fmri.determinism.rs_components_pre_aroma"].passed
-    assert checks["fmri.determinism.rs_components"].passed
-
-
-def test_nilearn_resting_pre_aroma_ica_missing_fails(tmp_path):
-    files = _rs_layout(str(tmp_path), n_pre_aroma=None)
-    checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
-    assert not checks["fmri.determinism.rs_components_pre_aroma"].passed
-
-
-def test_nilearn_resting_without_aroma_has_no_pre_aroma_count(tmp_path):
-    files = _rs_layout(str(tmp_path), n_pre_aroma=None)
-    checks = _by_name(
-        _check_nilearn_resting(_rs_result(str(tmp_path), aroma="false"), files)
-    )
-    assert "fmri.determinism.rs_components_pre_aroma" not in checks
-
-
-def test_nilearn_resting_fixed_ic_dim_expects_that_many_components(tmp_path):
-    # Without FSL, fmri_alt_settings downgrades to NILEARN but keeps ic_dim=20:
-    # the fixed dimensionality, not the estimated phantom count, is expected.
-    files = _rs_layout(str(tmp_path), n_components=20)
-    checks = _by_name(
-        _check_nilearn_resting(_rs_result(str(tmp_path), ic_dim="20"), files)
-    )
-    assert checks["fmri.determinism.rs_components"].passed
-
-
-def test_nilearn_resting_fixed_ic_dim_mismatch_fails(tmp_path):
-    files = _rs_layout(str(tmp_path), n_components=NILEARN_RS_EXPECTED_COMPONENTS)
-    checks = _by_name(
-        _check_nilearn_resting(_rs_result(str(tmp_path), ic_dim="20"), files)
-    )
-    assert not checks["fmri.determinism.rs_components"].passed
-
-
-def test_nilearn_resting_cluster_extent_report_missing_or_zero_fails(tmp_path):
-    missing = tmp_path / "missing"
-    files = _rs_layout(str(missing), k=None)
-    checks = _by_name(_check_nilearn_resting(_rs_result(str(missing)), files))
-    assert not checks["fmri.rs.cluster_extent"].passed
-
-    zero = tmp_path / "zero"
-    files = _rs_layout(str(zero), k=0)
-    checks = _by_name(_check_nilearn_resting(_rs_result(str(zero)), files))
-    assert not checks["fmri.rs.cluster_extent"].passed
-
-
-def test_nilearn_resting_all_empty_maps_fail(tmp_path):
-    files = _rs_layout(str(tmp_path), maps_nonempty=False)
-    checks = _by_name(_check_nilearn_resting(_rs_result(str(tmp_path)), files))
-    assert not checks["fmri.rs.zstat_maps"].passed
 
 
 def _task_result(subject_dir):
@@ -413,7 +263,7 @@ def _rs_maps(root, *maps):
     return files
 
 
-def _networks(root, files, engine="NILEARN", **values):
+def _networks(root, files, engine="FSL", **values):
     result = _rs_result(root, engine=engine, **values)
     return _by_name(_check_fmri_resting_networks(result, files, _RS_TRUTH))
 
@@ -447,10 +297,11 @@ def test_resting_network_found_twice_does_not_cover_the_other(tmp_path):
     assert not checks["fmri.rs.network.rs_posterior"].passed
 
 
-def test_resting_networks_are_checked_on_the_fsl_engine(tmp_path):
+def test_resting_networks_are_checked_whatever_the_task_fmri_engine(tmp_path):
+    # Resting state always runs on FSL: the (task) fmri_engine is irrelevant.
     root = str(tmp_path)
     files = _rs_maps(root, _rs_blob(20, -20))
-    checks = _networks(root, files, engine="FSL")
+    checks = _networks(root, files, engine="NILEARN")
     assert not checks["fmri.rs.network.precentral"].passed
 
 
