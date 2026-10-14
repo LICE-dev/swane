@@ -1,8 +1,8 @@
 """Settings matrix for
 :func:`swane.nipype_pipeline.workflows.fMRI_resting_state_workflow.fMRI_resting_state_workflow`.
 
-Wires the ICA chain of the selected fMRI engine (FSL MELODIC or the NILEARN
-chain) on the preprocessed data. The ``aroma=True`` path additionally
+Wires the FSL MELODIC ICA chain on the preprocessed data (resting state
+always runs on FSL, whatever the fMRI engine preference). The ``aroma=True`` path additionally
 reads the ``$FSLDIR`` MNI 2mm template at construction and adds the ICA-AROMA
 denoising branch: on a fully-equipped box that is the norm and is snapshotted;
 on a box without the template it degrades to a skip (see
@@ -23,16 +23,11 @@ from swane.tests.nipype_pipeline.matrix.conftest import fsl_data_path, require_f
 
 SUBDIR = "fmri_resting_state"
 
-# name -> (fmri_engine, registration engine, ic_dim, melodic_thr, aroma).
-# ``melodic_thr`` is read by the FSL engine only; the NILEARN scenarios echo
-# ``spatial_z_thr`` instead (its default).
+# name -> (registration engine, ic_dim, melodic_thr, aroma).
 SCENARIOS = {
-    "ic_auto_dim": ("FSL", "FSL", "0", "0.5", False),
-    "ic_fixed_dim": ("FSL", "FSL", "30", "0.9", False),
-    "aroma_on": ("FSL", "FSL", "0", "0.5", True),
-    "nilearn_aroma_on_ants": ("NILEARN", "ANTS", "0", "0.5", True),
-    "nilearn_aroma_off_ants": ("NILEARN", "ANTS", "0", "0.5", False),
-    "nilearn_aroma_on_fsl_registration": ("NILEARN", "FSL", "0", "0.5", True),
+    "ic_auto_dim": ("FSL", "0", "0.5", False),
+    "ic_fixed_dim": ("FSL", "30", "0.9", False),
+    "aroma_on": ("FSL", "0", "0.5", True),
 }
 
 
@@ -40,7 +35,7 @@ SCENARIOS = {
 def test_fmri_resting_state_matrix(
     scenario, subject_config, global_config, make_input_dir, graph_snapshot
 ):
-    fmri_engine, reg_engine, ic_dim, melodic_thr, aroma = SCENARIOS[scenario]
+    reg_engine, ic_dim, melodic_thr, aroma = SCENARIOS[scenario]
     if aroma:
         # aroma=True reads the MNI 2mm brain template at construction time.
         require_fsl_data(
@@ -53,7 +48,7 @@ def test_fmri_resting_state_matrix(
     # Pin both engines so the golden files do not follow the global defaults.
     synth = global_config[GlobalPrefCategoryList.SYNTH]
     synth["engine"] = reg_engine
-    synth["fmri_engine"] = fmri_engine
+    synth["fmri_engine"] = "FSL"
 
     wf = fMRI_resting_state_workflow(
         "fmri_rs",
@@ -65,13 +60,8 @@ def test_fmri_resting_state_matrix(
     config_echo = {
         "aroma": section["aroma"],
         "ic_dim": ic_dim,
+        "melodic_thr": melodic_thr,
     }
-    if fmri_engine == "FSL":
-        config_echo["melodic_thr"] = melodic_thr
-    else:
-        config_echo["fmri_engine"] = fmri_engine
-        config_echo["registration_engine"] = reg_engine
-        config_echo["spatial_z_thr"] = section["spatial_z_thr"]
     graph_snapshot(
         wf,
         subdir=SUBDIR,

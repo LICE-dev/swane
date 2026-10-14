@@ -135,6 +135,25 @@ class TestHideVsGrayOut:
         assert entry.label.isHidden() is True
         assert entry.input_field.isHidden() is True
 
+    @pytest.mark.parametrize("fsl", [True, False])
+    def test_resting_state_optional_series_is_hidden_without_fsl(
+        self, qtbot, global_config, dependency_manager, monkeypatch, fsl
+    ):
+        # Resting state runs on FSL (MELODIC) only: without FSL its optional
+        # series cannot be enabled.
+        monkeypatch.setattr(dependency_manager, "is_fsl", lambda: fsl)
+
+        window = PreferencesWindow(global_config, dependency_manager, False)
+        qtbot.addWidget(window)
+
+        optional = window.input_keys[GlobalPrefCategoryList.OPTIONAL_SERIES]
+        entry = window.inputs[optional[str(DataInputList.FMRI_RS)]]
+        assert entry.input_field.isHidden() is not fsl
+        assert entry.label.isHidden() is not fsl
+        # The task fMRI series has no external dependency.
+        task = window.inputs[optional[str(DataInputList.FMRI_0)]]
+        assert task.input_field.isHidden() is False
+
     def test_same_window_pref_requirement_in_workflow_window_is_grayed(
         self, qtbot, global_config, dependency_manager, monkeypatch
     ):

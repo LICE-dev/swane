@@ -15,7 +15,6 @@ from swane.config.config_enums import (
     FreesurferStep,
     DeskullModality,
     TractographyEngine,
-    FmriEngine,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -42,7 +41,6 @@ from swane.nipype_pipeline.workflows.dipy_bundle_workflow import (
     DIPY_TRACT_ATLAS,
 )
 from swane.nipype_pipeline.workflows.seeg_ct_workflow import seeg_ct_workflow
-from swane.nipype_pipeline.interfaces.utils import resolve_fmri_engine
 from swane.nipype_pipeline.workflows.tractography_workflow import (
     tractography_workflow,
     SIDES,
@@ -73,6 +71,7 @@ class MainWorkflow(CustomWorkflow):
     is_tractography: bool = False
     is_tissue_segmentation: bool = False
     is_slicer: bool = False
+    is_fsl: bool = False
     t1: CustomWorkflow
     freesurfer: CustomWorkflow = None
     sym: CustomWorkflow
@@ -225,6 +224,8 @@ class MainWorkflow(CustomWorkflow):
         )
         # Check if Slicer is installed to allow venous ct segmente_endocranium
         self.is_slicer = self.dependency_manager.is_slicer(self.global_config)
+        # Resting state fMRI runs on FSL (MELODIC) only
+        self.is_fsl = self.dependency_manager.is_fsl()
         # The reference tissue segmentation runs once in ref_workflow, only if
         # at least one consumer will be built.
         self.is_tissue_segmentation = self.is_tissue_segmentation_needed()
@@ -232,14 +233,12 @@ class MainWorkflow(CustomWorkflow):
     def is_tissue_segmentation_needed(self) -> bool:
         """
         Whether a consumer of the shared reference tissue segmentation will be
-        built. Mirrors the gates of launch_flat1_analysis,
-        launch_dipy_dti_analysis (tractography branch) and
-        launch_fMRI_resting_state_analysis (NILEARN engine).
+        built. Mirrors the gates of launch_flat1_analysis and
+        launch_dipy_dti_analysis (tractography branch).
         """
         if self.is_flat1:
             return True
 
-        synth_config = self.global_config[GlobalPrefCategoryList.SYNTH]
         if (
             self.subject_input_state_list[DIL.DTI].loaded
             and self.is_tractography
@@ -247,13 +246,6 @@ class MainWorkflow(CustomWorkflow):
                 GlobalPrefCategoryList.SYNTH, "tractography_engine"
             )
             == TractographyEngine.DIPY_RECOBUNDLES
-        ):
-            return True
-
-        if (
-            DIL.FMRI_RS in self.subject_input_state_list
-            and self.subject_input_state_list[DIL.FMRI_RS].loaded
-            and resolve_fmri_engine(synth_config) == FmriEngine.NILEARN
         ):
             return True
 
@@ -1329,7 +1321,8 @@ class MainWorkflow(CustomWorkflow):
     def launch_fMRI_resting_state_analysis(self):
         # Check for Resting state FMRI sequences
         if (
-            not DIL.FMRI_RS in self.subject_input_state_list
+            not self.is_fsl
+            or not DIL.FMRI_RS in self.subject_input_state_list
             or not self.subject_input_state_list[DIL.FMRI_RS].loaded
         ):
             return
@@ -1351,18 +1344,6 @@ class MainWorkflow(CustomWorkflow):
             self.fMRI_resting_state,
             "inputnode.reference_brain",
         )
-        if (
-            resolve_fmri_engine(self.global_config[GlobalPrefCategoryList.SYNTH])
-            == FmriEngine.NILEARN
-        ):
-            # NILEARN nuisance ROIs from the shared reference tissue segmentation.
-            self.connect(
-                self.t1,
-                "outputnode.tissue_pve",
-                self.fMRI_resting_state,
-                "inputnode.tissue_pve",
-            )
-
         self.fMRI_resting_state.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",

@@ -1,5 +1,4 @@
 import pytest
-from swane.config.config_enums import FmriEngine, RegistrationEngine
 from swane.nipype_pipeline.workflows.fMRI_resting_state_workflow import (
     fMRI_resting_state_workflow,
 )
@@ -8,8 +7,9 @@ from swane.nipype_pipeline.workflows.fMRI_resting_state_workflow import (
 # Dispatcher, shared AROMA module and FSL builder.
 #
 # Built with real ConfigManager sections (fixtures from
-# ``swane/tests/nipype_pipeline/conftest.py``) for both fMRI engines, AROMA on
-# and off, and registration engine ANTS and FSL.
+# ``swane/tests/nipype_pipeline/conftest.py``) for both fMRI engine
+# preferences (resting state ignores it and always runs on FSL), AROMA on and
+# off, and registration engine ANTS and FSL.
 # ---------------------------------------------------------------------------
 from nipype.utils.functions import getsource
 
@@ -161,8 +161,7 @@ def test_outputnode_fields(
         "ic_mix",
     }
     inc = {df: (src.name, sf) for src, sf, df in _incoming(wf, outputnode)}
-    final_output = "melodic_output" if fmri_engine == "FSL" else "ica_output"
-    assert inc["ic_mix"] == (final_output, "ic_mix")
+    assert inc["ic_mix"] == ("melodic_output", "ic_mix")
     assert inc["thresh_zstat_files"][1] == "out_file"
     if aroma:
         assert inc["aroma_classification"] == (
@@ -191,39 +190,28 @@ def test_aroma_module_node_names(
         assert {"ref_2_mni_fnirt", "func_2_mni_warp", "func2mni_apply_warp"} <= names
 
 
-@pytest.mark.parametrize("reg", ["ANTS", "FSL"])
-def test_nilearn_aroma_pass_dual_regression_flags(
-    subject_config, global_config, make_input_dir, reg
-):
-    wf = _build(subject_config, global_config, make_input_dir, "NILEARN", True, reg)
-    dual_reg = _node(wf, "preproc_ica_dual_reg")
-    assert dual_reg.inputs.centre_maps is False
-    assert dual_reg.inputs.t_to_z is False
-
-
 def test_build_aroma_classification_returns_node_and_registration(
     subject_config, global_config, make_input_dir
 ):
     from swane.nipype_pipeline.workflows import fMRI_resting_state_aroma
     from swane.nipype_pipeline.workflows import fMRI_resting_state_fsl
-    from swane.nipype_pipeline.workflows import fMRI_resting_state_nilearn
 
     assert callable(fMRI_resting_state_aroma.build_aroma_classification)
     assert callable(fMRI_resting_state_fsl.build_fsl_resting)
-    assert callable(fMRI_resting_state_nilearn.build_nilearn_resting)
 
 
 @pytest.mark.parametrize("fmri_engine", ["FSL", "NILEARN"])
-def test_tissue_pve_input_only_for_nilearn(
+def test_fmri_engine_preference_ignored(
     subject_config, global_config, make_input_dir, fmri_engine
 ):
-    """Only the NILEARN builder consumes the shared reference tissue
-    segmentation, so only it declares the ``tissue_pve`` input."""
-    from swane.nipype_pipeline.interfaces.utils import resolve_fmri_engine
-
+    """Resting state always runs the FSL preprocessing and MELODIC, whatever
+    the (task) fMRI engine preference."""
     wf = _build(
         subject_config, global_config, make_input_dir, fmri_engine, True, "ANTS"
     )
-    resolved = resolve_fmri_engine(global_config[GlobalPrefCategoryList.SYNTH])
-    fields = _node(wf, "inputnode").interface._fields
-    assert ("tissue_pve" in fields) == (resolved == FmriEngine.NILEARN)
+    assert type(_node(wf, "melodic").interface).__name__ == "MELODIC"
+    assert not any(
+        type(node.interface).__name__.startswith("Nilearn")
+        for node in wf._graph.nodes()
+    )
+    assert _node(wf, "inputnode").interface._fields == ["reference_brain"]

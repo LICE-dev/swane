@@ -19,6 +19,7 @@ from swane.config.config_enums import (
 )
 from swane.config.dependency_policy import default_engines
 from swane.config.preference_list import GLOBAL_PREFERENCES
+from swane.utils.DataInputList import DataInputList
 from swane.utils.Subject import Subject
 
 ENGINE_KEYS = (
@@ -118,6 +119,34 @@ def test_check_dependencies_keeps_fsl_engines_with_fsl(tmp_path):
 
     for key, option in FSL_OPTIONS.items():
         assert config[GlobalPrefCategoryList.SYNTH][key] == option.name
+
+
+def test_resting_state_series_is_gated_on_fsl():
+    """Resting state runs on FSL (MELODIC) only, so its optional series needs
+    FSL; the other optional series have no external dependency."""
+    optional = GLOBAL_PREFERENCES[GlobalPrefCategoryList.OPTIONAL_SERIES]
+    assert optional[str(DataInputList.FMRI_RS)].dependency == "is_fsl"
+    assert optional[str(DataInputList.FMRI_RS)].dependency_fail_tooltip
+    for key, entry in optional.items():
+        if key != str(DataInputList.FMRI_RS):
+            assert entry.dependency is None, key
+
+
+@pytest.mark.parametrize("fsl", [True, False])
+def test_check_dependencies_turns_resting_state_off_without_fsl(tmp_path, fsl):
+    config = ConfigManager(global_base_folder=str(tmp_path))
+    optional = config[GlobalPrefCategoryList.OPTIONAL_SERIES]
+    optional[str(DataInputList.FMRI_RS)] = "true"
+    optional[str(DataInputList.FMRI_0)] = "true"
+    config.save()
+
+    config.check_dependencies(_Deps(fsl=fsl))
+
+    assert config.is_optional_series_enabled(DataInputList.FMRI_RS) is fsl
+    assert config.is_optional_series_enabled(DataInputList.FMRI_0)
+    # The reset is persisted.
+    reloaded = ConfigManager(global_base_folder=str(tmp_path))
+    assert reloaded.is_optional_series_enabled(DataInputList.FMRI_RS) is fsl
 
 
 @pytest.mark.parametrize(

@@ -144,15 +144,14 @@ This project includes subsection derived from other software, which licenses can
 - Acoustic radiation (`ar`) produces no dipy bundle and remains FSL-only.
 - Low-confidence bundles are flagged rather than hidden: bundles that remain poorly matched to the atlas model after recovery retry generate a `r-<tract>_<side>.lowconf.json` sidecar (or `r-fx.lowconf.json` for fornix) and are labeled with `(LOW CONFIDENCE)` in 3D Slicer.
 - The dipy tractography engine requires a 6 GB RAM floor (`DIPY_TRACTOGRAPHY_RAM_REQUIREMENT`).
-- Resting state fMRI, Python engine (fMRI engine preference "Python (nilearn/scikit-learn)", the default): after the optional ICA-AROMA denoising, the data are regressed for linear trend and mean WM and CSF signals (plus the 24 Friston motion regressors when ICA-AROMA is off) and high-pass filtered (100 s); the model order is estimated on an unsmoothed copy of the same data; the final decomposition is FastICA with ICASSO (10 runs); maps are dual-regression z maps, thresholded by spatial z and by a per-subject Monte Carlo cluster extent, and resampled to the reference without creating sub-threshold edges.
-- New resting state preference `spatial_z_thr` (spatial z threshold, default 1.95, Python engine only). The spatial z of an IC map is a descriptive standardisation, not a statistical test.
 
 #### Changed
 
-- Resting state preference `melodic_dim` renamed `ic_dim`; existing configurations are migrated automatically. `melodic_thr` is used by the FSL engine only.
-- Resting state results: the component time courses are saved as `ica_mix` by both engines (FSL results used `melodic_mix`); 3D Slicer still loads older result folders. Component maps remain `r-thresh_zstatNN.nii.gz`.
+- Resting state fMRI requires FSL: it always runs on FSL MELODIC, whatever the fMRI engine preference (now labelled "Task fMRI engine", which only selects the task fMRI engine). Without FSL the "Resting State fMRI" optional series cannot be enabled, and a stored choice is turned off.
+- Resting state preference `melodic_dim` renamed `ic_dim`; existing configurations are migrated automatically.
+- Resting state results: the component time courses are saved as `ica_mix` (FSL results used `melodic_mix`); 3D Slicer still loads older result folders. Component maps remain `r-thresh_zstatNN.nii.gz`.
 - Resting state, FSL engine with ICA-AROMA: the ICA-AROMA decomposition and the denoising now use the data before the temporal high-pass, and the high-pass is applied after denoising, before the final MELODIC.
-- Python fMRI engine: motion correction now uses a fixed random seed and a single thread, so the same input always gives the same output. It is slower, and results of earlier versions are not reproduced.
+- Python task fMRI engine: motion correction now uses a fixed random seed and a single thread, so the same input always gives the same output. It is slower, and results of earlier versions are not reproduced.
 - The FSL license is always shown at first launch, also when FSL is not installed, because it covers the MNI152NLin6Asym template used by SWANe.
 - FSL is now a recommended dependency instead of a mandatory one: workflows can be generated and executed without FSL using the default FSL-free engines (ANTs, antspynet, dipy, nilearn). The FSL engines are disabled in the preferences when FSL is not installed, and stored FSL engine choices fall back to the default. A build-time flag (`FSL_MANDATORY` in `swane/config/dependency_policy.py`) restores FSL as a mandatory dependency and makes it the default brain extraction, tractography, segmentation and fMRI engine.
 

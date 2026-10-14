@@ -2,8 +2,7 @@
 :func:`swane.nipype_pipeline.workflows.ref_workflow.ref_workflow`.
 
 The segmentation runs once in the reference workflow (``ref_segmentation``)
-and its [CSF, GM, WM] maps are consumed by FLAT1, dipy tractography and the
-NILEARN resting state. Only the graph is built; no node is executed.
+and its [CSF, GM, WM] maps are consumed by FLAT1 and dipy tractography. Only the graph is built; no node is executed.
 """
 
 import pytest
