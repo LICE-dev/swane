@@ -89,7 +89,7 @@ def _tf_get(query: dict) -> str:
 def _lock_path() -> Path:
     # Same lock file as swane.utils.templates.get_swane_template: every
     # TemplateFlow download in SWANe is serialised on it. Never take it while
-    # already holding it in this process (see swane/utils/wm_prior.py).
+    # already holding it in this process: the lock is not reentrant.
     from swane.utils.templates import _SWANE_TEMPLATE_CACHE
 
     return _SWANE_TEMPLATE_CACHE / ".templateflow_fetch.lock"

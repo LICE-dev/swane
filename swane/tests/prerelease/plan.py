@@ -185,7 +185,7 @@ AXES = (
         gates={"NILEARN": "nilearn", "FSL": "fsl"},
     ),
     # The backend of the shared reference tissue segmentation (consumed by
-    # FLAT1, dipy tractography and the NILEARN resting state): ANTS (antspyx
+    # FLAT1 and dipy tractography): ANTS (antspyx
     # Atropos, the default, gated on antspyx) and FSL (FAST, gated on FSL).
     # Only meaningful when a pass runs one of those consumers; the two
     # structural twins pin it (FSL on structural_fsl, ANTS on structural_ants)
@@ -197,8 +197,8 @@ AXES = (
         option="segmentation_engine",
         values=_enum_values(SegmentationEngine, "ANTS", "FSL"),
         gates={"ANTS": "antspyx", "FSL": "fsl"},
-        note="only exercised when a pass runs FLAT1 (flat1=true), dipy "
-        "tractography or the NILEARN resting state",
+        note="only exercised when a pass runs FLAT1 (flat1=true) or dipy "
+        "tractography",
     ),
     Axis(
         name="synth_reconall",
@@ -430,13 +430,15 @@ AXES = (
     # (del=0 is then correct), so every pass loading both exercises "trim real
     # padding" and "correctly declare none" at once. No del_vols toggle.
     # ---- resting-state fMRI ---------------------------------------------------
+    # Resting state runs on FSL (MELODIC) only, whatever fmri_engine says: every
+    # value is gated on fsl, so an FSL-free host reports them unreachable.
     Axis(
         name="aroma",
         scope=SUBJECT,
         section=DIL.FMRI_RS,
         option="aroma",
         values=("false", "true"),
-        gates={"true": "mni_templates"},
+        gates={"false": "fsl", "true": ("fsl", "mni_templates")},
         needs_input=DIL.FMRI_RS,
     ),
     Axis(
@@ -445,19 +447,9 @@ AXES = (
         section=DIL.FMRI_RS,
         option="ic_dim",
         values=("0", "20"),
+        gates={"0": "fsl", "20": "fsl"},
         needs_input=DIL.FMRI_RS,
-        note="0 lets the fMRI engine estimate the dimensionality",
-    ),
-    # Read by the NILEARN engine only (threshold of the final IC maps). One
-    # value, the default: the NILEARN passes pin it so the axis is covered.
-    Axis(
-        name="spatial_z_thr",
-        scope=SUBJECT,
-        section=DIL.FMRI_RS,
-        option="spatial_z_thr",
-        values=("1.95",),
-        needs_input=DIL.FMRI_RS,
-        note="spatial z threshold of the final IC maps (NILEARN engine)",
+        note="0 lets MELODIC estimate the dimensionality",
     ),
 )
 
@@ -904,13 +896,14 @@ PASSES = (
     # the resting func->ref->mni concat, now follow registration_engine), so
     # this axis is pinned explicitly here to keep this pass's documented
     # FSL-baseline behaviour rather than silently riding the (ANTS) default --
-    # see structural_fsl/structural_ants. fmri_task_and_rest_ants below is its
-    # explicit ANTS twin.
+    # see structural_fsl/structural_ants. fmri_task_ants/fmri_rest_ants below
+    # are its explicit ANTS twins.
     PassSpec(
         name="fmri_task_and_rest",
         description=(
             "Both task runs (rArA with dummy padding, rArBrArB without, "
-            "different slice timings) plus resting state with the default NILEARN fMRI engine."
+            "different slice timings) with the default NILEARN fMRI engine, plus "
+            "resting state (always FSL MELODIC)."
         ),
         inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
         values={
@@ -923,7 +916,6 @@ PASSES = (
             "fmri1_slice_timing": "INTERLEAVED",
             "aroma": "true",
             "ic_dim": "0",
-            "spatial_z_thr": "1.95",
             "fmri_engine": "NILEARN",
         },
     ),
@@ -947,21 +939,19 @@ PASSES = (
             "fmri_engine": "FSL",
         },
     ),
-    # The explicit ANTS twin of fmri_task_and_rest (Phase 3): func->ref (task
-    # cluster applies, resting zstats apply) and the resting func->ref->mni
-    # AROMA-branch concatenation (a stacked AntsApplyTransforms transformlist,
-    # no ConvertWarp) forced through antspyx instead of FLIRT/FNIRT, mirroring
-    # structural_ants. Gated in _PASS_REQUIREMENTS: without antspyx it would
-    # downgrade to FSL and exactly duplicate fmri_task_and_rest, so it is
+    # The explicit ANTS twin of fmri_task_and_rest's task half (Phase 3): the
+    # task func->ref (cluster applies) forced through antspyx instead of FLIRT,
+    # mirroring structural_ants. Task-only, so it stays FSL-free. Gated in
+    # _PASS_REQUIREMENTS: without antspyx it would downgrade to FSL, so it is
     # skipped instead.
     PassSpec(
-        name="fmri_task_and_rest_ants",
+        name="fmri_task_ants",
         description=(
-            "The ANTS backend twin of fmri_task_and_rest: EPI func->ref "
-            "registration and the resting func->ref->mni concat exercised end "
-            "to end through antspyx instead of FLIRT/FNIRT."
+            "The ANTS backend twin of fmri_task_and_rest's task GLM: EPI "
+            "func->ref registration through antspyx instead of FLIRT, NILEARN "
+            "fMRI engine, no FSL."
         ),
-        inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1, DIL.FMRI_RS),
+        inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1),
         values={
             "freesurfer_step": "DISABLED",
             "deskull_engine": "ANTSPYNET",
@@ -970,10 +960,26 @@ PASSES = (
             "fmri1_block_design": "RARB",
             "fmri0_slice_timing": "UNKNOWN",
             "fmri1_slice_timing": "INTERLEAVED",
+            "fmri_engine": "NILEARN",
+        },
+    ),
+    # The ANTS twin of the resting state: func->ref (zstats apply) and the
+    # func->ref->mni AROMA-branch concatenation (a stacked AntsApplyTransforms
+    # transformlist, no ConvertWarp) through antspyx; MELODIC still needs FSL.
+    PassSpec(
+        name="fmri_rest_ants",
+        description=(
+            "Resting state with ANTS registration: func->ref and the AROMA "
+            "func->ref->mni concat exercised end to end through antspyx "
+            "instead of FLIRT/FNIRT."
+        ),
+        inputs=(DIL.T13D, DIL.FMRI_RS),
+        values={
+            "freesurfer_step": "DISABLED",
+            "deskull_engine": "ANTSPYNET",
+            "registration_engine": "ANTS",
             "aroma": "true",
             "ic_dim": "0",
-            "spatial_z_thr": "1.95",
-            "fmri_engine": "NILEARN",
         },
     ),
     PassSpec(
@@ -995,6 +1001,30 @@ PASSES = (
             "ic_dim": "20",
             "fmri_engine": "FSL",
         },
+    ),
+    # The FSL-free stand-in for fmri_alt_settings: the alternative slice-timing
+    # modes on the task runs only (resting state needs FSL), on the default
+    # ANTSPYNET/ANTS/NILEARN engines. It runs only where fmri_alt_settings is
+    # skipped, so on an FSL host the sweep is unchanged.
+    PassSpec(
+        name="fmri_alt_settings_fsl_free",
+        description=(
+            "The FSL-free stand-in for fmri_alt_settings: the other slice-timing "
+            "modes on the task runs with the NILEARN fMRI engine, run only where "
+            "the FSL original is skipped."
+        ),
+        inputs=(DIL.T13D, DIL.FMRI_0, DIL.FMRI_1),
+        values={
+            "freesurfer_step": "DISABLED",
+            "deskull_engine": "ANTSPYNET",
+            "registration_engine": "ANTS",
+            "fmri0_block_design": "RARA",
+            "fmri1_block_design": "RARB",
+            "fmri0_slice_timing": "UP",
+            "fmri1_slice_timing": "DOWN",
+            "fmri_engine": "NILEARN",
+        },
+        stands_in_for="fmri_alt_settings",
     ),
     # SynthMorph/SynthStrip coverage for the venous MR chain: venous_mr_workflow
     # uses SynthStrip (deskull) and SynthMorph (vein registration to reference).
@@ -1183,14 +1213,16 @@ _PASS_REQUIREMENTS = {
     # DIPY_RECOBUNDLES and claim old_eddy_correct=true without building it.
     "dti_classic": ("fsl", "xtract"),
     "fmri_task_and_rest_fsl": ("fsl",),
-    # Without FSL its FSL registration pin downgrades to ANTS, resolving to
-    # exactly fmri_task_and_rest_ants (which covers the ANTS/NILEARN path).
+    # Resting state runs on FSL only; the FSL-free task path is covered by
+    # fmri_task_ants.
     "fmri_task_and_rest": ("nilearn", "fsl"),
+    "fmri_alt_settings": ("fsl",),
+    "fmri_rest_ants": ("antspyx", "fsl"),
     # Phase 3 ANTS twins of the EPI/diffusion baselines, same reasoning as
     # structural_ants: without antspyx the engine axis would silently
     # downgrade ANTS->FSL, exactly duplicating fmri_task_and_rest /
     # dti_tractography, so they are skipped with a clear reason instead.
-    "fmri_task_and_rest_ants": ("antspyx", "nilearn"),
+    "fmri_task_ants": ("antspyx", "nilearn"),
     # dti_tractography_ants exists for ANTS + the externalized probtrackx
     # transforms: without xtract (which implies FSL) its FSL_XTRACT pin would
     # downgrade to the dipy chain and claim old_eddy_correct=false unread.
