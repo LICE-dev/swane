@@ -379,6 +379,26 @@ class ConfigManager(configparser.ConfigParser):
                 state.replace("%", "%%")
             )
 
+    def get_slicer_revision(self) -> str:
+        """
+        Returns
+        -------
+        The Slicer revision string recorded by the last full Slicer check,
+        or "" if none was recorded.
+        """
+        raw = self.get_slicer_extensions_state()
+        if not raw:
+            return ""
+        try:
+            import json
+
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                return str(data.get("revision", "")).strip()
+            return ""
+        except (ValueError, TypeError, KeyError):
+            return ""
+
     def get_accepted_license_version(self, tool_id: str) -> str:
         """
         Return the tool version whose license the user last accepted, or "".

@@ -1035,10 +1035,10 @@ class MainWindow(QMainWindow):
                 self.optional_grid_layout,
             )
             # The fast checks of need_slicer_check passed; confirm in background
-            # that the executable still reports the recorded version.
+            # that the installation still matches the recorded revision.
             DependencyManager.quick_check_slicer_version(
                 self.global_config.get_slicer_path(),
-                self.global_config.get_slicer_version(),
+                self.global_config.get_slicer_revision(),
                 self.slicer_quick_check_done,
             )
 
