@@ -355,7 +355,9 @@ class TestSlicerCheckWorkerReal:
         assert os.access(real_slicer, os.W_OK) is True, "Slicer non writeable"
         real_rev = SlicerCheckWorker.read_slicer_revision(real_slicer)
         assert (
-            real_rev is not None and real_rev.isdigit()
+            real_rev is not None
+            and len(real_rev) > 0
+            and any(c.isdigit() for c in real_rev)
         ), f"Failed to read valid revision from real Slicer at {real_slicer}: {real_rev}"
         # The install root: the .app bundle on macOS (the executable is in
         # Contents/MacOS), the executable's folder elsewhere.
@@ -656,6 +658,35 @@ def test_read_slicer_revision_from_macos_plist(tmp_path, monkeypatch):
     plist_file = contents / "Info.plist"
     with open(plist_file, "wb") as f:
         plistlib.dump({"CFBundleVersion": "34045"}, f)
+
+    slicer_exe = macos / "Slicer"
+    slicer_exe.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+    assert SlicerCheckWorker.read_slicer_revision(str(slicer_exe)) == "34045"
+
+
+def test_read_slicer_revision_from_macos_ini_precedence(tmp_path, monkeypatch):
+    import plistlib
+    import platform
+
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    bundle = tmp_path / "Slicer.app"
+    contents = bundle / "Contents"
+    macos = contents / "MacOS"
+    contents_bin = contents / "bin"
+    macos.mkdir(parents=True)
+    contents_bin.mkdir(parents=True)
+
+    # Info.plist has the marketing/build version (e.g. 5.12.4)
+    plist_file = contents / "Info.plist"
+    with open(plist_file, "wb") as f:
+        plistlib.dump({"CFBundleVersion": "5.12.4"}, f)
+
+    # SlicerLauncherSettings.ini has the actual numeric revision
+    ini_file = contents_bin / "SlicerLauncherSettings.ini"
+    ini_file.write_text("[Application]\nrevision = 34045\n", encoding="utf-8")
 
     slicer_exe = macos / "Slicer"
     slicer_exe.write_text("#!/bin/sh\n", encoding="utf-8")
