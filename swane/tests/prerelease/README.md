@@ -202,7 +202,7 @@ without XTRACT to check that no running pass pins such a value (it would count
 as coverage without being exercised) and that no two running passes are the
 same execution once those values are ignored.
 
-The phantom is built from the CerebrA/ICBM 2009c Sym TemplateFlow files: they are downloaded once (network needed). Phantom caches are keyed by the anatomy content and the generator version, so `phantom_<key>` folders under `~/test_swane/phantom` from earlier versions (fsaverage anatomy) are orphaned and can be deleted.
+The phantom is built from the CerebrA/ICBM 2009c Sym TemplateFlow files: they are downloaded once (network needed).
 
 Licenses of the anatomy files: see `NOTICE.md`.
 

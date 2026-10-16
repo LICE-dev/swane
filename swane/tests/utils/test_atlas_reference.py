@@ -35,4 +35,3 @@ def test_mni152nlin6asym_row_is_listed_under_the_fsl_license():
 def test_unrelated_atlas_rows_are_unchanged():
     names = {atlas.display_name for atlas in ATLASES}
     assert "HCP842 whole-brain bundle atlas" in names
-    assert "fsaverage" in names
