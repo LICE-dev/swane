@@ -302,16 +302,14 @@ wizard_parallel_subjects = "Subjects analysed at the same time"
 wizard_per_subject_resources = (
     "Each subject can use up to <b>{ram_gb:.2f} GB RAM</b> and <b>{cpu} CPU cores</b>."
 )
-wizard_parallel_subjects_limit = (
-    " At most {max_subj} subjects fit this share with at least {min_ram:.0f} GB each."
-)
 wizard_current_resources = (
     "<b>Current setting</b>: {ram_gb:.2f} GB RAM and {cpu} CPU cores per subject, "
     "up to {max_subj} subjects at the same time."
 )
-wizard_current_resources_overflow = (
-    " <span style='color:#c0392b;'><b>Together they can request {total_gb:.1f} GB, "
-    "more than the {ram_gb:.1f} GB of this computer.</b></span>"
+low_subject_ram_title = "Low RAM per subject"
+low_subject_ram_warning = (
+    "With {subjects} subjects at the same time, each subject can use only "
+    "{ram_gb:.2f} GB of RAM, less than {limit} GB: analyses may fail or be very slow."
 )
 
 wizard_hardware_accelleration_title = "Hardware Acceleration"

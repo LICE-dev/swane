@@ -6,6 +6,8 @@ import shutil
 
 import pytest
 
+from swane.utils.ResourceManager import ResourceManager
+
 from swane.config.ConfigManager import ConfigManager
 from swane.config.preference_list import GLOBAL_PREFERENCES
 from swane.config.config_enums import (
@@ -88,9 +90,22 @@ class TestGlobalConfig:
         assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == "1"
         config.apply_resource_profile(PerformanceProfile.MAX_PERF)
         assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == "1"
-        parallel = ConfigManager.get_max_parallel_subjects(PerformanceProfile.MAX_PERF)
-        config.apply_resource_profile(PerformanceProfile.MAX_PERF, parallel + 1)
-        assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == str(parallel)
+        config.apply_resource_profile(PerformanceProfile.MAX_PERF, 99)
+        assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == str(
+            ResourceManager.MAX_PARALLEL_SUBJECTS
+        )
+
+    def test_overflowing_ram_is_lowered_at_load(self, tmp_path):
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        perf = GlobalPrefCategoryList.PERFORMANCE
+        config[perf]["max_subj"] = "3"
+        config[perf]["ram_gb"] = str(ResourceManager.get_maximum_ram())
+        config.save()
+
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        ram_gb = config.getfloat_safe(perf, "ram_gb")
+        assert ram_gb == ResourceManager.get_max_subject_ram(3)
+        assert ram_gb * 3 <= ResourceManager.get_maximum_ram()
 
 
 class TestSafeGetters:

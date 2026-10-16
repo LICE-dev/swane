@@ -260,6 +260,8 @@ class PreferencesWindow(QDialog):
 
                 grid.addWidget(test_button, x, 0, 1, 2)
 
+        self._bind_subject_ram_limit()
+
         layout.addWidget(tab_widget)
         layout.addWidget(self.saveButton)
 
@@ -277,6 +279,60 @@ class PreferencesWindow(QDialog):
             layout.addWidget(reset_button)
 
         self.setLayout(layout)
+
+    def _bind_subject_ram_limit(self):
+        """
+        Keeps the RAM per subject within the share of all the subject tabs
+        together (see ResourceManager.get_max_subject_ram), updating its
+        maximum whenever the subject tab limit changes.
+        """
+        perf = GlobalPrefCategoryList.PERFORMANCE
+        if perf not in self.input_keys:
+            return
+        keys = self.input_keys[perf]
+        if "max_subj" not in keys or "ram_gb" not in keys:
+            return
+        self._max_subj_input = self.inputs[keys["max_subj"]]
+        self._ram_input = self.inputs[keys["ram_gb"]]
+        self._max_subj_input.input_field.valueChanged.connect(
+            self.subject_tab_limit_changed
+        )
+        self._last_max_subj = self._max_subj_input.input_field.value()
+        self.subject_tab_limit_changed(self._last_max_subj)
+
+    def subject_tab_limit_changed(self, max_subj: int):
+        """
+        Lowers the RAM per subject maximum (and value, if needed) to the share
+        of the new subject tab limit, alerting when an added subject brings
+        the RAM per subject below ResourceManager.LOW_SUBJECT_RAM_GB.
+
+        Parameters
+        ----------
+        max_subj: int
+            The new subject tab limit.
+        """
+        ram_field = self._ram_input.input_field
+        previous_ram = ram_field.value()
+        ram_field.setMaximum(ResourceManager.get_max_subject_ram(max_subj))
+        ram_gb = ram_field.value()
+
+        added = max_subj > self._last_max_subj
+        self._last_max_subj = max_subj
+        if (
+            added
+            and ram_gb < previous_ram
+            and ram_gb < ResourceManager.LOW_SUBJECT_RAM_GB
+        ):
+            self._alert_low_subject_ram(
+                strings.low_subject_ram_warning.format(
+                    subjects=max_subj,
+                    ram_gb=ram_gb,
+                    limit=ResourceManager.LOW_SUBJECT_RAM_GB,
+                )
+            )
+
+    def _alert_low_subject_ram(self, warning: str):
+        QMessageBox.warning(self, strings.low_subject_ram_title, warning)
 
     def send_test_mail(self):
         try:
@@ -556,6 +612,8 @@ class PreferencesWindow(QDialog):
                     pref_entry.key
                 ] = pref_entry.get_value()
 
+        # Defense in depth: the subject tabs together never exceed the RAM share
+        self.my_config.enforce_resource_limit()
         self.my_config.save()
         if self.restart:
             ret_code = EXIT_CODE_REBOOT

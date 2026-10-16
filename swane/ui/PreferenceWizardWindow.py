@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QSpinBox,
+    QMessageBox,
 )
 
 from swane.resources import strings
@@ -310,7 +311,7 @@ class PreferenceWizardWindow(QDialog):
                 ConfigManager.get_resource_budget(level)[0] - current_total
             ),
         )
-        prefs.parallel_subjects = max_subj
+        prefs.parallel_subjects = min(max_subj, ResourceManager.MAX_PARALLEL_SUBJECTS)
 
         prefs.use_gpu_acceleration = prefs.gpu_capable and config.getboolean_safe(
             perf, "cuda"
@@ -512,10 +513,17 @@ class PreferenceWizardWindow(QDialog):
         lay.addSpacing(8)
         lay.addLayout(parallel_row)
 
+        self._parallel_spin.setMaximum(ResourceManager.MAX_PARALLEL_SUBJECTS)
+
         self._per_subject_label = QLabel("")
         self._per_subject_label.setWordWrap(True)
         self._per_subject_label.setTextFormat(Qt.TextFormat.RichText)
         lay.addWidget(self._per_subject_label)
+
+        self._low_ram_label = QLabel("")
+        self._low_ram_label.setWordWrap(True)
+        self._low_ram_label.setStyleSheet("color: #c0392b;")
+        lay.addWidget(self._low_ram_label)
 
         if not self.first_run:
             current = QLabel(self._current_resources_text())
@@ -540,8 +548,7 @@ class PreferenceWizardWindow(QDialog):
 
     def _current_resources_text(self) -> str:
         """
-        Describes the current resource configuration, flagging a total RAM
-        request larger than this computer.
+        Describes the current resource configuration.
 
         Returns
         -------
@@ -556,20 +563,13 @@ class PreferenceWizardWindow(QDialog):
         if cpu < 1:
             cpu = ResourceManager.get_max_cpu()
         max_subj = max(1, self.global_config.get_max_subject_tabs())
-        text = strings.wizard_current_resources.format(
+        return strings.wizard_current_resources.format(
             ram_gb=ram_gb, cpu=cpu, max_subj=max_subj
         )
-        machine_gb = ResourceManager.total_memory_gb()
-        if ram_gb * max_subj > machine_gb:
-            text += strings.wizard_current_resources_overflow.format(
-                total_gb=ram_gb * max_subj, ram_gb=machine_gb
-            )
-        return text
 
     def _set_performance_profile(self, profile: PerformanceProfile) -> None:
         """
-        Stores the chosen resource level and bounds the parallel subjects to
-        what it can host.
+        Stores the chosen resource level.
 
         Parameters
         ----------
@@ -583,18 +583,16 @@ class PreferenceWizardWindow(QDialog):
         """
 
         self.user_prefs.performance_profile = profile
-        max_parallel = ConfigManager.get_max_parallel_subjects(profile)
         self._parallel_spin.blockSignals(True)
-        self._parallel_spin.setMaximum(max_parallel)
-        self._parallel_spin.setValue(
-            min(max(1, self.user_prefs.parallel_subjects), max_parallel)
-        )
+        self._parallel_spin.setValue(self.user_prefs.parallel_subjects)
         self._parallel_spin.blockSignals(False)
         self._set_parallel_subjects(self._parallel_spin.value())
 
     def _set_parallel_subjects(self, value: int) -> None:
         """
         Stores the parallel subjects and refreshes the per-subject resources.
+        Adding a subject that brings the RAM per subject below
+        ResourceManager.LOW_SUBJECT_RAM_GB raises an alert.
 
         Parameters
         ----------
@@ -607,16 +605,49 @@ class PreferenceWizardWindow(QDialog):
 
         """
 
+        previous_ram = float(self._resources()["ram_gb"])
+        added = int(value) > self.user_prefs.parallel_subjects
         self.user_prefs.parallel_subjects = int(value)
         resources = self._resources()
-        text = strings.wizard_per_subject_resources.format(
-            ram_gb=resources["ram_gb"], cpu=resources["max_subj_cpu"]
+        ram_gb = float(resources["ram_gb"])
+        self._per_subject_label.setText(
+            strings.wizard_per_subject_resources.format(
+                ram_gb=ram_gb, cpu=resources["max_subj_cpu"]
+            )
         )
-        text += strings.wizard_parallel_subjects_limit.format(
-            max_subj=self._parallel_spin.maximum(),
-            min_ram=ResourceManager.get_minimum_subject_ram(),
+
+        low_ram = ram_gb < ResourceManager.LOW_SUBJECT_RAM_GB
+        warning = (
+            strings.low_subject_ram_warning.format(
+                subjects=resources["max_subj"],
+                ram_gb=ram_gb,
+                limit=ResourceManager.LOW_SUBJECT_RAM_GB,
+            )
+            if low_ram
+            else ""
         )
-        self._per_subject_label.setText(text)
+        self._low_ram_label.setText(warning)
+        self._low_ram_label.setVisible(low_ram)
+        if low_ram and added and ram_gb < previous_ram:
+            self._alert_low_subject_ram(warning)
+
+    def _alert_low_subject_ram(self, warning: str) -> None:
+        """
+        Alerts that the RAM per subject fell below
+        ResourceManager.LOW_SUBJECT_RAM_GB.
+
+        Parameters
+        ----------
+        warning : str
+            The alert text.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        QMessageBox.warning(self, strings.low_subject_ram_title, warning)
 
     def _resources(self) -> dict:
         """
