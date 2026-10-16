@@ -356,24 +356,24 @@ class DependencyManager:
 
     @staticmethod
     def quick_check_slicer_version(
-        slicer_path: str, expected_version: str, callback_func: callable
+        slicer_path: str, expected_revision: str, callback_func: callable
     ):
         """
-        Start a thread that confirms the Slicer executable still reports the
-        recorded version
+        Start a thread that confirms the Slicer installation still matches the
+        revision recorded by the last full check (catches an in-place upgrade).
 
         Parameters
         ----------
         slicer_path: str
             Slicer executable path
-        expected_version: str
-            The version recorded by the last full check
+        expected_revision: str
+            The Slicer revision recorded by the last full check
         callback_func: callable
-            Called with True if the version matches, False otherwise
+            Called with True if the revision matches, False otherwise
         """
         from swane.workers.SlicerCheckWorker import SlicerQuickCheckWorker
 
-        worker = SlicerQuickCheckWorker(slicer_path, expected_version)
+        worker = SlicerQuickCheckWorker(slicer_path, expected_revision)
         worker.signal.done.connect(callback_func)
         start_worker(worker)
 

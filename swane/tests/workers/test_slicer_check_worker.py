@@ -353,6 +353,12 @@ class TestSlicerCheckWorkerReal:
 
         real_slicer = blocker.args[0]
         assert os.access(real_slicer, os.W_OK) is True, "Slicer non writeable"
+        real_rev = SlicerCheckWorker.read_slicer_revision(real_slicer)
+        assert (
+            real_rev is not None
+            and len(real_rev) > 0
+            and any(c.isdigit() for c in real_rev)
+        ), f"Failed to read valid revision from real Slicer at {real_slicer}: {real_rev}"
         # The install root: the .app bundle on macOS (the executable is in
         # Contents/MacOS), the executable's folder elsewhere.
         if platform.system() == "Darwin":
@@ -391,6 +397,9 @@ class TestSlicerCheckWorkerReal:
             slicer_dir_copy, os.path.relpath(real_slicer, slicer_dir)
         )
         assert os.path.exists(copy_slicer), "Error on duplicating Slicer"
+        assert (
+            SlicerCheckWorker.read_slicer_revision(copy_slicer) == real_rev
+        ), "Revision on duplicated Slicer did not match real Slicer"
 
         slicer_check_worker = SlicerCheckWorker(copy_slicer)
         with qtbot.waitSignal(
@@ -624,39 +633,165 @@ def test_run_does_not_emit_extensions_state_when_module_missing(monkeypatch):
     assert events == []
 
 
-def _quick_result(monkeypatch, fake_run, expected="5.6.2"):
+def test_read_slicer_revision_from_ini(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    ini_file = bin_dir / "SlicerLauncherSettings.ini"
+    ini_file.write_text("[Application]\nrevision = 34045\n", encoding="utf-8")
+    slicer_exe = tmp_path / "Slicer"
+    slicer_exe.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+    assert SlicerCheckWorker.read_slicer_revision(str(slicer_exe)) == "34045"
+
+
+def test_read_slicer_revision_from_ini_with_bom_and_percent_signs(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    ini_file = bin_dir / "SlicerLauncherSettings.ini"
+    # UTF-8 BOM + % characters that would trip default interpolation
+    content = (
+        "\ufeff[Application]\n"
+        "revision = 34045\n"
+        "path = %LOCALAPPDATA%\\slicer.org\\Slicer\n"
+        "percent_key = 100%\n"
+    )
+    ini_file.write_text(content, encoding="utf-8")
+    slicer_exe = tmp_path / "Slicer"
+    slicer_exe.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+    assert SlicerCheckWorker.read_slicer_revision(str(slicer_exe)) == "34045"
+
+
+def test_read_slicer_revision_from_macos_plist(tmp_path, monkeypatch):
+    import plistlib
+    import platform
+
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    bundle = tmp_path / "Slicer.app"
+    contents = bundle / "Contents"
+    macos = contents / "MacOS"
+    macos.mkdir(parents=True)
+    plist_file = contents / "Info.plist"
+    with open(plist_file, "wb") as f:
+        plistlib.dump({"CFBundleVersion": "34045"}, f)
+
+    slicer_exe = macos / "Slicer"
+    slicer_exe.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+    assert SlicerCheckWorker.read_slicer_revision(str(slicer_exe)) == "34045"
+
+
+def test_read_slicer_revision_from_macos_ini_precedence(tmp_path, monkeypatch):
+    import plistlib
+    import platform
+
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    bundle = tmp_path / "Slicer.app"
+    contents = bundle / "Contents"
+    macos = contents / "MacOS"
+    contents_bin = contents / "bin"
+    macos.mkdir(parents=True)
+    contents_bin.mkdir(parents=True)
+
+    # Info.plist has the marketing/build version (e.g. 5.12.4)
+    plist_file = contents / "Info.plist"
+    with open(plist_file, "wb") as f:
+        plistlib.dump({"CFBundleVersion": "5.12.4"}, f)
+
+    # SlicerLauncherSettings.ini has the actual numeric revision
+    ini_file = contents_bin / "SlicerLauncherSettings.ini"
+    ini_file.write_text("[Application]\nrevision = 34045\n", encoding="utf-8")
+
+    slicer_exe = macos / "Slicer"
+    slicer_exe.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+    assert SlicerCheckWorker.read_slicer_revision(str(slicer_exe)) == "34045"
+
+
+def test_read_slicer_revision_missing_or_corrupt(tmp_path):
+    from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+    assert SlicerCheckWorker.read_slicer_revision("") is None
+    assert SlicerCheckWorker.read_slicer_revision(str(tmp_path / "missing")) is None
+
+    # Corrupt / missing revision section
+    ini_file = tmp_path / "SlicerLauncherSettings.ini"
+    ini_file.write_text("[Other]\nkey = val\n", encoding="utf-8")
+    assert SlicerCheckWorker.read_slicer_revision(str(tmp_path / "Slicer")) is None
+
+
+def test_quick_check_revision_match(tmp_path, monkeypatch):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    ini_file = bin_dir / "SlicerLauncherSettings.ini"
+    ini_file.write_text("[Application]\nrevision = 34045\n", encoding="utf-8")
+    slicer_exe = tmp_path / "Slicer"
+    slicer_exe.write_text("", encoding="utf-8")
+
+    def forbid_subprocess(*args, **kwargs):
+        raise AssertionError("subprocess.run must not be called during quick check")
+
+    monkeypatch.setattr(subprocess, "run", forbid_subprocess)
+
     from swane.workers.SlicerCheckWorker import SlicerQuickCheckWorker
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
     results = []
-    w = SlicerQuickCheckWorker("/fake/Slicer", expected)
+    w = SlicerQuickCheckWorker(str(slicer_exe), "34045")
     w.signal.done.connect(results.append)
     w.run()
-    return results
+    assert results == [True]
 
 
-def test_quick_check_version_match(monkeypatch):
-    out = lambda cmd, **kw: type("P", (), {"stdout": b"Slicer 5.6.2\r\n"})
-    assert _quick_result(monkeypatch, out) == [True]
+def test_quick_check_revision_changed(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    ini_file = bin_dir / "SlicerLauncherSettings.ini"
+    ini_file.write_text("[Application]\nrevision = 34100\n", encoding="utf-8")
+    slicer_exe = tmp_path / "Slicer"
+    slicer_exe.write_text("", encoding="utf-8")
+
+    from swane.workers.SlicerCheckWorker import SlicerQuickCheckWorker
+
+    results = []
+    w = SlicerQuickCheckWorker(str(slicer_exe), "34045")
+    w.signal.done.connect(results.append)
+    w.run()
+    assert results == [False]
 
 
-def test_quick_check_version_changed(monkeypatch):
-    out = lambda cmd, **kw: type("P", (), {"stdout": b"Slicer 5.8.0\n"})
-    assert _quick_result(monkeypatch, out) == [False]
+def test_quick_check_missing_slicer_requests_full_check(tmp_path):
+    from swane.workers.SlicerCheckWorker import SlicerQuickCheckWorker
+
+    results = []
+    w = SlicerQuickCheckWorker(str(tmp_path / "nonexistent"), "34045")
+    w.signal.done.connect(results.append)
+    w.run()
+    assert results == [False]
 
 
-@pytest.mark.parametrize(
-    "exc",
-    [
-        PermissionError(13, "denied"),
-        subprocess.TimeoutExpired("Slicer", 1),
-    ],
-)
-def test_quick_check_failure_requests_full_check(monkeypatch, exc):
-    def raising(cmd, **kw):
-        raise exc
+def test_quick_check_empty_expected_revision_requests_full_check(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    ini_file = bin_dir / "SlicerLauncherSettings.ini"
+    ini_file.write_text("[Application]\nrevision = 34045\n", encoding="utf-8")
+    slicer_exe = tmp_path / "Slicer"
+    slicer_exe.write_text("", encoding="utf-8")
 
-    assert _quick_result(monkeypatch, raising) == [False]
+    from swane.workers.SlicerCheckWorker import SlicerQuickCheckWorker
+
+    results = []
+    w = SlicerQuickCheckWorker(str(slicer_exe), "")
+    w.signal.done.connect(results.append)
+    w.run()
+    assert results == [False]
 
 
 def test_module_install_script_reports_revision_and_paths(tmp_path):
