@@ -53,7 +53,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libnss3 libx11-xcb1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb || true
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb || true
           sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
       - name: Install SWANe
         shell: bash
@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libnss3 libx11-xcb1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb || true
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb || true
           sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
       - name: Install SWANe
         shell: bash
@@ -169,7 +169,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libnss3 libx11-xcb1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb || true
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb || true
           sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
       - name: Install SWANe
         shell: bash
@@ -279,7 +279,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libnss3 libx11-xcb1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb || true
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb || true
           sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
       - name: Install SWANe
         shell: bash
