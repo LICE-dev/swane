@@ -449,3 +449,20 @@ def test_bundled_fallback_keeps_plain_text_licences_plain(monkeypatch):
     result = lc.resolve_license_text(info, {})
     assert result.source is lc.LicenseSource.BUNDLED
     assert result.is_html is False
+
+
+def test_dist_info_license_candidates_finds_dipy():
+    from swane.utils.LicenseReference import _dist_info_license_candidates
+
+    candidates = _dist_info_license_candidates("dipy")
+    assert len(candidates) > 0
+    assert any("license" in c.lower() for c in candidates)
+    # Ensure every returned candidate actually exists on disk
+    assert all(os.path.isfile(c) for c in candidates)
+
+
+def test_dist_info_license_candidates_nonexistent_package():
+    from swane.utils.LicenseReference import _dist_info_license_candidates
+
+    assert _dist_info_license_candidates("nonexistent_swane_pkg") == []
+
