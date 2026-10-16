@@ -1037,10 +1037,3 @@ class ConfigManager(configparser.ConfigParser):
             changed = True
 
         return changed
-
-        perf = GlobalPrefCategoryList.PERFORMANCE
-        limit = ResourceManager.get_max_subject_ram(self.getint_safe(perf, "max_subj"))
-        if self.getfloat_safe(perf, "ram_gb") > limit:
-            self[perf]["ram_gb"] = str(limit)
-            return True
-        return False

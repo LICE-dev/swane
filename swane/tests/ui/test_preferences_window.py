@@ -52,6 +52,13 @@ class TestRegistrationEngineCombo:
         self, qtbot, global_config, dependency_manager
     ):
         assert dependency_manager.is_antspyx() is True
+        # The default RAM per subject (70% of the host RAM) may not fit ANTs
+        # on small hosts: give it the largest allocation one subject can have.
+        ram_gb = ResourceManager.get_maximum_ram()
+        if ram_gb < ResourceManager.ants_ram_requirements():
+            pytest.skip("host RAM below the ANTs requirement")
+        global_config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "1"
+        global_config[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(ram_gb)
 
         window1 = PreferencesWindow(global_config, dependency_manager, False)
         qtbot.addWidget(window1)

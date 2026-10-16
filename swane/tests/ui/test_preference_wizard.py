@@ -211,7 +211,8 @@ class TestResourceShare:
         for parallel in range(1, ResourceManager.MAX_PARALLEL_SUBJECTS + 3):
             values = ConfigManager.get_resource_profile_values(level, parallel)
             assert values["max_subj"] == min(parallel, max_parallel)
-            assert values["ram_gb"] * values["max_subj"] <= budget_ram
+            # Tolerance for float rounding (e.g. 2.1 * 3 = 6.300000000000001)
+            assert values["ram_gb"] * values["max_subj"] <= budget_ram + 1e-6
             assert values["max_subj_cpu"] * values["max_subj"] <= budget_cpu
             assert values["ram_gb"] >= ResourceManager.get_minimum_subject_ram()
             assert values["max_subj_cpu"] >= 1
