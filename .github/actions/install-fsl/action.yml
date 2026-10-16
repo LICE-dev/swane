@@ -19,6 +19,13 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Install FSL runtime dependencies (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends dc bc || true
+
     - name: Resolve FSL packages
       id: resolve
       shell: bash
