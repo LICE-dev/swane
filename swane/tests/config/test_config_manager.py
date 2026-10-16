@@ -108,7 +108,8 @@ class TestGlobalConfig:
         assert max_subj == ResourceManager.get_max_parallel_subjects()
         ram_gb = config.getfloat_safe(perf, "ram_gb")
         assert ram_gb == ResourceManager.get_max_subject_ram(max_subj)
-        assert ram_gb * max_subj <= ResourceManager.get_maximum_ram()
+        # Tolerance for float rounding (e.g. 2.1 * 3 = 6.300000000000001)
+        assert ram_gb * max_subj <= ResourceManager.get_maximum_ram() + 1e-6
         cpu = config.getint_safe(perf, "max_subj_cpu")
         if max_subj > 1:
             assert cpu == ResourceManager.get_max_subject_cpu(max_subj)
