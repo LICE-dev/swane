@@ -7,7 +7,7 @@
 #
 # nodes=20 edges=40
 
-- dif2ref_antsreg [AntsRegistration] mem_gb=5 n_procs=1
+- dif2ref_antsreg [AntsRegistration] mem_gb=4 n_procs=1
     aff_metric = 'mattes'
     num_threads = 1
     out_prefix = 'ants_reg_'
