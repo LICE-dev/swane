@@ -353,6 +353,10 @@ class TestSlicerCheckWorkerReal:
 
         real_slicer = blocker.args[0]
         assert os.access(real_slicer, os.W_OK) is True, "Slicer non writeable"
+        real_rev = SlicerCheckWorker.read_slicer_revision(real_slicer)
+        assert (
+            real_rev is not None and real_rev.isdigit()
+        ), f"Failed to read valid revision from real Slicer at {real_slicer}: {real_rev}"
         # The install root: the .app bundle on macOS (the executable is in
         # Contents/MacOS), the executable's folder elsewhere.
         if platform.system() == "Darwin":
@@ -391,6 +395,9 @@ class TestSlicerCheckWorkerReal:
             slicer_dir_copy, os.path.relpath(real_slicer, slicer_dir)
         )
         assert os.path.exists(copy_slicer), "Error on duplicating Slicer"
+        assert (
+            SlicerCheckWorker.read_slicer_revision(copy_slicer) == real_rev
+        ), "Revision on duplicated Slicer did not match real Slicer"
 
         slicer_check_worker = SlicerCheckWorker(copy_slicer)
         with qtbot.waitSignal(
