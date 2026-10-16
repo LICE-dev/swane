@@ -1,4 +1,5 @@
 import configparser
+import math
 from configparser import SectionProxy
 from typing import Literal, cast
 
@@ -8,7 +9,11 @@ from swane.config.preference_list import *
 from swane.utils.CryptographyManager import CryptographyManager
 from swane.utils.DataInputList import DataInputList
 from enum import Enum
-from swane.config.config_enums import WorkflowTypes, GlobalPrefCategoryList
+from swane.config.config_enums import (
+    WorkflowTypes,
+    GlobalPrefCategoryList,
+    PerformanceProfile,
+)
 from swane.utils.MailManager import MailManager
 
 
@@ -895,10 +900,19 @@ class ConfigManager(configparser.ConfigParser):
             value = str(self.validate_type(section, option, value))
         super().set(section, option, value)
 
+    #: Share of this computer each resource profile lets SWANe use, as
+    #: (percentage of the total RAM, fraction of the CPU cores). The share is
+    #: the total for all the subjects analysed at the same time.
+    RESOURCE_PROFILE_SHARES = {
+        PerformanceProfile.LOW_RESOURCE: (50, 1 / 3),
+        PerformanceProfile.BALANCED: (70, 1 / 2),
+        PerformanceProfile.MAX_PERF: (85, 1),
+    }
+
     @staticmethod
-    def get_resource_profile_values(profile: PerformanceProfile) -> dict:
+    def get_resource_budget(profile: PerformanceProfile) -> tuple[float, int]:
         """
-        Performance preferences that a resource profile sets.
+        Total RAM and CPU cores a resource profile lets SWANe use.
 
         Parameters
         ----------
@@ -907,31 +921,85 @@ class ConfigManager(configparser.ConfigParser):
 
         Returns
         -------
+        The RAM in GB and the number of CPU cores, both shared by all the
+        subjects analysed at the same time.
+        """
+        ram_perc, cpu_fraction = ConfigManager.RESOURCE_PROFILE_SHARES[profile]
+        ram_gb = max(
+            ResourceManager.get_ram_by_perc(ram_perc),
+            ResourceManager.get_minimum_subject_ram(),
+        )
+        cpu = max(1, int(ResourceManager.get_max_cpu() * cpu_fraction))
+        return ram_gb, cpu
+
+    @staticmethod
+    def get_max_parallel_subjects(profile: PerformanceProfile) -> int:
+        """
+        Most subjects a resource profile can analyse at the same time, giving
+        each one at least the minimum RAM allocation and staying within the
+        subject tab limit range.
+
+        Parameters
+        ----------
+        profile: PerformanceProfile
+            The resource profile.
+
+        Returns
+        -------
+        The maximum number of subjects analysed at the same time.
+        """
+        ram_gb, cpu = ConfigManager.get_resource_budget(profile)
+        tab_limit = GLOBAL_PREFERENCES[GlobalPrefCategoryList.PERFORMANCE][
+            "max_subj"
+        ].range[1]
+        by_ram = int(ram_gb // ResourceManager.get_minimum_subject_ram())
+        return max(1, min(tab_limit, by_ram, cpu))
+
+    @staticmethod
+    def get_resource_profile_values(
+        profile: PerformanceProfile, parallel_subjects: int = 1
+    ) -> dict:
+        """
+        Performance preferences that a resource profile sets.
+
+        The profile budget (see get_resource_budget) is split among the
+        subjects analysed at the same time, so that all the subject tabs
+        together never exceed it.
+
+        Parameters
+        ----------
+        profile: PerformanceProfile
+            The resource profile.
+        parallel_subjects: int, optional
+            Subjects analysed at the same time (the subject tab limit), clamped
+            to 1..get_max_parallel_subjects(profile). Default is 1.
+
+        Returns
+        -------
         A dict mapping each PERFORMANCE preference key the profile sets to its
         (non-serialized) value.
         """
-        if profile == PerformanceProfile.LOW_RESOURCE:
-            return {
-                "ram_gb": ResourceManager.get_minimum_ram(),
-                "max_subj_cpu": ResourceManager.get_min_cpu(),
-                "max_subj": 1,
-            }
-        if profile == PerformanceProfile.MAX_PERF:
-            return {
-                "ram_gb": ResourceManager.get_maximum_ram(),
-                "max_subj_cpu": ResourceManager.get_max_cpu(),
-                "max_subj": 3,
-            }
+        ram_gb, cpu = ConfigManager.get_resource_budget(profile)
+        parallel_subjects = max(
+            1,
+            min(
+                int(parallel_subjects), ConfigManager.get_max_parallel_subjects(profile)
+            ),
+        )
         return {
-            "ram_gb": ResourceManager.get_default_ram(),
-            "max_subj_cpu": ResourceManager.get_default_cpu(),
-            "max_subj": 2,
+            "ram_gb": math.floor(ram_gb / parallel_subjects * 100) / 100,
+            "max_subj_cpu": max(1, cpu // parallel_subjects),
+            "max_subj": parallel_subjects,
         }
 
-    def apply_resource_profile(self, profile: PerformanceProfile):
+    def apply_resource_profile(
+        self, profile: PerformanceProfile, parallel_subjects: int = 1
+    ):
 
         if not self.global_config:
             return
 
-        for key, value in ConfigManager.get_resource_profile_values(profile).items():
+        for key, value in ConfigManager.get_resource_profile_values(
+            profile, parallel_subjects
+        ).items():
             self[GlobalPrefCategoryList.PERFORMANCE][key] = str(value)

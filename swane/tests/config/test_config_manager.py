@@ -87,7 +87,10 @@ class TestGlobalConfig:
         config.apply_resource_profile(PerformanceProfile.LOW_RESOURCE)
         assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == "1"
         config.apply_resource_profile(PerformanceProfile.MAX_PERF)
-        assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == "3"
+        assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == "1"
+        parallel = ConfigManager.get_max_parallel_subjects(PerformanceProfile.MAX_PERF)
+        config.apply_resource_profile(PerformanceProfile.MAX_PERF, parallel + 1)
+        assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == str(parallel)
 
 
 class TestSafeGetters:
