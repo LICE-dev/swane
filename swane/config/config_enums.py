@@ -85,7 +85,7 @@ class SegmentationEngine(Enum):
 
 class FmriEngine(Enum):
     NILEARN = "Python (nilearn/scikit-learn)"
-    FSL = "FSL (MELODIC/FEAT)"
+    FSL = "FSL (FEAT)"
 
 
 class DeskullModality(Enum):
