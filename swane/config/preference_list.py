@@ -743,7 +743,7 @@ GLOBAL_PREFERENCES[category]["max_subj"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Subject tab limit",
     default=1,
-    range=[1, ResourceManager.MAX_PARALLEL_SUBJECTS],
+    range=[1, ResourceManager.get_max_parallel_subjects()],
 )
 GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
     input_type=InputTypes.INT,

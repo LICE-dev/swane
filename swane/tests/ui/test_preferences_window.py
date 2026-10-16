@@ -176,9 +176,10 @@ class TestHideVsGrayOut:
 
 
 class TestSubjectRamLimit:
-    """All the subject tabs together never exceed the RAM share: raising the
-    subject tab limit lowers the RAM per subject maximum, with an alert when a
-    new subject brings it below ResourceManager.LOW_SUBJECT_RAM_GB."""
+    """All the subject tabs together never exceed the RAM share or the CPU
+    cores: raising the subject tab limit lowers the RAM and CPU cores per
+    subject maximum, with an alert when a new subject brings them below
+    ResourceManager.LOW_SUBJECT_RAM_GB / LOW_SUBJECT_CPU."""
 
     def _fields(self, window):
         keys = window.input_keys[GlobalPrefCategoryList.PERFORMANCE]
@@ -193,7 +194,7 @@ class TestSubjectRamLimit:
         alerts = []
         monkeypatch.setattr(
             PreferencesWindow,
-            "_alert_low_subject_ram",
+            "_alert_low_subject_resources",
             lambda self, w: alerts.append(w),
         )
         window = PreferencesWindow(global_config, dependency_manager, False)
@@ -202,7 +203,8 @@ class TestSubjectRamLimit:
 
         max_subj.setValue(1)
         ram.input_field.setValue(ResourceManager.get_maximum_ram())
-        for subjects in range(2, ResourceManager.MAX_PARALLEL_SUBJECTS + 1):
+        assert max_subj.maximum() == ResourceManager.get_max_parallel_subjects()
+        for subjects in range(2, max_subj.maximum() + 1):
             max_subj.setValue(subjects)
             limit = ResourceManager.get_max_subject_ram(subjects)
             assert ram.input_field.maximum() == pytest.approx(limit)
@@ -221,7 +223,7 @@ class TestSubjectRamLimit:
         alerts = []
         monkeypatch.setattr(
             PreferencesWindow,
-            "_alert_low_subject_ram",
+            "_alert_low_subject_resources",
             lambda self, w: alerts.append(w),
         )
         global_config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "1"
@@ -233,7 +235,7 @@ class TestSubjectRamLimit:
 
         max_subj.setValue(2)
         assert ram.input_field.value() == pytest.approx(1.8)
-        assert len(alerts) == 1
+        assert len(alerts) == 1 and "GB of RAM" in alerts[0]
 
         # Removing a subject never alerts
         max_subj.setValue(1)
@@ -242,11 +244,51 @@ class TestSubjectRamLimit:
     def test_save_enforces_the_limit(self, qtbot, global_config, dependency_manager):
         window = PreferencesWindow(global_config, dependency_manager, False)
         qtbot.addWidget(window)
-        global_config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "5"
-        global_config[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(
-            ResourceManager.get_maximum_ram()
-        )
+        perf = GlobalPrefCategoryList.PERFORMANCE
+        global_config[perf]["max_subj"] = "99"
+        global_config[perf]["ram_gb"] = str(ResourceManager.get_maximum_ram())
         window.save_preferences()
+        max_subj = ResourceManager.get_max_parallel_subjects()
+        assert global_config.getint_safe(perf, "max_subj") == max_subj
         assert global_config.getfloat_safe(
-            GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
-        ) == ResourceManager.get_max_subject_ram(5)
+            perf, "ram_gb"
+        ) == ResourceManager.get_max_subject_ram(max_subj)
+
+    def test_cpu_maximum_follows_subject_tab_limit(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        alerts = []
+        monkeypatch.setattr(
+            PreferencesWindow,
+            "_alert_low_subject_resources",
+            lambda self, w: alerts.append(w),
+        )
+        perf = GlobalPrefCategoryList.PERFORMANCE
+        global_config[perf]["max_subj"] = "1"
+        global_config[perf]["max_subj_cpu"] = "-1"
+        window = PreferencesWindow(global_config, dependency_manager, False)
+        qtbot.addWidget(window)
+        max_subj, _ = self._fields(window)
+        cpu = window.inputs[window.input_keys[perf]["max_subj_cpu"]].input_field
+        if max_subj.maximum() < 2:
+            pytest.skip("single-core host: one subject at a time")
+
+        cores = ResourceManager.get_max_cpu()
+        previous = cores
+        for subjects in range(2, max_subj.maximum() + 1):
+            alerts.clear()
+            max_subj.setValue(subjects)
+            limit = ResourceManager.get_max_subject_cpu(subjects)
+            assert cpu.minimum() == 1 and cpu.specialValueText() == ""
+            assert cpu.maximum() == limit
+            assert cpu.value() * subjects <= cores
+            cpu_alerts = [a for a in alerts if "CPU core" in a]
+            expected = cpu.value() < previous and cpu.value() < (
+                ResourceManager.LOW_SUBJECT_CPU
+            )
+            assert bool(cpu_alerts) == expected
+            previous = cpu.value()
+
+        max_subj.setValue(1)
+        assert cpu.minimum() == -1
+        assert cpu.specialValueText() != ""

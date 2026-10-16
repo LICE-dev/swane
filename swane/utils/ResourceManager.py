@@ -18,6 +18,9 @@ class ResourceManager:
     MAX_PARALLEL_SUBJECTS = 5
     #: Below this RAM per subject, the user is warned that analyses may fail.
     LOW_SUBJECT_RAM_GB = 2
+    #: Below these CPU cores per subject, the user is warned that analyses
+    #: will be slow.
+    LOW_SUBJECT_CPU = 2
 
     SYNTH_STRIP_RAM_REQUIREMENT = {"mac": 30, "linux": 5, "other": 5, "windows": 5}
     SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 20, "linux": 14, "other": 14, "windows": 14}
@@ -93,6 +96,34 @@ class ResourceManager:
             )
             / 10,
         )
+
+    @staticmethod
+    def get_max_parallel_subjects() -> int:
+        """
+        Most subjects analysed at the same time: MAX_PARALLEL_SUBJECTS, and
+        never more than the CPU cores, since each subject needs at least one.
+        """
+        return max(
+            1,
+            min(ResourceManager.MAX_PARALLEL_SUBJECTS, ResourceManager.get_max_cpu()),
+        )
+
+    @staticmethod
+    def get_max_subject_cpu(subjects: int) -> int:
+        """
+        Most CPU cores per subject that keep the given number of subjects
+        analysed at the same time within the CPU cores of this computer.
+
+        Parameters
+        ----------
+        subjects: int
+            Subjects analysed at the same time.
+
+        Returns
+        -------
+        The CPU cores, at least 1.
+        """
+        return max(1, ResourceManager.get_max_cpu() // max(1, int(subjects)))
 
     @staticmethod
     def get_max_subject_ram(subjects: int) -> float:
