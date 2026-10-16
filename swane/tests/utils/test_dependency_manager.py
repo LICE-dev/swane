@@ -7,6 +7,7 @@ cannot be faked without a real bundled Slicer.
 """
 
 import os
+import subprocess
 import sys
 import types
 
@@ -314,3 +315,199 @@ class TestToolChecksMocked:
         dep = DependencyManager.check_antspynet()
         assert dep.state == DependenceStatus.DETECTED
         assert "href=" in dep.label
+
+
+def test_is_dipy_uses_instance_attribute():
+    manager = DependencyManager()
+    manager.dipy = Dependence(DependenceStatus.MISSING, "mock missing")
+    assert manager.is_dipy() is False
+
+    manager.dipy = Dependence(DependenceStatus.DETECTED, "mock detected")
+    assert manager.is_dipy() is True
+
+
+def test_is_antspynet_uses_instance_attribute():
+    manager = DependencyManager()
+    manager.antspynet = Dependence(DependenceStatus.MISSING, "mock missing")
+    assert manager.is_antspynet() is False
+
+    manager.antspynet = Dependence(DependenceStatus.DETECTED, "mock detected")
+    assert manager.is_antspynet() is True
+
+
+def test_is_freesurfer_synth_uses_instance_attribute():
+    manager = DependencyManager()
+    manager.freesurfer = Dependence(
+        DependenceStatus.DETECTED, "mock detected", detected_version="7.0.0"
+    )
+    assert manager.is_freesurfer_synth() is False
+
+    manager.freesurfer = Dependence(
+        DependenceStatus.DETECTED, "mock detected", detected_version="8.2.0"
+    )
+    assert manager.is_freesurfer_synth() is True
+
+
+def test_has_en_us_locale_memoized(monkeypatch):
+    import swane.utils.DependencyManager as dm
+
+    calls = 0
+
+    def mock_run(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args, 0, stdout="en_US.utf8\n", stderr="")
+
+    monkeypatch.setattr(dm.subprocess, "run", mock_run)
+    monkeypatch.setattr(dm, "is_linux", lambda: True)
+    dm._has_en_us_locale.cache_clear()
+
+    assert dm._has_en_us_locale() is True
+    assert dm._has_en_us_locale() is True
+    assert calls == 1
+
+
+def test_has_en_us_locale_non_linux(monkeypatch):
+    import swane.utils.DependencyManager as dm
+
+    calls = 0
+
+    def mock_run(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args, 0, stdout="en_US.utf8\n", stderr="")
+
+    monkeypatch.setattr(dm.subprocess, "run", mock_run)
+    monkeypatch.setattr(dm, "is_linux", lambda: False)
+    dm._has_en_us_locale.cache_clear()
+
+    assert dm._has_en_us_locale() is True
+    assert calls == 0
+
+
+def test_has_en_us_locale_missing(monkeypatch):
+    import swane.utils.DependencyManager as dm
+
+    monkeypatch.setattr(
+        dm.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, stdout="C\nPOSIX\n", stderr=""
+        ),
+    )
+    monkeypatch.setattr(dm, "is_linux", lambda: True)
+    dm._has_en_us_locale.cache_clear()
+
+    assert dm._has_en_us_locale() is False
+
+
+def test_has_en_us_locale_exception(monkeypatch):
+    import swane.utils.DependencyManager as dm
+
+    def mock_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="locale -a", timeout=1.0)
+
+    monkeypatch.setattr(dm.subprocess, "run", mock_run)
+    monkeypatch.setattr(dm, "is_linux", lambda: True)
+    dm._has_en_us_locale.cache_clear()
+
+    assert dm._has_en_us_locale() is False
+
+
+def test_check_freesurfer_matlab_absent_does_not_spawn(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("FS_LICENSE", raising=False)
+
+    monkeypatch.setattr(dm.freesurfer.base.Info, "version", lambda: "8.2.0")
+    monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "8.2.0")
+    fake_fs = tmp_path / "freesurfer"
+    fake_fs.mkdir()
+    monkeypatch.setenv("FREESURFER_HOME", str(fake_fs))
+    (fake_fs / "license.txt").write_text("license")
+
+    # which("tcsh") -> found, which("checkMCR.sh") -> not found
+    def mock_which(cmd):
+        if cmd == dm.DependencyManager.FSL_TCSH_COMMAND:
+            return "/usr/bin/tcsh"
+        return None
+
+    monkeypatch.setattr(dm, "which", mock_which)
+    monkeypatch.setattr(dm.shutil, "which", lambda cmd: None)
+
+    calls = 0
+
+    def mock_run(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(dm.subprocess, "run", mock_run)
+    monkeypatch.setattr(
+        dm.ResourceManager, "total_memory_gb", staticmethod(lambda: 9999)
+    )
+    monkeypatch.setattr(
+        dm.ResourceManager,
+        "synth_reconall_ram_requirements",
+        staticmethod(lambda: 1),
+    )
+
+    dep = DependencyManager.check_freesurfer()
+    assert dep.state == DependenceStatus.WARNING
+    assert dep.state2 == DependenceStatus.MISSING
+    assert calls == 0
+
+
+def test_check_freesurfer_matlab_candidate_in_freesurfer_home(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("FS_LICENSE", raising=False)
+
+    monkeypatch.setattr(dm.freesurfer.base.Info, "version", lambda: "8.2.0")
+    monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "8.2.0")
+    fake_fs = tmp_path / "freesurfer"
+    bin_dir = fake_fs / "bin"
+    bin_dir.mkdir(parents=True)
+    mcr_script = bin_dir / "checkMCR.sh"
+    mcr_script.write_text("#!/bin/sh\nexit 0\n")
+    mcr_script.chmod(0o755)
+
+    monkeypatch.setenv("FREESURFER_HOME", str(fake_fs))
+    (fake_fs / "license.txt").write_text("license")
+
+    def mock_which(cmd):
+        if cmd == dm.DependencyManager.FSL_TCSH_COMMAND:
+            return "/usr/bin/tcsh"
+        return None
+
+    monkeypatch.setattr(dm, "which", mock_which)
+    monkeypatch.setattr(dm.shutil, "which", lambda cmd: None)
+
+    captured_args = []
+
+    def mock_run(args, **kwargs):
+        captured_args.append((args, kwargs))
+        return subprocess.CompletedProcess(args, 0, stdout="MCR OK", stderr="")
+
+    monkeypatch.setattr(dm.subprocess, "run", mock_run)
+    monkeypatch.setattr(
+        dm.ResourceManager, "total_memory_gb", staticmethod(lambda: 9999)
+    )
+    monkeypatch.setattr(
+        dm.ResourceManager,
+        "synth_reconall_ram_requirements",
+        staticmethod(lambda: 1),
+    )
+
+    dep = DependencyManager.check_freesurfer()
+    assert dep.state == DependenceStatus.DETECTED
+    assert dep.state2 == DependenceStatus.DETECTED
+    assert len(captured_args) == 1
+    args, kwargs = captured_args[0]
+    assert args == [str(mcr_script)]
+    assert kwargs.get("shell") is False
+    assert kwargs.get("timeout") == 3.0

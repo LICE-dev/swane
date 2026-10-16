@@ -97,121 +97,80 @@ def _slicer_candidates(context: dict) -> list:
     ]
 
 
-def _dcm2niix_candidates(context: dict) -> list:
-    # The dcm2niix pip package (a SWANe dependency) ships its license under the
-    # distribution's .dist-info/licenses/ directory (PEP 639); recover it from
-    # the installed package so the displayed text matches the installed version.
+def _dist_info_license_candidates(package_name: str) -> list:
+    """
+    Fast resolution of license file paths for an installed pip package.
+
+    Directly inspects the package's .dist-info/ directory (and .dist-info/licenses/
+    per PEP 639) without loading dist.files or scanning all installed package files.
+    """
     try:
         from importlib.metadata import distribution, PackageNotFoundError
     except ImportError:
         return []
     try:
-        dist = distribution("dcm2niix")
+        dist = distribution(package_name)
     except PackageNotFoundError:
         return []
+
     candidates = []
+    dist_path = getattr(dist, "_path", None)
+    if dist_path is not None and dist_path.is_dir():
+        for entry in dist_path.iterdir():
+            try:
+                if not entry.is_file():
+                    continue
+            except OSError:
+                continue
+            name_lower = entry.name.lower()
+            if name_lower.startswith("licen") or name_lower.startswith("copying"):
+                candidates.append(str(entry))
+        licenses_dir = dist_path / "licenses"
+        if licenses_dir.is_dir():
+            for entry in licenses_dir.iterdir():
+                try:
+                    if not entry.is_file():
+                        continue
+                except OSError:
+                    continue
+                name_lower = entry.name.lower()
+                if name_lower.startswith("licen") or name_lower.startswith("copying"):
+                    candidates.append(str(entry))
+        if candidates:
+            return candidates
+
+    # Fallback path if dist._path is unavailable or yielded nothing: filter dist.files
     for entry in dist.files or []:
-        parts = [part.lower() for part in entry.parts]
-        if "licenses" in parts and entry.name.lower().startswith("licen"):
+        parts = [p.lower() for p in entry.parts]
+        name_lower = entry.name.lower()
+        if ("licenses" in parts or any(p.endswith(".dist-info") for p in parts)) and (
+            name_lower.startswith("licen") or name_lower.startswith("copying")
+        ):
             try:
                 candidates.append(str(dist.locate_file(entry)))
             except Exception:
                 continue
     return candidates
+
+
+def _dcm2niix_candidates(context: dict) -> list:
+    return _dist_info_license_candidates("dcm2niix")
 
 
 def _antspyx_candidates(context: dict) -> list:
-    # The antspyx pip package (a SWANe dependency, imported as "ants") ships its
-    # license under the distribution's .dist-info/licenses/ directory (PEP 639);
-    # recover it from the installed package so the displayed text matches the
-    # installed version.
-    try:
-        from importlib.metadata import distribution, PackageNotFoundError
-    except ImportError:
-        return []
-    try:
-        dist = distribution("antspyx")
-    except PackageNotFoundError:
-        return []
-    candidates = []
-    for entry in dist.files or []:
-        parts = [part.lower() for part in entry.parts]
-        if "licenses" in parts and entry.name.lower().startswith("licen"):
-            try:
-                candidates.append(str(dist.locate_file(entry)))
-            except Exception:
-                continue
-    return candidates
+    return _dist_info_license_candidates("antspyx")
 
 
 def _niimath_candidates(context: dict) -> list:
-    # The niimath pip package (a SWANe dependency) ships its license under the
-    # distribution's .dist-info/licenses/ directory (PEP 639), like dcm2niix and
-    # antspyx; recover it from the installed package so the displayed text
-    # matches the installed version.
-    try:
-        from importlib.metadata import distribution, PackageNotFoundError
-    except ImportError:
-        return []
-    try:
-        dist = distribution("niimath")
-    except PackageNotFoundError:
-        return []
-    candidates = []
-    for entry in dist.files or []:
-        parts = [part.lower() for part in entry.parts]
-        if "licenses" in parts and entry.name.lower().startswith("licen"):
-            try:
-                candidates.append(str(dist.locate_file(entry)))
-            except Exception:
-                continue
-    return candidates
+    return _dist_info_license_candidates("niimath")
 
 
 def _nilearn_candidates(context: dict) -> list:
-    # The nilearn pip package (a SWANe dependency) ships its license under the
-    # distribution's .dist-info/licenses/ directory (PEP 639); recover it from
-    # the installed package so the displayed text matches the installed version.
-    try:
-        from importlib.metadata import distribution, PackageNotFoundError
-    except ImportError:
-        return []
-    try:
-        dist = distribution("nilearn")
-    except PackageNotFoundError:
-        return []
-    candidates = []
-    for entry in dist.files or []:
-        parts = [part.lower() for part in entry.parts]
-        if "licenses" in parts and entry.name.lower().startswith("licen"):
-            try:
-                candidates.append(str(dist.locate_file(entry)))
-            except Exception:
-                continue
-    return candidates
+    return _dist_info_license_candidates("nilearn")
 
 
 def _dipy_candidates(context: dict) -> list:
-    # The dipy pip package (a SWANe dependency) ships its license directly
-    # under the distribution's .dist-info/ directory, rather than the PEP 639
-    # licenses/ subdirectory dcm2niix/antspyx use; recover it from the
-    # installed package so the displayed text matches the installed version.
-    try:
-        from importlib.metadata import distribution, PackageNotFoundError
-    except ImportError:
-        return []
-    try:
-        dist = distribution("dipy")
-    except PackageNotFoundError:
-        return []
-    candidates = []
-    for entry in dist.files or []:
-        if entry.name.lower().startswith("licen"):
-            try:
-                candidates.append(str(dist.locate_file(entry)))
-            except Exception:
-                continue
-    return candidates
+    return _dist_info_license_candidates("dipy")
 
 
 LICENSES = {
