@@ -447,9 +447,7 @@ class DependencyManager:
 
         # check if locale en_US.utf8 is available
         if not _has_en_us_locale():
-            return Dependence(
-                DependenceStatus.MISSING, strings.check_dep_fsl_no_locale
-            )
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_no_locale)
 
         fsl_version_lic = version_with_license(FSL, fsl_version)
 

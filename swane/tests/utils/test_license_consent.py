@@ -489,5 +489,3 @@ def test_local_license_path_caching(monkeypatch):
     path2 = lc.local_license_path(LICENSES[DIPY], {})
     assert path1 == path2
     assert call_count == 1
-
-

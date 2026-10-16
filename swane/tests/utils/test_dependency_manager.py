@@ -511,5 +511,3 @@ def test_check_freesurfer_matlab_candidate_in_freesurfer_home(monkeypatch, tmp_p
     assert args == [str(mcr_script)]
     assert kwargs.get("shell") is False
     assert kwargs.get("timeout") == 3.0
-
-
