@@ -115,8 +115,10 @@ runs:
           libgl1-mesa-dev \
           libglu1-mesa \
           libpulse0 \
+          libpulse-mainloop-glib0 \
           libnss3 \
           libx11-xcb1 \
+          libxdamage1 \
           libxss1 \
           libxkbcommon-x11-0 \
           libxcb-cursor0 \
