@@ -314,3 +314,34 @@ class TestToolChecksMocked:
         dep = DependencyManager.check_antspynet()
         assert dep.state == DependenceStatus.DETECTED
         assert "href=" in dep.label
+
+
+def test_is_dipy_uses_instance_attribute():
+    manager = DependencyManager()
+    manager.dipy = Dependence(DependenceStatus.MISSING, "mock missing")
+    assert manager.is_dipy() is False
+
+    manager.dipy = Dependence(DependenceStatus.DETECTED, "mock detected")
+    assert manager.is_dipy() is True
+
+
+def test_is_antspynet_uses_instance_attribute():
+    manager = DependencyManager()
+    manager.antspynet = Dependence(DependenceStatus.MISSING, "mock missing")
+    assert manager.is_antspynet() is False
+
+    manager.antspynet = Dependence(DependenceStatus.DETECTED, "mock detected")
+    assert manager.is_antspynet() is True
+
+
+def test_is_freesurfer_synth_uses_instance_attribute():
+    manager = DependencyManager()
+    manager.freesurfer = Dependence(
+        DependenceStatus.DETECTED, "mock detected", detected_version="7.0.0"
+    )
+    assert manager.is_freesurfer_synth() is False
+
+    manager.freesurfer = Dependence(
+        DependenceStatus.DETECTED, "mock detected", detected_version="8.2.0"
+    )
+    assert manager.is_freesurfer_synth() is True
