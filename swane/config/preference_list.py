@@ -759,7 +759,10 @@ GLOBAL_PREFERENCES[category]["ram_gb"] = PreferenceEntry(
     label="Estimated RAM allocation per subject",
     tooltip="Minimum RAM allocation: %.2fGB" % ResourceManager.MINIMUM_RAM,
     default=ResourceManager.get_default_ram(),
-    range=[ResourceManager.get_minimum_ram(), ResourceManager.get_maximum_ram()],
+    range=[
+        ResourceManager.get_minimum_subject_ram(),
+        ResourceManager.get_maximum_ram(),
+    ],
     suffix="GB",
     decimals=2,
     section=True,

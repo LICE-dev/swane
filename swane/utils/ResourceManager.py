@@ -72,6 +72,11 @@ class ResourceManager:
         return min(minimum_ram, ResourceManager.total_memory_gb())
 
     @staticmethod
+    def get_minimum_subject_ram() -> float:
+        """Smallest RAM allocation a single subject can be given."""
+        return min(ResourceManager.MINIMUM_RAM, ResourceManager.total_memory_gb())
+
+    @staticmethod
     def get_maximum_ram() -> float:
         maximum_ram = max(
             ResourceManager.MINIMUM_RAM,
