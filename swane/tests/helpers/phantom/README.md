@@ -77,7 +77,6 @@ Results live under `~/test_swane/phantom/phantom_<key>/` (override with
 `$SWANE_PHANTOM_DIR`). The `<key>` hashes the generator version, the
 `PhantomProfile`, and the anatomy files' content, so retuning any parameter
 transparently invalidates the cache. Pass `force=True` to rebuild.
-Caches built before generator version 10 (fsaverage anatomy) are orphaned and can be deleted.
 
 **Always bump `GENERATOR_VERSION`** in `dataset.py` when the generated data
 changes, even for changes that don't touch `PhantomProfile`. The prerelease

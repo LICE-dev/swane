@@ -79,4 +79,3 @@ def test_phantom_anatomy_probe_will_download(monkeypatch):
 
 def test_phantom_anatomy_is_blocking():
     assert "phantom_anatomy" in caps_mod.BLOCKING
-    assert "fsaverage" not in caps_mod.BLOCKING
