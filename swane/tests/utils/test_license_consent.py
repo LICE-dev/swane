@@ -466,3 +466,28 @@ def test_dist_info_license_candidates_nonexistent_package():
 
     assert _dist_info_license_candidates("nonexistent_swane_pkg") == []
 
+
+def test_local_license_path_caching(monkeypatch):
+    import dataclasses
+    import swane.utils.license_consent as lc
+    from swane.utils.LicenseReference import LICENSES, DIPY
+
+    call_count = 0
+    orig_candidates = LICENSES[DIPY].installed_path_candidates
+
+    def counting_candidates(context):
+        nonlocal call_count
+        call_count += 1
+        return orig_candidates(context)
+
+    fake_dipy = dataclasses.replace(
+        LICENSES[DIPY], installed_path_candidates=counting_candidates
+    )
+    monkeypatch.setitem(LICENSES, DIPY, fake_dipy)
+
+    path1 = lc.local_license_path(LICENSES[DIPY], {})
+    path2 = lc.local_license_path(LICENSES[DIPY], {})
+    assert path1 == path2
+    assert call_count == 1
+
+
