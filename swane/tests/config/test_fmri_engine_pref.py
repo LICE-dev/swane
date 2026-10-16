@@ -14,7 +14,7 @@ class TestFmriEngineEnum:
 
     def test_values_are_human_labels(self):
         assert FmriEngine.NILEARN.value == "Python (nilearn/scikit-learn)"
-        assert FmriEngine.FSL.value == "FSL (MELODIC/FEAT)"
+        assert FmriEngine.FSL.value == "FSL (FEAT)"
 
     def test_persisted_name_unchanged(self):
         assert FmriEngine["NILEARN"] is FmriEngine.NILEARN
