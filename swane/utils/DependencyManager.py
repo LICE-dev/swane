@@ -171,18 +171,25 @@ class DependencyManager:
         """
         return self.freesurfer.state2 != DependenceStatus.MISSING
 
-    @staticmethod
-    def is_freesurfer_synth() -> bool:
+    def is_freesurfer_synth(self=None) -> bool:
         """
         Returns
         -------
         True if freesurfer version contains synth commands.
-
         """
-        freesurfer_version = str(freesurfer.base.Info.looseversion())
+        detected = (
+            getattr(getattr(self, "freesurfer", None), "detected_version", None)
+            if self is not None
+            else None
+        )
+        freesurfer_version = (
+            detected
+            if detected is not None
+            else str(freesurfer.base.Info.looseversion())
+        )
         try:
             found_version = version.parse(freesurfer_version)
-        except:
+        except Exception:
             return False
 
         return found_version >= version.parse(
@@ -203,24 +210,24 @@ class DependencyManager:
             return self.antspyx.state != DependenceStatus.MISSING
         return DependencyManager.check_antspyx().state != DependenceStatus.MISSING
 
-    @staticmethod
-    def is_antspynet() -> bool:
+    def is_antspynet(self=None) -> bool:
         """
         Returns
         -------
         True if the antspynet package is importable (even if outdated).
-
         """
+        if self is not None:
+            return self.antspynet.state != DependenceStatus.MISSING
         return DependencyManager.check_antspynet().state != DependenceStatus.MISSING
 
-    @staticmethod
-    def is_dipy() -> bool:
+    def is_dipy(self=None) -> bool:
         """
         Returns
         -------
         True if the dipy package is importable (even if outdated).
-
         """
+        if self is not None:
+            return self.dipy.state != DependenceStatus.MISSING
         return DependencyManager.check_dipy().state != DependenceStatus.MISSING
 
     @staticmethod
