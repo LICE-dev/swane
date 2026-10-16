@@ -79,6 +79,8 @@ class TestGlobalConfig:
         assert config.get_slicer_revision() == ""
         config.set_slicer_extensions_state('{"revision": "34045", "paths": {}}')
         assert config.get_slicer_revision() == "34045"
+        config.set_slicer_extensions_state('{"revision": null, "paths": {}}')
+        assert config.get_slicer_revision() == ""
 
     def test_scene_ext_and_default_dicom_folder(self, tmp_path):
         config = ConfigManager(global_base_folder=str(tmp_path))

@@ -646,6 +646,26 @@ def test_read_slicer_revision_from_ini(tmp_path):
     assert SlicerCheckWorker.read_slicer_revision(str(slicer_exe)) == "34045"
 
 
+def test_read_slicer_revision_from_ini_with_bom_and_percent_signs(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    ini_file = bin_dir / "SlicerLauncherSettings.ini"
+    # UTF-8 BOM + % characters that would trip default interpolation
+    content = (
+        "\ufeff[Application]\n"
+        "revision = 34045\n"
+        "path = %LOCALAPPDATA%\\slicer.org\\Slicer\n"
+        "percent_key = 100%\n"
+    )
+    ini_file.write_text(content, encoding="utf-8")
+    slicer_exe = tmp_path / "Slicer"
+    slicer_exe.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+    assert SlicerCheckWorker.read_slicer_revision(str(slicer_exe)) == "34045"
+
+
 def test_read_slicer_revision_from_macos_plist(tmp_path, monkeypatch):
     import plistlib
     import platform
