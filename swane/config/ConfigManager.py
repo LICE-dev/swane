@@ -895,34 +895,43 @@ class ConfigManager(configparser.ConfigParser):
             value = str(self.validate_type(section, option, value))
         super().set(section, option, value)
 
+    @staticmethod
+    def get_resource_profile_values(profile: PerformanceProfile) -> dict:
+        """
+        Performance preferences that a resource profile sets.
+
+        Parameters
+        ----------
+        profile: PerformanceProfile
+            The resource profile.
+
+        Returns
+        -------
+        A dict mapping each PERFORMANCE preference key the profile sets to its
+        (non-serialized) value.
+        """
+        if profile == PerformanceProfile.LOW_RESOURCE:
+            return {
+                "ram_gb": ResourceManager.get_minimum_ram(),
+                "max_subj_cpu": ResourceManager.get_min_cpu(),
+                "max_subj": 1,
+            }
+        if profile == PerformanceProfile.MAX_PERF:
+            return {
+                "ram_gb": ResourceManager.get_maximum_ram(),
+                "max_subj_cpu": ResourceManager.get_max_cpu(),
+                "max_subj": 3,
+            }
+        return {
+            "ram_gb": ResourceManager.get_default_ram(),
+            "max_subj_cpu": ResourceManager.get_default_cpu(),
+            "max_subj": 2,
+        }
+
     def apply_resource_profile(self, profile: PerformanceProfile):
 
         if not self.global_config:
             return
 
-        if profile == PerformanceProfile.LOW_RESOURCE:
-            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(
-                ResourceManager.get_minimum_ram()
-            )
-            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(
-                ResourceManager.get_min_cpu()
-            )
-            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "1"
-
-        elif profile == PerformanceProfile.BALANCED:
-            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(
-                ResourceManager.get_default_ram()
-            )
-            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(
-                ResourceManager.get_default_cpu()
-            )
-            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "2"
-
-        elif profile == PerformanceProfile.MAX_PERF:
-            self[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(
-                ResourceManager.get_maximum_ram()
-            )
-            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj_cpu"] = str(
-                ResourceManager.get_max_cpu()
-            )
-            self[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "3"
+        for key, value in ConfigManager.get_resource_profile_values(profile).items():
+            self[GlobalPrefCategoryList.PERFORMANCE][key] = str(value)
