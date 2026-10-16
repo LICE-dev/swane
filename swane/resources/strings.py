@@ -306,10 +306,14 @@ wizard_current_resources = (
     "<b>Current setting</b>: {ram_gb:.2f} GB RAM and {cpu} CPU cores per subject, "
     "up to {max_subj} subjects at the same time."
 )
-low_subject_ram_title = "Low RAM per subject"
+low_subject_resources_title = "Low resources per subject"
 low_subject_ram_warning = (
     "With {subjects} subjects at the same time, each subject can use only "
     "{ram_gb:.2f} GB of RAM, less than {limit} GB: analyses may fail or be very slow."
+)
+low_subject_cpu_warning = (
+    "With {subjects} subjects at the same time, each subject can use only "
+    "{cpu} CPU core(s), fewer than {limit}: analyses will be slow."
 )
 
 wizard_hardware_accelleration_title = "Hardware Acceleration"

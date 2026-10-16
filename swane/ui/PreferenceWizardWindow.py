@@ -76,6 +76,39 @@ RESOURCE_LEVELS = [
 ]
 
 
+def low_subject_resources(subjects: int, ram_gb: float, cpu: int) -> dict:
+    """
+    Warnings for the resources per subject below ResourceManager.LOW_SUBJECT_RAM_GB
+    or ResourceManager.LOW_SUBJECT_CPU.
+
+    Parameters
+    ----------
+    subjects : int
+        Subjects analysed at the same time.
+    ram_gb : float
+        RAM per subject.
+    cpu : int
+        CPU cores per subject.
+
+    Returns
+    -------
+    dict
+        "ram" and/or "cpu" -> warning text, only for the low resources.
+
+    """
+
+    warnings = {}
+    if ram_gb < ResourceManager.LOW_SUBJECT_RAM_GB:
+        warnings["ram"] = strings.low_subject_ram_warning.format(
+            subjects=subjects, ram_gb=ram_gb, limit=ResourceManager.LOW_SUBJECT_RAM_GB
+        )
+    if cpu < ResourceManager.LOW_SUBJECT_CPU:
+        warnings["cpu"] = strings.low_subject_cpu_warning.format(
+            subjects=subjects, cpu=cpu, limit=ResourceManager.LOW_SUBJECT_CPU
+        )
+    return warnings
+
+
 @dataclass
 class UserPreferences:
     """
@@ -311,7 +344,9 @@ class PreferenceWizardWindow(QDialog):
                 ConfigManager.get_resource_budget(level)[0] - current_total
             ),
         )
-        prefs.parallel_subjects = min(max_subj, ResourceManager.MAX_PARALLEL_SUBJECTS)
+        prefs.parallel_subjects = min(
+            max_subj, ConfigManager.get_max_parallel_subjects(prefs.performance_profile)
+        )
 
         prefs.use_gpu_acceleration = prefs.gpu_capable and config.getboolean_safe(
             perf, "cuda"
@@ -513,17 +548,15 @@ class PreferenceWizardWindow(QDialog):
         lay.addSpacing(8)
         lay.addLayout(parallel_row)
 
-        self._parallel_spin.setMaximum(ResourceManager.MAX_PARALLEL_SUBJECTS)
-
         self._per_subject_label = QLabel("")
         self._per_subject_label.setWordWrap(True)
         self._per_subject_label.setTextFormat(Qt.TextFormat.RichText)
         lay.addWidget(self._per_subject_label)
 
-        self._low_ram_label = QLabel("")
-        self._low_ram_label.setWordWrap(True)
-        self._low_ram_label.setStyleSheet("color: #c0392b;")
-        lay.addWidget(self._low_ram_label)
+        self._low_resources_label = QLabel("")
+        self._low_resources_label.setWordWrap(True)
+        self._low_resources_label.setStyleSheet("color: #c0392b;")
+        lay.addWidget(self._low_resources_label)
 
         if not self.first_run:
             current = QLabel(self._current_resources_text())
@@ -569,7 +602,8 @@ class PreferenceWizardWindow(QDialog):
 
     def _set_performance_profile(self, profile: PerformanceProfile) -> None:
         """
-        Stores the chosen resource level.
+        Stores the chosen resource level and bounds the parallel subjects to
+        its CPU cores (at least one per subject).
 
         Parameters
         ----------
@@ -583,16 +617,21 @@ class PreferenceWizardWindow(QDialog):
         """
 
         self.user_prefs.performance_profile = profile
+        max_parallel = ConfigManager.get_max_parallel_subjects(profile)
         self._parallel_spin.blockSignals(True)
-        self._parallel_spin.setValue(self.user_prefs.parallel_subjects)
+        self._parallel_spin.setMaximum(max_parallel)
+        self._parallel_spin.setValue(
+            min(max(1, self.user_prefs.parallel_subjects), max_parallel)
+        )
         self._parallel_spin.blockSignals(False)
         self._set_parallel_subjects(self._parallel_spin.value())
 
     def _set_parallel_subjects(self, value: int) -> None:
         """
         Stores the parallel subjects and refreshes the per-subject resources.
-        Adding a subject that brings the RAM per subject below
-        ResourceManager.LOW_SUBJECT_RAM_GB raises an alert.
+        Adding a subject that brings the RAM or the CPU cores per subject
+        below ResourceManager.LOW_SUBJECT_RAM_GB / LOW_SUBJECT_CPU raises an
+        alert.
 
         Parameters
         ----------
@@ -605,36 +644,41 @@ class PreferenceWizardWindow(QDialog):
 
         """
 
-        previous_ram = float(self._resources()["ram_gb"])
+        previous = self._resources()
         added = int(value) > self.user_prefs.parallel_subjects
         self.user_prefs.parallel_subjects = int(value)
         resources = self._resources()
         ram_gb = float(resources["ram_gb"])
+        cpu = int(resources["max_subj_cpu"])
         self._per_subject_label.setText(
-            strings.wizard_per_subject_resources.format(
-                ram_gb=ram_gb, cpu=resources["max_subj_cpu"]
-            )
+            strings.wizard_per_subject_resources.format(ram_gb=ram_gb, cpu=cpu)
         )
 
-        low_ram = ram_gb < ResourceManager.LOW_SUBJECT_RAM_GB
-        warning = (
-            strings.low_subject_ram_warning.format(
-                subjects=resources["max_subj"],
-                ram_gb=ram_gb,
-                limit=ResourceManager.LOW_SUBJECT_RAM_GB,
-            )
-            if low_ram
-            else ""
+        # Warnings are about splitting the share: a single subject has it all
+        warnings = (
+            low_subject_resources(resources["max_subj"], ram_gb, cpu)
+            if resources["max_subj"] > 1
+            else {}
         )
-        self._low_ram_label.setText(warning)
-        self._low_ram_label.setVisible(low_ram)
-        if low_ram and added and ram_gb < previous_ram:
-            self._alert_low_subject_ram(warning)
+        self._low_resources_label.setText("<br>".join(warnings.values()))
+        self._low_resources_label.setVisible(bool(warnings))
 
-    def _alert_low_subject_ram(self, warning: str) -> None:
+        if added:
+            lowered = [
+                warnings[key]
+                for key, before, now in (
+                    ("ram", float(previous["ram_gb"]), ram_gb),
+                    ("cpu", int(previous["max_subj_cpu"]), cpu),
+                )
+                if key in warnings and now < before
+            ]
+            if lowered:
+                self._alert_low_subject_resources("\n\n".join(lowered))
+
+    def _alert_low_subject_resources(self, warning: str) -> None:
         """
-        Alerts that the RAM per subject fell below
-        ResourceManager.LOW_SUBJECT_RAM_GB.
+        Alerts that the RAM or CPU cores per subject fell below
+        ResourceManager.LOW_SUBJECT_RAM_GB / LOW_SUBJECT_CPU.
 
         Parameters
         ----------
@@ -647,7 +691,7 @@ class PreferenceWizardWindow(QDialog):
 
         """
 
-        QMessageBox.warning(self, strings.low_subject_ram_title, warning)
+        QMessageBox.warning(self, strings.low_subject_resources_title, warning)
 
     def _resources(self) -> dict:
         """
