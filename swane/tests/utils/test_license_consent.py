@@ -449,3 +449,43 @@ def test_bundled_fallback_keeps_plain_text_licences_plain(monkeypatch):
     result = lc.resolve_license_text(info, {})
     assert result.source is lc.LicenseSource.BUNDLED
     assert result.is_html is False
+
+
+def test_dist_info_license_candidates_finds_dipy():
+    from swane.utils.LicenseReference import _dist_info_license_candidates
+
+    candidates = _dist_info_license_candidates("dipy")
+    assert len(candidates) > 0
+    assert any("license" in c.lower() for c in candidates)
+    # Ensure every returned candidate actually exists on disk
+    assert all(os.path.isfile(c) for c in candidates)
+
+
+def test_dist_info_license_candidates_nonexistent_package():
+    from swane.utils.LicenseReference import _dist_info_license_candidates
+
+    assert _dist_info_license_candidates("nonexistent_swane_pkg") == []
+
+
+def test_local_license_path_caching(monkeypatch):
+    import dataclasses
+    import swane.utils.license_consent as lc
+    from swane.utils.LicenseReference import LICENSES, DIPY
+
+    call_count = 0
+    orig_candidates = LICENSES[DIPY].installed_path_candidates
+
+    def counting_candidates(context):
+        nonlocal call_count
+        call_count += 1
+        return orig_candidates(context)
+
+    fake_dipy = dataclasses.replace(
+        LICENSES[DIPY], installed_path_candidates=counting_candidates
+    )
+    monkeypatch.setitem(LICENSES, DIPY, fake_dipy)
+
+    path1 = lc.local_license_path(LICENSES[DIPY], {})
+    path2 = lc.local_license_path(LICENSES[DIPY], {})
+    assert path1 == path2
+    assert call_count == 1
