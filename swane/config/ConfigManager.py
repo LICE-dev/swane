@@ -394,7 +394,7 @@ class ConfigManager(configparser.ConfigParser):
 
             data = json.loads(raw)
             if isinstance(data, dict):
-                return str(data.get("revision", "")).strip()
+                return str(data.get("revision") or "").strip()
             return ""
         except (ValueError, TypeError, KeyError):
             return ""

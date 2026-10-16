@@ -291,8 +291,8 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 try:
                     import configparser
 
-                    cfg = configparser.ConfigParser()
-                    cfg.read(candidate, encoding="utf-8")
+                    cfg = configparser.ConfigParser(interpolation=None)
+                    cfg.read(candidate, encoding="utf-8-sig")
                     if "Application" in cfg and "revision" in cfg["Application"]:
                         rev = cfg["Application"]["revision"].strip()
                         if rev:
