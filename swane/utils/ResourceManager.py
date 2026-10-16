@@ -8,10 +8,16 @@ class ResourceManager:
 
     MINIMUM_CPU_MULTIPLIER = 1 / 3
     DEFAULT_CPU_MULTIPLIER = 1 / 2
-    MINIMUM_RAM = 5
+    #: Shares of the total RAM of the Light, Balanced and High resource
+    #: profiles. MAXIMUM_RAM_PERC is also the limit of all the subject tabs
+    #: together: ram_gb x max_subj never exceeds it.
     MINIMUM_RAM_PERC = 50
-    MAXIMUM_RAM_PERC = 95
     DEFAULT_RAM_PERC = 70
+    MAXIMUM_RAM_PERC = 90
+    #: Most subjects analysed at the same time (subject tab limit).
+    MAX_PARALLEL_SUBJECTS = 5
+    #: Below this RAM per subject, the user is warned that analyses may fail.
+    LOW_SUBJECT_RAM_GB = 2
 
     SYNTH_STRIP_RAM_REQUIREMENT = {"mac": 30, "linux": 5, "other": 5, "windows": 5}
     SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 20, "linux": 14, "other": 14, "windows": 14}
@@ -65,24 +71,46 @@ class ResourceManager:
 
     @staticmethod
     def get_minimum_ram() -> float:
-        minimum_ram = max(
-            ResourceManager.MINIMUM_RAM,
-            ResourceManager.get_ram_by_perc(ResourceManager.MINIMUM_RAM_PERC),
-        )
-        return min(minimum_ram, ResourceManager.total_memory_gb())
-
-    @staticmethod
-    def get_minimum_subject_ram() -> float:
-        """Smallest RAM allocation a single subject can be given."""
-        return min(ResourceManager.MINIMUM_RAM, ResourceManager.total_memory_gb())
+        return ResourceManager.get_ram_by_perc(ResourceManager.MINIMUM_RAM_PERC)
 
     @staticmethod
     def get_maximum_ram() -> float:
-        maximum_ram = max(
-            ResourceManager.MINIMUM_RAM,
-            ResourceManager.get_ram_by_perc(ResourceManager.MAXIMUM_RAM_PERC),
+        """RAM that all the subject tabs together can use."""
+        return ResourceManager.get_ram_by_perc(ResourceManager.MAXIMUM_RAM_PERC)
+
+    @staticmethod
+    def get_minimum_subject_ram() -> float:
+        """
+        Smallest RAM allocation per subject: the lightest profile split among
+        the most subjects analysed at the same time.
+        """
+        return max(
+            0.1,
+            floor(
+                ResourceManager.get_minimum_ram()
+                / ResourceManager.MAX_PARALLEL_SUBJECTS
+                * 10
+            )
+            / 10,
         )
-        return min(maximum_ram, ResourceManager.total_memory_gb())
+
+    @staticmethod
+    def get_max_subject_ram(subjects: int) -> float:
+        """
+        Largest RAM allocation per subject that keeps the given number of
+        subjects analysed at the same time within get_maximum_ram.
+
+        Parameters
+        ----------
+        subjects: int
+            Subjects analysed at the same time.
+
+        Returns
+        -------
+        The RAM in GB, rounded down to 0.01 GB.
+        """
+        subjects = max(1, int(subjects))
+        return floor(ResourceManager.get_maximum_ram() / subjects * 100) / 100
 
     @staticmethod
     def get_ram_by_perc(perc: int) -> float:

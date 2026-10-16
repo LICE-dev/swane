@@ -173,3 +173,80 @@ class TestHideVsGrayOut:
         assert entry.label.isHidden() is False
         assert entry.input_field.isHidden() is False
         assert entry.input_field.isEnabled() is False
+
+
+class TestSubjectRamLimit:
+    """All the subject tabs together never exceed the RAM share: raising the
+    subject tab limit lowers the RAM per subject maximum, with an alert when a
+    new subject brings it below ResourceManager.LOW_SUBJECT_RAM_GB."""
+
+    def _fields(self, window):
+        keys = window.input_keys[GlobalPrefCategoryList.PERFORMANCE]
+        return (
+            window.inputs[keys["max_subj"]].input_field,
+            window.inputs[keys["ram_gb"]],
+        )
+
+    def test_ram_maximum_follows_subject_tab_limit(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        alerts = []
+        monkeypatch.setattr(
+            PreferencesWindow,
+            "_alert_low_subject_ram",
+            lambda self, w: alerts.append(w),
+        )
+        window = PreferencesWindow(global_config, dependency_manager, False)
+        qtbot.addWidget(window)
+        max_subj, ram = self._fields(window)
+
+        max_subj.setValue(1)
+        ram.input_field.setValue(ResourceManager.get_maximum_ram())
+        for subjects in range(2, ResourceManager.MAX_PARALLEL_SUBJECTS + 1):
+            max_subj.setValue(subjects)
+            limit = ResourceManager.get_max_subject_ram(subjects)
+            assert ram.input_field.maximum() == pytest.approx(limit)
+            assert ram.input_field.value() * subjects <= (
+                ResourceManager.get_maximum_ram() + 1e-6
+            )
+        assert ram.changed
+
+    def test_alert_when_new_subject_goes_below_low_ram(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        # A 4 GB computer: 3.6 GB share, below 2 GB per subject from 2 subjects
+        monkeypatch.setattr(
+            ResourceManager, "get_maximum_ram", staticmethod(lambda: 3.6)
+        )
+        alerts = []
+        monkeypatch.setattr(
+            PreferencesWindow,
+            "_alert_low_subject_ram",
+            lambda self, w: alerts.append(w),
+        )
+        global_config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "1"
+        global_config[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = "3.6"
+        window = PreferencesWindow(global_config, dependency_manager, False)
+        qtbot.addWidget(window)
+        max_subj, ram = self._fields(window)
+        assert alerts == []
+
+        max_subj.setValue(2)
+        assert ram.input_field.value() == pytest.approx(1.8)
+        assert len(alerts) == 1
+
+        # Removing a subject never alerts
+        max_subj.setValue(1)
+        assert len(alerts) == 1
+
+    def test_save_enforces_the_limit(self, qtbot, global_config, dependency_manager):
+        window = PreferencesWindow(global_config, dependency_manager, False)
+        qtbot.addWidget(window)
+        global_config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] = "5"
+        global_config[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = str(
+            ResourceManager.get_maximum_ram()
+        )
+        window.save_preferences()
+        assert global_config.getfloat_safe(
+            GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
+        ) == ResourceManager.get_max_subject_ram(5)

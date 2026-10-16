@@ -124,6 +124,10 @@ class ConfigManager(configparser.ConfigParser):
                 self[GlobalPrefCategoryList.MAIN] = {}
             self[GlobalPrefCategoryList.MAIN]["last_swane_version"] = __version__
 
+        # Configurations saved by older versions may let the subject tabs
+        # together request more RAM than the computer has.
+        self.enforce_resource_limit()
+
         self.save()
 
     def reload(self):
@@ -904,9 +908,9 @@ class ConfigManager(configparser.ConfigParser):
     #: (percentage of the total RAM, fraction of the CPU cores). The share is
     #: the total for all the subjects analysed at the same time.
     RESOURCE_PROFILE_SHARES = {
-        PerformanceProfile.LOW_RESOURCE: (50, 1 / 3),
-        PerformanceProfile.BALANCED: (70, 1 / 2),
-        PerformanceProfile.MAX_PERF: (85, 1),
+        PerformanceProfile.LOW_RESOURCE: (ResourceManager.MINIMUM_RAM_PERC, 1 / 3),
+        PerformanceProfile.BALANCED: (ResourceManager.DEFAULT_RAM_PERC, 1 / 2),
+        PerformanceProfile.MAX_PERF: (ResourceManager.MAXIMUM_RAM_PERC, 1),
     }
 
     @staticmethod
@@ -925,35 +929,9 @@ class ConfigManager(configparser.ConfigParser):
         subjects analysed at the same time.
         """
         ram_perc, cpu_fraction = ConfigManager.RESOURCE_PROFILE_SHARES[profile]
-        ram_gb = max(
-            ResourceManager.get_ram_by_perc(ram_perc),
-            ResourceManager.get_minimum_subject_ram(),
-        )
+        ram_gb = ResourceManager.get_ram_by_perc(ram_perc)
         cpu = max(1, int(ResourceManager.get_max_cpu() * cpu_fraction))
         return ram_gb, cpu
-
-    @staticmethod
-    def get_max_parallel_subjects(profile: PerformanceProfile) -> int:
-        """
-        Most subjects a resource profile can analyse at the same time, giving
-        each one at least the minimum RAM allocation and staying within the
-        subject tab limit range.
-
-        Parameters
-        ----------
-        profile: PerformanceProfile
-            The resource profile.
-
-        Returns
-        -------
-        The maximum number of subjects analysed at the same time.
-        """
-        ram_gb, cpu = ConfigManager.get_resource_budget(profile)
-        tab_limit = GLOBAL_PREFERENCES[GlobalPrefCategoryList.PERFORMANCE][
-            "max_subj"
-        ].range[1]
-        by_ram = int(ram_gb // ResourceManager.get_minimum_subject_ram())
-        return max(1, min(tab_limit, by_ram, cpu))
 
     @staticmethod
     def get_resource_profile_values(
@@ -972,7 +950,7 @@ class ConfigManager(configparser.ConfigParser):
             The resource profile.
         parallel_subjects: int, optional
             Subjects analysed at the same time (the subject tab limit), clamped
-            to 1..get_max_parallel_subjects(profile). Default is 1.
+            to 1..ResourceManager.MAX_PARALLEL_SUBJECTS. Default is 1.
 
         Returns
         -------
@@ -981,10 +959,7 @@ class ConfigManager(configparser.ConfigParser):
         """
         ram_gb, cpu = ConfigManager.get_resource_budget(profile)
         parallel_subjects = max(
-            1,
-            min(
-                int(parallel_subjects), ConfigManager.get_max_parallel_subjects(profile)
-            ),
+            1, min(int(parallel_subjects), ResourceManager.MAX_PARALLEL_SUBJECTS)
         )
         return {
             "ram_gb": math.floor(ram_gb / parallel_subjects * 100) / 100,
@@ -1003,3 +978,23 @@ class ConfigManager(configparser.ConfigParser):
             profile, parallel_subjects
         ).items():
             self[GlobalPrefCategoryList.PERFORMANCE][key] = str(value)
+
+    def enforce_resource_limit(self) -> bool:
+        """
+        Lowers the RAM per subject so that all the subject tabs together stay
+        within ResourceManager.get_maximum_ram.
+
+        Returns
+        -------
+        True if the RAM per subject was lowered.
+        """
+
+        if not self.global_config:
+            return False
+
+        perf = GlobalPrefCategoryList.PERFORMANCE
+        limit = ResourceManager.get_max_subject_ram(self.getint_safe(perf, "max_subj"))
+        if self.getfloat_safe(perf, "ram_gb") > limit:
+            self[perf]["ram_gb"] = str(limit)
+            return True
+        return False
