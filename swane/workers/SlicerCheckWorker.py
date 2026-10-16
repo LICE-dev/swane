@@ -247,6 +247,69 @@ if _swane_os.path.isdir(_swane_workers_dir):
         return platform.system() == "Windows" or os.access(slicer_path, os.X_OK)
 
     @staticmethod
+    def read_slicer_revision(slicer_path: str) -> str | None:
+        """
+        Read the Slicer build revision from Slicer's metadata files without
+        spawning a subprocess.
+
+        On macOS, checks ``Contents/Info.plist`` (``CFBundleVersion``) and
+        ``Contents/bin/SlicerLauncherSettings.ini``.
+        On Linux and Windows, checks ``bin/SlicerLauncherSettings.ini``.
+
+        Returns
+        -------
+        str | None
+            The Slicer revision string (e.g. "34045"), or None if unreadable.
+        """
+        if not slicer_path:
+            return None
+
+        resolved = os.path.realpath(slicer_path)
+        dirs_to_check = [os.path.dirname(slicer_path), os.path.dirname(resolved)]
+
+        if platform.system() == "Darwin":
+            bundle = SlicerCheckWorker._macos_bundle_root(resolved)
+            plist_path = os.path.join(bundle, "Contents", "Info.plist")
+            if os.path.isfile(plist_path):
+                try:
+                    import plistlib
+
+                    with open(plist_path, "rb") as fp:
+                        plist = plistlib.load(fp)
+                        rev = plist.get("CFBundleVersion")
+                        if rev:
+                            return str(rev).strip()
+                except Exception:
+                    pass
+            dirs_to_check.append(os.path.join(bundle, "Contents", "bin"))
+
+        candidates = []
+        for d in dict.fromkeys(dirs_to_check):
+            candidates.extend(
+                [
+                    os.path.join(d, "bin", "SlicerLauncherSettings.ini"),
+                    os.path.join(d, "SlicerLauncherSettings.ini"),
+                    os.path.join(d, "..", "bin", "SlicerLauncherSettings.ini"),
+                ]
+            )
+
+        for candidate in dict.fromkeys(candidates):
+            if os.path.isfile(candidate):
+                try:
+                    import configparser
+
+                    cfg = configparser.ConfigParser()
+                    cfg.read(candidate, encoding="utf-8")
+                    if "Application" in cfg and "revision" in cfg["Application"]:
+                        rev = cfg["Application"]["revision"].strip()
+                        if rev:
+                            return rev
+                except Exception:
+                    continue
+
+        return None
+
+    @staticmethod
     def read_slicerrc(slicerrc_path):
         if os.path.exists(slicerrc_path):
             with open(slicerrc_path, "r", encoding="utf-8") as f:
@@ -445,30 +508,23 @@ class SlicerQuickCheckSignaler(QObject):
 
 class SlicerQuickCheckWorker(QRunnable):
     """
-    Spawn a thread that confirms the known Slicer executable still reports the
-    version recorded by the last full check (catches an in-place upgrade).
+    Spawn a thread that confirms the known Slicer installation still matches
+    the revision recorded by the last full check (catches an in-place upgrade).
     """
 
-    TIMEOUT = 60
-
-    def __init__(self, slicer_path: str, expected_version: str):
+    def __init__(self, slicer_path: str, expected_revision: str):
         super(SlicerQuickCheckWorker, self).__init__()
         self.signal = SlicerQuickCheckSignaler()
         self.slicer_path = slicer_path
-        self.expected_version = expected_version
+        self.expected_revision = expected_revision
 
     def run(self):
-        ok = False
-        try:
-            output = subprocess.run(
-                [self.slicer_path, "--version"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                timeout=self.TIMEOUT,
-            ).stdout.decode("utf-8")
-            ok = output.replace("Slicer ", "").strip() == self.expected_version
-        except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
-            ok = False
+        current_rev = SlicerCheckWorker.read_slicer_revision(self.slicer_path)
+        ok = bool(
+            current_rev
+            and self.expected_revision
+            and current_rev == str(self.expected_revision).strip()
+        )
         self.signal.done.emit(ok)
 
     def terminate(self):
