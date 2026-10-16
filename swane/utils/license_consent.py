@@ -1,5 +1,6 @@
 """License text resolution and consent evaluation for external tools."""
 
+import functools
 import os
 import urllib.request
 from dataclasses import dataclass
@@ -149,13 +150,10 @@ def resolve_license_text(
     )
 
 
-def local_license_path(info: LicenseInfo, context: dict):
-    """
-    Return the first existing local license file for a tool, or None.
-
-    Only references the legal license text (never a per-user key file), because
-    the candidate lists are defined that way.
-    """
+@functools.lru_cache(maxsize=32)
+def _cached_local_license_path(target, context_items: tuple):
+    context = dict(context_items)
+    info = LICENSES[target] if isinstance(target, str) else target
     for path in info.installed_path_candidates(context):
         try:
             if path and os.path.isfile(path):
@@ -163,6 +161,27 @@ def local_license_path(info: LicenseInfo, context: dict):
         except OSError:
             continue
     return None
+
+
+def local_license_path(info: LicenseInfo, context: dict):
+    """
+    Return the first existing local license file for a tool, or None.
+    Uses in-memory caching for repeated lookups within the process.
+
+    Only references the legal license text (never a per-user key file), because
+    the candidate lists are defined that way.
+    """
+    context_items = tuple(sorted((k, str(v)) for k, v in (context or {}).items()))
+    try:
+        return _cached_local_license_path(info, context_items)
+    except TypeError:
+        for path in info.installed_path_candidates(dict(context_items)):
+            try:
+                if path and os.path.isfile(path):
+                    return path
+            except OSError:
+                continue
+        return None
 
 
 def version_with_license(tool_id: str, version, context: dict = None) -> str:
