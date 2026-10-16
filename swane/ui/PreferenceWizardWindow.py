@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
 
 from PySide6.QtCore import Qt
@@ -27,7 +28,12 @@ from swane.config.config_enums import (
     PerformanceProfile,
     RegistrationEngine,
     DeskullEngine,
+    TractographyEngine,
+    SegmentationEngine,
+    FmriEngine,
 )
+from swane.config.preference_list import GLOBAL_PREFERENCES, WF_PREFERENCES
+from swane.config.PreferenceEntry import PreferenceEntry
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.DependencyManager import DependencyManager
@@ -80,6 +86,71 @@ class UserPreferences:
     full_reconall_enabled: bool = False
 
 
+#: Engine preferences (GlobalPrefCategoryList.SYNTH) the wizard resolves, each
+#: with its options in order of preference. The default engine of the active
+#: dependency policy (see dependency_policy.default_engines) is always tried
+#: first; the FreeSurfer Synth options are only tried with the advanced-models
+#: opt-in.
+ENGINE_PREFERENCE_ORDER = {
+    "deskull_engine": [
+        DeskullEngine.ANTSPYNET,
+        DeskullEngine.SYNTHSTRIP,
+        DeskullEngine.BET,
+    ],
+    "engine": [
+        RegistrationEngine.ANTS,
+        RegistrationEngine.SYNTH,
+        RegistrationEngine.FSL,
+    ],
+    "tractography_engine": [
+        TractographyEngine.DIPY_RECOBUNDLES,
+        TractographyEngine.FSL_XTRACT,
+    ],
+    "segmentation_engine": [SegmentationEngine.ANTS, SegmentationEngine.FSL],
+    "fmri_engine": [FmriEngine.NILEARN, FmriEngine.FSL],
+}
+ADVANCED_MODEL_OPTIONS = {DeskullEngine.SYNTHSTRIP, RegistrationEngine.SYNTH}
+
+
+@dataclass
+class WizardPlan:
+    """
+    Settings the wizard resolves from the user selections, the detected tools
+    and the RAM of the chosen performance profile.
+
+    The same plan is shown on the Review page and written by
+    `PreferenceWizardWindow._apply_settings_config`, so the review always
+    matches what is applied.
+
+    Attributes
+    ----------
+    ram_gb : float
+        RAM allocated per subject that the plan was resolved against.
+    cuda : bool
+        CUDA preference.
+    engines : dict
+        Engine preference key -> selected enum member.
+    engine_notes : dict
+        Engine preference key -> review note for an engine selected although
+        its RAM requirement or its tools are not met (no option fits).
+    synth_reconall : bool
+        Use Synth tools during recon-all.
+    freesurfer_step : FreesurferStep
+        Default 3D T1w FreeSurfer step.
+    hippo_amyg_labels : bool
+        Default hippocampal/amygdala subfields segmentation.
+
+    """
+
+    ram_gb: float
+    cuda: bool = False
+    engines: dict = field(default_factory=dict)
+    engine_notes: dict = field(default_factory=dict)
+    synth_reconall: bool = False
+    freesurfer_step: FreesurferStep = FreesurferStep.DISABLED
+    hippo_amyg_labels: bool = False
+
+
 class PreferenceWizardWindow(QDialog):
     """
     Wizard dialog for selecting SWANe configuration preferences.
@@ -88,26 +159,25 @@ class PreferenceWizardWindow(QDialog):
     1) Welcome
     2) Performance profile selection
     3) Hardware acceleration selection (only if GPU/CUDA capable)
-    4) Advanced models selection
-    5) Review summary
-    6) Configuration applied
+    4) FreeSurfer advanced models selection (only if Synth tools fit)
+    5) FreeSurfer outputs selection (only if FreeSurfer is detected)
+    6) Review summary, including the processing engines resolved for this system
+    7) Configuration applied
 
     Parameters
     ----------
-    my_config : object
-        SWANe configuration handler instance used by the application.
-        (Currently not modified by this wizard, but stored for future use.)
-    dependency_manager : object
-        SWANe dependency manager instance used to check optional capabilities
-        (e.g., GPU/CUDA availability).
+    global_config : ConfigManager
+        SWANe global configuration, updated and saved when the user applies.
+    dependency_manager : DependencyManager
+        SWANe dependency manager used to check the installed tools.
     parent : QWidget, optional
         Parent widget.
 
     Attributes
     ----------
-    my_config : object
+    global_config : ConfigManager
         Stored configuration object passed to the constructor.
-    dependency_manager : object
+    dependency_manager : DependencyManager
         Stored dependency manager passed to the constructor.
     user_prefs : UserPreferences
         The in-memory container of user choices collected by the wizard.
@@ -727,13 +797,12 @@ class PreferenceWizardWindow(QDialog):
 
     def _update_review_page(self) -> None:
         """
-        Updates the Review page summary text based on the current `user_prefs`.
+        Updates the Review page summary text.
 
-        The method generates user-facing status strings for:
-        - selected performance profile
-        - GPU acceleration state (enabled/disabled/not available)
-        - advanced models state
-        - FreeSurfer outputs state
+        The summary is generated from the same `WizardPlan` that Apply writes,
+        resolved against the RAM of the selected performance profile, so it
+        shows the resources, the processing engines and the FreeSurfer step
+        that will actually be configured.
 
         Parameters
         ----------
@@ -747,71 +816,69 @@ class PreferenceWizardWindow(QDialog):
 
         self._review_label.setTextFormat(Qt.TextFormat.RichText)
 
+        resources = ConfigManager.get_resource_profile_values(
+            self.user_prefs.performance_profile
+        )
+        plan = self._build_plan(float(resources["ram_gb"]))
+
         parts: list[str] = []
 
-        # Profile
-        profile = self.user_prefs.performance_profile.value
-        parts.append(strings.wizard_selected_profile.format(profile=profile))
+        # Profile and resources
+        parts.append(
+            strings.wizard_selected_profile.format(
+                profile=self.user_prefs.performance_profile.value
+            )
+            + "<br />"
+            + strings.wizard_resources.format(
+                ram_gb=float(resources["ram_gb"]),
+                cpu=resources["max_subj_cpu"],
+                max_subj=resources["max_subj"],
+            )
+        )
 
         # GPU
         if not self.user_prefs.gpu_capable:
-            parts.append(
-                strings.wizard_gpu_accelleration.format(gpu_status="Not Available")
-            )
+            gpu_status = strings.wizard_status_not_available
+        elif plan.cuda:
+            gpu_status = strings.wizard_status_enabled
         else:
-            parts.append(
-                strings.wizard_gpu_accelleration.format(gpu_status="Enabled")
-                if self.user_prefs.use_gpu_acceleration
-                else strings.wizard_gpu_accelleration.format(gpu_status="Disabled")
-            )
+            gpu_status = strings.wizard_status_disabled
+        parts.append(strings.wizard_gpu_accelleration.format(gpu_status=gpu_status))
 
         # Advanced models
-        if not getattr(self.user_prefs, "advanced_models_capable", True):
-            parts.append(
-                strings.wizard_advanced_models.format(
-                    adv_status=f"Not Available (requires FreeSurfer >= {self.dependency_manager.SYNTH_FREESURFER_VERSION} and at least "
-                    f"{ResourceManager.get_min_synth_ram_requirement()} GB)"
-                )
+        if not self.user_prefs.advanced_models_capable:
+            adv_status = strings.wizard_advanced_models_not_available.format(
+                version=self.dependency_manager.SYNTH_FREESURFER_VERSION,
+                ram=ResourceManager.get_min_synth_ram_requirement(),
             )
+        elif self.user_prefs.use_advanced_models:
+            adv_status = strings.wizard_status_enabled
         else:
-            parts.append(
-                strings.wizard_advanced_models.format(
-                    adv_status="Enabled (based on system resources)"
+            adv_status = strings.wizard_status_disabled
+        parts.append(strings.wizard_advanced_models.format(adv_status=adv_status))
+
+        # Engines
+        rows = []
+        for key, engine in plan.engines.items():
+            rows.append(
+                strings.wizard_engine_row.format(
+                    label=GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH][key].label,
+                    engine=engine.value,
                 )
-                if self.user_prefs.use_advanced_models
-                else strings.wizard_advanced_models.format(adv_status="Disabled")
+                + plan.engine_notes.get(key, "")
             )
+        parts.append(strings.wizard_engines.format(engines="<br />".join(rows)))
 
         # FreeSurfer outputs
         if not self.user_prefs.freesurfer_capable:
-            freesurfer_info_text = strings.wizard_freesurfer_outputs.format(
-                fs_outputs="Not Detected"
-            )
+            fs_out = strings.wizard_status_not_detected
+        elif plan.freesurfer_step is FreesurferStep.DISABLED:
+            fs_out = strings.wizard_status_disabled
         else:
-            freesurfer_outputs_enabled: list[str] = []
-            if self.user_prefs.cortical_parcellation_enabled:
-                freesurfer_outputs_enabled.append(
-                    strings.freesurfer_outputs_cortical_parcellation
-                )
-            if self.user_prefs.surfaces_enabled:
-                freesurfer_outputs_enabled.append(strings.freesurfer_outputs_surfaces)
-            if self.user_prefs.hippocampal_segmentation_enabled:
-                freesurfer_outputs_enabled.append(
-                    strings.freesurfer_outputs_hippocampal_segmentation
-                )
-            if self.user_prefs.full_reconall_enabled:
-                freesurfer_outputs_enabled.append(strings.freesurfer_full_reconall)
-
-            fs_out = (
-                "Disabled"
-                if not freesurfer_outputs_enabled
-                else ", ".join(freesurfer_outputs_enabled)
-            )
-            freesurfer_info_text = strings.wizard_freesurfer_outputs.format(
-                fs_outputs=fs_out
-            )
-
-        parts.append(freesurfer_info_text)
+            fs_out = plan.freesurfer_step.value
+            if plan.hippo_amyg_labels:
+                fs_out += strings.wizard_freesurfer_hippo_suffix
+        parts.append(strings.wizard_freesurfer_outputs.format(fs_outputs=fs_out))
 
         # join with HTML line breaks
         self._review_label.setText("<br /><br />".join(parts))
@@ -996,13 +1063,211 @@ class PreferenceWizardWindow(QDialog):
         self._finish_btn.setEnabled(False)
         self._finish_btn.setText(strings.wizard_finish_button)
 
+    def _is_option_available(
+        self,
+        entry: PreferenceEntry,
+        option: Enum,
+        ram_gb: float,
+        check_ram: bool = True,
+    ) -> bool:
+        """
+        Checks an enum preference option against its `PreferenceEntry`
+        metadata, the same metadata the Preferences window enforces.
+
+        Parameters
+        ----------
+        entry : PreferenceEntry
+            The enum preference metadata.
+        option : Enum
+            The option to check.
+        ram_gb : float
+            RAM allocated per subject that the option must fit in.
+        check_ram : bool
+            If False, only the external dependency of the option is checked.
+
+        Returns
+        -------
+        bool
+            True if the option dependency is met and, when checked, its
+            requirements are met. Requirements other than the RAM allocation
+            fail closed.
+
+        """
+
+        if option in entry.option_dependency:
+            dep_check = getattr(
+                self.dependency_manager, entry.option_dependency[option][0], None
+            )
+            if dep_check is None or not callable(dep_check) or not dep_check():
+                return False
+
+        if not check_ram:
+            return True
+
+        for category, requirements in entry.option_pref_requirement.get(
+            option, {}
+        ).items():
+            for key, threshold in requirements:
+                if category != GlobalPrefCategoryList.PERFORMANCE or key != "ram_gb":
+                    return False
+                if ram_gb < threshold:
+                    return False
+        return True
+
+    @staticmethod
+    def _ram_requirement(entry: PreferenceEntry, option: Enum) -> Optional[float]:
+        """
+        Returns the RAM requirement declared for an enum preference option.
+
+        Parameters
+        ----------
+        entry : PreferenceEntry
+            The enum preference metadata.
+        option : Enum
+            The option.
+
+        Returns
+        -------
+        float or None
+            The minimum RAM per subject, None if the option declares none.
+
+        """
+
+        for key, threshold in entry.option_pref_requirement.get(option, {}).get(
+            GlobalPrefCategoryList.PERFORMANCE, []
+        ):
+            if key == "ram_gb":
+                return threshold
+        return None
+
+    def _select_engine(self, key: str, ram_gb: float) -> tuple[Enum, str]:
+        """
+        Selects the option of an engine preference.
+
+        The candidates are the default engine of the active dependency policy
+        followed by `ENGINE_PREFERENCE_ORDER`, without the FreeSurfer Synth
+        options unless the user opted in to advanced models. The first candidate
+        whose tools are installed and whose RAM requirement fits is selected.
+        If none fits, the first candidate whose tools are installed is selected
+        anyway (and flagged in the review), and if no candidate has its tools
+        installed the policy default is kept.
+
+        Parameters
+        ----------
+        key : str
+            The engine preference key in GlobalPrefCategoryList.SYNTH.
+        ram_gb : float
+            RAM allocated per subject.
+
+        Returns
+        -------
+        tuple
+            The selected enum member and its review note ("" if it fits).
+
+        """
+
+        entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH][key]
+        default = dependency_policy.default_engines(dependency_policy.FSL_MANDATORY)[
+            key
+        ]
+        candidates = [default] + [
+            option for option in ENGINE_PREFERENCE_ORDER[key] if option != default
+        ]
+        if not self.user_prefs.use_advanced_models:
+            candidates = [
+                option for option in candidates if option not in ADVANCED_MODEL_OPTIONS
+            ]
+
+        for option in candidates:
+            if self._is_option_available(entry, option, ram_gb):
+                return option, ""
+
+        for option in candidates:
+            if self._is_option_available(entry, option, ram_gb, check_ram=False):
+                ram = self._ram_requirement(entry, option)
+                return option, (
+                    strings.wizard_engine_low_ram.format(ram=ram) if ram else ""
+                )
+
+        return default, strings.wizard_engine_missing
+
+    def _build_plan(self, ram_gb: float) -> WizardPlan:
+        """
+        Resolves the wizard selections into the settings to apply.
+
+        Parameters
+        ----------
+        ram_gb : float
+            RAM allocated per subject by the selected performance profile.
+
+        Returns
+        -------
+        WizardPlan
+            The resolved settings.
+
+        """
+
+        plan = WizardPlan(ram_gb=ram_gb)
+        plan.cuda = bool(self.user_prefs.use_gpu_acceleration)
+
+        for key in ENGINE_PREFERENCE_ORDER:
+            engine, note = self._select_engine(key, ram_gb)
+            plan.engines[key] = engine
+            if note:
+                plan.engine_notes[key] = note
+
+        reconall_entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["reconall"]
+        plan.synth_reconall = (
+            self.user_prefs.use_advanced_models
+            and self.dependency_manager.is_freesurfer_synth()
+            and all(
+                ram_gb >= threshold
+                for key, threshold in reconall_entry.pref_requirement.get(
+                    GlobalPrefCategoryList.PERFORMANCE, []
+                )
+                if key == "ram_gb"
+            )
+        )
+
+        prefs = self.user_prefs
+        fs_entry = WF_PREFERENCES[DataInputList.T13D]["freesurfer_step"]
+        if not prefs.freesurfer_capable:
+            plan.freesurfer_step = FreesurferStep.DISABLED
+        elif (
+            prefs.cortical_parcellation_enabled
+            and not prefs.hippocampal_segmentation_enabled
+            and not prefs.surfaces_enabled
+            and not prefs.full_reconall_enabled
+            and prefs.use_advanced_models
+            and self._is_option_available(fs_entry, FreesurferStep.SYNTHSEG, ram_gb)
+        ):
+            plan.freesurfer_step = FreesurferStep.SYNTHSEG
+        elif prefs.full_reconall_enabled:
+            plan.freesurfer_step = FreesurferStep.RECONALL
+        elif (
+            prefs.cortical_parcellation_enabled
+            or prefs.surfaces_enabled
+            or prefs.hippocampal_segmentation_enabled
+        ):
+            # Hippocampal subfields need the FreeSurfer surfaces
+            plan.freesurfer_step = FreesurferStep.AUTORECON_PIAL
+
+        plan.hippo_amyg_labels = bool(
+            prefs.freesurfer_capable
+            and prefs.matlab_capable
+            and prefs.hippocampal_segmentation_enabled
+        )
+
+        return plan
+
     def _apply_settings_config(self) -> None:
         """
-        Applies the wizard selections to the SWANe configuration object.
+        Applies the wizard selections to the global configuration and saves it.
 
-        This method is responsible for mapping the in-memory wizard choices stored in
-        `self.user_prefs` to the corresponding keys inside `self.my_config`, and for
-        persisting those changes (e.g., by calling `self.my_config.save()`).
+        The performance profile is applied first; the remaining settings are
+        resolved by `_build_plan` against the RAM allocation it set. Every
+        setting the wizard owns is written explicitly, so rerunning the wizard
+        also turns off what a previous run enabled.
 
         Parameters
         ----------
@@ -1013,96 +1278,24 @@ class PreferenceWizardWindow(QDialog):
         None.
 
         """
-        self.global_config.apply_resource_profile(self.user_prefs.performance_profile)
-        self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"] = str(
-            bool(self.user_prefs.use_gpu_acceleration)
-        )
 
-        available_ram = self.global_config.getfloat_safe(
+        self.global_config.apply_resource_profile(self.user_prefs.performance_profile)
+        ram_gb = self.global_config.getfloat_safe(
             GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
         )
+        plan = self._build_plan(ram_gb)
 
-        if self.user_prefs.use_advanced_models:
-            self.global_config[GlobalPrefCategoryList.SYNTH]["reconall"] = str(
-                available_ram >= ResourceManager.synth_reconall_ram_requirements()
-            )
-
-        # Brain extraction engine: antspynet is the general default and does not
-        # require the advanced-models opt-in. SynthStrip stays gated behind that
-        # opt-in, like the other FreeSurfer Synth tools (reconall/synthseg); FSL
-        # BET is the fallback when neither is available. When FSL is a mandatory
-        # dependency, FSL BET is always the brain extraction engine.
-        if dependency_policy.FSL_MANDATORY:
-            deskull_engine = DeskullEngine.BET
-        elif self.dependency_manager.is_antspynet() and (available_ram >= 5.0):
-            deskull_engine = DeskullEngine.ANTSPYNET
-        elif (
-            self.user_prefs.use_advanced_models
-            and self.dependency_manager.is_freesurfer_synth()
-            and available_ram >= ResourceManager.synth_strip_ram_requirements()
-        ):
-            deskull_engine = DeskullEngine.SYNTHSTRIP
-        else:
-            deskull_engine = DeskullEngine.BET
-        self.global_config[GlobalPrefCategoryList.SYNTH][
-            "deskull_engine"
-        ] = deskull_engine.name
-
-        # Registration engine: ANTs is the general default and does not require
-        # the advanced-models opt-in. SynthMorph stays gated behind that opt-in,
-        # like the other FreeSurfer Synth tools (reconall/synthseg above).
-        if self.dependency_manager.is_antspyx() and (
-            available_ram >= ResourceManager.ants_ram_requirements()
-        ):
-            engine = RegistrationEngine.ANTS
-        elif (
-            self.user_prefs.use_advanced_models
-            and self.dependency_manager.is_freesurfer_synth()
-            and available_ram >= ResourceManager.synth_morph_ram_requirements()
-        ):
-            engine = RegistrationEngine.SYNTH
-        else:
-            engine = RegistrationEngine.FSL
-        self.global_config[GlobalPrefCategoryList.SYNTH]["engine"] = engine.name
-
+        self.global_config[GlobalPrefCategoryList.PERFORMANCE]["cuda"] = str(plan.cuda)
+        for key, engine in plan.engines.items():
+            self.global_config[GlobalPrefCategoryList.SYNTH][key] = engine.name
+        self.global_config[GlobalPrefCategoryList.SYNTH]["reconall"] = str(
+            plan.synth_reconall
+        )
         self.global_config[DataInputList.T13D][
             "freesurfer_step"
-        ] = FreesurferStep.DISABLED.name
-        available_ram = self.global_config.getfloat_safe(
-            GlobalPrefCategoryList.PERFORMANCE, "ram_gb"
+        ] = plan.freesurfer_step.name
+        self.global_config[DataInputList.T13D]["hippo_amyg_labels"] = str(
+            plan.hippo_amyg_labels
         )
-        if (
-            self.user_prefs.cortical_parcellation_enabled
-            and not self.user_prefs.hippocampal_segmentation_enabled
-            and not self.user_prefs.surfaces_enabled
-            and not self.user_prefs.full_reconall_enabled
-            and self.user_prefs.use_advanced_models
-            and self.dependency_manager.is_freesurfer_synth()
-            and available_ram >= ResourceManager.synth_seg_ram_requirements()
-        ):
-            self.global_config[DataInputList.T13D][
-                "freesurfer_step"
-            ] = FreesurferStep.SYNTHSEG.name
-        elif self.user_prefs.full_reconall_enabled:
-            self.global_config[DataInputList.T13D][
-                "freesurfer_step"
-            ] = FreesurferStep.RECONALL.name
-        elif (
-            self.user_prefs.cortical_parcellation_enabled
-            or self.user_prefs.surfaces_enabled
-        ):
-            self.global_config[DataInputList.T13D][
-                "freesurfer_step"
-            ] = FreesurferStep.AUTORECON_PIAL.name
-
-        if self.user_prefs.hippocampal_segmentation_enabled:
-            if (
-                self.global_config.getenum_safe(DataInputList.T13D, "freesurfer_step")
-                is not FreesurferStep.RECONALL
-            ):
-                self.global_config[DataInputList.T13D][
-                    "freesurfer_step"
-                ] = FreesurferStep.AUTORECON_PIAL.name
-            self.global_config[DataInputList.T13D]["hippo_amyg_labels"] = str(True)
 
         self.global_config.save()

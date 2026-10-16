@@ -271,7 +271,8 @@ wizard_welcome_text = (
     "• Enable hardware acceleration, if supported.\n"
     "• Choose whether to use FreeSurfer advanced models for improved results.\n"
     "• Select Freesurfer output of your interest, if supported.\n"
-    "• Review a summary of your configuration before applying it.\n\n"
+    "• Review a summary of your configuration, including the processing engines "
+    "selected for your system, before applying it.\n\n"
     "These settings can always be adjusted later in Application Settings, or you can rerun "
     "this wizard at any time from Menu → Configuration Wizard."
 )
@@ -293,7 +294,7 @@ performance_profile_balanced_tooltip = (
 performance_profile_min = "Minimum Resource Usage"
 performance_profile_min_tooltip = "Minimize CPU and memory usage to keep the system responsive, even on limited hardware."
 
-wizard_hardware_accelleration_title = "Hardware Accelleration"
+wizard_hardware_accelleration_title = "Hardware Acceleration"
 wizard_hardware_accelleration_text = (
     "Speed up computations by using supported hardware features."
 )
@@ -347,7 +348,9 @@ freesurfer_full_reconall_tooltip = (
 wizard_review_title = "Review Your Configuration"
 wizard_review_text = "Please review your selections before applying them."
 wizard_review_tooltip = (
-    "Some options may be automatically adjusted to ensure stability and compatibility."
+    "Processing engines are selected automatically from the tools installed on this "
+    "system and the RAM allocated per subject. You can change them later in "
+    "Application Settings."
 )
 
 wizard_applied_title = "Configuration applied successfully"
@@ -365,6 +368,22 @@ wizard_selected_profile = "<b>Selected profile</b>: {profile}"
 wizard_gpu_accelleration = "<b>GPU acceleration</b>: {gpu_status}"
 wizard_advanced_models = "<b>FreeSurfer advanced models</b>: {adv_status}"
 wizard_freesurfer_outputs = "<b>FreeSurfer outputs</b>: {fs_outputs}"
+wizard_resources = (
+    "<b>Resources per subject</b>: {ram_gb:.2f} GB RAM, {cpu} CPU cores<br />"
+    "<b>Subject tab limit</b>: {max_subj}"
+)
+wizard_engines = "<b>Processing engines</b>:<br />{engines}"
+wizard_engine_row = "• {label}: {engine}"
+wizard_engine_low_ram = " (<i>below its {ram:.1f} GB RAM requirement</i>)"
+wizard_engine_missing = " (<i>required tools not detected</i>)"
+wizard_status_enabled = "Enabled"
+wizard_status_disabled = "Disabled"
+wizard_status_not_available = "Not available"
+wizard_status_not_detected = "Not detected"
+wizard_advanced_models_not_available = (
+    "Not available (requires FreeSurfer >= {version} and at least {ram} GB RAM)"
+)
+wizard_freesurfer_hippo_suffix = " + hippocampal/amygdala subfields"
 
 # Workflow
 check_dep_generic_error = "Dependency check error"
