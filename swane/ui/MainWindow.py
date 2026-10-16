@@ -1035,10 +1035,10 @@ class MainWindow(QMainWindow):
                 self.optional_grid_layout,
             )
             # The fast checks of need_slicer_check passed; confirm in background
-            # that the executable still reports the recorded version.
+            # that the installation still matches the recorded revision.
             DependencyManager.quick_check_slicer_version(
                 self.global_config.get_slicer_path(),
-                self.global_config.get_slicer_version(),
+                self.global_config.get_slicer_revision(),
                 self.slicer_quick_check_done,
             )
 
@@ -1149,17 +1149,17 @@ class MainWindow(QMainWindow):
 
         return y + 1
 
-    def slicer_quick_check_done(self, version_matches: bool):
+    def slicer_quick_check_done(self, revision_matches: bool):
         """
-        Handle the background Slicer version confirmation: on a mismatch (e.g.
+        Handle the background Slicer revision confirmation: on a mismatch (e.g.
         an in-place upgrade) the extensions may be gone, so run the full check.
 
         Parameters
         ----------
-        version_matches : bool
-            True if the executable still reports the recorded version.
+        revision_matches : bool
+            True if the executable still reports the recorded revision.
         """
-        if version_matches:
+        if revision_matches:
             return
         self.add_home_entry(
             Dependence(DependenceStatus.CHECKING, strings.mainwindow_dep_slicer_src),
