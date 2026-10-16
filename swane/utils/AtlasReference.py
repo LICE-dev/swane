@@ -29,8 +29,4 @@ ATLASES = (
         display_name="HCP842 whole-brain bundle atlas",
         license_url="https://creativecommons.org/licenses/by/4.0/",
     ),
-    AtlasInfo(
-        display_name="fsaverage",
-        license_url="https://raw.githubusercontent.com/freesurfer/freesurfer/dev/LICENSE.txt",
-    ),
 )
