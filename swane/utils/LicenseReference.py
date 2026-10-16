@@ -143,10 +143,9 @@ def _dist_info_license_candidates(package_name: str) -> list:
     for entry in dist.files or []:
         parts = [p.lower() for p in entry.parts]
         name_lower = entry.name.lower()
-        if (
-            "licenses" in parts
-            or any(p.endswith(".dist-info") for p in parts)
-        ) and (name_lower.startswith("licen") or name_lower.startswith("copying")):
+        if ("licenses" in parts or any(p.endswith(".dist-info") for p in parts)) and (
+            name_lower.startswith("licen") or name_lower.startswith("copying")
+        ):
             try:
                 candidates.append(str(dist.locate_file(entry)))
             except Exception:
