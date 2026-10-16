@@ -31,9 +31,12 @@ class ResourceManager:
         "other": 20,
         "windows": 20,
     }
-    #: Placeholder pending real antspyx memory profiling: started at the same
-    #: magnitude as SYNTH_MORPH_RAM_REQUIREMENT (Phase 1 CP-A, to confirm).
-    ANTS_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5, "windows": 5}
+    #: Measured peak RSS of the AntsRegistration node (fresh process, production
+    #: schedules aff 2100/1200/1200/10 and SyN 100/70/50/20, Linux): Rigid/Affine
+    #: 0.72-0.97 GB; SyN to the 1 mm templates 2.89-3.51 GB, the worst case being
+    #: a 0.8 mm T1 to MNI152NLin2009cSym. The thread count barely matters (SyN
+    #: 1 mm: 2.86 GB with 1 thread, 2.89 GB with 4). 4 GB = worst case + ~15%.
+    ANTS_RAM_REQUIREMENT = {"mac": 4, "linux": 4, "other": 4, "windows": 4}
     #: antspynet brain extraction; fixed at 5 GB for now (revisit later).
     ANTSPYNET_RAM_REQUIREMENT = {"mac": 5, "linux": 5, "other": 5, "windows": 5}
     ATROPOS_RAM_REQUIREMENT = {"mac": 3, "linux": 3, "other": 3, "windows": 3}
