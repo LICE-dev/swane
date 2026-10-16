@@ -77,12 +77,37 @@ def test_missing_release_fails_clearly():
         ci_slicer_env.resolve("5.12.4", "win", fetch=fetch)
 
 
+def test_resolves_linux():
+    fetch = _fake_server(
+        [_package("lin1", "linux")],
+        {
+            "lin1": [
+                {"name": "Slicer-5.12.4-linux-amd64.tar.gz", "sha512": "abc"},
+            ]
+        },
+    )
+    info = ci_slicer_env.resolve("5.12.4", "linux", fetch=fetch)
+    assert info == {
+        "release": "5.12.4",
+        "os": "linux",
+        "url": "%s/item/lin1/download" % ci_slicer_env.SERVER,
+        "filename": "Slicer-5.12.4-linux-amd64.tar.gz",
+        "sha512": "abc",
+    }
+
+
 def test_package_without_installer_fails_clearly():
     fetch = _fake_server(
         [_package("mac1", "macosx")], {"mac1": [{"name": "README.txt", "sha512": ""}]}
     )
     with pytest.raises(SystemExit, match=r"no \.dmg file"):
         ci_slicer_env.resolve("5.12.4", "macosx", fetch=fetch)
+
+    fetch_lin = _fake_server(
+        [_package("lin1", "linux")], {"lin1": [{"name": "README.txt", "sha512": ""}]}
+    )
+    with pytest.raises(SystemExit, match=r"no \.tar\.gz file"):
+        ci_slicer_env.resolve("5.12.4", "linux", fetch=fetch_lin)
 
 
 def test_rejects_a_malformed_release():
