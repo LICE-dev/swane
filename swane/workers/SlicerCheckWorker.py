@@ -269,19 +269,12 @@ if _swane_os.path.isdir(_swane_workers_dir):
 
         if platform.system() == "Darwin":
             bundle = SlicerCheckWorker._macos_bundle_root(resolved)
-            plist_path = os.path.join(bundle, "Contents", "Info.plist")
-            if os.path.isfile(plist_path):
-                try:
-                    import plistlib
-
-                    with open(plist_path, "rb") as fp:
-                        plist = plistlib.load(fp)
-                        rev = plist.get("CFBundleVersion")
-                        if rev:
-                            return str(rev).strip()
-                except Exception:
-                    pass
-            dirs_to_check.append(os.path.join(bundle, "Contents", "bin"))
+            dirs_to_check.extend(
+                [
+                    os.path.join(bundle, "Contents", "bin"),
+                    os.path.join(bundle, "Contents"),
+                ]
+            )
 
         candidates = []
         for d in dict.fromkeys(dirs_to_check):
@@ -306,6 +299,23 @@ if _swane_os.path.isdir(_swane_workers_dir):
                             return rev
                 except Exception:
                     continue
+
+        if platform.system() == "Darwin":
+            bundle = SlicerCheckWorker._macos_bundle_root(resolved)
+            plist_path = os.path.join(bundle, "Contents", "Info.plist")
+            if os.path.isfile(plist_path):
+                try:
+                    import plistlib
+
+                    with open(plist_path, "rb") as fp:
+                        plist = plistlib.load(fp)
+                        rev = plist.get("CFBundleVersion") or plist.get(
+                            "CFBundleShortVersionString"
+                        )
+                        if rev:
+                            return str(rev).strip()
+                except Exception:
+                    pass
 
         return None
 
