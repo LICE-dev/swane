@@ -1,4 +1,4 @@
-name: Tests (Windows / macOS)
+name: Tests (Windows / macOS / Ubuntu)
 
 # Run title in the Actions list: suite, runner OS and optional prerelease passes.
 run-name: >-
@@ -14,9 +14,9 @@ on:
         options: [light, heavy, prerelease, all]
         default: light
       os:
-        description: "Runner OS (macOS prerelease also installs a minimal FSL)"
+        description: "Runner OS (macOS/Ubuntu prerelease also installs a minimal FSL)"
         type: choice
-        options: [windows-latest, macos-latest]
+        options: [windows-latest, macos-latest, ubuntu-latest]
         default: windows-latest
       passes:
         description: "Comma-separated prerelease passes (empty = every runnable pass)"
@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
       fsl_release:
-        description: "macOS prerelease: FSL release to install (empty = oldest supported)"
+        description: "macOS/Ubuntu prerelease: FSL release to install (empty = oldest supported)"
         type: string
         default: ""
       slicer_release:
@@ -86,7 +86,7 @@ jobs:
     env:
       # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
       # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
-      TEMPLATEFLOW_HOME: ${{ inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow' || '/Users/runner/.cache/templateflow' }}
+      TEMPLATEFLOW_HOME: ${{ (inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow') || (inputs.os == 'macos-latest' && '/Users/runner/.cache/templateflow') || '/home/runner/.cache/templateflow' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -137,14 +137,14 @@ jobs:
       slicer_passes: ${{ steps.plan.outputs.slicer_passes }}
     env:
       # Space-free paths (SWANe rejects subject folders with blank spaces).
-      SWANE_PHANTOM_DIR: ${{ inputs.os == 'windows-latest' && 'D:\swp_phantom' || '/Users/runner/swp_phantom' }}
-      SWP_WORK_DIR: ${{ inputs.os == 'windows-latest' && 'D:/swp' || '/Users/runner/swp' }}
+      SWANE_PHANTOM_DIR: ${{ (inputs.os == 'windows-latest' && 'D:\swp_phantom') || (inputs.os == 'macos-latest' && '/Users/runner/swp_phantom') || '/home/runner/swp_phantom' }}
+      SWP_WORK_DIR: ${{ (inputs.os == 'windows-latest' && 'D:/swp') || (inputs.os == 'macos-latest' && '/Users/runner/swp') || '/home/runner/swp' }}
       # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
       # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
-      TEMPLATEFLOW_HOME: ${{ inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow' || '/Users/runner/.cache/templateflow' }}
-      # Standard runners: windows 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
-      SWP_CORES: ${{ inputs.os == 'windows-latest' && '4' || '3' }}
-      SWP_RAM: ${{ inputs.os == 'windows-latest' && '14' || '6' }}
+      TEMPLATEFLOW_HOME: ${{ (inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow') || (inputs.os == 'macos-latest' && '/Users/runner/.cache/templateflow') || '/home/runner/.cache/templateflow' }}
+      # Standard runners: windows/ubuntu 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
+      SWP_CORES: ${{ inputs.os == 'macos-latest' && '3' || '4' }}
+      SWP_RAM: ${{ inputs.os == 'macos-latest' && '6' || '14' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -155,14 +155,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt
-      # macOS only: Windows has no FSL build, so its sweep stays FSL-free.
+      # macOS / Linux only: Windows has no FSL build, so its sweep stays FSL-free.
       - name: Install FSL
-        if: ${{ runner.os == 'macOS' }}
+        if: ${{ runner.os != 'Windows' }}
         uses: ./.github/actions/install-fsl
         with:
           release: ${{ inputs.fsl_release }}
       - name: Check FSL
-        if: ${{ runner.os == 'macOS' }}
+        if: ${{ runner.os != 'Windows' }}
         shell: bash
         # Fail here rather than let the sweep silently drop every FSL pass.
         run: |
@@ -240,14 +240,14 @@ jobs:
     env:
       # Same paths and budget as prerelease-plan.
       # Space-free paths (SWANe rejects subject folders with blank spaces).
-      SWANE_PHANTOM_DIR: ${{ inputs.os == 'windows-latest' && 'D:\swp_phantom' || '/Users/runner/swp_phantom' }}
-      SWP_WORK_DIR: ${{ inputs.os == 'windows-latest' && 'D:/swp' || '/Users/runner/swp' }}
+      SWANE_PHANTOM_DIR: ${{ (inputs.os == 'windows-latest' && 'D:\swp_phantom') || (inputs.os == 'macos-latest' && '/Users/runner/swp_phantom') || '/home/runner/swp_phantom' }}
+      SWP_WORK_DIR: ${{ (inputs.os == 'windows-latest' && 'D:/swp') || (inputs.os == 'macos-latest' && '/Users/runner/swp') || '/home/runner/swp' }}
       # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
       # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
-      TEMPLATEFLOW_HOME: ${{ inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow' || '/Users/runner/.cache/templateflow' }}
-      # Standard runners: windows 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
-      SWP_CORES: ${{ inputs.os == 'windows-latest' && '4' || '3' }}
-      SWP_RAM: ${{ inputs.os == 'windows-latest' && '14' || '6' }}
+      TEMPLATEFLOW_HOME: ${{ (inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow') || (inputs.os == 'macos-latest' && '/Users/runner/.cache/templateflow') || '/home/runner/.cache/templateflow' }}
+      # Standard runners: windows/ubuntu 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
+      SWP_CORES: ${{ inputs.os == 'macos-latest' && '3' || '4' }}
+      SWP_RAM: ${{ inputs.os == 'macos-latest' && '6' || '14' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -258,14 +258,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt
-      # macOS only: Windows has no FSL build, so its sweep stays FSL-free.
+      # macOS / Linux only: Windows has no FSL build, so its sweep stays FSL-free.
       - name: Install FSL
-        if: ${{ runner.os == 'macOS' }}
+        if: ${{ runner.os != 'Windows' }}
         uses: ./.github/actions/install-fsl
         with:
           release: ${{ inputs.fsl_release }}
       - name: Check FSL
-        if: ${{ runner.os == 'macOS' }}
+        if: ${{ runner.os != 'Windows' }}
         shell: bash
         # Fail here rather than let the sweep silently drop every FSL pass.
         run: |
