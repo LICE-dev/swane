@@ -1,6 +1,8 @@
+import functools
 import importlib.metadata
 import importlib.util
 import os
+import shutil
 import subprocess
 import re
 from shutil import which
@@ -93,6 +95,25 @@ class Dependence:
             self.detected_version = None
 
 
+@functools.lru_cache(maxsize=1)
+def _has_en_us_locale() -> bool:
+    """Return True if en_US.utf8 locale is present on Linux, always True on other OS."""
+    if not is_linux():
+        return True
+    try:
+        res = subprocess.run(
+            ["locale", "-a"],
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            check=False,
+        )
+        out = res.stdout.lower()
+        return "en_us.utf8" in out or "en_us.utf-8" in out
+    except Exception:
+        return False
+
+
 class DependencyManager:
     """
     Manager for checking dependencies and reporting messages about them
@@ -171,18 +192,25 @@ class DependencyManager:
         """
         return self.freesurfer.state2 != DependenceStatus.MISSING
 
-    @staticmethod
-    def is_freesurfer_synth() -> bool:
+    def is_freesurfer_synth(self=None) -> bool:
         """
         Returns
         -------
         True if freesurfer version contains synth commands.
-
         """
-        freesurfer_version = str(freesurfer.base.Info.looseversion())
+        detected = (
+            getattr(getattr(self, "freesurfer", None), "detected_version", None)
+            if self is not None
+            else None
+        )
+        freesurfer_version = (
+            detected
+            if detected is not None
+            else str(freesurfer.base.Info.looseversion())
+        )
         try:
             found_version = version.parse(freesurfer_version)
-        except:
+        except Exception:
             return False
 
         return found_version >= version.parse(
@@ -203,24 +231,24 @@ class DependencyManager:
             return self.antspyx.state != DependenceStatus.MISSING
         return DependencyManager.check_antspyx().state != DependenceStatus.MISSING
 
-    @staticmethod
-    def is_antspynet() -> bool:
+    def is_antspynet(self=None) -> bool:
         """
         Returns
         -------
         True if the antspynet package is importable (even if outdated).
-
         """
+        if self is not None:
+            return self.antspynet.state != DependenceStatus.MISSING
         return DependencyManager.check_antspynet().state != DependenceStatus.MISSING
 
-    @staticmethod
-    def is_dipy() -> bool:
+    def is_dipy(self=None) -> bool:
         """
         Returns
         -------
         True if the dipy package is importable (even if outdated).
-
         """
+        if self is not None:
+            return self.dipy.state != DependenceStatus.MISSING
         return DependencyManager.check_dipy().state != DependenceStatus.MISSING
 
     @staticmethod
@@ -356,24 +384,24 @@ class DependencyManager:
 
     @staticmethod
     def quick_check_slicer_version(
-        slicer_path: str, expected_version: str, callback_func: callable
+        slicer_path: str, expected_revision: str, callback_func: callable
     ):
         """
-        Start a thread that confirms the Slicer executable still reports the
-        recorded version
+        Start a thread that confirms the Slicer installation still matches the
+        revision recorded by the last full check (catches an in-place upgrade).
 
         Parameters
         ----------
         slicer_path: str
             Slicer executable path
-        expected_version: str
-            The version recorded by the last full check
+        expected_revision: str
+            The Slicer revision recorded by the last full check
         callback_func: callable
-            Called with True if the version matches, False otherwise
+            Called with True if the revision matches, False otherwise
         """
         from swane.workers.SlicerCheckWorker import SlicerQuickCheckWorker
 
-        worker = SlicerQuickCheckWorker(slicer_path, expected_version)
+        worker = SlicerQuickCheckWorker(slicer_path, expected_revision)
         worker.signal.done.connect(callback_func)
         start_worker(worker)
 
@@ -418,12 +446,8 @@ class DependencyManager:
             found_version = version.parse("0")
 
         # check if locale en_US.utf8 is available
-        if is_linux():
-            locale_en = os.system(DependencyManager.FLS_LOCALE_COMMAND)
-            if locale_en != 0:
-                return Dependence(
-                    DependenceStatus.MISSING, strings.check_dep_fsl_no_locale
-                )
+        if not _has_en_us_locale():
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_no_locale)
 
         fsl_version_lic = version_with_license(FSL, fsl_version)
 
@@ -621,13 +645,35 @@ class DependencyManager:
             )
 
         # FS matlab runtime
-        result = subprocess.run(
-            DependencyManager.FREESURFER_MATLAB_COMMAND,
-            shell=True,
-            capture_output=True,
-            text=True,
+        mcr_cmd = which(DependencyManager.FREESURFER_MATLAB_COMMAND) or shutil.which(
+            DependencyManager.FREESURFER_MATLAB_COMMAND
         )
-        matlab_found = result.returncode == 0
+        if not mcr_cmd and "FREESURFER_HOME" in os.environ:
+            candidate = os.path.join(
+                os.environ["FREESURFER_HOME"],
+                "bin",
+                DependencyManager.FREESURFER_MATLAB_COMMAND,
+            )
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                mcr_cmd = candidate
+
+        output = ""
+        if not mcr_cmd:
+            matlab_found = False
+        else:
+            try:
+                res = subprocess.run(
+                    [mcr_cmd],
+                    capture_output=True,
+                    text=True,
+                    timeout=3.0,
+                    shell=False,
+                )
+                matlab_found = res.returncode == 0
+                output = (res.stdout or "") + (res.stderr or "")
+            except Exception:
+                matlab_found = False
+
         fs_dep = DependenceStatus.DETECTED
         matlab_dep = (
             DependenceStatus.DETECTED if matlab_found else DependenceStatus.MISSING
@@ -654,7 +700,6 @@ class DependencyManager:
         if not matlab_found:
             fs_dep = DependenceStatus.WARNING
 
-            output = result.stdout + result.stderr
             match = re.search(DependencyManager.FREESURFER_MATLAB_REGEXP, output)
             if match:
                 install_cmd = match.group(1)
