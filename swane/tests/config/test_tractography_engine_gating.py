@@ -1,6 +1,8 @@
 import pytest
 
+from swane.config import dependency_policy
 from swane.config.config_enums import GlobalPrefCategoryList, TractographyEngine
+from swane.config.dependency_policy import default_engines
 from swane.config.preference_list import GLOBAL_PREFERENCES, WF_PREFERENCES, TRACTS
 from swane.nipype_pipeline.workflows.dipy_bundle_workflow import DIPY_TRACT_ATLAS
 from swane.utils.DataInputList import DataInputList
@@ -25,7 +27,10 @@ def test_engine_enum_values():
 
 def test_engine_pref_default_and_dependency():
     entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["tractography_engine"]
-    assert entry.default == TractographyEngine.DIPY_RECOBUNDLES
+    assert (
+        entry.default
+        == default_engines(dependency_policy.FSL_MANDATORY)["tractography_engine"]
+    )
     assert entry.option_dependency[TractographyEngine.DIPY_RECOBUNDLES][0] == "is_dipy"
     # FSL is only a recommended dependency: FSL_XTRACT is gated on FSL itself
     assert entry.option_dependency[TractographyEngine.FSL_XTRACT][0] == "is_fsl"

@@ -1,6 +1,8 @@
-"""The default engines assemble a MainWorkflow that never runs an FSL tool.
+"""The FSL-free engines assemble a MainWorkflow that never runs an FSL tool.
 
-With ``FSL_MANDATORY = False`` FSL is only a recommended dependency, so a
+With ``FSL_MANDATORY = False`` FSL is only a recommended dependency and the
+FSL-free engines are the defaults (``default_engines(False)``). The shipped
+build makes FSL mandatory, so the test selects those engines explicitly: a
 subject with every input loaded must build a graph whose command-line nodes are
 all FSL-free when FSL is missing. niimath-backed interfaces subclass Nipype's
 FSL maths classes but run the bundled niimath binary, so they are allowed; they
@@ -29,10 +31,10 @@ def _is_niimath(interface) -> bool:
     return os.path.basename(str(getattr(interface, "_cmd", ""))).startswith("niimath")
 
 
-def test_default_engines_build_fsl_free_main_workflow(
+def test_fsl_free_engines_build_fsl_free_main_workflow(
     tmp_path, isolated_home, monkeypatch
 ):
-    assert dependency_policy.FSL_MANDATORY is False
+    monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", False)
     monkeypatch.delenv("FSLDIR", raising=False)
     monkeypatch.delenv("FSLOUTPUTTYPE", raising=False)
     monkeypatch.setenv("SUBJECTS_DIR", str(tmp_path))
@@ -51,6 +53,8 @@ def test_default_engines_build_fsl_free_main_workflow(
     dicom_dir.mkdir(parents=True)
     global_config = ConfigManager(global_base_folder=str(tmp_path))
     global_config.set_main_working_directory(str(tmp_path))
+    for key, engine in dependency_policy.default_engines(False).items():
+        global_config[GlobalPrefCategoryList.SYNTH][key] = engine.name
     global_config.check_dependencies(dependency_manager)
     optional = global_config[GlobalPrefCategoryList.OPTIONAL_SERIES]
     for key in optional:

@@ -1,6 +1,8 @@
 import pytest
 
+from swane.config import dependency_policy
 from swane.config.config_enums import FmriEngine, GlobalPrefCategoryList
+from swane.config.dependency_policy import default_engines
 from swane.config.ConfigManager import ConfigManager
 from swane.config.preference_list import GLOBAL_PREFERENCES
 from swane.nipype_pipeline.interfaces.utils import resolve_fmri_engine
@@ -39,16 +41,19 @@ class TestDependencyManagerNilearn:
         assert DependencyManager.is_nilearn() is False
 
 
+FMRI_DEFAULT = default_engines(dependency_policy.FSL_MANDATORY)["fmri_engine"]
+
+
 class TestResolveFmriEngine:
-    def test_default_returns_nilearn_when_available(self, tmp_path, monkeypatch):
+    def test_default_returns_policy_engine_when_available(self, tmp_path, monkeypatch):
         monkeypatch.setattr(DependencyManager, "is_nilearn", lambda: True)
         monkeypatch.setattr(DependencyManager, "is_fsl", lambda self=None: True)
         config = ConfigManager(global_base_folder=str(tmp_path))
 
         # Test both ConfigManager and section passing
-        assert resolve_fmri_engine(config) == FmriEngine.NILEARN
+        assert resolve_fmri_engine(config) == FMRI_DEFAULT
         synth = config[GlobalPrefCategoryList.SYNTH]
-        assert resolve_fmri_engine(synth) == FmriEngine.NILEARN
+        assert resolve_fmri_engine(synth) == FMRI_DEFAULT
 
     def test_nilearn_falls_back_to_fsl_when_nilearn_unavailable(
         self, tmp_path, monkeypatch
@@ -88,7 +93,7 @@ class TestFmriEnginePreference:
     def test_pref_registered_under_synth(self):
         assert "fmri_engine" in GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]
         entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["fmri_engine"]
-        assert entry.default == FmriEngine.NILEARN
+        assert entry.default == FMRI_DEFAULT
         assert entry.value_enum == FmriEngine
         assert entry.section is True
 
@@ -111,13 +116,14 @@ class TestFmriEnginePreference:
     def test_pref_round_trips_through_config_manager(self, tmp_path):
         config = ConfigManager(global_base_folder=str(tmp_path))
         synth = config[GlobalPrefCategoryList.SYNTH]
-        assert synth.getenum_safe("fmri_engine") == FmriEngine.NILEARN
+        assert synth.getenum_safe("fmri_engine") == FMRI_DEFAULT
 
-        # Mutate to FSL and save
-        synth["fmri_engine"] = FmriEngine.FSL.name
+        # Mutate to the other engine and save
+        other = FmriEngine.NILEARN if FMRI_DEFAULT == FmriEngine.FSL else FmriEngine.FSL
+        synth["fmri_engine"] = other.name
         config.save()
 
         # Reload in a clean ConfigManager
         reloaded = ConfigManager(global_base_folder=str(tmp_path))
         reloaded_synth = reloaded[GlobalPrefCategoryList.SYNTH]
-        assert reloaded_synth.getenum_safe("fmri_engine") == FmriEngine.FSL
+        assert reloaded_synth.getenum_safe("fmri_engine") == other

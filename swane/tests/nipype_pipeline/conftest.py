@@ -9,6 +9,8 @@ import nibabel as nib
 import pytest
 
 from swane.config.ConfigManager import ConfigManager
+from swane.config.config_enums import GlobalPrefCategoryList
+from swane.config.dependency_policy import default_engines
 
 
 # --------------------------------------------------------------------------- #
@@ -87,10 +89,18 @@ def subject_config(tmp_path, isolated_home):
 
 @pytest.fixture
 def global_config(tmp_path, isolated_home):
-    """A global :class:`ConfigManager` (holds the ``synth`` tool section)."""
+    """A global :class:`ConfigManager` (holds the ``synth`` tool section).
+
+    The engines are pinned to the FSL-free set so the golden snapshots do not
+    depend on the build-time FSL policy; tests exercising another engine set it
+    explicitly.
+    """
     base = tmp_path / "global"
     base.mkdir()
-    return ConfigManager(global_base_folder=str(base))
+    config = ConfigManager(global_base_folder=str(base))
+    for key, engine in default_engines(False).items():
+        config[GlobalPrefCategoryList.SYNTH][key] = engine.name
+    return config
 
 
 @pytest.fixture
