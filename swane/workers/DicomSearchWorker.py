@@ -1,4 +1,3 @@
-import pydicom
 import os
 from swane.utils.qt_compat import Signal, QObject, QRunnable
 from swane.utils.DicomTree import DicomTree
@@ -102,6 +101,9 @@ class DicomSearchWorker(QRunnable):
     def run(self):
         if len(self.unsorted_list) == 0:
             self.load_dir()
+
+        # Imported here, not at module level, to keep pydicom off GUI startup
+        import pydicom
 
         for dicom_loc in self.unsorted_list:
             self.signal.sig_loop.emit(1)
@@ -220,6 +222,8 @@ class DicomSearchWorker(QRunnable):
             The dicom series description
 
         """
+
+        import pydicom
 
         for image in image_list:
             ds = pydicom.dcmread(image, force=True)
