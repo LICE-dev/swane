@@ -7,7 +7,7 @@ from swane.resources import strings
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import *
 from swane.config.dependency_policy import FSL_MANDATORY, default_engines
-from swane.nipype_pipeline.workflows.dipy_bundle_workflow import DIPY_TRACT_ATLAS
+from swane.nipype_pipeline.workflows.workflow_constants import DIPY_TRACT_ATLAS
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))

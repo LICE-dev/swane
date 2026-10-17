@@ -13,7 +13,8 @@ def test_to_gb_and_ram_calculations(monkeypatch):
     monkeypatch.setattr(rm, "virtual_memory", lambda: FakeVM)
     # fake cpu_count and gpu_count
     monkeypatch.setattr(rm, "cpu_count", lambda: 8)
-    monkeypatch.setattr(rm, "gpu_count", lambda: 0)
+    # is_cuda() imports gpu_count lazily, so patch it at its source
+    monkeypatch.setattr("nipype.utils.gpu_count.gpu_count", lambda: 0)
 
     assert rm.ResourceManager.to_gb(1024**3) == 1.0
     assert rm.ResourceManager.total_memory_gb() == 8.0
@@ -21,6 +22,7 @@ def test_to_gb_and_ram_calculations(monkeypatch):
     assert rm.ResourceManager.get_minimum_ram() <= rm.ResourceManager.total_memory_gb()
     assert rm.ResourceManager.get_maximum_ram() <= rm.ResourceManager.total_memory_gb()
     assert isinstance(rm.ResourceManager.get_default_cpu(), int)
+    assert rm.ResourceManager.is_cuda() is False
 
 
 def test_synth_requirements_and_cpu(monkeypatch):

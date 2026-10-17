@@ -1,3 +1,5 @@
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
+
 import functools
 import importlib.metadata
 import importlib.util
@@ -6,7 +8,6 @@ import shutil
 import subprocess
 import re
 from shutil import which
-from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane.resources import strings
 from packaging import version
 from swane.config.ConfigManager import ConfigManager
@@ -114,6 +115,94 @@ def _has_en_us_locale() -> bool:
         return False
 
 
+def _read_first_line(path: str) -> str | None:
+    """Returns the first line of a text file, None if it is unreadable or empty."""
+    try:
+        with open(path, encoding="utf-8") as fobj:
+            lines = fobj.read().splitlines()
+    except OSError:
+        return None
+    return lines[0] if lines else None
+
+
+def _read_fsl_version() -> str | None:
+    """
+    Reads the installed FSL version from $FSLDIR/etc/fslversion, as
+    nipype.interfaces.fsl.Info.version() does, without importing Nipype
+    (importing nipype.interfaces.fsl takes seconds on GUI startup).
+
+    Returns
+    -------
+    The version string, None if FSL is not found.
+    """
+    fsldir = os.environ.get("FSLDIR")
+    if not fsldir:
+        return None
+    return _read_first_line(os.path.join(fsldir, "etc", "fslversion"))
+
+
+def _freesurfer_looseversion(raw_version: str) -> str:
+    """
+    Extracts the numeric version from a FreeSurfer build-stamp line.
+
+    Adapted from nipype.interfaces.freesurfer.base.Info.looseversion() (Nipype,
+    Apache License 2.0, see NOTICE.md) to avoid importing Nipype on GUI startup.
+
+    Parameters
+    ----------
+    raw_version: str
+        The first line of $FREESURFER_HOME/build-stamp.txt.
+
+    Returns
+    -------
+    The version string (e.g. "7.4.1").
+    """
+    vinfo = raw_version.rstrip().split("-")
+    try:
+        int(vinfo[-1], 16)
+    except ValueError:
+        githash = ""
+    else:
+        githash = "." + vinfo[-1]
+
+    # As of FreeSurfer v6.0.0, the final component is a githash
+    if githash:
+        if vinfo[3] == "dev":
+            return "6.0.0-dev" + githash
+        if vinfo[5][0] == "v":
+            return vinfo[5][1:]
+        if vinfo[3].count(".") == 2:
+            # e.g. freesurfer-linux-centos7_x86_64-7.1.0-20200511-813297b
+            return vinfo[3]
+        raise RuntimeError("Unknown version string: " + raw_version)
+    # Pre-6.0.0 heuristics
+    if "dev" in raw_version:
+        return vinfo[-1] + "-dev"
+    return raw_version.rstrip().split("-v")[-1]
+
+
+def _read_freesurfer_version() -> tuple[str | None, str | None]:
+    """
+    Reads the installed FreeSurfer version from $FREESURFER_HOME/build-stamp.txt,
+    as nipype.interfaces.freesurfer.Info does, without importing Nipype.
+
+    Returns
+    -------
+    A (raw build-stamp, numeric version) tuple, (None, None) if FreeSurfer is
+    not found or its version string is not recognized.
+    """
+    fs_home = os.environ.get("FREESURFER_HOME")
+    if not fs_home:
+        return None, None
+    raw_version = _read_first_line(os.path.join(fs_home, "build-stamp.txt"))
+    if raw_version is None:
+        return None, None
+    try:
+        return raw_version, _freesurfer_looseversion(raw_version)
+    except (IndexError, RuntimeError):
+        return None, None
+
+
 class DependencyManager:
     """
     Manager for checking dependencies and reporting messages about them
@@ -203,11 +292,12 @@ class DependencyManager:
             if self is not None
             else None
         )
-        freesurfer_version = (
-            detected
-            if detected is not None
-            else str(freesurfer.base.Info.looseversion())
-        )
+        if detected is not None:
+            freesurfer_version = detected
+        else:
+            _, freesurfer_version = _read_freesurfer_version()
+            if freesurfer_version is None:
+                return False
         try:
             found_version = version.parse(freesurfer_version)
         except Exception:
@@ -437,7 +527,7 @@ class DependencyManager:
         -------
         A Dependence object with fsl information.
         """
-        fsl_version = fsl.base.Info.version()
+        fsl_version = _read_fsl_version()
         if fsl_version is None:
             return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_error)
         try:
@@ -583,13 +673,13 @@ class DependencyManager:
         """
 
         # FS installed
-        if freesurfer.base.Info.version() is None:
+        raw_version, freesurfer_version = _read_freesurfer_version()
+        if raw_version is None or freesurfer_version is None:
             return Dependence(
                 DependenceStatus.MISSING,
                 strings.check_dep_fs_error1,
                 DependenceStatus.MISSING,
             )
-        freesurfer_version = str(freesurfer.base.Info.looseversion())
         # Version string with an inline license link (used in every label that
         # reports the version); the raw freesurfer_version is kept for parsing.
         fs_ver = version_with_license(FREESURFER, freesurfer_version)

@@ -1,6 +1,5 @@
 from math import ceil, floor
 from psutil import virtual_memory, cpu_count
-from nipype.utils.gpu_count import gpu_count
 from swane.utils.platform_and_tools_utils import get_os_type
 
 
@@ -143,6 +142,9 @@ class ResourceManager:
 
     @staticmethod
     def is_cuda():
+        # Imported here: importing nipype at module level slows down GUI startup
+        from nipype.utils.gpu_count import gpu_count
+
         return gpu_count() > 0
 
     @staticmethod
