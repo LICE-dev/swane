@@ -50,6 +50,43 @@ if not os.environ.get("SUBJECTS_DIR") or not os.path.exists(os.environ["SUBJECTS
 
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DependencyManager import DependencyManager
+
+# DependencyManager reads the FSL/FreeSurfer versions from their install files
+# without importing nipype (to keep it off GUI startup), so the nipype version
+# fallback of the repository-root conftest does not reach it. When a tool is not
+# installed, fall back to nipype's (faked) version, so FSL/FreeSurfer detection
+# (e.g. the fMRI engine resolution) matches nipype's view of the tools. The real
+# readers stay reachable as ``__wrapped__`` for their own tests.
+import functools
+
+import swane.utils.DependencyManager as _dependency_manager
+
+_real_read_fsl_version = _dependency_manager._read_fsl_version
+_real_read_freesurfer_version = _dependency_manager._read_freesurfer_version
+
+
+@functools.wraps(_real_read_fsl_version)
+def _read_fsl_version_with_fallback():
+    version = _real_read_fsl_version()
+    if version is None:
+        from nipype.interfaces.fsl.base import Info
+
+        return Info.version()
+    return version
+
+
+@functools.wraps(_real_read_freesurfer_version)
+def _read_freesurfer_version_with_fallback():
+    raw_version, version = _real_read_freesurfer_version()
+    if raw_version is None:
+        from nipype.interfaces.freesurfer.base import Info
+
+        return Info.version(), str(Info.looseversion())
+    return raw_version, version
+
+
+_dependency_manager._read_fsl_version = _read_fsl_version_with_fallback
+_dependency_manager._read_freesurfer_version = _read_freesurfer_version_with_fallback
 from swane.tests.helpers.dicom_scenarios import build_dicom_tree
 
 

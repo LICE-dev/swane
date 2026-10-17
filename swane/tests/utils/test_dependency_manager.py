@@ -511,38 +511,48 @@ def test_check_freesurfer_matlab_candidate_in_freesurfer_home(monkeypatch, tmp_p
     assert kwargs.get("timeout") == 3.0
 
 
+# swane/tests/conftest.py wraps the version readers with a fake installed
+# version: these tests exercise the real readers.
+_real_read_fsl_version = getattr(
+    dm._read_fsl_version, "__wrapped__", dm._read_fsl_version
+)
+_real_read_freesurfer_version = getattr(
+    dm._read_freesurfer_version, "__wrapped__", dm._read_freesurfer_version
+)
+
+
 def test_read_fsl_version(monkeypatch, tmp_path):
     monkeypatch.delenv("FSLDIR", raising=False)
-    assert dm._read_fsl_version() is None
+    assert _real_read_fsl_version() is None
 
     fsldir = tmp_path / "fsl"
     monkeypatch.setenv("FSLDIR", str(fsldir))
-    assert dm._read_fsl_version() is None
+    assert _real_read_fsl_version() is None
 
     etc = fsldir / "etc"
     etc.mkdir(parents=True)
     (etc / "fslversion").write_text("6.0.7.17\n")
-    assert dm._read_fsl_version() == "6.0.7.17"
+    assert _real_read_fsl_version() == "6.0.7.17"
 
     (etc / "fslversion").write_text("")
-    assert dm._read_fsl_version() is None
+    assert _real_read_fsl_version() is None
 
 
 def test_read_freesurfer_version(monkeypatch, tmp_path):
     monkeypatch.delenv("FREESURFER_HOME", raising=False)
-    assert dm._read_freesurfer_version() == (None, None)
+    assert _real_read_freesurfer_version() == (None, None)
 
     fs_home = tmp_path / "freesurfer"
     fs_home.mkdir()
     monkeypatch.setenv("FREESURFER_HOME", str(fs_home))
-    assert dm._read_freesurfer_version() == (None, None)
+    assert _real_read_freesurfer_version() == (None, None)
 
     stamp = "freesurfer-linux-ubuntu22_x86_64-8.2.0-20260314-d932c45"
     (fs_home / "build-stamp.txt").write_text(stamp + "\n")
-    assert dm._read_freesurfer_version() == (stamp, "8.2.0")
+    assert _real_read_freesurfer_version() == (stamp, "8.2.0")
 
     (fs_home / "build-stamp.txt").write_text("")
-    assert dm._read_freesurfer_version() == (None, None)
+    assert _real_read_freesurfer_version() == (None, None)
 
 
 @pytest.mark.parametrize(
