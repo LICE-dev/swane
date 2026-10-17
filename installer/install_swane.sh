@@ -665,6 +665,489 @@ ensure_swane_env() {
 }
 
 # ---------------------------------------------------------------------------
+# FSL (optional; installed into its own conda environment, never swane-env)
+# ---------------------------------------------------------------------------
+
+FSL_CHANNEL="https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public/"
+FSL_LICENSE_URL="https://fsl.fmrib.ox.ac.uk/fsl/docs/license.html"
+SWANE_FSL_ENV_NAME="swane-fsl"
+# Written into the FSL environment this installer created: a later run may
+# update that FSL without asking again (its licence was already accepted).
+SWANE_FSL_MARKER="etc/swane_installer_fsl"
+FSL_NEEDED_MESSAGE="SWANe needs FSL; rerun the installer or install FSL from fsl.fmrib.ox.ac.uk"
+# System-wide FSL locations probed after $FSLDIR, the hook and ~/fsl
+# (space-separated; overridable so tests never see the machine's real FSL).
+SWANE_SYSTEM_FSL_DIRS="${SWANE_SYSTEM_FSL_DIRS-/usr/local/fsl}"
+# Set by install_or_update_fsl: the swane-fsl prefix and what was done to it
+# ("installed" or "updated"). Globals rather than stdout: the function warns
+# and dies, which would be lost inside $(...).
+SWANE_FSL_PREFIX=""
+SWANE_FSL_ACTION=""
+# Set by fsl_step for the summary: FSL_RESULT_STATE is installed, updated,
+# existing or skipped; FSL_RESULT_DIR the FSLDIR of the hook (empty when
+# skipped); FSL_RESULT_VERSION the first line of its etc/fslversion.
+# shellcheck disable=SC2034 # read by main and by the test suite
+FSL_RESULT_STATE=""
+# shellcheck disable=SC2034 # read by main and by the test suite
+FSL_RESULT_DIR=""
+# shellcheck disable=SC2034 # read by main and by the test suite
+FSL_RESULT_VERSION=""
+
+# fsl_hook_activate / fsl_hook_deactivate ENV_PREFIX: print the paths of the
+# hook scripts "conda activate" / "conda deactivate" source for swane-env.
+fsl_hook_activate() {
+    printf '%s\n' "$1/etc/conda/activate.d/swane-fsl.sh"
+}
+
+fsl_hook_deactivate() {
+    printf '%s\n' "$1/etc/conda/deactivate.d/swane-fsl.sh"
+}
+
+# shell_quote TEXT: print TEXT as one single-quoted POSIX shell word.
+shell_quote() {
+    printf "'%s'\n" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# hook_written_fsldir ENV_PREFIX: print the FSLDIR the activation hook of
+# ENV_PREFIX sets, whether or not that directory still exists; return 1 if
+# there is no hook or it holds no FSLDIR line written by write_fsl_hook.
+hook_written_fsldir() {
+    local file line
+    file="$(fsl_hook_activate "$1")"
+    [ -f "$file" ] || return 1
+    line="$(sed -n "s/^    FSLDIR='\\(.*\\)'\$/\\1/p" "$file" | head -n 1)"
+    [ -n "$line" ] || return 1
+    printf '%s\n' "$line" | sed "s/'\\\\''/'/g"
+}
+
+# hook_fsldir ENV_PREFIX: print the FSLDIR of the activation hook if that
+# directory holds an FSL (etc/fslversion); return 1 otherwise, so a hook to a
+# deleted FSL counts as no FSL.
+hook_fsldir() {
+    local dir
+    dir="$(hook_written_fsldir "$1")" || return 1
+    [ -f "$dir/etc/fslversion" ] || return 1
+    printf '%s\n' "$dir"
+}
+
+# find_existing_fsl ENV_PREFIX: print the first FSL (a directory with
+# etc/fslversion) among $FSLDIR, the hook of ENV_PREFIX, ~/fsl and
+# SWANE_SYSTEM_FSL_DIRS; return 1 if there is none. A shell started by
+# "curl | bash" or the Linux menu has not read the user's rc files, so
+# FSLDIR alone is not enough.
+find_existing_fsl() {
+    local dir hook_dir=""
+    hook_dir="$(hook_fsldir "$1")" || hook_dir=""
+    for dir in "${FSLDIR:-}" "$hook_dir" "$HOME/fsl"; do
+        if [ -n "$dir" ] && [ -f "$dir/etc/fslversion" ]; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+    done
+    # Word splitting is intended: the variable is a space-separated list.
+    for dir in $SWANE_SYSTEM_FSL_DIRS; do
+        if [ -f "$dir/etc/fslversion" ]; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# fsl_version_of DIR: print the first line of DIR/etc/fslversion as written
+# (FSL's own installer may append ":<build hash>").
+fsl_version_of() {
+    local line=""
+    [ -f "$1/etc/fslversion" ] || return 1
+    IFS= read -r line <"$1/etc/fslversion" || [ -n "$line" ] || return 1
+    printf '%s\n' "$line"
+}
+
+# fsl_version_ge DIR MIN: return 0 if the FSL in DIR is release MIN or later.
+# The first line of etc/fslversion is compared without anything after ":",
+# number by number (see version_lt).
+fsl_version_ge() {
+    local dir="$1" min="$2" line
+    [ -f "$dir/etc/fslversion" ] || return 1
+    line="$(fsl_version_of "$dir")" || return 1
+    line="$(printf '%s' "${line%%:*}" | tr -d ' \t\r')"
+    [ -n "$line" ] || return 1
+    ! version_lt "$line" "$min"
+}
+
+# is_installer_fsl DIR: return 0 if DIR is the FSL environment this installer
+# created (it holds SWANE_FSL_MARKER).
+is_installer_fsl() {
+    [ -f "$1/$SWANE_FSL_MARKER" ]
+}
+
+# fsl_min_version ENV_PREFIX: print DependencyManager.MIN_FSL_VERSION of the
+# SWANe installed in ENV_PREFIX (read by swane.utils.fsl_conda without
+# importing SWANe's GUI); return 1 if it cannot be read.
+fsl_min_version() {
+    local out
+    out="$(PYTHONNOUSERSITE=1 "$1/bin/python" -I -c 'from swane.utils.fsl_conda import min_fsl_version; print(min_fsl_version())' </dev/null)" || return 1
+    case "$out" in
+        "" | *[!0-9.]*) return 1 ;;
+    esac
+    printf '%s\n' "$out"
+}
+
+# fsl_license_file ENV_PREFIX: print the path of the FSL licence bundled with
+# the SWANe installed in ENV_PREFIX; return 1 if it cannot be found.
+fsl_license_file() {
+    local path
+    path="$(PYTHONNOUSERSITE=1 "$1/bin/python" -I -c 'import os, swane; print(os.path.join(os.path.dirname(swane.__file__), "licenses", "fsl.txt"))' </dev/null 2>/dev/null)" || return 1
+    [ -n "$path" ] && [ -f "$path" ] || return 1
+    printf '%s\n' "$path"
+}
+
+# confirm_fsl_install ENV_PREFIX: return 0 if FSL may be installed: the user
+# answers yes to installing it (--yes does), then accepts the FSL licence by
+# typing the literal word "yes" (only --accept-fsl-license skips that, --yes
+# never does). --no-fsl returns 1 without asking. Call it directly, not
+# inside $(...): it reads the terminal.
+confirm_fsl_install() {
+    local env_prefix="$1" license="" answer=""
+    if [ "$NO_FSL" = "1" ]; then
+        return 1
+    fi
+    if ! prompt_yes_no "Install a minimal FSL (FMRIB Software Library) for SWANe, in its own conda environment $SWANE_FSL_ENV_NAME?"; then
+        return 1
+    fi
+    log_info "FSL has its own licence, with non-commercial terms. Read it before accepting: $FSL_LICENSE_URL"
+    if license="$(fsl_license_file "$env_prefix")"; then
+        log_info "A copy of the FSL licence is in $license"
+    fi
+    if [ "$ACCEPT_FSL_LICENSE" = "1" ]; then
+        log_info "FSL licence accepted (--accept-fsl-license)"
+        return 0
+    fi
+    if ! read_tty answer "Type yes to accept the FSL licence: "; then
+        die "No terminal available to accept the FSL licence: rerun with --accept-fsl-license (or --no-fsl)"
+    fi
+    if [ "$answer" = "yes" ]; then
+        return 0
+    fi
+    log_info "FSL licence not accepted"
+    return 1
+}
+
+# find_swane_fsl_env ROOT: find_env_prefix ROOT swane-fsl, with FSLDIR unset.
+# find_env_prefix skips environments under $FSLDIR (an FSL install), and a
+# shell where swane-env is active has FSLDIR set to swane-fsl itself by the
+# hook: the lookup must still find it.
+find_swane_fsl_env() (
+    unset FSLDIR
+    find_env_prefix "$1" "$SWANE_FSL_ENV_NAME"
+)
+
+# find_installer_fsl ROOT ENV_PREFIX: print the prefix of the swane-fsl
+# environment this installer created, found through $FSLDIR or the hook of
+# ENV_PREFIX (a directory with SWANE_FSL_MARKER), else by name in the conda
+# environment list. Return 1 if there is none (a listed prefix that no longer
+# exists counts as none), 2 if the list cannot be read, 3 (printing the
+# prefix) if an environment of that name exists without the marker.
+find_installer_fsl() {
+    local root="$1" env_prefix="$2" dir hook_dir="" rc=0
+    hook_dir="$(hook_written_fsldir "$env_prefix")" || hook_dir=""
+    for dir in "${FSLDIR:-}" "$hook_dir"; do
+        if [ -n "$dir" ] && is_installer_fsl "$dir"; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+    done
+    dir="$(find_swane_fsl_env "$root")" || rc=$?
+    case "$rc" in
+        0) ;;
+        1) return 1 ;;
+        *) return 2 ;;
+    esac
+    [ -d "$dir" ] || return 1
+    printf '%s\n' "$dir"
+    if is_installer_fsl "$dir"; then
+        return 0
+    fi
+    return 3
+}
+
+# install_or_update_fsl ROOT ENV_PREFIX [TARGET]: install the minimal FSL
+# release SWANe needs (resolved by swane.utils.fsl_conda of the SWANe in
+# ENV_PREFIX) into the swane-fsl environment of the conda ROOT: "conda
+# install" into TARGET or the swane-fsl this installer made earlier,
+# otherwise "conda create". Then write etc/fslversion (FSL's packages do not)
+# and the marker. Sets SWANE_FSL_PREFIX and SWANE_FSL_ACTION; prints nothing
+# on stdout. Call it directly, not inside $(...).
+install_or_update_fsl() {
+    local root="$1" env_prefix="$2" target="${3:-}" output release specs prefix="" rc=0
+    SWANE_FSL_PREFIX=""
+    SWANE_FSL_ACTION=""
+    log_info "Resolving the FSL release SWANe needs for this platform"
+    output="$(PYTHONNOUSERSITE=1 "$env_prefix/bin/python" -I -m swane.utils.fsl_conda --format github </dev/null)" ||
+        die "Could not resolve the FSL release to install (is fsl.fmrib.ox.ac.uk reachable?)"
+    release="$(printf '%s\n' "$output" | sed -n 's/^release=//p' | head -n 1)"
+    specs="$(printf '%s\n' "$output" | sed -n 's/^specs=//p' | head -n 1)"
+    case "$release" in
+        "" | *[!0-9.]*) die "The FSL resolver printed no valid release: $output" ;;
+    esac
+    [ -n "$specs" ] || die "The FSL resolver printed no packages for FSL $release"
+    if [ -n "$target" ]; then
+        prefix="$target"
+    else
+        prefix="$(find_installer_fsl "$root" "$env_prefix")" || rc=$?
+        case "$rc" in
+            0 | 1) ;;
+            3) die "A conda environment named $SWANE_FSL_ENV_NAME that this installer did not create exists in $prefix: remove it or rename it, then rerun" ;;
+            *) die "Could not list the conda environments of $root" ;;
+        esac
+    fi
+    # Word splitting of the specs is intended (a space-separated list);
+    # globbing is not.
+    set -f
+    if [ -n "$prefix" ]; then
+        log_info "Updating FSL in $prefix to release $release"
+        # shellcheck disable=SC2086
+        conda_cmd "$root" install -y -p "$prefix" --override-channels --strict-channel-priority -c "$FSL_CHANNEL" -c conda-forge $specs </dev/null >&2 ||
+            die "Could not update FSL in $prefix"
+        SWANE_FSL_ACTION="updated"
+    else
+        log_info "Installing FSL $release into the conda environment $SWANE_FSL_ENV_NAME"
+        # shellcheck disable=SC2086
+        conda_cmd "$root" create -y -n "$SWANE_FSL_ENV_NAME" --override-channels --strict-channel-priority -c "$FSL_CHANNEL" -c conda-forge $specs </dev/null >&2 ||
+            die "Could not create the $SWANE_FSL_ENV_NAME environment"
+        prefix="$(find_swane_fsl_env "$root")" ||
+            die "conda does not list $SWANE_FSL_ENV_NAME after creating it"
+        SWANE_FSL_ACTION="installed"
+    fi
+    set +f
+    mkdir -p "$prefix/etc" || die "Could not create $prefix/etc"
+    printf '%s\n' "$release" >"$prefix/etc/fslversion" || die "Could not write $prefix/etc/fslversion"
+    : >"$prefix/$SWANE_FSL_MARKER" || die "Could not write $prefix/$SWANE_FSL_MARKER"
+    SWANE_FSL_PREFIX="$prefix"
+}
+
+# write_fsl_hook ENV_PREFIX FSLDIR: write the activation hooks of swane-env.
+# activate.d/swane-fsl.sh saves FSLDIR, FSLOUTPUTTYPE and PATH, exports
+# FSLDIR, FSLOUTPUTTYPE=NIFTI_GZ and appends $FSLDIR/bin to PATH (so the env's
+# own python stays first); deactivate.d/swane-fsl.sh restores them, unsetting
+# the variables that were unset before. Both are POSIX sh, sourced by conda
+# in the user's shell (bash, zsh...), and safe under "set -u".
+write_fsl_hook() {
+    local prefix="$1" dir="$2" quoted activate deactivate
+    case "$dir" in
+        *"
+"*) die "The FSL directory name contains a newline: $dir" ;;
+    esac
+    quoted="$(shell_quote "$dir")"
+    activate="$(fsl_hook_activate "$prefix")"
+    deactivate="$(fsl_hook_deactivate "$prefix")"
+    mkdir -p "$(dirname -- "$activate")" "$(dirname -- "$deactivate")" ||
+        die "Could not create the activation hook directories of $prefix"
+    {
+        cat <<'EOF'
+# Written by the SWANe installer (rerun it rather than editing this file).
+# Sourced by "conda activate swane-env": points SWANe at FSL. The FSL bin
+# directory is appended to PATH, so swane-env's own programs stay first.
+if [ -z "${_SWANE_FSL_ACTIVE+x}" ]; then
+    _SWANE_FSL_ACTIVE=1
+    unset _SWANE_OLD_FSLDIR _SWANE_OLD_FSLOUTPUTTYPE _SWANE_FSL_OWNED
+    if [ -n "${FSLDIR+x}" ]; then
+        _SWANE_OLD_FSLDIR="$FSLDIR"
+    fi
+    if [ -n "${FSLOUTPUTTYPE+x}" ]; then
+        _SWANE_OLD_FSLOUTPUTTYPE="$FSLOUTPUTTYPE"
+    fi
+    _SWANE_OLD_PATH="$PATH"
+EOF
+        printf '    FSLDIR=%s\n' "$quoted"
+        cat <<'EOF'
+    FSLOUTPUTTYPE=NIFTI_GZ
+    export FSLDIR FSLOUTPUTTYPE
+    _SWANE_FSL_BIN="$FSLDIR/bin"
+    case ":$PATH:" in
+        *":$_SWANE_FSL_BIN:"*)
+            # Already on PATH: the user's own entry, left alone, unless the
+            # deactivation just before left it there (conda reactivating
+            # swane-env exports a PATH computed before deactivate.d ran):
+            # then it is ours, and the deactivation removes it.
+            if [ "${_SWANE_FSL_LEFT-}" = "$_SWANE_FSL_BIN" ]; then
+                _SWANE_FSL_OWNED=reused
+            fi
+            ;;
+        *)
+            PATH="$PATH:$_SWANE_FSL_BIN"
+            export PATH
+            _SWANE_FSL_OWNED=appended
+            ;;
+    esac
+    unset _SWANE_FSL_LEFT
+    _SWANE_NEW_PATH="$PATH"
+fi
+EOF
+    } >"$activate" || die "Could not write $activate"
+    cat >"$deactivate" <<'EOF' || die "Could not write $deactivate"
+# Written by the SWANe installer (rerun it rather than editing this file).
+# Sourced by "conda deactivate": undoes activate.d/swane-fsl.sh.
+#
+# Known limitation: when swane-env is replaced by another environment
+# without stacking ("conda activate other" from inside swane-env), conda
+# exports a PATH it computed before this script ran, so the FSL entry stays
+# on PATH in that environment (with FSLDIR unset). Reactivating swane-env
+# reuses that entry instead of appending another one.
+if [ -n "${_SWANE_FSL_ACTIVE+x}" ]; then
+    if [ -n "${_SWANE_FSL_OWNED+x}" ]; then
+        if [ "${_SWANE_FSL_OWNED-}" = appended ] && [ "$PATH" = "${_SWANE_NEW_PATH-}" ]; then
+            # PATH unchanged since this activation appended the entry:
+            # restore it exactly.
+            PATH="${_SWANE_OLD_PATH-}"
+        else
+            # conda rewrites PATH before running this script (it drops the
+            # env's own entries), or the entry was reused from an earlier
+            # activation: remove just that entry, its last occurrence, and
+            # keep the rest.
+            _SWANE_P=":$PATH:"
+            case "$_SWANE_P" in
+                *":${_SWANE_FSL_BIN-}:"*)
+                    _SWANE_HEAD="${_SWANE_P%":${_SWANE_FSL_BIN-}:"*}"
+                    _SWANE_P="$_SWANE_HEAD${_SWANE_P#"$_SWANE_HEAD:${_SWANE_FSL_BIN-}"}"
+                    ;;
+            esac
+            _SWANE_P="${_SWANE_P#:}"
+            PATH="${_SWANE_P%:}"
+            unset _SWANE_P _SWANE_HEAD
+        fi
+        export PATH
+        # A reactivation (or an environment switch) exports a PATH computed
+        # before this script, which still holds the entry: let the next
+        # activation know that entry is ours.
+        _SWANE_FSL_LEFT="${_SWANE_FSL_BIN-}"
+    fi
+    if [ -n "${_SWANE_OLD_FSLDIR+x}" ]; then
+        FSLDIR="$_SWANE_OLD_FSLDIR"
+        export FSLDIR
+    else
+        unset FSLDIR
+    fi
+    if [ -n "${_SWANE_OLD_FSLOUTPUTTYPE+x}" ]; then
+        FSLOUTPUTTYPE="$_SWANE_OLD_FSLOUTPUTTYPE"
+        export FSLOUTPUTTYPE
+    else
+        unset FSLOUTPUTTYPE
+    fi
+    unset _SWANE_FSL_ACTIVE _SWANE_FSL_OWNED _SWANE_OLD_FSLDIR \
+        _SWANE_OLD_FSLOUTPUTTYPE _SWANE_OLD_PATH _SWANE_NEW_PATH _SWANE_FSL_BIN
+fi
+EOF
+    log_info "FSL for $SWANE_ENV_NAME: FSLDIR=$dir (in $activate)"
+}
+
+# remove_stale_fsl_hook ENV_PREFIX: delete both hook files when the hook
+# points at a directory that no longer holds FSL (e.g. swane-fsl removed by
+# hand); a valid hook is kept.
+remove_stale_fsl_hook() {
+    local env_prefix="$1" activate deactivate dir
+    activate="$(fsl_hook_activate "$env_prefix")"
+    deactivate="$(fsl_hook_deactivate "$env_prefix")"
+    if [ ! -e "$activate" ] && [ ! -e "$deactivate" ]; then
+        return 0
+    fi
+    if hook_fsldir "$env_prefix" >/dev/null; then
+        return 0
+    fi
+    dir="$(hook_written_fsldir "$env_prefix")" || dir="an unreadable FSLDIR"
+    log_info "Removing the FSL activation hook of $SWANE_ENV_NAME: $dir no longer holds FSL"
+    rm -f "$activate" "$deactivate"
+}
+
+# fsl_set_result STATE DIR: publish the FSL_RESULT_* globals.
+fsl_set_result() {
+    # shellcheck disable=SC2034 # read by main and by the test suite
+    FSL_RESULT_STATE="$1"
+    # shellcheck disable=SC2034 # read by main and by the test suite
+    FSL_RESULT_DIR="$2"
+    # shellcheck disable=SC2034 # read by main and by the test suite
+    FSL_RESULT_VERSION=""
+    if [ -n "$2" ]; then
+        # shellcheck disable=SC2034 # read by main and by the test suite
+        FSL_RESULT_VERSION="$(fsl_version_of "$2")" || FSL_RESULT_VERSION=""
+    fi
+}
+
+# fsl_install_and_wire ROOT ENV_PREFIX [TARGET]: install_or_update_fsl, then
+# point the hook at the result.
+fsl_install_and_wire() {
+    install_or_update_fsl "$@"
+    write_fsl_hook "$2" "$SWANE_FSL_PREFIX"
+    fsl_set_result "$SWANE_FSL_ACTION" "$SWANE_FSL_PREFIX"
+}
+
+# fsl_use_dir ROOT ENV_PREFIX DIR MIN: wire the FSL in DIR when it is release
+# MIN or later; update it first when it is this installer's own (older) FSL.
+# Return 1, doing nothing, for an older FSL the installer did not make.
+fsl_use_dir() {
+    local root="$1" env_prefix="$2" dir="$3" min="$4" version
+    version="$(fsl_version_of "$dir")" || version="unknown"
+    if fsl_version_ge "$dir" "$min"; then
+        log_info "Using FSL $version in $dir"
+        write_fsl_hook "$env_prefix" "$dir"
+        fsl_set_result existing "$dir"
+        return 0
+    fi
+    if is_installer_fsl "$dir"; then
+        log_info "FSL $version in $dir (installed by this installer) is older than $min: updating it"
+        fsl_install_and_wire "$root" "$env_prefix" "$dir"
+        return 0
+    fi
+    return 1
+}
+
+# fsl_step ROOT ENV_PREFIX: the FSL step of the installer.
+#   - no FSL found: ask (install + licence), install swane-fsl, hook to it;
+#   - FSL >= MIN_FSL_VERSION: hook to it, nothing installed;
+#   - this installer's swane-fsl, older: update it without asking;
+#   - another FSL, older: warn, leave it untouched, ask, install swane-fsl
+#     (unless the hook already points at this installer's swane-fsl).
+# Declined or --no-fsl: warn and write no hook (a stale one is removed).
+# Sets FSL_RESULT_*; call it directly, not inside $(...).
+fsl_step() {
+    local root="$1" env_prefix="$2" min found="" hook_dir="" version
+    fsl_set_result "" ""
+    if [ "$NO_FSL" = "1" ]; then
+        remove_stale_fsl_hook "$env_prefix"
+        if hook_dir="$(hook_fsldir "$env_prefix")"; then
+            log_info "FSL skipped (--no-fsl); $SWANE_ENV_NAME keeps using the FSL in $hook_dir"
+        else
+            log_warn "$FSL_NEEDED_MESSAGE"
+        fi
+        fsl_set_result skipped ""
+        return 0
+    fi
+    min="$(fsl_min_version "$env_prefix")" ||
+        die "Could not read the minimum FSL version from SWANe in $env_prefix"
+    found="$(find_existing_fsl "$env_prefix")" || found=""
+    if [ -n "$found" ]; then
+        if fsl_use_dir "$root" "$env_prefix" "$found" "$min"; then
+            return 0
+        fi
+        version="$(fsl_version_of "$found")" || version="unknown"
+        hook_dir="$(hook_fsldir "$env_prefix")" || hook_dir=""
+        if [ -n "$hook_dir" ] && [ "$hook_dir" != "$found" ] && is_installer_fsl "$hook_dir"; then
+            log_info "Leaving FSL $version in $found (older than $min) aside: $SWANE_ENV_NAME uses the FSL this installer made in $hook_dir"
+            fsl_use_dir "$root" "$env_prefix" "$hook_dir" "$min"
+            return 0
+        fi
+        log_warn "FSL $version in $found is older than $min, the oldest release SWANe supports: it is left untouched, and a separate FSL can be installed for SWANe"
+    fi
+    if confirm_fsl_install "$env_prefix"; then
+        fsl_install_and_wire "$root" "$env_prefix"
+        return 0
+    fi
+    remove_stale_fsl_hook "$env_prefix"
+    log_warn "$FSL_NEEDED_MESSAGE"
+    fsl_set_result skipped ""
+}
+
+# ---------------------------------------------------------------------------
 # Command line
 # ---------------------------------------------------------------------------
 
