@@ -690,3 +690,39 @@ class TestPreferenceWizardReview:
         assert "%.2f GB" % global_config.getfloat_safe(PERF, "ram_gb") in review
         for key in ENGINE_PREFERENCE_ORDER:
             assert engine(global_config, key).value in review
+
+
+class TestPreferenceWizardParent:
+    """The wizard must be a child of the main window to stack above it."""
+
+    @pytest.mark.parametrize("first_run", [True, False])
+    def test_wizard_is_parented_to_main_window(
+        self, monkeypatch, global_config, dependency_manager, first_run
+    ):
+        import swane.ui.MainWindow as main_window_module
+
+        captured = {}
+
+        class FakeWizard:
+            def __init__(self, *args, **kwargs):
+                captured["args"] = args
+                captured["kwargs"] = kwargs
+
+            def exec(self):
+                captured["executed"] = True
+
+        class FakeMainWindow:
+            def __init__(self):
+                self.global_config = global_config
+                self.dependency_manager = dependency_manager
+
+            def check_running_workflows(self):
+                return False
+
+        monkeypatch.setattr(main_window_module, "PreferenceWizardWindow", FakeWizard)
+        main = FakeMainWindow()
+        main_window_module.MainWindow.start_preference_wizard(main, first_run=first_run)
+
+        assert captured["executed"]
+        assert captured["kwargs"].get("parent") is main
+        assert captured["kwargs"].get("first_run") is first_run
