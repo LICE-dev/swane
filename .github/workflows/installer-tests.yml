@@ -1,0 +1,258 @@
+name: Installer tests
+
+# shellcheck and the unit tests of installer/install_swane.sh, then the real
+# installer on clean hosted runners (Ubuntu, macOS arm64, macOS Intel),
+# installing the SWANe of the commit under test, with a check of the result
+# and a second run (the update path).
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "installer/**"
+      - "setup.py"
+      - "swane/utils/fsl_conda.py"
+      - "swane/utils/DependencyManager.py"
+      - "swane/licenses/fsl.txt"
+      - "swane/tests/installer/**"
+      - ".github/scripts/check_installed_env.sh"
+      - ".github/workflows/installer-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: shellcheck and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: shellcheck
+        shell: bash
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends shellcheck
+          fi
+          shellcheck --version
+          shellcheck installer/install_swane.sh .github/scripts/check_installed_env.sh
+      # zsh: the activation hook tests run under every shell found (bash, dash, zsh).
+      - name: Install zsh
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zsh
+      - name: Install SWANe
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+      - name: Installer unit tests
+        shell: bash
+        # CONDA_EXE pointing at the runner's conda enables the hook test under
+        # the real "conda activate" (fake prefixes only, nothing is installed).
+        run: |
+          if [ -n "${CONDA:-}" ] && [ -x "$CONDA/bin/conda" ]; then
+            export CONDA_EXE="$CONDA/bin/conda"
+          fi
+          python -m pytest swane/tests/installer -p no:cacheprovider -rfEs
+
+  install:
+    name: install (${{ matrix.os }}, ${{ matrix.conda }} conda)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # fresh: no conda visible to the installer, which installs Miniforge.
+          - os: ubuntu-latest
+            conda: fresh
+          # existing: the runner's own conda ($CONDA), found through CONDA_EXE.
+          - os: ubuntu-latest
+            conda: existing
+          - os: macos-latest
+            conda: fresh
+          # macos-15-intel is GitHub's last Intel (x86_64) macOS image,
+          # supported until fall 2027: drop this leg then. It is the only CI
+          # coverage of macOS Intel (TensorFlow from conda-forge).
+          - os: macos-15-intel
+            conda: fresh
+    env:
+      CONDA_MODE: ${{ matrix.conda }}
+      EXPECT_CONDA_TENSORFLOW: ${{ matrix.os == 'macos-15-intel' }}
+    steps:
+      - uses: actions/checkout@v7
+      # Job variables for every later step: the summary files, the expected
+      # conda root and login profile, and a PATH without ~/.local/bin (so the
+      # installer adds it through the login profile, as on a user's machine)
+      # and, for the fresh legs, without any directory holding a runner conda.
+      - name: Prepare the runner
+        shell: bash
+        run: |
+          echo "Login shell: SHELL=${SHELL:-<unset>}"
+          if [ -z "${SHELL:-}" ]; then
+            echo "::error::SHELL is unset: the installer cannot choose a login profile"
+            exit 1
+          fi
+          # The profile install_swane.sh's login_profile picks, decided before
+          # the installer can create any of these files.
+          case "$(basename -- "$SHELL" | tr '[:upper:]' '[:lower:]')" in
+            zsh) expected_profile="$HOME/.zprofile" ;;
+            bash)
+              if [ -f "$HOME/.bash_profile" ]; then
+                expected_profile="$HOME/.bash_profile"
+              else
+                expected_profile="$HOME/.profile"
+              fi
+              ;;
+            sh | dash) expected_profile="$HOME/.profile" ;;
+            *)
+              echo "::error::Login shell $SHELL has no known profile: the installer would only warn"
+              exit 1
+              ;;
+          esac
+          echo "Expected login profile: $expected_profile"
+          IFS=: read -r -a path_dirs <<<"$PATH"
+          new_path=""
+          for dir in "${path_dirs[@]}"; do
+            case "$dir" in
+              "" | "$HOME/.local/bin" | "$HOME/.local/bin/") continue ;;
+            esac
+            if [ "$CONDA_MODE" = fresh ] && [ -x "$dir/conda" ]; then
+              echo "Removed from PATH (runner conda): $dir"
+              continue
+            fi
+            new_path="${new_path:+$new_path:}$dir"
+          done
+          conda_exe=""
+          expected_root="$HOME/miniforge3"
+          if [ "$CONDA_MODE" = existing ]; then
+            if [ -z "${CONDA:-}" ] || [ ! -x "$CONDA/bin/conda" ]; then
+              echo "::error::The runner has no conda in \$CONDA (${CONDA:-unset})"
+              exit 1
+            fi
+            "$CONDA/bin/conda" --version
+            conda_exe="$CONDA/bin/conda"
+            expected_root="$CONDA"
+          fi
+          {
+            echo "PATH=$new_path"
+            echo "SUMMARY_1=$RUNNER_TEMP/installer-summary-1.txt"
+            echo "SUMMARY_2=$RUNNER_TEMP/installer-summary-2.txt"
+            echo "EXPECTED_CONDA_ROOT=$expected_root"
+            echo "EXPECTED_PROFILE=$expected_profile"
+            if [ -n "$conda_exe" ]; then
+              echo "CONDA_EXE=$conda_exe"
+            fi
+          } >> "$GITHUB_ENV"
+      # /bin/bash: on macOS that is bash 3.2, the shell of "curl ... | bash".
+      # Only stdout (the summary) goes to the file; the log stays on stderr.
+      # Any summary warning fails the job: a clean hosted runner expects none
+      # (e.g. a renamed apt package would otherwise leave CI green).
+      - name: Run the installer
+        shell: bash
+        run: |
+          if [ "$CONDA_MODE" = fresh ]; then
+            unset CONDA_EXE
+          fi
+          /bin/bash installer/install_swane.sh --yes --accept-fsl-license \
+            --swane-spec "$GITHUB_WORKSPACE" | tee "$SUMMARY_1"
+          grep -qxF "SWANe installer: conda $EXPECTED_CONDA_ROOT" "$SUMMARY_1" ||
+            { echo "::error::Expected the conda in $EXPECTED_CONDA_ROOT"; exit 1; }
+          grep -qE '^SWANe installer: FSL .* installed$' "$SUMMARY_1" ||
+            { echo "::error::Expected FSL to be installed on a runner without FSL"; exit 1; }
+          if grep -q '^WARNING: ' "$SUMMARY_1"; then
+            sed -n 's/^WARNING: \(.*\)/::error::Installer warning: \1/p' "$SUMMARY_1"
+            exit 1
+          fi
+      # The list is read from the script itself (sourcing it never runs main),
+      # so it cannot drift from what the installer installs.
+      - name: Check the Linux system packages
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          # shellcheck disable=SC2016 # expanded by the inner bash
+          apt_list="$(bash -c '. installer/install_swane.sh && printf "%s\n" "$APT_PACKAGES"')"
+          read -r -a packages <<<"$apt_list"
+          [ "${#packages[@]}" -gt 0 ] || { echo "::error::Could not read APT_PACKAGES from the installer"; exit 1; }
+          installed() {
+            # shellcheck disable=SC2016 # dpkg-query format, not a shell expansion
+            [ "$(dpkg-query -W -f='${Status}' "$1" 2>/dev/null || true)" = "install ok installed" ]
+          }
+          missing=""
+          for pkg in "${packages[@]}"; do
+            installed "$pkg" || missing="$missing $pkg"
+          done
+          installed libasound2t64 || installed libasound2 || missing="$missing libasound2t64|libasound2"
+          if [ -n "$missing" ]; then
+            echo "::error::System packages not installed:$missing"
+            exit 1
+          fi
+          echo "All ${#packages[@]} packages and libasound2t64/libasound2 are installed"
+      - name: Check the environment
+        shell: bash
+        timeout-minutes: 20
+        run: bash -l .github/scripts/check_installed_env.sh "$SUMMARY_1"
+      # A fresh login shell of the user's own shell, with a minimal
+      # environment: swane must come from the PATH the login profile sets.
+      - name: Check swane in a login shell
+        shell: bash
+        run: |
+          echo "Login shell: $SHELL"
+          # shellcheck disable=SC2016 # expanded by the login shell
+          output="$(env -i HOME="$HOME" USER="$USER" LOGNAME="${LOGNAME:-$USER}" \
+            SHELL="$SHELL" TERM=dumb PATH=/usr/bin:/bin \
+            "$SHELL" -lc 'printf "SWANE_RESOLVED=%s\n" "$(command -v swane)"')"
+          echo "$output"
+          resolved="$(printf '%s\n' "$output" | sed -n 's/^SWANE_RESOLVED=//p' | tail -n 1)"
+          if [ "$resolved" != "$HOME/.local/bin/swane" ]; then
+            echo "::error::swane resolves to '$resolved' in a $SHELL login shell, not $HOME/.local/bin/swane"
+            exit 1
+          fi
+      # As users run it: the script on stdin ("curl ... | bash -s -- ...").
+      - name: Run the installer again from stdin (update path)
+        shell: bash
+        run: |
+          if [ "$CONDA_MODE" = fresh ]; then
+            unset CONDA_EXE
+          fi
+          /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" \
+            < installer/install_swane.sh | tee "$SUMMARY_2"
+          grep -qE '^SWANe installer: FSL .* existing$' "$SUMMARY_2" ||
+            { echo "::error::Expected the second run to reuse the FSL of the first one"; exit 1; }
+          first="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_1")"
+          second="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_2")"
+          if [ "$first" != "$second" ]; then
+            echo "::error::The second run changed conda or swane-env"
+            printf 'first run:\n%s\nsecond run:\n%s\n' "$first" "$second"
+            exit 1
+          fi
+          if grep -q '^WARNING: ' "$SUMMARY_2"; then
+            sed -n 's/^WARNING: \(.*\)/::error::Installer warning: \1/p' "$SUMMARY_2"
+            exit 1
+          fi
+          # One PATH block, in the profile the installer picks for $SHELL,
+          # never duplicated by a rerun.
+          in_expected="$(grep -c '^# >>> SWANe installer >>>$' "$EXPECTED_PROFILE" 2>/dev/null || true)"
+          if [ "$in_expected" != 1 ]; then
+            echo "::error::Expected one SWANe PATH block in $EXPECTED_PROFILE, found ${in_expected:-none}"
+            exit 1
+          fi
+          blocks="$(cat "$HOME/.zprofile" "$HOME/.bash_profile" "$HOME/.profile" 2>/dev/null |
+            grep -c '^# >>> SWANe installer >>>$' || true)"
+          if [ "$blocks" != 1 ]; then
+            echo "::error::Expected one SWANe PATH block in the login profiles, found $blocks"
+            exit 1
+          fi
+      - name: Check the environment after the second run
+        shell: bash
+        timeout-minutes: 20
+        run: bash -l .github/scripts/check_installed_env.sh "$SUMMARY_2"
