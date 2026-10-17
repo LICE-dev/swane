@@ -472,8 +472,13 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
+        # Parenting makes the window manager keep the dialog above the main
+        # window, which on first run is shown right before the wizard.
         wf_preference_window = PreferenceWizardWindow(
-            self.global_config, self.dependency_manager, first_run=first_run
+            self.global_config,
+            self.dependency_manager,
+            first_run=first_run,
+            parent=self,
         )
         wf_preference_window.exec()
 
