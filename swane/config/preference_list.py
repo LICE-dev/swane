@@ -7,7 +7,21 @@ from swane.resources import strings
 from swane.config.PreferenceEntry import PreferenceEntry
 from swane.config.config_enums import *
 from swane.config.dependency_policy import FSL_MANDATORY, default_engines
-from swane.nipype_pipeline.workflows.dipy_bundle_workflow import DIPY_TRACT_ATLAS
+
+# Mapping of tract keys to RecoBundles atlas bundle names
+DIPY_TRACT_ATLAS = {
+    "af": "AF",
+    "cst": "CST",
+    "fa": "AST",
+    "ifo": "IFOF",
+    "ilf": "ILF",
+    "mdlf": "MdLF",
+    "or": "OR",
+    "uf": "UF",
+    "vof": "VOF",
+    "fx": "F",
+    "cingulum": "C",
+}
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))

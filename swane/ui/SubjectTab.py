@@ -34,7 +34,10 @@ from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
-from swane.ui.NipypeNodeRuntimeWidget import NipypeNodeRuntimeWidget
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from swane.ui.NipypeNodeRuntimeWidget import NipypeNodeRuntimeWidget
 from swane.config.ConfigManager import ConfigManager
 from swane.config import dependency_policy
 from swane.workers.DicomSearchWorker import DicomSearchWorker
@@ -576,6 +579,8 @@ class SubjectTab(QTabWidget):
         layout.addWidget(self.exec_button, 1, 1)
         self.exec_graph = QSvgWidget()
         layout.addWidget(self.exec_graph, 2, 1)
+        from swane.ui.NipypeNodeRuntimeWidget import NipypeNodeRuntimeWidget
+
         self.node_runtime_widget = NipypeNodeRuntimeWidget(
             slicer_path=self.global_config.get_slicer_path(),
             main_window=self.main_window,

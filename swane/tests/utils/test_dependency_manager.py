@@ -511,3 +511,54 @@ def test_check_freesurfer_matlab_candidate_in_freesurfer_home(monkeypatch, tmp_p
     assert args == [str(mcr_script)]
     assert kwargs.get("shell") is False
     assert kwargs.get("timeout") == 3.0
+
+
+def test_read_fsl_version_direct(tmp_path):
+    # Missing / non-existent directory
+    assert dm._read_fsl_version_direct(str(tmp_path / "nonexistent")) is None
+
+    # Valid fslversion file
+    fsldir = tmp_path / "fsl"
+    etc = fsldir / "etc"
+    etc.mkdir(parents=True)
+    (etc / "fslversion").write_text("6.0.7.17\n")
+    assert dm._read_fsl_version_direct(str(fsldir)) == "6.0.7.17"
+
+    # Empty fslversion file
+    (etc / "fslversion").write_text("")
+    assert dm._read_fsl_version_direct(str(fsldir)) is None
+
+
+def test_read_freesurfer_version_direct(tmp_path):
+    # Missing directory
+    assert dm._read_freesurfer_version_direct(str(tmp_path / "nonexistent")) == (
+        None,
+        None,
+    )
+
+    # Valid Ubuntu build-stamp
+    fs_home = tmp_path / "freesurfer"
+    fs_home.mkdir(parents=True)
+    (fs_home / "build-stamp.txt").write_text(
+        "freesurfer-linux-ubuntu22_x86_64-8.2.0-20260314-d932c45\n"
+    )
+    raw, loose = dm._read_freesurfer_version_direct(str(fs_home))
+    assert raw == "freesurfer-linux-ubuntu22_x86_64-8.2.0-20260314-d932c45"
+    assert loose == "8.2.0"
+
+    # Valid CentOS build-stamp
+    (fs_home / "build-stamp.txt").write_text(
+        "freesurfer-linux-centos7_x86_64-7.1.0-20200511-813297b\n"
+    )
+    raw, loose = dm._read_freesurfer_version_direct(str(fs_home))
+    assert loose == "7.1.0"
+
+    # Plain version string
+    (fs_home / "build-stamp.txt").write_text("7.4.0\n")
+    raw, loose = dm._read_freesurfer_version_direct(str(fs_home))
+    assert raw == "7.4.0"
+    assert loose == "7.4.0"
+
+    # Empty file
+    (fs_home / "build-stamp.txt").write_text("")
+    assert dm._read_freesurfer_version_direct(str(fs_home)) == (None, None)

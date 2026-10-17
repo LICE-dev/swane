@@ -4,9 +4,9 @@ import importlib.util
 import os
 import shutil
 import subprocess
+import sys
 import re
 from shutil import which
-from nipype.interfaces import dcm2nii, fsl, freesurfer
 from swane.resources import strings
 from packaging import version
 from swane.config.ConfigManager import ConfigManager
@@ -114,6 +114,115 @@ def _has_en_us_locale() -> bool:
         return False
 
 
+def _read_fsl_version_direct(fsldir: str | None = None) -> str | None:
+    """Read FSL version directly from the file system or fslversion binary."""
+    target_fsldir = fsldir if fsldir is not None else os.environ.get("FSLDIR")
+    if target_fsldir:
+        ver_file = os.path.join(target_fsldir, "etc", "fslversion")
+        if os.path.isfile(ver_file):
+            try:
+                with open(ver_file, "r", encoding="utf-8") as fobj:
+                    first_line = fobj.readline().strip()
+                if first_line:
+                    return first_line
+            except OSError:
+                return None
+        # If a specific fsldir was given, do not fall back to global PATH commands
+        if fsldir is not None:
+            return None
+
+    which_fsl = which("fslversion")
+    if which_fsl:
+        try:
+            res = subprocess.run(
+                [which_fsl],
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+                check=False,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                m = re.search(
+                    r"Version:\s*([0-9]+(?:\.[0-9]+)+)",
+                    res.stdout,
+                    re.IGNORECASE,
+                )
+                if m:
+                    return m.group(1)
+                m = re.search(r"\b([0-9]+(?:\.[0-9]+)+)\b", res.stdout)
+                if m:
+                    return m.group(1)
+                return res.stdout.splitlines()[0].strip()
+        except Exception:
+            pass
+
+    return None
+
+
+def _read_fsl_version() -> str | None:
+    """Read the installed FSL version without eagerly importing Nipype.
+
+    If nipype.interfaces.fsl has already been imported or mocked in sys.modules,
+    delegate to fsl.base.Info.version(). Otherwise, inspect $FSLDIR/etc/fslversion
+    or the fslversion binary directly.
+    """
+    fsl_mod = sys.modules.get("nipype.interfaces.fsl")
+    if fsl_mod is not None:
+        try:
+            return fsl_mod.base.Info.version()
+        except Exception:
+            pass
+
+    return _read_fsl_version_direct()
+
+
+def _read_freesurfer_version_direct(
+    fs_home: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Read FreeSurfer version directly from $FREESURFER_HOME/build-stamp.txt.
+
+    Returns (raw_version, loose_version_str). If FreeSurfer is not found,
+    returns (None, None).
+    """
+    target_fs_home = fs_home or os.environ.get("FREESURFER_HOME")
+    if target_fs_home:
+        stamp_file = os.path.join(target_fs_home, "build-stamp.txt")
+        if os.path.isfile(stamp_file):
+            try:
+                with open(stamp_file, "r", encoding="utf-8") as fobj:
+                    raw_line = fobj.readline().strip()
+                if raw_line:
+                    m = re.search(r"(?:^|[^\d])v?(\d+\.\d+(?:\.\d+)?)", raw_line)
+                    loose_ver = m.group(1) if m else raw_line
+                    return raw_line, loose_ver
+            except OSError:
+                return None, None
+
+    return None, None
+
+
+def _read_freesurfer_version() -> tuple[str | None, str | None]:
+    """Read the installed FreeSurfer version without eagerly importing Nipype.
+
+    Returns (raw_version, loose_version_str). If FreeSurfer is not found,
+    returns (None, None).
+    If nipype.interfaces.freesurfer has already been imported or mocked in sys.modules,
+    delegates to freesurfer.base.Info.version() and looseversion().
+    """
+    fs_mod = sys.modules.get("nipype.interfaces.freesurfer")
+    if fs_mod is not None:
+        try:
+            raw = fs_mod.base.Info.version()
+            if raw is None:
+                return None, None
+            loose = str(fs_mod.base.Info.looseversion())
+            return raw, loose
+        except Exception:
+            pass
+
+    return _read_freesurfer_version_direct()
+
+
 class DependencyManager:
     """
     Manager for checking dependencies and reporting messages about them
@@ -203,11 +312,12 @@ class DependencyManager:
             if self is not None
             else None
         )
-        freesurfer_version = (
-            detected
-            if detected is not None
-            else str(freesurfer.base.Info.looseversion())
-        )
+        if detected is not None:
+            freesurfer_version = detected
+        else:
+            _, freesurfer_version = _read_freesurfer_version()
+            if freesurfer_version is None:
+                return False
         try:
             found_version = version.parse(freesurfer_version)
         except Exception:
@@ -437,7 +547,7 @@ class DependencyManager:
         -------
         A Dependence object with fsl information.
         """
-        fsl_version = fsl.base.Info.version()
+        fsl_version = _read_fsl_version()
         if fsl_version is None:
             return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_error)
         try:
@@ -583,13 +693,13 @@ class DependencyManager:
         """
 
         # FS installed
-        if freesurfer.base.Info.version() is None:
+        raw_version, freesurfer_version = _read_freesurfer_version()
+        if raw_version is None or freesurfer_version is None:
             return Dependence(
                 DependenceStatus.MISSING,
                 strings.check_dep_fs_error1,
                 DependenceStatus.MISSING,
             )
-        freesurfer_version = str(freesurfer.base.Info.looseversion())
         # Version string with an inline license link (used in every label that
         # reports the version); the raw freesurfer_version is kept for parsing.
         fs_ver = version_with_license(FREESURFER, freesurfer_version)
@@ -713,3 +823,19 @@ class DependencyManager:
             matlab_dep,
             detected_version=freesurfer_version,
         )
+
+
+def __getattr__(name: str):
+    if name == "fsl":
+        from nipype.interfaces import fsl
+
+        return fsl
+    if name == "freesurfer":
+        from nipype.interfaces import freesurfer
+
+        return freesurfer
+    if name == "dcm2nii":
+        from nipype.interfaces import dcm2nii
+
+        return dcm2nii
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
