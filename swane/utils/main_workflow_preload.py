@@ -19,9 +19,13 @@ MAIN_WORKFLOW_MODULE = "swane.nipype_pipeline.MainWorkflow"
 
 _preload_thread: Optional[threading.Thread] = None
 _preload_lock = threading.Lock()
+# Modules the preload thread is importing right now
+_importing: set[str] = set()
 
 
 def _preload(module_name: str):
+    with _preload_lock:
+        _importing.add(module_name)
     try:
         if module_name == MAIN_WORKFLOW_MODULE:
             from swane.patches.nipype_patches import apply_patches
@@ -35,6 +39,9 @@ def _preload(module_name: str):
             module_name,
             exc_info=True,
         )
+    finally:
+        with _preload_lock:
+            _importing.discard(module_name)
 
 
 def start_main_workflow_preload(
@@ -65,3 +72,21 @@ def start_main_workflow_preload(
             )
             _preload_thread.start()
         return _preload_thread
+
+
+def is_main_workflow_loaded(module_name: str = MAIN_WORKFLOW_MODULE) -> bool:
+    """
+    Tells whether module_name is fully imported.
+
+    Parameters
+    ----------
+    module_name: str
+        The module to check. Default is MAIN_WORKFLOW_MODULE.
+
+    Returns
+    -------
+    False while the module is missing or still being imported by the preload
+    thread (it is already in sys.modules then, but only partially initialized).
+    """
+    with _preload_lock:
+        return module_name in sys.modules and module_name not in _importing

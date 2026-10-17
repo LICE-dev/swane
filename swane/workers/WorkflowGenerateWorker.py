@@ -24,6 +24,7 @@ class WorkflowGenerateWorker(QRunnable):
 
         # Each preload is independent: one failure must not skip the others.
         for preload in (
+            self._load_pipeline_modules,
             self._preload_templates,
             self._preload_models,
             self._preload_dipy_atlas,
@@ -45,6 +46,25 @@ class WorkflowGenerateWorker(QRunnable):
         self.signal.progress_msg.emit(strings.subj_tab_wf_gen_start)
         ret = self.subject.generate_workflow(generate_graphs=self.generate_graphs)
         self.signal.finished.emit(ret)
+
+    def _load_pipeline_modules(self, strings):
+        """
+        Imports the Nipype main workflow module, or waits for its background
+        preload, telling the user why generation is waiting.
+        """
+        from swane.utils.main_workflow_preload import (
+            MAIN_WORKFLOW_MODULE,
+            is_main_workflow_loaded,
+        )
+
+        if is_main_workflow_loaded():
+            return
+
+        import importlib
+
+        self.signal.progress_msg.emit(strings.subj_tab_wf_gen_modules)
+        # Waits on the module import lock if the preload thread is importing it
+        importlib.import_module(MAIN_WORKFLOW_MODULE)
 
     def _preload_templates(self, strings):
         """

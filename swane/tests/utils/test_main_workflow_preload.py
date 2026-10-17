@@ -6,6 +6,7 @@ import subprocess
 import sys
 import textwrap
 import threading
+import types
 import pytest
 
 from swane.utils import main_workflow_preload as preload
@@ -138,3 +139,37 @@ def test_result_dir_import_after_preload(mode, expect_import):
     )
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.strip().splitlines()[-1] == str(expect_import)
+
+
+class TestIsMainWorkflowLoaded:
+
+    def test_missing_module_is_not_loaded(self):
+        assert not preload.is_main_workflow_loaded("swane._preload_test_missing")
+
+    def test_imported_module_is_loaded(self):
+        assert preload.is_main_workflow_loaded("swane")
+
+    def test_module_still_preloading_is_not_loaded(self, monkeypatch):
+        """While the preload thread runs, the module is already in sys.modules
+        but only partially initialized."""
+        name = "swane._preload_test_dummy"
+        started = threading.Event()
+        release = threading.Event()
+
+        def fake_import(module_name):
+            # Like a real import: in sys.modules before its body has run
+            sys.modules[module_name] = types.ModuleType(module_name)
+            started.set()
+            release.wait(5)
+
+        monkeypatch.setattr(preload.importlib, "import_module", fake_import)
+        monkeypatch.delitem(sys.modules, name, raising=False)
+        thread = preload.start_main_workflow_preload(name)
+        try:
+            assert started.wait(5)
+            assert not preload.is_main_workflow_loaded(name)
+        finally:
+            release.set()
+            thread.join(5)
+        assert preload.is_main_workflow_loaded(name)
+        del sys.modules[name]

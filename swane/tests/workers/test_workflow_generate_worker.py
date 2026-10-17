@@ -129,6 +129,9 @@ def test_failed_preload_does_not_skip_the_others(monkeypatch):
         calls.append("templates")
         raise RuntimeError("offline")
 
+    monkeypatch.setattr(
+        worker, "_load_pipeline_modules", lambda _s: calls.append("modules")
+    )
     monkeypatch.setattr(worker, "_preload_templates", _failing)
     monkeypatch.setattr(worker, "_preload_models", lambda _s: calls.append("models"))
     monkeypatch.setattr(
@@ -137,5 +140,30 @@ def test_failed_preload_does_not_skip_the_others(monkeypatch):
 
     worker.run()
 
-    assert calls == ["templates", "models", "dipy_atlas"]
+    assert calls == ["modules", "templates", "models", "dipy_atlas"]
     subject.generate_workflow.assert_called_once()
+
+
+@pytest.mark.parametrize("loaded", [True, False])
+def test_load_pipeline_modules_shows_label_only_when_loading(monkeypatch, loaded):
+    import importlib
+    from swane.utils import main_workflow_preload
+
+    imported = []
+    monkeypatch.setattr(
+        main_workflow_preload, "is_main_workflow_loaded", lambda: loaded
+    )
+    monkeypatch.setattr(importlib, "import_module", imported.append)
+    worker = WorkflowGenerateWorker(MagicMock())
+    messages = []
+    worker.signal.progress_msg.connect(messages.append)
+    strings_mock = MagicMock()
+    strings_mock.subj_tab_wf_gen_modules = "Loading modules..."
+
+    worker._load_pipeline_modules(strings_mock)
+
+    if loaded:
+        assert messages == [] and imported == []
+    else:
+        assert messages == ["Loading modules..."]
+        assert imported == [main_workflow_preload.MAIN_WORKFLOW_MODULE]
