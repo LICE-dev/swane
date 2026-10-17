@@ -1,7 +1,7 @@
-import smtplib
 from datetime import datetime
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+
+# smtplib and email are imported where used: ConfigManager imports this module
+# on GUI startup, while mail is only sent at workflow end.
 
 
 class MailManager:
@@ -53,6 +53,7 @@ class MailManager:
         Connects to the SMTP server using the provided credentials.
 
         """
+        import smtplib
 
         try:
             if self.use_ssl:
@@ -93,6 +94,8 @@ class MailManager:
         Sends an email with the specified subject and body.
 
         """
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
 
         message = MIMEMultipart()
         message["From"] = from_addr
