@@ -263,38 +263,61 @@ wizard_start_button = "&Get Started"
 
 wizard_welcome_title = "Welcome to the " + APPNAME + " Configuration Wizard"
 wizard_welcome_text = (
-    "This wizard will guide you through selecting the optimal computational settings "
-    "for your research workflows.\n\n"
-    "It helps balance performance, resource usage, and advanced features so that SWANe can "
-    "analyze your data efficiently and reliably.\n\n"
-    "You’ll be able to:\n"
-    "• Select a performance profile that matches your priorities.\n"
-    "• Enable hardware acceleration, if supported.\n"
-    "• Choose whether to use FreeSurfer advanced models for improved results.\n"
-    "• Select Freesurfer output of your interest, if supported.\n"
-    "• Review a summary of your configuration before applying it.\n\n"
-    "These settings can always be adjusted later in Application Settings, or you can rerun "
-    "this wizard at any time from Menu → Configuration Wizard."
+    "This wizard will guide you through selecting the computational settings "
+    "for your research workflows.<br><br>"
+    "You’ll be able to:<br>"
+    "• Choose how much of this computer " + APPNAME + " can use.<br>"
+    "• Enable hardware acceleration, if supported.<br>"
+    "• Choose the processing engines.<br>"
+    "• Select the FreeSurfer outputs of your interest, if supported.<br>"
+    "• Review a summary of your configuration before applying it.<br><br>"
+    "Every page starts from your current settings. They can always be adjusted "
+    "later in Application Settings, or you can rerun this wizard at any time from "
+    "Menu → Configuration Wizard."
 )
 
-wizard_performance_title = "Choose your performance profile"
+wizard_performance_title = "How much of this computer can " + APPNAME + " use?"
 wizard_performance_text = (
-    "This helps "
+    "This computer has {ram_gb:.1f} GB of RAM and {cpu} CPU cores. "
     + APPNAME
-    + " optimize processing based on your system capabilities and research needs."
+    + " never uses more than the share you choose: when more subjects are "
+    "analysed at the same time, the share is split among them."
 )
-performance_profile_max = "Maximum Performance"
+performance_profile_max = "High"
 performance_profile_max_tooltip = (
-    "Use more system resources to complete tasks as quickly as possible."
+    "For a computer dedicated to " + APPNAME + ": analyses complete faster, other "
+    "applications may become slow."
 )
 performance_profile_balanced = "Balanced"
 performance_profile_balanced_tooltip = (
-    "A compromise between speed and resource usage for most analyses."
+    "Leaves room for other applications while " + APPNAME + " is running."
 )
-performance_profile_min = "Minimum Resource Usage"
-performance_profile_min_tooltip = "Minimize CPU and memory usage to keep the system responsive, even on limited hardware."
+performance_profile_min = "Light"
+performance_profile_min_tooltip = (
+    "Keeps the computer responsive for other work; analyses take longer."
+)
+wizard_resource_level = (
+    "{name}: up to {ram_gb:.1f} GB RAM and {cpu} CPU cores\n{tooltip}"
+)
+wizard_parallel_subjects = "Subjects analysed at the same time"
+wizard_per_subject_resources = (
+    "Each subject can use up to <b>{ram_gb:.2f} GB RAM</b> and <b>{cpu} CPU cores</b>."
+)
+wizard_current_resources = (
+    "<b>Current setting</b>: {ram_gb:.2f} GB RAM and {cpu} CPU cores per subject, "
+    "up to {max_subj} subjects at the same time."
+)
+low_subject_resources_title = "Low resources per subject"
+low_subject_ram_warning = (
+    "With {subjects} subjects at the same time, each subject can use only "
+    "{ram_gb:.2f} GB of RAM, less than {limit} GB: analyses may fail or be very slow."
+)
+low_subject_cpu_warning = (
+    "With {subjects} subjects at the same time, each subject can use only "
+    "{cpu} CPU core(s), fewer than {limit}: analyses will be slow."
+)
 
-wizard_hardware_accelleration_title = "Hardware Accelleration"
+wizard_hardware_accelleration_title = "Hardware Acceleration"
 wizard_hardware_accelleration_text = (
     "Speed up computations by using supported hardware features."
 )
@@ -307,27 +330,24 @@ gpu_acceleration_disabled_tooltip = (
     "All processing will run on the CPU, even if GPU acceleration is available."
 )
 
-wizard_advanced_models_title = "FreeSurfer Advanced Models"
-wizard_advanced_models_text = (
-    "FreeSurfer advanced models implement state-of-the-art FreeSurfer deep learning algorithms (Synth Tools) that can improve results "
-    "and, in some cases, reduce analysis time.<br>"
-    "They may require additional memory and processing power."
+wizard_engines_title = "Processing engines"
+wizard_engines_text = (
+    "Choose the tool used for each processing step. Engines whose tools are not "
+    "installed, or that need more RAM than each subject can use "
+    "({ram_gb:.2f} GB), cannot be selected: hover them to see why."
 )
+wizard_engines_recommended_button = "Use recommended engines"
+wizard_engine_unavailable_tools = "Not installed: {reason}"
+wizard_engine_unavailable_ram = "Requires at least {ram:.1f} GB RAM per subject"
+wizard_engine_no_option = "No engine fits: install one of its tools or allow more RAM."
+
 wizard_advanced_models_macos_warn = "<b>Please note</b>: The synth tools consume a significant amount of RAM on macOS. For this reason, we do <b>not recommend</b> using them on this platform."
 windows_experimental_warn = "<b>Please note</b>: Windows support is <b>experimental</b>. FSL and FreeSurfer are not available natively on Windows; 3D Slicer integration is best-effort."
-advanced_models_enabled = "Use FreeSurfer advanced models when supported"
-advanced_models_enabled_tooltip = (
-    "Enable FreeSurfer advanced models when the system can handle them reliably."
-)
-advanced_models_disabled = "Use standard models only"
-advanced_models_disabled_tooltip = (
-    "Prefer lighter, more stable processing techniques with minimal resource usage."
-)
 
 wizard_freesurfer_outputs_title = "FreeSurfer Outputs Selection"
 wizard_freesurfer_outputs_tooltip = (
-    "Select which FreeSurfer outputs you want to generate for your analyses.\n"
-    "You can choose multiple options or none.\n"
+    "Select which FreeSurfer outputs you want to generate for your analyses. "
+    "You can choose multiple options or none. "
     "More selections will increase processing time."
 )
 freesurfer_outputs_cortical_parcellation = "Cortical Parcellation"
@@ -344,12 +364,16 @@ freesurfer_full_reconall = "Full Recon-All Processing"
 freesurfer_full_reconall_tooltip = (
     "Enables the complete Recon-All pipeline for comprehensive brain analysis."
 )
+freesurfer_synth = "Use FreeSurfer Synth tools when supported"
+freesurfer_synth_tooltip = (
+    "Deep learning tools (SynthSeg for a parcellation-only analysis, Synth tools "
+    "during recon-all): they can improve results and reduce analysis time, but "
+    "need more RAM."
+)
 
 wizard_review_title = "Review Your Configuration"
 wizard_review_text = "Please review your selections before applying them."
-wizard_review_tooltip = (
-    "Some options may be automatically adjusted to ensure stability and compatibility."
-)
+wizard_review_tooltip = "You can change these settings later in Application Settings."
 
 wizard_applied_title = "Configuration applied successfully"
 wizard_applied_text = (
@@ -362,10 +386,24 @@ wizard_applied_text = (
     "You can also rerun this wizard at any time from Menu → Configuration Wizard."
 )
 
-wizard_selected_profile = "<b>Selected profile</b>: {profile}"
+wizard_selected_profile = "<b>Computer share</b>: {profile}"
+wizard_resources = (
+    "<b>Total</b>: up to {total_gb:.2f} GB RAM of {machine_gb:.1f} GB<br />"
+    "<b>Subjects at the same time</b>: {max_subj}<br />"
+    "<b>Each subject</b>: {ram_gb:.2f} GB RAM, {cpu} CPU cores"
+)
 wizard_gpu_accelleration = "<b>GPU acceleration</b>: {gpu_status}"
-wizard_advanced_models = "<b>FreeSurfer advanced models</b>: {adv_status}"
+wizard_engines = "<b>Processing engines</b>:<br />{engines}"
+wizard_engine_row = "• {label}: {engine}"
+wizard_engine_low_ram = " (<i>below its {ram:.1f} GB RAM requirement</i>)"
+wizard_engine_missing = " (<i>required tools not detected</i>)"
 wizard_freesurfer_outputs = "<b>FreeSurfer outputs</b>: {fs_outputs}"
+wizard_freesurfer_hippo_suffix = " + hippocampal/amygdala subfields"
+wizard_freesurfer_synth_suffix = " (Synth tools)"
+wizard_status_enabled = "Enabled"
+wizard_status_disabled = "Disabled"
+wizard_status_not_available = "Not available"
+wizard_status_not_detected = "Not detected"
 
 # Workflow
 check_dep_generic_error = "Dependency check error"

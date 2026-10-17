@@ -1,3 +1,4 @@
+import pytest
 import types
 
 import swane.utils.ResourceManager as rm
@@ -18,7 +19,7 @@ def test_to_gb_and_ram_calculations(monkeypatch):
 
     assert rm.ResourceManager.to_gb(1024**3) == 1.0
     assert rm.ResourceManager.total_memory_gb() == 8.0
-    # min ram is max(MINIMUM_RAM, perc of total)
+    # min and max ram are percentages of the total
     assert rm.ResourceManager.get_minimum_ram() <= rm.ResourceManager.total_memory_gb()
     assert rm.ResourceManager.get_maximum_ram() <= rm.ResourceManager.total_memory_gb()
     assert isinstance(rm.ResourceManager.get_default_cpu(), int)
@@ -63,3 +64,28 @@ def test_every_ram_requirement_has_a_windows_value():
         if name.endswith("_RAM_REQUIREMENT"):
             table = getattr(ResourceManager, name)
             assert table["windows"] == table["other"], name
+
+
+def test_subject_ram_limits(monkeypatch):
+    class FakeVM:
+        total = 16 * 1024**3
+
+    monkeypatch.setattr(rm, "virtual_memory", lambda: FakeVM)
+    assert ResourceManager.get_maximum_ram() == pytest.approx(
+        16 * ResourceManager.MAXIMUM_RAM_PERC / 100
+    )
+    for subjects in range(1, ResourceManager.MAX_PARALLEL_SUBJECTS + 1):
+        limit = ResourceManager.get_max_subject_ram(subjects)
+        assert limit * subjects <= ResourceManager.get_maximum_ram()
+        assert limit >= ResourceManager.get_minimum_subject_ram()
+
+
+def test_parallel_subjects_limited_by_cores(monkeypatch):
+    monkeypatch.setattr(rm, "cpu_count", lambda: 3)
+    assert ResourceManager.get_max_parallel_subjects() == 3
+    assert ResourceManager.get_max_subject_cpu(2) == 1
+    monkeypatch.setattr(rm, "cpu_count", lambda: 16)
+    assert ResourceManager.get_max_parallel_subjects() == (
+        ResourceManager.MAX_PARALLEL_SUBJECTS
+    )
+    assert ResourceManager.get_max_subject_cpu(5) == 3

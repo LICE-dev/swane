@@ -94,7 +94,7 @@ class MainWindow(QMainWindow):
         self.initialize_ui()
 
         if need_setting_wizard:
-            self.start_preference_wizard()
+            self.start_preference_wizard(first_run=True)
 
         # Check for update
         update_thread = UpdateCheckWorker()
@@ -450,9 +450,15 @@ class MainWindow(QMainWindow):
         )
         self.global_config[GlobalPrefCategoryList.MAIN]["shutdown"] = str(not shutdown)
 
-    def start_preference_wizard(self):
+    def start_preference_wizard(self, first_run: bool = False):
         """
         Open the Preference Wizard Window.
+
+        Parameters
+        ----------
+        first_run: bool, optional
+            Start from the recommendations instead of the current settings.
+            Default is False.
 
         Returns
         -------
@@ -466,8 +472,13 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
+        # Parenting makes the window manager keep the dialog above the main
+        # window, which on first run is shown right before the wizard.
         wf_preference_window = PreferenceWizardWindow(
-            self.global_config, self.dependency_manager
+            self.global_config,
+            self.dependency_manager,
+            first_run=first_run,
+            parent=self,
         )
         wf_preference_window.exec()
 
@@ -736,7 +747,7 @@ class MainWindow(QMainWindow):
         button_action6 = QAction(
             QIcon.fromTheme("tools-wizard"), strings.menu_start_preference_wizard, self
         )
-        button_action6.triggered.connect(self.start_preference_wizard)
+        button_action6.triggered.connect(lambda: self.start_preference_wizard())
 
         button_action7 = QAction(strings.menu_shutdown_pref, self)
         button_action7.setCheckable(True)
