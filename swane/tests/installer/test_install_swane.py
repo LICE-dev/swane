@@ -101,6 +101,8 @@ def test_parse_args_sets_every_option(sh):
 def test_main_defaults_ignore_the_environment(sh):
     """Options come from the command line only, not from inherited variables."""
     result = sh.code(
+        # A no-op install flow: only main's option handling is under test.
+        "install_flow() { :; }; "
         'main; printf "%s|" "$ASSUME_YES" "$ACCEPT_FSL_LICENSE" "$NO_FSL" '
         '"$SWANE_SPEC" "$MINIFORGE_PREFIX"',
         env={
@@ -352,9 +354,13 @@ def _fake_miniforge_installer(sh):
     return path
 
 
-def _serve(sh):
-    """Bash that writes the fake download for $url into $out."""
-    installer = _fake_miniforge_installer(sh)
+def _serve(sh, installer=None):
+    """Bash that writes the fake download for $url into $out.
+
+    The installer served is ``installer`` (a file), by default
+    :func:`_fake_miniforge_installer`.
+    """
+    installer = installer or _fake_miniforge_installer(sh)
     return (
         'case "$url" in\n'
         "    *.sha256)\n"
@@ -365,7 +371,9 @@ def _serve(sh):
     )
 
 
-def _stub_curl(sh, stub, tag_url="%s/tag/%s" % (RELEASES, MINIFORGE_TAG)):
+def _stub_curl(
+    sh, stub, tag_url="%s/tag/%s" % (RELEASES, MINIFORGE_TAG), installer=None
+):
     stub(
         "curl",
         'out=""; url=""; write_out=0\n'
@@ -379,7 +387,7 @@ def _stub_curl(sh, stub, tag_url="%s/tag/%s" % (RELEASES, MINIFORGE_TAG)):
         "    shift\n"
         "done\n"
         'if [ "$write_out" = 1 ]; then printf "%%s" %s; exit 0; fi\n'
-        "%s" % (bash_quote(tag_url), _serve(sh)),
+        "%s" % (bash_quote(tag_url), _serve(sh, installer)),
     )
 
 
@@ -2230,3 +2238,256 @@ def test_unknown_shell_warns_with_a_manual_hint(sh, shell):
     assert "WARNING: Unknown shell" in result.stderr
     assert 'export PATH="$HOME/.local/bin:$PATH"' in result.stdout
     assert os.listdir(sh.home) == []
+
+
+# ---------------------------------------------------------------------------
+# main: the whole flow and the summary
+# ---------------------------------------------------------------------------
+
+
+class InstallWorld:
+    """Every external tool of a whole installer run, stubbed.
+
+    A conda root (found through ``CONDA_EXE``) without ``swane-env``. Its
+    ``bin/conda`` (logged as ``conda``) prints :attr:`envs_json` for ``env
+    list --json``; ``create -n swane-env`` makes :attr:`env` (with
+    ``bin/dot`` when graphviz is requested) and ``create -n swane-fsl``
+    makes :attr:`fsl_prefix`, each then listed. The env's ``bin/python``
+    (logged as ``env-python``) fakes the SWANe installed in it, as in
+    :class:`FslWorld`. ``mktemp`` and ``basename`` wrap the real tools, so
+    the launcher step (its ``mktemp``) and the PATH step (``basename`` of
+    ``$SHELL``) show up in the call log too.
+
+    Parameters
+    ----------
+    root : Path, optional
+        The conda root (default ``<tmp>/conda root``).
+    system, machine : str
+        What ``uname -s`` / ``uname -m`` print.
+    """
+
+    def __init__(self, sh, stub, root=None, system="Linux", machine="x86_64"):
+        self.sh = sh
+        self.stub = stub
+        self.root = make_conda_root(root or sh.tmp / "conda root")
+        make_executable(
+            self.root / "bin" / "python", 'exec %s "$@"' % bash_quote(sys.executable)
+        )
+        self.env = self.root / "envs" / "swane-env"
+        self.fsl_prefix = self.root / "envs" / "swane-fsl"
+        self.envs_json = sh.tmp / "envs.json"
+        self.envs_json.write_text(json.dumps({"envs": [str(self.root)]}))
+        self.license = sh.tmp / "site packages" / "swane" / "licenses" / "fsl.txt"
+        self.license.parent.mkdir(parents=True)
+        self.license.write_text("FSL licence text\n")
+        template = stub.script(
+            sh.tmp / "env-python-template",
+            "env-python",
+            'case "$*" in\n'
+            '    *"-m swane.utils.fsl_conda --format github"*)\n'
+            "        printf 'release=6.0.7.8\\nplatform=linux-64\\nspecs=%s\\n' ;;\n"
+            "    *min_fsl_version*) echo 6.0.7.8 ;;\n"
+            "    *licenses*) echo %s ;;\n"
+            '    "-c "*) echo 3.12 ;;\n'
+            '    "-m pip install -U "*) echo "pip output" ;;\n'
+            "    *) exit 9 ;;\n"
+            "esac" % (FSL_SPECS, bash_quote(str(self.license))),
+        )
+        with_env = json.dumps({"envs": [str(self.root), str(self.env)]})
+        with_fsl = json.dumps(
+            {"envs": [str(self.root), str(self.env), str(self.fsl_prefix)]}
+        )
+        stub.script(
+            self.root / "bin" / "conda",
+            "conda",
+            'case "$1" in\n'
+            '    --version) echo "conda 24.11.3" ;;\n'
+            "    env) cat %(json)s ;;\n"
+            '    create) echo "conda create output"\n'
+            '        case " $* " in\n'
+            '            *" -n swane-env "*)\n'
+            "                mkdir -p %(env_bin)s\n"
+            "                cp %(template)s %(env_bin)s/python\n"
+            '                case " $* " in\n'
+            '                    *" graphviz "*) printf "#!/bin/sh\\n" > %(env_bin)s/dot\n'
+            "                        chmod 755 %(env_bin)s/dot ;;\n"
+            "                esac\n"
+            "                printf '%%s' %(with_env)s > %(json)s ;;\n"
+            '            *" -n swane-fsl "*)\n'
+            "                mkdir -p %(fsl_bin)s\n"
+            "                printf '%%s' %(with_fsl)s > %(json)s ;;\n"
+            "        esac ;;\n"
+            '    install) echo "conda install output" ;;\n'
+            "esac"
+            % {
+                "json": bash_quote(str(self.envs_json)),
+                "env_bin": bash_quote(str(self.env / "bin")),
+                "template": bash_quote(str(template)),
+                "with_env": bash_quote(with_env),
+                "fsl_bin": bash_quote(str(self.fsl_prefix / "bin")),
+                "with_fsl": bash_quote(with_fsl),
+            },
+        )
+        stub.platform(system, machine)
+        stub("sudo", '"$@"')
+        stub("apt-get")
+        stub("locale", "echo C; echo POSIX")
+        stub("locale-gen")
+        for tool in ("mktemp", "basename"):
+            stub(tool, 'exec %s "$@"' % bash_quote(str(sh.tools / tool)))
+        self.launcher = sh.home / ".local" / "bin" / "swane"
+        self.profile = sh.home / ".profile"
+
+    def run(self, *args, env=None):
+        """Execute the installer file with ``args`` (no terminal, empty stdin)."""
+        base = {"CONDA_EXE": self.root / "bin" / "conda", "SHELL": "/bin/sh"}
+        return subprocess.run(
+            [BASH, str(SCRIPT), *args],
+            env=self.sh.environment(dict(base, **(env or {}))),
+            cwd=str(self.sh.tmp),
+            input="",
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+    def conda_calls(self):
+        return self.stub.calls("conda")
+
+
+E2E_ARGS = ("--yes", "--accept-fsl-license", "--swane-spec", "/x")
+
+
+def _first_index(calls, prefix):
+    """Index of the first logged call starting with ``prefix``."""
+    for index, call in enumerate(calls):
+        if call.startswith(prefix):
+            return index
+    raise AssertionError("no call starting with %r in %r" % (prefix, calls))
+
+
+def test_main_end_to_end_with_stubs(sh, stub):
+    world = InstallWorld(sh, stub)
+    result = world.run(*E2E_ARGS)
+    assert result.returncode == 0, result.stderr
+    calls = stub.calls()
+    # One marker call per step, in the order of main.
+    steps = [
+        "uname",  # detect_platform
+        "conda --version",  # the conda found (warn_old_conda)
+        "sudo apt-get update",  # install_linux_packages
+        "sudo locale-gen en_US.UTF-8",  # ensure_locale
+        "conda create -y -n swane-env",  # ensure_swane_env
+        "env-python -m pip install -U /x",
+        "env-python -I -c from swane.utils.fsl_conda import min_fsl_version",
+        "conda create -y -n swane-fsl",  # fsl_step
+        "mktemp",  # write_launcher
+        "basename",  # ensure_local_bin_on_path
+    ]
+    indexes = [_first_index(calls, step) for step in steps]
+    assert indexes == sorted(indexes), calls
+    assert world.conda_calls() == [
+        "conda --version",
+        "conda env list --json",
+        "conda create -y -n swane-env %s python=3.12 graphviz" % CHANNELS,
+        "conda env list --json",
+        "conda env list --json",
+        "conda create -y -n swane-fsl %s %s" % (FSL_CHANNELS, FSL_SPECS),
+        "conda env list --json",
+    ]
+    assert "defaults" not in stub.calls_log.read_text()
+    # The summary is the only output on stdout.
+    assert result.stdout.splitlines() == [
+        "SWANe installer: conda %s" % world.root,
+        "SWANe installer: env %s" % world.env,
+        "SWANe installer: FSL %s (6.0.7.8) installed" % world.fsl_prefix,
+        "Open a new terminal and run: swane",
+    ]
+    assert "sudo may ask for your password" in result.stderr
+    assert result.stderr.count("password") == 1
+    assert str(world.env) in world.launcher.read_text()
+    assert MARKER_BEGIN in world.profile.read_text()
+    activate = world.env / "etc" / "conda" / "activate.d" / "swane-fsl.sh"
+    assert str(world.fsl_prefix) in activate.read_text()
+
+
+def test_main_rerun_reports_existing_fsl(sh, stub):
+    world = InstallWorld(sh, stub)
+    assert world.run(*E2E_ARGS).returncode == 0
+    stub.calls_log.unlink()
+    profile = world.profile.read_text()
+    result = world.run(*E2E_ARGS)
+    assert result.returncode == 0, result.stderr
+    # swane-env is found (graphviz already in it), the hook's FSL is reused.
+    assert world.conda_calls() == ["conda --version", "conda env list --json"]
+    assert not any(" create " in call for call in stub.calls())
+    assert "env-python -m pip install -U /x" in stub.calls()
+    assert result.stdout.splitlines() == [
+        "SWANe installer: conda %s" % world.root,
+        "SWANe installer: env %s" % world.env,
+        "SWANe installer: FSL %s (6.0.7.8) existing" % world.fsl_prefix,
+        "Open a new terminal and run: swane",
+    ]
+    assert world.profile.read_text() == profile
+
+
+def test_main_summary_lists_skipped_fsl_and_warnings(sh, stub):
+    world = InstallWorld(sh, stub)
+    result = world.run(
+        "--yes", "--no-fsl", "--swane-spec", "/x", env={"SHELL": "/usr/bin/fish"}
+    )
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[:3] == [
+        "SWANe installer: conda %s" % world.root,
+        "SWANe installer: env %s" % world.env,
+        "SWANe installer: FSL skipped",
+    ]
+    assert lines[3] == "WARNING: %s" % NEEDS_FSL
+    assert lines[4].startswith("WARNING: Unknown shell: ")
+    assert lines[5:] == ["Open a new terminal and run: swane"]
+    assert not any("swane-fsl" in call for call in stub.calls())
+    assert not world.profile.exists()
+
+
+def test_main_on_macos_skips_the_linux_steps(sh, stub):
+    world = InstallWorld(sh, stub, system="Darwin", machine="arm64")
+    result = world.run(*E2E_ARGS)
+    assert result.returncode == 0, result.stderr
+    assert stub.calls("sudo") == []
+    assert stub.calls("apt-get") == []
+    assert stub.calls("locale-gen") == []
+    assert "password" not in result.stderr
+    assert result.stdout.splitlines()[-1] == "Open a new terminal and run: swane"
+
+
+def test_main_installs_miniforge_when_no_conda_is_found(sh, stub):
+    """No conda anywhere: Miniforge goes into --miniforge-prefix and is used."""
+    prefix = sh.home / "forge"
+    world = InstallWorld(sh, stub, root=prefix)
+    staged = sh.tmp / "staged-miniforge"
+    prefix.rename(staged)
+    installer = sh.tmp / "fake-miniforge.sh"
+    installer.write_text(
+        'printf "miniforge-installer %%s\\n" "$*" >> %s\n'
+        'mkdir -p "$3" && cp -R %s/. "$3"\n'
+        % (bash_quote(str(stub.calls_log)), bash_quote(str(staged)))
+    )
+    _stub_curl(sh, stub, installer=installer)
+    _stub_sha256sum(stub)
+    result = world.run(*E2E_ARGS, "--miniforge-prefix", prefix, env={"CONDA_EXE": None})
+    assert result.returncode == 0, result.stderr
+    assert stub.calls("miniforge-installer") == [
+        "miniforge-installer -b -p %s" % prefix
+    ]
+    assert stub.calls("conda")[0] == "conda --version"
+    assert result.stdout.splitlines()[0] == "SWANe installer: conda %s" % prefix
+
+
+def test_unknown_flag_exit_2(sh, stub):
+    world = InstallWorld(sh, stub)
+    result = world.run("--bogus")
+    assert result.returncode == 2
+    assert "Unknown option: --bogus" in result.stderr
+    assert result.stdout == ""
+    assert stub.calls() == []

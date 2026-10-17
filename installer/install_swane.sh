@@ -397,7 +397,7 @@ install_linux_packages() {
         log_warn "sudo not found and not running as root: install these packages as root (3D Slicer needs them): $APT_PACKAGES, and libasound2t64 or libasound2"
         return 0
     fi
-    log_info "Installing system packages for 3D Slicer (sudo may ask for your password)"
+    log_info "Installing system packages for 3D Slicer"
     if ! run_privileged apt-get update; then
         log_warn "apt-get update failed: the package lists may be stale"
     fi
@@ -432,7 +432,7 @@ ensure_locale() {
         log_warn "The en_US.UTF-8 locale is missing and sudo is not available: generate it as root (locale-gen en_US.UTF-8)"
         return 0
     fi
-    log_info "Generating the en_US.UTF-8 locale (sudo may ask for your password)"
+    log_info "Generating the en_US.UTF-8 locale"
     if [ -f "$SWANE_LOCALE_GEN_FILE" ]; then
         if ! run_privileged sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' "$SWANE_LOCALE_GEN_FILE"; then
             log_warn "Could not enable en_US.UTF-8 in $SWANE_LOCALE_GEN_FILE"
@@ -1320,6 +1320,70 @@ parse_args() {
     done
 }
 
+# ---------------------------------------------------------------------------
+# Main flow and summary
+# ---------------------------------------------------------------------------
+
+# sudo_notice: on Linux, say once, before the system steps, that sudo may ask
+# for the password; only when one of them will run sudo as a non-root user
+# (apt-get is there, or the en_US.UTF-8 locale is missing). No prompt.
+sudo_notice() {
+    is_linux || return 0
+    have_command sudo || return 0
+    [ "${EUID:-1}" != "0" ] || return 0
+    if have_command apt-get || ! has_en_us_locale; then
+        log_info "Linux system setup (packages for 3D Slicer, en_US.UTF-8 locale) runs sudo: sudo may ask for your password"
+    fi
+}
+
+# print_summary ROOT: print on stdout what the run did, from SWANE_ENV_PREFIX,
+# FSL_RESULT_* and SUMMARY_WARNINGS. CI reads these lines: keep their
+# prefixes.
+print_summary() {
+    local root="$1" warning
+    printf 'SWANe installer: conda %s\n' "$root"
+    printf 'SWANe installer: env %s\n' "$SWANE_ENV_PREFIX"
+    if [ "$FSL_RESULT_STATE" = "skipped" ] || [ -z "$FSL_RESULT_DIR" ]; then
+        printf 'SWANe installer: FSL skipped\n'
+    else
+        printf 'SWANe installer: FSL %s (%s) %s\n' "$FSL_RESULT_DIR" \
+            "${FSL_RESULT_VERSION:-unknown version}" "$FSL_RESULT_STATE"
+    fi
+    if [ -n "$SUMMARY_WARNINGS" ]; then
+        while IFS= read -r warning; do
+            printf 'WARNING: %s\n' "$warning"
+        done <<EOF
+$SUMMARY_WARNINGS
+EOF
+    fi
+    printf 'Open a new terminal and run: swane\n'
+}
+
+# install_flow: every step of the installer, in order, then the summary.
+# Functions that warn or prompt are called directly (their results are
+# globals); the producers that only print or die are captured with $(...).
+install_flow() {
+    local platform="" root=""
+    platform="$(detect_platform)" || exit 1
+    log_info "Platform: $platform"
+    if root="$(find_conda)"; then
+        log_info "Using the conda in $root"
+    else
+        log_info "No conda found: installing Miniforge into $MINIFORGE_PREFIX"
+        root="$(install_miniforge "$MINIFORGE_PREFIX")" || exit 1
+    fi
+    warn_old_conda "$root"
+    sudo_notice
+    install_linux_packages
+    ensure_locale
+    ensure_swane_env "$root" "$SWANE_SPEC"
+    fsl_step "$root" "$SWANE_ENV_PREFIX"
+    write_launcher "$root" "$SWANE_ENV_PREFIX"
+    ensure_local_bin_on_path
+    printf '\n' >&2
+    print_summary "$root"
+}
+
 main() {
     ASSUME_YES=0
     ACCEPT_FSL_LICENSE=0
@@ -1329,6 +1393,7 @@ main() {
     # ${1+"$@"}: an empty "$@" is an unbound-variable error under "set -u"
     # in old bash releases (macOS /bin/bash 3.2).
     parse_args ${1+"$@"}
+    install_flow
 }
 
 # Run main only when executed (directly or as "curl ... | bash"), never when
