@@ -4,6 +4,7 @@ Every call runs in the isolated harness of ``harness.py``: no real conda,
 network tool or terminal is ever reached.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -741,3 +742,488 @@ def test_linux_steps_noop_on_macos(sh, stub, func):
     assert stub.calls("sudo") == []
     assert stub.calls("apt-get") == []
     assert stub.calls("locale-gen") == []
+
+
+# ---------------------------------------------------------------------------
+# swane-env
+# ---------------------------------------------------------------------------
+
+CHANNELS = "--override-channels --strict-channel-priority -c conda-forge"
+VERSION_CODE = 'import sys; print("%d.%d" % sys.version_info[:2])'
+
+
+def _env_python(stub, path, label, version="3.12"):
+    """Logging stub of an environment's ``bin/python``.
+
+    ``-c`` (the version check) prints ``version``; ``-m pip`` prints some
+    chatter on stdout and records ``PYTHONNOUSERSITE`` next to the stub.
+    """
+    return stub.script(
+        path,
+        label,
+        'case "$1" in\n'
+        "    -c) echo %s ;;\n"
+        '    -m) echo "pip output"\n'
+        '        printf "%%s" "${PYTHONNOUSERSITE:-unset}" > "$0.nousersite" ;;\n'
+        "esac" % bash_quote(version),
+    )
+
+
+class FakeConda:
+    """A conda root whose ``bin/conda`` logs every call (as ``conda ...``).
+
+    ``env list --json`` prints :attr:`envs_json`; ``create`` makes
+    :attr:`new_prefix` (with a Python stub reporting 3.12) and lists it;
+    ``--version`` prints ``version``. ``bin/python`` is the interpreter
+    running the tests, so the installer's JSON parsing is the real one.
+    """
+
+    def __init__(self, sh, stub, version="conda 24.11.3", create_exit=0):
+        self.stub = stub
+        self.root = make_conda_root(sh.tmp / "conda root")
+        self.envs_json = sh.tmp / "envs.json"
+        self.new_prefix = self.root / "envs" / "swane-env"
+        self.set_envs()
+        make_executable(
+            self.root / "bin" / "python", 'exec %s "$@"' % bash_quote(sys.executable)
+        )
+        template = _env_python(
+            stub, sh.tmp / "python-template", str(self.new_prefix / "bin" / "python")
+        )
+        created = json.dumps({"envs": [str(self.root), str(self.new_prefix)]})
+        stub.script(
+            self.root / "bin" / "conda",
+            "conda",
+            'case "$1" in\n'
+            "    --version) echo %s ;;\n"
+            "    env) cat %s ;;\n"
+            '    create) echo "conda create output"\n'
+            "        [ %d = 0 ] || exit %d\n"
+            "        mkdir -p %s\n"
+            "        cp %s %s\n"
+            "        printf '%%s' %s > %s ;;\n"
+            '    install) echo "conda install output" ;;\n'
+            "esac"
+            % (
+                bash_quote(version),
+                bash_quote(str(self.envs_json)),
+                create_exit,
+                create_exit,
+                bash_quote(str(self.new_prefix / "bin")),
+                bash_quote(str(template)),
+                bash_quote(str(self.new_prefix / "bin" / "python")),
+                bash_quote(created),
+                bash_quote(str(self.envs_json)),
+            ),
+        )
+
+    def set_envs(self, *prefixes):
+        """List the root plus ``prefixes`` in ``conda env list --json``."""
+        envs = [str(self.root)] + [str(p) for p in prefixes]
+        self.envs_json.write_text(json.dumps({"envs": envs}))
+
+    def add_env(self, prefix, version="3.12", dot=False, tensorflow=False):
+        """Make an existing environment at ``prefix``; return its python path."""
+        python = prefix / "bin" / "python"
+        _env_python(self.stub, python, str(python), version)
+        if dot:
+            make_executable(prefix / "bin" / "dot", "exit 0")
+        if tensorflow:
+            package = prefix / "lib" / "python3.12" / "site-packages" / "tensorflow"
+            package.mkdir(parents=True)
+            (package / "__init__.py").write_text("")
+        return python
+
+    def conda_calls(self, subcommand):
+        return [
+            call
+            for call in self.stub.calls("conda")
+            if call.split()[1:2] == [subcommand]
+        ]
+
+
+def _ensure(sh, conda, spec="swane"):
+    """Run ensure_swane_env and print SWANE_ENV_PREFIX on stdout."""
+    return sh.code(
+        'ensure_swane_env "$ROOT" "$SPEC"; printf "%s\\n" "$SWANE_ENV_PREFIX"',
+        env={"ROOT": conda.root, "SPEC": spec},
+    )
+
+
+def test_conda_cmd_uses_bin_conda(sh, stub):
+    root = sh.tmp / "root"
+    stub.script(root / "bin" / "conda", "bin-conda")
+    stub.script(root / "condabin" / "conda", "condabin-conda")
+    assert sh("conda_cmd", root, "info", "--json").returncode == 0
+    assert stub.calls() == ["bin-conda info --json"]
+
+
+def test_conda_cmd_falls_back_to_condabin(sh, stub):
+    root = sh.tmp / "root"
+    stub.script(root / "condabin" / "conda", "condabin-conda", "exit 3")
+    assert sh("conda_cmd", root, "--version").returncode == 3
+    assert stub.calls() == ["condabin-conda --version"]
+
+
+def test_conda_cmd_without_conda_dies(sh):
+    result = sh("conda_cmd", sh.tmp / "empty", "--version")
+    assert result.returncode == 1
+    assert "No conda executable" in result.stderr
+
+
+def test_find_env_prefix_matches_the_directory_name_exactly(sh, stub):
+    conda = FakeConda(sh, stub)
+    wanted = sh.tmp / "other envs" / "swane-env"
+    conda.set_envs(
+        conda.root / "envs" / "swane-env-dev",
+        conda.root / "envs" / "my-swane-env",
+        conda.root / "envs" / "swane-env" / "nested",
+        str(wanted) + "/",
+    )
+    result = sh("find_env_prefix", conda.root, "swane-env")
+    assert result.returncode == 0
+    # The only exact match, as conda listed it.
+    assert result.stdout == str(wanted) + "/\n"
+
+
+def test_find_env_prefix_prefers_the_roots_own_env(sh, stub):
+    conda = FakeConda(sh, stub)
+    own = conda.root / "envs" / "swane-env"
+    conda.set_envs(sh.tmp / "other conda" / "envs" / "swane-env", own)
+    result = sh("find_env_prefix", conda.root, "swane-env")
+    assert result.returncode == 0
+    assert result.stdout == "%s\n" % own
+
+
+def test_find_env_prefix_takes_the_first_match_outside_the_root(sh, stub):
+    conda = FakeConda(sh, stub)
+    first = sh.tmp / "conda a" / "envs" / "swane-env"
+    conda.set_envs(first, sh.tmp / "conda b" / "envs" / "swane-env")
+    result = sh("find_env_prefix", conda.root, "swane-env")
+    assert result.returncode == 0
+    assert result.stdout == "%s\n" % first
+
+
+def _fsl_root(path):
+    """A fake FSL install: a conda root with ``etc/fslversion``."""
+    make_conda_root(path)
+    (path / "etc" / "fslversion").write_text("6.0.7.8\n")
+    return path
+
+
+@pytest.mark.parametrize("how", ["fslversion", "fsldir", "under_fsldir"])
+def test_find_env_prefix_skips_envs_inside_fsl(sh, stub, how):
+    """An env registered by FSL's own conda is listed too: never reuse it."""
+    conda = FakeConda(sh, stub)
+    env = {}
+    if how == "fslversion":
+        fsl_env = _fsl_root(sh.tmp / "fsl") / "envs" / "swane-env"
+    elif how == "fsldir":
+        # $FSLDIR without etc/fslversion, given with a trailing slash.
+        make_conda_root(sh.tmp / "fsl")
+        fsl_env = sh.tmp / "fsl" / "envs" / "swane-env"
+        env["FSLDIR"] = str(sh.tmp / "fsl") + "/"
+    else:
+        fsl_env = sh.tmp / "fsl" / "pkgs" / "envs" / "swane-env"
+        env["FSLDIR"] = sh.tmp / "fsl"
+    fsl_env.mkdir(parents=True)
+    outside = sh.tmp / "other conda" / "envs" / "swane-env"
+    conda.set_envs(fsl_env, outside)
+    result = sh("find_env_prefix", conda.root, "swane-env", env=env)
+    assert result.returncode == 0
+    assert result.stdout == "%s\n" % outside
+    assert "inside an FSL installation" in result.stderr
+    # With only the FSL env listed, swane-env counts as absent.
+    conda.set_envs(fsl_env)
+    result = sh("find_env_prefix", conda.root, "swane-env", env=env)
+    assert result.returncode == 1
+    assert result.stdout == ""
+
+
+def test_swane_env_inside_fsl_is_not_reused(sh, stub):
+    """``conda create -n swane-env`` once run with FSL's conda: create a new one."""
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    fsl_env = _fsl_root(sh.tmp / "fsl") / "envs" / "swane-env"
+    fsl_python = conda.add_env(fsl_env, dot=True)
+    conda.set_envs(fsl_env)
+    result = _ensure(sh, conda)
+    assert result.returncode == 0, result.stderr
+    assert conda.conda_calls("create") == [
+        "conda create -y -n swane-env %s python=3.12 graphviz" % CHANNELS
+    ]
+    assert conda.conda_calls("install") == []
+    assert stub.calls(str(fsl_python)) == []
+    assert result.stdout == "%s\n" % conda.new_prefix
+
+
+def test_find_env_prefix_absent_returns_1(sh, stub):
+    conda = FakeConda(sh, stub)
+    conda.set_envs(conda.root / "envs" / "swane-env-dev")
+    result = sh("find_env_prefix", conda.root, "swane-env")
+    assert result.returncode == 1
+    assert result.stdout == ""
+
+
+def test_find_env_prefix_unreadable_list_returns_2(sh, stub):
+    conda = FakeConda(sh, stub)
+    conda.envs_json.write_text("not json")
+    assert sh("find_env_prefix", conda.root, "swane-env").returncode == 2
+
+
+@pytest.mark.parametrize(
+    "version", ["conda 23.7.4", "conda 23.9.0", "conda 4.14.0", "conda 22.11.1"]
+)
+def test_old_conda_warns(sh, stub, version):
+    conda = FakeConda(sh, stub, version=version)
+    result = sh.code(
+        'warn_old_conda "$ROOT"; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc',
+        env={"ROOT": conda.root},
+    )
+    assert result.returncode == 0
+    assert "conda %s" % version.split()[1] in result.stdout
+    assert "23.10" in result.stdout
+    assert "WARNING:" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "version", ["conda 24.11.3", "conda 23.10.0", "conda 23.11.0", "conda 25.1"]
+)
+def test_recent_conda_does_not_warn(sh, stub, version):
+    conda = FakeConda(sh, stub, version=version)
+    result = sh.code(
+        'warn_old_conda "$ROOT"; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc',
+        env={"ROOT": conda.root},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert "WARNING:" not in result.stderr
+
+
+def test_unreadable_conda_version_never_fails(sh, stub):
+    conda = FakeConda(sh, stub, version="something else")
+    result = sh.code(
+        'warn_old_conda "$ROOT"; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc',
+        env={"ROOT": conda.root},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize(
+    "a, b, lower",
+    [
+        ("23.7.4", "23.10", True),
+        ("23.10", "23.10", False),
+        ("23.10.0", "23.10", False),
+        ("23.9.9", "23.10", True),
+        ("24.1", "23.10", False),
+        ("4.14.0", "23.10", True),
+        ("23.10.0rc1", "23.10", False),
+    ],
+)
+def test_version_lt(sh, a, b, lower):
+    assert sh("version_lt", a, b).returncode == (0 if lower else 1)
+
+
+def test_system_has_dot_checks_the_starting_path(sh, stub):
+    assert sh("system_has_dot").returncode == 1
+    stub("dot")
+    assert sh("system_has_dot").returncode == 0
+
+
+def test_system_has_dot_ignores_later_path_changes(sh):
+    """A dot reachable only after sourcing (e.g. after an activation) is not the system's."""
+    make_executable(sh.tmp / "later" / "dot", "exit 0")
+    result = sh.code(
+        'PATH="$LATER:$PATH"; system_has_dot', env={"LATER": sh.tmp / "later"}
+    )
+    assert result.returncode == 1
+
+
+def test_create_env_linux_without_dot(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    result = _ensure(sh, conda)
+    assert result.returncode == 0, result.stderr
+    assert conda.conda_calls("create") == [
+        "conda create -y -n swane-env %s python=3.12 graphviz" % CHANNELS
+    ]
+    assert conda.conda_calls("install") == []
+    assert all("defaults" not in call for call in stub.calls())
+    assert all("tensorflow" not in call for call in stub.calls())
+    # The prefix is published in the global; conda/pip chatter stays off stdout.
+    assert result.stdout == "%s\n" % conda.new_prefix
+    assert "conda create output" in result.stderr
+
+
+def test_create_env_skips_graphviz_when_dot_present(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("dot")
+    conda = FakeConda(sh, stub)
+    result = _ensure(sh, conda)
+    assert result.returncode == 0, result.stderr
+    assert conda.conda_calls("create") == [
+        "conda create -y -n swane-env %s python=3.12" % CHANNELS
+    ]
+
+
+@pytest.mark.parametrize(
+    "system, machine, tensorflow",
+    [
+        ("Darwin", "x86_64", True),
+        ("Darwin", "arm64", False),
+        ("Linux", "x86_64", False),
+    ],
+)
+def test_create_env_macos_intel_adds_tensorflow(sh, stub, system, machine, tensorflow):
+    stub.platform(system, machine)
+    stub("dot")
+    conda = FakeConda(sh, stub)
+    result = _ensure(sh, conda)
+    assert result.returncode == 0, result.stderr
+    expected = "conda create -y -n swane-env %s python=3.12" % CHANNELS
+    if tensorflow:
+        expected += " tensorflow>=2.18"
+    assert conda.conda_calls("create") == [expected]
+
+
+def test_create_env_pip_installs_into_the_new_env(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    result = _ensure(sh, conda)
+    assert result.returncode == 0, result.stderr
+    python = str(conda.new_prefix / "bin" / "python")
+    assert stub.calls(python) == ["%s -m pip install -U swane" % python]
+    # pip must not take ~/.local packages as already installed.
+    assert (conda.new_prefix / "bin" / "python.nousersite").read_text() == "1"
+
+
+def test_existing_env_is_updated_not_recreated(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    python = conda.add_env(prefix, dot=True)
+    conda.set_envs(conda.root / "envs" / "swane-env-dev", prefix)
+    result = _ensure(sh, conda)
+    assert result.returncode == 0, result.stderr
+    assert conda.conda_calls("create") == []
+    # graphviz is already there: nothing to install.
+    assert conda.conda_calls("install") == []
+    assert stub.calls(str(python)) == [
+        "%s -c %s" % (python, VERSION_CODE),
+        "%s -m pip install -U swane" % python,
+    ]
+    assert result.stdout == "%s\n" % prefix
+
+
+@pytest.mark.parametrize(
+    "system, machine, dot, tensorflow, missing",
+    [
+        ("Linux", "x86_64", False, False, "graphviz"),
+        ("Darwin", "x86_64", True, False, "tensorflow>=2.18"),
+        ("Darwin", "x86_64", False, True, "graphviz"),
+        ("Darwin", "x86_64", False, False, "graphviz tensorflow>=2.18"),
+    ],
+)
+def test_existing_env_installs_only_missing_packages(
+    sh, stub, system, machine, dot, tensorflow, missing
+):
+    stub.platform(system, machine)
+    conda = FakeConda(sh, stub)
+    prefix = sh.tmp / "elsewhere" / "swane-env"
+    conda.add_env(prefix, dot=dot, tensorflow=tensorflow)
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda)
+    assert result.returncode == 0, result.stderr
+    assert conda.conda_calls("create") == []
+    assert conda.conda_calls("install") == [
+        "conda install -y -p %s %s %s" % (prefix, CHANNELS, missing)
+    ]
+
+
+def test_existing_env_with_everything_on_macos_intel_installs_nothing(sh, stub):
+    stub.platform("Darwin", "x86_64")
+    stub("dot")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    conda.add_env(prefix, tensorflow=True)
+    conda.set_envs(prefix)
+    assert _ensure(sh, conda).returncode == 0
+    assert conda.conda_calls("install") == []
+
+
+def test_existing_env_wrong_python_dies(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    python = conda.add_env(prefix, version="3.11")
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda)
+    assert result.returncode == 1
+    assert "swane-env uses Python 3.11; remove it or rename it, then rerun" in (
+        result.stderr
+    )
+    assert conda.conda_calls("create") == []
+    assert conda.conda_calls("install") == []
+    assert stub.calls(str(python)) == ["%s -c %s" % (python, VERSION_CODE)]
+
+
+def test_existing_env_without_python_dies(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    prefix.mkdir(parents=True)
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda)
+    assert result.returncode == 1
+    assert "has no Python" in result.stderr
+
+
+def test_swane_spec_is_passed_to_pip(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    python = conda.add_env(prefix, dot=True)
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda, spec="/path/to/checkout")
+    assert result.returncode == 0, result.stderr
+    assert stub.calls(str(python))[-1] == (
+        "%s -m pip install -U /path/to/checkout" % python
+    )
+
+
+def test_create_failure_dies_before_pip(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub, create_exit=1)
+    result = _ensure(sh, conda)
+    assert result.returncode == 1
+    assert "Could not create the swane-env environment" in result.stderr
+    assert not (conda.new_prefix / "bin" / "python").exists()
+    assert [call for call in stub.calls() if "pip" in call] == []
+
+
+def test_pip_failure_dies(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    stub.script(
+        prefix / "bin" / "python",
+        "python",
+        '[ "$1" = -c ] && echo 3.12 || exit 1',
+    )
+    make_executable(prefix / "bin" / "dot", "exit 0")
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda)
+    assert result.returncode == 1
+    assert "pip install -U swane failed" in result.stderr
+
+
+def test_unreadable_env_list_dies_without_creating(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    conda.envs_json.write_text("not json")
+    result = _ensure(sh, conda)
+    assert result.returncode == 1
+    assert "Could not list the conda environments" in result.stderr
+    assert conda.conda_calls("create") == []

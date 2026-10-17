@@ -445,6 +445,226 @@ ensure_locale() {
 }
 
 # ---------------------------------------------------------------------------
+# swane-env (the conda environment SWANe runs in)
+# ---------------------------------------------------------------------------
+
+SWANE_ENV_NAME="swane-env"
+SWANE_ENV_PYTHON="3.12"
+# PyPI has no recent TensorFlow wheels for macOS Intel (setup.py leaves it out
+# of the pip requirements there): it comes from conda-forge on that platform.
+SWANE_TENSORFLOW_SPEC="tensorflow>=2.18"
+# First conda release whose default solver is libmamba.
+SWANE_MIN_FAST_CONDA="23.10"
+# Prefix of swane-env, set by ensure_swane_env. A global rather than stdout:
+# ensure_swane_env warns and dies, which would be lost inside $(...).
+SWANE_ENV_PREFIX=""
+
+# conda_cmd ROOT ARGS...: run the conda of the root ROOT (bin/conda, else
+# condabin/conda) without activating it.
+conda_cmd() {
+    local root="$1"
+    shift
+    if [ -x "$root/bin/conda" ]; then
+        "$root/bin/conda" ${1+"$@"}
+    elif [ -x "$root/condabin/conda" ]; then
+        "$root/condabin/conda" ${1+"$@"}
+    else
+        die "No conda executable in $root (bin/conda or condabin/conda)"
+    fi
+}
+
+# env_in_fsl PREFIX: return 0 if the environment PREFIX belongs to an FSL
+# install: its conda root (PREFIX/../..) is an FSL root, or PREFIX lies under
+# $FSLDIR. swane-env must never live inside FSL.
+env_in_fsl() {
+    local dir env_root fsl_dir
+    dir="$(physical_dir "$1")"
+    env_root="$(dirname -- "$(dirname -- "$dir")")"
+    if is_fsl_root "$env_root"; then
+        return 0
+    fi
+    if [ -n "${FSLDIR:-}" ]; then
+        fsl_dir="$(physical_dir "$FSLDIR")"
+        case "$dir/" in
+            "$fsl_dir/"*) return 0 ;;
+        esac
+    fi
+    return 1
+}
+
+# find_env_prefix ROOT NAME: print the prefix, as conda lists it, of an
+# environment from "conda env list --json" whose directory name is exactly
+# NAME. The list also holds the environments of other conda installs (all
+# share ~/.conda/environments.txt), so matches inside an FSL install are
+# skipped, a match in ROOT/envs is preferred, and otherwise the first
+# remaining match is taken. Return 1 if there is none, 2 if the list cannot
+# be read. The JSON is parsed by the root's own Python, in isolated mode (-I)
+# so nothing in the current directory or the user's site-packages can be
+# imported.
+find_env_prefix() {
+    local root="$1" name="$2" listing matches candidate dir own_envs first=""
+    listing="$(conda_cmd "$root" env list --json </dev/null)" || return 2
+    matches="$(printf '%s\n' "$listing" | "$root/bin/python" -I -c '
+import json
+import os
+import sys
+
+for env in json.load(sys.stdin).get("envs", []):
+    if os.path.basename(os.path.normpath(env)) == sys.argv[1]:
+        print(env)
+' "$name")" || return 2
+    own_envs="$(physical_dir "$root")/envs"
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        if env_in_fsl "$candidate"; then
+            log_info "Skipping $candidate: it is inside an FSL installation"
+            continue
+        fi
+        dir="$(physical_dir "$candidate")"
+        if [ "$(dirname -- "$dir")" = "$own_envs" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+        [ -n "$first" ] || first="$candidate"
+    done <<EOF
+$matches
+EOF
+    [ -n "$first" ] || return 1
+    printf '%s\n' "$first"
+}
+
+# version_lt A B: return 0 if the dotted version A is lower than B. Compared
+# number by number; a missing number counts as 0 and anything after the
+# leading digits of a number ("4rc1") is ignored.
+version_lt() {
+    local a="$1." b="$2." x y
+    while [ -n "$a" ] || [ -n "$b" ]; do
+        x="${a%%.*}"
+        a="${a#*.}"
+        y="${b%%.*}"
+        b="${b#*.}"
+        x="${x%%[!0-9]*}"
+        y="${y%%[!0-9]*}"
+        x="${x:-0}"
+        y="${y:-0}"
+        if [ "$x" -lt "$y" ]; then
+            return 0
+        fi
+        if [ "$x" -gt "$y" ]; then
+            return 1
+        fi
+    done
+    return 1
+}
+
+# warn_old_conda ROOT: warn (recorded for the summary) when the conda of ROOT
+# is older than SWANE_MIN_FAST_CONDA, whose classic solver can take very long
+# on swane-env. Never fails. Call it directly, not inside $(...).
+warn_old_conda() {
+    local root="$1" output version
+    output="$(conda_cmd "$root" --version 2>&1 </dev/null)" || output=""
+    version="$(printf '%s\n' "$output" | sed -n 's/^conda \([0-9][0-9.]*\).*/\1/p' | head -n 1)" || version=""
+    if [ -z "$version" ]; then
+        log_info "Could not read the conda version in $root"
+        return 0
+    fi
+    if version_lt "$version" "$SWANE_MIN_FAST_CONDA"; then
+        log_warn "conda $version in $root is older than $SWANE_MIN_FAST_CONDA (no libmamba solver by default): creating $SWANE_ENV_NAME may be very slow; consider updating conda"
+    fi
+    return 0
+}
+
+# system_has_dot: return 0 if a "dot" executable (graphviz) is on the PATH the
+# installer started with, before any conda activation. The PATH is walked by
+# hand: "command -v" would also see the shell's hash table.
+system_has_dot() {
+    local rest="$ORIGINAL_PATH:" dir
+    while [ -n "$rest" ]; do
+        dir="${rest%%:*}"
+        rest="${rest#*:}"
+        # An empty entry means the current directory: never trusted here.
+        if [ -n "$dir" ] && [ -f "$dir/dot" ] && [ -x "$dir/dot" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# swane_env_packages [PREFIX]: print the conda-forge packages swane-env needs
+# besides Python, space-separated (possibly nothing): graphviz unless
+# system_has_dot, TensorFlow on macOS Intel. With PREFIX (an existing
+# swane-env) the packages already there are left out: graphviz when
+# PREFIX/bin/dot exists, TensorFlow when PREFIX's site-packages holds the
+# tensorflow package (installed by conda or pip alike).
+swane_env_packages() {
+    local prefix="${1:-}" packages=""
+    if ! system_has_dot; then
+        if [ -z "$prefix" ] || [ ! -x "$prefix/bin/dot" ]; then
+            packages="graphviz"
+        fi
+    fi
+    if is_macos_intel; then
+        if [ -z "$prefix" ] || [ ! -f "$prefix/lib/python$SWANE_ENV_PYTHON/site-packages/tensorflow/__init__.py" ]; then
+            packages="${packages:+$packages }$SWANE_TENSORFLOW_SPEC"
+        fi
+    fi
+    printf '%s\n' "$packages"
+}
+
+# ensure_swane_env ROOT SWANE_SPEC: create swane-env in the conda ROOT (Python
+# SWANE_ENV_PYTHON plus swane_env_packages), or update an existing one (same
+# Python required, missing packages added), then "pip install -U SWANE_SPEC"
+# into it. Sets SWANE_ENV_PREFIX and prints nothing on stdout (conda and pip
+# output goes to stderr). Call it directly, not inside $(...).
+#
+# Every solve uses conda-forge only (never the "defaults" channel), whatever
+# the user's .condarc says. pip runs with PYTHONNOUSERSITE=1 so packages in
+# ~/.local are not taken as already installed.
+ensure_swane_env() {
+    local root="$1" spec="$2" prefix="" version packages rc=0
+    SWANE_ENV_PREFIX=""
+    prefix="$(find_env_prefix "$root" "$SWANE_ENV_NAME")" || rc=$?
+    case "$rc" in
+        0)
+            log_info "Updating the existing $SWANE_ENV_NAME environment in $prefix"
+            if [ ! -x "$prefix/bin/python" ]; then
+                die "$SWANE_ENV_NAME in $prefix has no Python; remove it or rename it, then rerun"
+            fi
+            version="$("$prefix/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])' </dev/null)" || version="unknown"
+            if [ "$version" != "$SWANE_ENV_PYTHON" ]; then
+                die "$SWANE_ENV_NAME uses Python $version; remove it or rename it, then rerun"
+            fi
+            packages="$(swane_env_packages "$prefix")"
+            if [ -n "$packages" ]; then
+                log_info "Installing into $SWANE_ENV_NAME: $packages"
+                # Word splitting is intended: a space-separated list. "-p"
+                # targets the very environment checked above.
+                # shellcheck disable=SC2086
+                conda_cmd "$root" install -y -p "$prefix" --override-channels --strict-channel-priority -c conda-forge $packages </dev/null >&2 ||
+                    die "Could not install $packages into $SWANE_ENV_NAME"
+            fi
+            ;;
+        1)
+            packages="$(swane_env_packages)"
+            log_info "Creating the $SWANE_ENV_NAME environment (Python $SWANE_ENV_PYTHON${packages:+ $packages})"
+            # shellcheck disable=SC2086 # word splitting intended, as above
+            conda_cmd "$root" create -y -n "$SWANE_ENV_NAME" --override-channels --strict-channel-priority -c conda-forge "python=$SWANE_ENV_PYTHON" $packages </dev/null >&2 ||
+                die "Could not create the $SWANE_ENV_NAME environment"
+            prefix="$(find_env_prefix "$root" "$SWANE_ENV_NAME")" ||
+                die "conda does not list $SWANE_ENV_NAME after creating it"
+            ;;
+        *)
+            die "Could not list the conda environments of $root"
+            ;;
+    esac
+    log_info "Installing $spec into $SWANE_ENV_NAME"
+    PYTHONNOUSERSITE=1 "$prefix/bin/python" -m pip install -U "$spec" </dev/null >&2 ||
+        die "pip install -U $spec failed in $SWANE_ENV_NAME"
+    # shellcheck disable=SC2034 # read by main and by the test suite
+    SWANE_ENV_PREFIX="$prefix"
+}
+
+# ---------------------------------------------------------------------------
 # Command line
 # ---------------------------------------------------------------------------
 
