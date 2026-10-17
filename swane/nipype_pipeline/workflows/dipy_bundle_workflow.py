@@ -47,6 +47,7 @@ from swane.nipype_pipeline.interfaces.dipy.DipyBundleUnion import DipyBundleUnio
 from swane.nipype_pipeline.interfaces.dipy.DipyBundlesToRef import DipyBundlesToRef
 from swane.nipype_pipeline.interfaces.dipy.DipyBundleRecovery import DipyBundleRecovery
 from swane.nipype_pipeline.interfaces.ram_estimators import RecoBundlesRamEstimator
+from swane.nipype_pipeline.workflows.workflow_constants import DIPY_TRACT_ATLAS
 
 # Fixed per-node memory reservations (GB), no estimator: all three nodes work
 # on one recognised tract's streamlines (a small subset of the whole-brain
@@ -62,30 +63,6 @@ _MEM_GB = {
 # lh/rh -> the atlas's left/right model-file suffix.
 SIDES = ["lh", "rh"]
 _SIDE_SUFFIX = {"lh": "L", "rh": "R"}
-
-# The SWANe tract key -> the atlas model-bundle basename (spec section 3,
-# verified against the downloaded HCP842 atlas). Every value is bilateral: the
-# per-side model file is ``<base>_L`` / ``<base>_R``. ``fx`` maps to ``F`` and is
-# the one tract processed as a single bilateral bundle (the atlas ships F_L_R
-# combined); ``cingulum`` is dipy-only. Tracts with no atlas counterpart
-# (``atr``/``str``/``cbd``/``cbp``/``cbt`` -- greyed on dipy -- and the
-# non-bilateral ``fma``/``fmi``/``mcp``/``ac``) are deliberately absent, so
-# :func:`dipy_bundle_workflow` returns ``None`` for them. ``ar`` (acoustic
-# radiation) *has* an atlas counterpart (``AR_L``/``AR_R``) but is excluded too:
-# RecoBundles has poor performance on acoustic radiation, so it is FSL-only.
-DIPY_TRACT_ATLAS = {
-    "af": "AF",
-    "cst": "CST",
-    "fa": "AST",
-    "ifo": "IFOF",
-    "ilf": "ILF",
-    "mdlf": "MdLF",
-    "or": "OR",
-    "uf": "UF",
-    "vof": "VOF",
-    "fx": "F",
-    "cingulum": "C",
-}
 
 # The one tract processed as a single bilateral bundle.
 _FORNIX_TRACT = "fx"
