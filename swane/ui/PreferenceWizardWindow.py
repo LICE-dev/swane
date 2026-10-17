@@ -323,8 +323,12 @@ class PreferenceWizardWindow(QDialog):
             prefs.performance_profile = PerformanceProfile.BALANCED
             prefs.parallel_subjects = 1
             prefs.use_gpu_acceleration = prefs.gpu_capable
-            prefs.use_synth_freesurfer = prefs.synth_capable and not is_mac()
             ram_gb = self._resources()["ram_gb"]
+            prefs.use_synth_freesurfer = (
+                prefs.synth_capable
+                and not is_mac()
+                and ram_gb >= self._min_synth_freesurfer_ram()
+            )
             prefs.engines = {
                 key: self._select_engine(key, ram_gb)[0]
                 for key in ENGINE_PREFERENCE_ORDER
@@ -987,7 +991,61 @@ class PreferenceWizardWindow(QDialog):
         lay.addStretch(1)
         page.setLayout(lay)
 
+        page._wizard_on_enter = self._refresh_freesurfer_page  # type: ignore[attr-defined]
         return page
+
+    @staticmethod
+    def _min_synth_freesurfer_ram() -> float:
+        """
+        Returns the lowest RAM per subject at which any FreeSurfer Synth tool
+        (SynthSeg step or Synth recon-all) can run, from the preference
+        metadata the Preferences window enforces.
+
+        Returns
+        -------
+        float
+            The RAM per subject, in GB.
+
+        """
+
+        reconall_entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["reconall"]
+        requirements = [
+            threshold
+            for key, threshold in reconall_entry.pref_requirement.get(
+                GlobalPrefCategoryList.PERFORMANCE, []
+            )
+            if key == "ram_gb"
+        ]
+        fs_entry = WF_PREFERENCES[DataInputList.T13D]["freesurfer_step"]
+        ram = PreferenceWizardWindow._ram_requirement(fs_entry, FreesurferStep.SYNTHSEG)
+        if ram is not None:
+            requirements.append(ram)
+        return min(requirements, default=0)
+
+    def _refresh_freesurfer_page(self) -> None:
+        """
+        Blocks the Synth tools checkbox, with the reason as tooltip, when the
+        RAM per subject chosen in the resources page is below what any Synth
+        tool needs; a choice that no longer fits is turned off.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        checkbox = getattr(self, "_cb_freesurfer_synth", None)
+        if checkbox is None:
+            return
+        ram_gb = float(self._resources()["ram_gb"])
+        required = self._min_synth_freesurfer_ram()
+        fits = ram_gb >= required
+        checkbox.setEnabled(fits)
+        checkbox.setToolTip(
+            "" if fits else strings.wizard_engine_unavailable_ram.format(ram=required)
+        )
+        if not fits:
+            checkbox.setChecked(False)
 
     # --------------------------
     # Page: Review

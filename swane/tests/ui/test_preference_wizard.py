@@ -141,6 +141,38 @@ class TestPreferenceWizard:
         qtbot.addWidget(page)
         assert not hasattr(wizard, "_cb_freesurfer_synth")
 
+    def test_synth_checkbox_blocked_when_ram_too_low(
+        self, qtbot, wizard, global_config, dependency_manager, monkeypatch
+    ):
+        set_tools(monkeypatch, dependency_manager, "is_freesurfer_synth")
+        threshold = wizard._min_synth_freesurfer_ram()
+        wizard.user_prefs.synth_capable = True
+        wizard.user_prefs.use_synth_freesurfer = True
+        page = wizard._page_freesurfer_outputs()
+        qtbot.addWidget(page)
+        monkeypatch.setattr(wizard, "_resources", lambda: resources(threshold - 1))
+        wizard._refresh_freesurfer_page()
+        assert not wizard._cb_freesurfer_synth.isEnabled()
+        assert not wizard._cb_freesurfer_synth.isChecked()
+        assert wizard.user_prefs.use_synth_freesurfer is False
+
+        monkeypatch.setattr(wizard, "_resources", lambda: resources(threshold))
+        wizard._refresh_freesurfer_page()
+        assert wizard._cb_freesurfer_synth.isEnabled()
+
+    def test_synth_not_recommended_on_first_run_with_low_ram(
+        self, qtbot, global_config, dependency_manager, monkeypatch
+    ):
+        set_tools(monkeypatch, dependency_manager, "is_freesurfer_synth")
+        low_ram = PreferenceWizardWindow._min_synth_freesurfer_ram() - 1
+        monkeypatch.setattr(
+            PreferenceWizardWindow, "_resources", lambda self: resources(low_ram)
+        )
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
+        qtbot.addWidget(wizard)
+        assert wizard.user_prefs.synth_capable is True
+        assert wizard.user_prefs.use_synth_freesurfer is False
+
     def test_synthseg_requires_synth_tools_and_sufficient_ram(
         self, wizard, global_config, dependency_manager, monkeypatch
     ):
