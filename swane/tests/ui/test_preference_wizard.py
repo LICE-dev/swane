@@ -446,6 +446,7 @@ class TestRecommendedEngines:
     def test_antspynet_recommended(
         self, wizard, global_config, dependency_manager, monkeypatch
     ):
+        monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", False)
         set_tools(monkeypatch, dependency_manager, "is_antspynet", "is_fsl")
         set_ram(
             global_config, ram_requirement("deskull_engine", DeskullEngine.ANTSPYNET)
@@ -456,6 +457,7 @@ class TestRecommendedEngines:
     def test_synth_engines_not_recommended_on_macos(
         self, wizard, global_config, dependency_manager, monkeypatch
     ):
+        monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", False)
         set_tools(monkeypatch, dependency_manager, "is_freesurfer_synth", "is_fsl")
         set_ram(global_config, 64)
         wizard._apply_settings_config()
