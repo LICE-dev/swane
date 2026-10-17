@@ -5,6 +5,9 @@ GUI layers import it at startup (importing the workflow modules that use these
 constants would load Nipype on the GUI thread).
 """
 
+# Subject results directory name (MainWorkflow.Result_DIR).
+RESULT_DIR = "results"
+
 # FreeSurfer subject directory name inside the subject workflow base dir.
 FS_DIR = "FS"
 

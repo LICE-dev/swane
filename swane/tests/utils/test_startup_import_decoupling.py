@@ -68,3 +68,38 @@ def test_dependency_manager_instantiation_avoids_nipype():
         env=dict(os.environ, PYTHONNOUSERSITE="1", QT_QPA_PLATFORM="offscreen"),
     )
     assert result.returncode == 0, f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+
+
+def test_opening_subject_tab_avoids_nipype(tmp_path):
+    """Opening a subject tab runs on the GUI thread: it must not import Nipype
+    (MainWorkflow is preloaded in background and only needed to generate or
+    run a workflow)."""
+    workspace = tmp_path / "workspace"
+    main_dir = tmp_path / "subjects"
+    workspace.mkdir()
+    main_dir.mkdir()
+    code = (
+        "import sys\n"
+        "from PySide6.QtWidgets import QApplication\n"
+        "app = QApplication(['swane'])\n"
+        "from swane.config.ConfigManager import ConfigManager\n"
+        "from swane.ui.MainWindow import MainWindow\n"
+        "from swane.utils.Subject import Subject, SubjectRet\n"
+        "from swane.workers.UpdateCheckWorker import UpdateCheckWorker\n"
+        "UpdateCheckWorker.run = lambda self: None\n"
+        f"cfg = ConfigManager(global_base_folder={str(workspace)!r})\n"
+        f"cfg.set_main_working_directory({str(main_dir)!r})\n"
+        "window = MainWindow(cfg)\n"
+        "subject = Subject(cfg, window.dependency_manager)\n"
+        "assert subject.create_new_subject_dir('subj') == SubjectRet.ValidFolder\n"
+        "window.open_subject_tab(subject)\n"
+        "app.processEvents()\n"
+        "assert 'nipype' not in sys.modules, 'Nipype imported opening a subject'\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=dict(os.environ, PYTHONNOUSERSITE="1", QT_QPA_PLATFORM="offscreen"),
+    )
+    assert result.returncode == 0, f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"

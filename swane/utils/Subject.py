@@ -11,7 +11,7 @@ from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.workers.worker_pool import start_worker
 from swane.resources import strings
 import traceback
-from swane.nipype_pipeline.workflows.workflow_constants import FS_DIR
+from swane.nipype_pipeline.workflows.workflow_constants import FS_DIR, RESULT_DIR
 from multiprocessing import Queue
 from swane.utils.ToolReference import tool_reference_list
 from typing import TYPE_CHECKING
@@ -670,9 +670,7 @@ class Subject:
         -------
         The subject results directory path
         """
-        from swane.nipype_pipeline.MainWorkflow import MainWorkflow
-
-        return os.path.join(self.folder, MainWorkflow.Result_DIR)
+        return os.path.join(self.folder, RESULT_DIR)
 
     def scene_path(self) -> str:
         """

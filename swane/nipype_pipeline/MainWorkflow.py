@@ -10,6 +10,7 @@ apply_patches()
 from swane import resources
 
 from swane.utils.ResourceManager import ResourceManager
+from swane.nipype_pipeline.workflows.workflow_constants import RESULT_DIR
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
@@ -61,7 +62,7 @@ DEBUG = False
 
 # TODO error manager implementation
 class MainWorkflow(CustomWorkflow):
-    Result_DIR: str = "results"
+    Result_DIR: str = RESULT_DIR
 
     is_resource_monitor: bool = False
     test_run: bool = False
