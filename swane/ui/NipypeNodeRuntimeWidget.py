@@ -12,19 +12,19 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QFontMetrics
 
 from swane.resources import strings
-from nipype.utils.filemanip import loadpkl
 from datetime import datetime
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
 from multiprocessing import cpu_count
-from nipype.interfaces.base.support import Bunch
-from nipype.interfaces.base import traits
 import math
 import os
 import subprocess
-from numpy import ndarray
 
 from swane.utils.ToolReference import get_command_info, ToolReference
+
+# nipype and numpy are imported inside the methods that read node pickles: this
+# widget is built with every SubjectTab, on the GUI thread, and importing them
+# at module level would stall subject opening until the Nipype preload ends.
 
 
 class NipypeNodeRuntimeWidget(QScrollArea):
@@ -232,6 +232,8 @@ class NipypeNodeRuntimeWidget(QScrollArea):
 
         # ---------------- Result (if it exists) ----------------
         if status is WorkflowSignals.NODE_COMPLETED and os.path.exists(result_file):
+            from nipype.utils.filemanip import loadpkl
+
             res = loadpkl(result_file)
             rt = res.runtime
             outputs = res.outputs
@@ -358,6 +360,7 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         self.grid.addWidget(btn, row, col, 1, 5)
 
     def _add_output_view(self, outputs, col):
+        from nipype.interfaces.base.support import Bunch
 
         # -------------------------
         # Case 1: OutputSpec (Node)
@@ -432,6 +435,9 @@ class NipypeNodeRuntimeWidget(QScrollArea):
             self._add_value("—", self._row, col, colspan=6)
 
     def _is_valid_output_value(self, value):
+        from nipype.interfaces.base import traits
+        from numpy import ndarray
+
         if value is None:
             return False
         if value is traits.Undefined:
@@ -450,6 +456,8 @@ class NipypeNodeRuntimeWidget(QScrollArea):
         return f"<i><u>{name}</u></i>"
 
     def _get_interface_name(self, node_pickle_file):
+        from nipype.utils.filemanip import loadpkl
+
         try:
             node = loadpkl(node_pickle_file)
             interface = node.interface
