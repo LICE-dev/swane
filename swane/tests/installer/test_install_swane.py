@@ -1967,3 +1967,266 @@ def test_hook_activate_deactivate_roundtrip(sh, stub):
         "%s|/a:/b:%s/bin" % (fsl, fsl),
         "<unset>|/a:/b",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Launcher (~/.local/bin/swane)
+# ---------------------------------------------------------------------------
+
+MARKER_BEGIN = "# >>> SWANe installer >>>"
+MARKER_END = "# <<< SWANe installer <<<"
+
+
+class LauncherWorld:
+    """A fake conda root and swane-env, and the launcher written for them.
+
+    ``conda.sh`` defines a ``conda`` function that logs its arguments; the
+    fake ``<prefix>/bin/swane`` prints what the real SWANe would see.
+    """
+
+    def __init__(self, sh, prefix_name="swane-env"):
+        self.sh = sh
+        self.root = make_conda_root(sh.tmp / "conda root")
+        self.prefix = sh.tmp / prefix_name
+        self.log = sh.tmp / "conda.log"
+        # The unset-variable expansion fails the launcher if it ever ran
+        # conda.sh under "set -u".
+        (self.root / "etc" / "profile.d" / "conda.sh").write_text(
+            'conda() { printf "%%s\\n" "$*" >> %s; }\n'
+            ': "$SWANE_TEST_UNSET_VARIABLE"\n' % bash_quote(str(self.log))
+        )
+        make_executable(
+            self.prefix / "bin" / "swane",
+            'echo "launcher=$SWANE_LAUNCHER"\n'
+            'echo "nousersite=${PYTHONNOUSERSITE-unset}"\n'
+            'echo "args=$*"',
+        )
+        self.launcher = sh.home / ".local" / "bin" / "swane"
+        data = sh.home / ".local" / "share"
+        self.desktop = data / "applications" / "swane.desktop"
+        self.menu_script = data / "swane" / "swane-launcher.sh"
+
+    def write(self):
+        result = self.sh("write_launcher", self.root, self.prefix)
+        assert result.returncode == 0, result.stderr
+        return result
+
+    def run(self, *args, env=None):
+        return subprocess.run(
+            [str(self.launcher), *args],
+            env=self.sh.environment(env),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+
+def test_launcher_activates_and_execs(sh):
+    world = LauncherWorld(sh)
+    world.write()
+    assert world.launcher.stat().st_mode & 0o777 == 0o755
+    assert world.launcher.read_text().startswith("#!/usr/bin/env bash\n")
+    result = world.run("a", "b", env={"PYTHONNOUSERSITE": None})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "launcher=%s" % world.launcher,
+        # R11: ~/.local packages never shadow swane-env.
+        "nousersite=1",
+        "args=a b",
+    ]
+    assert world.log.read_text() == "activate %s\n" % world.prefix
+
+
+def test_launcher_pins_root_and_prefix_on_single_lines(sh):
+    """Task 10 reads the pinned values back with grep/source."""
+    world = LauncherWorld(sh)
+    world.write()
+    lines = world.launcher.read_text().splitlines()
+    assert "SWANE_CONDA_ROOT=%s" % bash_quote(str(world.root)) in lines
+    assert "SWANE_ENV_PREFIX=%s" % bash_quote(str(world.prefix)) in lines
+    assert "SWANE_LAUNCHER=%s" % bash_quote(str(world.launcher)) in lines
+    pins = subprocess.run(
+        [
+            BASH,
+            "-c",
+            'eval "$(grep -E \'^SWANE_(CONDA_ROOT|ENV_PREFIX)=\' "$0")"; '
+            'printf "%s\\n%s" "$SWANE_CONDA_ROOT" "$SWANE_ENV_PREFIX"',
+            str(world.launcher),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert pins.stdout == "%s\n%s" % (world.root, world.prefix)
+
+
+def test_launcher_is_atomic_and_replaces_the_old_one(sh):
+    world = LauncherWorld(sh)
+    world.write()
+    first = world.launcher.read_text()
+    other = LauncherWorld(sh, prefix_name="other-env")
+    other.write()
+    assert world.launcher.read_text() != first
+    assert "other-env" in world.launcher.read_text()
+    assert os.listdir(world.launcher.parent) == ["swane"]
+
+
+def test_launcher_ignores_its_own_name_when_called_through_a_symlink(sh):
+    """SWANE_LAUNCHER is the pinned install path, not $0."""
+    world = LauncherWorld(sh)
+    world.write()
+    link = sh.tmp / "link-to-swane"
+    link.symlink_to(world.launcher)
+    result = subprocess.run(
+        [str(link), "x"],
+        env=sh.environment(),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert "launcher=%s" % world.launcher in result.stdout.splitlines()
+
+
+def test_launcher_self_heals(sh):
+    world = LauncherWorld(sh)
+    world.write()
+    for path in (world.desktop, world.menu_script):
+        path.parent.mkdir(parents=True)
+        path.write_text("x")
+    (world.prefix / "bin" / "swane").unlink()
+    result = world.run()
+    assert result.returncode == 1
+    assert "SWANe is no longer installed: rerun install_swane.sh" in result.stderr
+    assert not world.launcher.exists()
+    assert not world.desktop.exists()
+    assert not world.menu_script.exists()
+    assert not world.log.exists()
+
+
+def test_launcher_self_heal_honours_xdg_data_home(sh):
+    world = LauncherWorld(sh)
+    world.write()
+    data = sh.tmp / "xdg data"
+    desktop = data / "applications" / "swane.desktop"
+    script = data / "swane" / "swane-launcher.sh"
+    for path in (desktop, script):
+        path.parent.mkdir(parents=True)
+        path.write_text("x")
+    (world.prefix / "bin" / "swane").unlink()
+    assert world.run(env={"XDG_DATA_HOME": data}).returncode == 1
+    assert not desktop.exists()
+    assert not script.exists()
+    assert not world.launcher.exists()
+
+
+def test_launcher_with_space_in_prefix(sh):
+    """Review Focus 3: spaces and quotes in the paths survive."""
+    world = LauncherWorld(sh, prefix_name="home/my env's $HOME")
+    world.write()
+    assert subprocess.run([BASH, "-n", str(world.launcher)]).returncode == 0
+    result = world.run("a b")
+    assert result.returncode == 0, result.stderr
+    assert "args=a b" in result.stdout.splitlines()
+    assert world.log.read_text() == "activate %s\n" % world.prefix
+    (world.prefix / "bin" / "swane").unlink()
+    assert world.run().returncode == 1
+    assert not world.launcher.exists()
+
+
+def test_launcher_fails_cleanly_without_conda_sh(sh):
+    world = LauncherWorld(sh)
+    world.write()
+    (world.root / "etc" / "profile.d" / "conda.sh").unlink()
+    result = world.run()
+    assert result.returncode != 0
+    assert "launcher=" not in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# ~/.local/bin on PATH
+# ---------------------------------------------------------------------------
+
+
+def test_profile_block_added_once(sh):
+    """Review Focus 5: a profile without a final newline, run twice."""
+    profile = sh.home / ".zprofile"
+    profile.write_text("export FOO=1")
+    for _ in range(2):
+        result = sh("ensure_local_bin_on_path", env={"SHELL": "/bin/zsh"})
+        assert result.returncode == 0, result.stderr
+    assert profile.read_text() == (
+        'export FOO=1\n%s\nexport PATH="$HOME/.local/bin:$PATH"\n%s\n'
+        % (MARKER_BEGIN, MARKER_END)
+    )
+
+
+def test_profile_created_and_newline_not_doubled(sh):
+    profile = sh.home / ".zprofile"
+    assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/zsh"}).returncode == 0
+    assert profile.read_text() == (
+        '%s\nexport PATH="$HOME/.local/bin:$PATH"\n%s\n' % (MARKER_BEGIN, MARKER_END)
+    )
+    other = sh.home / ".profile"
+    other.write_text("a\n")
+    assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/sh"}).returncode == 0
+    assert other.read_text().startswith("a\n%s\n" % MARKER_BEGIN)
+
+
+@pytest.mark.parametrize("suffix", ["", "/"])
+def test_profile_untouched_when_local_bin_on_path(sh, suffix):
+    profile = sh.home / ".zprofile"
+    profile.write_text("keep\n")
+    path = "%s:%s/.local/bin%s" % (sh.path, sh.home, suffix)
+    result = sh("ensure_local_bin_on_path", env={"SHELL": "/bin/zsh", "PATH": path})
+    assert result.returncode == 0
+    assert profile.read_text() == "keep\n"
+
+
+def test_path_check_uses_the_starting_path(sh):
+    """A conda activation after sourcing must not hide a missing entry."""
+    result = sh.code(
+        'PATH="$HOME/.local/bin:$PATH"; ensure_local_bin_on_path',
+        env={"SHELL": "/bin/zsh"},
+    )
+    assert result.returncode == 0
+    assert MARKER_BEGIN in (sh.home / ".zprofile").read_text()
+
+
+def test_bash_prefers_existing_bash_profile(sh):
+    assert sh("login_profile", env={"SHELL": "/bin/bash"}).stdout == (
+        "%s/.profile\n" % sh.home
+    )
+    (sh.home / ".bash_profile").write_text("")
+    assert sh("login_profile", env={"SHELL": "/usr/bin/bash"}).stdout == (
+        "%s/.bash_profile\n" % sh.home
+    )
+    assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/bash"}).returncode == 0
+    assert MARKER_BEGIN in (sh.home / ".bash_profile").read_text()
+    assert not (sh.home / ".profile").exists()
+
+
+@pytest.mark.parametrize(
+    "shell, expected",
+    [
+        ("/bin/zsh", ".zprofile"),
+        ("/bin/sh", ".profile"),
+        ("/usr/bin/dash", ".profile"),
+        ("/bin/ZSH", ".zprofile"),
+    ],
+)
+def test_login_profile_mapping(sh, shell, expected):
+    assert sh("login_profile", env={"SHELL": shell}).stdout == (
+        "%s/%s\n" % (sh.home, expected)
+    )
+
+
+@pytest.mark.parametrize("shell", ["/usr/bin/fish", "/bin/tcsh", ""])
+def test_unknown_shell_warns_with_a_manual_hint(sh, shell):
+    assert sh("login_profile", env={"SHELL": shell}).returncode == 1
+    result = sh.code(
+        'ensure_local_bin_on_path; printf "%s" "$SUMMARY_WARNINGS"',
+        env={"SHELL": shell},
+    )
+    assert result.returncode == 0
+    assert "WARNING: Unknown shell" in result.stderr
+    assert 'export PATH="$HOME/.local/bin:$PATH"' in result.stdout
+    assert os.listdir(sh.home) == []
