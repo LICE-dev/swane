@@ -1148,6 +1148,117 @@ fsl_step() {
 }
 
 # ---------------------------------------------------------------------------
+# Launcher and PATH
+# ---------------------------------------------------------------------------
+
+# write_launcher ROOT ENV_PREFIX: write ~/.local/bin/swane (mode 755), a
+# standalone script that activates ENV_PREFIX (by absolute prefix, never by
+# name) with ROOT's conda and execs SWANe. When swane-env is gone it removes
+# the Linux menu entry and itself instead. The pinned assignments are one
+# single-quoted line each, so CI can read them back.
+write_launcher() {
+    local root="$1" env_prefix="$2" bin_dir dest tmp
+    case "$root$env_prefix" in
+        *"
+"*) die "The conda root or environment path contains a newline" ;;
+    esac
+    bin_dir="$HOME/.local/bin"
+    dest="$bin_dir/swane"
+    mkdir -p "$bin_dir" || die "Could not create $bin_dir"
+    tmp="$(mktemp "$bin_dir/.swane.XXXXXX")" ||
+        die "Could not create a temporary file in $bin_dir"
+    {
+        printf '#!/usr/bin/env bash\n'
+        printf '# Written by the SWANe installer (rerun it rather than editing this file).\n'
+        printf 'SWANE_CONDA_ROOT=%s\n' "$(shell_quote "$root")"
+        printf 'SWANE_ENV_PREFIX=%s\n' "$(shell_quote "$env_prefix")"
+        printf 'SWANE_LAUNCHER=%s\n' "$(shell_quote "$dest")"
+        cat <<'LAUNCHER'
+if [ ! -x "$SWANE_ENV_PREFIX/bin/swane" ]; then
+    # swane-env was removed: drop the menu entry and this launcher too.
+    SWANE_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+    rm -f "$SWANE_DATA_HOME/applications/swane.desktop" \
+        "$SWANE_DATA_HOME/swane/swane-launcher.sh" "$SWANE_LAUNCHER"
+    echo "SWANe is no longer installed: rerun install_swane.sh" >&2
+    exit 1
+fi
+# conda.sh is not safe under "set -u": do not enable it before sourcing.
+# shellcheck disable=SC1091
+. "$SWANE_CONDA_ROOT/etc/profile.d/conda.sh" || exit 1
+conda activate "$SWANE_ENV_PREFIX" || exit 1
+export SWANE_LAUNCHER
+# Never let ~/.local packages shadow the ones of swane-env.
+export PYTHONNOUSERSITE=1
+exec "$SWANE_ENV_PREFIX/bin/swane" "$@"
+LAUNCHER
+    } >"$tmp" || {
+        rm -f "$tmp"
+        die "Could not write $dest"
+    }
+    if ! chmod 755 "$tmp" || ! mv -f "$tmp" "$dest"; then
+        rm -f "$tmp"
+        die "Could not install $dest"
+    fi
+    log_info "Launcher written: $dest"
+}
+
+# login_profile: print the login profile of the user's shell (the first
+# entries of fsl_conflict_handler.SHELL_PROFILE); return 1 for any other shell.
+login_profile() {
+    local shell_name
+    shell_name="$(basename -- "${SHELL:-}" | tr '[:upper:]' '[:lower:]')"
+    case "$shell_name" in
+        zsh) printf '%s\n' "$HOME/.zprofile" ;;
+        bash)
+            if [ -f "$HOME/.bash_profile" ]; then
+                printf '%s\n' "$HOME/.bash_profile"
+            else
+                printf '%s\n' "$HOME/.profile"
+            fi
+            ;;
+        sh | dash) printf '%s\n' "$HOME/.profile" ;;
+        *) return 1 ;;
+    esac
+}
+
+# ensure_local_bin_on_path: add ~/.local/bin to PATH through the login
+# profile, unless the starting PATH already has it or the profile already
+# holds the marker block. Call it directly (not inside $(...)): a warning
+# must reach SUMMARY_WARNINGS.
+ensure_local_bin_on_path() {
+    local profile lead="" marker_begin="# >>> SWANe installer >>>"
+    case ":$ORIGINAL_PATH:" in
+        *":$HOME/.local/bin:"* | *":$HOME/.local/bin/:"*)
+            log_info "$HOME/.local/bin is already on PATH"
+            return 0
+            ;;
+    esac
+    if ! profile="$(login_profile)"; then
+        log_warn "Unknown shell: add this line to your shell profile to run swane: export PATH=\"\$HOME/.local/bin:\$PATH\""
+        return 0
+    fi
+    if [ -f "$profile" ] && grep -qF "$marker_begin" "$profile"; then
+        log_info "$profile already adds ~/.local/bin to PATH"
+        return 0
+    fi
+    # The command substitution drops a final newline: empty = ends with one.
+    if [ -s "$profile" ] && [ -n "$(tail -c 1 "$profile")" ]; then
+        lead="
+"
+    fi
+    {
+        printf '%s%s\n' "$lead" "$marker_begin"
+        # shellcheck disable=SC2016 # the profile expands $HOME and $PATH
+        printf '%s\n' 'export PATH="$HOME/.local/bin:$PATH"'
+        printf '%s\n' "# <<< SWANe installer <<<"
+    } >>"$profile" || {
+        log_warn "Could not update $profile: add ~/.local/bin to PATH to run swane"
+        return 0
+    }
+    log_info "Added ~/.local/bin to PATH in $profile (open a new terminal to use it)"
+}
+
+# ---------------------------------------------------------------------------
 # Command line
 # ---------------------------------------------------------------------------
 
