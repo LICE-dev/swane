@@ -143,9 +143,17 @@ class Stubs:
         In ``body``, ``"$@"`` holds the stub's arguments and ``$CALLS_LOG``
         the log path (for helpers that log their own lines).
         """
+        return self.script(self.dir / name, name, body)
+
+    def script(self, path: Path, name: str, body: str = "") -> Path:
+        """Write a logging stub at any ``path`` (e.g. ``<root>/bin/conda``).
+
+        It logs to :attr:`calls_log` like a ``PATH`` stub, under ``name``
+        (any string, e.g. the stub's own path), then runs ``body``.
+        """
         log = bash_quote(str(self.calls_log))
         return make_executable(
-            self.dir / name,
+            path,
             "CALLS_LOG=%s\n"
             'printf "%%s" %s >> "$CALLS_LOG"\n'
             'for _arg in "$@"; do printf " %%s" "$_arg" >> "$CALLS_LOG"; done\n'
