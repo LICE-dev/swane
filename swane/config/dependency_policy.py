@@ -11,7 +11,7 @@ from swane.config.config_enums import (
 # extraction, tractography, segmentation and fMRI. When False, FSL is only a
 # recommended dependency and the FSL-free engines are the defaults. Registration
 # defaults to ANTs either way.
-FSL_MANDATORY = False
+FSL_MANDATORY = True
 
 
 def default_engines(fsl_mandatory: bool) -> dict:

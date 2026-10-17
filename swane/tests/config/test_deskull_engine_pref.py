@@ -1,10 +1,13 @@
+from swane.config import dependency_policy
 from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList
+from swane.config.dependency_policy import default_engines
 from swane.config.preference_list import GLOBAL_PREFERENCES
 
 
-def test_deskull_engine_default_is_antspynet():
+def test_deskull_engine_default_follows_fsl_policy():
     entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]["deskull_engine"]
-    assert entry.default == DeskullEngine.ANTSPYNET
+    expected = default_engines(dependency_policy.FSL_MANDATORY)["deskull_engine"]
+    assert entry.default == expected
     assert entry.value_enum is DeskullEngine
 
 
