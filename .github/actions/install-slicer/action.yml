@@ -1,6 +1,6 @@
 name: Install 3D Slicer
 description: >-
-  Install a pinned stable 3D Slicer release (Windows or macOS) from Slicer's
+  Install a pinned stable 3D Slicer release (Windows, macOS or Linux) from Slicer's
   own package server, export its executable as SWANE_SLICER_PATH and validate
   it through SWANe's own Slicer check, which also installs the Slicer
   extensions SWANe needs. Slicer is downloaded on the runner and never copied
@@ -99,20 +99,68 @@ runs:
         [ -x "$exe" ] || { echo "$exe not found"; exit 1; }
         echo "path=$exe" >> "$GITHUB_OUTPUT"
 
+    # $HOME/slicer is searched by SlicerCheckWorker ($HOME search stage).
+    - name: Install (Linux)
+      if: ${{ runner.os == 'Linux' }}
+      id: install-linux
+      shell: bash
+      env:
+        INSTALLER: ${{ runner.temp }}/slicer-installer/${{ steps.resolve.outputs.filename }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libegl1 \
+          libgl1 \
+          libopengl0 \
+          libgl1-mesa-dev \
+          libglu1-mesa \
+          libpulse0 \
+          libpulse-mainloop-glib0 \
+          libnss3 \
+          libx11-xcb1 \
+          libxdamage1 \
+          libxss1 \
+          libxkbcommon-x11-0 \
+          libxcb-cursor0 \
+          libxcb-icccm4 \
+          libxcb-image0 \
+          libxcb-keysyms1 \
+          libxcb-randr0 \
+          libxcb-render-util0 \
+          libxcb-shape0 \
+          libxcb-sync1 \
+          libxcb-xfixes0 \
+          libxcb-xinerama0 \
+          libxcb-xkb1 \
+          xvfb || true
+        sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
+        if ! pgrep -x Xvfb > /dev/null; then
+          Xvfb :99 -screen 0 1024x768x24 -nolisten tcp -ac +extension GLX +render -noreset > /dev/null 2>&1 &
+          sleep 1
+        fi
+        echo "DISPLAY=:99" >> "$GITHUB_ENV"
+        dest="$HOME/slicer"
+        rm -rf "$dest"
+        mkdir -p "$dest"
+        tar -xzf "$INSTALLER" -C "$dest" --strip-components=1
+        exe="$dest/Slicer"
+        [ -x "$exe" ] || { echo "$exe not found"; exit 1; }
+        echo "path=$exe" >> "$GITHUB_OUTPUT"
+
     - name: Export SWANE_SLICER_PATH
       id: install
       shell: bash
       env:
-        SLICER_EXE: ${{ steps.install-win.outputs.path || steps.install-mac.outputs.path }}
+        SLICER_EXE: ${{ steps.install-win.outputs.path || steps.install-mac.outputs.path || steps.install-linux.outputs.path }}
       run: |
-        [ -n "$SLICER_EXE" ] || { echo "Slicer install is supported on Windows and macOS only"; exit 1; }
+        [ -n "$SLICER_EXE" ] || { echo "Slicer install is supported on Windows, macOS and Linux only"; exit 1; }
         echo "path=$SLICER_EXE" >> "$GITHUB_OUTPUT"
         echo "SWANE_SLICER_PATH=$SLICER_EXE" >> "$GITHUB_ENV"
-        "$SLICER_EXE" --version
+        DISPLAY="${DISPLAY:-:99}" "$SLICER_EXE" --version
 
     # Fail here rather than let the job silently skip the Slicer tests/passes.
     - name: Check Slicer
       shell: bash
       env:
         SWANE_SLICER_PATH: ${{ steps.install.outputs.path }}
-      run: python -m swane.tests.prerelease.ci_slicer_check
+      run: DISPLAY="${DISPLAY:-:99}" python -m swane.tests.prerelease.ci_slicer_check
