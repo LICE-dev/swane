@@ -19,8 +19,7 @@ from swane.nipype_pipeline.interfaces.niimath.ThrROI import ThrROI
 from swane.config.config_enums import FreesurferStep
 from nipype.interfaces.utility import IdentityInterface
 from swane.utils.ResourceManager import ResourceManager
-
-FS_DIR = "FS"
+from swane.nipype_pipeline.workflows.workflow_constants import FS_DIR
 
 # recon-all top-level flags for test_run, appended to the existing args.
 # -nuiterations 1 : halve NU intensity-correction iterations (default 2)

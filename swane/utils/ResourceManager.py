@@ -142,11 +142,7 @@ class ResourceManager:
 
     @staticmethod
     def is_cuda():
-        import sys
-
-        mod = sys.modules.get(__name__)
-        if mod is not None and "gpu_count" in mod.__dict__:
-            return mod.__dict__["gpu_count"]() > 0
+        # Imported here: importing nipype at module level slows down GUI startup
         from nipype.utils.gpu_count import gpu_count
 
         return gpu_count() > 0
@@ -162,11 +158,3 @@ class ResourceManager:
     @staticmethod
     def get_max_cpu():
         return cpu_count()
-
-
-def __getattr__(name: str):
-    if name == "gpu_count":
-        from nipype.utils.gpu_count import gpu_count
-
-        return gpu_count
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
