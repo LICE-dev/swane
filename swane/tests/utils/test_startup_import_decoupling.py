@@ -15,6 +15,9 @@ def test_full_gui_startup_path_avoids_nipype_and_scipy():
         "from swane.ui.MainWindow import MainWindow\n"
         "assert 'nipype' not in sys.modules, f'Nipype leaked: {sys.modules.get(\"nipype\")}'\n"
         "assert 'scipy' not in sys.modules, f'SciPy leaked: {sys.modules.get(\"scipy\")}'\n"
+        # Only needed for DICOM scans, mail and encrypted preferences
+        "for mod in ('pydicom', 'numpy', 'cryptography', 'smtplib'):\n"
+        "    assert mod not in sys.modules, f'{mod} leaked into GUI startup'\n"
     )
     result = subprocess.run(
         [sys.executable, "-c", code],
