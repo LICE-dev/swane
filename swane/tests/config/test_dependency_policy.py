@@ -39,8 +39,8 @@ FSL_OPTIONS = {
 }
 
 
-def test_shipped_policy_makes_fsl_recommended():
-    assert dependency_policy.FSL_MANDATORY is False
+def test_shipped_policy_makes_fsl_mandatory():
+    assert dependency_policy.FSL_MANDATORY is True
 
 
 def test_fsl_mandatory_defaults_to_fsl_engines_except_registration():

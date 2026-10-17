@@ -790,6 +790,9 @@ PASSES = (
             # No old_eddy_correct/cuda pin: the dipy chain ignores both (FSL-only).
             "tractography": "true",
             "tractography_engine": "DIPY_RECOBUNDLES",
+            # The reference segmentation feeds the dipy tracking: pin the
+            # FSL-free backend instead of riding the (FSL) config default.
+            "segmentation_engine": "ANTS",
         },
     ),
     # The CPU tractography baseline: modern eddy + BEDPOSTX + corticospinal

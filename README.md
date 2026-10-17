@@ -137,7 +137,7 @@ This project includes subsection derived from other software, which licenses can
 
 - License consent gate: on startup (after the setup wizard) SWANe shows and requires acceptance of the licenses of the detected external tools (FSL, FreeSurfer, 3D Slicer, dcm2niix, ANTs/antspyx). Acceptance is stored per tool and re-prompted only when a tool's version changes.
 - Home dependency labels now include an inline link to each detected tool's license, opening the locally installed license file when available, otherwise the official source.
-- dipy tractography engine: added a CSD and RecoBundles tractography engine as an alternative to FSL XTRACT. A new global `tractography_engine` preference selects the engine, with dipy configured as the default.
+- dipy tractography engine: added a CSD and RecoBundles tractography engine as an alternative to FSL XTRACT. A new global `tractography_engine` preference selects the engine (dipy is the default only when FSL is not mandatory).
 - On the first DTI tractography run, the ~649 MB HCP842 bundle atlas (`Atlas_80_Bundles` via dipy) is automatically downloaded into the local dipy directory.
 - dipy tractography results are exported as `.vtp` streamline bundle models in reference space rather than thresholded `.nii.gz` density maps; re-running an old subject will not reproduce its previous output.
 - Tracking defaults updated to use percentile-based FA stopping (`FA_STOP_PERCENTILE = 10%`, floored at 0.10) and volume-based seeding (`REFERENCE_VOXEL_MM3 = 2.2 mm³`) for consistent tracking across differing voxel sizes and contrasts.
@@ -153,7 +153,7 @@ This project includes subsection derived from other software, which licenses can
 - Resting state, FSL engine with ICA-AROMA: the ICA-AROMA decomposition and the denoising now use the data before the temporal high-pass, and the high-pass is applied after denoising, before the final MELODIC.
 - Python task fMRI engine: motion correction now uses a fixed random seed and a single thread, so the same input always gives the same output. It is slower, and results of earlier versions are not reproduced.
 - The FSL license is always shown at first launch, also when FSL is not installed, because it covers the MNI152NLin6Asym template used by SWANe.
-- FSL is now a recommended dependency instead of a mandatory one: workflows can be generated and executed without FSL using the default FSL-free engines (ANTs, antspynet, dipy, nilearn). The FSL engines are disabled in the preferences when FSL is not installed, and stored FSL engine choices fall back to the default. A build-time flag (`FSL_MANDATORY` in `swane/config/dependency_policy.py`) restores FSL as a mandatory dependency and makes it the default brain extraction, tractography, segmentation and fMRI engine.
+- FSL remains a mandatory dependency, and the FSL tools are the default brain extraction, tractography, segmentation and task fMRI engines (registration defaults to ANTs). SWANe can also run without FSL using the FSL-free engines (ANTs, antspynet, dipy, nilearn): a build-time flag (`FSL_MANDATORY` in `swane/config/dependency_policy.py`, currently `True`) set to `False` makes FSL a recommended dependency and the FSL-free engines the defaults. The FSL engines are disabled in the preferences when FSL is not installed, and stored FSL engine choices fall back to the default.
 
 #### Fixed
 
