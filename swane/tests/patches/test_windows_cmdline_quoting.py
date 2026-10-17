@@ -165,7 +165,7 @@ def test_shell_executable_quotes_on_windows(monkeypatch):
 
 def test_swane_import_installs_windows_quoting_on_windows():
     """In a fresh interpreter where ``windows_compat`` sees Windows, importing
-    swane must rebind nipype's ``shlex`` and quote the bundled executables."""
+    MainWorkflow must rebind nipype's ``shlex`` and quote the bundled executables."""
     code = textwrap.dedent("""
         import importlib.util, os, sys
 
@@ -184,6 +184,7 @@ def test_swane_import_installs_windows_quoting_on_windows():
         sys.modules["swane.patches.windows_compat"] = compat
 
         import swane
+        from swane.nipype_pipeline.MainWorkflow import MainWorkflow
         from nipype.interfaces.base import core
 
         assert core.shlex is compat.WINDOWS_SHLEX, core.shlex

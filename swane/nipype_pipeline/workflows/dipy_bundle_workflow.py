@@ -73,19 +73,7 @@ _SIDE_SUFFIX = {"lh": "L", "rh": "R"}
 # :func:`dipy_bundle_workflow` returns ``None`` for them. ``ar`` (acoustic
 # radiation) *has* an atlas counterpart (``AR_L``/``AR_R``) but is excluded too:
 # RecoBundles has poor performance on acoustic radiation, so it is FSL-only.
-DIPY_TRACT_ATLAS = {
-    "af": "AF",
-    "cst": "CST",
-    "fa": "AST",
-    "ifo": "IFOF",
-    "ilf": "ILF",
-    "mdlf": "MdLF",
-    "or": "OR",
-    "uf": "UF",
-    "vof": "VOF",
-    "fx": "F",
-    "cingulum": "C",
-}
+from swane.config.preference_list import DIPY_TRACT_ATLAS
 
 # The one tract processed as a single bilateral bundle.
 _FORNIX_TRACT = "fx"

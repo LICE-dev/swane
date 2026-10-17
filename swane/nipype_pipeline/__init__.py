@@ -1,0 +1,1 @@
+"""SWANe Nipype pipeline package."""

@@ -23,6 +23,10 @@ _preload_lock = threading.Lock()
 
 def _preload(module_name: str):
     try:
+        if module_name == MAIN_WORKFLOW_MODULE:
+            from swane.patches.nipype_patches import apply_patches
+
+            apply_patches()
         importlib.import_module(module_name)
     except Exception:
         # Not fatal: callers keep their lazy import and will retry on first use

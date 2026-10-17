@@ -11,7 +11,8 @@ from swane.workers.DicomSearchWorker import DicomSearchWorker
 from swane.workers.worker_pool import start_worker
 from swane.resources import strings
 import traceback
-from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
+
+FS_DIR = "FS"
 from multiprocessing import Queue
 from swane.utils.ToolReference import tool_reference_list
 from typing import TYPE_CHECKING

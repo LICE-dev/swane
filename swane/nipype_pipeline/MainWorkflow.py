@@ -3,7 +3,12 @@ import os
 from multiprocessing import cpu_count
 from os.path import abspath
 
+from swane.patches.nipype_patches import apply_patches
+
+apply_patches()
+
 from swane import resources
+
 from swane.utils.ResourceManager import ResourceManager
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.SubjectInputStateList import SubjectInputStateList
