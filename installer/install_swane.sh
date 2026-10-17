@@ -43,6 +43,10 @@ MINIFORGE_PREFIX="${MINIFORGE_PREFIX:-$HOME/miniforge3}"
 # overridable so tests never see the machine's real conda).
 SWANE_SYSTEM_CONDA_ROOTS="${SWANE_SYSTEM_CONDA_ROOTS-/opt/conda}"
 
+# Locale definitions file edited (through sudo) when en_US.UTF-8 is missing.
+# Overridable so tests never point at the real /etc/locale.gen.
+SWANE_LOCALE_GEN_FILE="${SWANE_LOCALE_GEN_FILE:-/etc/locale.gen}"
+
 # Terminal the prompts read from. Under "curl ... | bash" stdin is the script
 # itself, so prompts must never read stdin. Overridable for tests.
 SWANE_TTY="${SWANE_TTY:-/dev/tty}"
@@ -348,6 +352,96 @@ install_miniforge() {
     rm -rf "$workdir"
     [ -f "$prefix/etc/profile.d/conda.sh" ] || die "Miniforge installed into $prefix without etc/profile.d/conda.sh"
     printf '%s\n' "$prefix"
+}
+
+# ---------------------------------------------------------------------------
+# Linux system packages and locale (sudo steps: warn and continue)
+# ---------------------------------------------------------------------------
+
+# Packages the 3D Slicer binaries need (the list of the Windows/Linux test
+# workflow, without the virtual display server), then libasound2t64 or
+# libasound2 depending on the release.
+APT_PACKAGES="libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 dc bc"
+
+is_linux() {
+    [ "$(uname -s)" = "Linux" ]
+}
+
+# can_run_privileged: return 0 if sudo exists or we already are root.
+can_run_privileged() {
+    have_command sudo || [ "${EUID:-1}" = "0" ]
+}
+
+# run_privileged CMD ARGS...: run a command through sudo (directly as root
+# when there is no sudo). "--yes" never implies "sudo -n": the password
+# prompt, if any, is the user's.
+run_privileged() {
+    if have_command sudo; then
+        sudo "$@"
+    else
+        "$@"
+    fi
+}
+
+# install_linux_packages: install APT_PACKAGES and libasound2t64 (or
+# libasound2) with apt-get. No-op off Linux. Every failure is a warning, never
+# an error: SWANe itself works without them, only 3D Slicer needs them.
+# Call it directly (not inside $(...)) so the warnings reach SUMMARY_WARNINGS.
+install_linux_packages() {
+    is_linux || return 0
+    if ! have_command apt-get; then
+        log_warn "apt-get not found: install these packages with your system package manager (3D Slicer needs them): $APT_PACKAGES, and libasound2t64 or libasound2"
+        return 0
+    fi
+    if ! can_run_privileged; then
+        log_warn "sudo not found and not running as root: install these packages as root (3D Slicer needs them): $APT_PACKAGES, and libasound2t64 or libasound2"
+        return 0
+    fi
+    log_info "Installing system packages for 3D Slicer (sudo may ask for your password)"
+    if ! run_privileged apt-get update; then
+        log_warn "apt-get update failed: the package lists may be stale"
+    fi
+    # Word splitting is intended: the variable is a space-separated list.
+    # shellcheck disable=SC2086
+    if ! run_privileged apt-get install -y --no-install-recommends $APT_PACKAGES; then
+        log_warn "Installing the system packages failed: 3D Slicer may not start. Install manually: $APT_PACKAGES"
+    fi
+    if ! run_privileged apt-get install -y --no-install-recommends libasound2t64 &&
+        ! run_privileged apt-get install -y --no-install-recommends libasound2; then
+        log_warn "Installing libasound2t64 / libasound2 failed: 3D Slicer may not start"
+    fi
+    return 0
+}
+
+# has_en_us_locale: return 0 if "locale -a" lists en_US.utf8 / en_US.UTF-8
+# (any case, with or without the dash).
+has_en_us_locale() {
+    local listing
+    listing="$(locale -a 2>/dev/null || true)"
+    printf '%s\n' "$listing" | grep -Eiq '^en_US\.utf-?8$'
+}
+
+# ensure_locale: make the en_US.UTF-8 locale available (the FSL check needs
+# it). No-op off Linux or when it already exists. Failures are warnings.
+ensure_locale() {
+    is_linux || return 0
+    if has_en_us_locale; then
+        return 0
+    fi
+    if ! can_run_privileged; then
+        log_warn "The en_US.UTF-8 locale is missing and sudo is not available: generate it as root (locale-gen en_US.UTF-8)"
+        return 0
+    fi
+    log_info "Generating the en_US.UTF-8 locale (sudo may ask for your password)"
+    if [ -f "$SWANE_LOCALE_GEN_FILE" ]; then
+        if ! run_privileged sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' "$SWANE_LOCALE_GEN_FILE"; then
+            log_warn "Could not enable en_US.UTF-8 in $SWANE_LOCALE_GEN_FILE"
+        fi
+    fi
+    if ! run_privileged locale-gen en_US.UTF-8; then
+        log_warn "locale-gen en_US.UTF-8 failed: FSL may report a missing locale"
+    fi
+    return 0
 }
 
 # ---------------------------------------------------------------------------
