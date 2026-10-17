@@ -8,7 +8,7 @@ be reached:
 * the environment is rebuilt from scratch (no inherited ``FSLDIR``,
   ``CONDA_EXE``, ``CONDA_PREFIX``, ``SHELL``...): only ``HOME``, ``PATH``,
   ``TMPDIR``, ``LANG``/``LC_ALL=C``, ``SWANE_TTY`` and the
-  ``SWANE_SYSTEM_*`` overrides, plus what the test passes;
+  ``SWANE_SYSTEM_*`` and ``SWANE_LOCALE_GEN_FILE`` overrides, plus what the test passes;
 * ``PATH`` is ``<stubdir>:<toolsdir>``. ``toolsdir`` holds symlinks to a
   whitelist of basic utilities (:data:`BASIC_TOOLS`); every tool under test
   (``uname``, ``conda``, ``sudo``, ``apt-get``, ``curl``, ``sha256sum``,
@@ -210,6 +210,7 @@ class Runner:
             "SWANE_TTY": str(self.tty_path),
             "SWANE_SYSTEM_CONDA_ROOTS": str(self.tmp / "no-system-conda"),
             "SWANE_SYSTEM_FSL_DIRS": str(self.tmp / "no-system-fsl"),
+            "SWANE_LOCALE_GEN_FILE": str(self.tmp / "locale.gen"),
         }
         for key, value in (env or {}).items():
             if value is None:

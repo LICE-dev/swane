@@ -514,3 +514,230 @@ def test_install_miniforge_refuses_fsl_prefix(sh, stub, case):
     assert stub.calls() == []
     if case == "fsldir_missing":
         assert not prefix.exists()
+
+
+# ---------------------------------------------------------------------------
+# Linux system packages and locale
+# ---------------------------------------------------------------------------
+
+#: The 3D Slicer package list, written out here on purpose (not read back from
+#: the script): the installer must install exactly these, in this order.
+APT_LIST = (
+    "libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 "
+    "libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 "
+    "libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 "
+    "libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 "
+    "libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 dc bc"
+)
+APT_INSTALL = "apt-get install -y --no-install-recommends"
+
+
+def _stub_linux_system(stub, apt_body=""):
+    """Linux host with ``sudo`` (runs its arguments) and ``apt-get`` stubs."""
+    stub.platform("Linux", "x86_64")
+    stub("sudo", '"$@"')
+    stub("apt-get", apt_body)
+
+
+def test_apt_installs_exact_package_list(sh, stub):
+    _stub_linux_system(stub)
+    result = sh("install_linux_packages")
+    assert result.returncode == 0
+    assert stub.calls("apt-get") == [
+        "apt-get update",
+        "%s %s" % (APT_INSTALL, APT_LIST),
+        "%s libasound2t64" % APT_INSTALL,
+    ]
+    # Every apt-get call goes through sudo, and without "-n".
+    assert stub.calls("sudo") == [
+        "sudo apt-get update",
+        "sudo %s %s" % (APT_INSTALL, APT_LIST),
+        "sudo %s libasound2t64" % APT_INSTALL,
+    ]
+
+
+def test_apt_yes_does_not_make_sudo_non_interactive(sh, stub):
+    _stub_linux_system(stub)
+    result = sh("install_linux_packages", env={"ASSUME_YES": "1"})
+    assert result.returncode == 0
+    assert all(call.startswith("sudo apt-get") for call in stub.calls("sudo"))
+
+
+def test_apt_falls_back_to_libasound2(sh, stub):
+    _stub_linux_system(stub, 'case "$*" in *libasound2t64*) exit 100 ;; esac')
+    result = sh.code(
+        'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
+    )
+    assert result.returncode == 0
+    assert stub.calls("apt-get")[-2:] == [
+        "%s libasound2t64" % APT_INSTALL,
+        "%s libasound2" % APT_INSTALL,
+    ]
+    # The fallback worked: nothing to report.
+    assert result.stdout == ""
+
+
+def test_apt_reports_when_both_alsa_packages_fail(sh, stub):
+    _stub_linux_system(stub, 'case "$*" in *libasound2*) exit 100 ;; esac')
+    result = sh.code(
+        'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
+    )
+    assert result.returncode == 0
+    assert "libasound2" in result.stdout
+
+
+def test_no_apt_prints_list_and_continues(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("sudo", '"$@"')
+    result = sh.code(
+        'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
+    )
+    assert result.returncode == 0
+    assert "libxcb-cursor0" in result.stderr
+    assert "libxcb-cursor0" in result.stdout  # recorded for the summary
+    assert stub.calls("sudo") == []
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="needs a non-root user")
+def test_no_sudo_for_non_root_warns_and_continues(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("apt-get")
+    result = sh.code(
+        'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
+    )
+    assert result.returncode == 0
+    assert "libxcb-cursor0" in result.stdout
+    assert stub.calls("apt-get") == []
+
+
+def test_apt_failure_warns_and_continues(sh, stub):
+    _stub_linux_system(stub, '[ "$1" = install ] && exit 100 || exit 0')
+    result = sh.code(
+        'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
+    )
+    assert result.returncode == 0
+    assert "WARNING:" in result.stderr
+    assert "Installing the system packages failed" in result.stdout
+    # The ALSA step still ran after the main list failed.
+    assert stub.calls("apt-get")[-2:] == [
+        "%s libasound2t64" % APT_INSTALL,
+        "%s libasound2" % APT_INSTALL,
+    ]
+
+
+def test_apt_update_failure_warns_and_still_installs(sh, stub):
+    _stub_linux_system(stub, '[ "$1" = update ] && exit 100 || exit 0')
+    result = sh.code(
+        'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
+    )
+    assert result.returncode == 0
+    assert "apt-get update failed" in result.stdout
+    assert "%s %s" % (APT_INSTALL, APT_LIST) in stub.calls("apt-get")
+
+
+def test_locale_present_is_noop(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("sudo", '"$@"')
+    stub("locale", "echo C; echo en_US.utf8; echo POSIX")
+    stub("locale-gen")
+    result = sh("ensure_locale")
+    assert result.returncode == 0
+    assert stub.calls("locale-gen") == []
+    assert stub.calls("sudo") == []
+
+
+@pytest.mark.parametrize("listing", ["en_US.UTF-8", "EN_us.UTF8", "en_US.utf8"])
+def test_has_en_us_locale_accepts_spellings(sh, stub, listing):
+    stub("locale", "echo C; echo %s" % bash_quote(listing))
+    assert sh("has_en_us_locale").returncode == 0
+
+
+@pytest.mark.parametrize("listing", ["C\nPOSIX", "en_US.ISO-8859-1", "en_GB.utf8", ""])
+def test_has_en_us_locale_rejects_others(sh, stub, listing):
+    stub("locale", "printf '%s\\n' " + bash_quote(listing))
+    assert sh("has_en_us_locale").returncode == 1
+
+
+def test_locale_missing_runs_locale_gen(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("sudo", '"$@"')
+    stub("locale", "echo C; echo POSIX")
+    stub("locale-gen")
+    result = sh("ensure_locale")
+    assert result.returncode == 0
+    assert stub.calls("locale-gen") == ["locale-gen en_US.UTF-8"]
+    assert stub.calls("sudo") == ["sudo locale-gen en_US.UTF-8"]
+
+
+def test_locale_missing_enables_entry_in_locale_gen_file(sh, stub):
+    """The commented en_US line is uncommented through sudo, before locale-gen."""
+    stub.platform("Linux", "x86_64")
+    stub("sudo", '"$@"')
+    stub("locale", "echo C")
+    stub("locale-gen")
+    locale_gen = sh.tmp / "locale.gen"
+    locale_gen.write_text(
+        "# de_DE.UTF-8 UTF-8\n#  en_US.UTF-8 UTF-8\n# fr_FR.UTF-8 UTF-8\n"
+    )
+    result = sh("ensure_locale", env={"SWANE_LOCALE_GEN_FILE": locale_gen})
+    assert result.returncode == 0
+    assert locale_gen.read_text() == (
+        "# de_DE.UTF-8 UTF-8\nen_US.UTF-8 UTF-8\n# fr_FR.UTF-8 UTF-8\n"
+    )
+    assert stub.calls("sudo") == [
+        "sudo sed -i s/^# *\\(en_US.UTF-8 UTF-8\\)/\\1/ %s" % locale_gen,
+        "sudo locale-gen en_US.UTF-8",
+    ]
+
+
+def test_locale_without_locale_gen_file_skips_the_edit(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("sudo", '"$@"')
+    stub("locale", "echo C")
+    stub("locale-gen")
+    assert not (sh.tmp / "locale.gen").exists()
+    result = sh("ensure_locale")
+    assert result.returncode == 0
+    assert stub.calls("sudo") == ["sudo locale-gen en_US.UTF-8"]
+
+
+def test_locale_gen_failure_warns_and_continues(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("sudo", '"$@"')
+    stub("locale", "echo C")
+    stub("locale-gen", "exit 1")
+    result = sh.code('ensure_locale; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc')
+    assert result.returncode == 0
+    assert "locale-gen en_US.UTF-8 failed" in result.stdout
+    assert "WARNING:" in result.stderr
+
+
+def test_locale_sudo_failure_warns_and_continues(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("sudo", "exit 1")
+    stub("locale", "echo C")
+    locale_gen = sh.tmp / "locale.gen"
+    locale_gen.write_text("# en_US.UTF-8 UTF-8\n")
+    result = sh.code(
+        'ensure_locale; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc',
+        env={"SWANE_LOCALE_GEN_FILE": locale_gen},
+    )
+    assert result.returncode == 0
+    assert "locale-gen en_US.UTF-8 failed" in result.stdout
+    assert "Could not enable en_US.UTF-8" in result.stdout
+    # sudo failed before the edit: the real file is untouched.
+    assert locale_gen.read_text() == "# en_US.UTF-8 UTF-8\n"
+
+
+@pytest.mark.parametrize("func", ["install_linux_packages", "ensure_locale"])
+def test_linux_steps_noop_on_macos(sh, stub, func):
+    stub.platform("Darwin", "arm64")
+    stub("sudo", '"$@"')
+    stub("apt-get")
+    stub("locale", "echo C")
+    stub("locale-gen")
+    result = sh(func)
+    assert result.returncode == 0
+    assert stub.calls("sudo") == []
+    assert stub.calls("apt-get") == []
+    assert stub.calls("locale-gen") == []
