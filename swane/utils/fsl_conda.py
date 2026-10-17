@@ -1,18 +1,18 @@
-"""Resolve the minimal FSL conda install a CI prerelease runner needs.
+"""Resolve the minimal FSL conda install SWANe needs.
 
 Stdlib only, so it runs before SWANe is installed. It picks the **oldest FSL
 release SWANe supports** (``DependencyManager.MIN_FSL_VERSION``) that FSL
-publishes for the runner platform, reads that release's environment file from
+publishes for the host platform, reads that release's environment file from
 FSL's own release manifest, and pins the few FSL packages the SWANe workflows
 call to the versions of that release. Raising ``MIN_FSL_VERSION`` therefore
-moves the CI install with it.
+moves every install that uses this module with it (CI runners and the installer).
 
-FSL is downloaded from FSL's own conda channel on the runner; nothing of it is
+FSL is downloaded from FSL's own conda channel on the host; nothing of it is
 copied into this repository.
 
 Usage::
 
-    python swane/tests/prerelease/ci_fsl_env.py [--platform macos-M1]
+    python swane/utils/fsl_conda.py [--platform macos-M1]
         [--release 6.0.7.9] [--format github|text]
 
 ``--format github`` prints ``release=...``, ``platform=...`` and ``specs=...``
@@ -28,12 +28,9 @@ import sys
 import urllib.request
 
 MANIFEST_URL = "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/manifest.json"
+FSL_CHANNEL = "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public/"
 DEPENDENCY_MANAGER = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    os.pardir,
-    os.pardir,
-    "utils",
-    "DependencyManager.py",
+    os.path.dirname(os.path.abspath(__file__)), "DependencyManager.py"
 )
 
 #: The FSL packages SWANe runs, each with the commands it is installed for.
