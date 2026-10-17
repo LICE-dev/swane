@@ -47,6 +47,8 @@ each derived file is marked by a file-level disclaimer comment:
 - `swane/nipype_pipeline/interfaces/` (interfaces that extend Nipype base
   classes or Nipype interfaces);
 - `swane/workers/WorkflowProcess.py`;
+- `swane/utils/DependencyManager.py` (FreeSurfer version parsing adapted
+  from Nipype's `Info.looseversion`);
 - `swane/patches/nipype_patches.py` (runtime patches of Nipype);
 - `swane/nipype_pipeline/workflows/fMRI_preproc_workflow.py`, whose
   preprocessing graph follows Nipype's `create_featreg_preproc` workflow

@@ -11,6 +11,8 @@ import subprocess
 import sys
 import types
 
+import pytest
+
 import swane.utils.DependencyManager as dm
 from swane.utils.DependencyManager import (
     DependencyManager,
@@ -193,26 +195,25 @@ class TestToolChecksMocked:
     def test_check_fsl(self, monkeypatch):
         monkeypatch.setattr(dm, "is_linux", lambda: False)
 
-        monkeypatch.setattr(dm.fsl.base.Info, "version", lambda: None)
+        monkeypatch.setattr(dm, "_read_fsl_version", lambda: None)
         assert DependencyManager.check_fsl().state == DependenceStatus.MISSING
 
-        monkeypatch.setattr(dm.fsl.base.Info, "version", lambda: "6.0.7.8")
+        monkeypatch.setattr(dm, "_read_fsl_version", lambda: "6.0.7.8")
         assert DependencyManager.check_fsl().state == DependenceStatus.DETECTED
 
         # eddy gained --nthr (which SWANe passes) in FSL 6.0.7.8
-        monkeypatch.setattr(dm.fsl.base.Info, "version", lambda: "6.0.7.7")
+        monkeypatch.setattr(dm, "_read_fsl_version", lambda: "6.0.7.7")
         assert DependencyManager.check_fsl().state == DependenceStatus.WARNING
 
-        monkeypatch.setattr(dm.fsl.base.Info, "version", lambda: "5.0.0")
+        monkeypatch.setattr(dm, "_read_fsl_version", lambda: "5.0.0")
         assert DependencyManager.check_fsl().state == DependenceStatus.WARNING
 
     def test_check_freesurfer_missing(self, monkeypatch):
-        monkeypatch.setattr(dm.freesurfer.base.Info, "version", lambda: None)
+        monkeypatch.setattr(dm, "_read_freesurfer_version", lambda: (None, None))
         assert DependencyManager.check_freesurfer().state == DependenceStatus.MISSING
 
     def test_check_freesurfer_without_home(self, monkeypatch):
-        monkeypatch.setattr(dm.freesurfer.base.Info, "version", lambda: "7.4.0")
-        monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "7.4.0")
+        monkeypatch.setattr(dm, "_read_freesurfer_version", lambda: ("7.4.0", "7.4.0"))
         monkeypatch.delenv("FREESURFER_HOME", raising=False)
         assert DependencyManager.check_freesurfer().state == DependenceStatus.MISSING
 
@@ -229,8 +230,7 @@ class TestToolChecksMocked:
         monkeypatch.setenv("USERPROFILE", str(home))
         monkeypatch.delenv("FS_LICENSE", raising=False)
 
-        monkeypatch.setattr(dm.freesurfer.base.Info, "version", lambda: "8.2.0")
-        monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "8.2.0")
+        monkeypatch.setattr(dm, "_read_freesurfer_version", lambda: ("8.2.0", "8.2.0"))
         fake_fs = tmp_path / "freesurfer"
         fake_fs.mkdir()
         monkeypatch.setenv("FREESURFER_HOME", str(fake_fs))
@@ -278,9 +278,9 @@ class TestToolChecksMocked:
         assert DependencyManager.check_antspyx().state == DependenceStatus.MISSING
 
     def test_is_freesurfer_synth(self, monkeypatch):
-        monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "8.2.0")
+        monkeypatch.setattr(dm, "_read_freesurfer_version", lambda: ("8.2.0", "8.2.0"))
         assert DependencyManager.is_freesurfer_synth() is True
-        monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "7.0.0")
+        monkeypatch.setattr(dm, "_read_freesurfer_version", lambda: ("7.0.0", "7.0.0"))
         assert DependencyManager.is_freesurfer_synth() is False
 
     def test_is_antspynet_true_when_present(self, monkeypatch):
@@ -421,8 +421,7 @@ def test_check_freesurfer_matlab_absent_does_not_spawn(monkeypatch, tmp_path):
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("FS_LICENSE", raising=False)
 
-    monkeypatch.setattr(dm.freesurfer.base.Info, "version", lambda: "8.2.0")
-    monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "8.2.0")
+    monkeypatch.setattr(dm, "_read_freesurfer_version", lambda: ("8.2.0", "8.2.0"))
     fake_fs = tmp_path / "freesurfer"
     fake_fs.mkdir()
     monkeypatch.setenv("FREESURFER_HOME", str(fake_fs))
@@ -467,8 +466,7 @@ def test_check_freesurfer_matlab_candidate_in_freesurfer_home(monkeypatch, tmp_p
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("FS_LICENSE", raising=False)
 
-    monkeypatch.setattr(dm.freesurfer.base.Info, "version", lambda: "8.2.0")
-    monkeypatch.setattr(dm.freesurfer.base.Info, "looseversion", lambda: "8.2.0")
+    monkeypatch.setattr(dm, "_read_freesurfer_version", lambda: ("8.2.0", "8.2.0"))
     fake_fs = tmp_path / "freesurfer"
     bin_dir = fake_fs / "bin"
     bin_dir.mkdir(parents=True)
@@ -511,3 +509,67 @@ def test_check_freesurfer_matlab_candidate_in_freesurfer_home(monkeypatch, tmp_p
     assert args == [str(mcr_script)]
     assert kwargs.get("shell") is False
     assert kwargs.get("timeout") == 3.0
+
+
+# swane/tests/conftest.py wraps the version readers with a fake installed
+# version: these tests exercise the real readers.
+_real_read_fsl_version = getattr(
+    dm._read_fsl_version, "__wrapped__", dm._read_fsl_version
+)
+_real_read_freesurfer_version = getattr(
+    dm._read_freesurfer_version, "__wrapped__", dm._read_freesurfer_version
+)
+
+
+def test_read_fsl_version(monkeypatch, tmp_path):
+    monkeypatch.delenv("FSLDIR", raising=False)
+    assert _real_read_fsl_version() is None
+
+    fsldir = tmp_path / "fsl"
+    monkeypatch.setenv("FSLDIR", str(fsldir))
+    assert _real_read_fsl_version() is None
+
+    etc = fsldir / "etc"
+    etc.mkdir(parents=True)
+    (etc / "fslversion").write_text("6.0.7.17\n")
+    assert _real_read_fsl_version() == "6.0.7.17"
+
+    (etc / "fslversion").write_text("")
+    assert _real_read_fsl_version() is None
+
+
+def test_read_freesurfer_version(monkeypatch, tmp_path):
+    monkeypatch.delenv("FREESURFER_HOME", raising=False)
+    assert _real_read_freesurfer_version() == (None, None)
+
+    fs_home = tmp_path / "freesurfer"
+    fs_home.mkdir()
+    monkeypatch.setenv("FREESURFER_HOME", str(fs_home))
+    assert _real_read_freesurfer_version() == (None, None)
+
+    stamp = "freesurfer-linux-ubuntu22_x86_64-8.2.0-20260314-d932c45"
+    (fs_home / "build-stamp.txt").write_text(stamp + "\n")
+    assert _real_read_freesurfer_version() == (stamp, "8.2.0")
+
+    (fs_home / "build-stamp.txt").write_text("")
+    assert _real_read_freesurfer_version() == (None, None)
+
+
+@pytest.mark.parametrize(
+    "stamp",
+    [
+        "freesurfer-linux-ubuntu22_x86_64-8.2.0-20260314-d932c45",
+        "freesurfer-linux-centos7_x86_64-7.1.0-20200511-813297b",
+        "freesurfer-linux-centos7_x86_64-7.4.1-20230614-7eb8460",
+        "freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.0-2beb96c",
+        "freesurfer-Linux-centos6_x86_64-dev-20160310-a4b9de2",
+        "freesurfer-Linux-centos4_x86_64-stable-pub-v5.3.0",
+        "freesurfer-Darwin-lion-stable-pub-v5.1.0",
+    ],
+)
+def test_freesurfer_looseversion_matches_nipype(monkeypatch, tmp_path, stamp):
+    """The Nipype-free parser must agree with nipype's Info.looseversion()."""
+    from nipype.interfaces.freesurfer.base import Info
+
+    monkeypatch.setattr(Info, "version", classmethod(lambda cls: stamp))
+    assert dm._freesurfer_looseversion(stamp) == str(Info.looseversion())

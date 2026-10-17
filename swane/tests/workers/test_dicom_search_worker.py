@@ -213,16 +213,16 @@ class TestDicomSearchRobustness:
         write_minimal_dicom(good, patient_id="P_GOOD")
         write_minimal_dicom(bad, patient_id="P_BAD")
 
-        import swane.workers.DicomSearchWorker as mod
+        import pydicom
 
-        real_dcmread = mod.pydicom.dcmread
+        real_dcmread = pydicom.dcmread
 
         def flaky_dcmread(path, *args, **kwargs):
             if str(path).endswith("bad.dcm"):
                 raise ValueError("simulated corrupt dicom")
             return real_dcmread(path, *args, **kwargs)
 
-        monkeypatch.setattr(mod.pydicom, "dcmread", flaky_dcmread)
+        monkeypatch.setattr(pydicom, "dcmread", flaky_dcmread)
 
         worker = DicomSearchWorker(str(tmp_path))
         worker.run()
