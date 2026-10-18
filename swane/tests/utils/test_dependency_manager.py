@@ -348,7 +348,19 @@ def test_is_freesurfer_synth_uses_instance_attribute():
     assert manager.is_freesurfer_synth() is True
 
 
-def test_has_en_us_locale_memoized(monkeypatch):
+@pytest.fixture
+def clear_locale_cache():
+    """Clear the memoized locale probe before and after the test.
+
+    A result cached under mocked ``subprocess.run``/``is_linux`` would
+    otherwise leak into later tests (e.g. the FSL fMRI workflow builds).
+    """
+    dm._has_en_us_locale.cache_clear()
+    yield
+    dm._has_en_us_locale.cache_clear()
+
+
+def test_has_en_us_locale_memoized(monkeypatch, clear_locale_cache):
     import swane.utils.DependencyManager as dm
 
     calls = 0
@@ -360,14 +372,13 @@ def test_has_en_us_locale_memoized(monkeypatch):
 
     monkeypatch.setattr(dm.subprocess, "run", mock_run)
     monkeypatch.setattr(dm, "is_linux", lambda: True)
-    dm._has_en_us_locale.cache_clear()
 
     assert dm._has_en_us_locale() is True
     assert dm._has_en_us_locale() is True
     assert calls == 1
 
 
-def test_has_en_us_locale_non_linux(monkeypatch):
+def test_has_en_us_locale_non_linux(monkeypatch, clear_locale_cache):
     import swane.utils.DependencyManager as dm
 
     calls = 0
@@ -379,13 +390,12 @@ def test_has_en_us_locale_non_linux(monkeypatch):
 
     monkeypatch.setattr(dm.subprocess, "run", mock_run)
     monkeypatch.setattr(dm, "is_linux", lambda: False)
-    dm._has_en_us_locale.cache_clear()
 
     assert dm._has_en_us_locale() is True
     assert calls == 0
 
 
-def test_has_en_us_locale_missing(monkeypatch):
+def test_has_en_us_locale_missing(monkeypatch, clear_locale_cache):
     import swane.utils.DependencyManager as dm
 
     monkeypatch.setattr(
@@ -396,12 +406,11 @@ def test_has_en_us_locale_missing(monkeypatch):
         ),
     )
     monkeypatch.setattr(dm, "is_linux", lambda: True)
-    dm._has_en_us_locale.cache_clear()
 
     assert dm._has_en_us_locale() is False
 
 
-def test_has_en_us_locale_exception(monkeypatch):
+def test_has_en_us_locale_exception(monkeypatch, clear_locale_cache):
     import swane.utils.DependencyManager as dm
 
     def mock_run(*args, **kwargs):
@@ -409,7 +418,6 @@ def test_has_en_us_locale_exception(monkeypatch):
 
     monkeypatch.setattr(dm.subprocess, "run", mock_run)
     monkeypatch.setattr(dm, "is_linux", lambda: True)
-    dm._has_en_us_locale.cache_clear()
 
     assert dm._has_en_us_locale() is False
 
