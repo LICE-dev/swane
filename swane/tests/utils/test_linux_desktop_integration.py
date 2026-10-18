@@ -18,6 +18,16 @@ posix_host = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_inherited_swane_launcher(monkeypatch):
+    """Hide a SWANE_LAUNCHER inherited from the developer's shell.
+
+    The installer's launcher exports it to SWANe and what SWANe starts; the
+    tests that need one set it themselves.
+    """
+    monkeypatch.delenv("SWANE_LAUNCHER", raising=False)
+
+
 def test_noop_on_non_linux(monkeypatch, tmp_path):
     monkeypatch.setattr(mod, "is_linux", lambda: False)
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
@@ -49,6 +59,48 @@ def test_writes_desktop_entry_and_launcher_on_linux(monkeypatch, tmp_path):
     launcher_content = launcher_script.read_text()
     assert "/usr/local/bin/swane" in launcher_content
     assert os.access(launcher_script, os.X_OK)
+
+
+@posix_host
+def test_uses_swane_launcher_when_set(monkeypatch, tmp_path):
+    monkeypatch.setattr(mod, "is_linux", lambda: True)
+    monkeypatch.setattr(mod, "is_command_available", lambda cmd: False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setattr(mod.sys, "argv", ["/usr/local/bin/swane"])
+    launcher = tmp_path / "bin" / "swane"
+    launcher.parent.mkdir()
+    launcher.write_text("#!/bin/sh\n")
+    launcher.chmod(0o755)
+    monkeypatch.setenv("SWANE_LAUNCHER", str(launcher))
+
+    ensure_desktop_entry("/opt/swane/icon.png")
+
+    content = (tmp_path / "data" / "swane" / "swane-launcher.sh").read_text()
+    assert f'exec "{launcher}"' in content
+    assert f'[ -x "{launcher}" ]' in content
+    assert "/usr/local/bin/swane" not in content
+
+
+@posix_host
+@pytest.mark.parametrize("mode", [0o644, None])
+def test_ignores_swane_launcher_when_unusable(monkeypatch, tmp_path, mode):
+    """A non-executable or missing SWANE_LAUNCHER falls back to argv[0]."""
+    monkeypatch.setattr(mod, "is_linux", lambda: True)
+    monkeypatch.setattr(mod, "is_command_available", lambda cmd: False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setattr(mod.sys, "argv", ["/usr/local/bin/swane"])
+    launcher = tmp_path / "bin" / "swane"
+    if mode is not None:
+        launcher.parent.mkdir()
+        launcher.write_text("#!/bin/sh\n")
+        launcher.chmod(mode)
+    monkeypatch.setenv("SWANE_LAUNCHER", str(launcher))
+
+    ensure_desktop_entry("/opt/swane/icon.png")
+
+    content = (tmp_path / "data" / "swane" / "swane-launcher.sh").read_text()
+    assert 'exec "/usr/local/bin/swane"' in content
+    assert str(launcher) not in content
 
 
 def test_idempotent_when_content_unchanged(monkeypatch, tmp_path):

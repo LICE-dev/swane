@@ -1,18 +1,18 @@
-"""Resolve the minimal FSL conda install a CI prerelease runner needs.
+"""Resolve the minimal FSL conda install SWANe needs.
 
 Stdlib only, so it runs before SWANe is installed. It picks the **oldest FSL
 release SWANe supports** (``DependencyManager.MIN_FSL_VERSION``) that FSL
-publishes for the runner platform, reads that release's environment file from
+publishes for the host platform, reads that release's environment file from
 FSL's own release manifest, and pins the few FSL packages the SWANe workflows
 call to the versions of that release. Raising ``MIN_FSL_VERSION`` therefore
-moves the CI install with it.
+moves every install that uses this module with it (CI runners and the installer).
 
-FSL is downloaded from FSL's own conda channel on the runner; nothing of it is
+FSL is downloaded from FSL's own conda channel on the host; nothing of it is
 copied into this repository.
 
 Usage::
 
-    python swane/tests/prerelease/ci_fsl_env.py [--platform macos-M1]
+    python swane/utils/fsl_conda.py [--platform macos-M1]
         [--release 6.0.7.9] [--format github|text]
 
 ``--format github`` prints ``release=...``, ``platform=...`` and ``specs=...``
@@ -28,12 +28,9 @@ import sys
 import urllib.request
 
 MANIFEST_URL = "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/manifest.json"
+FSL_CHANNEL = "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public/"
 DEPENDENCY_MANAGER = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    os.pardir,
-    os.pardir,
-    "utils",
-    "DependencyManager.py",
+    os.path.dirname(os.path.abspath(__file__)), "DependencyManager.py"
 )
 
 #: The FSL packages SWANe runs, each with the commands it is installed for.
@@ -62,6 +59,18 @@ FSL_PACKAGES = (
 )
 #: Pinned too, so the FSL Python scripts run on the interpreter of the release.
 EXTRA_PACKAGES = ("python",)
+#: The ``fsl-installer`` release requested, whatever the FSL release lists:
+#: it ships ``createFSLWrapper``, which the SWANe installer runs to create
+#: FSL's command wrappers in ``$FSLDIR/share/fsl/bin``. 3.21.0 is the version
+#: whose ``createFSLWrapper`` behaviour was observed (``bin/createFSLWrapper``;
+#: wrappers created only with ``FSL_CREATE_WRAPPER_SCRIPTS`` and ``PREFIX``
+#: set; exit status always 0); the release pin is not usable (FSL 6.0.7.8
+#: lists fsl-installer 3.9.0, which has no ``createFSLWrapper``). Bumping it
+#: requires a run of the installer CI workflow (installer-tests.yml).
+FSL_INSTALLER_VERSION = "3.21.0"
+#: Packages requested at a fixed version (``name=version``), whether or not
+#: the release environment lists them, and whatever version it lists.
+FIXED_PACKAGES = (("fsl-installer", FSL_INSTALLER_VERSION),)
 
 
 def host_platform() -> str:
@@ -125,10 +134,34 @@ def select_release(manifest: dict, platform: str, minimum: str, release=None):
     )
 
 
-def pinned_specs(environment: str, packages=FSL_PACKAGES + EXTRA_PACKAGES) -> list:
-    """Conda specs ``name=version`` for ``packages``, from an environment file.
+def pinned_specs(
+    environment: str,
+    packages=FSL_PACKAGES + EXTRA_PACKAGES,
+    fixed=FIXED_PACKAGES,
+) -> list:
+    """Conda specs for ``packages`` (from an environment file) and ``fixed``.
 
     FSL's release environment files list one ``- name version`` per line.
+
+    Parameters
+    ----------
+    environment : str
+        The text of the release environment file.
+    packages : tuple of str
+        Packages pinned as ``name=version``; each must be listed.
+    fixed : tuple of (str, str)
+        ``(name, version)`` pairs requested as ``name=version``, ignoring
+        the environment file.
+
+    Returns
+    -------
+    list of str
+        The specs of ``packages``, then those of ``fixed``.
+
+    Raises
+    ------
+    SystemExit
+        If one of ``packages`` is not listed.
     """
     found = {}
     for line in environment.splitlines():
@@ -138,7 +171,9 @@ def pinned_specs(environment: str, packages=FSL_PACKAGES + EXTRA_PACKAGES) -> li
     missing = [name for name in packages if name not in found]
     if missing:
         raise SystemExit("the FSL release environment lacks: %s" % ", ".join(missing))
-    return ["%s=%s" % (name, found[name]) for name in packages]
+    specs = ["%s=%s" % (name, found[name]) for name in packages]
+    specs.extend("%s=%s" % pair for pair in fixed)
+    return specs
 
 
 def main(argv=None) -> int:

@@ -209,7 +209,7 @@ Licenses of the anatomy files: see `NOTICE.md`.
 On GitHub Actions (`.github/workflows/windows-tests.yml`) the Windows sweep is
 FSL-free, while the macOS and Ubuntu sweeps install a minimal FSL from FSL's own conda
 channel (`.github/actions/install-fsl`) and so run the FSL passes too.
-`ci_fsl_env.py` pins only the FSL packages SWANe runs, at the versions of the
+`swane/utils/fsl_conda.py` pins only the FSL packages SWANe runs, at the versions of the
 oldest FSL release ≥ `DependencyManager.MIN_FSL_VERSION` published for the
 runner platform, and that release is written to `$FSLDIR/etc/fslversion`: the
 CI exercises the minimum SWANe claims to support, and follows it when it is
