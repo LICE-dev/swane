@@ -87,7 +87,7 @@ jobs:
       # Job variables for every later step: the summary files, the expected
       # conda root and login profile, and a PATH without ~/.local/bin (so the
       # installer adds it through the login profile, as on a user's machine)
-      # and, for the fresh legs, without any directory holding a runner conda.
+      # and, for the fresh legs, with no runner conda on it (asserted).
       - name: Prepare the runner
         shell: bash
         run: |
@@ -122,6 +122,19 @@ jobs:
             *) expected_rc="" ;;
           esac
           echo "Expected rc file: ${expected_rc:-<none>}"
+          # Physical path of a directory (symlinks resolved, so /bin and
+          # /usr/bin compare equal on a usrmerge system); empty if missing.
+          physical_dir() { (cd -P -- "$1" 2>/dev/null && pwd -P) || true; }
+          # System bin dirs stay on PATH in fresh mode (the Ubuntu image links
+          # its Miniconda as /usr/bin/conda): their conda file is deleted
+          # instead, which is fine on a disposable hosted runner.
+          system_dirs=":"
+          for dir in /usr/bin /bin /usr/sbin /sbin /usr/local/bin /usr/local/sbin; do
+            resolved="$(physical_dir "$dir")"
+            if [ -n "$resolved" ]; then
+              system_dirs="$system_dirs$resolved:"
+            fi
+          done
           IFS=: read -r -a path_dirs <<<"$PATH"
           new_path=""
           for dir in "${path_dirs[@]}"; do
@@ -129,11 +142,42 @@ jobs:
               "" | "$HOME/.local/bin" | "$HOME/.local/bin/") continue ;;
             esac
             if [ "$CONDA_MODE" = fresh ] && [ -x "$dir/conda" ]; then
-              echo "Removed from PATH (runner conda): $dir"
-              continue
+              resolved="$(physical_dir "$dir")"
+              case "$system_dirs" in
+                *":$resolved:"*)
+                  target="$(readlink -f -- "$dir/conda" 2>/dev/null || echo "<unresolved>")"
+                  if ! sudo -n rm -f -- "$dir/conda"; then
+                    echo "::error::Could not remove the runner conda $dir/conda"
+                    exit 1
+                  fi
+                  echo "Removed runner conda: $dir/conda (pointed to $target); $dir kept on PATH"
+                  ;;
+                *)
+                  echo "Removed from PATH (runner conda): $dir"
+                  continue
+                  ;;
+              esac
             fi
             new_path="${new_path:+$new_path:}$dir"
           done
+          # A green fresh leg must prove the installer starts with no conda.
+          if [ "$CONDA_MODE" = fresh ]; then
+            if found="$(PATH="$new_path" command -v conda)"; then
+              echo "::error::A conda is still on the fresh-leg PATH: $found"
+              exit 1
+            fi
+            echo "No conda on the fresh-leg PATH"
+            # The fixed roots install_swane.sh's find_conda probes besides
+            # PATH (MINIFORGE_PREFIX defaults to ~/miniforge3, and
+            # SWANE_SYSTEM_CONDA_ROOTS to /opt/conda): none may exist.
+            for root in "$HOME/miniforge3" "$HOME/miniconda3" "$HOME/anaconda3" /opt/conda; do
+              if [ -e "$root" ] || [ -L "$root" ]; then
+                echo "::error::$root exists: the fresh leg would not start without a conda"
+                exit 1
+              fi
+            done
+            echo "No conda root in the installer's fixed candidates"
+          fi
           conda_exe=""
           expected_root="$HOME/miniforge3"
           if [ "$CONDA_MODE" = existing ]; then
