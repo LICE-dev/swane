@@ -4,7 +4,8 @@ name: Installer tests
 # installer on clean hosted runners (Ubuntu, macOS arm64 with bash and with
 # zsh as the login shell, macOS Intel),
 # installing the SWANe of the commit under test, with a check of the result
-# and a second run (the update path).
+# and a second run (the update path); two "update" legs (Ubuntu, macOS
+# arm64) rerun it on the FSL update paths instead (Ruling R48).
 #
 # Manual only (user decision): run it on demand with
 #   gh workflow run installer-tests.yml -r <branch>
@@ -60,26 +61,33 @@ jobs:
           python -m pytest swane/tests/installer -p no:cacheprovider -rfEs
 
   install:
-    name: install (${{ matrix.os }}, ${{ matrix.conda }} conda, ${{ matrix.login_shell }})
+    name: ${{ matrix.scenario }} (${{ matrix.os }}, ${{ matrix.conda }} conda, ${{ matrix.login_shell }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        # Every leg names its login shell: entries differing only by a new
-        # key would be merged into an earlier one by GitHub's "include".
+        # Every leg names its login shell and its scenario: entries differing
+        # only by a new key would be merged into an earlier one by GitHub's
+        # "include".
+        # scenario install: first run, checks, second run from a pipe.
+        # scenario update (Ruling R48): first run and checks, then the FSL
+        # update paths (phases A, B, C below) instead of the second run.
         include:
           # fresh: no conda visible to the installer, which installs Miniforge.
           - os: ubuntu-latest
             conda: fresh
             login_shell: bash
+            scenario: install
           # existing: the runner's own conda ($CONDA), found through CONDA_EXE.
           - os: ubuntu-latest
             conda: existing
             login_shell: bash
+            scenario: install
           - os: macos-latest
             conda: fresh
             login_shell: bash
+            scenario: install
           # GitHub's macOS runners have SHELL=/bin/bash, but zsh is the
           # default login shell of a Mac: this leg runs the installer and
           # every check with SHELL=/bin/zsh (the installer picks the PATH
@@ -87,12 +95,24 @@ jobs:
           - os: macos-latest
             conda: fresh
             login_shell: zsh
+            scenario: install
           # macos-15-intel is GitHub's last Intel (x86_64) macOS image,
           # supported until fall 2027: drop this leg then. It is the only CI
           # coverage of macOS Intel (TensorFlow from conda-forge).
           - os: macos-15-intel
             conda: fresh
             login_shell: bash
+            scenario: install
+          # The FSL update paths (Ruling R48, amended): Linux and macOS arm64,
+          # not macOS Intel.
+          - os: ubuntu-latest
+            conda: fresh
+            login_shell: bash
+            scenario: update
+          - os: macos-latest
+            conda: fresh
+            login_shell: bash
+            scenario: update
     env:
       CONDA_MODE: ${{ matrix.conda }}
       LOGIN_SHELL: ${{ matrix.login_shell }}
@@ -308,7 +328,7 @@ jobs:
       # failure means a runtime library is missing: add its package to
       # APT_PACKAGES, never skip this check.
       - name: Check that Qt starts with the xcb platform
-        if: ${{ runner.os == 'Linux' }}
+        if: ${{ runner.os == 'Linux' && matrix.scenario == 'install' }}
         shell: bash
         timeout-minutes: 10
         run: |
@@ -357,10 +377,13 @@ jobs:
           done
       # As users run it: the script through a pipe ("curl ... | bash -s --
       # ..."); pipefail keeps an installer failure. The installer log
-      # (stderr) is saved, then printed, so that on Linux it can prove the
-      # system step found everything already present: no sudo question, no
-      # apt-get, no locale-gen.
+      # (stderr) stays live in the job log and is also saved, so that on
+      # Linux it can prove the system step found everything already present:
+      # no sudo question, no apt-get, no locale-gen. Its tee is a stage of
+      # the pipeline (fd 3 carries the installer's stdout past it), so the
+      # pipeline waits for it and the file is complete before the checks.
       - name: Run the installer again from a pipe (update path)
+        if: ${{ matrix.scenario == 'install' }}
         shell: bash
         run: |
           if [ "$CONDA_MODE" = fresh ]; then
@@ -368,12 +391,12 @@ jobs:
           fi
           rerun_log="$RUNNER_TEMP/installer-log-2.txt"
           status=0
-          # shellcheck disable=SC2002 # a real pipe, as with curl
-          cat installer/install_swane.sh |
-            /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" 2>"$rerun_log" |
-            tee "$SUMMARY_2" || status=$?
-          echo "Installer log of the second run:"
-          cat "$rerun_log"
+          {
+            # shellcheck disable=SC2002 # a real pipe, as with curl
+            cat installer/install_swane.sh |
+              /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" 2>&1 >&3 3>&- |
+              tee "$rerun_log" >&2 3>&-
+          } 3>&1 | tee "$SUMMARY_2" || status=$?
           if [ "$status" != 0 ]; then
             echo "::error::The second run failed (exit $status)"
             exit "$status"
@@ -432,6 +455,7 @@ jobs:
           done
           [ "$bad" = 0 ] || exit 1
       - name: Check the environment after the second run
+        if: ${{ matrix.scenario == 'install' }}
         shell: bash
         timeout-minutes: 20
         run: |
@@ -439,3 +463,181 @@ jobs:
           if [ "$SHELL_NAME" = zsh ]; then
             CHECK_SHELL=zsh zsh -l .github/scripts/check_installed_env.sh "$SUMMARY_2"
           fi
+      # Ruling R48: the FSL update paths, one phase after the other on the
+      # install of the first run (fresh conda, so CONDA_EXE stays unset).
+      #   A: swane-fsl lost its command wrappers -> a rerun updates it and
+      #      recreates them;
+      #   B: an FSL in a custom directory, as a plain conda create of the
+      #      packages swane.utils.fsl_conda lists (FSL's conda channel) makes
+      #      it: share/fsl/bin without bet, flirt or fsl-cluster wrappers;
+      #      given as FSLDIR -> not reused and left untouched, swane-env
+      #      keeps the installer's swane-fsl;
+      #   C: the same FSL after createFSLWrapper (run as a black box, as the
+      #      installer runs it, on that share/fsl/bin) -> reused as it is.
+      # Every run must end without a summary warning, and the environment
+      # check runs after each one. Portable to macOS (BSD sed/grep, bash 3.2).
+      - name: FSL update paths (phases A, B, C)
+        if: ${{ matrix.scenario == 'update' }}
+        shell: bash
+        timeout-minutes: 80
+        run: |
+          unset CONDA_EXE FSLDIR FSL_CREATE_WRAPPER_SCRIPTS
+          fail() { echo "::error::$*"; exit 1; }
+          # fsl_result SUMMARY: "<FSL dir>|<state>" from the summary FSL line.
+          fsl_result() {
+            sed -n 's/^SWANe installer: FSL \(.*\) ([^()]*) \([a-z]*\)$/\1|\2/p' "$1" | head -n 1
+          }
+          conda_root="$(sed -n 's/^SWANe installer: conda //p' "$SUMMARY_1" | head -n 1)"
+          env_prefix="$(sed -n 's/^SWANe installer: env //p' "$SUMMARY_1" | head -n 1)"
+          if [ -z "$conda_root" ] || [ -z "$env_prefix" ]; then
+            fail "No conda or env line in $SUMMARY_1"
+          fi
+          # hook_written: the FSLDIR the activation hook of swane-env sets
+          # (read with the installer's own function).
+          hook_written() {
+            # shellcheck disable=SC2016 # expanded by the inner bash
+            bash -c '. installer/install_swane.sh && hook_written_fsldir "$1"' _ "$env_prefix"
+          }
+          # run_installer PHASE [FSLDIR]: run the installer (FSLDIR exported
+          # only when given), log live and saved; it must succeed, keep the
+          # conda and swane-env of the first run, and warn about nothing.
+          run_installer() {
+            local phase="$1" fsldir="${2:-}" rc=0 summary log
+            summary="$RUNNER_TEMP/installer-summary-$phase.txt"
+            log="$RUNNER_TEMP/installer-log-$phase.txt"
+            {
+              if [ -n "$fsldir" ]; then
+                export FSLDIR="$fsldir"
+              fi
+              /bin/bash installer/install_swane.sh --yes --accept-fsl-license \
+                --swane-spec "$GITHUB_WORKSPACE" 2>&1 >&3 3>&- | tee "$log" >&2 3>&-
+            } 3>&1 | tee "$summary" || rc=$?
+            [ "$rc" = 0 ] || fail "Phase $phase: the installer failed (exit $rc)"
+            grep -qxF "SWANe installer: conda $conda_root" "$summary" ||
+              fail "Phase $phase: the conda changed"
+            grep -qxF "SWANe installer: env $env_prefix" "$summary" ||
+              fail "Phase $phase: swane-env changed"
+            if grep -q '^WARNING: ' "$summary"; then
+              sed -n 's/^WARNING: \(.*\)/::error::Installer warning: \1/p' "$summary"
+              exit 1
+            fi
+          }
+          # no_fsl_install PHASE: the run neither installed nor updated an FSL.
+          no_fsl_install() {
+            local line
+            for line in '==> Installing FSL ' '==> Updating FSL in '; do
+              if grep -qF -- "$line" "$RUNNER_TEMP/installer-log-$1.txt"; then
+                fail "Phase $1: unexpected '$line' in the installer log"
+              fi
+            done
+          }
+          wrappers_present() {
+            local tool
+            for tool in bet flirt fsl-cluster; do
+              if [ ! -f "$1/share/fsl/bin/$tool" ] || [ ! -x "$1/share/fsl/bin/$tool" ]; then
+                return 1
+              fi
+            done
+          }
+
+          echo "::group::Phase A: swane-fsl without its command wrappers"
+          result="$(fsl_result "$SUMMARY_1")"
+          swane_fsl="${result%|*}"
+          [ "${result#*|}" = installed ] || fail "Expected the first run to install FSL: '$result'"
+          [ -f "$swane_fsl/etc/swane_installer_fsl" ] || fail "No installer marker in $swane_fsl"
+          release="$(head -n 1 "$swane_fsl/etc/fslversion")"
+          wrappers_present "$swane_fsl" || fail "The first run left no wrappers in $swane_fsl/share/fsl/bin"
+          for tool in bet flirt fsl-cluster; do
+            rm -f "$swane_fsl/share/fsl/bin/$tool"
+          done
+          if wrappers_present "$swane_fsl"; then
+            fail "Could not delete the wrappers in $swane_fsl"
+          fi
+          run_installer A
+          [ "$(fsl_result "$RUNNER_TEMP/installer-summary-A.txt")" = "$swane_fsl|updated" ] ||
+            fail "Phase A: expected '$swane_fsl ... updated' in the summary"
+          grep -qF -- "in $swane_fsl (installed by this installer) lacks the FSL command wrappers" \
+            "$RUNNER_TEMP/installer-log-A.txt" || fail "Phase A: the update was not due to the missing wrappers"
+          wrappers_present "$swane_fsl" || fail "Phase A: the wrappers were not recreated in $swane_fsl"
+          [ "$(hook_written)" = "$swane_fsl" ] || fail "Phase A: the hook's FSLDIR is not $swane_fsl"
+          EXPECT_FSLDIR="$swane_fsl" bash -l .github/scripts/check_installed_env.sh \
+            "$RUNNER_TEMP/installer-summary-A.txt"
+          echo "::endgroup::"
+
+          echo "::group::Phase B: a custom FSL without command wrappers"
+          custom="$HOME/custom-fsl"
+          [ ! -e "$custom" ] || fail "$custom already exists"
+          resolved="$(PYTHONNOUSERSITE=1 "$env_prefix/bin/python" -I -m swane.utils.fsl_conda --format github </dev/null)" ||
+            fail "Could not resolve the FSL packages"
+          custom_release="$(printf '%s\n' "$resolved" | sed -n 's/^release=//p' | head -n 1)"
+          specs="$(printf '%s\n' "$resolved" | sed -n 's/^specs=//p' | head -n 1)"
+          if [ -z "$custom_release" ] || [ -z "$specs" ]; then
+            fail "No release or specs from the FSL resolver: $resolved"
+          fi
+          [ "$custom_release" = "$release" ] || fail "The resolver gives FSL $custom_release, swane-fsl has $release"
+          # shellcheck disable=SC2016 # expanded by the inner bash
+          channel="$(bash -c '. installer/install_swane.sh && printf "%s\n" "$FSL_CHANNEL"')"
+          read -r -a spec_list <<<"$specs"
+          "$conda_root/bin/conda" create -y -p "$custom" --override-channels \
+            --strict-channel-priority -c "$channel" -c conda-forge "${spec_list[@]}" </dev/null
+          [ -x "$custom/bin/bet" ] || fail "No $custom/bin/bet: not an FSL"
+          [ -x "$custom/bin/createFSLWrapper" ] || fail "No $custom/bin/createFSLWrapper"
+          # The FSL as conda made it: share/fsl/bin may hold the files of
+          # FSL's own packages, but none of the command wrappers the
+          # installer requires (no createFSLWrapper run yet).
+          listing() {
+            if [ -d "$1" ]; then
+              ls -A "$1"
+            fi
+          }
+          custom_bin_before="$(listing "$custom/share/fsl/bin")"
+          echo "$custom/share/fsl/bin before run B: ${custom_bin_before:-<absent or empty>}"
+          for tool in bet flirt fsl-cluster; do
+            if [ -e "$custom/share/fsl/bin/$tool" ]; then
+              fail "conda put a $tool wrapper in $custom/share/fsl/bin: phase B needs an FSL without wrappers"
+            fi
+          done
+          mkdir -p "$custom/etc"
+          printf '%s\n' "$release" >"$custom/etc/fslversion"
+          run_installer B "$custom"
+          [ "$(fsl_result "$RUNNER_TEMP/installer-summary-B.txt")" = "$swane_fsl|existing" ] ||
+            fail "Phase B: expected swane-fsl ($swane_fsl) existing in the summary, not the custom FSL"
+          grep -qF -- "Leaving FSL $release in $custom aside" "$RUNNER_TEMP/installer-log-B.txt" ||
+            fail "Phase B: the installer did not leave the custom FSL aside"
+          no_fsl_install B
+          [ "$(hook_written)" = "$swane_fsl" ] || fail "Phase B: the hook's FSLDIR is not $swane_fsl"
+          [ "$(listing "$custom/share/fsl/bin")" = "$custom_bin_before" ] ||
+            fail "Phase B: the installer changed $custom/share/fsl/bin"
+          [ ! -e "$custom/etc/swane_installer_fsl" ] || fail "Phase B: the installer marked $custom"
+          EXPECT_FSLDIR="$swane_fsl" bash -l .github/scripts/check_installed_env.sh \
+            "$RUNNER_TEMP/installer-summary-B.txt"
+          echo "::endgroup::"
+
+          echo "::group::Phase C: the custom FSL with command wrappers"
+          # The programs of FSL's packages, as the installer lists them, and
+          # createFSLWrapper with the environment the installer gives it.
+          # shellcheck disable=SC2016 # expanded by the inner bash
+          names="$(bash -c '. installer/install_swane.sh && fsl_executables "$1" "$2"' _ "$env_prefix" "$custom")" ||
+            fail "Could not list the programs of $custom"
+          programs=()
+          while IFS= read -r name; do
+            if [ -n "$name" ]; then
+              programs+=("$name")
+            fi
+          done <<EOF
+          $names
+          EOF
+          [ "${#programs[@]}" -gt 0 ] || fail "No program of FSL's packages in $custom"
+          FSLDIR="$custom" PREFIX="$custom" FSL_CREATE_WRAPPER_SCRIPTS=1 PYTHONNOUSERSITE=1 \
+            "$custom/bin/createFSLWrapper" "${programs[@]}" </dev/null
+          wrappers_present "$custom" || fail "createFSLWrapper did not create the wrappers in $custom"
+          run_installer C "$custom"
+          [ "$(fsl_result "$RUNNER_TEMP/installer-summary-C.txt")" = "$custom|existing" ] ||
+            fail "Phase C: expected '$custom ... existing' in the summary"
+          grep -qF -- "==> Using FSL $release in $custom" "$RUNNER_TEMP/installer-log-C.txt" ||
+            fail "Phase C: the installer did not use the custom FSL as it is"
+          no_fsl_install C
+          [ "$(hook_written)" = "$custom" ] || fail "Phase C: the hook's FSLDIR is not $custom"
+          EXPECT_FSLDIR="$custom" EXPECT_INSTALLER_FSL=false bash -l .github/scripts/check_installed_env.sh \
+            "$RUNNER_TEMP/installer-summary-C.txt"
+          echo "::endgroup::"

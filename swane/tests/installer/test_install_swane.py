@@ -223,6 +223,167 @@ def test_is_macos_intel(sh, stub, system, machine, intel):
     assert (sh("is_macos_intel").returncode == 0) is intel
 
 
+ROSETTA_ERROR = (
+    "ERROR: This terminal runs under Rosetta (x86_64 emulation on an Apple "
+    "Silicon Mac): open a native (arm64) terminal and rerun the installer"
+)
+
+
+def test_refuse_rosetta_dies_when_translated(sh, stub):
+    """R44: sysctl.proc_translated = 1 is an x86_64 shell on Apple Silicon."""
+    stub("sysctl", "echo 1")
+    result = sh("refuse_rosetta")
+    assert result.returncode == 1
+    assert result.stderr.strip() == ROSETTA_ERROR
+    assert stub.calls("sysctl") == ["sysctl -n sysctl.proc_translated"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # Native process on Apple Silicon.
+        "echo 0",
+        # Intel Mac: the key does not exist.
+        "echo \"sysctl: unknown oid 'sysctl.proc_translated'\" >&2; exit 1",
+    ],
+)
+def test_refuse_rosetta_passes_when_not_translated(sh, stub, body):
+    stub("sysctl", body)
+    result = sh("refuse_rosetta")
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+
+
+def test_refuse_rosetta_passes_without_sysctl(sh):
+    # SWANE_SYSCTL is the harness's stub path, absent here.
+    assert sh("refuse_rosetta").returncode == 0
+
+
+def test_refuse_rosetta_runs_swane_sysctl(sh, stub):
+    other = stub.script(sh.tmp / "bin" / "my-sysctl", "my-sysctl", "echo 1")
+    result = sh("refuse_rosetta", env={"SWANE_SYSCTL": other})
+    assert result.returncode == 1
+    assert result.stderr.strip() == ROSETTA_ERROR
+    assert stub.calls() == ["my-sysctl -n sysctl.proc_translated"]
+
+
+def test_refuse_rosetta_takes_sysctl_from_path_by_default(sh, stub):
+    """An empty SWANE_SYSCTL: "sysctl" from PATH (here the stub directory)."""
+    stub("sysctl", "echo 1")
+    result = sh("refuse_rosetta", env={"SWANE_SYSCTL": ""})
+    assert result.returncode == 1
+    assert stub.calls() == ["sysctl -n sysctl.proc_translated"]
+
+
+@pytest.mark.parametrize(
+    "env, active",
+    [
+        (
+            {"CONDA_PREFIX": "/c/envs/swane-env", "CONDA_SHLVL": "2"},
+            "/c/envs/swane-env",
+        ),
+        (
+            {"CONDA_PREFIX": "/c/envs/swane-fsl", "CONDA_SHLVL": "2"},
+            "/c/envs/swane-fsl",
+        ),
+        ({"CONDA_PREFIX": "/c/envs/swane-env-dev/"}, "/c/envs/swane-env-dev"),
+        # Named once, trailing slashes or not.
+        (
+            {
+                "CONDA_PREFIX": "/c/envs/swane-env/",
+                "CONDA_PREFIX_1": "/c/envs/swane-env",
+                "CONDA_SHLVL": "2",
+            },
+            "/c/envs/swane-env",
+        ),
+        # A huge CONDA_SHLVL is capped at 100 levels.
+        (
+            {
+                "CONDA_PREFIX": "/c",
+                "CONDA_PREFIX_100": "/c/envs/swane-env",
+                "CONDA_SHLVL": "99999999999999999999",
+            },
+            "/c/envs/swane-env",
+        ),
+        # Stacked below a non-swane environment.
+        (
+            {
+                "CONDA_PREFIX": "/c/envs/other",
+                "CONDA_PREFIX_1": "/c",
+                "CONDA_PREFIX_2": "/c/envs/swane-env",
+                "CONDA_SHLVL": "3",
+            },
+            "/c/envs/swane-env",
+        ),
+        # A missing level in the stack does not stop the search.
+        (
+            {
+                "CONDA_PREFIX": "/c/envs/other",
+                "CONDA_PREFIX_3": "/x/swane-old",
+                "CONDA_SHLVL": "4",
+            },
+            "/x/swane-old",
+        ),
+        # The same environment at two levels is named once.
+        (
+            {
+                "CONDA_PREFIX": "/c/envs/swane-env",
+                "CONDA_PREFIX_1": "/c/envs/swane-env",
+                "CONDA_SHLVL": "2",
+            },
+            "/c/envs/swane-env",
+        ),
+        (
+            {
+                "CONDA_PREFIX": "/c/envs/swane-env",
+                "CONDA_PREFIX_1": "/c/envs/swane-fsl",
+                "CONDA_SHLVL": "2",
+            },
+            "/c/envs/swane-env, /c/envs/swane-fsl",
+        ),
+    ],
+)
+def test_refuse_swane_conda_env_dies(sh, env, active):
+    """R43: no active or stacked swane* environment."""
+    result = sh("refuse_swane_conda_env", env=env)
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "ERROR: The installer cannot run inside a SWANe conda environment "
+        '(active: %s): run "conda deactivate" until no swane* environment is '
+        "active (or open a new terminal), then rerun the installer" % active
+    )
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {},
+        {"CONDA_PREFIX": "/home/u/miniforge3", "CONDA_SHLVL": "1"},
+        # The name must start with "swane".
+        {"CONDA_PREFIX": "/c/envs/myswane", "CONDA_SHLVL": "1"},
+        {"CONDA_PREFIX": "/swane-root/envs/other", "CONDA_SHLVL": "1"},
+        {"CONDA_PREFIX": "/c/envs/other", "CONDA_PREFIX_1": "/c", "CONDA_SHLVL": "2"},
+        # Levels above CONDA_SHLVL are not active.
+        {
+            "CONDA_PREFIX": "/c",
+            "CONDA_PREFIX_5": "/c/envs/swane-env",
+            "CONDA_SHLVL": "1",
+        },
+        {"CONDA_PREFIX": "/c", "CONDA_SHLVL": "not-a-number"},
+        {
+            "CONDA_PREFIX": "/c",
+            "CONDA_PREFIX_101": "/c/envs/swane-env",
+            "CONDA_SHLVL": "99999999999999999999",
+        },
+    ],
+)
+def test_refuse_swane_conda_env_passes(sh, env):
+    result = sh("refuse_swane_conda_env", env=env)
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+
+
 # ---------------------------------------------------------------------------
 # Prompts
 # ---------------------------------------------------------------------------
@@ -1434,7 +1595,9 @@ def test_existing_env_is_updated_not_recreated(sh, stub):
     [
         ("Linux", "x86_64", False, False, "graphviz"),
         ("Darwin", "x86_64", True, False, "tensorflow>=2.18"),
-        ("Darwin", "x86_64", False, True, "graphviz"),
+        # R45: the TensorFlow spec is passed even when TensorFlow is there.
+        ("Darwin", "x86_64", False, True, "graphviz tensorflow>=2.18"),
+        ("Darwin", "x86_64", True, True, "tensorflow>=2.18"),
         ("Darwin", "x86_64", False, False, "graphviz tensorflow>=2.18"),
     ],
 )
@@ -1454,12 +1617,26 @@ def test_existing_env_installs_only_missing_packages(
     ]
 
 
-def test_existing_env_with_everything_on_macos_intel_installs_nothing(sh, stub):
+def test_existing_env_on_macos_intel_always_requests_tensorflow(sh, stub):
+    """R45: every update solve on macOS Intel carries the TensorFlow spec."""
     stub.platform("Darwin", "x86_64")
     stub("dot")
     conda = FakeConda(sh, stub)
     prefix = conda.root / "envs" / "swane-env"
     conda.add_env(prefix, tensorflow=True)
+    conda.set_envs(prefix)
+    assert _ensure(sh, conda).returncode == 0
+    assert conda.conda_calls("install") == [
+        "conda install -y -p %s %s tensorflow>=2.18" % (prefix, CHANNELS)
+    ]
+
+
+def test_existing_env_with_everything_on_macos_arm_installs_nothing(sh, stub):
+    stub.platform("Darwin", "arm64")
+    stub("dot")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    conda.add_env(prefix)
     conda.set_envs(prefix)
     assert _ensure(sh, conda).returncode == 0
     assert conda.conda_calls("install") == []
@@ -3183,6 +3360,93 @@ def test_launcher_is_atomic_and_replaces_the_old_one(sh):
     assert os.listdir(world.launcher.parent) == ["swane"]
 
 
+def _write_launcher_warnings(sh, world):
+    """Run write_launcher; return (result, SUMMARY_WARNINGS afterwards)."""
+    result = sh.code(
+        'write_launcher "$R" "$P"; printf "%s" "$SUMMARY_WARNINGS"',
+        env={"R": world.root, "P": world.prefix},
+    )
+    assert result.returncode == 0, result.stderr
+    return result, result.stdout
+
+
+def _foreign_warning(launcher, backup):
+    return (
+        "%s was not written by the SWANe installer: it was moved to %s and "
+        "replaced by the SWANe launcher" % (launcher, backup)
+    )
+
+
+def test_launcher_replaces_its_own_launcher_silently(sh):
+    """R46: a launcher of an earlier run (marker line) is no foreign file."""
+    world = LauncherWorld(sh)
+    world.write()
+    result, warnings = _write_launcher_warnings(sh, world)
+    assert warnings == ""
+    assert "WARNING" not in result.stderr
+    assert os.listdir(world.launcher.parent) == ["swane"]
+
+
+def test_launcher_backs_up_a_foreign_file(sh):
+    """R46: e.g. the entry point of an old ``pip install --user swane``."""
+    world = LauncherWorld(sh)
+    world.launcher.parent.mkdir(parents=True)
+    world.launcher.write_text("#!/usr/bin/python3\nfrom swane import main\n")
+    result, warnings = _write_launcher_warnings(sh, world)
+    backup = world.launcher.parent / "swane.bk"
+    assert warnings == _foreign_warning(world.launcher, backup)
+    assert "WARNING: %s" % warnings in result.stderr
+    assert backup.read_text() == "#!/usr/bin/python3\nfrom swane import main\n"
+    assert "SWANE_ENV_PREFIX=" in world.launcher.read_text()
+    assert sorted(os.listdir(world.launcher.parent)) == ["swane", "swane.bk"]
+
+
+def test_launcher_backs_up_a_symlink_not_its_target(sh):
+    world = LauncherWorld(sh)
+    target = sh.tmp / "elsewhere" / "swane"
+    make_executable(target, "echo other")
+    world.launcher.parent.mkdir(parents=True)
+    world.launcher.symlink_to(target)
+    _, warnings = _write_launcher_warnings(sh, world)
+    backup = world.launcher.parent / "swane.bk"
+    assert warnings == _foreign_warning(world.launcher, backup)
+    assert backup.is_symlink()
+    assert os.readlink(backup) == str(target)
+    assert target.read_text() == "#!%s\necho other\n" % BASH
+    assert not world.launcher.is_symlink()
+    assert "SWANE_ENV_PREFIX=" in world.launcher.read_text()
+
+
+def test_launcher_backup_takes_the_first_free_name(sh):
+    world = LauncherWorld(sh)
+    bin_dir = world.launcher.parent
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "swane.bk").write_text("first")
+    (bin_dir / "swane.bk.1").write_text("second")
+    # A dangling symlink takes its name too.
+    (bin_dir / "swane.bk.2").symlink_to(sh.tmp / "missing")
+    world.launcher.write_text("foreign")
+    _, warnings = _write_launcher_warnings(sh, world)
+    backup = bin_dir / "swane.bk.3"
+    assert warnings == _foreign_warning(world.launcher, backup)
+    assert backup.read_text() == "foreign"
+    assert (bin_dir / "swane.bk").read_text() == "first"
+    assert (bin_dir / "swane.bk.1").read_text() == "second"
+
+
+def test_launcher_backup_warning_reaches_the_summary(sh, stub):
+    world = InstallWorld(sh, stub)
+    world.launcher.parent.mkdir(parents=True)
+    world.launcher.write_text("foreign")
+    result = world.run(*E2E_ARGS)
+    assert result.returncode == 0, result.stderr
+    backup = world.launcher.parent / "swane.bk"
+    assert "WARNING: %s" % _foreign_warning(world.launcher, backup) in (
+        result.stdout.splitlines()
+    )
+    assert backup.read_text() == "foreign"
+
+
 def test_launcher_ignores_its_own_name_when_called_through_a_symlink(sh):
     """SWANE_LAUNCHER is the pinned install path, not $0."""
     world = LauncherWorld(sh)
@@ -3743,6 +4007,50 @@ def test_unknown_flag_exit_2(sh, stub):
     assert "Unknown option: --bogus" in result.stderr
     assert result.stdout == ""
     assert stub.calls() == []
+
+
+def test_main_refuses_to_run_inside_a_swane_env(sh, stub):
+    """R43: dies before any prompt, external call or file change."""
+    world = InstallWorld(sh, stub)
+    sh.tty_path.write_text("y\n")
+    result = world.run(
+        "--swane-spec",
+        "/x",
+        env={
+            "CONDA_PREFIX": "/c/envs/other",
+            "CONDA_PREFIX_1": world.env,
+            "CONDA_SHLVL": "2",
+        },
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "cannot run inside a SWANe conda environment (active: %s)" % world.env in (
+        result.stderr
+    )
+    assert "[y/N]" not in result.stderr
+    assert stub.calls() == []
+    assert not world.launcher.exists()
+    assert list(sh.home.iterdir()) == []
+
+
+def test_main_help_works_inside_a_swane_env(sh, stub):
+    world = InstallWorld(sh, stub)
+    result = world.run("--help", env={"CONDA_PREFIX": world.env})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("Usage: install_swane.sh")
+
+
+def test_main_under_rosetta_dies_before_downloading(sh, stub):
+    """R44: no conda found, so Miniforge would be next: never reached."""
+    world = InstallWorld(sh, stub, system="Darwin", machine="x86_64")
+    _stub_curl(sh, stub)
+    stub("sysctl", "echo 1")
+    result = world.run(*E2E_ARGS, env={"CONDA_EXE": None})
+    assert result.returncode == 1
+    assert ROSETTA_ERROR in result.stderr
+    assert [call.split()[0] for call in stub.calls()] == ["uname", "uname", "sysctl"]
+    assert stub.calls("curl") == []
+    assert result.stdout == ""
 
 
 def test_main_declined_system_setup_warns_in_the_summary(sh, stub):

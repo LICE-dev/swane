@@ -7,8 +7,10 @@ be reached:
 
 * the environment is rebuilt from scratch (no inherited ``FSLDIR``,
   ``CONDA_EXE``, ``CONDA_PREFIX``, ``SHELL``...): only ``HOME``, ``PATH``,
-  ``TMPDIR``, ``LANG``/``LC_ALL=C``, ``SWANE_TTY`` and the
-  ``SWANE_SYSTEM_*`` overrides, plus what the test passes;
+  ``TMPDIR``, ``LANG``/``LC_ALL=C``, ``SWANE_TTY``, the
+  ``SWANE_SYSTEM_*`` overrides and ``SWANE_SYSCTL`` (the ``sysctl`` stub's
+  path, so the real ``/usr/sbin/sysctl`` is never run), plus what the test
+  passes;
 * ``PATH`` is ``<stubdir>:<toolsdir>``. ``toolsdir`` holds symlinks to a
   whitelist of basic utilities (:data:`BASIC_TOOLS`); every tool under test
   (``uname``, ``conda``, ``sudo``, ``apt-get``, ``curl``, ``sha256sum``,
@@ -218,6 +220,8 @@ class Runner:
             "SWANE_TTY": str(self.tty_path),
             "SWANE_SYSTEM_CONDA_ROOTS": str(self.tmp / "no-system-conda"),
             "SWANE_SYSTEM_FSL_DIRS": str(self.tmp / "no-system-fsl"),
+            # The stub path: missing (no sysctl) until a test stubs it.
+            "SWANE_SYSCTL": str(self.stubs.dir / "sysctl"),
         }
         for key, value in (env or {}).items():
             if value is None:
