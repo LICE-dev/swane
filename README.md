@@ -92,8 +92,10 @@ Below the recommend software/package installation order to make sure SWANe works
 * Graphviz;
 * SWANe
 
-### Quick install (Linux/macOS)
-A single command builds a working SWANe environment: it reuses an existing conda (otherwise it installs Miniforge in `~/miniforge3`), creates a Python 3.12 environment named `swane-env`, installs SWANe and Graphviz in it, optionally installs a minimal FSL, and adds a `swane` launcher in `~/.local/bin`.
+### Installation
+
+#### Quick install (Linux/macOS)
+A single command builds a working SWANe environment: it reuses an existing conda (otherwise it installs Miniforge in `~/miniforge3`), creates a Python 3.12 environment named `swane-env`, installs SWANe in it (with Graphviz when no `dot` is already available), optionally installs a minimal FSL, and adds a `swane` launcher in `~/.local/bin`. The installer needs SWANe 0.2.5 or newer: it stops with an error if the SWANe it installed is older.
 ```
 curl -fsSL https://raw.githubusercontent.com/LICE-dev/swane/main/installer/install_swane.sh | bash
 ```
@@ -103,32 +105,35 @@ Options can be passed after `bash -s --`, for example `curl -fsSL <url> | bash -
 | --- | --- |
 | `--yes` | Answer yes to every prompt except the FSL licence. |
 | `--accept-fsl-license` | Accept the FSL licence without prompting. |
-| `--no-fsl` | Do not install or configure FSL. |
+| `--no-fsl` | Do not install or configure FSL (an FSL already wired into `swane-env` is kept). |
 | `--swane-spec SPEC` | pip requirement or local path to install (default: `swane`). |
 | `--miniforge-prefix DIR` | Where to install Miniforge when no conda is found (default: `~/miniforge3`). |
 | `-h`, `--help` | Show the help and exit. |
 
 What it installs and where:
 * conda: your existing one, or Miniforge in `~/miniforge3` (no `conda init`, `~/.condarc` untouched, the conda `defaults` channel is never used);
-* `swane-env`: Python 3.12, SWANe from PyPI (or `--swane-spec`), Graphviz (and TensorFlow from conda-forge on Intel Macs);
-* `swane-fsl` (optional): a minimal FSL, the oldest release supported by SWANe, activated together with `swane-env` (it sets `FSLDIR`, `FSLOUTPUTTYPE` and `PATH` only while `swane-env` is active). An FSL already installed and recent enough is reused;
+* `swane-env`: Python 3.12, SWANe from PyPI (or `--swane-spec`) with its pip dependencies (dcm2niix included), Graphviz only when no `dot` is already available, and TensorFlow from conda-forge on Intel Macs;
+* `swane-fsl` (optional): a minimal FSL, the oldest release supported by SWANe, in its own conda environment. FSL is wired into `swane-env` only through its activation hook: `FSLDIR`, `FSLOUTPUTTYPE` and `PATH` point at it only while `swane-env` is active (an FSL set up by your shell profile is moved out of the way meanwhile, and restored on deactivation). An FSL already installed and recent enough is reused instead;
 * on Linux, the system libraries needed by 3D Slicer and a `en_US.UTF-8` locale, through `sudo` (a failure only prints a warning);
-* `~/.local/bin/swane`, the launcher, and, when `~/.local/bin` is not on your `PATH`, a block delimited by `# >>> SWANe installer >>>` in your login profile. Open a new terminal, then run `swane`.
+* `~/.local/bin/swane`, the launcher, and, when `~/.local/bin` is not on your `PATH`, a block delimited by `# >>> SWANe installer >>>` in your login profile (`~/.zprofile`, `~/.bash_profile` or `~/.profile`) and, for bash and zsh, in `~/.bashrc` or `~/.zshrc`. Open a new terminal, then run `swane` (or run the launcher by its full path, printed at the end).
+
+FreeSurfer, the MATLAB Runtime and 3D Slicer are not installed by the installer: install them separately (see [Optional Dependencies](#optional-dependencies) and the [Wiki](https://github.com/LICE-dev/swane/wiki)).
 
 Every prompt is read from the terminal, so the command also works through `curl | bash`. Running the installer again updates the existing installation.
 
 > [!NOTE]
-FSL is free for non-commercial use under its own licence. The installer shows the FSL licence (https://fsl.fmrib.ox.ac.uk/fsl/docs/license.html) and installs FSL only if you type `yes`. `--yes` does not accept the FSL licence: use `--accept-fsl-license` (or `--no-fsl` to skip FSL).
+FSL is free for non-commercial use only, under its own licence (https://fsl.fmrib.ox.ac.uk/fsl/docs/license.html): installing it means accepting that licence. Before installing FSL the installer says so and links the licence, and it installs FSL only if you type `yes`. `--yes` does not accept the FSL licence: use `--accept-fsl-license` (or `--no-fsl` to skip FSL).
 
-To remove everything the installer created:
+To remove everything the installer created, use the conda printed on the `SWANe installer: conda` line of the summary (here the default Miniforge one):
 ```
-conda env remove -n swane-env
-conda env remove -n swane-fsl
+~/miniforge3/bin/conda env remove -n swane-env
+~/miniforge3/bin/conda env remove -n swane-fsl
 rm ~/.local/bin/swane
+rm -f ~/.local/share/applications/swane.desktop ~/.local/share/swane/swane-launcher.sh
 ```
-then delete the block from `# >>> SWANe installer >>>` to `# <<< SWANe installer <<<` in your login profile (`~/.zprofile`, `~/.bash_profile` or `~/.profile`) and, if you no longer need it, the Miniforge directory (`~/miniforge3`).
+then delete the block from `# >>> SWANe installer >>>` to `# <<< SWANe installer <<<` in your login profile (`~/.zprofile`, `~/.bash_profile` or `~/.profile`) and in `~/.bashrc` or `~/.zshrc` and, if you no longer need it, the Miniforge directory (`~/miniforge3`).
 
-### Manual installation
+#### Manual installation
 ```
 pip3 install swane
 ```

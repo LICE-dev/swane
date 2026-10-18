@@ -4,24 +4,18 @@ name: Installer tests
 # installer on clean hosted runners (Ubuntu, macOS arm64, macOS Intel),
 # installing the SWANe of the commit under test, with a check of the result
 # and a second run (the update path).
+#
+# Manual only (user decision): run it on demand with
+#   gh workflow run installer-tests.yml -r <branch>
+# which works once this file is on the default branch (dev).
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "installer/**"
-      - "setup.py"
-      - "swane/utils/fsl_conda.py"
-      - "swane/utils/DependencyManager.py"
-      - "swane/licenses/fsl.txt"
-      - "swane/tests/installer/**"
-      - ".github/scripts/check_installed_env.sh"
-      - ".github/workflows/installer-tests.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: installer-tests-${{ github.event.pull_request.number || github.ref }}
+  group: installer-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -120,6 +114,14 @@ jobs:
               ;;
           esac
           echo "Expected login profile: $expected_profile"
+          # The rc file of interactive non-login shells (shell_rc_file), which
+          # gets the same block; none for sh/dash.
+          case "$(basename -- "$SHELL" | tr '[:upper:]' '[:lower:]')" in
+            zsh) expected_rc="$HOME/.zshrc" ;;
+            bash) expected_rc="$HOME/.bashrc" ;;
+            *) expected_rc="" ;;
+          esac
+          echo "Expected rc file: ${expected_rc:-<none>}"
           IFS=: read -r -a path_dirs <<<"$PATH"
           new_path=""
           for dir in "${path_dirs[@]}"; do
@@ -149,6 +151,7 @@ jobs:
             echo "SUMMARY_2=$RUNNER_TEMP/installer-summary-2.txt"
             echo "EXPECTED_CONDA_ROOT=$expected_root"
             echo "EXPECTED_PROFILE=$expected_profile"
+            echo "EXPECTED_RC=$expected_rc"
             if [ -n "$conda_exe" ]; then
               echo "CONDA_EXE=$conda_exe"
             fi
@@ -183,9 +186,16 @@ jobs:
           apt_list="$(bash -c '. installer/install_swane.sh && printf "%s\n" "$APT_PACKAGES"')"
           read -r -a packages <<<"$apt_list"
           [ "${#packages[@]}" -gt 0 ] || { echo "::error::Could not read APT_PACKAGES from the installer"; exit 1; }
+          native_arch="$(dpkg --print-architecture)"
+          # The package of the native architecture (on a multi-arch host
+          # dpkg-query prints one status per architecture), else the plain
+          # name for an "Architecture: all" package; first status line only.
           installed() {
+            local status
             # shellcheck disable=SC2016 # dpkg-query format, not a shell expansion
-            [ "$(dpkg-query -W -f='${Status}' "$1" 2>/dev/null || true)" = "install ok installed" ]
+            status="$(dpkg-query -W -f='${Status}\n' "$1:$native_arch" 2>/dev/null ||
+              dpkg-query -W -f='${Status}\n' "$1" 2>/dev/null || true)"
+            [ "$(printf '%s\n' "$status" | head -n 1)" = "install ok installed" ]
           }
           missing=""
           for pkg in "${packages[@]}"; do
@@ -217,15 +227,34 @@ jobs:
             echo "::error::swane resolves to '$resolved' in a $SHELL login shell, not $HOME/.local/bin/swane"
             exit 1
           fi
-      # As users run it: the script on stdin ("curl ... | bash -s -- ...").
-      - name: Run the installer again from stdin (update path)
+      # Linux terminals start interactive non-login shells, which read only
+      # the rc file: swane must be found there too.
+      - name: Check swane in an interactive non-login shell
+        if: ${{ env.EXPECTED_RC != '' }}
+        shell: bash
+        run: |
+          # shellcheck disable=SC2016 # expanded by the interactive shell
+          output="$(env -i HOME="$HOME" USER="$USER" LOGNAME="${LOGNAME:-$USER}" \
+            SHELL="$SHELL" TERM=dumb PATH=/usr/bin:/bin \
+            "$SHELL" -ic 'printf "SWANE_RESOLVED=%s\n" "$(command -v swane)"' </dev/null)"
+          echo "$output"
+          resolved="$(printf '%s\n' "$output" | sed -n 's/^SWANE_RESOLVED=//p' | tail -n 1)"
+          if [ "$resolved" != "$HOME/.local/bin/swane" ]; then
+            echo "::error::swane resolves to '$resolved' in an interactive $SHELL, not $HOME/.local/bin/swane"
+            exit 1
+          fi
+      # As users run it: the script through a pipe ("curl ... | bash -s --
+      # ..."); pipefail keeps an installer failure.
+      - name: Run the installer again from a pipe (update path)
         shell: bash
         run: |
           if [ "$CONDA_MODE" = fresh ]; then
             unset CONDA_EXE
           fi
-          /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" \
-            < installer/install_swane.sh | tee "$SUMMARY_2"
+          # shellcheck disable=SC2002 # a real pipe, as with curl
+          cat installer/install_swane.sh |
+            /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" |
+            tee "$SUMMARY_2"
           grep -qE '^SWANe installer: FSL .* existing$' "$SUMMARY_2" ||
             { echo "::error::Expected the second run to reuse the FSL of the first one"; exit 1; }
           first="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_1")"
@@ -251,6 +280,13 @@ jobs:
           if [ "$blocks" != 1 ]; then
             echo "::error::Expected one SWANe PATH block in the login profiles, found $blocks"
             exit 1
+          fi
+          if [ -n "$EXPECTED_RC" ]; then
+            in_rc="$(grep -c '^# >>> SWANe installer >>>$' "$EXPECTED_RC" 2>/dev/null || true)"
+            if [ "$in_rc" != 1 ]; then
+              echo "::error::Expected one SWANe PATH block in $EXPECTED_RC, found ${in_rc:-none}"
+              exit 1
+            fi
           fi
       - name: Check the environment after the second run
         shell: bash
