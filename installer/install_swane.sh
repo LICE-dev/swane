@@ -21,6 +21,11 @@ set -euo pipefail
 
 INSTALLER_URL="https://raw.githubusercontent.com/LICE-dev/swane/main/installer/install_swane.sh"
 MINIFORGE_RELEASES_URL="https://github.com/conda-forge/miniforge/releases"
+# The Miniforge release installed when no conda is found, pinned with the
+# SHA-256 of its four installers (miniforge_sha256). To bump it, update
+# MINIFORGE_VERSION and the four hashes together, from that release's
+# .sha256 files.
+MINIFORGE_VERSION="26.7.2-0"
 
 # The PATH the installer started with, before any conda activation: later
 # steps check it for a system "dot" and for ~/.local/bin.
@@ -42,10 +47,6 @@ MINIFORGE_PREFIX="${MINIFORGE_PREFIX:-$HOME/miniforge3}"
 # System-wide conda roots probed after the user's own (space-separated;
 # overridable so tests never see the machine's real conda).
 SWANE_SYSTEM_CONDA_ROOTS="${SWANE_SYSTEM_CONDA_ROOTS-/opt/conda}"
-
-# Locale definitions file edited (through sudo) when en_US.UTF-8 is missing.
-# Overridable so tests never point at the real /etc/locale.gen.
-SWANE_LOCALE_GEN_FILE="${SWANE_LOCALE_GEN_FILE:-/etc/locale.gen}"
 
 # Terminal the prompts read from. Under "curl ... | bash" stdin is the script
 # itself, so prompts must never read stdin. Overridable for tests.
@@ -266,30 +267,6 @@ download() {
     fi
 }
 
-# miniforge_latest_tag: print the tag of Miniforge's latest release, read
-# from the redirect of releases/latest. Only the versioned installers have a
-# published .sha256 file.
-miniforge_latest_tag() {
-    local url="" tag
-    if have_command curl; then
-        url="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$MINIFORGE_RELEASES_URL/latest")" || return 1
-    elif have_command wget; then
-        url="$(wget -S --spider "$MINIFORGE_RELEASES_URL/latest" 2>&1 |
-            sed -n 's/^ *[Ll]ocation: *\([^ ]*\).*/\1/p' | tail -n 1)" || return 1
-    else
-        die "Neither curl nor wget is available: install one of them and rerun"
-    fi
-    case "$url" in
-        */releases/tag/*) tag="${url##*/releases/tag/}" ;;
-        *) return 1 ;;
-    esac
-    tag="$(printf '%s' "$tag" | tr -d '\r')"
-    case "$tag" in
-        "" | *[!A-Za-z0-9._-]*) return 1 ;;
-    esac
-    printf '%s\n' "$tag"
-}
-
 # sha256_of FILE: print the SHA-256 of FILE (sha256sum on Linux, shasum on
 # macOS).
 sha256_of() {
@@ -304,12 +281,51 @@ sha256_of() {
     printf '%s\n' "${line%% *}"
 }
 
-# install_miniforge PREFIX: download the latest Miniforge installer for this
-# platform, verify its published SHA-256 and install it in batch mode into
-# PREFIX; print PREFIX. Never runs "conda init": the user's shell startup
-# files are not touched.
+# miniforge_asset: print the name of the MINIFORGE_VERSION installer for this
+# machine, Miniforge3-<version>-<Linux|MacOSX>-<arch>.sh, with the machine
+# name normalised as detect_platform accepts it (Linux amd64 -> x86_64,
+# arm64 -> aarch64; macOS aarch64 -> arm64); die on any other platform.
+miniforge_asset() {
+    local os arch
+    os="$(uname -s)"
+    arch="$(uname -m)"
+    case "$os/$arch" in
+        Linux/x86_64 | Linux/amd64) printf 'Miniforge3-%s-Linux-x86_64.sh\n' "$MINIFORGE_VERSION" ;;
+        Linux/aarch64 | Linux/arm64) printf 'Miniforge3-%s-Linux-aarch64.sh\n' "$MINIFORGE_VERSION" ;;
+        Darwin/x86_64) printf 'Miniforge3-%s-MacOSX-x86_64.sh\n' "$MINIFORGE_VERSION" ;;
+        Darwin/arm64 | Darwin/aarch64) printf 'Miniforge3-%s-MacOSX-arm64.sh\n' "$MINIFORGE_VERSION" ;;
+        *) die "No Miniforge installer for this platform: $os $arch" ;;
+    esac
+}
+
+# miniforge_sha256 NAME: print the SHA-256 of the Miniforge installer NAME
+# (one of the four miniforge_asset names of MINIFORGE_VERSION); return 1 for
+# any other name.
+miniforge_sha256() {
+    case "$1" in
+        "Miniforge3-$MINIFORGE_VERSION-Linux-x86_64.sh")
+            printf '%s\n' 281b0ac7d550802efc81af633225a5e6116d29ae72f3ab4eae7168c3931a4c05
+            ;;
+        "Miniforge3-$MINIFORGE_VERSION-Linux-aarch64.sh")
+            printf '%s\n' 89b786c8d2c8b0fda7553914c1314ae4ddaa094503802f279377b19ac4463cb2
+            ;;
+        "Miniforge3-$MINIFORGE_VERSION-MacOSX-x86_64.sh")
+            printf '%s\n' b00e7798658f92721a3ae2f6b9832695ffc6baf07758894d726268055359f6c5
+            ;;
+        "Miniforge3-$MINIFORGE_VERSION-MacOSX-arm64.sh")
+            printf '%s\n' d70bfa2e97afcda96927c9b9ca0e2316cb7750e4ce651c94388267cbe9588711
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+# install_miniforge PREFIX: download the Miniforge MINIFORGE_VERSION
+# installer for this platform, verify it against the SHA-256 embedded in
+# this script (miniforge_sha256) and install it in batch mode into PREFIX;
+# print PREFIX. Never runs "conda init": the user's shell startup files are
+# not touched.
 install_miniforge() {
-    local prefix="$1" os arch tag name url workdir expected actual
+    local prefix="$1" name url workdir expected actual
     if is_fsl_root "$prefix"; then
         die "$prefix is an FSL installation: choose another --miniforge-prefix"
     fi
@@ -321,25 +337,17 @@ install_miniforge() {
     if [ -e "$prefix" ]; then
         die "$prefix exists but is not a conda installation: remove it or choose another --miniforge-prefix"
     fi
-    os="$(uname -s)"
-    arch="$(uname -m)"
-    case "$os" in
-        Linux) ;;
-        Darwin) os="MacOSX" ;;
-        *) die "Unsupported operating system for Miniforge: $os" ;;
-    esac
-    tag="$(miniforge_latest_tag)" || die "Could not find the latest Miniforge release at $MINIFORGE_RELEASES_URL"
-    name="Miniforge3-$tag-$os-$arch.sh"
-    url="$MINIFORGE_RELEASES_URL/download/$tag/$name"
+    name="$(miniforge_asset)" || exit 1
+    expected="$(miniforge_sha256 "$name")" || die "No SHA-256 recorded for $name"
+    url="$MINIFORGE_RELEASES_URL/download/$MINIFORGE_VERSION/$name"
     workdir="$(mktemp -d "${TMPDIR:-/tmp}/swane-miniforge.XXXXXX")" || die "Could not create a temporary directory"
     log_info "Downloading $url"
-    if ! download "$url" "$workdir/$name" || ! download "$url.sha256" "$workdir/$name.sha256"; then
+    if ! download "$url" "$workdir/$name"; then
         rm -rf "$workdir"
         die "Could not download Miniforge from $url"
     fi
-    expected="$(sed -n '1s/^\([0-9A-Fa-f]*\).*/\1/p' "$workdir/$name.sha256" | tr 'A-F' 'a-f')"
     actual="$(sha256_of "$workdir/$name" | tr 'A-F' 'a-f')"
-    if [ "${#expected}" -ne 64 ] || [ "$expected" != "$actual" ]; then
+    if [ "$expected" != "$actual" ]; then
         rm -rf "$workdir"
         die "Miniforge checksum mismatch for $name (expected '$expected', got '$actual'): download not used"
     fi
@@ -355,13 +363,21 @@ install_miniforge() {
 }
 
 # ---------------------------------------------------------------------------
-# Linux system packages and locale (sudo steps: warn and continue)
+# Linux system packages and locale (sudo steps: asked once, warn and continue)
 # ---------------------------------------------------------------------------
 
 # Packages the 3D Slicer binaries need (the list of the Windows/Linux test
-# workflow, without the virtual display server), then libasound2t64 or
-# libasound2 depending on the release.
-APT_PACKAGES="libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 dc bc"
+# workflow, without the virtual display server), plus tcsh (FreeSurfer's
+# recon-all runs /bin/tcsh) and unzip (FreeSurfer's fs_install_mcr unpacks
+# the MATLAB Runtime with it), then libasound2t64 or libasound2 depending on
+# the release.
+APT_PACKAGES="libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 dc bc tcsh unzip"
+
+# What to do by hand when the en_US.UTF-8 locale is missing. The installer
+# only runs "locale-gen en_US.UTF-8" and never edits files under /etc: where
+# locale-gen generates only the locales enabled in the system's
+# configuration (Debian), that is up to the user.
+LOCALE_HINT="enable en_US.UTF-8 in your system's locale configuration and generate it (sudo locale-gen en_US.UTF-8 on Ubuntu), or FSL may report a missing locale"
 
 is_linux() {
     [ "$(uname -s)" = "Linux" ]
@@ -383,20 +399,60 @@ run_privileged() {
     fi
 }
 
+# apt_install_hint: print the apt-get command that installs the packages
+# 3D Slicer needs (the manual form of install_linux_packages), as a shell
+# command users can paste. Its libasound2 alternative is APT_ALSA_NOTE,
+# prose kept outside the command.
+apt_install_hint() {
+    printf 'apt-get install --no-install-recommends %s libasound2t64\n' "$APT_PACKAGES"
+}
+APT_ALSA_NOTE="on releases without libasound2t64, install libasound2 instead"
+
+# deb_installed PACKAGE ARCH: return 0 if dpkg reports PACKAGE installed:
+# PACKAGE:ARCH (the native architecture; on a multi-arch host dpkg-query
+# prints one status per architecture) when dpkg knows it, else the plain
+# name (an "Architecture: all" package). ARCH may be empty.
+deb_installed() {
+    local status=""
+    if [ -n "$2" ]; then
+        # shellcheck disable=SC2016 # a dpkg-query format, not an expansion
+        status="$(dpkg-query -W -f='${Status}\n' "$1:$2" 2>/dev/null)" || status=""
+    fi
+    if [ -z "$status" ]; then
+        # shellcheck disable=SC2016 # a dpkg-query format, not an expansion
+        status="$(dpkg-query -W -f='${Status}\n' "$1" 2>/dev/null)" || status=""
+    fi
+    # "<want> ok installed": "install", or "hold" for a package the user put
+    # on hold (still installed).
+    case "$(printf '%s\n' "$status" | head -n 1)" in
+        *" ok installed") return 0 ;;
+    esac
+    return 1
+}
+
+# linux_packages_installed: return 0 if dpkg reports every APT_PACKAGES
+# package and libasound2t64 or libasound2 installed; return 1 otherwise, or
+# when there is no dpkg-query (the packages are then installed again, which
+# is harmless).
+linux_packages_installed() {
+    local arch pkg
+    have_command dpkg-query || return 1
+    arch="$(dpkg --print-architecture 2>/dev/null)" || arch=""
+    # Word splitting is intended: the variable is a space-separated list.
+    for pkg in $APT_PACKAGES; do
+        deb_installed "$pkg" "$arch" || return 1
+    done
+    deb_installed libasound2t64 "$arch" || deb_installed libasound2 "$arch"
+}
+
 # install_linux_packages: install APT_PACKAGES and libasound2t64 (or
-# libasound2) with apt-get. No-op off Linux. Every failure is a warning, never
-# an error: SWANe itself works without them, only 3D Slicer needs them.
-# Call it directly (not inside $(...)) so the warnings reach SUMMARY_WARNINGS.
+# libasound2) with apt-get, through run_privileged. No-op off Linux. Only
+# linux_system_step decides whether it runs. Every failure is a warning,
+# never an error: SWANe itself works without them, only 3D Slicer needs
+# them. Call it directly (not inside $(...)) so the warnings reach
+# SUMMARY_WARNINGS.
 install_linux_packages() {
     is_linux || return 0
-    if ! have_command apt-get; then
-        log_warn "apt-get not found: install these packages with your system package manager (3D Slicer needs them): $APT_PACKAGES, and libasound2t64 or libasound2"
-        return 0
-    fi
-    if ! can_run_privileged; then
-        log_warn "sudo not found and not running as root: install these packages as root (3D Slicer needs them): $APT_PACKAGES, and libasound2t64 or libasound2"
-        return 0
-    fi
     log_info "Installing system packages for 3D Slicer"
     # DPkg::Lock::Timeout: wait up to 5 minutes for the dpkg lock (held by
     # unattended-upgrades on a freshly booted machine) instead of failing.
@@ -423,26 +479,95 @@ has_en_us_locale() {
     printf '%s\n' "$listing" | grep -Eiq '^en_US\.utf-?8$'
 }
 
-# ensure_locale: make the en_US.UTF-8 locale available (the FSL check needs
-# it). No-op off Linux or when it already exists. Failures are warnings.
+# ensure_locale: generate the en_US.UTF-8 locale (the FSL check needs it)
+# with "locale-gen en_US.UTF-8" through run_privileged, then check that it
+# exists. No file under /etc is ever edited. No-op off Linux or when the
+# locale already exists; only linux_system_step decides whether it runs.
+# Failures are warnings.
 ensure_locale() {
     is_linux || return 0
     if has_en_us_locale; then
         return 0
     fi
-    if ! can_run_privileged; then
-        log_warn "The en_US.UTF-8 locale is missing and sudo is not available: generate it as root (locale-gen en_US.UTF-8)"
+    log_info "Generating the en_US.UTF-8 locale"
+    if ! run_privileged locale-gen en_US.UTF-8; then
+        log_warn "locale-gen en_US.UTF-8 failed: $LOCALE_HINT"
         return 0
     fi
-    log_info "Generating the en_US.UTF-8 locale"
-    if [ -f "$SWANE_LOCALE_GEN_FILE" ]; then
-        if ! run_privileged sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' "$SWANE_LOCALE_GEN_FILE"; then
-            log_warn "Could not enable en_US.UTF-8 in $SWANE_LOCALE_GEN_FILE"
+    if ! has_en_us_locale; then
+        log_warn "The en_US.UTF-8 locale is still missing after locale-gen en_US.UTF-8: $LOCALE_HINT"
+    fi
+    return 0
+}
+
+# linux_system_step: the Linux system setup, the only place that decides
+# whether anything runs with sudo. No-op off Linux.
+#   - apt-get, and sudo (or root): when packages (checked with dpkg-query)
+#     or the en_US.UTF-8 locale are missing, ONE question names the steps
+#     that would run privileged (--yes answers yes; no terminal without
+#     --yes stops the installer, as every prompt does). Yes: they run.
+#     No: nothing runs with sudo, and one warning gives the commands to run
+#     by hand. Nothing missing: no question.
+#   - apt-get without sudo (non-root): warnings with the manual commands.
+#   - no apt-get: warnings only, never sudo (locale-gen alone could not
+#     enable a locale such systems configure under /etc).
+# Call it directly (not inside $(...)): it reads the terminal and warns.
+linux_system_step() {
+    local need_packages=0 need_locale=0 reasons="" commands=""
+    is_linux || return 0
+    has_en_us_locale || need_locale=1
+    if ! have_command apt-get; then
+        log_warn "apt-get not found: install these packages with your system package manager (3D Slicer needs them): $APT_PACKAGES, and libasound2t64 or libasound2"
+        if [ "$need_locale" = 1 ]; then
+            log_warn "The en_US.UTF-8 locale is missing: $LOCALE_HINT"
         fi
+        return 0
     fi
-    if ! run_privileged locale-gen en_US.UTF-8; then
-        log_warn "locale-gen en_US.UTF-8 failed: FSL may report a missing locale"
+    linux_packages_installed || need_packages=1
+    if [ "$need_packages" = 0 ] && [ "$need_locale" = 0 ]; then
+        log_info "The system packages for 3D Slicer and the en_US.UTF-8 locale are already installed"
+        return 0
     fi
+    if ! can_run_privileged; then
+        if [ "$need_packages" = 1 ]; then
+            log_warn "sudo not found and not running as root: install the packages 3D Slicer needs as root ($APT_ALSA_NOTE): $(apt_install_hint)"
+        fi
+        if [ "$need_locale" = 1 ]; then
+            log_warn "The en_US.UTF-8 locale is missing and sudo is not available: $LOCALE_HINT"
+        fi
+        return 0
+    fi
+    if [ "${EUID:-1}" = "0" ]; then
+        log_info "Linux system setup: these steps run as root:"
+    else
+        log_info "Linux system setup: these steps run with sudo, which may ask for your password:"
+    fi
+    if [ "$need_packages" = 1 ]; then
+        log_info "  - install the system packages 3D Slicer needs: apt-get update, then apt-get install $APT_PACKAGES, and libasound2t64 or libasound2"
+    fi
+    if [ "$need_locale" = 1 ]; then
+        log_info "  - generate the en_US.UTF-8 locale FSL needs: locale-gen en_US.UTF-8"
+    fi
+    if prompt_yes_no "Run the Linux system setup steps above?"; then
+        if [ "$need_packages" = 1 ]; then
+            install_linux_packages
+        fi
+        if [ "$need_locale" = 1 ]; then
+            ensure_locale
+        fi
+        return 0
+    fi
+    # The reasons first, then every manual command as one shell line that
+    # can be pasted as is (nothing but commands after "run:").
+    if [ "$need_packages" = 1 ]; then
+        reasons="3D Slicer may not start without its system packages ($APT_ALSA_NOTE)"
+        commands="sudo apt-get update && sudo $(apt_install_hint)"
+    fi
+    if [ "$need_locale" = 1 ]; then
+        reasons="${reasons:+$reasons, and }FSL may report a missing locale"
+        commands="${commands:+$commands; }sudo locale-gen en_US.UTF-8"
+    fi
+    log_warn "Linux system setup declined, nothing was run with sudo: $reasons. To set it up by hand, run: $commands"
     return 0
 }
 
@@ -1305,9 +1430,15 @@ fsl_step() {
 # standalone script that activates ENV_PREFIX (by absolute prefix, never by
 # name) with ROOT's conda and execs SWANe. When swane-env is gone it removes
 # the Linux menu entry and itself instead. The pinned assignments are one
-# single-quoted line each, so CI can read them back.
+# single-quoted line each, so CI can read them back. On Linux it also sets
+# QT_QPA_PLATFORM=xcb (Qt through X11, or XWayland in a Wayland session) for
+# SWANe and what it starts, unless the user set QT_QPA_PLATFORM: a value of
+# the user's always wins, and no shell startup file is touched for it.
 write_launcher() {
-    local root="$1" env_prefix="$2" bin_dir dest tmp
+    local root="$1" env_prefix="$2" bin_dir dest tmp qt_platform=0
+    if is_linux; then
+        qt_platform=1
+    fi
     case "$root$env_prefix" in
         *"
 "*) die "The conda root or environment path contains a newline" ;;
@@ -1339,8 +1470,18 @@ conda activate "$SWANE_ENV_PREFIX" || exit 1
 export SWANE_LAUNCHER
 # Never let ~/.local packages shadow the ones of swane-env.
 export PYTHONNOUSERSITE=1
-exec "$SWANE_ENV_PREFIX/bin/swane" "$@"
 LAUNCHER
+        if [ "$qt_platform" = 1 ]; then
+            cat <<'LAUNCHER'
+# Linux: Qt's xcb platform (X11, or XWayland under Wayland) unless the user
+# chose a platform.
+if [ -z "${QT_QPA_PLATFORM:-}" ]; then
+    export QT_QPA_PLATFORM=xcb
+fi
+LAUNCHER
+        fi
+        # shellcheck disable=SC2016 # expanded by the launcher
+        printf '%s\n' 'exec "$SWANE_ENV_PREFIX/bin/swane" "$@"'
     } >"$tmp" || {
         rm -f "$tmp"
         die "Could not write $dest"
@@ -1352,34 +1493,35 @@ LAUNCHER
     log_info "Launcher written: $dest"
 }
 
-# login_profile: print the login profile of the user's shell (the first
-# entries of fsl_conflict_handler.SHELL_PROFILE); return 1 for any other shell.
-login_profile() {
-    local shell_name
-    shell_name="$(basename -- "${SHELL:-}" | tr '[:upper:]' '[:lower:]')"
-    case "$shell_name" in
-        zsh) printf '%s\n' "$HOME/.zprofile" ;;
-        bash)
-            if [ -f "$HOME/.bash_profile" ]; then
-                printf '%s\n' "$HOME/.bash_profile"
-            else
-                printf '%s\n' "$HOME/.profile"
-            fi
-            ;;
-        sh | dash) printf '%s\n' "$HOME/.profile" ;;
-        *) return 1 ;;
-    esac
-}
-
-# shell_rc_file: print the startup file of the user's interactive non-login
-# shells (~/.bashrc for bash, ~/.zshrc for zsh): Linux terminals start those,
-# which do not read the login profile. Return 1 for any other shell.
-shell_rc_file() {
-    local shell_name
+# path_startup_file: print the one startup file of the user's shell ($SHELL)
+# that gets the PATH block: the file the shells of a new terminal read.
+#   - zsh: ~/.zshrc (every interactive zsh, login or not, reads it);
+#   - bash on Linux: ~/.bashrc (terminals start interactive non-login shells);
+#   - bash on macOS: ~/.bash_profile (Terminal starts login shells, and a
+#     bash login shell never reads ~/.bashrc). When it does not exist but
+#     ~/.bash_login or ~/.profile does, that file instead: bash reads only the
+#     first of the three, so creating ~/.bash_profile would hide it;
+#   - sh, dash: ~/.profile.
+# Return 1 for any other shell.
+path_startup_file() {
+    local shell_name file
     shell_name="$(basename -- "${SHELL:-}" | tr '[:upper:]' '[:lower:]')"
     case "$shell_name" in
         zsh) printf '%s\n' "$HOME/.zshrc" ;;
-        bash) printf '%s\n' "$HOME/.bashrc" ;;
+        bash)
+            if is_linux; then
+                printf '%s\n' "$HOME/.bashrc"
+                return 0
+            fi
+            for file in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+                if [ -f "$file" ]; then
+                    printf '%s\n' "$file"
+                    return 0
+                fi
+            done
+            printf '%s\n' "$HOME/.bash_profile"
+            ;;
+        sh | dash) printf '%s\n' "$HOME/.profile" ;;
         *) return 1 ;;
     esac
 }
@@ -1389,8 +1531,9 @@ PATH_BLOCK_END="# <<< SWANe installer <<<"
 
 # add_path_block FILE: append to FILE (created if missing) the block that
 # puts ~/.local/bin on PATH, unless FILE already holds it. The block adds the
-# entry only when PATH lacks it, so a profile that also sources the rc file
-# never duplicates it. Return 1 if FILE cannot be written.
+# entry only when PATH lacks it, so a shell that reads it twice (a profile
+# sourcing the rc file) never duplicates it. Return 1 if FILE cannot be
+# written.
 add_path_block() {
     local file="$1" lead=""
     if [ -f "$file" ] && grep -qF "$PATH_BLOCK_BEGIN" "$file"; then
@@ -1414,29 +1557,25 @@ add_path_block() {
     log_info "Added ~/.local/bin to PATH in $file"
 }
 
-# ensure_local_bin_on_path: add ~/.local/bin to PATH through the login
-# profile and, for bash and zsh, the rc file of interactive shells, unless the
+# ensure_local_bin_on_path: add ~/.local/bin to PATH through the one
+# startup file path_startup_file picks (no other file is written), unless the
 # starting PATH already has it; a file already holding the block is left
 # alone. Call it directly (not inside $(...)): a warning must reach
 # SUMMARY_WARNINGS.
 ensure_local_bin_on_path() {
-    local profile rc_file
+    local file
     case ":$ORIGINAL_PATH:" in
         *":$HOME/.local/bin:"* | *":$HOME/.local/bin/:"*)
             log_info "$HOME/.local/bin is already on PATH"
             return 0
             ;;
     esac
-    if ! profile="$(login_profile)"; then
-        log_warn "Unknown shell: add this line to your shell profile to run swane: export PATH=\"\$HOME/.local/bin:\$PATH\""
+    if ! file="$(path_startup_file)"; then
+        log_warn "Unknown shell: add this line to your shell startup file to run swane: export PATH=\"\$HOME/.local/bin:\$PATH\""
         return 0
     fi
-    add_path_block "$profile" ||
-        log_warn "Could not update $profile: add ~/.local/bin to PATH to run swane"
-    if rc_file="$(shell_rc_file)"; then
-        add_path_block "$rc_file" ||
-            log_warn "Could not update $rc_file: add ~/.local/bin to PATH to run swane"
-    fi
+    add_path_block "$file" ||
+        log_warn "Could not update $file: add ~/.local/bin to PATH to run swane"
     return 0
 }
 
@@ -1457,8 +1596,14 @@ Options:
   --yes                    Answer yes to every prompt except the FSL licence.
   --accept-fsl-license     Accept the FSL licence without prompting.
   --no-fsl                 Do not install or configure FSL.
-  --swane-spec SPEC        pip requirement or local path to install
-                           (default: swane).
+  --swane-spec SPEC        What to install as SWANe, passed verbatim to
+                           "pip install -U" (default: swane, the latest
+                           release on PyPI). SWANe $SWANE_MIN_VERSION or newer is
+                           required. Accepted forms, for example:
+                             a PyPI version   swane==0.2.5
+                             a local checkout /path/to/swane
+                             a git URL        git+https://github.com/LICE-dev/swane.git@<branch>
+                             a wheel file     /path/to/swane-0.2.5-py3-none-any.whl
   --miniforge-prefix DIR   Where to install Miniforge when no conda is found
                            (default: ~/miniforge3).
   -h, --help               Show this help and exit.
@@ -1529,18 +1674,6 @@ parse_args() {
 # Main flow and summary
 # ---------------------------------------------------------------------------
 
-# sudo_notice: on Linux, say once, before the system steps, that sudo may ask
-# for the password; only when one of them will run sudo as a non-root user
-# (apt-get is there, or the en_US.UTF-8 locale is missing). No prompt.
-sudo_notice() {
-    is_linux || return 0
-    have_command sudo || return 0
-    [ "${EUID:-1}" != "0" ] || return 0
-    if have_command apt-get || ! has_en_us_locale; then
-        log_info "Linux system setup (packages for 3D Slicer, en_US.UTF-8 locale) runs sudo: sudo may ask for your password"
-    fi
-}
-
 # print_summary ROOT: print on stdout what the run did, from SWANE_ENV_PREFIX,
 # FSL_RESULT_* and SUMMARY_WARNINGS. CI reads these lines: keep their
 # prefixes.
@@ -1579,9 +1712,7 @@ install_flow() {
         root="$(install_miniforge "$MINIFORGE_PREFIX")" || exit 1
     fi
     warn_old_conda "$root"
-    sudo_notice
-    install_linux_packages
-    ensure_locale
+    linux_system_step
     ensure_swane_env "$root" "$SWANE_SPEC"
     fsl_step "$root" "$SWANE_ENV_PREFIX"
     write_launcher "$root" "$SWANE_ENV_PREFIX"
