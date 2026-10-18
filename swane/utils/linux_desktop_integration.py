@@ -17,6 +17,20 @@ def _launcher_script_path() -> str:
     return os.path.join(_data_home(), "swane", "swane-launcher.sh")
 
 
+def _launch_target() -> str:
+    """
+    Return the executable the generated launcher script must run.
+
+    The SWANE_LAUNCHER environment variable (exported by the installer's
+    ``~/.local/bin/swane`` launcher) wins when it names an existing executable file;
+    otherwise the real path of the running SWANe executable is used.
+    """
+    candidate = os.environ.get("SWANE_LAUNCHER")
+    if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+        return candidate
+    return os.path.realpath(sys.argv[0])
+
+
 def _refresh_desktop_database(applications_dir: str) -> None:
     if is_command_available("update-desktop-database"):
         subprocess.run(
@@ -55,7 +69,9 @@ def ensure_desktop_entry(icon_path: str) -> None:
     .desktop entry itself. pip has no uninstall hooks, so a file created outside of
     the package's own install records is never cleaned up by `pip uninstall`; this
     self-healing indirection is what avoids leaving a stale/broken menu entry behind
-    without requiring the user to run any manual cleanup command.
+    without requiring the user to run any manual cleanup command. If the
+    SWANE_LAUNCHER environment variable names an executable file, the generated
+    script runs that launcher instead of the current process's executable.
 
     This is a no-op on non-Linux platforms and never raises: desktop integration is
     cosmetic and must not prevent SWANe from starting.
@@ -66,7 +82,7 @@ def ensure_desktop_entry(icon_path: str) -> None:
         return
 
     try:
-        exec_path = os.path.realpath(sys.argv[0])
+        exec_path = _launch_target()
         desktop_file = _desktop_file_path()
         launcher_script = _launcher_script_path()
 

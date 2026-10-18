@@ -32,8 +32,8 @@ runs:
       env:
         FSL_RELEASE: ${{ inputs.release }}
       run: |
-        python swane/tests/prerelease/ci_fsl_env.py --release "$FSL_RELEASE"
-        python swane/tests/prerelease/ci_fsl_env.py --release "$FSL_RELEASE" \
+        python swane/utils/fsl_conda.py --release "$FSL_RELEASE"
+        python swane/utils/fsl_conda.py --release "$FSL_RELEASE" \
           --format github | tr -d '\r' >> "$GITHUB_OUTPUT"
 
     - uses: mamba-org/setup-micromamba@v3
