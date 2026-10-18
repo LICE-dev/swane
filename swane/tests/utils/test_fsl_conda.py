@@ -69,7 +69,7 @@ def test_missing_platform_or_release_fails(manifest):
 
 
 def test_pinned_specs_takes_the_release_versions():
-    """R37: fsl-installer is pinned to 3.21.0, never to the release's own
+    """The fsl-installer is pinned to 3.21.0, never to the release's own
     (FSL 6.0.7.8 lists 3.9.0, which ships no createFSLWrapper)."""
     versions = {**_full("1"), "fsl-installer": "3.9.0", "fsl-other": "9"}
     specs = fsl_conda.pinned_specs(_environment(versions))

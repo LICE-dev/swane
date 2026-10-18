@@ -12,17 +12,17 @@
 # "true" (macOS Intel), TensorFlow; then deactivates it and checks that the
 # FSL hook undid its changes.
 #
-# Optional, for the update-path phases (Ruling R48): EXPECT_FSLDIR, the
+# Optional, for the update-path phases: EXPECT_FSLDIR, the
 # FSLDIR the hook must set; EXPECT_INSTALLER_FSL=false for an FSL this
 # installer did not make (no installer marker in it; default: marker
 # required).
 #
 # FSL is reached only through its command wrappers: the hook puts
 # $FSLDIR/share/fsl/bin first on PATH (before swane-env's bin), never
-# $FSLDIR/bin (Ruling R19).
+# $FSLDIR/bin.
 #
 # Bash 3.2 compatible (macOS), and runs unchanged under zsh in its native
-# mode (the macOS zsh leg, Ruling R36): then "conda activate" sources the FSL
+# mode (the macOS zsh leg): then "conda activate" sources the FSL
 # hook in zsh, as in a default macOS terminal. Hence: every expansion
 # quoted (zsh does not split words), no "==" inside "[", no variable named
 # like a zsh special parameter (path, status...).
