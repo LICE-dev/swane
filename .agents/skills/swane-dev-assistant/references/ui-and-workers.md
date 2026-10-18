@@ -9,6 +9,7 @@ Read this reference for application lifecycle, general Qt components, GUI state,
 - [Signals, state, and object lifetime](#signals-state-and-object-lifetime)
 - [Workflow progress and cancellation](#workflow-progress-and-cancellation)
 - [Slicer integration](#slicer-integration)
+- [License consent gate](#license-consent-gate)
 - [Error and shutdown behavior](#error-and-shutdown-behavior)
 - [Verification](#verification)
 
@@ -23,7 +24,7 @@ Read this reference for application lifecycle, general Qt components, GUI state,
 
 ## Background execution models
 
-- Use `QRunnable` with `QThreadPool.globalInstance()` for bounded background operations such as DICOM scans, update checks, Slicer checks/exports, scene viewing, and queue monitoring.
+- Use `QRunnable` workers on `QThreadPool.globalInstance()` for bounded background operations such as DICOM scans, update checks, Slicer checks/exports, scene viewing, and queue monitoring, launched **only** through `swane.workers.worker_pool.start_worker()`. Never pass a Python `QRunnable` to `QThreadPool.start()` directly: Qt takes ownership and either destroys it (and the GUI-thread signal `QObject` it holds) on the pool thread while Python still references it — heap corruption/segfault — or, with `setAutoDelete(False)`, PySide never releases it (leak). `start_worker` hands the pool a plain callable, keeps the worker in a registry, and drops the last reference on the GUI thread after `run()` returns.
 - Use explicit signal-holder `QObject` instances for worker results and progress, following the existing worker pattern.
 - Keep full Nipype execution inside `WorkflowProcess`, not a Qt thread. The multiprocessing boundary exists so the process and its descendants can be terminated safely.
 - Keep the multiprocessing `Queue` -> `WorkflowMonitorWorker` -> Qt signal path for workflow reports.
@@ -51,12 +52,23 @@ Read this reference for application lifecycle, general Qt components, GUI state,
 
 ## Slicer integration
 
-- `SlicerCheckWorker` discovers Slicer, checks its version/modules, may maintain the HideZero block in `~/.slicerrc.py`, and emits `(slicer_path, slicer_version, message, DependenceStatus)`.
+- `SlicerCheckWorker` discovers Slicer, checks its version/modules, maintains a marker-delimited stub (`BEGIN`/`END SWANE PATCH`) in `~/.slicerrc.py` that only bootstraps `swane/workers/slicerrc_swane.py` (the actual logic, shipped with SWANe — currently installing the MELODIC resting-state timecourse viewer), and emits `(slicer_path, slicer_version, message, DependenceStatus)`.
+- Startup trusts the cached Slicer check only after a cheap revalidation (`DependencyManager.need_slicer_check`): the executable is a launchable file, and every extension install folder recorded by the last full check still exists (`slicer_extensions_state` preference: JSON revision + paths, taken from Slicer's own `extensionInstallPath` by `slicer_script_module_install.py` and emitted through `SlicerCheckSignaler.extensions`). Any drift, or an empty state, reruns the full check. `SlicerQuickCheckWorker` then runs `Slicer --version` in the background and `MainWindow.slicer_quick_check_done` reruns the full check on mismatch (in-place upgrade). Filesystem checks only, so behavior is identical on Linux/macOS/Windows.
+- Hide-zero display is handled entirely at scene-export time (`SlicerExportWorker`), not via a slicerrc patch. `SlicerCheckWorker.LEGACY_MARKERS` cleans up the old inline `HIDEZERO PATCH` block on migration — do not resurrect logic under those legacy markers; the mechanism they supported is dead.
 - Keep `MainWindow.slicer_row` as the GUI-side owner of status rendering and persisted path/version/validation changes.
 - Preserve status semantics: detected capabilities can clear validation; warnings remain visible and require revalidation; missing checks must not overwrite a known-good configuration without explicit intent.
 - `SlicerExportWorker` generates scenes from result contracts; `SlicerViewerWorker` opens an existing scene. Keep result filenames and scene extensions aligned with scripts and preferences.
-- Treat edits to `~/.slicerrc.py` and external Slicer subprocesses as user-visible side effects. Make markers idempotent, preserve unrelated file content, handle paths containing spaces, and report failures.
+- Treat edits to `~/.slicerrc.py`, `swane/workers/slicerrc_swane.py`, and external Slicer subprocesses as user-visible side effects. Keep the stub itself tiny and stable (real behavior changes belong in `slicerrc_swane.py`, not the injected stub), make markers idempotent, preserve unrelated file content, handle paths containing spaces, and report failures.
 - Handle subprocess return codes, stderr, timeouts, missing modules, unsupported versions, and closure during an active Slicer task.
+
+## License consent gate
+
+- `swane/__main__.py` calls `MainWindow.run_license_consent_gate()` after `MainWindow` construction (so the setup wizard has already run) and before `app.exec()`; a decline aborts startup without entering the event loop and leaves the PID cleanup intact.
+- Consent is per external tool, keyed by the tool's detected version, in the global config `accepted_license_<tool>` MAIN keys. The gate prompts only tools that are detected/usable (non-MISSING) whose stored accepted version differs from the current one; persistence is atomic (written only after the whole flow is accepted).
+- Resolve license text off the GUI thread: `LicenseResolveWorker` (a `QThreadPool` worker) performs the possibly-networked resolution while a modal busy indicator keeps a local `QEventLoop` running, so the main window never freezes during a download. Never fetch on the GUI thread.
+- `swane/utils/license_consent.py` owns resolution (`resolve_license_text`: installed file -> online -> bundled), consent evaluation (`tools_needing_consent`, `detected_tool_versions`), and the inline label helper (`version_with_license`); `swane/utils/LicenseReference.py` is the per-tool registry (display name, official URL, installed-file candidates, bundled fallback under `swane/licenses/`). Reference only the legal license text, never a per-user key file (e.g. FreeSurfer's `_license.txt`).
+- Home dependency labels embed a license link inside the version parenthesis via `version_with_license` (built in `DependencyManager`/`SlicerCheckWorker`): shown whenever a version is detected, opening the local license file when present else the official URL. This "version present" rule is intentionally more permissive than the gate's "tool usable" rule.
+- `LicenseConsentWindow` is a sequential, blocking dialog (one page per tool, fixed non-clinical/non-commercial banner, scroll-to-enable "I ACCEPT", monospace themed panel). Keep it presentation-only; the caller persists consent.
 
 ## Error and shutdown behavior
 
