@@ -12,6 +12,11 @@
 # "true" (macOS Intel), TensorFlow; then deactivates it and checks that the
 # FSL hook undid its changes.
 #
+# Optional, for the update-path phases (Ruling R48): EXPECT_FSLDIR, the
+# FSLDIR the hook must set; EXPECT_INSTALLER_FSL=false for an FSL this
+# installer did not make (no installer marker in it; default: marker
+# required).
+#
 # FSL is reached only through its command wrappers: the hook puts
 # $FSLDIR/share/fsl/bin first on PATH (before swane-env's bin), never
 # $FSLDIR/bin (Ruling R19).
@@ -76,7 +81,16 @@ echo "FSLDIR=${FSLDIR:-} FSLOUTPUTTYPE=${FSLOUTPUTTYPE:-}"
 [ "${FSLOUTPUTTYPE:-}" = NIFTI_GZ ] || fail "FSLOUTPUTTYPE is '${FSLOUTPUTTYPE:-}', not NIFTI_GZ"
 [ -f "$FSLDIR/etc/fslversion" ] || fail "No $FSLDIR/etc/fslversion"
 cat "$FSLDIR/etc/fslversion"
-[ -f "$FSLDIR/etc/swane_installer_fsl" ] || fail "No installer marker in $FSLDIR"
+if [ -n "${EXPECT_FSLDIR:-}" ] && [ "$FSLDIR" != "$EXPECT_FSLDIR" ]; then
+    fail "FSLDIR is $FSLDIR, expected $EXPECT_FSLDIR"
+fi
+if [ "${EXPECT_INSTALLER_FSL:-true}" = false ]; then
+    [ ! -e "$FSLDIR/etc/swane_installer_fsl" ] ||
+        fail "$FSLDIR has the installer marker, but an FSL not made by the installer was expected"
+    echo "FSL in $FSLDIR was not made by the installer (no marker), as expected"
+else
+    [ -f "$FSLDIR/etc/swane_installer_fsl" ] || fail "No installer marker in $FSLDIR"
+fi
 
 # path_index ENTRY: print the 1-based position of the first PATH entry equal
 # to ENTRY, or nothing.

@@ -168,6 +168,78 @@ is_macos_intel() {
     [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "x86_64" ]
 }
 
+# The sysctl refuse_rosetta runs; empty: "sysctl" from PATH, else
+# /usr/sbin/sysctl (not always on PATH). Overridable so tests never reach the
+# real one.
+SWANE_SYSCTL="${SWANE_SYSCTL-}"
+
+# refuse_rosetta: die when this macOS shell runs under Rosetta (an x86_64
+# process on Apple Silicon, where "uname -m" says x86_64): everything
+# installed from it, Miniforge included, would be x86_64 and stay emulated.
+# A missing sysctl key (Intel Macs) or no sysctl at all means not translated.
+refuse_rosetta() {
+    local sysctl_cmd="$SWANE_SYSCTL" translated=""
+    if [ -z "$sysctl_cmd" ]; then
+        if have_command sysctl; then
+            sysctl_cmd="sysctl"
+        elif [ -x /usr/sbin/sysctl ]; then
+            sysctl_cmd="/usr/sbin/sysctl"
+        else
+            return 0
+        fi
+    fi
+    translated="$("$sysctl_cmd" -n sysctl.proc_translated 2>/dev/null </dev/null)" || translated=""
+    if [ "$translated" = "1" ]; then
+        die "This terminal runs under Rosetta (x86_64 emulation on an Apple Silicon Mac): open a native (arm64) terminal and rerun the installer"
+    fi
+    return 0
+}
+
+# refuse_swane_conda_env: die when an active conda environment, the current
+# one (CONDA_PREFIX) or one stacked below it (CONDA_PREFIX_1 ..
+# CONDA_PREFIX_<CONDA_SHLVL>, at most 100 levels, missing levels skipped),
+# has a directory name starting with "swane" (swane-env, swane-fsl,
+# development environments): the installer changes those environments and
+# their activation hooks. Other environments (base included) are fine.
+refuse_swane_conda_env() {
+    local level=0 max_level="${CONDA_SHLVL:-0}" name value base found=""
+    case "$max_level" in
+        "" | *[!0-9]*) max_level=0 ;;
+    esac
+    # Real stacks are a few levels deep: a huge value is not looped over.
+    if [ "${#max_level}" -gt 3 ] || [ "$max_level" -gt 100 ]; then
+        max_level=100
+    fi
+    while [ "$level" -le "$max_level" ]; do
+        if [ "$level" = 0 ]; then
+            name="CONDA_PREFIX"
+        else
+            name="CONDA_PREFIX_$level"
+        fi
+        level=$((level + 1))
+        value="${!name:-}"
+        [ -n "$value" ] || continue
+        base="$value"
+        while [ "${base%/}" != "$base" ]; do
+            base="${base%/}"
+        done
+        case "${base##*/}" in
+            swane*) ;;
+            *) continue ;;
+        esac
+        # Listed once (without trailing slashes), even when activated at
+        # several levels.
+        case ", $found, " in
+            *", $base, "*) ;;
+            *) found="${found:+$found, }$base" ;;
+        esac
+    done
+    if [ -n "$found" ]; then
+        die "The installer cannot run inside a SWANe conda environment (active: $found): run \"conda deactivate\" until no swane* environment is active (or open a new terminal), then rerun the installer"
+    fi
+    return 0
+}
+
 # ---------------------------------------------------------------------------
 # Conda discovery
 # ---------------------------------------------------------------------------
@@ -578,7 +650,8 @@ linux_system_step() {
 SWANE_ENV_NAME="swane-env"
 SWANE_ENV_PYTHON="3.12"
 # PyPI has no recent TensorFlow wheels for macOS Intel (setup.py leaves it out
-# of the pip requirements there): it comes from conda-forge on that platform.
+# of the pip requirements there): it comes from conda-forge on that platform,
+# requested on every create and update of swane-env.
 SWANE_TENSORFLOW_SPEC="tensorflow>=2.18"
 # First conda release whose default solver is libmamba.
 SWANE_MIN_FAST_CONDA="23.10"
@@ -730,10 +803,10 @@ system_has_dot() {
 
 # swane_env_packages [PREFIX]: print the conda-forge packages swane-env needs
 # besides Python, space-separated (possibly nothing): graphviz unless
-# system_has_dot, TensorFlow on macOS Intel. With PREFIX (an existing
-# swane-env) the packages already there are left out: graphviz when
-# PREFIX/bin/dot exists, TensorFlow when PREFIX's site-packages holds the
-# tensorflow package (installed by conda or pip alike).
+# system_has_dot, SWANE_TENSORFLOW_SPEC on macOS Intel. With PREFIX (an
+# existing swane-env) graphviz is left out when PREFIX/bin/dot exists; the
+# TensorFlow spec is always listed on macOS Intel, so every update solve
+# keeps (or brings) TensorFlow within it, whatever is installed already.
 swane_env_packages() {
     local prefix="${1:-}" packages=""
     if ! system_has_dot; then
@@ -742,19 +815,18 @@ swane_env_packages() {
         fi
     fi
     if is_macos_intel; then
-        if [ -z "$prefix" ] || [ ! -f "$prefix/lib/python$SWANE_ENV_PYTHON/site-packages/tensorflow/__init__.py" ]; then
-            packages="${packages:+$packages }$SWANE_TENSORFLOW_SPEC"
-        fi
+        packages="${packages:+$packages }$SWANE_TENSORFLOW_SPEC"
     fi
     printf '%s\n' "$packages"
 }
 
 # ensure_swane_env ROOT SWANE_SPEC: create swane-env in the conda ROOT (Python
 # SWANE_ENV_PYTHON plus swane_env_packages), or update an existing one (same
-# Python required, missing packages added), then "pip install -U SWANE_SPEC"
-# into it, and die if that SWANe is older than SWANE_MIN_VERSION (it has no
-# swane.utils.fsl_conda). Sets SWANE_ENV_PREFIX and prints nothing on stdout
-# (conda and pip output goes to stderr). Call it directly, not inside $(...).
+# Python required; swane_env_packages installed into it), then
+# "pip install -U SWANE_SPEC" into it, and die if that SWANe is older than
+# SWANE_MIN_VERSION (it has no swane.utils.fsl_conda). Sets SWANE_ENV_PREFIX
+# and prints nothing on stdout (conda and pip output goes to stderr). Call it
+# directly, not inside $(...).
 #
 # Every solve uses conda-forge only (never the "defaults" channel), whatever
 # the user's .condarc says. pip runs with PYTHONNOUSERSITE=1 so packages in
@@ -1426,6 +1498,34 @@ fsl_step() {
 # Launcher and PATH
 # ---------------------------------------------------------------------------
 
+# First line of the comment every launcher starts with: a ~/.local/bin/swane
+# without a line starting with it was not written by this installer.
+SWANE_LAUNCHER_MARKER="# Written by the SWANe installer"
+
+# backup_foreign_launcher DEST: when DEST exists (a dangling symlink too) and
+# is not a regular file holding a line that starts with SWANE_LAUNCHER_MARKER,
+# move it (a symlink itself, not its target) to the first free name among
+# DEST.bk, DEST.bk.1, DEST.bk.2... and warn naming it (the warning is
+# repeated in the summary). Return 1 if it cannot be moved. Call it directly,
+# not inside $(...).
+backup_foreign_launcher() {
+    local dest="$1" backup n=0
+    if [ ! -e "$dest" ] && [ ! -L "$dest" ]; then
+        return 0
+    fi
+    if [ ! -L "$dest" ] && [ -f "$dest" ] &&
+        grep -q "^$SWANE_LAUNCHER_MARKER" "$dest" 2>/dev/null; then
+        return 0
+    fi
+    backup="$dest.bk"
+    while [ -e "$backup" ] || [ -L "$backup" ]; do
+        n=$((n + 1))
+        backup="$dest.bk.$n"
+    done
+    mv -- "$dest" "$backup" || return 1
+    log_warn "$dest was not written by the SWANe installer: it was moved to $backup and replaced by the SWANe launcher"
+}
+
 # write_launcher ROOT ENV_PREFIX: write ~/.local/bin/swane (mode 755), a
 # standalone script that activates ENV_PREFIX (by absolute prefix, never by
 # name) with ROOT's conda and execs SWANe. When swane-env is gone it removes
@@ -1434,6 +1534,9 @@ fsl_step() {
 # QT_QPA_PLATFORM=xcb (Qt through X11, or XWayland in a Wayland session) for
 # SWANe and what it starts, unless the user set QT_QPA_PLATFORM: a value of
 # the user's always wins, and no shell startup file is touched for it.
+# An existing ~/.local/bin/swane the installer did not write (no
+# SWANE_LAUNCHER_MARKER line, e.g. left by "pip install --user swane", or a
+# symlink) is first moved aside by backup_foreign_launcher, with a warning.
 write_launcher() {
     local root="$1" env_prefix="$2" bin_dir dest tmp qt_platform=0
     if is_linux; then
@@ -1450,7 +1553,7 @@ write_launcher() {
         die "Could not create a temporary file in $bin_dir"
     {
         printf '#!/usr/bin/env bash\n'
-        printf '# Written by the SWANe installer (rerun it rather than editing this file).\n'
+        printf '%s (rerun it rather than editing this file).\n' "$SWANE_LAUNCHER_MARKER"
         printf 'SWANE_CONDA_ROOT=%s\n' "$(shell_quote "$root")"
         printf 'SWANE_ENV_PREFIX=%s\n' "$(shell_quote "$env_prefix")"
         printf 'SWANE_LAUNCHER=%s\n' "$(shell_quote "$dest")"
@@ -1486,6 +1589,10 @@ LAUNCHER
         rm -f "$tmp"
         die "Could not write $dest"
     }
+    if ! backup_foreign_launcher "$dest"; then
+        rm -f "$tmp"
+        die "Could not move the existing $dest aside"
+    fi
     if ! chmod 755 "$tmp" || ! mv -f "$tmp" "$dest"; then
         rm -f "$tmp"
         die "Could not install $dest"
@@ -1705,6 +1812,9 @@ install_flow() {
     local platform="" root=""
     platform="$(detect_platform)" || exit 1
     log_info "Platform: $platform"
+    case "$platform" in
+        macos-*) refuse_rosetta ;;
+    esac
     if root="$(find_conda)"; then
         log_info "Using the conda in $root"
     else
@@ -1730,6 +1840,8 @@ main() {
     # ${1+"$@"}: an empty "$@" is an unbound-variable error under "set -u"
     # in old bash releases (macOS /bin/bash 3.2).
     parse_args ${1+"$@"}
+    # Before any prompt or change to the system.
+    refuse_swane_conda_env
     install_flow
 }
 

@@ -18,6 +18,16 @@ posix_host = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_inherited_swane_launcher(monkeypatch):
+    """Hide a SWANE_LAUNCHER inherited from the developer's shell.
+
+    The installer's launcher exports it to SWANe and what SWANe starts; the
+    tests that need one set it themselves.
+    """
+    monkeypatch.delenv("SWANE_LAUNCHER", raising=False)
+
+
 def test_noop_on_non_linux(monkeypatch, tmp_path):
     monkeypatch.setattr(mod, "is_linux", lambda: False)
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
