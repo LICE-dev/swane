@@ -1,85 +1,45 @@
 ---
 name: swane-dev-assistant
-description: "Develop and govern SWANe, the Python/PySide6 and Nipype application for standardized neuroimaging workflows. Use when Codex must create, change, refactor, debug, review, document, or validate SWANe code involving Nipype nodes and workflows, workflow orchestration, DICOM inputs, configuration and preferences, resource scheduling, external neuroimaging tools, GUI components, background workers, tests, packaging, releases, or repository conventions."
+description: Use when creating, changing, refactoring, debugging, reviewing, documenting, or validating SWANe code — Nipype nodes/workflows, DICOM inputs, configuration/preferences, resource scheduling, external neuroimaging tool integration (FSL, FreeSurfer, dcm2niix, 3D Slicer), GUI components, background workers, tests, pip dependency upgrades, or packaging/releases.
 ---
 
 # SWANe Dev Assistant
 
-Develop SWANe while preserving its workflow contracts, scientific behavior, persisted preferences, resource limits, GUI responsiveness, and repository conventions.
+## Overview
 
-## Establish context and select references
+Develop SWANe while preserving its workflow contracts, scientific behavior, persisted preferences, resource limits, GUI responsiveness, and repository conventions. Treat the current checkout as source of truth — inspect real code before proposing or implementing a change; do not invent APIs, node names, output fields, preferences, signals, or external-tool behavior.
 
-- Treat the current repository checkout as the source of truth. Inspect real code before proposing or implementing a change; do not invent APIs, node names, output fields, preferences, signals, or external-tool behavior.
-- Always read [references/architecture-and-change-map.md](references/architecture-and-change-map.md) before changing code. Use it to trace the end-to-end impact and select additional references.
-- Read [references/workflows-and-nipype.md](references/workflows-and-nipype.md) for changes to `MainWorkflow`, workflow factories, custom Nipype interfaces, execution/reporting, result sinks, CPU/RAM/GPU behavior, or scientific image processing.
-- Read [references/configuration-and-preferences.md](references/configuration-and-preferences.md) for changes to global or subject configuration, `PreferenceEntry`, preference catalogs, defaults, presets, dependency/resource requirements, preference UI, the setup wizard, persisted keys, or secrets.
-- Read [references/ui-and-workers.md](references/ui-and-workers.md) for changes to application lifecycle, `MainWindow`, `SubjectTab`, generic Qt components, workers, signals, multiprocessing, cancellation, shutdown, or Slicer integration. Preference-specific widgets remain owned by the configuration reference.
-- Read `README.md` for supported platforms, dependencies, installation, and release history. For user-facing installation or usage documentation, also consult the linked SWANe wiki when access is available.
-- Inspect `NOTICE.md` before copying or substantially modifying code derived from Nipype or another project. Preserve existing source disclaimers and license notices.
+## Choose a reference
 
-## Follow the repository workflow
+Always read [references/architecture-and-change-map.md](references/architecture-and-change-map.md) first — it routes to the others based on what is changing.
 
-1. Inspect the active branch and working tree with `git branch --show-current` and `git status --short --branch`.
-2. Preserve all unrelated user changes. Never discard, overwrite, reformat, stage, or include them in the task.
-3. Trace the requested behavior end to end: configuration/input -> subject state -> `MainWorkflow` -> subworkflow -> Nipype interface/external tool -> result/report -> GUI or Slicer consumer.
-4. Identify stable contracts affected by the change: persisted keys, enum members, workflow/node names, traits, result filenames, signals, callback payloads, cached work directories, and package metadata.
-5. Implement the smallest coherent change using existing abstractions and patterns.
-6. Add or update focused regression coverage and documentation when behavior, dependencies, installation, configuration, or release-visible output changes.
-7. Run the narrowest useful checks first, then broaden validation in proportion to risk. Report every check that could not run and its missing prerequisite.
+| Change area | Reference |
+|---|---|
+| Workflow graphs, custom Nipype interfaces, execution/resources/reporting, scientific processing | [references/workflows-and-nipype.md](references/workflows-and-nipype.md) |
+| Global/subject preferences, `PreferenceEntry`, presets, dependency gates, setup wizard, secrets | [references/configuration-and-preferences.md](references/configuration-and-preferences.md) |
+| Application lifecycle, `MainWindow`/`SubjectTab`, workers, signals, Slicer integration | [references/ui-and-workers.md](references/ui-and-workers.md) |
+| Which suite to run, how to add/update tests for a given change | [references/testing.md](references/testing.md) |
+| Bumping a pinned `setup.py` dependency (e.g. Nipype), checking monkeypatches and deprecated APIs, transitive dependency changes | [references/dependency-updates.md](references/dependency-updates.md) |
 
-## Use a dedicated Git branch
+## Repository workflow
 
-- Never modify files on `dev` or `main` unless the user explicitly asks in the current conversation to work directly on that branch.
-- When implementation starts from `dev`, `main`, or an unrelated branch, create a fresh task branch. Use `codex/<descriptive-kebab-name>` by default unless the user or repository workflow specifies another prefix.
-- Preserve a dirty worktree. If existing changes make branch creation or safe isolation ambiguous, stop and ask for direction.
-- Target `dev` for normal integration. Do not merge into or push directly to `dev`/`main` unless the user explicitly requests that exception.
-- Do not commit, push, or open a pull request unless the user requests publication or the active workflow explicitly includes it.
+1. Check the active branch and working tree (`git branch --show-current`, `git status --short --branch`).
+2. Trace the requested behavior end to end: configuration/input → subject state → `MainWorkflow` → subworkflow → Nipype interface/external tool → result/report → GUI or Slicer consumer.
+3. Identify the stable contracts touched by the change (see `CLAUDE.md`).
+4. Implement the smallest coherent change using existing abstractions and patterns.
+5. Add or update focused regression coverage — see [references/testing.md](references/testing.md).
+6. Run the narrowest useful checks first, then broaden validation in proportion to risk. Report every check that could not run and why.
+7. If the change makes a reference file inaccurate (a renamed class/method, a moved file, a changed mechanism, a dead cross-reference), update that reference in the same change — do not leave it to drift. A reference describing code that no longer exists is worse than no reference.
 
-## Preserve boundaries and stable contracts
+## Style
 
-- Keep custom interfaces in `swane/nipype_pipeline/interfaces/` (grouped into per-tool/per-domain subfolders mirroring nipype's own `interfaces/<tool>/` layout), reusable graphs in `workflows/`, subject orchestration in `MainWorkflow.py`, and execution/reporting infrastructure in `engine/`.
-- Keep preference schema, defaults, typed identifiers, validation, and persistence in `swane/config/`. Keep subject, DICOM, dependency, resource, and reusable domain behavior in `swane/utils/`.
-- Keep UI composition in `swane/ui/` and long-running GUI work in `swane/workers/` using the existing Qt signal, `QThreadPool`, and multiprocessing patterns.
-- Keep user-facing text in `swane/resources/strings.py`. Reuse `swane.resources` and `ResourceManager` for packaged resources and resource discovery.
-- Preserve persisted preference keys, enum-member names, workflow and node names, Traits fields, output filenames, report signals, and Slicer/result mappings unless the task explicitly includes a compatibility plan.
-- Distinguish Python packages in `setup.py` from system tools detected by `DependencyManager` such as dcm2niix, FSL, FreeSurfer, Graphviz, and 3D Slicer.
+- Format changed Python with Black; do not reformat unrelated files.
+- Match the surrounding NumPy-style docstring convention for public classes, workflow factories, and non-obvious methods.
+- Avoid opportunistic refactors; do not rewrite existing wildcard-import areas solely for style.
+- Preserve established public names and mixed legacy filename conventions unless the rename is the task itself.
 
-## Apply scientific, privacy, and compatibility safeguards
+## Reporting the result
 
-- Treat changes to preprocessing, segmentation, registration, tractography, statistics, visualization, and resource scheduling as scientifically sensitive. State the intended numerical or geometric effect and add comparison coverage where feasible.
-- Never add real patient data, identifiers, private DICOM metadata, local subject paths, credentials, decrypted secrets, or execution logs to source control. Use synthetic or de-identified fixtures only.
-- Do not present a code change as clinically validated merely because tests pass; distinguish software regression evidence from scientific or clinical validation.
-- Preserve Python 3.10 compatibility, supported Ubuntu/macOS behavior, and existing public behavior unless the user explicitly requests a breaking change.
-- Avoid hard-coded developer paths, unbounded parallelism, blocking work on the Qt GUI thread, and direct external command execution from UI code.
-
-## Match project style without expanding scope
-
-- Preserve established public names and mixed legacy filename conventions unless a rename is part of the task.
-- Format changed Python code with Black. Avoid formatting the entire repository when only a small surface changed.
-- Use the surrounding NumPy-style docstring pattern for public classes, workflow factories, and non-obvious methods. Keep comments focused on rationale and scientific or lifecycle constraints.
-- Avoid opportunistic refactors. Tighten legacy broad exception handling only when the relevant behavior is understood and covered.
-- Prefer explicit imports over introducing new wildcard imports; do not rewrite existing wildcard-import areas solely for style.
-
-## Validate in risk order
-
-Use the configured project interpreter (`python3`, `python`, or an explicit environment path). The light suite (`swane/tests/{config,utils,workers,ui}`, run with `-m "not heavy"`) is headless — Qt is forced offscreen by `swane/tests/conftest.py` — uses disposable `tmp_path` fixtures, and auto-skips any test whose external tool (FSL, FreeSurfer, dcm2niix, Slicer) is absent. Tests marked `@pytest.mark.heavy` (opt-in via `--run-heavy`) are interleaved in those same directories and run against a real toolchain where a mock cannot stand in (e.g. `workers/test_slicer_check_worker.py::TestSlicerCheckWorkerReal`, against a real installed Slicer). For full-pipeline execution correctness, use `swane/tests/prerelease/` (`python3 -m swane.tests.prerelease`), which runs the real workflows over a generated synthetic phantom under the disposable root `~/test_swane/prerelease`. Verify that exact path and never point test configuration at a clinical or user working directory.
-
-```bash
-python3 -m compileall swane
-python3 -m pytest <targeted-test-file-or-node>
-python3 -m black --check <changed-python-files>
-python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
-```
-
-- Start with syntax/import checks and the closest targeted test.
-- Run graph-construction or interface tests when changing nodes, connections, names, outputs, or preferences.
-- Treat tests requiring neuroimaging tools, a Qt display, or a configured dataset as environment-dependent. Do not claim they passed when prerequisites are absent.
-- For scientific output changes, add a representative workflow comparison when the required tools and de-identified data are available.
-- Review the final diff for generated files, subject data, logs, caches, broad formatting, and unrelated changes.
-
-## Communicate the result
-
-- Answer in Italian unless the user asks otherwise.
 - Lead with the implemented or diagnosed outcome.
 - Name affected persisted, workflow, scientific, signal, and result contracts.
 - Report tests run, tests skipped, and missing prerequisites precisely.
