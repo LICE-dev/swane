@@ -59,6 +59,11 @@ FSL_PACKAGES = (
 )
 #: Pinned too, so the FSL Python scripts run on the interpreter of the release.
 EXTRA_PACKAGES = ("python",)
+#: Requested even when the release environment does not list them (then
+#: unpinned): ``fsl-installer`` ships ``createFSLWrapper``, which the SWANe
+#: installer runs to create FSL's command wrappers in
+#: ``$FSLDIR/share/fsl/bin`` (the solver pulls it in as a dependency anyway).
+OPTIONAL_PACKAGES = ("fsl-installer",)
 
 
 def host_platform() -> str:
@@ -122,10 +127,34 @@ def select_release(manifest: dict, platform: str, minimum: str, release=None):
     )
 
 
-def pinned_specs(environment: str, packages=FSL_PACKAGES + EXTRA_PACKAGES) -> list:
-    """Conda specs ``name=version`` for ``packages``, from an environment file.
+def pinned_specs(
+    environment: str,
+    packages=FSL_PACKAGES + EXTRA_PACKAGES,
+    optional=OPTIONAL_PACKAGES,
+) -> list:
+    """Conda specs for ``packages`` and ``optional``, from an environment file.
 
     FSL's release environment files list one ``- name version`` per line.
+
+    Parameters
+    ----------
+    environment : str
+        The text of the release environment file.
+    packages : tuple of str
+        Packages pinned as ``name=version``; each must be listed.
+    optional : tuple of str
+        Packages pinned as ``name=version`` when listed, else requested by
+        name alone (unpinned).
+
+    Returns
+    -------
+    list of str
+        The specs of ``packages``, then those of ``optional``.
+
+    Raises
+    ------
+    SystemExit
+        If one of ``packages`` is not listed.
     """
     found = {}
     for line in environment.splitlines():
@@ -135,7 +164,10 @@ def pinned_specs(environment: str, packages=FSL_PACKAGES + EXTRA_PACKAGES) -> li
     missing = [name for name in packages if name not in found]
     if missing:
         raise SystemExit("the FSL release environment lacks: %s" % ", ".join(missing))
-    return ["%s=%s" % (name, found[name]) for name in packages]
+    specs = ["%s=%s" % (name, found[name]) for name in packages]
+    for name in optional:
+        specs.append("%s=%s" % (name, found[name]) if name in found else name)
+    return specs
 
 
 def main(argv=None) -> int:
