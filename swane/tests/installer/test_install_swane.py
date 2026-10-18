@@ -98,6 +98,27 @@ def test_parse_args_sets_every_option(sh):
     assert result.stdout == "1|1|1|/x/y|/p q|"
 
 
+@pytest.mark.parametrize(
+    "given, expected",
+    [
+        ("./mf", "{cwd}/mf"),
+        ("mf", "{cwd}/mf"),
+        (".//a b/c", "{cwd}/a b/c"),
+        (".", "{cwd}"),
+        ("/abs/mf", "/abs/mf"),
+    ],
+)
+def test_parse_args_makes_the_miniforge_prefix_absolute(sh, given, expected):
+    """A relative prefix would be pinned as is in the launcher."""
+    result = sh.code(
+        'parse_args --miniforge-prefix "$P"; printf "%s" "$MINIFORGE_PREFIX"',
+        env={"P": given},
+    )
+    assert result.returncode == 0, result.stderr
+    # The harness runs every call in the test's tmp directory.
+    assert result.stdout == expected.replace("{cwd}", str(sh.tmp))
+
+
 def test_main_defaults_ignore_the_environment(sh):
     """Options come from the command line only, not from inherited variables."""
     result = sh.code(
@@ -539,7 +560,10 @@ APT_LIST = (
     "libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 "
     "libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 dc bc"
 )
-APT_INSTALL = "apt-get install -y --no-install-recommends"
+#: apt-get waits for the dpkg lock instead of failing at once.
+APT_LOCK = "-o DPkg::Lock::Timeout=300"
+APT_INSTALL = "apt-get %s install -y --no-install-recommends" % APT_LOCK
+APT_UPDATE = "apt-get %s update" % APT_LOCK
 
 
 def _stub_linux_system(stub, apt_body=""):
@@ -554,13 +578,13 @@ def test_apt_installs_exact_package_list(sh, stub):
     result = sh("install_linux_packages")
     assert result.returncode == 0
     assert stub.calls("apt-get") == [
-        "apt-get update",
+        APT_UPDATE,
         "%s %s" % (APT_INSTALL, APT_LIST),
         "%s libasound2t64" % APT_INSTALL,
     ]
     # Every apt-get call goes through sudo, and without "-n".
     assert stub.calls("sudo") == [
-        "sudo apt-get update",
+        "sudo %s" % APT_UPDATE,
         "sudo %s %s" % (APT_INSTALL, APT_LIST),
         "sudo %s libasound2t64" % APT_INSTALL,
     ]
@@ -621,7 +645,7 @@ def test_no_sudo_for_non_root_warns_and_continues(sh, stub):
 
 
 def test_apt_failure_warns_and_continues(sh, stub):
-    _stub_linux_system(stub, '[ "$1" = install ] && exit 100 || exit 0')
+    _stub_linux_system(stub, '[ "$3" = install ] && exit 100 || exit 0')
     result = sh.code(
         'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
     )
@@ -636,7 +660,7 @@ def test_apt_failure_warns_and_continues(sh, stub):
 
 
 def test_apt_update_failure_warns_and_still_installs(sh, stub):
-    _stub_linux_system(stub, '[ "$1" = update ] && exit 100 || exit 0')
+    _stub_linux_system(stub, '[ "$3" = update ] && exit 100 || exit 0')
     result = sh.code(
         'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
     )
@@ -759,13 +783,20 @@ def test_linux_steps_noop_on_macos(sh, stub, func):
 
 CHANNELS = "--override-channels --strict-channel-priority -c conda-forge"
 VERSION_CODE = 'import sys; print("%d.%d" % sys.version_info[:2])'
+#: The check, after pip, that the installed SWANe is recent enough.
+SWANE_CHECK_CALL = "-I -c import swane.utils.fsl_conda"
+SWANE_TOO_OLD = (
+    "The installed SWANe (%s) is too old for this installer: "
+    "it needs SWANe 0.2.5 or newer"
+)
 
 
 def _env_python(stub, path, label, version="3.12"):
     """Logging stub of an environment's ``bin/python``.
 
     ``-c`` (the version check) prints ``version``; ``-m pip`` prints some
-    chatter on stdout and records ``PYTHONNOUSERSITE`` next to the stub.
+    chatter on stdout and records ``PYTHONNOUSERSITE`` next to the stub; the
+    ``-I -c`` SWANe check succeeds silently.
     """
     return stub.script(
         path,
@@ -1103,7 +1134,10 @@ def test_create_env_pip_installs_into_the_new_env(sh, stub):
     result = _ensure(sh, conda)
     assert result.returncode == 0, result.stderr
     python = str(conda.new_prefix / "bin" / "python")
-    assert stub.calls(python) == ["%s -m pip install -U swane" % python]
+    assert stub.calls(python) == [
+        "%s -m pip install -U swane" % python,
+        "%s %s" % (python, SWANE_CHECK_CALL),
+    ]
     # pip must not take ~/.local packages as already installed.
     assert (conda.new_prefix / "bin" / "python.nousersite").read_text() == "1"
 
@@ -1122,6 +1156,7 @@ def test_existing_env_is_updated_not_recreated(sh, stub):
     assert stub.calls(str(python)) == [
         "%s -c %s" % (python, VERSION_CODE),
         "%s -m pip install -U swane" % python,
+        "%s %s" % (python, SWANE_CHECK_CALL),
     ]
     assert result.stdout == "%s\n" % prefix
 
@@ -1197,9 +1232,100 @@ def test_swane_spec_is_passed_to_pip(sh, stub):
     conda.set_envs(prefix)
     result = _ensure(sh, conda, spec="/path/to/checkout")
     assert result.returncode == 0, result.stderr
-    assert stub.calls(str(python))[-1] == (
+    assert stub.calls(str(python))[-2] == (
         "%s -m pip install -U /path/to/checkout" % python
     )
+
+
+MISSING_FSL_CONDA = "ModuleNotFoundError: No module named 'swane.utils.fsl_conda'"
+
+
+def _old_swane_python(stub, path, version="0.2.1.1", error=MISSING_FSL_CONDA):
+    """An env ``bin/python`` whose ``import swane.utils.fsl_conda`` fails.
+
+    The import prints a traceback ending with ``error`` and exits 1 (by
+    default: a SWANe without swane.utils.fsl_conda); ``swane.__version__``
+    prints ``version``. It records ``PYTHONNOUSERSITE`` of the SWANe checks
+    (``-I``) next to it.
+    """
+    return stub.script(
+        path,
+        str(path),
+        'case "$*" in\n'
+        '    "-I "*) printf "%%s\\n" "${PYTHONNOUSERSITE:-unset}" >> "$0.checks" ;;\n'
+        "esac\n"
+        'case "$*" in\n'
+        '    "-c "*) echo 3.12 ;;\n'
+        '    "-m pip "*) echo "pip output" ;;\n'
+        '    *"import swane.utils.fsl_conda"*)\n'
+        "        echo 'Traceback (most recent call last):' >&2\n"
+        "        echo %s >&2\n"
+        "        exit 1 ;;\n"
+        "    *swane.__version__*) echo %s ;;\n"
+        "    *) exit 9 ;;\n"
+        "esac" % (bash_quote(error), bash_quote(version)),
+    )
+
+
+@pytest.mark.parametrize("version, shown", [("0.2.1.1", "0.2.1.1"), ("", None)])
+def test_swane_without_fsl_conda_is_too_old(sh, stub, version, shown):
+    """PyPI's SWANe 0.2.1.1 has no swane.utils.fsl_conda: stop right after pip."""
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    python = _old_swane_python(stub, prefix / "bin" / "python", version)
+    make_executable(prefix / "bin" / "dot", "exit 0")
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda)
+    assert result.returncode == 1
+    assert SWANE_TOO_OLD % (shown or "unknown version") in result.stderr
+    assert stub.calls(str(python))[-3:] == [
+        "%s -m pip install -U swane" % python,
+        "%s %s" % (python, SWANE_CHECK_CALL),
+        "%s -I -c import swane; print(swane.__version__)" % python,
+    ]
+    # Both checks run isolated, without the user's site-packages.
+    assert python.with_name("python.checks").read_text() == "1\n1\n"
+    assert result.stdout == ""
+
+
+LIBGL_ERROR = "ImportError: libGL.so.1: cannot open shared object file"
+
+
+@pytest.mark.parametrize(
+    "version, error, too_old",
+    [
+        # Below the minimum: too old, whatever the error.
+        ("0.2.1.1", LIBGL_ERROR, True),
+        # Recent enough, or no version: the Python error, never "too old".
+        ("0.2.5", LIBGL_ERROR, False),
+        ("0.3", "ModuleNotFoundError: No module named 'nibabel'", False),
+        ("", LIBGL_ERROR, False),
+    ],
+)
+def test_swane_import_failure_is_too_old_only_when_it_is(
+    sh, stub, version, error, too_old
+):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    _old_swane_python(stub, prefix / "bin" / "python", version, error)
+    make_executable(prefix / "bin" / "dot", "exit 0")
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda)
+    assert result.returncode == 1
+    shown = version or "unknown version"
+    if too_old:
+        assert SWANE_TOO_OLD % shown in result.stderr
+    else:
+        assert "too old" not in result.stderr
+        # The whole Python output, then the error line in the message.
+        assert "Traceback (most recent call last):\n%s\n" % error in result.stderr
+        assert (
+            "ERROR: The installed SWANe (%s) cannot be imported in swane-env: %s\n"
+            % (shown, error)
+        ) in result.stderr
+    assert result.stdout == ""
 
 
 def test_create_failure_dies_before_pip(sh, stub):
@@ -1248,11 +1374,20 @@ FSL_CHANNELS = (
 )
 FSL_SPECS = "fsl-bet2=2.1 python=3.12.1"
 FSL_LICENSE_URL = "https://fsl.fmrib.ox.ac.uk/fsl/docs/license.html"
+#: The licence notice shown before every FSL licence acceptance.
+FSL_LICENSE_NOTICE = (
+    "==> FSL is free for non-commercial use only, under its own licence.\n"
+    "==> Installing FSL means accepting the FSL licence: read it first at %s\n"
+    % FSL_LICENSE_URL
+)
+#: The hint shown only when the licence is accepted at the terminal.
+FSL_DECLINE_HINT = "If you do not accept it, answer anything but yes"
 NEEDS_FSL = (
     "SWANe needs FSL; rerun the installer or install FSL from fsl.fmrib.ox.ac.uk"
 )
 #: The variables the hooks use, all of which must be gone after deactivation
-#: (except ``_SWANE_FSL_LEFT``, kept on purpose for a following reactivation).
+#: (except ``_SWANE_FSL_LEFT`` and ``_SWANE_FSL_LEFT_*``, kept on purpose for a
+#: following reactivation).
 HOOK_VARIABLES = (
     "_SWANE_FSL_ACTIVE",
     "_SWANE_FSL_OWNED",
@@ -1261,8 +1396,25 @@ HOOK_VARIABLES = (
     "_SWANE_OLD_PATH",
     "_SWANE_NEW_PATH",
     "_SWANE_FSL_BIN",
+    "_SWANE_FSL_DROPPED",
+    "_SWANE_FSL_KEPT",
     "_SWANE_P",
     "_SWANE_HEAD",
+    "_SWANE_REST",
+    "_SWANE_E",
+    "_SWANE_K",
+    "_SWANE_D",
+    "_SWANE_A",
+    "_SWANE_NL",
+    "_SWANE_LINES",
+    "_SWANE_N",
+    "_SWANE_O",
+    "_SWANE_PREV",
+    "_SWANE_PREVK",
+    "_SWANE_I",
+    "_SWANE_B",
+    "_SWANE_C",
+    "_SWANE_X",
 )
 
 
@@ -1281,14 +1433,14 @@ class FslWorld:
     The env's ``bin/python`` (logged as ``env-python``) fakes the SWANe
     installed in it: ``-m swane.utils.fsl_conda --format github`` prints
     release 6.0.7.8 and :data:`FSL_SPECS`, the ``min_fsl_version`` code prints
-    6.0.7.8 and the ``licenses`` code prints :attr:`license`. Each call
-    appends its ``PYTHONNOUSERSITE`` to ``<python>.nousersite``.
+    6.0.7.8; anything else fails. Each call appends its ``PYTHONNOUSERSITE``
+    to ``<python>.nousersite``.
 
     The root's ``bin/conda`` (logged as ``conda``) prints :attr:`envs_json`
     for ``env list --json``; ``create`` makes :attr:`fsl_prefix` and lists it.
     """
 
-    def __init__(self, sh, stub, license=True, resolver_exit=0):
+    def __init__(self, sh, stub, resolver_exit=0):
         self.sh = sh
         self.stub = stub
         self.root = make_conda_root(sh.tmp / "conda root")
@@ -1299,10 +1451,6 @@ class FslWorld:
         self.fsl_prefix = self.root / "envs" / "swane-fsl"
         self.envs_json = sh.tmp / "envs.json"
         self.set_envs()
-        self.license = sh.tmp / "site packages" / "swane" / "licenses" / "fsl.txt"
-        if license:
-            self.license.parent.mkdir(parents=True)
-            self.license.write_text("FSL licence text\n")
         self.python = self.env / "bin" / "python"
         stub.script(
             self.python,
@@ -1313,9 +1461,8 @@ class FslWorld:
             '        [ %d = 0 ] || { echo "no manifest" >&2; exit 1; }\n'
             "        printf 'release=6.0.7.8\\nplatform=linux-64\\nspecs=%s\\n' ;;\n"
             "    *min_fsl_version*) echo 6.0.7.8 ;;\n"
-            "    *licenses*) echo %s ;;\n"
             "    *) exit 9 ;;\n"
-            "esac" % (resolver_exit, FSL_SPECS, bash_quote(str(self.license))),
+            "esac" % (resolver_exit, FSL_SPECS),
         )
         listed = json.dumps(
             {"envs": [str(self.root), str(self.env), str(self.fsl_prefix)]}
@@ -1408,9 +1555,15 @@ def test_no_fsl_accept_installs_swane_fsl(sh, stub):
         "version": "6.0.7.8",
         "warnings": "",
     }
-    # The licence was shown (link and bundled copy) before the acceptance.
-    assert FSL_LICENSE_URL in result.stderr
-    assert str(world.license) in result.stderr
+    # The licence notice came between the install question and the
+    # acceptance prompt; no licence file is looked up or shown.
+    question = result.stderr.index("Install a minimal FSL")
+    notice = result.stderr.index(FSL_LICENSE_NOTICE)
+    hint = result.stderr.index(FSL_DECLINE_HINT)
+    prompt = result.stderr.index("Type yes to accept the FSL licence: ")
+    assert question < notice < hint < prompt
+    assert "licenses" not in stub.calls_log.read_text()
+    assert "fsl.txt" not in result.stderr
     assert "conda create output" in result.stderr
     assert "conda create output" not in result.stdout
 
@@ -1420,11 +1573,11 @@ def test_swane_python_runs_isolated_without_user_site(sh, stub):
     result, _ = world.run(tty="y\nyes\n")
     assert result.returncode == 0, result.stderr
     calls = stub.calls("env-python")
-    assert len(calls) == 3
+    assert len(calls) == 2
     assert all(call.split()[1] == "-I" for call in calls)
     assert calls[-1] == "env-python -I -m swane.utils.fsl_conda --format github"
     nousersite = world.python.with_name("python.nousersite").read_text()
-    assert nousersite == "1\n1\n1\n"
+    assert nousersite == "1\n1\n"
 
 
 @pytest.mark.parametrize("answer", ["y", "Y", "Yes", "YES", "no", ""])
@@ -1433,7 +1586,7 @@ def test_licence_requires_literal_yes(sh, stub, answer):
     result, info = world.run(tty="y\n%s\n" % answer)
     assert result.returncode == 0, result.stderr
     assert world.conda_calls() == []
-    assert FSL_LICENSE_URL in result.stderr
+    assert FSL_LICENSE_NOTICE in result.stderr
     assert "licence not accepted" in result.stderr
     assert info["state"] == "skipped"
     assert info["dir"] == ""
@@ -1475,16 +1628,12 @@ def test_accept_fsl_license_flag_needs_no_terminal(sh, stub):
         world.conda_calls()
     )
     assert info["state"] == "installed"
-    assert FSL_LICENSE_URL in result.stderr
-
-
-def test_missing_bundled_licence_still_shows_the_link(sh, stub):
-    world = FslWorld(sh, stub, license=False)
-    result, info = world.run(tty="y\nyes\n")
-    assert result.returncode == 0, result.stderr
-    assert FSL_LICENSE_URL in result.stderr
-    assert "A copy of the FSL licence" not in result.stderr
-    assert info["state"] == "installed"
+    # The notice is printed even when the licence is accepted by flag; the
+    # hint about answering at the terminal is not.
+    assert FSL_LICENSE_NOTICE + "==> FSL licence accepted (--accept-fsl-license)\n" in (
+        result.stderr
+    )
+    assert FSL_DECLINE_HINT not in result.stderr
 
 
 def test_no_fsl_flag_skips(sh, stub):
@@ -1506,8 +1655,14 @@ def test_no_fsl_flag_keeps_a_valid_hook_and_drops_a_stale_one(sh, stub):
     result, info = world.run(env={"NO_FSL": "1"})
     assert result.returncode == 0, result.stderr
     assert world.hook_dir() == str(fsl)
-    assert info["state"] == "skipped"
-    assert info["warnings"] == ""
+    # swane-env still uses that FSL: reported as existing, not skipped.
+    assert info == {
+        "state": "existing",
+        "dir": str(fsl),
+        "version": "6.0.7.16",
+        "warnings": "",
+    }
+    assert stub.calls() == []
     (fsl / "etc" / "fslversion").unlink()
     result, info = world.run(env={"NO_FSL": "1"})
     assert result.returncode == 0, result.stderr
@@ -1716,7 +1871,12 @@ def test_foreign_swane_fsl_env_is_not_reused(sh, stub):
     world.set_envs(world.fsl_prefix)
     result, _ = world.run(tty="y\nyes\n")
     assert result.returncode == 1
-    assert "did not create" in result.stderr
+    assert (
+        "swane-fsl exists in %s but is not marked as installed by this installer "
+        "(a previous install may have failed): remove it with "
+        '"%s" env remove -p "%s" and rerun'
+        % (world.fsl_prefix, world.root / "bin" / "conda", world.fsl_prefix)
+    ) in result.stderr
     assert [c for c in world.conda_calls() if "create" in c or "install" in c] == []
 
 
@@ -1839,6 +1999,122 @@ HOOK_SCENARIOS = {
     # "conda activate other" from swane-env, then "conda deactivate" back:
     # the entry leaks into "other" (a documented limitation: conda exports a
     # PATH computed before deactivate.d), but is not appended a second time.
+    # The FSL of the user's shell (FSLDIR=/old, its share/fsl/bin and bin on
+    # PATH) would shadow the hook's: its entries leave PATH while swane-env
+    # is active and come back, in place, on deactivation.
+    "old_fsl_on_path": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH=/old/share/fsl/bin:/old/bin:/a",
+        "",
+        ["{dir}|NIFTI_GZ|/a:{dir}/bin", "/old|<unset>|/old/share/fsl/bin:/old/bin:/a"],
+    ),
+    "old_fsl_conda_deactivate": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH=/env/bin:/old/share/fsl/bin:/a:/old/bin:/b",
+        CONDA_DROP_ENV_BIN,
+        [
+            "{dir}|NIFTI_GZ|/env/bin:/a:/b:{dir}/bin",
+            "/old|<unset>|/old/share/fsl/bin:/a:/old/bin:/b",
+        ],
+    ),
+    # Every occurrence goes. After conda's rewrite only the first comes back
+    # (an entry already on PATH is never added again); restored exactly
+    # otherwise.
+    "old_fsl_twice_conda_deactivate": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH=/env/bin:/old/bin:/a:/old/bin",
+        CONDA_DROP_ENV_BIN,
+        ["{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin", "/old|<unset>|/old/bin:/a"],
+    ),
+    "old_fsl_twice": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; PATH=/old/bin:/a:/old/bin",
+        "",
+        ["{dir}|NIFTI_GZ|/a:{dir}/bin", "/old|<unset>|/old/bin:/a:/old/bin"],
+    ),
+    # The last entry has no entry after it: it goes back at the end.
+    "old_fsl_last_conda_deactivate": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; PATH=/env/bin:/a:/old/bin",
+        CONDA_DROP_ENV_BIN,
+        ["{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin", "/old|<unset>|/a:/old/bin"],
+    ),
+    "old_fsl_conda_reactivates": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH=/env/bin:/old/share/fsl/bin:/a",
+        "%s; %s" % (CONDA_REACTIVATE, CONDA_DROP_ENV_BIN),
+        [
+            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
+            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
+            "/old|<unset>|/old/share/fsl/bin:/a",
+        ],
+    ),
+    "old_fsl_conda_reactivates_then_restores": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH=/env/bin:/old/share/fsl/bin:/a",
+        CONDA_REACTIVATE,
+        [
+            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
+            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
+            "/old|<unset>|/env/bin:/old/share/fsl/bin:/a",
+        ],
+    ),
+    # An entry the user put back meanwhile is not added a second time.
+    "old_fsl_back_on_path_before_deactivate": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; PATH=/env/bin:/old/bin:/a",
+        'PATH="/old/bin:${PATH#/env/bin:}"',
+        ["{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin", "/old|<unset>|/old/bin:/a"],
+    ),
+    # conda activated swane-env in place of another environment (base) whose
+    # bin came right after the FSL entries, and turns it back on
+    # deactivation: the entry that followed them is gone, so they go back
+    # at the front, in order, or after the kept entry before them.
+    "old_fsl_before_a_replaced_env_bin": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH=/old/share/fsl/bin:/old/bin:/env/bin:/c",
+        'PATH="/base/bin:${PATH#/env/bin:}"',
+        [
+            "{dir}|NIFTI_GZ|/env/bin:/c:{dir}/bin",
+            "/old|<unset>|/old/share/fsl/bin:/old/bin:/base/bin:/c",
+        ],
+    ),
+    "old_fsl_between_x_and_a_replaced_env_bin": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH=/x:/old/share/fsl/bin:/old/bin:/env/bin:/c",
+        'PATH="/x:/base/bin:${PATH#/x:/env/bin:}"',
+        [
+            "{dir}|NIFTI_GZ|/x:/env/bin:/c:{dir}/bin",
+            "/old|<unset>|/x:/old/share/fsl/bin:/old/bin:/base/bin:/c",
+        ],
+    ),
+    # Repeated and trailing slashes in FSLDIR or in the entries still match;
+    # the entries come back as written.
+    "old_fsldir_with_slashes": (
+        "FSLDIR=/old/; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH=/env/bin:/old//share/fsl/bin:/a:/old/bin/",
+        CONDA_DROP_ENV_BIN,
+        [
+            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
+            "/old/|<unset>|/old//share/fsl/bin:/a:/old/bin/",
+        ],
+    ),
+    "old_fsldir_without_slash_entries_with": (
+        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH=/old/share/fsl/bin/:/old//bin:/a",
+        "",
+        [
+            "{dir}|NIFTI_GZ|/a:{dir}/bin",
+            "/old|<unset>|/old/share/fsl/bin/:/old//bin:/a",
+        ],
+    ),
+    # FSLDIR already names the hook's own FSL: nothing is dropped.
+    "same_fsl_in_fsldir": (
+        "FSLDIR='{dir}'; export FSLDIR; unset FSLOUTPUTTYPE; "
+        "PATH='{dir}/share/fsl/bin:/a'",
+        "",
+        [
+            "{dir}|NIFTI_GZ|{dir}/share/fsl/bin:/a:{dir}/bin",
+            "{dir}|<unset>|{dir}/share/fsl/bin:/a",
+        ],
+    ),
     "conda_switches_env_and_back": (
         "unset FSLDIR FSLOUTPUTTYPE; PATH=/env/bin:/a",
         '_saved="$PATH"; . "$D"; PATH="/other/bin:${_saved#/env/bin:}"; show\n'
@@ -1884,6 +2160,73 @@ def test_hook_roundtrip_in_posix_shells(sh, stub, shell, scenario):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == expected + ["left:"]
+
+
+def _bet_dirs(sh):
+    """An old FSL (bet in share/fsl/bin and bin) and the hook's FSL."""
+    old = sh.tmp / "old fsl"
+    new = _make_fsl(sh.tmp / "new fsl", "6.0.7.8\n")
+    for path in (
+        old / "share" / "fsl" / "bin" / "bet",
+        old / "bin" / "bet",
+        new / "bin" / "bet",
+    ):
+        make_executable(path, "exit 0")
+    _make_fsl(old, "6.0.5\n")
+    return old, new
+
+
+@pytest.mark.parametrize("shell", _hook_shells())
+def test_hook_unshadows_an_older_fsl_from_the_profile(sh, stub, shell):
+    """FSL set up by the user's profile: bet must be the hook's FSL's own."""
+    world = FslWorld(sh, stub)
+    old, new = _bet_dirs(sh)
+    world.write_hook(new)
+    start = "%s/share/fsl/bin:%s/bin:/usr/bin:/bin" % (old, old)
+    script = (
+        "set -u\n"
+        '. "$A"\n'
+        "command -v bet\n"
+        'printf "%s\\n" "$FSLDIR"\n'
+        '. "$D"\n'
+        'printf "%s\\n%s\\n" "$FSLDIR" "$PATH"\n'
+    )
+    result = subprocess.run(
+        [shell, "-c", script],
+        env={
+            "A": str(world.activate),
+            "D": str(world.deactivate),
+            "PATH": start,
+            "FSLDIR": str(old),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "%s/bin/bet" % new,
+        str(new),
+        str(old),
+        start,
+    ]
+
+
+def test_hook_compares_fsl_dirs_physically(sh, stub):
+    """FSLDIR naming the hook's FSL through a symlink drops nothing."""
+    world = FslWorld(sh, stub)
+    _, new = _bet_dirs(sh)
+    link = sh.tmp / "fsl link"
+    link.symlink_to(new)
+    world.write_hook(new)
+    start = "%s/bin:/usr/bin:/bin" % link
+    result = subprocess.run(
+        [BASH, "-c", '. "$A"; printf "%s" "$PATH"'],
+        env={"A": str(world.activate), "PATH": start, "FSLDIR": str(link)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s:%s/bin" % (start, new)
 
 
 def _real_conda_sh():
@@ -1955,6 +2298,103 @@ def test_hook_with_the_real_conda_activation(sh, stub):
     assert entries[0][0] == "%s/bin" % world.env
 
 
+@pytest.mark.skipif(_real_conda_sh() is None, reason="no conda.sh (CONDA_EXE unset)")
+def test_hook_unshadows_an_older_fsl_with_the_real_conda_activation(sh, stub):
+    """An older FSL set up by the profile, under the real ``conda activate``.
+
+    bet is the hook's FSL's while swane-env is active (also after a
+    reactivation), and the final ``conda deactivate`` gives back the PATH and
+    FSLDIR the shell had.
+    """
+    world = FslWorld(sh, stub)
+    old, new = _bet_dirs(sh)
+    (world.env / "conda-meta").mkdir(parents=True, exist_ok=True)
+    (world.env / "conda-meta" / "history").write_text("")
+    (world.env / "bin").mkdir(exist_ok=True)
+    world.write_hook(new)
+    script = (
+        '. "$CONDA_SH"\n'
+        'start="$PATH"\n'
+        'conda activate "$P"; command -v bet\n'
+        'conda activate "$P"; command -v bet\n'
+        "conda deactivate\n"
+        '[ "$PATH" = "$start" ] && echo restored || printf "%s\\n%s\\n" "$start" "$PATH"\n'
+        'printf "%s\\n" "$FSLDIR"\n'
+        "command -v bet\n"
+    )
+    result = subprocess.run(
+        [BASH, "-c", script],
+        env={
+            "HOME": str(sh.home),
+            "PATH": "%s/share/fsl/bin:%s/bin:%s" % (old, old, sh.tools),
+            "FSLDIR": str(old),
+            "CONDA_SH": _real_conda_sh(),
+            "P": str(world.env),
+        },
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "%s/bin/bet" % new,
+        "%s/bin/bet" % new,
+        "restored",
+        str(old),
+        "%s/share/fsl/bin/bet" % old,
+    ]
+
+
+@pytest.mark.skipif(_real_conda_sh() is None, reason="no conda.sh (CONDA_EXE unset)")
+@pytest.mark.parametrize("lead", ["", "/x:"])
+def test_hook_restores_path_after_base_with_the_real_conda_activation(sh, stub, lead):
+    """base active first, the profile's FSL entries right before its bin.
+
+    conda puts swane-env's bin in place of base's and back on deactivation,
+    so the entry that followed the dropped ones is gone by then: PATH must
+    still come back exactly.
+    """
+    world = FslWorld(sh, stub)
+    old, new = _bet_dirs(sh)
+    (world.env / "conda-meta").mkdir(parents=True, exist_ok=True)
+    (world.env / "conda-meta" / "history").write_text("")
+    (world.env / "bin").mkdir(exist_ok=True)
+    world.write_hook(new)
+    script = (
+        '. "$CONDA_SH"\n'
+        "conda activate base\n"
+        'PATH="${LEAD}$OLD/share/fsl/bin:$OLD/bin:$PATH"\n'
+        'start="$PATH"\n'
+        'conda activate "$P"; command -v bet\n'
+        'conda activate "$P"; command -v bet\n'
+        "conda deactivate\n"
+        '[ "$PATH" = "$start" ] && echo restored || printf "%s\\n%s\\n" "$start" "$PATH"\n'
+        'printf "%s\\n" "$FSLDIR"\n'
+    )
+    result = subprocess.run(
+        [BASH, "-c", script],
+        env={
+            "HOME": str(sh.home),
+            "PATH": str(sh.tools),
+            "FSLDIR": str(old),
+            "OLD": str(old),
+            "LEAD": lead,
+            "CONDA_SH": _real_conda_sh(),
+            "P": str(world.env),
+        },
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "%s/bin/bet" % new,
+        "%s/bin/bet" % new,
+        "restored",
+        str(old),
+    ]
+
+
 def test_hook_activate_deactivate_roundtrip(sh, stub):
     world = FslWorld(sh, stub)
     fsl = _make_fsl(sh.tmp / "fsl", "6.0.7.8\n")
@@ -1983,6 +2423,15 @@ def test_hook_activate_deactivate_roundtrip(sh, stub):
 
 MARKER_BEGIN = "# >>> SWANe installer >>>"
 MARKER_END = "# <<< SWANe installer <<<"
+#: The block the installer appends to the login profile and the rc file.
+PATH_BLOCK = (
+    "%s\n"
+    'case ":$PATH:" in\n'
+    '    *":$HOME/.local/bin:"*) ;;\n'
+    '    *) export PATH="$HOME/.local/bin:$PATH" ;;\n'
+    "esac\n"
+    "%s\n" % (MARKER_BEGIN, MARKER_END)
+)
 
 
 class LauncherWorld:
@@ -2154,29 +2603,102 @@ def test_launcher_fails_cleanly_without_conda_sh(sh):
 # ---------------------------------------------------------------------------
 
 
-def test_profile_block_added_once(sh):
-    """Review Focus 5: a profile without a final newline, run twice."""
-    profile = sh.home / ".zprofile"
+@pytest.mark.parametrize(
+    "shell, profile_name, rc_name",
+    [
+        ("/bin/zsh", ".zprofile", ".zshrc"),
+        ("/bin/bash", ".profile", ".bashrc"),
+    ],
+)
+def test_profile_and_rc_blocks_added_once(sh, shell, profile_name, rc_name):
+    """Review Focus 5: files without a final newline, run twice.
+
+    Linux terminals start interactive non-login shells, which read only the
+    rc file: the block goes there too.
+    """
+    profile = sh.home / profile_name
+    rc_file = sh.home / rc_name
     profile.write_text("export FOO=1")
+    rc_file.write_text("alias ll='ls -l'")
     for _ in range(2):
-        result = sh("ensure_local_bin_on_path", env={"SHELL": "/bin/zsh"})
+        result = sh("ensure_local_bin_on_path", env={"SHELL": shell})
         assert result.returncode == 0, result.stderr
-    assert profile.read_text() == (
-        'export FOO=1\n%s\nexport PATH="$HOME/.local/bin:$PATH"\n%s\n'
-        % (MARKER_BEGIN, MARKER_END)
-    )
+    assert profile.read_text() == "export FOO=1\n" + PATH_BLOCK
+    assert rc_file.read_text() == "alias ll='ls -l'\n" + PATH_BLOCK
 
 
-def test_profile_created_and_newline_not_doubled(sh):
-    profile = sh.home / ".zprofile"
+def test_profile_and_rc_created_and_newline_not_doubled(sh):
     assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/zsh"}).returncode == 0
-    assert profile.read_text() == (
-        '%s\nexport PATH="$HOME/.local/bin:$PATH"\n%s\n' % (MARKER_BEGIN, MARKER_END)
-    )
+    assert (sh.home / ".zprofile").read_text() == PATH_BLOCK
+    assert (sh.home / ".zshrc").read_text() == PATH_BLOCK
     other = sh.home / ".profile"
     other.write_text("a\n")
     assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/sh"}).returncode == 0
-    assert other.read_text().startswith("a\n%s\n" % MARKER_BEGIN)
+    assert other.read_text() == "a\n" + PATH_BLOCK
+    # sh and dash have no rc file of their own.
+    assert sorted(os.listdir(sh.home)) == [".profile", ".zprofile", ".zshrc"]
+
+
+def test_rc_block_added_when_the_profile_already_has_one(sh):
+    """A rerun over an earlier install (block in the login profile only)."""
+    profile = sh.home / ".profile"
+    profile.write_text(
+        '%s\nexport PATH="$HOME/.local/bin:$PATH"\n%s\n'
+        % (
+            MARKER_BEGIN,
+            MARKER_END,
+        )
+    )
+    before = profile.read_text()
+    assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/bash"}).returncode == 0
+    assert profile.read_text() == before
+    assert (sh.home / ".bashrc").read_text() == PATH_BLOCK
+
+
+@pytest.mark.parametrize("shell", ["bash", "dash", "zsh"])
+def test_path_block_never_duplicates_the_entry(sh, shell):
+    """A profile that sources the rc file runs the block twice."""
+    path = shutil.which(shell)
+    if path is None:
+        pytest.skip("%s not found" % shell)
+    block = sh.tmp / "block.sh"
+    block.write_text(PATH_BLOCK)
+    result = subprocess.run(
+        [path, "-c", '. "$B"; . "$B"; printf "%s" "$PATH"'],
+        env={"B": str(block), "HOME": str(sh.home), "PATH": "/a:/b"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s/.local/bin:/a:/b" % sh.home
+    result = subprocess.run(
+        [path, "-c", '. "$B"; printf "%s" "$PATH"'],
+        env={
+            "B": str(block),
+            "HOME": str(sh.home),
+            "PATH": "/a:%s/.local/bin" % sh.home,
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout == "/a:%s/.local/bin" % sh.home
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write a read-only file")
+def test_unwritable_rc_file_warns_and_keeps_the_profile_block(sh):
+    rc_file = sh.home / ".bashrc"
+    rc_file.write_text("x\n")
+    rc_file.chmod(0o444)
+    result = sh.code(
+        'ensure_local_bin_on_path; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc',
+        env={"SHELL": "/bin/bash"},
+    )
+    assert result.returncode == 0
+    assert result.stdout == (
+        "Could not update %s: add ~/.local/bin to PATH to run swane" % rc_file
+    )
+    assert (sh.home / ".profile").read_text() == PATH_BLOCK
+    assert rc_file.read_text() == "x\n"
 
 
 @pytest.mark.parametrize("suffix", ["", "/"])
@@ -2187,6 +2709,7 @@ def test_profile_untouched_when_local_bin_on_path(sh, suffix):
     result = sh("ensure_local_bin_on_path", env={"SHELL": "/bin/zsh", "PATH": path})
     assert result.returncode == 0
     assert profile.read_text() == "keep\n"
+    assert not (sh.home / ".zshrc").exists()
 
 
 def test_path_check_uses_the_starting_path(sh):
@@ -2209,6 +2732,7 @@ def test_bash_prefers_existing_bash_profile(sh):
     )
     assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/bash"}).returncode == 0
     assert MARKER_BEGIN in (sh.home / ".bash_profile").read_text()
+    assert MARKER_BEGIN in (sh.home / ".bashrc").read_text()
     assert not (sh.home / ".profile").exists()
 
 
@@ -2277,9 +2801,6 @@ class InstallWorld:
         self.fsl_prefix = self.root / "envs" / "swane-fsl"
         self.envs_json = sh.tmp / "envs.json"
         self.envs_json.write_text(json.dumps({"envs": [str(self.root)]}))
-        self.license = sh.tmp / "site packages" / "swane" / "licenses" / "fsl.txt"
-        self.license.parent.mkdir(parents=True)
-        self.license.write_text("FSL licence text\n")
         template = stub.script(
             sh.tmp / "env-python-template",
             "env-python",
@@ -2287,11 +2808,11 @@ class InstallWorld:
             '    *"-m swane.utils.fsl_conda --format github"*)\n'
             "        printf 'release=6.0.7.8\\nplatform=linux-64\\nspecs=%s\\n' ;;\n"
             "    *min_fsl_version*) echo 6.0.7.8 ;;\n"
-            "    *licenses*) echo %s ;;\n"
+            '    "%s") ;;\n'
             '    "-c "*) echo 3.12 ;;\n'
             '    "-m pip install -U "*) echo "pip output" ;;\n'
             "    *) exit 9 ;;\n"
-            "esac" % (FSL_SPECS, bash_quote(str(self.license))),
+            "esac" % (FSL_SPECS, SWANE_CHECK_CALL),
         )
         with_env = json.dumps({"envs": [str(self.root), str(self.env)]})
         with_fsl = json.dumps(
@@ -2375,10 +2896,11 @@ def test_main_end_to_end_with_stubs(sh, stub):
     steps = [
         "uname",  # detect_platform
         "conda --version",  # the conda found (warn_old_conda)
-        "sudo apt-get update",  # install_linux_packages
+        "sudo %s" % APT_UPDATE,  # install_linux_packages
         "sudo locale-gen en_US.UTF-8",  # ensure_locale
         "conda create -y -n swane-env",  # ensure_swane_env
         "env-python -m pip install -U /x",
+        "env-python %s" % SWANE_CHECK_CALL,
         "env-python -I -c from swane.utils.fsl_conda import min_fsl_version",
         "conda create -y -n swane-fsl",  # fsl_step
         "mktemp",  # write_launcher
@@ -2402,6 +2924,7 @@ def test_main_end_to_end_with_stubs(sh, stub):
         "SWANe installer: env %s" % world.env,
         "SWANe installer: FSL %s (6.0.7.8) installed" % world.fsl_prefix,
         "Open a new terminal and run: swane",
+        "Or run now: %s" % world.launcher,
     ]
     assert "sudo may ask for your password" in result.stderr
     assert result.stderr.count("password") == 1
@@ -2427,8 +2950,21 @@ def test_main_rerun_reports_existing_fsl(sh, stub):
         "SWANe installer: env %s" % world.env,
         "SWANe installer: FSL %s (6.0.7.8) existing" % world.fsl_prefix,
         "Open a new terminal and run: swane",
+        "Or run now: %s" % world.launcher,
     ]
     assert world.profile.read_text() == profile
+
+
+def test_main_rerun_with_no_fsl_reports_the_kept_fsl(sh, stub):
+    world = InstallWorld(sh, stub)
+    assert world.run(*E2E_ARGS).returncode == 0
+    result = world.run("--yes", "--no-fsl", "--swane-spec", "/x")
+    assert result.returncode == 0, result.stderr
+    assert "SWANe installer: FSL skipped" not in result.stdout
+    assert (
+        "SWANe installer: FSL %s (6.0.7.8) existing" % world.fsl_prefix
+    ) in result.stdout.splitlines()
+    assert "WARNING:" not in result.stdout
 
 
 def test_main_summary_lists_skipped_fsl_and_warnings(sh, stub):
@@ -2445,7 +2981,10 @@ def test_main_summary_lists_skipped_fsl_and_warnings(sh, stub):
     ]
     assert lines[3] == "WARNING: %s" % NEEDS_FSL
     assert lines[4].startswith("WARNING: Unknown shell: ")
-    assert lines[5:] == ["Open a new terminal and run: swane"]
+    assert lines[5:] == [
+        "Open a new terminal and run: swane",
+        "Or run now: %s" % world.launcher,
+    ]
     assert not any("swane-fsl" in call for call in stub.calls())
     assert not world.profile.exists()
 
@@ -2458,7 +2997,10 @@ def test_main_on_macos_skips_the_linux_steps(sh, stub):
     assert stub.calls("apt-get") == []
     assert stub.calls("locale-gen") == []
     assert "password" not in result.stderr
-    assert result.stdout.splitlines()[-1] == "Open a new terminal and run: swane"
+    assert result.stdout.splitlines()[-2:] == [
+        "Open a new terminal and run: swane",
+        "Or run now: %s" % world.launcher,
+    ]
 
 
 def test_main_installs_miniforge_when_no_conda_is_found(sh, stub):
