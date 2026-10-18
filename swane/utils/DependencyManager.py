@@ -530,6 +530,10 @@ class DependencyManager:
         fsl_version = _read_fsl_version()
         if fsl_version is None:
             return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_error)
+        # The first line of etc/fslversion is parsed as is, with no suffix
+        # stripped: this matches nipype.interfaces.fsl.Info.version(), whose
+        # parse_version returns raw_info.splitlines()[0] (checked on Nipype
+        # 1.12.0), so SWANe and the Nipype FSL interfaces see the same version.
         try:
             found_version = version.parse(fsl_version)
         except:
