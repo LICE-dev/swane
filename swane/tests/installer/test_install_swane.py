@@ -71,7 +71,7 @@ def test_piped_script_runs_main(sh):
 
 
 def test_usage_explains_the_swane_spec_forms(sh):
-    """R35: --swane-spec goes verbatim to pip; each accepted form has an example."""
+    """--swane-spec goes verbatim to pip; each accepted form has an example."""
     result = sh("usage")
     assert result.returncode == 0
     text = " ".join(result.stdout.split())
@@ -230,7 +230,7 @@ ROSETTA_ERROR = (
 
 
 def test_refuse_rosetta_dies_when_translated(sh, stub):
-    """R44: sysctl.proc_translated = 1 is an x86_64 shell on Apple Silicon."""
+    """A sysctl.proc_translated of 1 is an x86_64 shell on Apple Silicon."""
     stub("sysctl", "echo 1")
     result = sh("refuse_rosetta")
     assert result.returncode == 1
@@ -344,7 +344,7 @@ def test_refuse_rosetta_takes_sysctl_from_path_by_default(sh, stub):
     ],
 )
 def test_refuse_swane_conda_env_dies(sh, env, active):
-    """R43: no active or stacked swane* environment."""
+    """No active or stacked swane* environment."""
     result = sh("refuse_swane_conda_env", env=env)
     assert result.returncode == 1
     assert result.stdout == ""
@@ -791,7 +791,7 @@ APT_INSTALL = "apt-get %s install -y --no-install-recommends" % APT_LOCK
 APT_UPDATE = "apt-get %s update" % APT_LOCK
 #: The one question of the Linux system step.
 SYSTEM_QUESTION = "Run the Linux system setup steps above?"
-#: What the installer says to do by hand about a missing locale (R25).
+#: What the installer says to do by hand about a missing locale.
 LOCALE_HINT = "enable en_US.UTF-8 in your system's locale configuration"
 #: Runs the step and prints the recorded warnings on stdout.
 SYSTEM_STEP = 'linux_system_step; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
@@ -912,7 +912,7 @@ def test_apt_update_failure_warns_and_still_installs(sh, stub):
 @pytest.mark.skipif(os.geteuid() == 0, reason="needs a non-root user")
 @pytest.mark.parametrize("answer", ["y\n", "yes\n"])
 def test_system_step_asks_once_and_runs_both_steps(sh, stub, answer):
-    """R24: one question, before the first sudo command, naming the steps."""
+    """One question, before the first sudo command, naming the steps."""
     _stub_linux_system(stub)
     _stub_locale(sh, stub)
     result = sh.code(SYSTEM_STEP, tty=answer)
@@ -1130,7 +1130,7 @@ def test_has_en_us_locale_rejects_others(sh, stub, listing):
 
 
 def test_locale_missing_runs_only_locale_gen(sh, stub):
-    """R25: the one privileged command is locale-gen; nothing under /etc is
+    """The one privileged command is locale-gen; nothing under /etc is
     edited (a stand-in locale.gen with the entry commented stays as is)."""
     stub.platform("Linux", "x86_64")
     stub("sudo", '"$@"')
@@ -1151,7 +1151,7 @@ def test_locale_missing_runs_only_locale_gen(sh, stub):
 
 
 def test_script_never_names_a_file_under_etc():
-    """R25: no command of the installer reads or writes a system /etc path
+    """No command of the installer reads or writes a system /etc path
     (only "<prefix>/etc/..." of conda environments appear in code lines)."""
     offending = []
     for number, line in enumerate(SCRIPT.read_text().splitlines(), 1):
@@ -1595,7 +1595,7 @@ def test_existing_env_is_updated_not_recreated(sh, stub):
     [
         ("Linux", "x86_64", False, False, "graphviz"),
         ("Darwin", "x86_64", True, False, "tensorflow>=2.18"),
-        # R45: the TensorFlow spec is passed even when TensorFlow is there.
+        # The TensorFlow spec is passed even when TensorFlow is there.
         ("Darwin", "x86_64", False, True, "graphviz tensorflow>=2.18"),
         ("Darwin", "x86_64", True, True, "tensorflow>=2.18"),
         ("Darwin", "x86_64", False, False, "graphviz tensorflow>=2.18"),
@@ -1618,7 +1618,7 @@ def test_existing_env_installs_only_missing_packages(
 
 
 def test_existing_env_on_macos_intel_always_requests_tensorflow(sh, stub):
-    """R45: every update solve on macOS Intel carries the TensorFlow spec."""
+    """Every update solve on macOS Intel carries the TensorFlow spec."""
     stub.platform("Darwin", "x86_64")
     stub("dot")
     conda = FakeConda(sh, stub)
@@ -2262,7 +2262,7 @@ def test_resolver_specs_are_passed_unchanged(sh, stub, specs):
 @pytest.mark.parametrize("tool", REQUIRED_WRAPPERS)
 @pytest.mark.parametrize("how", ["missing", "not_executable"])
 def test_existing_fsl_without_wrappers_is_not_used(sh, stub, tool, how):
-    """Ruling R23: the hook never puts $FSLDIR/bin on PATH."""
+    """The hook never puts $FSLDIR/bin on PATH."""
     world = FslWorld(sh, stub)
     external = _make_fsl(sh.home / "fsl", "6.0.7.16\n")
     make_executable(external / "bin" / tool, "exit 0")
@@ -2654,7 +2654,7 @@ def test_hook_quotes_paths(sh, stub):
 
 
 def test_hook_never_names_fsldir_bin(sh, stub):
-    """Only $FSLDIR/share/fsl/bin is ever put on PATH (Ruling R19)."""
+    """Only $FSLDIR/share/fsl/bin is ever put on PATH."""
     world = FslWorld(sh, stub)
     world.write_hook(sh.tmp / "fsl")
     lines = (world.activate.read_text() + world.deactivate.read_text()).splitlines()
@@ -2740,9 +2740,9 @@ HOOK_SCENARIOS = {
         CONDA_DROP_ENV_BIN,
         ["{dir}|NIFTI_GZ|/a:{bin}:/env/bin:/b", "<unset>|<unset>|/a:{bin}:/b"],
     ),
-    # Ruling R33: the user's entry after swane-env's bin (conda put the env's
-    # bin in front of it) stays, and a copy goes first; only the copy goes
-    # on deactivation, also when conda rewrites PATH or reactivates.
+    # The user's entry after swane-env's bin (conda put the env's bin in
+    # front of it) stays, and a copy goes first; only the copy goes on
+    # deactivation, also when conda rewrites PATH or reactivates.
     "already_after_env_bin": (
         "unset FSLDIR FSLOUTPUTTYPE; PATH='/env/bin:/base:{bin}:/b'",
         "",
@@ -3148,7 +3148,7 @@ def test_hook_restores_path_after_base_with_the_real_conda_activation(sh, stub, 
 
 @pytest.mark.skipif(_real_conda_sh() is None, reason="no conda.sh (CONDA_EXE unset)")
 def test_hook_entry_after_base_bin_with_the_real_conda_activation(sh, stub):
-    """Ruling R33, the default macOS zsh order with a reused fslinstaller FSL.
+    """The default macOS zsh order with a reused fslinstaller FSL.
 
     ``~/.zprofile`` (FSL's installer) puts the FSL's share/fsl/bin on PATH,
     then ``~/.zshrc`` (conda init) activates base in front of it; conda puts
@@ -3293,9 +3293,9 @@ def test_launcher_activates_and_execs(sh):
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
         "launcher=%s" % world.launcher,
-        # R11: ~/.local packages never shadow swane-env.
+        # ~/.local packages never shadow swane-env.
         "nousersite=1",
-        # R32: Qt through xcb on Linux.
+        # Qt through xcb on Linux.
         "qpa=xcb",
         "args=a b",
     ]
@@ -3316,7 +3316,7 @@ def test_launcher_activates_and_execs(sh):
 def test_launcher_qt_platform_only_on_linux_and_only_when_unset(
     sh, system, given, seen
 ):
-    """R32: a QT_QPA_PLATFORM of the user's always wins; macOS is untouched."""
+    """A QT_QPA_PLATFORM of the user's always wins; macOS is untouched."""
     world = LauncherWorld(sh, system=system)
     world.write()
     text = world.launcher.read_text()
@@ -3378,7 +3378,7 @@ def _foreign_warning(launcher, backup):
 
 
 def test_launcher_replaces_its_own_launcher_silently(sh):
-    """R46: a launcher of an earlier run (marker line) is no foreign file."""
+    """A launcher of an earlier run (marker line) is no foreign file."""
     world = LauncherWorld(sh)
     world.write()
     result, warnings = _write_launcher_warnings(sh, world)
@@ -3388,7 +3388,7 @@ def test_launcher_replaces_its_own_launcher_silently(sh):
 
 
 def test_launcher_backs_up_a_foreign_file(sh):
-    """R46: e.g. the entry point of an old ``pip install --user swane``."""
+    """E.g. the entry point of an old ``pip install --user swane``."""
     world = LauncherWorld(sh)
     world.launcher.parent.mkdir(parents=True)
     world.launcher.write_text("#!/usr/bin/python3\nfrom swane import main\n")
@@ -3534,7 +3534,7 @@ STARTUP_FILES = (
     ".profile",
 )
 
-#: (SHELL, uname -s, the one file that gets the block) -- R26.
+#: (SHELL, uname -s, the one file that gets the block).
 PATH_FILE_CASES = [
     ("/bin/zsh", "Linux", ".zshrc"),
     ("/bin/zsh", "Darwin", ".zshrc"),
@@ -3898,7 +3898,7 @@ def test_main_end_to_end_with_stubs(sh, stub):
         "Open a new terminal and run: swane",
         "Or run now: %s" % world.launcher,
     ]
-    # R24: the one sudo question, answered by --yes, before any sudo call.
+    # The one sudo question, answered by --yes, before any sudo call.
     assert result.stderr.count("%s yes (--yes)" % SYSTEM_QUESTION) == 1
     assert "with sudo, which may ask for your password" in result.stderr
     assert result.stderr.count("password") == 1
@@ -4010,7 +4010,7 @@ def test_unknown_flag_exit_2(sh, stub):
 
 
 def test_main_refuses_to_run_inside_a_swane_env(sh, stub):
-    """R43: dies before any prompt, external call or file change."""
+    """Dies before any prompt, external call or file change."""
     world = InstallWorld(sh, stub)
     sh.tty_path.write_text("y\n")
     result = world.run(
@@ -4041,7 +4041,7 @@ def test_main_help_works_inside_a_swane_env(sh, stub):
 
 
 def test_main_under_rosetta_dies_before_downloading(sh, stub):
-    """R44: no conda found, so Miniforge would be next: never reached."""
+    """No conda found, so Miniforge would be next: never reached."""
     world = InstallWorld(sh, stub, system="Darwin", machine="x86_64")
     _stub_curl(sh, stub)
     stub("sysctl", "echo 1")
@@ -4054,7 +4054,7 @@ def test_main_under_rosetta_dies_before_downloading(sh, stub):
 
 
 def test_main_declined_system_setup_warns_in_the_summary(sh, stub):
-    """R24 end to end: "n" at the one sudo question, the install goes on."""
+    """Answering "n" at the one sudo question, the install goes on."""
     world = InstallWorld(sh, stub)
     sh.tty_path.write_text("n\n")
     result = world.run("--no-fsl", "--swane-spec", "/x")
