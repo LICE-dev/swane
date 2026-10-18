@@ -69,7 +69,9 @@ def test_missing_platform_or_release_fails(manifest):
 
 
 def test_pinned_specs_takes_the_release_versions():
-    versions = {**_full("1"), "fsl-installer": "3.21.0", "fsl-other": "9"}
+    """R37: fsl-installer is pinned to 3.21.0, never to the release's own
+    (FSL 6.0.7.8 lists 3.9.0, which ships no createFSLWrapper)."""
+    versions = {**_full("1"), "fsl-installer": "3.9.0", "fsl-other": "9"}
     specs = fsl_conda.pinned_specs(_environment(versions))
     expected = _full("1")
     assert specs == ["%s=%s" % item for item in expected.items()] + [
@@ -79,11 +81,13 @@ def test_pinned_specs_takes_the_release_versions():
     assert not any("cuda" in spec for spec in specs)
 
 
-def test_pinned_specs_requests_an_unlisted_optional_package_unpinned():
-    """fsl-installer (createFSLWrapper) is requested even when not listed."""
-    assert fsl_conda.OPTIONAL_PACKAGES == ("fsl-installer",)
+def test_pinned_specs_requests_fsl_installer_even_when_not_listed():
+    """fsl-installer (createFSLWrapper) is requested, at the fixed version,
+    also when the release does not list it."""
+    assert fsl_conda.FSL_INSTALLER_VERSION == "3.21.0"
+    assert fsl_conda.FIXED_PACKAGES == (("fsl-installer", "3.21.0"),)
     specs = fsl_conda.pinned_specs(_environment(_full("1")))
-    assert specs[-1] == "fsl-installer"
+    assert specs[-1] == "fsl-installer=3.21.0"
     assert specs[:-1] == ["%s=%s" % item for item in _full("1").items()]
 
 

@@ -1,7 +1,8 @@
 name: Installer tests
 
 # shellcheck and the unit tests of installer/install_swane.sh, then the real
-# installer on clean hosted runners (Ubuntu, macOS arm64, macOS Intel),
+# installer on clean hosted runners (Ubuntu, macOS arm64 with bash and with
+# zsh as the login shell, macOS Intel),
 # installing the SWANe of the commit under test, with a check of the result
 # and a second run (the update path).
 #
@@ -59,69 +60,106 @@ jobs:
           python -m pytest swane/tests/installer -p no:cacheprovider -rfEs
 
   install:
-    name: install (${{ matrix.os }}, ${{ matrix.conda }} conda)
+    name: install (${{ matrix.os }}, ${{ matrix.conda }} conda, ${{ matrix.login_shell }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
+        # Every leg names its login shell: entries differing only by a new
+        # key would be merged into an earlier one by GitHub's "include".
         include:
           # fresh: no conda visible to the installer, which installs Miniforge.
           - os: ubuntu-latest
             conda: fresh
+            login_shell: bash
           # existing: the runner's own conda ($CONDA), found through CONDA_EXE.
           - os: ubuntu-latest
             conda: existing
+            login_shell: bash
           - os: macos-latest
             conda: fresh
+            login_shell: bash
+          # GitHub's macOS runners have SHELL=/bin/bash, but zsh is the
+          # default login shell of a Mac: this leg runs the installer and
+          # every check with SHELL=/bin/zsh (the installer picks the PATH
+          # file from $SHELL), and the FSL hook check under zsh too.
+          - os: macos-latest
+            conda: fresh
+            login_shell: zsh
           # macos-15-intel is GitHub's last Intel (x86_64) macOS image,
           # supported until fall 2027: drop this leg then. It is the only CI
           # coverage of macOS Intel (TensorFlow from conda-forge).
           - os: macos-15-intel
             conda: fresh
+            login_shell: bash
     env:
       CONDA_MODE: ${{ matrix.conda }}
+      LOGIN_SHELL: ${{ matrix.login_shell }}
       EXPECT_CONDA_TENSORFLOW: ${{ matrix.os == 'macos-15-intel' }}
     steps:
       - uses: actions/checkout@v7
-      # Job variables for every later step: the summary files, the expected
-      # conda root and login profile, and a PATH without ~/.local/bin (so the
-      # installer adds it through the login profile, as on a user's machine)
-      # and, for the fresh legs, with no runner conda on it (asserted).
+      # Job variables for every later step: the login shell (SHELL=/bin/zsh
+      # on the zsh leg), the summary files, the expected conda root and PATH
+      # startup file, the shell invocations that must find swane, and a PATH
+      # without ~/.local/bin (so the installer adds it through that file, as
+      # on a user's machine) and, for the fresh legs, with no runner conda on
+      # it (asserted).
       - name: Prepare the runner
         shell: bash
         run: |
-          echo "Login shell: SHELL=${SHELL:-<unset>}"
+          echo "Runner login shell: SHELL=${SHELL:-<unset>}"
+          if [ "$LOGIN_SHELL" = zsh ]; then
+            if [ ! -x /bin/zsh ]; then
+              echo "::error::No /bin/zsh on this runner"
+              exit 1
+            fi
+            SHELL=/bin/zsh
+          fi
           if [ -z "${SHELL:-}" ]; then
-            echo "::error::SHELL is unset: the installer cannot choose a login profile"
+            echo "::error::SHELL is unset: the installer cannot choose a startup file"
             exit 1
           fi
-          # The profile install_swane.sh's login_profile picks, decided before
-          # the installer can create any of these files.
-          case "$(basename -- "$SHELL" | tr '[:upper:]' '[:lower:]')" in
-            zsh) expected_profile="$HOME/.zprofile" ;;
-            bash)
-              if [ -f "$HOME/.bash_profile" ]; then
-                expected_profile="$HOME/.bash_profile"
-              else
-                expected_profile="$HOME/.profile"
-              fi
+          if [ "$(basename -- "$SHELL")" != "$LOGIN_SHELL" ]; then
+            echo "::error::SHELL is $SHELL, but this leg is the $LOGIN_SHELL one"
+            exit 1
+          fi
+          echo "Login shell of this leg: SHELL=$SHELL"
+          # The one file install_swane.sh's path_startup_file picks (Ruling
+          # R26), decided before the installer can create any of them, and
+          # the invocations of $SHELL that read it: Linux terminals start
+          # interactive non-login shells (-ic), macOS Terminal login shells
+          # (-lic); every interactive zsh reads ~/.zshrc. A bash login shell
+          # on Linux (-lc) is not checked: by design only ~/.bashrc gets the
+          # block, and the stock ~/.bashrc returns early when not interactive.
+          shell_name="$(basename -- "$SHELL" | tr '[:upper:]' '[:lower:]')"
+          case "$shell_name/$RUNNER_OS" in
+            zsh/macOS)
+              expected_file="$HOME/.zshrc"
+              shell_flags="-ic -lic"
               ;;
-            sh | dash) expected_profile="$HOME/.profile" ;;
+            bash/Linux)
+              expected_file="$HOME/.bashrc"
+              shell_flags="-ic"
+              ;;
+            bash/macOS)
+              # bash login reads only the first of these: the installer
+              # never creates .bash_profile next to the others.
+              expected_file="$HOME/.bash_profile"
+              for file in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+                if [ -f "$file" ]; then
+                  expected_file="$file"
+                  break
+                fi
+              done
+              shell_flags="-lic"
+              ;;
             *)
-              echo "::error::Login shell $SHELL has no known profile: the installer would only warn"
+              echo "::error::Login shell $SHELL on $RUNNER_OS is not covered by this workflow"
               exit 1
               ;;
           esac
-          echo "Expected login profile: $expected_profile"
-          # The rc file of interactive non-login shells (shell_rc_file), which
-          # gets the same block; none for sh/dash.
-          case "$(basename -- "$SHELL" | tr '[:upper:]' '[:lower:]')" in
-            zsh) expected_rc="$HOME/.zshrc" ;;
-            bash) expected_rc="$HOME/.bashrc" ;;
-            *) expected_rc="" ;;
-          esac
-          echo "Expected rc file: ${expected_rc:-<none>}"
+          echo "Expected PATH startup file: $expected_file (checked with: $shell_flags)"
           # Physical path of a directory (symlinks resolved, so /bin and
           # /usr/bin compare equal on a usrmerge system); empty if missing.
           physical_dir() { (cd -P -- "$1" 2>/dev/null && pwd -P) || true; }
@@ -194,8 +232,10 @@ jobs:
             echo "SUMMARY_1=$RUNNER_TEMP/installer-summary-1.txt"
             echo "SUMMARY_2=$RUNNER_TEMP/installer-summary-2.txt"
             echo "EXPECTED_CONDA_ROOT=$expected_root"
-            echo "EXPECTED_PROFILE=$expected_profile"
-            echo "EXPECTED_RC=$expected_rc"
+            echo "SHELL=$SHELL"
+            echo "SHELL_NAME=$shell_name"
+            echo "EXPECTED_PATH_FILE=$expected_file"
+            echo "SHELL_FLAGS=$shell_flags"
             if [ -n "$conda_exe" ]; then
               echo "CONDA_EXE=$conda_exe"
             fi
@@ -251,54 +291,114 @@ jobs:
             exit 1
           fi
           echo "All ${#packages[@]} packages and libasound2t64/libasound2 are installed"
+      # The launcher runs bash; the zsh leg also activates swane-env in
+      # zsh, as a default macOS terminal does, so the FSL hook is sourced by
+      # zsh (same checks: wrappers, $FSLDIR/bin absent, exact PATH after
+      # conda deactivate).
       - name: Check the environment
         shell: bash
         timeout-minutes: 20
-        run: bash -l .github/scripts/check_installed_env.sh "$SUMMARY_1"
-      # A fresh login shell of the user's own shell, with a minimal
-      # environment: swane must come from the PATH the login profile sets.
-      - name: Check swane in a login shell
-        shell: bash
         run: |
-          echo "Login shell: $SHELL"
-          # shellcheck disable=SC2016 # expanded by the login shell
-          output="$(env -i HOME="$HOME" USER="$USER" LOGNAME="${LOGNAME:-$USER}" \
-            SHELL="$SHELL" TERM=dumb PATH=/usr/bin:/bin \
-            "$SHELL" -lc 'printf "SWANE_RESOLVED=%s\n" "$(command -v swane)"')"
-          echo "$output"
-          resolved="$(printf '%s\n' "$output" | sed -n 's/^SWANE_RESOLVED=//p' | tail -n 1)"
-          if [ "$resolved" != "$HOME/.local/bin/swane" ]; then
-            echo "::error::swane resolves to '$resolved' in a $SHELL login shell, not $HOME/.local/bin/swane"
+          bash -l .github/scripts/check_installed_env.sh "$SUMMARY_1"
+          if [ "$SHELL_NAME" = zsh ]; then
+            CHECK_SHELL=zsh zsh -l .github/scripts/check_installed_env.sh "$SUMMARY_1"
+          fi
+      # Ruling R31: Qt's xcb platform starts in swane-env on a virtual X
+      # display (xvfb only on the runner, never through the installer). A
+      # failure means a runtime library is missing: add its package to
+      # APT_PACKAGES, never skip this check.
+      - name: Check that Qt starts with the xcb platform
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        timeout-minutes: 10
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb
+          launcher="$HOME/.local/bin/swane"
+          pin() { sed -n "s/^$1='\\(.*\\)'\$/\\1/p" "$launcher" | head -n 1 | sed "s/'\\\\''/'/g"; }
+          root="$(pin SWANE_CONDA_ROOT)"
+          prefix="$(pin SWANE_ENV_PREFIX)"
+          if [ -z "$root" ] || [ -z "$prefix" ]; then
+            echo "::error::No conda pins in $launcher"
             exit 1
           fi
-      # Linux terminals start interactive non-login shells, which read only
-      # the rc file: swane must be found there too.
-      - name: Check swane in an interactive non-login shell
-        if: ${{ env.EXPECTED_RC != '' }}
-        shell: bash
-        run: |
-          # shellcheck disable=SC2016 # expanded by the interactive shell
-          output="$(env -i HOME="$HOME" USER="$USER" LOGNAME="${LOGNAME:-$USER}" \
-            SHELL="$SHELL" TERM=dumb PATH=/usr/bin:/bin \
-            "$SHELL" -ic 'printf "SWANE_RESOLVED=%s\n" "$(command -v swane)"' </dev/null)"
-          echo "$output"
-          resolved="$(printf '%s\n' "$output" | sed -n 's/^SWANE_RESOLVED=//p' | tail -n 1)"
-          if [ "$resolved" != "$HOME/.local/bin/swane" ]; then
-            echo "::error::swane resolves to '$resolved' in an interactive $SHELL, not $HOME/.local/bin/swane"
+          set +u
+          # shellcheck disable=SC1091 # exists only on the runner
+          . "$root/etc/profile.d/conda.sh"
+          conda activate "$prefix"
+          export PYTHONNOUSERSITE=1 QT_QPA_PLATFORM=xcb
+          snippet='from PySide6.QtWidgets import QApplication
+          app = QApplication([])
+          print("Qt platform:", app.platformName())
+          assert app.platformName() == "xcb", app.platformName()'
+          if ! timeout 120 xvfb-run -a python -c "$snippet"; then
+            echo "::error::PySide6 QApplication does not start with QT_QPA_PLATFORM=xcb: Qt's plugin log follows"
+            QT_DEBUG_PLUGINS=1 timeout 120 xvfb-run -a python -c "$snippet" || true
             exit 1
           fi
+      # New shells of the user's own shell, with a minimal environment, in
+      # the kinds a new terminal starts (SHELL_FLAGS, from the Prepare step):
+      # swane must come from the PATH block of the one startup file.
+      - name: Check swane in new shells
+        shell: bash
+        run: |
+          read -r -a flags_list <<<"$SHELL_FLAGS"
+          for flags in "${flags_list[@]}"; do
+            # shellcheck disable=SC2016 # expanded by the new shell
+            output="$(env -i HOME="$HOME" USER="$USER" LOGNAME="${LOGNAME:-$USER}" \
+              SHELL="$SHELL" TERM=dumb PATH=/usr/bin:/bin \
+              "$SHELL" "$flags" 'printf "SWANE_RESOLVED=%s\n" "$(command -v swane)"' </dev/null)"
+            echo "$SHELL $flags: $output"
+            resolved="$(printf '%s\n' "$output" | sed -n 's/^SWANE_RESOLVED=//p' | tail -n 1)"
+            if [ "$resolved" != "$HOME/.local/bin/swane" ]; then
+              echo "::error::swane resolves to '$resolved' in '$SHELL $flags', not $HOME/.local/bin/swane"
+              exit 1
+            fi
+          done
       # As users run it: the script through a pipe ("curl ... | bash -s --
-      # ..."); pipefail keeps an installer failure.
+      # ..."); pipefail keeps an installer failure. The installer log
+      # (stderr) is saved, then printed, so that on Linux it can prove the
+      # system step found everything already present: no sudo question, no
+      # apt-get, no locale-gen.
       - name: Run the installer again from a pipe (update path)
         shell: bash
         run: |
           if [ "$CONDA_MODE" = fresh ]; then
             unset CONDA_EXE
           fi
+          rerun_log="$RUNNER_TEMP/installer-log-2.txt"
+          status=0
           # shellcheck disable=SC2002 # a real pipe, as with curl
           cat installer/install_swane.sh |
-            /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" |
-            tee "$SUMMARY_2"
+            /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" 2>"$rerun_log" |
+            tee "$SUMMARY_2" || status=$?
+          echo "Installer log of the second run:"
+          cat "$rerun_log"
+          if [ "$status" != 0 ]; then
+            echo "::error::The second run failed (exit $status)"
+            exit "$status"
+          fi
+          # Linux system step (install_swane.sh linux_system_step): its
+          # nothing-missing line must be there, and none of the lines that
+          # precede the question, apt-get or locale-gen.
+          if [ "$RUNNER_OS" = Linux ]; then
+            if [ ! -s "$rerun_log" ]; then
+              echo "::error::No installer log captured from the second run"
+              exit 1
+            fi
+            if ! grep -qxF '==> The system packages for 3D Slicer and the en_US.UTF-8 locale are already installed' "$rerun_log"; then
+              echo "::error::The second run did not find the system packages and the locale already installed"
+              exit 1
+            fi
+            for line in 'Linux system setup: ' 'Run the Linux system setup steps above?' \
+              '==> Installing system packages for 3D Slicer' '==> Generating the en_US.UTF-8 locale'; do
+              if grep -qF -- "$line" "$rerun_log"; then
+                echo "::error::The second run ran the Linux system setup: found '$line'"
+                exit 1
+              fi
+            done
+            echo "Second run: system packages and locale already present, no sudo question, no apt-get"
+          fi
           grep -qE '^SWANe installer: FSL .* existing$' "$SUMMARY_2" ||
             { echo "::error::Expected the second run to reuse the FSL of the first one"; exit 1; }
           first="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_1")"
@@ -312,27 +412,30 @@ jobs:
             sed -n 's/^WARNING: \(.*\)/::error::Installer warning: \1/p' "$SUMMARY_2"
             exit 1
           fi
-          # One PATH block, in the profile the installer picks for $SHELL,
-          # never duplicated by a rerun.
-          in_expected="$(grep -c '^# >>> SWANe installer >>>$' "$EXPECTED_PROFILE" 2>/dev/null || true)"
-          if [ "$in_expected" != 1 ]; then
-            echo "::error::Expected one SWANe PATH block in $EXPECTED_PROFILE, found ${in_expected:-none}"
-            exit 1
-          fi
-          blocks="$(cat "$HOME/.zprofile" "$HOME/.bash_profile" "$HOME/.profile" 2>/dev/null |
-            grep -c '^# >>> SWANe installer >>>$' || true)"
-          if [ "$blocks" != 1 ]; then
-            echo "::error::Expected one SWANe PATH block in the login profiles, found $blocks"
-            exit 1
-          fi
-          if [ -n "$EXPECTED_RC" ]; then
-            in_rc="$(grep -c '^# >>> SWANe installer >>>$' "$EXPECTED_RC" 2>/dev/null || true)"
-            if [ "$in_rc" != 1 ]; then
-              echo "::error::Expected one SWANe PATH block in $EXPECTED_RC, found ${in_rc:-none}"
-              exit 1
+          # One PATH block, in the one file the installer picks for $SHELL,
+          # never duplicated by a rerun, and none in any other startup file
+          # (Ruling R26).
+          bad=0
+          for file in .zshrc .zprofile .zshenv .zlogin .bashrc .bash_profile .bash_login .profile; do
+            count="$(grep -c '^# >>> SWANe installer >>>$' "$HOME/$file" 2>/dev/null || true)"
+            count="${count:-0}"
+            if [ "$HOME/$file" = "$EXPECTED_PATH_FILE" ]; then
+              expected=1
+            else
+              expected=0
             fi
-          fi
+            echo "$HOME/$file: $count PATH block(s), expected $expected"
+            if [ "$count" != "$expected" ]; then
+              echo "::error::Expected $expected SWANe PATH block(s) in $HOME/$file, found $count"
+              bad=1
+            fi
+          done
+          [ "$bad" = 0 ] || exit 1
       - name: Check the environment after the second run
         shell: bash
         timeout-minutes: 20
-        run: bash -l .github/scripts/check_installed_env.sh "$SUMMARY_2"
+        run: |
+          bash -l .github/scripts/check_installed_env.sh "$SUMMARY_2"
+          if [ "$SHELL_NAME" = zsh ]; then
+            CHECK_SHELL=zsh zsh -l .github/scripts/check_installed_env.sh "$SUMMARY_2"
+          fi

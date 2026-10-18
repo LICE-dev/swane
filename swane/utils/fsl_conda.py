@@ -59,11 +59,18 @@ FSL_PACKAGES = (
 )
 #: Pinned too, so the FSL Python scripts run on the interpreter of the release.
 EXTRA_PACKAGES = ("python",)
-#: Requested even when the release environment does not list them (then
-#: unpinned): ``fsl-installer`` ships ``createFSLWrapper``, which the SWANe
-#: installer runs to create FSL's command wrappers in
-#: ``$FSLDIR/share/fsl/bin`` (the solver pulls it in as a dependency anyway).
-OPTIONAL_PACKAGES = ("fsl-installer",)
+#: The ``fsl-installer`` release requested, whatever the FSL release lists:
+#: it ships ``createFSLWrapper``, which the SWANe installer runs to create
+#: FSL's command wrappers in ``$FSLDIR/share/fsl/bin``. 3.21.0 is the version
+#: whose ``createFSLWrapper`` behaviour was observed (``bin/createFSLWrapper``;
+#: wrappers created only with ``FSL_CREATE_WRAPPER_SCRIPTS`` and ``PREFIX``
+#: set; exit status always 0); the release pin is not usable (FSL 6.0.7.8
+#: lists fsl-installer 3.9.0, which has no ``createFSLWrapper``). Bumping it
+#: requires a run of the installer CI workflow (installer-tests.yml).
+FSL_INSTALLER_VERSION = "3.21.0"
+#: Packages requested at a fixed version (``name=version``), whether or not
+#: the release environment lists them, and whatever version it lists.
+FIXED_PACKAGES = (("fsl-installer", FSL_INSTALLER_VERSION),)
 
 
 def host_platform() -> str:
@@ -130,9 +137,9 @@ def select_release(manifest: dict, platform: str, minimum: str, release=None):
 def pinned_specs(
     environment: str,
     packages=FSL_PACKAGES + EXTRA_PACKAGES,
-    optional=OPTIONAL_PACKAGES,
+    fixed=FIXED_PACKAGES,
 ) -> list:
-    """Conda specs for ``packages`` and ``optional``, from an environment file.
+    """Conda specs for ``packages`` (from an environment file) and ``fixed``.
 
     FSL's release environment files list one ``- name version`` per line.
 
@@ -142,14 +149,14 @@ def pinned_specs(
         The text of the release environment file.
     packages : tuple of str
         Packages pinned as ``name=version``; each must be listed.
-    optional : tuple of str
-        Packages pinned as ``name=version`` when listed, else requested by
-        name alone (unpinned).
+    fixed : tuple of (str, str)
+        ``(name, version)`` pairs requested as ``name=version``, ignoring
+        the environment file.
 
     Returns
     -------
     list of str
-        The specs of ``packages``, then those of ``optional``.
+        The specs of ``packages``, then those of ``fixed``.
 
     Raises
     ------
@@ -165,8 +172,7 @@ def pinned_specs(
     if missing:
         raise SystemExit("the FSL release environment lacks: %s" % ", ".join(missing))
     specs = ["%s=%s" % (name, found[name]) for name in packages]
-    for name in optional:
-        specs.append("%s=%s" % (name, found[name]) if name in found else name)
+    specs.extend("%s=%s" % pair for pair in fixed)
     return specs
 
 

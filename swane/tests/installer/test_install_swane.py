@@ -6,6 +6,7 @@ network tool or terminal is ever reached.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -22,10 +23,8 @@ from swane.tests.installer.harness import (
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="bash installer")
 
-MINIFORGE_TAG = "26.7.2-0"
+MINIFORGE_VERSION = "26.7.2-0"
 RELEASES = "https://github.com/conda-forge/miniforge/releases"
-GOOD_HASH = "a" * 64
-BAD_HASH = "b" * 64
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +68,23 @@ def test_piped_script_runs_main(sh):
     )
     assert result.returncode == 0
     assert result.stdout.startswith("Usage: install_swane.sh")
+
+
+def test_usage_explains_the_swane_spec_forms(sh):
+    """R35: --swane-spec goes verbatim to pip; each accepted form has an example."""
+    result = sh("usage")
+    assert result.returncode == 0
+    text = " ".join(result.stdout.split())
+    assert 'passed verbatim to "pip install -U"' in text
+    assert "(default: swane, the latest release on PyPI)" in text
+    assert "SWANe 0.2.5 or newer is required" in text
+    for example in (
+        "a PyPI version swane==0.2.5",
+        "a local checkout /path/to/swane",
+        "a git URL git+https://github.com/LICE-dev/swane.git@<branch>",
+        "a wheel file /path/to/swane-0.2.5-py3-none-any.whl",
+    ):
+        assert example in text
 
 
 @pytest.mark.parametrize(
@@ -356,6 +372,15 @@ def test_find_conda_none(sh):
 # Miniforge
 # ---------------------------------------------------------------------------
 
+#: The SHA-256 of the four pinned Miniforge installers, written out here on
+#: purpose (not read back from the script): a bump must change both.
+MINIFORGE_HASHES = {
+    "Linux-x86_64": "281b0ac7d550802efc81af633225a5e6116d29ae72f3ab4eae7168c3931a4c05",
+    "Linux-aarch64": "89b786c8d2c8b0fda7553914c1314ae4ddaa094503802f279377b19ac4463cb2",
+    "MacOSX-x86_64": "b00e7798658f92721a3ae2f6b9832695ffc6baf07758894d726268055359f6c5",
+    "MacOSX-arm64": "d70bfa2e97afcda96927c9b9ca0e2316cb7750e4ce651c94388267cbe9588711",
+}
+
 
 def _fake_miniforge_installer(sh):
     """A stand-in for the downloaded installer: logs its argv, creates PREFIX."""
@@ -375,81 +400,107 @@ def _fake_miniforge_installer(sh):
     return path
 
 
-def _serve(sh, installer=None):
-    """Bash that writes the fake download for $url into $out.
-
-    The installer served is ``installer`` (a file), by default
-    :func:`_fake_miniforge_installer`.
-    """
+def _stub_curl(sh, stub, installer=None):
+    """``curl -fsSL -o OUT URL`` copies the fake installer into OUT."""
     installer = installer or _fake_miniforge_installer(sh)
-    return (
-        'case "$url" in\n'
-        "    *.sha256)\n"
-        '        name="${url##*/}"\n'
-        '        printf "%%s  ./%%s\\n" %s "${name%%.sha256}" > "$out" ;;\n'
-        '    *) cp %s "$out" ;;\n'
-        "esac" % (GOOD_HASH, bash_quote(str(installer)))
-    )
-
-
-def _stub_curl(
-    sh, stub, tag_url="%s/tag/%s" % (RELEASES, MINIFORGE_TAG), installer=None
-):
     stub(
         "curl",
-        'out=""; url=""; write_out=0\n'
+        'out=""\n'
         'while [ "$#" -gt 0 ]; do\n'
-        '    case "$1" in\n'
-        '        -o) out="$2"; shift ;;\n'
-        "        -w) write_out=1; shift ;;\n"
-        "        -*) ;;\n"
-        '        *) url="$1" ;;\n'
-        "    esac\n"
+        '    case "$1" in -o) out="$2"; shift ;; esac\n'
         "    shift\n"
         "done\n"
-        'if [ "$write_out" = 1 ]; then printf "%%s" %s; exit 0; fi\n'
-        "%s" % (bash_quote(tag_url), _serve(sh, installer)),
+        'cp %s "$out"' % bash_quote(str(installer)),
     )
 
 
 def _stub_wget(sh, stub):
-    stub(
-        "wget",
-        'if [ "$1" = "-S" ]; then\n'
-        '    echo "  HTTP/1.1 302 Found" >&2\n'
-        '    echo "  Location: %s/tag/%s [following]" >&2\n'
-        "    exit 0\n"
-        "fi\n"
-        'out="$2"; url="$3"\n'
-        "%s" % (RELEASES, MINIFORGE_TAG, _serve(sh)),
-    )
+    """``wget -qO OUT URL`` copies the fake installer into OUT."""
+    stub("wget", 'cp %s "$2"' % bash_quote(str(_fake_miniforge_installer(sh))))
 
 
-def _stub_sha256sum(stub, digest=GOOD_HASH):
+def _stub_sha256sum(stub, digest=MINIFORGE_HASHES["Linux-x86_64"]):
     stub("sha256sum", 'printf "%%s  %%s\\n" %s "$1"' % digest)
 
 
-def _installer_name(system, machine):
-    return "Miniforge3-%s-%s-%s.sh" % (MINIFORGE_TAG, system, machine)
+def _installer_name(asset):
+    return "Miniforge3-%s-%s.sh" % (MINIFORGE_VERSION, asset)
 
 
-def test_install_miniforge_downloads_verifies_and_installs(sh, stub):
-    stub.platform("Linux", "x86_64")
+def _installer_url(asset):
+    return "%s/download/%s/%s" % (RELEASES, MINIFORGE_VERSION, _installer_name(asset))
+
+
+def test_miniforge_is_pinned_with_the_four_hashes(sh):
+    result = sh.code('printf "%s" "$MINIFORGE_VERSION"')
+    assert result.stdout == MINIFORGE_VERSION
+    for asset, digest in MINIFORGE_HASHES.items():
+        result = sh("miniforge_sha256", _installer_name(asset))
+        assert result.returncode == 0, asset
+        assert result.stdout == digest + "\n"
+    for name in (
+        "Miniforge3-26.7.1-0-Linux-x86_64.sh",
+        "Miniforge3-latest-Linux-x86_64.sh",
+    ):
+        assert sh("miniforge_sha256", name).returncode == 1
+
+
+@pytest.mark.parametrize(
+    "system, machine, asset",
+    [
+        ("Linux", "x86_64", "Linux-x86_64"),
+        ("Linux", "amd64", "Linux-x86_64"),
+        ("Linux", "aarch64", "Linux-aarch64"),
+        ("Linux", "arm64", "Linux-aarch64"),
+        ("Darwin", "x86_64", "MacOSX-x86_64"),
+        ("Darwin", "arm64", "MacOSX-arm64"),
+        ("Darwin", "aarch64", "MacOSX-arm64"),
+    ],
+)
+def test_miniforge_asset_normalises_the_machine_name(sh, stub, system, machine, asset):
+    """The aliases detect_platform accepts name the right installer."""
+    stub.platform(system, machine)
+    result = sh("miniforge_asset")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == _installer_name(asset) + "\n"
+
+
+@pytest.mark.parametrize(
+    "system, machine",
+    [("Linux", "ppc64le"), ("Darwin", "i386"), ("FreeBSD", "amd64")],
+)
+def test_install_miniforge_unknown_platform_dies_before_downloading(
+    sh, stub, system, machine
+):
+    stub.platform(system, machine)
     _stub_curl(sh, stub)
-    _stub_sha256sum(stub)
+    result = sh("install_miniforge", sh.home / "miniforge3")
+    assert result.returncode == 1
+    assert "No Miniforge installer for this platform: %s %s" % (
+        system,
+        machine,
+    ) in (result.stderr)
+    assert stub.calls("curl") == []
+
+
+@pytest.mark.parametrize(
+    "machine, asset", [("x86_64", "Linux-x86_64"), ("amd64", "Linux-x86_64")]
+)
+def test_install_miniforge_downloads_verifies_and_installs(sh, stub, machine, asset):
+    stub.platform("Linux", machine)
+    _stub_curl(sh, stub)
+    _stub_sha256sum(stub, MINIFORGE_HASHES[asset])
     prefix = sh.home / "miniforge3"
     result = sh("install_miniforge", prefix)
     assert result.returncode == 0, result.stderr
     assert result.stdout == "%s\n" % prefix, "installer output must not reach stdout"
     assert (prefix / "etc" / "profile.d" / "conda.sh").is_file()
-    name = _installer_name("Linux", "x86_64")
-    url = "%s/download/%s/%s" % (RELEASES, MINIFORGE_TAG, name)
+    # One download, the pinned installer itself: no "latest" lookup and no
+    # .sha256 file (the hash is in the script).
     curl = stub.calls("curl")
-    assert (
-        curl[0] == "curl -fsSLI -o /dev/null -w %%{url_effective} %s/latest" % RELEASES
-    )
-    assert curl[1].startswith("curl -fsSL -o ") and curl[1].endswith(" " + url)
-    assert curl[2].endswith(" " + url + ".sha256")
+    assert len(curl) == 1, curl
+    assert curl[0].startswith("curl -fsSL -o ")
+    assert curl[0].endswith(" " + _installer_url(asset))
     assert stub.calls("miniforge-installer") == [
         "miniforge-installer -b -p %s" % prefix
     ]
@@ -460,50 +511,62 @@ def test_install_miniforge_downloads_verifies_and_installs(sh, stub):
 def test_install_miniforge_macos_uses_shasum(sh, stub):
     stub.platform("Darwin", "arm64")
     _stub_curl(sh, stub)
-    stub("shasum", 'printf "%%s  %%s\\n" %s "$3"' % GOOD_HASH)
+    stub("shasum", 'printf "%%s  %%s\\n" %s "$3"' % MINIFORGE_HASHES["MacOSX-arm64"])
     prefix = sh.tmp / "forge"
     result = sh("install_miniforge", prefix)
     assert result.returncode == 0, result.stderr
-    assert stub.calls("curl")[1].endswith("/" + _installer_name("MacOSX", "arm64"))
+    assert stub.calls("curl")[0].endswith(" " + _installer_url("MacOSX-arm64"))
     assert stub.calls("shasum")[0].startswith("shasum -a 256 ")
 
 
-def test_install_miniforge_refuses_checksum_mismatch(sh, stub):
+@pytest.mark.parametrize(
+    "digest",
+    [
+        "b" * 64,
+        # The right hash, but of another platform's installer.
+        MINIFORGE_HASHES["Linux-aarch64"],
+    ],
+)
+def test_install_miniforge_refuses_checksum_mismatch(sh, stub, digest):
     stub.platform("Linux", "x86_64")
     _stub_curl(sh, stub)
-    _stub_sha256sum(stub, BAD_HASH)
+    _stub_sha256sum(stub, digest)
     prefix = sh.home / "miniforge3"
     result = sh("install_miniforge", prefix)
     assert result.returncode == 1
     assert "checksum mismatch" in result.stderr
+    assert MINIFORGE_HASHES["Linux-x86_64"] in result.stderr
     assert result.stdout == ""
     assert not prefix.exists()
     assert stub.calls("miniforge-installer") == []
-    assert list(sh.tmpdir.iterdir()) == []
+    assert list(sh.tmpdir.iterdir()) == [], "the download is deleted"
 
 
 def test_install_miniforge_falls_back_to_wget(sh, stub):
-    stub.platform("Linux", "aarch64")
+    stub.platform("Linux", "arm64")
     _stub_wget(sh, stub)
-    _stub_sha256sum(stub)
+    _stub_sha256sum(stub, MINIFORGE_HASHES["Linux-aarch64"])
     prefix = sh.home / "miniforge3"
     result = sh("install_miniforge", prefix)
     assert result.returncode == 0, result.stderr
     wget = stub.calls("wget")
-    assert wget[0] == "wget -S --spider %s/latest" % RELEASES
-    assert wget[1].startswith("wget -qO ")
-    assert wget[1].endswith("/" + _installer_name("Linux", "aarch64"))
+    assert len(wget) == 1, wget
+    assert wget[0].startswith("wget -qO ")
+    assert wget[0].endswith(" " + _installer_url("Linux-aarch64"))
     assert (prefix / "etc" / "profile.d" / "conda.sh").is_file()
 
 
-def test_install_miniforge_without_latest_tag_dies(sh, stub):
+def test_install_miniforge_download_failure_dies(sh, stub):
     stub.platform("Linux", "x86_64")
-    _stub_curl(sh, stub, tag_url="https://github.com/login")
+    stub("curl", "exit 22")
     _stub_sha256sum(stub)
     result = sh("install_miniforge", sh.home / "miniforge3")
     assert result.returncode == 1
-    assert "latest Miniforge release" in result.stderr
-    assert len(stub.calls("curl")) == 1
+    assert "Could not download Miniforge from %s" % _installer_url("Linux-x86_64") in (
+        result.stderr
+    )
+    assert stub.calls("sha256sum") == []
+    assert list(sh.tmpdir.iterdir()) == []
 
 
 def test_install_miniforge_reuses_existing_prefix(sh, stub):
@@ -551,19 +614,26 @@ def test_install_miniforge_refuses_fsl_prefix(sh, stub, case):
 # Linux system packages and locale
 # ---------------------------------------------------------------------------
 
-#: The 3D Slicer package list, written out here on purpose (not read back from
-#: the script): the installer must install exactly these, in this order.
+#: The 3D Slicer package list (plus tcsh and unzip for FreeSurfer), written
+#: out here on purpose (not read back from the script): the installer must
+#: install exactly these, in this order.
 APT_LIST = (
     "libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 "
     "libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 "
     "libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 "
     "libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 "
-    "libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 dc bc"
+    "libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 dc bc tcsh unzip"
 )
 #: apt-get waits for the dpkg lock instead of failing at once.
 APT_LOCK = "-o DPkg::Lock::Timeout=300"
 APT_INSTALL = "apt-get %s install -y --no-install-recommends" % APT_LOCK
 APT_UPDATE = "apt-get %s update" % APT_LOCK
+#: The one question of the Linux system step.
+SYSTEM_QUESTION = "Run the Linux system setup steps above?"
+#: What the installer says to do by hand about a missing locale (R25).
+LOCALE_HINT = "enable en_US.UTF-8 in your system's locale configuration"
+#: Runs the step and prints the recorded warnings on stdout.
+SYSTEM_STEP = 'linux_system_step; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
 
 
 def _stub_linux_system(stub, apt_body=""):
@@ -571,6 +641,46 @@ def _stub_linux_system(stub, apt_body=""):
     stub.platform("Linux", "x86_64")
     stub("sudo", '"$@"')
     stub("apt-get", apt_body)
+
+
+def _stub_locale(sh, stub, present=False, generated=True):
+    """``locale -a`` lists en_US.utf8 when ``present``, or once ``locale-gen``
+    ran successfully if ``generated``."""
+    marker = sh.tmp / "locale-generated"
+    stub(
+        "locale",
+        "echo C; echo POSIX\n"
+        "%s"
+        "[ -f %s ] && echo en_US.utf8\n"
+        "exit 0" % ("echo en_US.utf8\n" if present else "", bash_quote(str(marker))),
+    )
+    stub("locale-gen", "touch %s" % bash_quote(str(marker)) if generated else "")
+
+
+def _stub_dpkg(stub, missing=(), known=True, status="install ok installed"):
+    """``dpkg-query -W -f=... PKG`` reports PKG with ``status`` (installed),
+    except the ``missing`` ones (known, not installed); with ``known`` False
+    it knows no package at all (exit 1). ``dpkg --print-architecture`` prints
+    amd64."""
+    stub("dpkg", "echo amd64")
+    stub(
+        "dpkg-query",
+        "%s"
+        'pkg="${3%%:amd64}"\n'
+        'case " %s " in *" $pkg "*) echo "unknown ok not-installed"; exit 0 ;; esac\n'
+        "echo %s"
+        % ("" if known else "exit 1\n", " ".join(missing), bash_quote(status)),
+    )
+
+
+def _assert_shell_line(command):
+    """``command`` is one valid shell line (``bash -n``): pasted as is, it
+    cannot fail on a syntax error."""
+    assert "\n" not in command
+    check = subprocess.run(
+        ["bash", "-n", "-c", command], capture_output=True, text=True, check=False
+    )
+    assert check.returncode == 0, (command, check.stderr)
 
 
 def test_apt_installs_exact_package_list(sh, stub):
@@ -588,13 +698,6 @@ def test_apt_installs_exact_package_list(sh, stub):
         "sudo %s %s" % (APT_INSTALL, APT_LIST),
         "sudo %s libasound2t64" % APT_INSTALL,
     ]
-
-
-def test_apt_yes_does_not_make_sudo_non_interactive(sh, stub):
-    _stub_linux_system(stub)
-    result = sh("install_linux_packages", env={"ASSUME_YES": "1"})
-    assert result.returncode == 0
-    assert all(call.startswith("sudo apt-get") for call in stub.calls("sudo"))
 
 
 def test_apt_falls_back_to_libasound2(sh, stub):
@@ -618,30 +721,6 @@ def test_apt_reports_when_both_alsa_packages_fail(sh, stub):
     )
     assert result.returncode == 0
     assert "libasound2" in result.stdout
-
-
-def test_no_apt_prints_list_and_continues(sh, stub):
-    stub.platform("Linux", "x86_64")
-    stub("sudo", '"$@"')
-    result = sh.code(
-        'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
-    )
-    assert result.returncode == 0
-    assert "libxcb-cursor0" in result.stderr
-    assert "libxcb-cursor0" in result.stdout  # recorded for the summary
-    assert stub.calls("sudo") == []
-
-
-@pytest.mark.skipif(os.geteuid() == 0, reason="needs a non-root user")
-def test_no_sudo_for_non_root_warns_and_continues(sh, stub):
-    stub.platform("Linux", "x86_64")
-    stub("apt-get")
-    result = sh.code(
-        'install_linux_packages; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc'
-    )
-    assert result.returncode == 0
-    assert "libxcb-cursor0" in result.stdout
-    assert stub.calls("apt-get") == []
 
 
 def test_apt_failure_warns_and_continues(sh, stub):
@@ -669,11 +748,208 @@ def test_apt_update_failure_warns_and_still_installs(sh, stub):
     assert "%s %s" % (APT_INSTALL, APT_LIST) in stub.calls("apt-get")
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="needs a non-root user")
+@pytest.mark.parametrize("answer", ["y\n", "yes\n"])
+def test_system_step_asks_once_and_runs_both_steps(sh, stub, answer):
+    """R24: one question, before the first sudo command, naming the steps."""
+    _stub_linux_system(stub)
+    _stub_locale(sh, stub)
+    result = sh.code(SYSTEM_STEP, tty=answer)
+    assert result.returncode == 0, result.stderr
+    assert result.stderr.count(SYSTEM_QUESTION) == 1
+    assert "may ask for your password" in result.stderr
+    assert "apt-get install %s" % APT_LIST in result.stderr
+    assert "locale-gen en_US.UTF-8" in result.stderr
+    # The question comes before the first privileged step.
+    assert result.stderr.index(SYSTEM_QUESTION) < result.stderr.index(
+        "Installing system packages"
+    )
+    assert stub.calls("sudo") == [
+        "sudo %s" % APT_UPDATE,
+        "sudo %s %s" % (APT_INSTALL, APT_LIST),
+        "sudo %s libasound2t64" % APT_INSTALL,
+        "sudo locale-gen en_US.UTF-8",
+    ]
+    assert result.stdout == "", "nothing to warn about"
+
+
+@pytest.mark.parametrize("answer", ["n\n", "\n", "no\n"])
+def test_system_step_declined_runs_no_sudo_and_warns(sh, stub, answer):
+    _stub_linux_system(stub)
+    _stub_locale(sh, stub)
+    result = sh.code(SYSTEM_STEP, tty=answer)
+    assert result.returncode == 0, result.stderr
+    assert result.stderr.count(SYSTEM_QUESTION) == 1
+    assert stub.calls("sudo") == []
+    assert stub.calls("apt-get") == []
+    assert stub.calls("locale-gen") == []
+    # One warning, for the summary, with the commands to run by hand.
+    warnings = result.stdout.splitlines()
+    assert len(warnings) == 1, warnings
+    assert warnings[0].startswith("Linux system setup declined")
+    # The libasound2 alternative is prose before the commands; everything
+    # after "run: " is one shell line that can be pasted as is.
+    prose, commands = warnings[0].split(", run: ")
+    assert "on releases without libasound2t64, install libasound2 instead" in prose
+    assert commands == (
+        "sudo apt-get update && sudo apt-get install --no-install-recommends "
+        "%s libasound2t64; sudo locale-gen en_US.UTF-8" % APT_LIST
+    )
+    _assert_shell_line(commands)
+
+
+def test_system_step_declined_with_the_locale_present_names_only_apt(sh, stub):
+    _stub_linux_system(stub)
+    _stub_locale(sh, stub, present=True)
+    result = sh.code(SYSTEM_STEP, tty="n\n")
+    assert result.returncode == 0
+    assert "locale-gen" not in result.stderr
+    assert "locale-gen" not in result.stdout
+    commands = result.stdout.splitlines()[0].split(", run: ")[1]
+    assert commands == (
+        "sudo apt-get update && sudo apt-get install --no-install-recommends "
+        "%s libasound2t64" % APT_LIST
+    )
+    _assert_shell_line(commands)
+
+
+def test_system_step_assume_yes_needs_no_terminal(sh, stub):
+    _stub_linux_system(stub)
+    _stub_locale(sh, stub)
+    result = sh.code(SYSTEM_STEP, env={"ASSUME_YES": "1", "SWANE_TTY": "/nonexistent"})
+    assert result.returncode == 0, result.stderr
+    assert "%s yes (--yes)" % SYSTEM_QUESTION in result.stderr
+    assert stub.calls("sudo")[0] == "sudo %s" % APT_UPDATE
+    assert stub.calls("sudo")[-1] == "sudo locale-gen en_US.UTF-8"
+
+
+def test_system_step_without_terminal_dies_like_every_prompt(sh, stub):
+    _stub_linux_system(stub)
+    _stub_locale(sh, stub)
+    result = sh.code(SYSTEM_STEP, env={"SWANE_TTY": "/nonexistent"})
+    assert result.returncode == 1
+    assert "No terminal available: rerun with --yes" in result.stderr
+    assert stub.calls("sudo") == []
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        "install ok installed",
+        # A package the user put on hold is still installed.
+        "hold ok installed",
+    ],
+)
+def test_system_step_with_nothing_missing_asks_nothing(sh, stub, status):
+    """dpkg reports every package (libasound2 as the ALSA one) and the locale
+    exists: no question, no sudo, also on a rerun without a terminal."""
+    _stub_linux_system(stub)
+    _stub_locale(sh, stub, present=True)
+    _stub_dpkg(stub, missing=("libasound2t64",), status=status)
+    result = sh.code(SYSTEM_STEP, env={"SWANE_TTY": "/nonexistent"})
+    assert result.returncode == 0, result.stderr
+    assert SYSTEM_QUESTION not in result.stderr
+    # The exact line the installer-tests workflow requires on its rerun.
+    assert (
+        "==> The system packages for 3D Slicer and the en_US.UTF-8 locale are "
+        "already installed\n"
+    ) in result.stderr
+    assert stub.calls("sudo") == []
+    assert result.stdout == ""
+    # The native architecture is asked first.
+    assert "dpkg-query -W -f=${Status}\\n libegl1:amd64" in stub.calls("dpkg-query")
+
+
+@pytest.mark.parametrize(
+    "dpkg",
+    [
+        {"missing": ("tcsh",)},
+        {"missing": ("libasound2t64", "libasound2")},
+        # dpkg knows none of them (never installed on this host).
+        {"known": False},
+        # Removed, only the configuration files are left.
+        {"status": "deinstall ok config-files"},
+    ],
+)
+def test_system_step_asks_when_a_package_is_missing(sh, stub, dpkg):
+    _stub_linux_system(stub)
+    _stub_locale(sh, stub, present=True)
+    _stub_dpkg(stub, **dpkg)
+    result = sh.code(SYSTEM_STEP, tty="y\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stderr.count(SYSTEM_QUESTION) == 1
+    assert "locale-gen" not in result.stderr
+    assert stub.calls("sudo")[1] == "sudo %s %s" % (APT_INSTALL, APT_LIST)
+    assert stub.calls("locale-gen") == []
+
+
+def test_system_step_plain_name_fallback_counts_as_installed(sh, stub):
+    """dpkg-query fails for PKG:amd64 but knows PKG (Architecture: all)."""
+    _stub_linux_system(stub)
+    _stub_locale(sh, stub, present=True)
+    stub("dpkg", "echo amd64")
+    stub(
+        "dpkg-query",
+        'case "$3" in *:amd64) exit 1 ;; esac\necho "install ok installed"',
+    )
+    result = sh.code(SYSTEM_STEP, env={"SWANE_TTY": "/nonexistent"})
+    assert result.returncode == 0, result.stderr
+    assert SYSTEM_QUESTION not in result.stderr
+    assert stub.calls("sudo") == []
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="needs a non-root user")
+def test_system_step_packages_present_locale_missing_asks_for_locale_only(sh, stub):
+    _stub_linux_system(stub)
+    _stub_locale(sh, stub)
+    _stub_dpkg(stub)
+    result = sh.code(SYSTEM_STEP, tty="y\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stderr.count(SYSTEM_QUESTION) == 1
+    assert "apt-get install" not in result.stderr
+    assert stub.calls("sudo") == ["sudo locale-gen en_US.UTF-8"]
+
+
+def test_system_step_without_apt_never_asks_or_runs_sudo(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("sudo", '"$@"')
+    _stub_locale(sh, stub)
+    result = sh.code(SYSTEM_STEP, env={"SWANE_TTY": "/nonexistent"})
+    assert result.returncode == 0, result.stderr
+    assert SYSTEM_QUESTION not in result.stderr
+    assert stub.calls("sudo") == []
+    assert stub.calls("locale-gen") == []
+    warnings = result.stdout.splitlines()
+    assert warnings[0].startswith("apt-get not found")
+    assert "libxcb-cursor0" in warnings[0]
+    assert warnings[1].startswith("The en_US.UTF-8 locale is missing: ")
+    assert LOCALE_HINT in warnings[1]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="needs a non-root user")
+def test_system_step_without_sudo_for_non_root_warns(sh, stub):
+    stub.platform("Linux", "x86_64")
+    stub("apt-get")
+    _stub_locale(sh, stub)
+    result = sh.code(SYSTEM_STEP, env={"SWANE_TTY": "/nonexistent"})
+    assert result.returncode == 0, result.stderr
+    assert SYSTEM_QUESTION not in result.stderr
+    assert stub.calls("apt-get") == []
+    warnings = result.stdout.splitlines()
+    assert len(warnings) == 2, warnings
+    # The command ends the warning, with the libasound2 alternative as
+    # prose before it.
+    prose, command = warnings[0].split(": apt-get ")
+    assert "on releases without libasound2t64, install libasound2 instead" in prose
+    assert command == "install --no-install-recommends %s libasound2t64" % APT_LIST
+    _assert_shell_line("apt-get " + command)
+    assert LOCALE_HINT in warnings[1]
+
+
 def test_locale_present_is_noop(sh, stub):
     stub.platform("Linux", "x86_64")
     stub("sudo", '"$@"')
-    stub("locale", "echo C; echo en_US.utf8; echo POSIX")
-    stub("locale-gen")
+    _stub_locale(sh, stub, present=True)
     result = sh("ensure_locale")
     assert result.returncode == 0
     assert stub.calls("locale-gen") == []
@@ -692,47 +968,52 @@ def test_has_en_us_locale_rejects_others(sh, stub, listing):
     assert sh("has_en_us_locale").returncode == 1
 
 
-def test_locale_missing_runs_locale_gen(sh, stub):
+def test_locale_missing_runs_only_locale_gen(sh, stub):
+    """R25: the one privileged command is locale-gen; nothing under /etc is
+    edited (a stand-in locale.gen with the entry commented stays as is)."""
     stub.platform("Linux", "x86_64")
     stub("sudo", '"$@"')
-    stub("locale", "echo C; echo POSIX")
-    stub("locale-gen")
-    result = sh("ensure_locale")
-    assert result.returncode == 0
+    _stub_locale(sh, stub)
+    etc = sh.tmp / "etc"
+    etc.mkdir()
+    (etc / "locale.gen").write_text("# en_US.UTF-8 UTF-8\n")
+    result = sh.code(
+        'ensure_locale; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc',
+        env={"SWANE_LOCALE_GEN_FILE": etc / "locale.gen"},
+    )
+    assert result.returncode == 0, result.stderr
     assert stub.calls("locale-gen") == ["locale-gen en_US.UTF-8"]
     assert stub.calls("sudo") == ["sudo locale-gen en_US.UTF-8"]
+    assert (etc / "locale.gen").read_text() == "# en_US.UTF-8 UTF-8\n"
+    assert os.listdir(etc) == ["locale.gen"]
+    assert result.stdout == "", "the locale exists after locale-gen"
 
 
-def test_locale_missing_enables_entry_in_locale_gen_file(sh, stub):
-    """The commented en_US line is uncommented through sudo, before locale-gen."""
+def test_script_never_names_a_file_under_etc():
+    """R25: no command of the installer reads or writes a system /etc path
+    (only "<prefix>/etc/..." of conda environments appear in code lines)."""
+    offending = []
+    for number, line in enumerate(SCRIPT.read_text().splitlines(), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        if re.search(r"(^|[\s\"'=:(])/etc(/|\b)", line):
+            offending.append("%d: %s" % (number, line))
+    assert offending == []
+    assert "locale.gen" not in SCRIPT.read_text()
+
+
+def test_locale_still_missing_after_locale_gen_warns(sh, stub):
+    """Debian's locale-gen ignores its argument: the locale stays missing."""
     stub.platform("Linux", "x86_64")
     stub("sudo", '"$@"')
-    stub("locale", "echo C")
-    stub("locale-gen")
-    locale_gen = sh.tmp / "locale.gen"
-    locale_gen.write_text(
-        "# de_DE.UTF-8 UTF-8\n#  en_US.UTF-8 UTF-8\n# fr_FR.UTF-8 UTF-8\n"
-    )
-    result = sh("ensure_locale", env={"SWANE_LOCALE_GEN_FILE": locale_gen})
+    _stub_locale(sh, stub, generated=False)
+    result = sh.code('ensure_locale; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc')
     assert result.returncode == 0
-    assert locale_gen.read_text() == (
-        "# de_DE.UTF-8 UTF-8\nen_US.UTF-8 UTF-8\n# fr_FR.UTF-8 UTF-8\n"
+    assert result.stdout.startswith(
+        "The en_US.UTF-8 locale is still missing after locale-gen en_US.UTF-8: "
     )
-    assert stub.calls("sudo") == [
-        "sudo sed -i s/^# *\\(en_US.UTF-8 UTF-8\\)/\\1/ %s" % locale_gen,
-        "sudo locale-gen en_US.UTF-8",
-    ]
-
-
-def test_locale_without_locale_gen_file_skips_the_edit(sh, stub):
-    stub.platform("Linux", "x86_64")
-    stub("sudo", '"$@"')
-    stub("locale", "echo C")
-    stub("locale-gen")
-    assert not (sh.tmp / "locale.gen").exists()
-    result = sh("ensure_locale")
-    assert result.returncode == 0
-    assert stub.calls("sudo") == ["sudo locale-gen en_US.UTF-8"]
+    assert LOCALE_HINT in result.stdout
+    assert "WARNING:" in result.stderr
 
 
 def test_locale_gen_failure_warns_and_continues(sh, stub):
@@ -742,39 +1023,26 @@ def test_locale_gen_failure_warns_and_continues(sh, stub):
     stub("locale-gen", "exit 1")
     result = sh.code('ensure_locale; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc')
     assert result.returncode == 0
-    assert "locale-gen en_US.UTF-8 failed" in result.stdout
+    assert result.stdout.startswith("locale-gen en_US.UTF-8 failed: ")
+    assert LOCALE_HINT in result.stdout
     assert "WARNING:" in result.stderr
 
 
-def test_locale_sudo_failure_warns_and_continues(sh, stub):
-    stub.platform("Linux", "x86_64")
-    stub("sudo", "exit 1")
-    stub("locale", "echo C")
-    locale_gen = sh.tmp / "locale.gen"
-    locale_gen.write_text("# en_US.UTF-8 UTF-8\n")
-    result = sh.code(
-        'ensure_locale; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc',
-        env={"SWANE_LOCALE_GEN_FILE": locale_gen},
-    )
-    assert result.returncode == 0
-    assert "locale-gen en_US.UTF-8 failed" in result.stdout
-    assert "Could not enable en_US.UTF-8" in result.stdout
-    # sudo failed before the edit: the real file is untouched.
-    assert locale_gen.read_text() == "# en_US.UTF-8 UTF-8\n"
-
-
-@pytest.mark.parametrize("func", ["install_linux_packages", "ensure_locale"])
+@pytest.mark.parametrize(
+    "func", ["install_linux_packages", "ensure_locale", "linux_system_step"]
+)
 def test_linux_steps_noop_on_macos(sh, stub, func):
     stub.platform("Darwin", "arm64")
     stub("sudo", '"$@"')
     stub("apt-get")
     stub("locale", "echo C")
     stub("locale-gen")
-    result = sh(func)
+    result = sh(func, env={"SWANE_TTY": "/nonexistent"})
     assert result.returncode == 0
     assert stub.calls("sudo") == []
     assert stub.calls("apt-get") == []
     assert stub.calls("locale-gen") == []
+    assert result.stderr == ""
 
 
 # ---------------------------------------------------------------------------
@@ -2781,7 +3049,7 @@ def test_hook_activate_deactivate_roundtrip(sh, stub):
 
 MARKER_BEGIN = "# >>> SWANe installer >>>"
 MARKER_END = "# <<< SWANe installer <<<"
-#: The block the installer appends to the login profile and the rc file.
+#: The block the installer appends to the one startup file of the shell.
 PATH_BLOCK = (
     "%s\n"
     'case ":$PATH:" in\n'
@@ -2796,11 +3064,13 @@ class LauncherWorld:
     """A fake conda root and swane-env, and the launcher written for them.
 
     ``conda.sh`` defines a ``conda`` function that logs its arguments; the
-    fake ``<prefix>/bin/swane`` prints what the real SWANe would see.
+    fake ``<prefix>/bin/swane`` prints what the real SWANe would see. The
+    launcher is written on ``system`` (``uname -s``, Linux by default).
     """
 
-    def __init__(self, sh, prefix_name="swane-env"):
+    def __init__(self, sh, prefix_name="swane-env", system="Linux"):
         self.sh = sh
+        sh.stubs.platform(system, "x86_64")
         self.root = make_conda_root(sh.tmp / "conda root")
         self.prefix = sh.tmp / prefix_name
         self.log = sh.tmp / "conda.log"
@@ -2814,6 +3084,7 @@ class LauncherWorld:
             self.prefix / "bin" / "swane",
             'echo "launcher=$SWANE_LAUNCHER"\n'
             'echo "nousersite=${PYTHONNOUSERSITE-unset}"\n'
+            'echo "qpa=${QT_QPA_PLATFORM-unset}"\n'
             'echo "args=$*"',
         )
         self.launcher = sh.home / ".local" / "bin" / "swane"
@@ -2847,9 +3118,36 @@ def test_launcher_activates_and_execs(sh):
         "launcher=%s" % world.launcher,
         # R11: ~/.local packages never shadow swane-env.
         "nousersite=1",
+        # R32: Qt through xcb on Linux.
+        "qpa=xcb",
         "args=a b",
     ]
     assert world.log.read_text() == "activate %s\n" % world.prefix
+
+
+@pytest.mark.parametrize(
+    "system, given, seen",
+    [
+        ("Linux", None, "xcb"),
+        ("Linux", "", "xcb"),
+        ("Linux", "wayland", "wayland"),
+        ("Linux", "offscreen", "offscreen"),
+        ("Darwin", None, "unset"),
+        ("Darwin", "cocoa", "cocoa"),
+    ],
+)
+def test_launcher_qt_platform_only_on_linux_and_only_when_unset(
+    sh, system, given, seen
+):
+    """R32: a QT_QPA_PLATFORM of the user's always wins; macOS is untouched."""
+    world = LauncherWorld(sh, system=system)
+    world.write()
+    text = world.launcher.read_text()
+    assert ("QT_QPA_PLATFORM" in text) is (system == "Linux")
+    assert subprocess.run([BASH, "-n", str(world.launcher)]).returncode == 0
+    result = world.run(env={"QT_QPA_PLATFORM": given})
+    assert result.returncode == 0, result.stderr
+    assert "qpa=%s" % seen in result.stdout.splitlines()
 
 
 def test_launcher_pins_root_and_prefix_on_single_lines(sh):
@@ -2960,57 +3258,124 @@ def test_launcher_fails_cleanly_without_conda_sh(sh):
 # ~/.local/bin on PATH
 # ---------------------------------------------------------------------------
 
-
-@pytest.mark.parametrize(
-    "shell, profile_name, rc_name",
-    [
-        ("/bin/zsh", ".zprofile", ".zshrc"),
-        ("/bin/bash", ".profile", ".bashrc"),
-    ],
+#: Every startup file a shell may read: the installer writes exactly one.
+STARTUP_FILES = (
+    ".zshrc",
+    ".zprofile",
+    ".zshenv",
+    ".zlogin",
+    ".bashrc",
+    ".bash_profile",
+    ".bash_login",
+    ".profile",
 )
-def test_profile_and_rc_blocks_added_once(sh, shell, profile_name, rc_name):
-    """Review Focus 5: files without a final newline, run twice.
 
-    Linux terminals start interactive non-login shells, which read only the
-    rc file: the block goes there too.
-    """
-    profile = sh.home / profile_name
-    rc_file = sh.home / rc_name
-    profile.write_text("export FOO=1")
-    rc_file.write_text("alias ll='ls -l'")
+#: (SHELL, uname -s, the one file that gets the block) -- R26.
+PATH_FILE_CASES = [
+    ("/bin/zsh", "Linux", ".zshrc"),
+    ("/bin/zsh", "Darwin", ".zshrc"),
+    ("/bin/ZSH", "Darwin", ".zshrc"),
+    ("/bin/bash", "Linux", ".bashrc"),
+    ("/usr/bin/bash", "Linux", ".bashrc"),
+    ("/bin/bash", "Darwin", ".bash_profile"),
+    ("/opt/homebrew/bin/bash", "Darwin", ".bash_profile"),
+    ("/bin/sh", "Linux", ".profile"),
+    ("/usr/bin/dash", "Linux", ".profile"),
+    ("/bin/sh", "Darwin", ".profile"),
+]
+
+
+def _blocks(sh):
+    """{file name: number of PATH blocks} for every existing startup file."""
+    found = {}
+    for name in STARTUP_FILES:
+        path = sh.home / name
+        if path.exists():
+            found[name] = path.read_text().count(MARKER_BEGIN)
+    return found
+
+
+@pytest.mark.parametrize("shell, system, expected", PATH_FILE_CASES)
+def test_path_block_goes_into_one_file_per_shell(sh, stub, shell, system, expected):
+    stub.platform(system, "x86_64")
+    result = sh("path_startup_file", env={"SHELL": shell})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s/%s\n" % (sh.home, expected)
     for _ in range(2):
         result = sh("ensure_local_bin_on_path", env={"SHELL": shell})
         assert result.returncode == 0, result.stderr
-    assert profile.read_text() == "export FOO=1\n" + PATH_BLOCK
+    assert (sh.home / expected).read_text() == PATH_BLOCK
+    assert sorted(os.listdir(sh.home)) == [expected], "no other file is written"
+
+
+@pytest.mark.parametrize("shell, system, expected", PATH_FILE_CASES)
+def test_path_block_leaves_the_other_startup_files_alone(
+    sh, stub, shell, system, expected
+):
+    """Existing startup files of every kind: only the chosen one changes."""
+    stub.platform(system, "x86_64")
+    for name in STARTUP_FILES:
+        (sh.home / name).write_text("# %s\n" % name)
+    assert sh("ensure_local_bin_on_path", env={"SHELL": shell}).returncode == 0
+    for name in STARTUP_FILES:
+        text = (sh.home / name).read_text()
+        if name == expected:
+            assert text == "# %s\n%s" % (name, PATH_BLOCK)
+        else:
+            assert text == "# %s\n" % name, name
+
+
+def test_path_block_keeps_content_without_final_newline(sh, stub):
+    """Review Focus 5: a file without a final newline, run twice."""
+    stub.platform("Linux", "x86_64")
+    rc_file = sh.home / ".bashrc"
+    rc_file.write_text("alias ll='ls -l'")
+    for _ in range(2):
+        result = sh("ensure_local_bin_on_path", env={"SHELL": "/bin/bash"})
+        assert result.returncode == 0, result.stderr
     assert rc_file.read_text() == "alias ll='ls -l'\n" + PATH_BLOCK
+    assert _blocks(sh) == {".bashrc": 1}
 
 
-def test_profile_and_rc_created_and_newline_not_doubled(sh):
-    assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/zsh"}).returncode == 0
-    assert (sh.home / ".zprofile").read_text() == PATH_BLOCK
-    assert (sh.home / ".zshrc").read_text() == PATH_BLOCK
-    other = sh.home / ".profile"
-    other.write_text("a\n")
-    assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/sh"}).returncode == 0
-    assert other.read_text() == "a\n" + PATH_BLOCK
-    # sh and dash have no rc file of their own.
-    assert sorted(os.listdir(sh.home)) == [".profile", ".zprofile", ".zshrc"]
-
-
-def test_rc_block_added_when_the_profile_already_has_one(sh):
-    """A rerun over an earlier install (block in the login profile only)."""
-    profile = sh.home / ".profile"
-    profile.write_text(
-        '%s\nexport PATH="$HOME/.local/bin:$PATH"\n%s\n'
-        % (
-            MARKER_BEGIN,
-            MARKER_END,
-        )
-    )
-    before = profile.read_text()
+@pytest.mark.parametrize(
+    "existing, expected",
+    [
+        ((), ".bash_profile"),
+        ((".profile",), ".profile"),
+        ((".bash_login", ".profile"), ".bash_login"),
+        ((".bash_profile", ".bash_login", ".profile"), ".bash_profile"),
+        ((".bashrc",), ".bash_profile"),
+    ],
+)
+def test_macos_bash_never_hides_the_login_file_bash_reads(sh, stub, existing, expected):
+    """bash login reads only the first of .bash_profile, .bash_login and
+    .profile: creating .bash_profile next to the user's .profile would hide it."""
+    stub.platform("Darwin", "arm64")
+    for name in existing:
+        (sh.home / name).write_text("")
+    result = sh("path_startup_file", env={"SHELL": "/bin/bash"})
+    assert result.stdout == "%s/%s\n" % (sh.home, expected)
     assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/bash"}).returncode == 0
-    assert profile.read_text() == before
-    assert (sh.home / ".bashrc").read_text() == PATH_BLOCK
+    assert _blocks(sh) == dict(
+        {name: 0 for name in existing}, **{expected: 1}
+    ), "the block goes into one file"
+
+
+def test_linux_bash_uses_bashrc_even_with_a_bash_profile(sh, stub):
+    stub.platform("Linux", "x86_64")
+    (sh.home / ".bash_profile").write_text("keep\n")
+    assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/bash"}).returncode == 0
+    assert (sh.home / ".bash_profile").read_text() == "keep\n"
+    assert _blocks(sh) == {".bash_profile": 0, ".bashrc": 1}
+
+
+def test_rerun_over_an_older_install_adds_no_second_file(sh, stub):
+    """An earlier installer wrote .zprofile and .zshrc: nothing changes."""
+    stub.platform("Darwin", "arm64")
+    for name in (".zprofile", ".zshrc"):
+        (sh.home / name).write_text(PATH_BLOCK)
+    assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/zsh"}).returncode == 0
+    assert _blocks(sh) == {".zprofile": 1, ".zshrc": 1}
 
 
 @pytest.mark.parametrize("shell", ["bash", "dash", "zsh"])
@@ -3043,7 +3408,8 @@ def test_path_block_never_duplicates_the_entry(sh, shell):
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root can write a read-only file")
-def test_unwritable_rc_file_warns_and_keeps_the_profile_block(sh):
+def test_unwritable_startup_file_warns(sh, stub):
+    stub.platform("Linux", "x86_64")
     rc_file = sh.home / ".bashrc"
     rc_file.write_text("x\n")
     rc_file.chmod(0o444)
@@ -3055,19 +3421,19 @@ def test_unwritable_rc_file_warns_and_keeps_the_profile_block(sh):
     assert result.stdout == (
         "Could not update %s: add ~/.local/bin to PATH to run swane" % rc_file
     )
-    assert (sh.home / ".profile").read_text() == PATH_BLOCK
     assert rc_file.read_text() == "x\n"
+    assert sorted(os.listdir(sh.home)) == [".bashrc"]
 
 
 @pytest.mark.parametrize("suffix", ["", "/"])
-def test_profile_untouched_when_local_bin_on_path(sh, suffix):
-    profile = sh.home / ".zprofile"
-    profile.write_text("keep\n")
+def test_startup_file_untouched_when_local_bin_on_path(sh, suffix):
+    rc_file = sh.home / ".zshrc"
+    rc_file.write_text("keep\n")
     path = "%s:%s/.local/bin%s" % (sh.path, sh.home, suffix)
     result = sh("ensure_local_bin_on_path", env={"SHELL": "/bin/zsh", "PATH": path})
     assert result.returncode == 0
-    assert profile.read_text() == "keep\n"
-    assert not (sh.home / ".zshrc").exists()
+    assert rc_file.read_text() == "keep\n"
+    assert os.listdir(sh.home) == [".zshrc"]
 
 
 def test_path_check_uses_the_starting_path(sh):
@@ -3077,41 +3443,13 @@ def test_path_check_uses_the_starting_path(sh):
         env={"SHELL": "/bin/zsh"},
     )
     assert result.returncode == 0
-    assert MARKER_BEGIN in (sh.home / ".zprofile").read_text()
-
-
-def test_bash_prefers_existing_bash_profile(sh):
-    assert sh("login_profile", env={"SHELL": "/bin/bash"}).stdout == (
-        "%s/.profile\n" % sh.home
-    )
-    (sh.home / ".bash_profile").write_text("")
-    assert sh("login_profile", env={"SHELL": "/usr/bin/bash"}).stdout == (
-        "%s/.bash_profile\n" % sh.home
-    )
-    assert sh("ensure_local_bin_on_path", env={"SHELL": "/bin/bash"}).returncode == 0
-    assert MARKER_BEGIN in (sh.home / ".bash_profile").read_text()
-    assert MARKER_BEGIN in (sh.home / ".bashrc").read_text()
-    assert not (sh.home / ".profile").exists()
-
-
-@pytest.mark.parametrize(
-    "shell, expected",
-    [
-        ("/bin/zsh", ".zprofile"),
-        ("/bin/sh", ".profile"),
-        ("/usr/bin/dash", ".profile"),
-        ("/bin/ZSH", ".zprofile"),
-    ],
-)
-def test_login_profile_mapping(sh, shell, expected):
-    assert sh("login_profile", env={"SHELL": shell}).stdout == (
-        "%s/%s\n" % (sh.home, expected)
-    )
+    assert MARKER_BEGIN in (sh.home / ".zshrc").read_text()
 
 
 @pytest.mark.parametrize("shell", ["/usr/bin/fish", "/bin/tcsh", ""])
-def test_unknown_shell_warns_with_a_manual_hint(sh, shell):
-    assert sh("login_profile", env={"SHELL": shell}).returncode == 1
+def test_unknown_shell_warns_with_a_manual_hint(sh, stub, shell):
+    stub.platform("Linux", "x86_64")
+    assert sh("path_startup_file", env={"SHELL": shell}).returncode == 1
     result = sh.code(
         'ensure_local_bin_on_path; printf "%s" "$SUMMARY_WARNINGS"',
         env={"SHELL": shell},
@@ -3222,8 +3560,7 @@ class InstallWorld:
         stub.platform(system, machine)
         stub("sudo", '"$@"')
         stub("apt-get")
-        stub("locale", "echo C; echo POSIX")
-        stub("locale-gen")
+        _stub_locale(sh, stub)
         for tool in ("mktemp", "basename"):
             stub(tool, 'exec %s "$@"' % bash_quote(str(sh.tools / tool)))
         self.launcher = sh.home / ".local" / "bin" / "swane"
@@ -3297,7 +3634,9 @@ def test_main_end_to_end_with_stubs(sh, stub):
         "Open a new terminal and run: swane",
         "Or run now: %s" % world.launcher,
     ]
-    assert "sudo may ask for your password" in result.stderr
+    # R24: the one sudo question, answered by --yes, before any sudo call.
+    assert result.stderr.count("%s yes (--yes)" % SYSTEM_QUESTION) == 1
+    assert "with sudo, which may ask for your password" in result.stderr
     assert result.stderr.count("password") == 1
     assert str(world.env) in world.launcher.read_text()
     assert MARKER_BEGIN in world.profile.read_text()
@@ -3404,3 +3743,24 @@ def test_unknown_flag_exit_2(sh, stub):
     assert "Unknown option: --bogus" in result.stderr
     assert result.stdout == ""
     assert stub.calls() == []
+
+
+def test_main_declined_system_setup_warns_in_the_summary(sh, stub):
+    """R24 end to end: "n" at the one sudo question, the install goes on."""
+    world = InstallWorld(sh, stub)
+    sh.tty_path.write_text("n\n")
+    result = world.run("--no-fsl", "--swane-spec", "/x")
+    assert result.returncode == 0, result.stderr
+    assert result.stderr.count(SYSTEM_QUESTION) == 1
+    assert stub.calls("sudo") == []
+    assert stub.calls("apt-get") == []
+    warnings = [
+        line for line in result.stdout.splitlines() if line.startswith("WARNING: ")
+    ]
+    assert warnings[0].startswith("WARNING: Linux system setup declined")
+    assert "sudo locale-gen en_US.UTF-8" in warnings[0]
+    assert "env-python -m pip install -U /x" in stub.calls()
+    assert result.stdout.splitlines()[-2:] == [
+        "Open a new terminal and run: swane",
+        "Or run now: %s" % world.launcher,
+    ]

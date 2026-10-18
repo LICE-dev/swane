@@ -3,6 +3,7 @@
 # .github/workflows/installer-tests.yml after each installer run).
 #
 # Usage: bash -l check_installed_env.sh SUMMARY_FILE
+#        zsh -l check_installed_env.sh SUMMARY_FILE   (with CHECK_SHELL=zsh)
 #
 # Reads the conda root and swane-env prefix pinned in ~/.local/bin/swane
 # (never sourcing the launcher: it would exec SWANe), checks them against the
@@ -15,7 +16,11 @@
 # $FSLDIR/share/fsl/bin first on PATH (before swane-env's bin), never
 # $FSLDIR/bin (Ruling R19).
 #
-# Bash 3.2 compatible (macOS).
+# Bash 3.2 compatible (macOS), and runs unchanged under zsh in its native
+# mode (the macOS zsh leg, Ruling R36): then "conda activate" sources the FSL
+# hook in zsh, as in a default macOS terminal. Hence: every expansion
+# quoted (zsh does not split words), no "==" inside "[", no variable named
+# like a zsh special parameter (path, status...).
 # No "set -u": conda.sh is not safe under it.
 set -eo pipefail
 
@@ -24,6 +29,10 @@ fail() {
     exit 1
 }
 
+echo "Shell: ${ZSH_VERSION:+zsh $ZSH_VERSION}${BASH_VERSION:+bash $BASH_VERSION}"
+if [ "${CHECK_SHELL:-}" = zsh ] && [ -z "${ZSH_VERSION:-}" ]; then
+    fail "CHECK_SHELL=zsh but this is not zsh"
+fi
 summary="${1:-}"
 [ -f "$summary" ] || fail "No installer summary file: '$summary'"
 launcher="$HOME/.local/bin/swane"
@@ -107,8 +116,9 @@ for tool in bet flirt convert_xfm fnirt invwarp mcflirt susan slicetimer \
         echo "($tool is not installed in $FSLDIR/bin: not checked)"
         continue
     fi
-    [ -f "$wrappers/$tool" ] && [ -x "$wrappers/$tool" ] ||
+    if [ ! -f "$wrappers/$tool" ] || [ ! -x "$wrappers/$tool" ]; then
         fail "No executable FSL wrapper $wrappers/$tool"
+    fi
     grep -qF -- "$FSLDIR/bin/$tool" "$wrappers/$tool" ||
         grep -qF -- "$fsldir_physical/bin/$tool" "$wrappers/$tool" ||
         fail "$wrappers/$tool does not run $FSLDIR/bin/$tool: $(cat "$wrappers/$tool")"
