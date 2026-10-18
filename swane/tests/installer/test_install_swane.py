@@ -1372,7 +1372,7 @@ FSL_CHANNEL = "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public/"
 FSL_CHANNELS = (
     "--override-channels --strict-channel-priority -c %s -c conda-forge" % FSL_CHANNEL
 )
-FSL_SPECS = "fsl-bet2=2.1 python=3.12.1"
+FSL_SPECS = "fsl-bet2=2.1 fsl-installer=3.21.0 python=3.12.1"
 FSL_LICENSE_URL = "https://fsl.fmrib.ox.ac.uk/fsl/docs/license.html"
 #: The licence notice shown before every FSL licence acceptance.
 FSL_LICENSE_NOTICE = (
@@ -1386,45 +1386,171 @@ NEEDS_FSL = (
     "SWANe needs FSL; rerun the installer or install FSL from fsl.fmrib.ox.ac.uk"
 )
 #: The variables the hooks use, all of which must be gone after deactivation
-#: (except ``_SWANE_FSL_LEFT`` and ``_SWANE_FSL_LEFT_*``, kept on purpose for a
-#: following reactivation).
+#: (except ``_SWANE_FSL_LEFT``, kept on purpose for a following
+#: reactivation), then those of the earlier drop/re-insert hooks, which must
+#: never be set at all.
 HOOK_VARIABLES = (
     "_SWANE_FSL_ACTIVE",
-    "_SWANE_FSL_OWNED",
+    "_SWANE_FSL_ADDED",
+    "_SWANE_FSL_ENTRY",
     "_SWANE_OLD_FSLDIR",
     "_SWANE_OLD_FSLOUTPUTTYPE",
-    "_SWANE_OLD_PATH",
-    "_SWANE_NEW_PATH",
+    "_SWANE_P",
     "_SWANE_FSL_BIN",
+    "_SWANE_FSL_OWNED",
     "_SWANE_FSL_DROPPED",
     "_SWANE_FSL_KEPT",
-    "_SWANE_P",
-    "_SWANE_HEAD",
-    "_SWANE_REST",
-    "_SWANE_E",
-    "_SWANE_K",
-    "_SWANE_D",
-    "_SWANE_A",
-    "_SWANE_NL",
-    "_SWANE_LINES",
-    "_SWANE_N",
-    "_SWANE_O",
-    "_SWANE_PREV",
-    "_SWANE_PREVK",
-    "_SWANE_I",
-    "_SWANE_B",
-    "_SWANE_C",
-    "_SWANE_X",
+    "_SWANE_FSL_LEFT_DROPPED",
+    "_SWANE_FSL_LEFT_KEPT",
+    "_SWANE_FSL_LEFT_FROM",
+    "_SWANE_OLD_PATH",
+    "_SWANE_NEW_PATH",
 )
 
 
-def _make_fsl(path, version, marker=False):
-    """A fake FSL directory: ``etc/fslversion`` (and the installer's marker)."""
+#: The wrappers an FSL must have (FSL_REQUIRED_WRAPPERS of the installer).
+REQUIRED_WRAPPERS = ("bet", "flirt", "fsl-cluster")
+
+
+def _make_fsl(path, version, marker=False, wrappers=True):
+    """A fake FSL directory: ``etc/fslversion`` (and the installer's marker).
+
+    With ``wrappers`` it also has FSL's command wrappers
+    ``share/fsl/bin/{bet,flirt,fsl-cluster}``, without which the installer
+    does not use an FSL.
+    """
     (path / "etc").mkdir(parents=True, exist_ok=True)
     (path / "etc" / "fslversion").write_text(version)
     if marker:
         (path / "etc" / "swane_installer_fsl").write_text("")
+    if wrappers:
+        for tool in REQUIRED_WRAPPERS:
+            make_executable(path / "share" / "fsl" / "bin" / tool, "exit 0")
     return path
+
+
+#: The conda-meta records :func:`_fake_fsl_solver` writes: (record file,
+#: channel, url, files). The FSL channel is written in each of its forms
+#: (with and without the platform subdir, only in the url); the decoy's
+#: channel merely starts with the same text.
+FAKE_FSL_RECORDS = (
+    (
+        "fsl-bet2-2.1-0",
+        FSL_CHANNEL + "linux-64",
+        FSL_CHANNEL + "linux-64/fsl-bet2-2.1-0.conda",
+        ["bin/bet", "share/fsl/doc/bet.txt"],
+    ),
+    (
+        "fsl-flirt-2.0-0",
+        FSL_CHANNEL.rstrip("/"),
+        "",
+        ["bin/flirt", "bin/.hidden", "bin/sub/inner", "lib/libflirt.so"],
+    ),
+    (
+        "fsl-cluster-2.0-0",
+        "",
+        FSL_CHANNEL + "noarch/fsl-cluster-2.0-0.conda",
+        ["bin/fsl-cluster", "bin/smoothest"],
+    ),
+    (
+        "fsl-installer-3.21.0-0",
+        FSL_CHANNEL + "noarch",
+        "",
+        ["bin/createFSLWrapper", "bin/removeFSLWrapper"],
+    ),
+    (
+        "graphviz-12.0.0-0",
+        "https://conda.anaconda.org/conda-forge/linux-64",
+        "",
+        ["bin/cluster", "bin/dot"],
+    ),
+    ("python-3.12.1-0", "https://conda.anaconda.org/conda-forge/linux-64", "", []),
+    (
+        "decoy-1-0",
+        "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/publicity/linux-64",
+        "",
+        ["bin/decoy"],
+    ),
+)
+#: The programs of the FSL-channel records above, in the order passed to
+#: createFSLWrapper.
+FSL_PROGRAMS = (
+    "bet",
+    "createFSLWrapper",
+    "flirt",
+    "fsl-cluster",
+    "removeFSLWrapper",
+    "smoothest",
+)
+#: Where the fake createFSLWrapper logs what it saw, one line per call.
+WRAPPER_LOG = "calls.log.wrapper-env"
+
+
+def _fake_fsl_solver(sh, stub):
+    """A script ``fill-fsl PREFIX`` that fills PREFIX as an FSL solve would.
+
+    Executables in ``bin`` (FSL's, graphviz's ``cluster`` and ``dot``,
+    ``python``, a hidden and a nested one, the decoy), the
+    :data:`FAKE_FSL_RECORDS` in ``conda-meta`` (plus a ``history`` file that
+    is not JSON), and ``bin/createFSLWrapper`` (logged as
+    ``createFSLWrapper``) unless ``FAKE_NO_CREATE_WRAPPER`` is set.
+
+    The fake createFSLWrapper appends ``FSLDIR|PREFIX|FSL_CREATE_WRAPPER_SCRIPTS
+    |PYTHONNOUSERSITE|<etc/fslversion>|<marker>`` to :data:`WRAPPER_LOG`, and
+    prints a line on stdout. Like the real one (ledger probe) it does nothing
+    unless FSL_CREATE_WRAPPER_SCRIPTS and PREFIX are set, wraps any name found
+    in ``$FSLDIR/bin``, skips existing wrappers and always exits 0; names in
+    ``FAKE_WRAPPER_SKIP`` (space-separated) are skipped.
+    """
+    wrapper = stub.script(
+        sh.tmp / "createFSLWrapper-template",
+        "createFSLWrapper",
+        'version="$(cat "$FSLDIR/etc/fslversion" 2>/dev/null || echo none)"\n'
+        'marker=none; [ -e "$FSLDIR/etc/swane_installer_fsl" ] && marker=marker\n'
+        'printf "%s|%s|%s|%s|%s|%s\\n" "${FSLDIR-<unset>}" "${PREFIX-<unset>}" '
+        '"${FSL_CREATE_WRAPPER_SCRIPTS-<unset>}" "${PYTHONNOUSERSITE-<unset>}" '
+        '"$version" "$marker" >> "$CALLS_LOG.wrapper-env"\n'
+        "echo createFSLWrapper output\n"
+        '[ -n "${FSL_CREATE_WRAPPER_SCRIPTS:-}" ] && [ -n "${PREFIX:-}" ] || exit 0\n'
+        'mkdir -p "$FSLDIR/share/fsl/bin"\n'
+        'for name in "$@"; do\n'
+        '    case " ${FAKE_WRAPPER_SKIP:-} " in *" $name "*) continue ;; esac\n'
+        '    [ -e "$FSLDIR/bin/$name" ] || continue\n'
+        '    [ -e "$FSLDIR/share/fsl/bin/$name" ] && continue\n'
+        '    printf "#!/bin/sh\\nexec \'%s/bin/%s\' \\"\\$@\\"\\n" "$FSLDIR" "$name" '
+        '> "$FSLDIR/share/fsl/bin/$name"\n'
+        '    chmod 755 "$FSLDIR/share/fsl/bin/$name"\n'
+        "done\n"
+        "exit 0",
+    )
+    lines = [
+        'prefix="$1"',
+        'mkdir -p "$prefix/bin/sub" "$prefix/conda-meta"',
+        "for name in bet flirt fsl-cluster smoothest removeFSLWrapper .hidden "
+        "sub/inner cluster dot python decoy; do",
+        '    printf "#!/bin/sh\\necho %s\\n" "$name" > "$prefix/bin/$name"',
+        '    chmod 755 "$prefix/bin/$name"',
+        "done",
+        '[ -n "${FAKE_NO_CREATE_WRAPPER:-}" ] || '
+        'cp %s "$prefix/bin/createFSLWrapper"' % bash_quote(str(wrapper)),
+        'echo "not json" > "$prefix/conda-meta/history"',
+    ]
+    for name, channel, url, files in FAKE_FSL_RECORDS:
+        record = {"name": name.rsplit("-", 2)[0], "files": files}
+        if channel:
+            record["channel"] = channel
+        if url:
+            record["url"] = url
+        lines.append(
+            "printf '%%s' %s > \"$prefix/conda-meta/%s.json\""
+            % (bash_quote(json.dumps(record)), name)
+        )
+    return make_executable(sh.tmp / "fill-fsl", "\n".join(lines))
+
+
+#: The env Python's case for the conda-meta reader (``python -I -``, the
+#: program on stdin): run by the real interpreter.
+ENV_PYTHON_STDIN_CASE = '    "-I - "*) exec %s "$@" ;;\n' % bash_quote(sys.executable)
 
 
 class FslWorld:
@@ -1432,15 +1558,18 @@ class FslWorld:
 
     The env's ``bin/python`` (logged as ``env-python``) fakes the SWANe
     installed in it: ``-m swane.utils.fsl_conda --format github`` prints
-    release 6.0.7.8 and :data:`FSL_SPECS`, the ``min_fsl_version`` code prints
-    6.0.7.8; anything else fails. Each call appends its ``PYTHONNOUSERSITE``
-    to ``<python>.nousersite``.
+    release 6.0.7.8 and ``specs`` (default :data:`FSL_SPECS`), the
+    ``min_fsl_version`` code prints 6.0.7.8, ``-I -`` (the conda-meta reader)
+    runs the real Python; anything else fails. Each call appends its
+    ``PYTHONNOUSERSITE`` to ``<python>.nousersite``.
 
     The root's ``bin/conda`` (logged as ``conda``) prints :attr:`envs_json`
     for ``env list --json``; ``create`` makes :attr:`fsl_prefix` and lists it.
+    ``create`` and ``install -p PREFIX`` fill the FSL prefix as an FSL solve
+    would (:func:`_fake_fsl_solver`).
     """
 
-    def __init__(self, sh, stub, resolver_exit=0):
+    def __init__(self, sh, stub, resolver_exit=0, specs=FSL_SPECS):
         self.sh = sh
         self.stub = stub
         self.root = make_conda_root(sh.tmp / "conda root")
@@ -1457,13 +1586,15 @@ class FslWorld:
             "env-python",
             'printf "%%s\\n" "${PYTHONNOUSERSITE:-unset}" >> "$0.nousersite"\n'
             'case "$*" in\n'
+            "%s"
             '    *"-m swane.utils.fsl_conda --format github"*)\n'
             '        [ %d = 0 ] || { echo "no manifest" >&2; exit 1; }\n'
             "        printf 'release=6.0.7.8\\nplatform=linux-64\\nspecs=%s\\n' ;;\n"
             "    *min_fsl_version*) echo 6.0.7.8 ;;\n"
             "    *) exit 9 ;;\n"
-            "esac" % (resolver_exit, FSL_SPECS),
+            "esac" % (ENV_PYTHON_STDIN_CASE, resolver_exit, specs),
         )
+        fill = _fake_fsl_solver(sh, stub)
         listed = json.dumps(
             {"envs": [str(self.root), str(self.env), str(self.fsl_prefix)]}
         )
@@ -1474,14 +1605,22 @@ class FslWorld:
             "    env) cat %s ;;\n"
             '    create) echo "conda create output"\n'
             "        mkdir -p %s\n"
+            "        %s %s\n"
             "        printf '%%s' %s > %s ;;\n"
-            '    install) echo "conda install output" ;;\n'
+            '    install) echo "conda install output"\n'
+            '        while [ "$#" -gt 0 ]; do\n'
+            '            [ "$1" = -p ] && %s "$2"\n'
+            "            shift\n"
+            "        done ;;\n"
             "esac"
             % (
                 bash_quote(str(self.envs_json)),
                 bash_quote(str(self.fsl_prefix / "bin")),
+                bash_quote(str(fill)),
+                bash_quote(str(self.fsl_prefix)),
                 bash_quote(listed),
                 bash_quote(str(self.envs_json)),
+                bash_quote(str(fill)),
             ),
         )
 
@@ -1573,11 +1712,167 @@ def test_swane_python_runs_isolated_without_user_site(sh, stub):
     result, _ = world.run(tty="y\nyes\n")
     assert result.returncode == 0, result.stderr
     calls = stub.calls("env-python")
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert all(call.split()[1] == "-I" for call in calls)
-    assert calls[-1] == "env-python -I -m swane.utils.fsl_conda --format github"
+    assert calls[1] == "env-python -I -m swane.utils.fsl_conda --format github"
+    # The conda-meta reader of the wrapper step (its program on stdin).
+    assert calls[2] == "env-python -I - %s %s" % (FSL_CHANNEL, world.fsl_prefix)
     nousersite = world.python.with_name("python.nousersite").read_text()
-    assert nousersite == "1\n1\n"
+    assert nousersite == "1\n1\n1\n"
+
+
+def _wrapper_log(stub):
+    """The lines the fake createFSLWrapper logged (see _fake_fsl_solver)."""
+    path = stub.dir / WRAPPER_LOG
+    return path.read_text().splitlines() if path.exists() else []
+
+
+def test_install_wraps_only_the_programs_of_fsl_packages(sh, stub):
+    """createFSLWrapper gets the bin/ programs of FSL-channel records only."""
+    world = FslWorld(sh, stub)
+    result, info = world.run(tty="y\nyes\n")
+    assert result.returncode == 0, result.stderr
+    prefix = world.fsl_prefix
+    assert stub.calls("createFSLWrapper") == [
+        "createFSLWrapper " + " ".join(FSL_PROGRAMS)
+    ]
+    # The variables createFSLWrapper needs (it does nothing without
+    # FSL_CREATE_WRAPPER_SCRIPTS and PREFIX), before etc/fslversion and the
+    # marker exist.
+    assert _wrapper_log(stub) == ["%s|%s|1|1|none|none" % (prefix, prefix)]
+    wrappers = prefix / "share" / "fsl" / "bin"
+    assert sorted(p.name for p in wrappers.iterdir()) == sorted(FSL_PROGRAMS)
+    # graphviz's cluster is neither wrapped nor replaced (nipype runs
+    # fsl-cluster); python, dot, the hidden, nested and decoy programs are
+    # not wrapped either.
+    assert (prefix / "bin" / "cluster").read_text().endswith("echo cluster\n")
+    assert not (prefix / "bin" / "cluster").is_symlink()
+    assert "createFSLWrapper output" in result.stderr
+    assert "createFSLWrapper output" not in result.stdout
+    assert info["state"] == "installed"
+    assert (prefix / "etc" / "fslversion").read_text() == "6.0.7.8\n"
+
+
+def test_update_runs_the_wrapper_step_too(sh, stub):
+    world = FslWorld(sh, stub)
+    _make_fsl(world.fsl_prefix, "6.0.7.1\n", marker=True)
+    world.set_envs(world.fsl_prefix)
+    world.write_hook(world.fsl_prefix)
+    result, info = world.run()
+    assert result.returncode == 0, result.stderr
+    prefix = world.fsl_prefix
+    assert stub.calls("createFSLWrapper") == [
+        "createFSLWrapper " + " ".join(FSL_PROGRAMS)
+    ]
+    # After "conda install", before the new etc/fslversion is written.
+    assert _wrapper_log(stub) == ["%s|%s|1|1|6.0.7.1|marker" % (prefix, prefix)]
+    calls = stub.calls()
+    assert calls.index(
+        "conda install -y -p %s %s %s" % (prefix, FSL_CHANNELS, FSL_SPECS)
+    ) < calls.index("createFSLWrapper " + " ".join(FSL_PROGRAMS))
+    for tool in ("bet", "flirt", "fsl-cluster"):
+        assert os.access(prefix / "share" / "fsl" / "bin" / tool, os.X_OK)
+    assert info["state"] == "updated"
+    assert (prefix / "etc" / "fslversion").read_text() == "6.0.7.8\n"
+
+
+@pytest.mark.parametrize("tool", ["bet", "flirt", "fsl-cluster"])
+def test_missing_wrapper_after_create_fsl_wrapper_dies(sh, stub, tool):
+    """createFSLWrapper exits 0 whatever happened: the result is checked."""
+    world = FslWorld(sh, stub)
+    result, _ = world.run(env={"FAKE_WRAPPER_SKIP": tool}, tty="y\nyes\n")
+    assert result.returncode == 1
+    assert (
+        "createFSLWrapper did not create %s/share/fsl/bin/%s" % (world.fsl_prefix, tool)
+    ) in result.stderr
+    # Not marked as done: no fslversion, no marker, no hook.
+    assert not (world.fsl_prefix / "etc" / "fslversion").exists()
+    assert not (world.fsl_prefix / "etc" / "swane_installer_fsl").exists()
+    assert not world.activate.exists()
+
+
+def test_missing_create_fsl_wrapper_dies(sh, stub):
+    world = FslWorld(sh, stub)
+    result, _ = world.run(env={"FAKE_NO_CREATE_WRAPPER": "1"}, tty="y\nyes\n")
+    assert result.returncode == 1
+    assert (
+        "No createFSLWrapper in %s/bin (package fsl-installer)" % world.fsl_prefix
+    ) in result.stderr
+    assert not (world.fsl_prefix / "etc" / "swane_installer_fsl").exists()
+    assert not world.activate.exists()
+
+
+@pytest.mark.parametrize(
+    "specs", [FSL_SPECS, "fsl-bet2=2.1 python=3.12.1"], ids=["listed", "unlisted"]
+)
+def test_resolver_specs_are_passed_unchanged(sh, stub, specs):
+    """The resolver is the only source of the specs (fsl-installer included)."""
+    world = FslWorld(sh, stub, specs=specs)
+    result, _ = world.run(tty="y\nyes\n")
+    assert result.returncode == 0, result.stderr
+    (create,) = [c for c in world.conda_calls() if c.startswith("conda create")]
+    assert create == "conda create -y -n swane-fsl %s %s" % (FSL_CHANNELS, specs)
+
+
+@pytest.mark.parametrize("tool", REQUIRED_WRAPPERS)
+@pytest.mark.parametrize("how", ["missing", "not_executable"])
+def test_existing_fsl_without_wrappers_is_not_used(sh, stub, tool, how):
+    """Ruling R23: the hook never puts $FSLDIR/bin on PATH."""
+    world = FslWorld(sh, stub)
+    external = _make_fsl(sh.home / "fsl", "6.0.7.16\n")
+    make_executable(external / "bin" / tool, "exit 0")
+    wrapper = external / "share" / "fsl" / "bin" / tool
+    wrapper.unlink()
+    if how == "not_executable":
+        wrapper.write_text("")
+    result, info = world.run(env={"FSLDIR": None}, tty="y\nyes\n")
+    assert result.returncode == 0, result.stderr
+    assert "conda create -y -n swane-fsl %s %s" % (FSL_CHANNELS, FSL_SPECS) in (
+        world.conda_calls()
+    )
+    assert world.hook_dir() == str(world.fsl_prefix)
+    assert info["state"] == "installed"
+    assert (
+        "FSL 6.0.7.16 in %s lacks the FSL command wrappers bet flirt fsl-cluster "
+        "(executables in %s/share/fsl/bin;" % (external, external)
+    ) in info["warnings"]
+    assert "left untouched" in info["warnings"]
+    assert not (external / "etc" / "swane_installer_fsl").exists()
+
+
+@pytest.mark.parametrize("missing", ["all", "flirt", "fsl-cluster"])
+def test_installer_fsl_without_wrappers_is_updated(sh, stub, missing):
+    """A swane-fsl made before the wrapper step, or that lost one, is repaired."""
+    world = FslWorld(sh, stub)
+    _make_fsl(world.fsl_prefix, "6.0.7.8\n", marker=True, wrappers=missing != "all")
+    if missing != "all":
+        (world.fsl_prefix / "share" / "fsl" / "bin" / missing).unlink()
+    world.set_envs(world.fsl_prefix)
+    world.write_hook(world.fsl_prefix)
+    result, info = world.run()
+    assert result.returncode == 0, result.stderr
+    assert world.conda_calls() == [
+        "conda install -y -p %s %s %s" % (world.fsl_prefix, FSL_CHANNELS, FSL_SPECS)
+    ]
+    assert "lacks the FSL command wrappers bet flirt fsl-cluster" in result.stderr
+    for tool in REQUIRED_WRAPPERS:
+        assert os.access(world.fsl_prefix / "share" / "fsl" / "bin" / tool, os.X_OK)
+    assert info["state"] == "updated"
+    assert info["warnings"] == ""
+
+
+def test_fsldir_without_wrappers_keeps_the_installers_swane_fsl(sh, stub):
+    world = FslWorld(sh, stub)
+    external = _make_fsl(sh.tmp / "fsl no wrappers", "6.0.7.16\n", wrappers=False)
+    _make_fsl(world.fsl_prefix, "6.0.7.8\n", marker=True)
+    world.write_hook(world.fsl_prefix)
+    result, info = world.run(env={"FSLDIR": external})
+    assert result.returncode == 0, result.stderr
+    assert world.conda_calls() == []
+    assert "Leaving FSL 6.0.7.16 in %s aside" % external in result.stderr
+    assert world.hook_dir() == str(world.fsl_prefix)
+    assert info["state"] == "existing"
+    assert info["warnings"] == ""
 
 
 @pytest.mark.parametrize("answer", ["y", "Y", "Yes", "YES", "no", ""])
@@ -1890,22 +2185,42 @@ def test_resolver_failure_dies_before_conda(sh, stub):
 
 
 def test_hook_quotes_paths(sh, stub):
-    """Review Focus 3: spaces and quotes in FSLDIR survive the hook."""
+    """Review Focus 3: spaces, quotes and glob characters in FSLDIR survive."""
     world = FslWorld(sh, stub)
-    fsl = _make_fsl(sh.tmp / "my fsl's dir $HOME `x`", "6.0.7.8\n")
+    fsl = _make_fsl(sh.tmp / "my fsl's dir $HOME `x` [a]*", "6.0.7.8\n")
     world.write_hook(fsl)
     assert world.hook_dir() == str(fsl)
     assert sh("hook_fsldir", world.env).stdout == "%s\n" % fsl
     for hook in (world.activate, world.deactivate):
         assert subprocess.run([BASH, "-n", str(hook)]).returncode == 0
-    script = '. "$A"; printf "%s" "$FSLDIR"'
+    script = (
+        '. "$A"; printf "%s|%s\\n" "$FSLDIR" "$PATH"; ' '. "$D"; printf "%s\\n" "$PATH"'
+    )
     result = subprocess.run(
         [BASH, "-c", script],
-        env={"A": str(world.activate), "PATH": "/a"},
+        env={"A": str(world.activate), "D": str(world.deactivate), "PATH": "/a"},
         capture_output=True,
         text=True,
     )
-    assert result.stdout == str(fsl)
+    assert result.stdout.splitlines() == [
+        "%s|%s/share/fsl/bin:/a" % (fsl, fsl),
+        "/a",
+    ]
+
+
+def test_hook_never_names_fsldir_bin(sh, stub):
+    """Only $FSLDIR/share/fsl/bin is ever put on PATH (Ruling R19)."""
+    world = FslWorld(sh, stub)
+    world.write_hook(sh.tmp / "fsl")
+    lines = (world.activate.read_text() + world.deactivate.read_text()).splitlines()
+    code = "\n".join(line for line in lines if not line.lstrip().startswith("#"))
+    assert '_SWANE_FSL_ENTRY="$FSLDIR/share/fsl/bin"' in code
+    allowed = ("$FSLDIR/share/fsl/bin", "$CONDA_PREFIX/bin")
+    for text in allowed:
+        code = code.replace(text, "")
+    assert "/bin" not in code
+    for name in ("_SWANE_FSL_BIN", "_SWANE_FSL_DROPPED", "_SWANE_OLD_PATH"):
+        assert name not in code
 
 
 def _hook_shells():
@@ -1922,6 +2237,15 @@ def _hook_shells():
     return shells
 
 
+#: Shell helpers of the round trip: ``drop ENTRY`` removes the first
+#: occurrence of ENTRY from PATH, ``swap OLD NEW`` replaces the first OLD
+#: with NEW in place (what conda does with an environment's bin).
+PATH_HELPERS = (
+    'drop() { _p=":$PATH:"; _p="${_p%%":$1:"*}:${_p#*":$1:"}"; '
+    '_p="${_p#:}"; PATH="${_p%:}"; unset _p; }\n'
+    'swap() { _p=":$PATH:"; _p="${_p%%":$1:"*}:$2:${_p#*":$1:"}"; '
+    '_p="${_p#:}"; PATH="${_p%:}"; unset _p; }\n'
+)
 #: How conda reactivates an environment (``conda activate`` of the active
 #: env, and after every ``conda install/update/remove`` in it): it computes
 #: PATH first, runs the deactivate.d scripts, exports that PATH, then runs the
@@ -1929,61 +2253,116 @@ def _hook_shells():
 CONDA_REACTIVATE = '_saved="$PATH"; . "$D"; PATH="$_saved"; . "$A"; show'
 #: How ``conda deactivate`` runs: it exports PATH without the env's own bin
 #: first, then runs the deactivate.d scripts (``_yield_commands``).
-CONDA_DROP_ENV_BIN = 'PATH="${PATH#/env/bin:}"'
+CONDA_DROP_ENV_BIN = "drop /env/bin"
 
 #: Scenarios of the hook round trip: shell code run before the activation,
 #: code run between activation and deactivation (it may ``show``), and the
 #: expected ``FSLDIR|FSLOUTPUTTYPE|PATH`` lines, one per ``show``: after the
-#: activation, in between, after the deactivation (``{dir}`` is the FSL dir).
+#: activation, in between, after the deactivation. ``{dir}`` is the FSL dir,
+#: ``{bin}`` its ``share/fsl/bin``.
 HOOK_SCENARIOS = {
     "unset": (
         "unset FSLDIR FSLOUTPUTTYPE; PATH=/a:/b",
         "",
-        ["{dir}|NIFTI_GZ|/a:/b:{dir}/bin", "<unset>|<unset>|/a:/b"],
+        ["{dir}|NIFTI_GZ|{bin}:/a:/b", "<unset>|<unset>|/a:/b"],
     ),
     "set": (
         "FSLDIR=/old; FSLOUTPUTTYPE=NIFTI; export FSLDIR FSLOUTPUTTYPE; PATH=/a",
         "",
-        ["{dir}|NIFTI_GZ|/a:{dir}/bin", "/old|NIFTI|/a"],
+        ["{dir}|NIFTI_GZ|{bin}:/a", "/old|NIFTI|/a"],
     ),
     "empty": (
         "FSLDIR=; export FSLDIR; unset FSLOUTPUTTYPE; PATH=/a",
         "",
-        ["{dir}|NIFTI_GZ|/a:{dir}/bin", "|<unset>|/a"],
+        ["{dir}|NIFTI_GZ|{bin}:/a", "|<unset>|/a"],
     ),
-    # The user's own entry (FSL sourced in the shell) is neither duplicated
-    # nor removed, also when conda rewrites PATH on deactivation.
-    "already_on_path": (
-        "unset FSLDIR FSLOUTPUTTYPE; PATH='/a:{dir}/bin:/b'",
+    # The entry goes first, before swane-env's own bin (conda put it first).
+    "before_env_bin": (
+        "unset FSLDIR FSLOUTPUTTYPE; PATH=/env/bin:/a",
         "",
-        ["{dir}|NIFTI_GZ|/a:{dir}/bin:/b", "<unset>|<unset>|/a:{dir}/bin:/b"],
+        ["{dir}|NIFTI_GZ|{bin}:/env/bin:/a", "<unset>|<unset>|/env/bin:/a"],
+    ),
+    # The user's own entry (FSL sourced in the shell) ahead of swane-env's
+    # bin (here: swane-env's bin not on PATH) is neither duplicated, moved
+    # nor removed.
+    "already_on_path": (
+        "unset FSLDIR FSLOUTPUTTYPE; PATH='/a:{bin}:/b'",
+        "",
+        ["{dir}|NIFTI_GZ|/a:{bin}:/b", "<unset>|<unset>|/a:{bin}:/b"],
+    ),
+    "already_ahead_of_env_bin": (
+        "unset FSLDIR FSLOUTPUTTYPE; PATH='/a:{bin}:/env/bin:/b'",
+        CONDA_DROP_ENV_BIN,
+        ["{dir}|NIFTI_GZ|/a:{bin}:/env/bin:/b", "<unset>|<unset>|/a:{bin}:/b"],
+    ),
+    # Ruling R33: the user's entry after swane-env's bin (conda put the env's
+    # bin in front of it) stays, and a copy goes first; only the copy goes
+    # on deactivation, also when conda rewrites PATH or reactivates.
+    "already_after_env_bin": (
+        "unset FSLDIR FSLOUTPUTTYPE; PATH='/env/bin:/base:{bin}:/b'",
+        "",
+        [
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/base:{bin}:/b",
+            "<unset>|<unset>|/env/bin:/base:{bin}:/b",
+        ],
     ),
     "already_on_path_conda_deactivate": (
-        "unset FSLDIR FSLOUTPUTTYPE; PATH='/env/bin:{dir}/bin'",
+        "unset FSLDIR FSLOUTPUTTYPE; PATH='/env/bin:{bin}'",
         CONDA_DROP_ENV_BIN,
-        ["{dir}|NIFTI_GZ|/env/bin:{dir}/bin", "<unset>|<unset>|{dir}/bin"],
+        ["{dir}|NIFTI_GZ|{bin}:/env/bin:{bin}", "<unset>|<unset>|{bin}"],
+    ),
+    "already_on_path_conda_reactivates": (
+        "unset FSLDIR FSLOUTPUTTYPE; PATH='/env/bin:{bin}:/a'",
+        "%s; %s; %s" % (CONDA_REACTIVATE, CONDA_REACTIVATE, CONDA_DROP_ENV_BIN),
+        [
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:{bin}:/a",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:{bin}:/a",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:{bin}:/a",
+            "<unset>|<unset>|{bin}:/a",
+        ],
+    ),
+    # A stale _SWANE_FSL_LEFT never claims a user's entry after the env bin.
+    "stale_left_entry_after_env_bin": (
+        "unset FSLDIR FSLOUTPUTTYPE; _SWANE_FSL_LEFT='{bin}'; " "PATH='/env/bin:{bin}'",
+        "",
+        ["{dir}|NIFTI_GZ|{bin}:/env/bin:{bin}", "<unset>|<unset>|/env/bin:{bin}"],
     ),
     # conda sets PATH (dropping the env's own bin) before the deactivate.d
-    # scripts run: only the appended FSL entry may go.
+    # scripts run: only the entry the activation added goes.
     "conda_rewrites_path": (
         "unset FSLDIR FSLOUTPUTTYPE; PATH=/env/bin:/a",
         CONDA_DROP_ENV_BIN,
-        ["{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin", "<unset>|<unset>|/a"],
+        ["{dir}|NIFTI_GZ|{bin}:/env/bin:/a", "<unset>|<unset>|/a"],
+    ),
+    # The added entry goes wherever it is by then; the rest stays as it is.
+    "entry_moved_before_deactivate": (
+        "unset FSLDIR FSLOUTPUTTYPE; PATH=/env/bin:/a",
+        'drop "$FSLDIR/share/fsl/bin"; PATH="/x:$PATH:$FSLDIR/share/fsl/bin:/z"; show',
+        [
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/a",
+            "{dir}|NIFTI_GZ|/x:/env/bin:/a:{bin}:/z",
+            "<unset>|<unset>|/x:/env/bin:/a:/z",
+        ],
+    ),
+    "entry_gone_before_deactivate": (
+        "unset FSLDIR FSLOUTPUTTYPE; PATH=/env/bin:/a",
+        'drop "$FSLDIR/share/fsl/bin"',
+        ["{dir}|NIFTI_GZ|{bin}:/env/bin:/a", "<unset>|<unset>|/env/bin:/a"],
     ),
     "activated_twice": (
         "unset FSLDIR FSLOUTPUTTYPE; PATH=/a",
         '. "$A"',
-        ["{dir}|NIFTI_GZ|/a:{dir}/bin", "<unset>|<unset>|/a"],
+        ["{dir}|NIFTI_GZ|{bin}:/a", "<unset>|<unset>|/a"],
     ),
-    # Reactivation must not append a second entry, and the entry it reuses
-    # must go on the final deactivation.
+    # Reactivation must not add a second entry, and the entry it keeps must
+    # go on the final deactivation.
     "conda_reactivates": (
         "unset FSLDIR FSLOUTPUTTYPE; PATH=/env/bin:/a",
         "%s; %s; %s" % (CONDA_REACTIVATE, CONDA_REACTIVATE, CONDA_DROP_ENV_BIN),
         [
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/a",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/a",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/a",
             "<unset>|<unset>|/a",
         ],
     ),
@@ -1991,138 +2370,49 @@ HOOK_SCENARIOS = {
         "unset FSLDIR FSLOUTPUTTYPE; PATH=/env/bin:/a",
         CONDA_REACTIVATE,
         [
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/a",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/a",
             "<unset>|<unset>|/env/bin:/a",
         ],
     ),
-    # "conda activate other" from swane-env, then "conda deactivate" back:
-    # the entry leaks into "other" (a documented limitation: conda exports a
-    # PATH computed before deactivate.d), but is not appended a second time.
-    # The FSL of the user's shell (FSLDIR=/old, its share/fsl/bin and bin on
-    # PATH) would shadow the hook's: its entries leave PATH while swane-env
-    # is active and come back, in place, on deactivation.
+    # Another FSL set up by the user's shell keeps every entry where it is:
+    # the hook's entry simply comes first, and FSLDIR comes back.
     "old_fsl_on_path": (
         "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
         "PATH=/old/share/fsl/bin:/old/bin:/a",
         "",
-        ["{dir}|NIFTI_GZ|/a:{dir}/bin", "/old|<unset>|/old/share/fsl/bin:/old/bin:/a"],
+        [
+            "{dir}|NIFTI_GZ|{bin}:/old/share/fsl/bin:/old/bin:/a",
+            "/old|<unset>|/old/share/fsl/bin:/old/bin:/a",
+        ],
     ),
     "old_fsl_conda_deactivate": (
         "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
-        "PATH=/env/bin:/old/share/fsl/bin:/a:/old/bin:/b",
+        "PATH=/env/bin:/old/share/fsl/bin:/a:/old/bin",
         CONDA_DROP_ENV_BIN,
         [
-            "{dir}|NIFTI_GZ|/env/bin:/a:/b:{dir}/bin",
-            "/old|<unset>|/old/share/fsl/bin:/a:/old/bin:/b",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/old/share/fsl/bin:/a:/old/bin",
+            "/old|<unset>|/old/share/fsl/bin:/a:/old/bin",
         ],
     ),
-    # Every occurrence goes. After conda's rewrite only the first comes back
-    # (an entry already on PATH is never added again); restored exactly
-    # otherwise.
-    "old_fsl_twice_conda_deactivate": (
-        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
-        "PATH=/env/bin:/old/bin:/a:/old/bin",
-        CONDA_DROP_ENV_BIN,
-        ["{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin", "/old|<unset>|/old/bin:/a"],
-    ),
-    "old_fsl_twice": (
-        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; PATH=/old/bin:/a:/old/bin",
-        "",
-        ["{dir}|NIFTI_GZ|/a:{dir}/bin", "/old|<unset>|/old/bin:/a:/old/bin"],
-    ),
-    # The last entry has no entry after it: it goes back at the end.
-    "old_fsl_last_conda_deactivate": (
-        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; PATH=/env/bin:/a:/old/bin",
-        CONDA_DROP_ENV_BIN,
-        ["{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin", "/old|<unset>|/a:/old/bin"],
-    ),
-    "old_fsl_conda_reactivates": (
-        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
-        "PATH=/env/bin:/old/share/fsl/bin:/a",
-        "%s; %s" % (CONDA_REACTIVATE, CONDA_DROP_ENV_BIN),
-        [
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
-            "/old|<unset>|/old/share/fsl/bin:/a",
-        ],
-    ),
-    "old_fsl_conda_reactivates_then_restores": (
-        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
-        "PATH=/env/bin:/old/share/fsl/bin:/a",
-        CONDA_REACTIVATE,
-        [
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
-            "/old|<unset>|/env/bin:/old/share/fsl/bin:/a",
-        ],
-    ),
-    # An entry the user put back meanwhile is not added a second time.
-    "old_fsl_back_on_path_before_deactivate": (
-        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; PATH=/env/bin:/old/bin:/a",
-        'PATH="/old/bin:${PATH#/env/bin:}"',
-        ["{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin", "/old|<unset>|/old/bin:/a"],
-    ),
-    # conda activated swane-env in place of another environment (base) whose
-    # bin came right after the FSL entries, and turns it back on
-    # deactivation: the entry that followed them is gone, so they go back
-    # at the front, in order, or after the kept entry before them.
-    "old_fsl_before_a_replaced_env_bin": (
-        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
-        "PATH=/old/share/fsl/bin:/old/bin:/env/bin:/c",
-        'PATH="/base/bin:${PATH#/env/bin:}"',
-        [
-            "{dir}|NIFTI_GZ|/env/bin:/c:{dir}/bin",
-            "/old|<unset>|/old/share/fsl/bin:/old/bin:/base/bin:/c",
-        ],
-    ),
-    "old_fsl_between_x_and_a_replaced_env_bin": (
-        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
-        "PATH=/x:/old/share/fsl/bin:/old/bin:/env/bin:/c",
-        'PATH="/x:/base/bin:${PATH#/x:/env/bin:}"',
-        [
-            "{dir}|NIFTI_GZ|/x:/env/bin:/c:{dir}/bin",
-            "/old|<unset>|/x:/old/share/fsl/bin:/old/bin:/base/bin:/c",
-        ],
-    ),
-    # Repeated and trailing slashes in FSLDIR or in the entries still match;
-    # the entries come back as written.
-    "old_fsldir_with_slashes": (
-        "FSLDIR=/old/; export FSLDIR; unset FSLOUTPUTTYPE; "
-        "PATH=/env/bin:/old//share/fsl/bin:/a:/old/bin/",
-        CONDA_DROP_ENV_BIN,
-        [
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
-            "/old/|<unset>|/old//share/fsl/bin:/a:/old/bin/",
-        ],
-    ),
-    "old_fsldir_without_slash_entries_with": (
-        "FSLDIR=/old; export FSLDIR; unset FSLOUTPUTTYPE; "
-        "PATH=/old/share/fsl/bin/:/old//bin:/a",
-        "",
-        [
-            "{dir}|NIFTI_GZ|/a:{dir}/bin",
-            "/old|<unset>|/old/share/fsl/bin/:/old//bin:/a",
-        ],
-    ),
-    # FSLDIR already names the hook's own FSL: nothing is dropped.
+    # FSLDIR already names the hook's own FSL, its entry on PATH: untouched.
     "same_fsl_in_fsldir": (
-        "FSLDIR='{dir}'; export FSLDIR; unset FSLOUTPUTTYPE; "
-        "PATH='{dir}/share/fsl/bin:/a'",
+        "FSLDIR='{dir}'; export FSLDIR; unset FSLOUTPUTTYPE; PATH='{bin}:/a'",
         "",
-        [
-            "{dir}|NIFTI_GZ|{dir}/share/fsl/bin:/a:{dir}/bin",
-            "{dir}|<unset>|{dir}/share/fsl/bin:/a",
-        ],
+        ["{dir}|NIFTI_GZ|{bin}:/a", "{dir}|<unset>|{bin}:/a"],
     ),
+    # "conda activate other" from swane-env, then back: the entry leaks into
+    # "other" (a documented limitation: conda exports a PATH computed before
+    # deactivate.d), is not added a second time, and goes on the final
+    # deactivation.
     "conda_switches_env_and_back": (
         "unset FSLDIR FSLOUTPUTTYPE; PATH=/env/bin:/a",
-        '_saved="$PATH"; . "$D"; PATH="/other/bin:${_saved#/env/bin:}"; show\n'
-        'PATH="/env/bin:${PATH#/other/bin:}"; . "$A"; show\n' + CONDA_DROP_ENV_BIN,
+        '_saved="$PATH"; . "$D"; PATH="$_saved"; swap /env/bin /other/bin; show\n'
+        'swap /other/bin /env/bin; . "$A"; show\n' + CONDA_DROP_ENV_BIN,
         [
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
-            "<unset>|<unset>|/other/bin:/a:{dir}/bin",
-            "{dir}|NIFTI_GZ|/env/bin:/a:{dir}/bin",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/a",
+            "<unset>|<unset>|{bin}:/other/bin:/a",
+            "{dir}|NIFTI_GZ|{bin}:/env/bin:/a",
             "<unset>|<unset>|/a",
         ],
     ),
@@ -2132,16 +2422,25 @@ HOOK_SCENARIOS = {
 @pytest.mark.parametrize("scenario", sorted(HOOK_SCENARIOS))
 @pytest.mark.parametrize("shell", _hook_shells())
 def test_hook_roundtrip_in_posix_shells(sh, stub, shell, scenario):
-    """The hooks are sourced by conda in the user's shell, under ``set -u``."""
+    """The hooks are sourced by conda in the user's shell, under ``set -u``.
+
+    ``CONDA_PREFIX`` is ``/env``, as conda exports it before activate.d.
+    """
     world = FslWorld(sh, stub)
     fsl = sh.tmp / "fsl dir"
     world.write_hook(fsl)
     before, between, expected = HOOK_SCENARIOS[scenario]
-    before = before.replace("{dir}", str(fsl))
-    expected = [line.replace("{dir}", str(fsl)) for line in expected]
+
+    def fill(text):
+        return text.replace("{bin}", "%s/share/fsl/bin" % fsl).replace(
+            "{dir}", str(fsl)
+        )
+
+    expected = [fill(line) for line in expected]
     leftovers = "".join("${%s+%s}" % (name, name) for name in HOOK_VARIABLES)
     script = (
         "set -u\n"
+        "%s"
         'show() { printf "%%s|%%s|%%s\\n" "${FSLDIR-<unset>}" '
         '"${FSLOUTPUTTYPE-<unset>}" "$PATH"; }\n'
         "%s\n"
@@ -2150,46 +2449,64 @@ def test_hook_roundtrip_in_posix_shells(sh, stub, shell, scenario):
         "%s\n"
         '. "$D"\n'
         "show\n"
-        'printf "left:%s\\n"\n' % (before, between, leftovers)
+        'printf "left:%s\\n"\n' % (PATH_HELPERS, fill(before), between, leftovers)
     )
     result = subprocess.run(
         [shell, "-c", script],
-        env={"A": str(world.activate), "D": str(world.deactivate), "PATH": "/a"},
+        env={
+            "A": str(world.activate),
+            "D": str(world.deactivate),
+            "PATH": "/a",
+            "CONDA_PREFIX": "/env",
+        },
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == expected + ["left:"]
+    lines = result.stdout.splitlines()
+    assert lines == expected + ["left:"]
+    # $FSLDIR/bin (a whole conda env bin) is never put on PATH.
+    for line in lines[:-1]:
+        assert "%s/bin" % fsl not in line.split("|", 2)[2].split(":")
 
 
-def _bet_dirs(sh):
-    """An old FSL (bet in share/fsl/bin and bin) and the hook's FSL."""
-    old = sh.tmp / "old fsl"
+def _fsl_tool_dirs(sh, stub):
+    """swane-env (python, graphviz's cluster), an old and the hook's FSL.
+
+    The hook's FSL has ``bin/python``, ``bin/bet``, ``bin/cluster``
+    (graphviz's) and the wrappers ``share/fsl/bin/bet`` and ``fsl-cluster``;
+    the old FSL has bet in ``share/fsl/bin`` and ``bin``.
+    """
+    world = FslWorld(sh, stub)
+    old = _make_fsl(sh.tmp / "old fsl", "6.0.5\n")
     new = _make_fsl(sh.tmp / "new fsl", "6.0.7.8\n")
     for path in (
-        old / "share" / "fsl" / "bin" / "bet",
         old / "bin" / "bet",
         new / "bin" / "bet",
+        new / "bin" / "python",
+        new / "bin" / "cluster",
+        new / "share" / "fsl" / "bin" / "fsl-cluster",
+        world.env / "bin" / "python",
+        world.env / "bin" / "cluster",
     ):
         make_executable(path, "exit 0")
-    _make_fsl(old, "6.0.5\n")
-    return old, new
+    world.write_hook(new)
+    return world, old, new
 
 
 @pytest.mark.parametrize("shell", _hook_shells())
-def test_hook_unshadows_an_older_fsl_from_the_profile(sh, stub, shell):
-    """FSL set up by the user's profile: bet must be the hook's FSL's own."""
-    world = FslWorld(sh, stub)
-    old, new = _bet_dirs(sh)
-    world.write_hook(new)
-    start = "%s/share/fsl/bin:%s/bin:/usr/bin:/bin" % (old, old)
+def test_hook_wrappers_come_first_and_fsl_bin_stays_off_path(sh, stub, shell):
+    """FSL set up by the profile, swane-env first: what each name runs."""
+    world, old, new = _fsl_tool_dirs(sh, stub)
+    start = "%s/bin:%s/share/fsl/bin:%s/bin:/usr/bin:/bin" % (world.env, old, old)
     script = (
         "set -u\n"
         '. "$A"\n'
-        "command -v bet\n"
+        "for tool in bet fsl-cluster python cluster; do command -v $tool; done\n"
         'printf "%s\\n" "$FSLDIR"\n'
         '. "$D"\n'
         'printf "%s\\n%s\\n" "$FSLDIR" "$PATH"\n'
+        "command -v bet\n"
     )
     result = subprocess.run(
         [shell, "-c", script],
@@ -2204,29 +2521,17 @@ def test_hook_unshadows_an_older_fsl_from_the_profile(sh, stub, shell):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
-        "%s/bin/bet" % new,
+        "%s/share/fsl/bin/bet" % new,
+        "%s/share/fsl/bin/fsl-cluster" % new,
+        # swane-env's python, never the FSL environment's; graphviz's
+        # cluster of swane-env, not the FSL environment's bin/cluster.
+        "%s/bin/python" % world.env,
+        "%s/bin/cluster" % world.env,
         str(new),
         str(old),
         start,
+        "%s/share/fsl/bin/bet" % old,
     ]
-
-
-def test_hook_compares_fsl_dirs_physically(sh, stub):
-    """FSLDIR naming the hook's FSL through a symlink drops nothing."""
-    world = FslWorld(sh, stub)
-    _, new = _bet_dirs(sh)
-    link = sh.tmp / "fsl link"
-    link.symlink_to(new)
-    world.write_hook(new)
-    start = "%s/bin:/usr/bin:/bin" % link
-    result = subprocess.run(
-        [BASH, "-c", '. "$A"; printf "%s" "$PATH"'],
-        env={"A": str(world.activate), "PATH": start, "FSLDIR": str(link)},
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == "%s:%s/bin" % (start, new)
 
 
 def _real_conda_sh():
@@ -2240,21 +2545,27 @@ def _real_conda_sh():
     return path if os.path.isfile(path) else None
 
 
+def _fake_conda_prefix(prefix):
+    """Make ``prefix`` look like a conda environment to ``conda activate``."""
+    (prefix / "conda-meta").mkdir(parents=True, exist_ok=True)
+    (prefix / "conda-meta" / "history").write_text("")
+    (prefix / "bin").mkdir(exist_ok=True)
+
+
 @pytest.mark.skipif(_real_conda_sh() is None, reason="no conda.sh (CONDA_EXE unset)")
 def test_hook_with_the_real_conda_activation(sh, stub):
     """The hooks under the real ``conda activate``/``deactivate`` command order.
 
     Only fake prefixes are activated (nothing is installed); HOME is the
     test's own. Reactivation and a switch to another environment and back
-    leave a single FSL entry, removed on the last deactivation.
+    leave a single FSL entry, first and before swane-env's bin, removed on
+    the last deactivation.
     """
     world = FslWorld(sh, stub)
     fsl = sh.tmp / "fsl dir"
     other = sh.tmp / "other-env"
     for prefix in (world.env, other):
-        (prefix / "conda-meta").mkdir(parents=True, exist_ok=True)
-        (prefix / "conda-meta" / "history").write_text("")
-        (prefix / "bin").mkdir(exist_ok=True)
+        _fake_conda_prefix(prefix)
     world.write_hook(fsl)
     script = (
         '. "$CONDA_SH"\n'
@@ -2282,9 +2593,9 @@ def test_hook_with_the_real_conda_activation(sh, stub):
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
     assert len(lines) == 6, result.stdout
-    fsl_bin = "%s/bin" % fsl
+    fsl_entry = "%s/share/fsl/bin" % fsl
     entries = [line.split("|", 1)[1].split(":") for line in lines]
-    counts = [path.count(fsl_bin) for path in entries]
+    counts = [path.count(fsl_entry) for path in entries]
     # The switch to "other" keeps the entry (documented limitation).
     assert counts == [1, 1, 0, 1, 1, 0]
     assert [line.split("|", 1)[0] for line in lines] == [
@@ -2295,28 +2606,26 @@ def test_hook_with_the_real_conda_activation(sh, stub):
         str(fsl),
         "<unset>",
     ]
-    assert entries[0][0] == "%s/bin" % world.env
+    for index in (0, 1, 4):
+        assert entries[index][:2] == [fsl_entry, "%s/bin" % world.env]
+    assert all("%s/bin" % fsl not in path for path in entries)
 
 
 @pytest.mark.skipif(_real_conda_sh() is None, reason="no conda.sh (CONDA_EXE unset)")
-def test_hook_unshadows_an_older_fsl_with_the_real_conda_activation(sh, stub):
+def test_hook_wrappers_win_with_the_real_conda_activation(sh, stub):
     """An older FSL set up by the profile, under the real ``conda activate``.
 
-    bet is the hook's FSL's while swane-env is active (also after a
-    reactivation), and the final ``conda deactivate`` gives back the PATH and
-    FSLDIR the shell had.
+    bet is the hook's FSL's wrapper and python swane-env's while swane-env is
+    active (also after a reactivation), and the final ``conda deactivate``
+    gives back the PATH and FSLDIR the shell had.
     """
-    world = FslWorld(sh, stub)
-    old, new = _bet_dirs(sh)
-    (world.env / "conda-meta").mkdir(parents=True, exist_ok=True)
-    (world.env / "conda-meta" / "history").write_text("")
-    (world.env / "bin").mkdir(exist_ok=True)
-    world.write_hook(new)
+    world, old, new = _fsl_tool_dirs(sh, stub)
+    _fake_conda_prefix(world.env)
     script = (
         '. "$CONDA_SH"\n'
         'start="$PATH"\n'
-        'conda activate "$P"; command -v bet\n'
-        'conda activate "$P"; command -v bet\n'
+        'conda activate "$P"; command -v bet; command -v python\n'
+        'conda activate "$P"; command -v bet; command -v python\n'
         "conda deactivate\n"
         '[ "$PATH" = "$start" ] && echo restored || printf "%s\\n%s\\n" "$start" "$PATH"\n'
         'printf "%s\\n" "$FSLDIR"\n'
@@ -2337,8 +2646,10 @@ def test_hook_unshadows_an_older_fsl_with_the_real_conda_activation(sh, stub):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
-        "%s/bin/bet" % new,
-        "%s/bin/bet" % new,
+        "%s/share/fsl/bin/bet" % new,
+        "%s/bin/python" % world.env,
+        "%s/share/fsl/bin/bet" % new,
+        "%s/bin/python" % world.env,
         "restored",
         str(old),
         "%s/share/fsl/bin/bet" % old,
@@ -2350,16 +2661,11 @@ def test_hook_unshadows_an_older_fsl_with_the_real_conda_activation(sh, stub):
 def test_hook_restores_path_after_base_with_the_real_conda_activation(sh, stub, lead):
     """base active first, the profile's FSL entries right before its bin.
 
-    conda puts swane-env's bin in place of base's and back on deactivation,
-    so the entry that followed the dropped ones is gone by then: PATH must
-    still come back exactly.
+    conda puts swane-env's bin in place of base's and back on deactivation:
+    PATH must still come back exactly.
     """
-    world = FslWorld(sh, stub)
-    old, new = _bet_dirs(sh)
-    (world.env / "conda-meta").mkdir(parents=True, exist_ok=True)
-    (world.env / "conda-meta" / "history").write_text("")
-    (world.env / "bin").mkdir(exist_ok=True)
-    world.write_hook(new)
+    world, old, new = _fsl_tool_dirs(sh, stub)
+    _fake_conda_prefix(world.env)
     script = (
         '. "$CONDA_SH"\n'
         "conda activate base\n"
@@ -2388,11 +2694,63 @@ def test_hook_restores_path_after_base_with_the_real_conda_activation(sh, stub, 
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
-        "%s/bin/bet" % new,
-        "%s/bin/bet" % new,
+        "%s/share/fsl/bin/bet" % new,
+        "%s/share/fsl/bin/bet" % new,
         "restored",
         str(old),
     ]
+
+
+@pytest.mark.skipif(_real_conda_sh() is None, reason="no conda.sh (CONDA_EXE unset)")
+def test_hook_entry_after_base_bin_with_the_real_conda_activation(sh, stub):
+    """Ruling R33, the default macOS zsh order with a reused fslinstaller FSL.
+
+    ``~/.zprofile`` (FSL's installer) puts the FSL's share/fsl/bin on PATH,
+    then ``~/.zshrc`` (conda init) activates base in front of it; conda puts
+    swane-env's bin in place of base's, still in front. The activation puts
+    a copy of the entry first (FSL's ``cluster`` wrapper wins over graphviz's
+    in swane-env), also after a reactivation, and the deactivation removes
+    only that copy: PATH and FSLDIR come back exactly.
+    """
+    world, _, new = _fsl_tool_dirs(sh, stub)
+    make_executable(new / "share" / "fsl" / "bin" / "cluster", "exit 0")
+    _fake_conda_prefix(world.env)
+    entry = "%s/share/fsl/bin" % new
+    script = (
+        'PATH="$ENTRY:$PATH"\n'
+        '. "$CONDA_SH"\n'
+        "conda activate base\n"
+        'start="$PATH"\n'
+        'conda activate "$P"; command -v cluster; printf "%s\\n" "$PATH"\n'
+        'conda activate "$P"; command -v cluster; printf "%s\\n" "$PATH"\n'
+        "conda deactivate\n"
+        '[ "$PATH" = "$start" ] && echo restored || printf "%s\\n%s\\n" "$start" "$PATH"\n'
+        'printf "%s\\n" "$FSLDIR"\n'
+        "command -v cluster\n"
+    )
+    result = subprocess.run(
+        [BASH, "-c", script],
+        env={
+            "HOME": str(sh.home),
+            "PATH": str(sh.tools),
+            "FSLDIR": str(new),
+            "ENTRY": entry,
+            "CONDA_SH": _real_conda_sh(),
+            "P": str(world.env),
+        },
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert len(lines) == 7, result.stdout
+    for index in (0, 2):
+        assert lines[index] == "%s/cluster" % entry
+        path = lines[index + 1].split(":")
+        assert path[:2] == [entry, "%s/bin" % world.env]
+        assert path.count(entry) == 2
+    assert lines[4:] == ["restored", str(new), "%s/cluster" % entry]
 
 
 def test_hook_activate_deactivate_roundtrip(sh, stub):
@@ -2412,7 +2770,7 @@ def test_hook_activate_deactivate_roundtrip(sh, stub):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
-        "%s|/a:/b:%s/bin" % (fsl, fsl),
+        "%s|%s/share/fsl/bin:/a:/b" % (fsl, fsl),
         "<unset>|/a:/b",
     ]
 
@@ -2776,7 +3134,9 @@ class InstallWorld:
     ``bin/conda`` (logged as ``conda``) prints :attr:`envs_json` for ``env
     list --json``; ``create -n swane-env`` makes :attr:`env` (with
     ``bin/dot`` when graphviz is requested) and ``create -n swane-fsl``
-    makes :attr:`fsl_prefix`, each then listed. The env's ``bin/python``
+    makes :attr:`fsl_prefix` (filled as an FSL solve would, see
+    :func:`_fake_fsl_solver`, as is the prefix of ``install -p``), each then
+    listed. The env's ``bin/python``
     (logged as ``env-python``) fakes the SWANe installed in it, as in
     :class:`FslWorld`. ``mktemp`` and ``basename`` wrap the real tools, so
     the launcher step (its ``mktemp``) and the PATH step (``basename`` of
@@ -2805,6 +3165,7 @@ class InstallWorld:
             sh.tmp / "env-python-template",
             "env-python",
             'case "$*" in\n'
+            "%s"
             '    *"-m swane.utils.fsl_conda --format github"*)\n'
             "        printf 'release=6.0.7.8\\nplatform=linux-64\\nspecs=%s\\n' ;;\n"
             "    *min_fsl_version*) echo 6.0.7.8 ;;\n"
@@ -2812,8 +3173,9 @@ class InstallWorld:
             '    "-c "*) echo 3.12 ;;\n'
             '    "-m pip install -U "*) echo "pip output" ;;\n'
             "    *) exit 9 ;;\n"
-            "esac" % (FSL_SPECS, SWANE_CHECK_CALL),
+            "esac" % (ENV_PYTHON_STDIN_CASE, FSL_SPECS, SWANE_CHECK_CALL),
         )
+        fill = _fake_fsl_solver(sh, stub)
         with_env = json.dumps({"envs": [str(self.root), str(self.env)]})
         with_fsl = json.dumps(
             {"envs": [str(self.root), str(self.env), str(self.fsl_prefix)]}
@@ -2836,9 +3198,14 @@ class InstallWorld:
             "                printf '%%s' %(with_env)s > %(json)s ;;\n"
             '            *" -n swane-fsl "*)\n'
             "                mkdir -p %(fsl_bin)s\n"
+            "                %(fill)s %(fsl)s\n"
             "                printf '%%s' %(with_fsl)s > %(json)s ;;\n"
             "        esac ;;\n"
-            '    install) echo "conda install output" ;;\n'
+            '    install) echo "conda install output"\n'
+            '        while [ "$#" -gt 0 ]; do\n'
+            '            [ "$1" = -p ] && [ "$2" != %(env)s ] && %(fill)s "$2"\n'
+            "            shift\n"
+            "        done ;;\n"
             "esac"
             % {
                 "json": bash_quote(str(self.envs_json)),
@@ -2846,6 +3213,9 @@ class InstallWorld:
                 "template": bash_quote(str(template)),
                 "with_env": bash_quote(with_env),
                 "fsl_bin": bash_quote(str(self.fsl_prefix / "bin")),
+                "fsl": bash_quote(str(self.fsl_prefix)),
+                "env": bash_quote(str(self.env)),
+                "fill": bash_quote(str(fill)),
                 "with_fsl": bash_quote(with_fsl),
             },
         )
@@ -2903,6 +3273,7 @@ def test_main_end_to_end_with_stubs(sh, stub):
         "env-python %s" % SWANE_CHECK_CALL,
         "env-python -I -c from swane.utils.fsl_conda import min_fsl_version",
         "conda create -y -n swane-fsl",  # fsl_step
+        "createFSLWrapper " + " ".join(FSL_PROGRAMS),
         "mktemp",  # write_launcher
         "basename",  # ensure_local_bin_on_path
     ]

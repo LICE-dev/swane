@@ -708,6 +708,9 @@ SWANE_FSL_ENV_NAME="swane-fsl"
 # update that FSL without asking again (its licence was already accepted).
 SWANE_FSL_MARKER="etc/swane_installer_fsl"
 FSL_NEEDED_MESSAGE="SWANe needs FSL; rerun the installer or install FSL from fsl.fmrib.ox.ac.uk"
+# FSL command wrappers an FSL must have in share/fsl/bin to be used (and
+# create_fsl_wrappers requires after createFSLWrapper).
+FSL_REQUIRED_WRAPPERS="bet flirt fsl-cluster"
 # System-wide FSL locations probed after $FSLDIR, the hook and ~/fsl
 # (space-separated; overridable so tests never see the machine's real FSL).
 SWANE_SYSTEM_FSL_DIRS="${SWANE_SYSTEM_FSL_DIRS-/usr/local/fsl}"
@@ -901,13 +904,85 @@ find_installer_fsl() {
     return 3
 }
 
+# fsl_executables ENV_PREFIX PREFIX: print, one per line, the names of the
+# programs FSL's own packages installed in PREFIX/bin: the direct bin/<name>
+# entries (no subdirectory, no leading dot) of every PREFIX/conda-meta record
+# whose channel or package URL is FSL_CHANNEL. Programs of other packages
+# (graphviz's "cluster", python, conda...) are never listed. The records are
+# read by the Python of ENV_PREFIX, in isolated mode (the program comes on
+# stdin).
+fsl_executables() {
+    PYTHONNOUSERSITE=1 "$1/bin/python" -I - "$FSL_CHANNEL" "$2" <<'EOF'
+import glob
+import json
+import os
+import sys
+
+channel = sys.argv[1].rstrip("/")
+names = set()
+for path in sorted(glob.glob(os.path.join(sys.argv[2], "conda-meta", "*.json"))):
+    with open(path, encoding="utf-8") as handle:
+        record = json.load(handle)
+    sources = [str(record.get(key) or "").rstrip("/") for key in ("channel", "url")]
+    if not any(s == channel or s.startswith(channel + "/") for s in sources):
+        continue
+    for name in record.get("files") or ():
+        parts = str(name).split("/")
+        if (
+            len(parts) == 2
+            and parts[0] == "bin"
+            and parts[1]
+            and not parts[1].startswith(".")
+            and not any(c.isspace() for c in parts[1])
+        ):
+            names.add(parts[1])
+for name in sorted(names):
+    print(name)
+EOF
+}
+
+# create_fsl_wrappers ENV_PREFIX PREFIX: create FSL's command wrappers in
+# PREFIX/share/fsl/bin (the only FSL directory the hook puts on PATH) for the
+# programs of FSL's own packages (fsl_executables), with the createFSLWrapper
+# of the fsl-installer package. Its exit status tells nothing (it is 0 also
+# when nothing was created), so the FSL_REQUIRED_WRAPPERS (bet, flirt,
+# fsl-cluster) are checked afterwards: die if one is missing.
+create_fsl_wrappers() {
+    local env_prefix="$1" prefix="$2" names tool
+    local -a targets=()
+    [ -x "$prefix/bin/createFSLWrapper" ] ||
+        die "No createFSLWrapper in $prefix/bin (package fsl-installer): cannot create FSL's command wrappers"
+    names="$(fsl_executables "$env_prefix" "$prefix")" ||
+        die "Could not read the package records in $prefix/conda-meta"
+    while IFS= read -r tool; do
+        if [ -n "$tool" ]; then
+            targets+=("$tool")
+        fi
+    done <<EOF
+$names
+EOF
+    [ "${#targets[@]}" -gt 0 ] ||
+        die "No program of FSL's packages found in $prefix/conda-meta"
+    log_info "Creating FSL's command wrappers in $prefix/share/fsl/bin (${#targets[@]} programs)"
+    FSLDIR="$prefix" PREFIX="$prefix" FSL_CREATE_WRAPPER_SCRIPTS=1 PYTHONNOUSERSITE=1 \
+        "$prefix/bin/createFSLWrapper" "${targets[@]}" </dev/null >&2 ||
+        die "createFSLWrapper failed in $prefix"
+    # Word splitting is intended: the variable is a space-separated list.
+    for tool in $FSL_REQUIRED_WRAPPERS; do
+        if [ ! -f "$prefix/share/fsl/bin/$tool" ] || [ ! -x "$prefix/share/fsl/bin/$tool" ]; then
+            die "createFSLWrapper did not create $prefix/share/fsl/bin/$tool"
+        fi
+    done
+}
+
 # install_or_update_fsl ROOT ENV_PREFIX [TARGET]: install the minimal FSL
 # release SWANe needs (resolved by swane.utils.fsl_conda of the SWANe in
-# ENV_PREFIX) into the swane-fsl environment of the conda ROOT: "conda
-# install" into TARGET or the swane-fsl this installer made earlier,
-# otherwise "conda create". Then write etc/fslversion (FSL's packages do not)
-# and the marker. Sets SWANE_FSL_PREFIX and SWANE_FSL_ACTION; prints nothing
-# on stdout. Call it directly, not inside $(...).
+# ENV_PREFIX, fsl-installer included) into the swane-fsl environment of the
+# conda ROOT: "conda install" into TARGET or the swane-fsl this installer made
+# earlier, otherwise "conda create". Then create FSL's command wrappers
+# (create_fsl_wrappers) and write etc/fslversion (FSL's packages do not) and
+# the marker. Sets SWANE_FSL_PREFIX and SWANE_FSL_ACTION; prints nothing on
+# stdout. Call it directly, not inside $(...).
 install_or_update_fsl() {
     local root="$1" env_prefix="$2" target="${3:-}" output release specs prefix="" rc=0
     SWANE_FSL_PREFIX=""
@@ -952,6 +1027,7 @@ install_or_update_fsl() {
         SWANE_FSL_ACTION="installed"
     fi
     set +f
+    create_fsl_wrappers "$env_prefix" "$prefix"
     mkdir -p "$prefix/etc" || die "Could not create $prefix/etc"
     printf '%s\n' "$release" >"$prefix/etc/fslversion" || die "Could not write $prefix/etc/fslversion"
     : >"$prefix/$SWANE_FSL_MARKER" || die "Could not write $prefix/$SWANE_FSL_MARKER"
@@ -959,12 +1035,15 @@ install_or_update_fsl() {
 }
 
 # write_fsl_hook ENV_PREFIX FSLDIR: write the activation hooks of swane-env.
-# activate.d/swane-fsl.sh saves FSLDIR, FSLOUTPUTTYPE and PATH, exports
-# FSLDIR, FSLOUTPUTTYPE=NIFTI_GZ and appends $FSLDIR/bin to PATH (so the env's
-# own python stays first), after dropping from PATH the bin directories of the
-# FSL the shell had in FSLDIR when that is another FSL;
-# deactivate.d/swane-fsl.sh restores them, unsetting the variables that were
-# unset before. Both are POSIX sh, sourced by conda in the user's shell (bash,
+# activate.d/swane-fsl.sh saves FSLDIR and FSLOUTPUTTYPE, exports FSLDIR and
+# FSLOUTPUTTYPE=NIFTI_GZ, and puts FSL's command wrappers,
+# $FSLDIR/share/fsl/bin, first on PATH (ahead of swane-env's own bin) unless
+# that entry is already on PATH ahead of swane-env's bin; an entry of the
+# user's that comes after it stays, and a copy goes first. $FSLDIR/bin (the
+# bin of a whole conda environment: python, conda...) never goes on PATH,
+# and nothing is removed from it. deactivate.d/swane-fsl.sh removes the
+# entry again (its first occurrence), only if the activation added it, and
+# restores the variables, unsetting those that were unset before. Both are POSIX sh, sourced by conda in the user's shell (bash,
 # zsh...), and safe under "set -u".
 write_fsl_hook() {
     local prefix="$1" dir="$2" quoted activate deactivate
@@ -980,240 +1059,88 @@ write_fsl_hook() {
     {
         cat <<'EOF'
 # Written by the SWANe installer (rerun it rather than editing this file).
-# Sourced by "conda activate swane-env": points SWANe at FSL. The FSL bin
-# directory is appended to PATH, so swane-env's own programs stay first.
+# Sourced by "conda activate swane-env": points SWANe at FSL. Only FSL's
+# command wrappers, $FSLDIR/share/fsl/bin, go on PATH, never $FSLDIR/bin
+# (the bin of a whole conda environment, with its own python and conda).
+# The entry goes first, ahead of swane-env's own bin, so an FSL wrapper wins
+# over a program of the same name in swane-env (graphviz's "cluster"). An
+# entry already on PATH ahead of swane-env's bin is left where it is; one
+# after it (the user's profile set up this FSL, then conda put the env's bin
+# in front of it) stays too, and a copy goes first. Nothing is removed.
 if [ -z "${_SWANE_FSL_ACTIVE+x}" ]; then
     _SWANE_FSL_ACTIVE=1
-    unset _SWANE_OLD_FSLDIR _SWANE_OLD_FSLOUTPUTTYPE _SWANE_FSL_OWNED
+    unset _SWANE_OLD_FSLDIR _SWANE_OLD_FSLOUTPUTTYPE _SWANE_FSL_ADDED
     if [ -n "${FSLDIR+x}" ]; then
         _SWANE_OLD_FSLDIR="$FSLDIR"
     fi
     if [ -n "${FSLOUTPUTTYPE+x}" ]; then
         _SWANE_OLD_FSLOUTPUTTYPE="$FSLOUTPUTTYPE"
     fi
-    _SWANE_OLD_PATH="$PATH"
 EOF
         printf '    FSLDIR=%s\n' "$quoted"
         cat <<'EOF'
     FSLOUTPUTTYPE=NIFTI_GZ
     export FSLDIR FSLOUTPUTTYPE
-    _SWANE_FSL_BIN="$FSLDIR/bin"
-    # Another FSL set up by the user's shell (the FSLDIR before this
-    # activation) has its bin and share/fsl/bin directories on PATH ahead of
-    # the entry appended below, and its share/fsl/bin wrappers run its own
-    # programs: drop them, so they cannot shadow this FSL. The deactivation
-    # puts them back. _SWANE_FSL_KEPT is PATH without them, and
-    # _SWANE_FSL_DROPPED holds one "N:entry" line per dropped entry (N: the
-    # number of _SWANE_FSL_KEPT entries before it).
-    unset _SWANE_FSL_DROPPED _SWANE_FSL_KEPT
-    if [ -n "${_SWANE_OLD_FSLDIR-}" ] &&
-        [ "$(CDPATH='' cd -P -- "$_SWANE_OLD_FSLDIR" >/dev/null 2>&1 && pwd -P || printf '%s\n' "$_SWANE_OLD_FSLDIR")" != \
-            "$(CDPATH='' cd -P -- "$FSLDIR" >/dev/null 2>&1 && pwd -P || printf '%s\n' "$FSLDIR")" ]; then
-        # Compared with repeated and trailing slashes removed
-        # ("/usr/local/fsl/" in FSLDIR, ".../bin/" on PATH); the entries
-        # themselves are kept as written, for the restore.
-        _SWANE_N="$_SWANE_OLD_FSLDIR"
-        while :; do
-            case "$_SWANE_N" in
-                *//*) _SWANE_N="${_SWANE_N%%//*}/${_SWANE_N#*//}" ;;
-                ?*/) _SWANE_N="${_SWANE_N%/}" ;;
-                *) break ;;
-            esac
-        done
-        _SWANE_O="$_SWANE_N"
-        _SWANE_REST="$PATH:"
-        _SWANE_P=""
-        _SWANE_K=0
-        _SWANE_D=""
-        while [ -n "$_SWANE_REST" ]; do
-            _SWANE_E="${_SWANE_REST%%:*}"
-            _SWANE_REST="${_SWANE_REST#*:}"
-            _SWANE_N="$_SWANE_E"
-            while :; do
-                case "$_SWANE_N" in
-                    *//*) _SWANE_N="${_SWANE_N%%//*}/${_SWANE_N#*//}" ;;
-                    ?*/) _SWANE_N="${_SWANE_N%/}" ;;
-                    *) break ;;
-                esac
-            done
-            if [ "$_SWANE_N" = "$_SWANE_O/share/fsl/bin" ] ||
-                [ "$_SWANE_N" = "$_SWANE_O/bin" ]; then
-                _SWANE_D="$_SWANE_D$_SWANE_K:$_SWANE_E
-"
-            else
-                _SWANE_P="$_SWANE_P$_SWANE_E:"
-                _SWANE_K=$((_SWANE_K + 1))
-            fi
-        done
-        if [ -n "$_SWANE_D" ]; then
-            _SWANE_FSL_DROPPED="$_SWANE_D"
-            _SWANE_FSL_KEPT="${_SWANE_P%:}"
-            PATH="$_SWANE_FSL_KEPT"
-            export PATH
-        fi
-        unset _SWANE_REST _SWANE_P _SWANE_K _SWANE_D _SWANE_E _SWANE_N _SWANE_O
-    fi
-    # conda reactivating swane-env exports a PATH computed before
-    # deactivate.d ran, without the entries that script put back: they are
-    # still to be restored by the next deactivation.
-    if [ -z "${_SWANE_FSL_DROPPED+x}" ] && [ -n "${_SWANE_FSL_LEFT_DROPPED-}" ] &&
-        [ "${_SWANE_FSL_LEFT_FROM-}" = "${_SWANE_OLD_FSLDIR-}" ]; then
-        _SWANE_FSL_DROPPED="$_SWANE_FSL_LEFT_DROPPED"
-        _SWANE_FSL_KEPT="${_SWANE_FSL_LEFT_KEPT-}"
-    fi
-    unset _SWANE_FSL_LEFT_DROPPED _SWANE_FSL_LEFT_KEPT _SWANE_FSL_LEFT_FROM
-    case ":$PATH:" in
-        *":$_SWANE_FSL_BIN:"*)
-            # Already on PATH: the user's own entry, left alone, unless the
-            # deactivation just before left it there (conda reactivating
-            # swane-env exports a PATH computed before deactivate.d ran):
-            # then it is ours, and the deactivation removes it.
-            if [ "${_SWANE_FSL_LEFT-}" = "$_SWANE_FSL_BIN" ]; then
-                _SWANE_FSL_OWNED=reused
+    _SWANE_FSL_ENTRY="$FSLDIR/share/fsl/bin"
+    # Put (a copy of) the entry first when it is absent, or when swane-env's
+    # bin comes before its first occurrence (_SWANE_P: what precedes it).
+    _SWANE_P=":${PATH-}:"
+    _SWANE_P="${_SWANE_P%%":$_SWANE_FSL_ENTRY:"*}:"
+    case ":${PATH-}:" in
+        *":$_SWANE_FSL_ENTRY:"*)
+            if [ -n "${CONDA_PREFIX-}" ] &&
+                [ "${_SWANE_P#*":$CONDA_PREFIX/bin:"}" != "$_SWANE_P" ]; then
+                # Only after swane-env's bin: a copy goes first.
+                PATH="$_SWANE_FSL_ENTRY:$PATH"
+                export PATH
+                _SWANE_FSL_ADDED=1
+            elif [ "${_SWANE_FSL_LEFT-}" = "$_SWANE_FSL_ENTRY" ]; then
+                # Ahead of swane-env's bin: the user's own entry, left alone,
+                # unless the deactivation just before removed it as ours
+                # (conda reactivating swane-env exports a PATH computed
+                # before deactivate.d ran, with the entry still in it): then
+                # it is ours again.
+                _SWANE_FSL_ADDED=1
             fi
             ;;
         *)
-            PATH="$PATH:$_SWANE_FSL_BIN"
+            PATH="$_SWANE_FSL_ENTRY${PATH:+:$PATH}"
             export PATH
-            _SWANE_FSL_OWNED=appended
+            _SWANE_FSL_ADDED=1
             ;;
     esac
-    unset _SWANE_FSL_LEFT
-    _SWANE_NEW_PATH="$PATH"
+    unset _SWANE_FSL_LEFT _SWANE_P
 fi
 EOF
     } >"$activate" || die "Could not write $activate"
     cat >"$deactivate" <<'EOF' || die "Could not write $deactivate"
 # Written by the SWANe installer (rerun it rather than editing this file).
-# Sourced by "conda deactivate": undoes activate.d/swane-fsl.sh.
+# Sourced by "conda deactivate": undoes activate.d/swane-fsl.sh. conda may
+# already have rewritten PATH (dropping swane-env's own bin) when this runs,
+# so the current PATH is edited, never replaced by a saved one: only the
+# $FSLDIR/share/fsl/bin entry the activation added goes, wherever it is now.
 #
 # Known limitation: when swane-env is replaced by another environment
 # without stacking ("conda activate other" from inside swane-env), conda
 # exports a PATH it computed before this script ran, so in that environment
-# the FSL entry stays on PATH and the entries of the shell's own FSL stay
-# off it (with FSLDIR back to its previous value). Reactivating swane-env
-# reuses that entry instead of appending another one.
+# the FSL entry stays on PATH (with FSLDIR back to its previous value).
+# _SWANE_FSL_LEFT names the entry removed here, so that the next activation
+# of swane-env takes such a leftover entry as its own instead of leaving it
+# behind on the following deactivation.
 if [ -n "${_SWANE_FSL_ACTIVE+x}" ]; then
-    if [ -n "${_SWANE_FSL_OWNED+x}" ] || [ -n "${_SWANE_FSL_DROPPED+x}" ]; then
-        if [ "${_SWANE_FSL_OWNED-}" != reused ] && [ "$PATH" = "${_SWANE_NEW_PATH-}" ]; then
-            # PATH unchanged since the activation: restore it exactly.
-            PATH="${_SWANE_OLD_PATH-}"
-        else
-            # conda rewrites PATH before running this script (it drops the
-            # env's own entries), or the entry was reused from an earlier
-            # activation: undo just what the activation did, and keep the
-            # rest.
-            _SWANE_P=":$PATH:"
-            if [ -n "${_SWANE_FSL_OWNED+x}" ]; then
-                # Remove the FSL entry, its last occurrence.
-                case "$_SWANE_P" in
-                    *":${_SWANE_FSL_BIN-}:"*)
-                        _SWANE_HEAD="${_SWANE_P%":${_SWANE_FSL_BIN-}:"*}"
-                        _SWANE_P="$_SWANE_HEAD${_SWANE_P#"$_SWANE_HEAD:${_SWANE_FSL_BIN-}"}"
-                        ;;
-                esac
-            fi
-            # Put each dropped entry back, unless it is on PATH already. Its
-            # place: right after the entry dropped just before it from the
-            # same place; else before the kept entry that followed it, or
-            # after the kept entry that preceded it (conda turns swane-env's
-            # bin back into the previous environment's, so either can be
-            # gone); else at the front when it came first, before a later
-            # kept entry, or at the end.
-            _SWANE_NL='
-'
-            _SWANE_LINES="${_SWANE_FSL_DROPPED-}"
-            _SWANE_PREV=""
-            _SWANE_PREVK=""
-            while [ -n "$_SWANE_LINES" ]; do
-                case "$_SWANE_LINES" in
-                    *"$_SWANE_NL"*)
-                        _SWANE_E="${_SWANE_LINES%%"$_SWANE_NL"*}"
-                        _SWANE_LINES="${_SWANE_LINES#*"$_SWANE_NL"}"
-                        ;;
-                    *)
-                        _SWANE_E="$_SWANE_LINES"
-                        _SWANE_LINES=""
-                        ;;
-                esac
-                [ -n "$_SWANE_E" ] || continue
-                _SWANE_K="${_SWANE_E%%:*}"
-                _SWANE_E="${_SWANE_E#*:}"
-                if [ "${_SWANE_P#*":$_SWANE_E:"}" != "$_SWANE_P" ]; then
-                    _SWANE_PREV="$_SWANE_E"
-                    _SWANE_PREVK="$_SWANE_K"
-                    continue
-                fi
-                # The kept entries just before (B) and after (A) it, and the
-                # first later kept entry still on PATH (C).
-                _SWANE_REST="${_SWANE_FSL_KEPT-}:"
-                _SWANE_I=0
-                _SWANE_A=""
-                _SWANE_B=""
-                _SWANE_C=""
-                _SWANE_D=""
-                while [ -n "$_SWANE_REST" ]; do
-                    _SWANE_X="${_SWANE_REST%%:*}"
-                    _SWANE_REST="${_SWANE_REST#*:}"
-                    _SWANE_I=$((_SWANE_I + 1))
-                    if [ "$_SWANE_I" -eq "$_SWANE_K" ]; then
-                        _SWANE_B=":$_SWANE_X:"
-                    elif [ "$_SWANE_I" -eq $((_SWANE_K + 1)) ]; then
-                        _SWANE_A=":$_SWANE_X:"
-                    elif [ "$_SWANE_I" -gt $((_SWANE_K + 1)) ] &&
-                        [ -z "$_SWANE_C" ] &&
-                        [ "${_SWANE_P#*":$_SWANE_X:"}" != "$_SWANE_P" ]; then
-                        _SWANE_C=":$_SWANE_X:"
-                    fi
-                done
-                if [ -n "$_SWANE_PREV" ] && [ "$_SWANE_PREVK" = "$_SWANE_K" ] &&
-                    [ "${_SWANE_P#*":$_SWANE_PREV:"}" != "$_SWANE_P" ]; then
-                    _SWANE_X=":$_SWANE_PREV:"
-                    _SWANE_D=after
-                elif [ -n "$_SWANE_A" ] && [ "${_SWANE_P#*"$_SWANE_A"}" != "$_SWANE_P" ]; then
-                    _SWANE_X="$_SWANE_A"
-                    _SWANE_D=before
-                elif [ -n "$_SWANE_B" ] && [ "${_SWANE_P#*"$_SWANE_B"}" != "$_SWANE_P" ]; then
-                    _SWANE_X="$_SWANE_B"
-                    _SWANE_D=after
-                elif [ "$_SWANE_K" = 0 ]; then
-                    _SWANE_P=":$_SWANE_E$_SWANE_P"
-                elif [ -n "$_SWANE_C" ]; then
-                    _SWANE_X="$_SWANE_C"
-                    _SWANE_D=before
-                else
-                    _SWANE_P="$_SWANE_P$_SWANE_E:"
-                fi
-                # _SWANE_X is ":entry:"; insert next to its first occurrence.
-                case "$_SWANE_D" in
-                    before)
-                        _SWANE_P="${_SWANE_P%%"$_SWANE_X"*}:$_SWANE_E$_SWANE_X${_SWANE_P#*"$_SWANE_X"}"
-                        ;;
-                    after)
-                        _SWANE_P="${_SWANE_P%%"$_SWANE_X"*}$_SWANE_X$_SWANE_E:${_SWANE_P#*"$_SWANE_X"}"
-                        ;;
-                esac
-                _SWANE_PREV="$_SWANE_E"
-                _SWANE_PREVK="$_SWANE_K"
-            done
-            _SWANE_P="${_SWANE_P#:}"
-            PATH="${_SWANE_P%:}"
-            unset _SWANE_P _SWANE_HEAD _SWANE_E _SWANE_K _SWANE_REST _SWANE_A _SWANE_D \
-                _SWANE_NL _SWANE_LINES _SWANE_PREV _SWANE_PREVK _SWANE_I _SWANE_B \
-                _SWANE_C _SWANE_X
-        fi
-        export PATH
-        # A reactivation (or an environment switch) exports a PATH computed
-        # before this script, which still holds the FSL entry and lacks the
-        # dropped ones: let the next activation know.
-        if [ -n "${_SWANE_FSL_OWNED+x}" ]; then
-            _SWANE_FSL_LEFT="${_SWANE_FSL_BIN-}"
-        fi
-        if [ -n "${_SWANE_FSL_DROPPED+x}" ]; then
-            _SWANE_FSL_LEFT_DROPPED="$_SWANE_FSL_DROPPED"
-            _SWANE_FSL_LEFT_KEPT="${_SWANE_FSL_KEPT-}"
-            _SWANE_FSL_LEFT_FROM="${_SWANE_OLD_FSLDIR-}"
-        fi
+    if [ -n "${_SWANE_FSL_ADDED+x}" ] && [ -n "${_SWANE_FSL_ENTRY-}" ]; then
+        # The first occurrence: the activation put the entry first.
+        _SWANE_P=":${PATH-}:"
+        case "$_SWANE_P" in
+            *":$_SWANE_FSL_ENTRY:"*)
+                _SWANE_P="${_SWANE_P%%":$_SWANE_FSL_ENTRY:"*}:${_SWANE_P#*":$_SWANE_FSL_ENTRY:"}"
+                _SWANE_P="${_SWANE_P#:}"
+                PATH="${_SWANE_P%:}"
+                export PATH
+                _SWANE_FSL_LEFT="$_SWANE_FSL_ENTRY"
+                ;;
+        esac
+        unset _SWANE_P
     fi
     if [ -n "${_SWANE_OLD_FSLDIR+x}" ]; then
         FSLDIR="$_SWANE_OLD_FSLDIR"
@@ -1227,9 +1154,8 @@ if [ -n "${_SWANE_FSL_ACTIVE+x}" ]; then
     else
         unset FSLOUTPUTTYPE
     fi
-    unset _SWANE_FSL_ACTIVE _SWANE_FSL_OWNED _SWANE_OLD_FSLDIR \
-        _SWANE_OLD_FSLOUTPUTTYPE _SWANE_OLD_PATH _SWANE_NEW_PATH _SWANE_FSL_BIN \
-        _SWANE_FSL_DROPPED _SWANE_FSL_KEPT
+    unset _SWANE_FSL_ACTIVE _SWANE_FSL_ADDED _SWANE_FSL_ENTRY \
+        _SWANE_OLD_FSLDIR _SWANE_OLD_FSLOUTPUTTYPE
 fi
 EOF
     log_info "FSL for $SWANE_ENV_NAME: FSLDIR=$dir (in $activate)"
@@ -1275,20 +1201,44 @@ fsl_install_and_wire() {
     fsl_set_result "$SWANE_FSL_ACTION" "$SWANE_FSL_PREFIX"
 }
 
+# fsl_has_wrappers DIR: return 0 if the FSL in DIR has FSL's command wrappers
+# (executable share/fsl/bin/<tool> for each FSL_REQUIRED_WRAPPERS tool): the
+# hook puts only $FSLDIR/share/fsl/bin on PATH, never $FSLDIR/bin.
+fsl_has_wrappers() {
+    local tool
+    # Word splitting is intended: the variable is a space-separated list.
+    for tool in $FSL_REQUIRED_WRAPPERS; do
+        if [ ! -f "$1/share/fsl/bin/$tool" ] || [ ! -x "$1/share/fsl/bin/$tool" ]; then
+            return 1
+        fi
+    done
+}
+
+# fsl_unusable_reason DIR MIN: print why the FSL in DIR cannot be used as it
+# is (fsl_use_dir returned 1 for it), as the end of "FSL <version> in DIR ...".
+fsl_unusable_reason() {
+    if fsl_version_ge "$1" "$2"; then
+        printf '%s\n' "lacks the FSL command wrappers $FSL_REQUIRED_WRAPPERS (executables in $1/share/fsl/bin; SWANe puts only \$FSLDIR/share/fsl/bin on PATH)"
+    else
+        printf '%s\n' "is older than $2, the oldest release SWANe supports"
+    fi
+}
+
 # fsl_use_dir ROOT ENV_PREFIX DIR MIN: wire the FSL in DIR when it is release
-# MIN or later; update it first when it is this installer's own (older) FSL.
-# Return 1, doing nothing, for an older FSL the installer did not make.
+# MIN or later and has FSL's command wrappers (fsl_has_wrappers); update it
+# first when it is this installer's own FSL, older or without wrappers.
+# Return 1, doing nothing, for any other FSL.
 fsl_use_dir() {
     local root="$1" env_prefix="$2" dir="$3" min="$4" version
     version="$(fsl_version_of "$dir")" || version="unknown"
-    if fsl_version_ge "$dir" "$min"; then
+    if fsl_version_ge "$dir" "$min" && fsl_has_wrappers "$dir"; then
         log_info "Using FSL $version in $dir"
         write_fsl_hook "$env_prefix" "$dir"
         fsl_set_result existing "$dir"
         return 0
     fi
     if is_installer_fsl "$dir"; then
-        log_info "FSL $version in $dir (installed by this installer) is older than $min: updating it"
+        log_info "FSL $version in $dir (installed by this installer) $(fsl_unusable_reason "$dir" "$min"): updating it"
         fsl_install_and_wire "$root" "$env_prefix" "$dir"
         return 0
     fi
@@ -1297,15 +1247,18 @@ fsl_use_dir() {
 
 # fsl_step ROOT ENV_PREFIX: the FSL step of the installer.
 #   - no FSL found: ask (install + licence), install swane-fsl, hook to it;
-#   - FSL >= MIN_FSL_VERSION: hook to it, nothing installed;
-#   - this installer's swane-fsl, older: update it without asking;
-#   - another FSL, older: warn, leave it untouched, ask, install swane-fsl
-#     (unless the hook already points at this installer's swane-fsl).
+#   - FSL >= MIN_FSL_VERSION with FSL's command wrappers
+#     ($FSLDIR/share/fsl/bin/bet): hook to it, nothing installed;
+#   - this installer's swane-fsl, older or without wrappers: update it
+#     without asking;
+#   - another FSL, older or without wrappers: warn, leave it untouched, ask,
+#     install swane-fsl (unless the hook already points at this installer's
+#     swane-fsl).
 # Declined or --no-fsl: warn and write no hook (a stale one is removed);
 # --no-fsl keeps a valid hook, reported as the existing FSL.
 # Sets FSL_RESULT_*; call it directly, not inside $(...).
 fsl_step() {
-    local root="$1" env_prefix="$2" min found="" hook_dir="" version
+    local root="$1" env_prefix="$2" min found="" hook_dir="" version reason
     fsl_set_result "" ""
     if [ "$NO_FSL" = "1" ]; then
         remove_stale_fsl_hook "$env_prefix"
@@ -1326,13 +1279,14 @@ fsl_step() {
             return 0
         fi
         version="$(fsl_version_of "$found")" || version="unknown"
+        reason="$(fsl_unusable_reason "$found" "$min")"
         hook_dir="$(hook_fsldir "$env_prefix")" || hook_dir=""
         if [ -n "$hook_dir" ] && [ "$hook_dir" != "$found" ] && is_installer_fsl "$hook_dir"; then
-            log_info "Leaving FSL $version in $found (older than $min) aside: $SWANE_ENV_NAME uses the FSL this installer made in $hook_dir"
+            log_info "Leaving FSL $version in $found aside (it $reason): $SWANE_ENV_NAME uses the FSL this installer made in $hook_dir"
             fsl_use_dir "$root" "$env_prefix" "$hook_dir" "$min"
             return 0
         fi
-        log_warn "FSL $version in $found is older than $min, the oldest release SWANe supports: it is left untouched, and a separate FSL can be installed for SWANe"
+        log_warn "FSL $version in $found $reason: it is left untouched, and a separate FSL can be installed for SWANe"
     fi
     if confirm_fsl_install; then
         fsl_install_and_wire "$root" "$env_prefix"
