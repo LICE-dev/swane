@@ -12,9 +12,9 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
-# antspyx is imported lazily inside _run_interface, as in AntsRegistration.
+from swane.nipype_pipeline.interfaces.ants import thread_env
 
-ITK_THREADS_VAR = "ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"
+# antspyx is imported lazily inside _run_interface, as in AntsRegistration.
 
 # antspyx's own default tolerance for ants.n4_bias_field_correction's
 # convergence dict; kept explicit here because passing max_iterations means
@@ -62,12 +62,12 @@ class AntsN4BiasFieldCorrection(BaseInterface):
     input_spec = AntsN4BiasFieldCorrectionInputSpec
     output_spec = AntsN4BiasFieldCorrectionOutputSpec
 
+    # ITK caches its thread count on first use: run each node in a new process
+    # so that num_threads is honoured (see MonitoredMultiProcPlugin).
+    fresh_process = True
+
     def _run_interface(self, runtime):
-        # --- Threads control ---
-        previous_threads = os.environ.get(ITK_THREADS_VAR)
-        if isdefined(self.inputs.num_threads):
-            os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
-        try:
+        with thread_env(self.inputs.num_threads):
             import ants
 
             out_file = self._gen_outfilename()
@@ -119,11 +119,6 @@ class AntsN4BiasFieldCorrection(BaseInterface):
                 kwargs["spline_param"] = self.inputs.spline_distance
 
             corrected = ants.n4_bias_field_correction(img, mask=mask, **kwargs)
-        finally:
-            if previous_threads is None:
-                os.environ.pop(ITK_THREADS_VAR, None)
-            else:
-                os.environ[ITK_THREADS_VAR] = previous_threads
 
         # save output
         ants.image_write(corrected, out_file)

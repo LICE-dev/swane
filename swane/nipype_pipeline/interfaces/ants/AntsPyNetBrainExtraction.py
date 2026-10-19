@@ -13,13 +13,13 @@ from nipype.interfaces.base import (
 
 from swane.nipype_pipeline.interfaces.ants import (
     DEFAULT_RANDOM_SEED,
+    ITK_THREADS_VAR,
     ants_random_seed,
+    thread_env,
 )
 
 # antspyx and antspynet are imported lazily inside _run_interface, as in
 # AntsN4BiasFieldCorrection, so importing this module never loads tensorflow.
-
-ITK_THREADS_VAR = "ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -68,6 +68,11 @@ class AntsPyNetBrainExtraction(BaseInterface):
     input_spec = AntsPyNetBrainExtractionInputSpec
     output_spec = AntsPyNetBrainExtractionOutputSpec
 
+    # ITK and TensorFlow cache their thread counts on first use: run each node
+    # in a new process so that num_threads is honoured (see
+    # MonitoredMultiProcPlugin).
+    fresh_process = True
+
     THREAD_ENV_VARS = (
         ITK_THREADS_VAR,
         "TF_NUM_INTRAOP_THREADS",
@@ -76,15 +81,7 @@ class AntsPyNetBrainExtraction(BaseInterface):
     )
 
     def _run_interface(self, runtime):
-        saved = {v: os.environ.get(v) for v in self.THREAD_ENV_VARS}
-        # Only export a positive thread count: num_threads<=0 means "auto/all
-        # cores" (the max_cpu=0 default), and exporting OMP_NUM_THREADS=0 is
-        # undefined for OpenMP -- leave the env untouched so each library uses
-        # its own default.
-        if isdefined(self.inputs.num_threads) and self.inputs.num_threads > 0:
-            for v in self.THREAD_ENV_VARS:
-                os.environ[v] = str(self.inputs.num_threads)
-        try:
+        with thread_env(self.inputs.num_threads, self.THREAD_ENV_VARS):
             import ants
             import antspynet
             from ants.core.ants_image import ANTsImage
@@ -125,12 +122,6 @@ class AntsPyNetBrainExtraction(BaseInterface):
                 ants.image_write(mask, abspath(self.inputs.mask_file))
 
             ants.image_write(img * mask, out_file)
-        finally:
-            for v, prev in saved.items():
-                if prev is None:
-                    os.environ.pop(v, None)
-                else:
-                    os.environ[v] = prev
 
         return runtime
 
