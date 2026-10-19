@@ -132,6 +132,48 @@ def test_patch_is_idempotent(monkeypatch, tmp_path):
     assert second.count(SlicerCheckWorker.BEGIN_MARKER) == 1
 
 
+def test_patch_does_not_rewrite_an_up_to_date_slicerrc(monkeypatch, tmp_path):
+    slicerrc = tmp_path / ".slicerrc.py"
+    slicerrc.write_text('print("hello")\n')
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(slicerrc))
+
+    assert SlicerCheckWorker.add_slicer_startup_patch() is True
+    first_mtime = slicerrc.stat().st_mtime_ns
+    written = []
+    monkeypatch.setattr(
+        SlicerCheckWorker,
+        "write_slicerrc",
+        staticmethod(lambda path, content: written.append(path)),
+    )
+
+    assert SlicerCheckWorker.add_slicer_startup_patch() is True
+    assert written == []
+    assert slicerrc.stat().st_mtime_ns == first_mtime
+
+
+def test_patch_tolerates_read_only_slicerrc(monkeypatch, tmp_path):
+    slicerrc = tmp_path / ".slicerrc.py"
+    slicerrc.write_text('print("hello")\n')
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(slicerrc))
+
+    def read_only(path, content):
+        raise PermissionError("read-only slicerrc")
+
+    monkeypatch.setattr(SlicerCheckWorker, "write_slicerrc", staticmethod(read_only))
+
+    assert SlicerCheckWorker.add_slicer_startup_patch() is False
+    assert slicerrc.read_text() == 'print("hello")\n'
+
+
+def test_patch_tolerates_undecodable_slicerrc(monkeypatch, tmp_path):
+    slicerrc = tmp_path / ".slicerrc.py"
+    slicerrc.write_bytes(b"# \xff\xfe not utf-8\n")
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(slicerrc))
+
+    assert SlicerCheckWorker.add_slicer_startup_patch() is False
+    assert slicerrc.read_bytes() == b"# \xff\xfe not utf-8\n"
+
+
 def test_patch_replaces_outdated_patch(monkeypatch, tmp_path):
     slicerrc = tmp_path / ".slicerrc.py"
     slicerrc.write_text('print("hello")\n')
