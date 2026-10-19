@@ -38,6 +38,13 @@ on:
 permissions:
   contents: read
 
+env:
+  # TEMPORARY (see swane/tests/helpers/fsl_policy_override.py): FSL has no
+  # Windows build, so the Windows runner tests as if FSL were only recommended
+  # despite the shipped FSL_MANDATORY = True. Empty (no override) elsewhere.
+  # Remove once FSL_MANDATORY ships as False or Windows drops the FSL requirement.
+  SWANE_TEST_FSL_MANDATORY: ${{ inputs.os == 'windows-latest' && '0' || '' }}
+
 jobs:
   light:
     if: ${{ inputs.suite == 'light' || inputs.suite == 'all' }}
