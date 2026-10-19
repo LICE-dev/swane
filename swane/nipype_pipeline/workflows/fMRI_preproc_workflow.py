@@ -85,7 +85,7 @@ def fMRI_preproc_workflow(
     synth_config: SectionProxy
         The Synth-tools configuration section used to resolve the registration
         engine (func->ref follows the configured engine, falling back
-        SYNTH->FSL; see the func->ref block below).
+        SYNTH->ANTS; see the func->ref block below).
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
@@ -469,7 +469,7 @@ def fMRI_preproc_workflow(
 
     # NODE 27: Coregister the mean functional image to the structural image.
     # Follow the configured engine; EPI avoids SynthMorph (see spec §1), so
-    # SYNTH falls back to FSL.
+    # SYNTH falls back to ANTS.
     engine = resolve_registration_engine(synth_config, allow_synth=False)
 
     reg_2_ref = get_registration_node(

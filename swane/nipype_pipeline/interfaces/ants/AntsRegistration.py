@@ -159,7 +159,7 @@ class AntsRegistration(BaseInterface):
                 kwargs["aff_iterations"] = TEST_RUN_AFF_ITERATIONS
                 kwargs["reg_iterations"] = TEST_RUN_REG_ITERATIONS
             else:
-                # Explicitly set the standard clinical schedule. We cannot rely on
+                # Explicitly set the standard schedule. We cannot rely on
                 # antspyx's default reg_iterations because it defaults to (40, 20, 0),
                 # which performs zero iterations at the native resolution and yields
                 # terrible nonlinear (SyN) registrations. The affine default

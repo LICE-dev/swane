@@ -769,6 +769,79 @@ class TestBundlesToRef:
         pd, _ = _read_vtp_points(out)
         assert pd.GetNumberOfLines() == 0
 
+    @staticmethod
+    def _write_point_by_point(streamlines, path):
+        """Oracle: the original writer, which built every polyline cell one
+        point at a time (``InsertNextCell`` / ``InsertCellPoint``)."""
+        from vtkmodules.vtkCommonCore import vtkPoints
+        from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData
+        from vtkmodules.vtkIOXML import vtkXMLPolyDataWriter
+        from vtkmodules.util.numpy_support import numpy_to_vtk
+        from swane.nipype_pipeline.interfaces.dipy.DipyBundlesToRef import RAS_TO_LPS
+
+        lines = vtkCellArray()
+        blocks = []
+        offset = 0
+        for streamline in streamlines:
+            arr = np.asarray(streamline, dtype=np.float32) @ RAS_TO_LPS.T.astype(
+                np.float32
+            )
+            n = len(arr)
+            if n == 0:
+                continue
+            blocks.append(arr)
+            lines.InsertNextCell(n)
+            for i in range(n):
+                lines.InsertCellPoint(offset + i)
+            offset += n
+        all_points = (
+            np.vstack(blocks).astype(np.float32)
+            if blocks
+            else np.zeros((0, 3), dtype=np.float32)
+        )
+        points = vtkPoints()
+        points.SetData(numpy_to_vtk(all_points, deep=True))
+        polydata = vtkPolyData()
+        polydata.SetPoints(points)
+        polydata.SetLines(lines)
+        writer = vtkXMLPolyDataWriter()
+        writer.SetFileName(path)
+        writer.SetInputData(polydata)
+        writer.Write()
+
+    @pytest.mark.parametrize(
+        "case", ["mixed", "empty_list", "only_empty_streamlines", "single_point"]
+    )
+    def test_bulk_cell_array_matches_point_by_point_writer(self, tmp_path, case):
+        """The vectorised cell-array construction must write the very same
+        ``.vtp`` as the original one-point-at-a-time loop."""
+        from swane.nipype_pipeline.interfaces.dipy.DipyBundlesToRef import (
+            write_streamlines_vtp,
+        )
+
+        rng = np.random.default_rng(0)
+        if case == "mixed":
+            streamlines = [
+                rng.normal(size=(int(rng.integers(1, 60)), 3)) * 30 for _ in range(40)
+            ]
+            # empty streamlines are skipped, a single-point one is kept
+            streamlines.insert(5, np.zeros((0, 3)))
+            streamlines.append(np.array([[1.0, 2.0, 3.0]]))
+        elif case == "empty_list":
+            streamlines = []
+        elif case == "only_empty_streamlines":
+            streamlines = [np.zeros((0, 3)), np.zeros((0, 3))]
+        else:
+            streamlines = [np.array([[1.0, 2.0, 3.0]])]
+
+        new = str(tmp_path / "new.vtp")
+        old = str(tmp_path / "old.vtp")
+        write_streamlines_vtp(streamlines, new)
+        self._write_point_by_point(streamlines, old)
+
+        with open(new, "rb") as f_new, open(old, "rb") as f_old:
+            assert f_new.read() == f_old.read()
+
 
 # --------------------------------------------------------------------------- #
 # Fornix split (spec section 3's "fx" special case).

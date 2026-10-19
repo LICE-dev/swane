@@ -54,7 +54,7 @@ def build_dicom_tree(root):
         n_slices=11,
         n_volumes=1,
         series_description="SINGLE",
-        patient_id="P_SINGLE",
+        subject_id="P_SINGLE",
     )
     scenarios["SINGLE_VOL"] = Scenario("SINGLE_VOL", single_dir, 11, 1, 1, 1, 1, 11)
 
@@ -65,7 +65,7 @@ def build_dicom_tree(root):
         n_slices=5,
         n_volumes=2,
         series_description="TWO",
-        patient_id="P_TWO",
+        subject_id="P_TWO",
     )
     scenarios["TWO_VOL"] = Scenario("TWO_VOL", two_dir, 10, 1, 1, 1, 2, 10)
 
@@ -76,7 +76,7 @@ def build_dicom_tree(root):
         n_slices=3,
         n_volumes=4,
         series_description="MULTI",
-        patient_id="P_MULTI",
+        subject_id="P_MULTI",
     )
     scenarios["MULTI_VOL"] = Scenario("MULTI_VOL", multi_dir, 12, 1, 1, 1, 4, 12)
 
@@ -96,7 +96,7 @@ def build_dicom_tree(root):
         for i in range(2):
             write_minimal_dicom(
                 os.path.join(multisubj_dir, f"{subject.lower()}{i}.dcm"),
-                patient_id=subject,
+                subject_id=subject,
                 series_desc="S_" + subject,
                 study_uid=study_uid,
             )
@@ -110,7 +110,7 @@ def build_dicom_tree(root):
     for i in range(2):
         write_minimal_dicom(
             os.path.join(multiexam_dir, f"{i + 1}.dcm"),
-            patient_id="P_EXAM",
+            subject_id="P_EXAM",
             study_uid=generate_uid(),
         )
     scenarios["MULTI_EXAM"] = Scenario("MULTI_EXAM", multiexam_dir, 2, 1, 2, -1, -1, 1)
@@ -123,7 +123,7 @@ def build_dicom_tree(root):
         n_slices=3,
         n_volumes=2,
         series_description="ENHANCED",
-        patient_id="P_MF",
+        subject_id="P_MF",
     )
     scenarios["MULTIFRAME"] = Scenario("MULTIFRAME", multiframe_dir, 1, 1, 1, 1, 2, 1)
 
