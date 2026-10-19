@@ -20,8 +20,8 @@ def run_python(*arguments):
 
 
 def assert_supported_python():
-    if sys.version_info < (3, 10):
-        raise SystemExit("SWANe development requires Python 3.10 or newer.")
+    if sys.version_info < (3, 12):
+        raise SystemExit("SWANe development requires Python 3.12 or newer.")
 
 
 def find_sibling(repository_name, marker):
@@ -39,7 +39,18 @@ def bootstrap():
         if sibling is not None:
             print("Installing sibling checkout: {0}".format(sibling))
             run_python("-m", "pip", "install", "-e", sibling)
-    run_python("-m", "pip", "install", "-e", ".", "pytest", "black")
+    run_python(
+        "-m",
+        "pip",
+        "install",
+        "-e",
+        ".",
+        "pytest",
+        "pytest-qt",
+        "pytest-timeout",
+        "SimpleITK",
+        "black",
+    )
 
 
 def assert_safe_test_root():
@@ -83,10 +94,9 @@ def main():
         run_python(
             "-m",
             "pytest",
-            "swane/tests/test_1_dep_manager.py",
-            "swane/tests/test_2_config_global.py",
-            "swane/tests/test_3_dicom_search.py",
-            "swane/tests/test_4_subject.py",
+            "swane/tests",
+            "-m",
+            "not heavy",
             "--color=yes",
             "--verbose",
         )
@@ -95,7 +105,7 @@ def main():
         run_python(
             "-m",
             "pytest",
-            "swane/tests/test_5_workflow.py",
+            "swane/tests/nipype_pipeline/matrix",
             "--color=yes",
             "--verbose",
         )

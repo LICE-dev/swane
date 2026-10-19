@@ -61,13 +61,28 @@ class TestPreferencesWindow:
 
 def test_home_tab_shows_windows_notice(monkeypatch, request):
     import swane.ui.MainWindow as main_window_module
+    from swane.config import dependency_policy
 
     monkeypatch.setattr(main_window_module, "is_windows", lambda: True)
+    monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", False)
     window = request.getfixturevalue("main_window")
     from PySide6.QtWidgets import QLabel
 
     texts = [w.text() for w in window.homeTab.findChildren(QLabel)]
     assert any("experimental" in t for t in texts)
+
+
+def test_home_tab_hides_windows_notice_when_fsl_mandatory(monkeypatch, request):
+    import swane.ui.MainWindow as main_window_module
+    from swane.config import dependency_policy
+
+    monkeypatch.setattr(main_window_module, "is_windows", lambda: True)
+    monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", True)
+    window = request.getfixturevalue("main_window")
+    from PySide6.QtWidgets import QLabel
+
+    texts = [w.text() for w in window.homeTab.findChildren(QLabel)]
+    assert not any("experimental" in t for t in texts)
 
 
 def test_update_available_shows_conda_installer_command(monkeypatch, main_window):

@@ -218,11 +218,19 @@ class TestPreferenceWizard:
             return " ".join(label.text() for label in page.findChildren(QLabel))
 
         monkeypatch.setattr(wizard_module, "is_windows", lambda: True)
+        monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", True)
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
+        qtbot.addWidget(wizard)
+        assert "experimental" not in texts(wizard)
+
+        monkeypatch.setattr(wizard_module, "is_windows", lambda: True)
+        monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", False)
         wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
         assert "experimental" in texts(wizard)
 
         monkeypatch.setattr(wizard_module, "is_windows", lambda: False)
+        monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", False)
         wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
         assert "experimental" not in texts(wizard)
