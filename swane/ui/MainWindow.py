@@ -41,6 +41,7 @@ from swane.utils.LicenseReference import SLICER
 from swane.utils.AtlasReference import ATLASES
 from swane.ui.LicenseConsentWindow import LicenseConsentWindow
 from swane.workers.LicenseResolveWorker import LicenseResolveWorker
+from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 from swane import resources
 from swane.resources import strings
 from swane import __version__, EXIT_CODE_REBOOT
@@ -1055,6 +1056,8 @@ class MainWindow(QMainWindow):
                 opt_x,
                 self.optional_grid_layout,
             )
+            # Slicer is valid: make sure the slicerrc startup patch is present
+            SlicerCheckWorker.add_slicer_startup_patch()
             # The fast checks of need_slicer_check passed; confirm in background
             # that the installation still matches the recorded revision.
             DependencyManager.quick_check_slicer_version(

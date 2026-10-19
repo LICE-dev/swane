@@ -4,7 +4,6 @@ import functools
 import importlib.metadata
 import importlib.util
 import os
-import shutil
 import subprocess
 import re
 from shutil import which
@@ -414,10 +413,6 @@ class DependencyManager:
         ):
             return True
 
-        # If Slicer is valid, we need to check if the startup patch is present
-        # on every startup
-        SlicerCheckWorker.add_slicer_startup_patch()
-
         return False
 
     @staticmethod
@@ -739,9 +734,7 @@ class DependencyManager:
             )
 
         # FS matlab runtime
-        mcr_cmd = which(DependencyManager.FREESURFER_MATLAB_COMMAND) or shutil.which(
-            DependencyManager.FREESURFER_MATLAB_COMMAND
-        )
+        mcr_cmd = which(DependencyManager.FREESURFER_MATLAB_COMMAND)
         if not mcr_cmd and "FREESURFER_HOME" in os.environ:
             candidate = os.path.join(
                 os.environ["FREESURFER_HOME"],
