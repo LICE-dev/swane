@@ -1,5 +1,4 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
-import os
 from os.path import abspath
 
 import numpy as np
@@ -13,9 +12,9 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
-# antspyx is imported lazily inside _run_interface, as in AntsN4BiasFieldCorrection.
+from swane.nipype_pipeline.interfaces.ants import thread_env
 
-ITK_THREADS_VAR = "ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"
+# antspyx is imported lazily inside _run_interface, as in AntsN4BiasFieldCorrection.
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -64,6 +63,10 @@ class AntsAtropos(BaseInterface):
     input_spec = AntsAtroposInputSpec
     output_spec = AntsAtroposOutputSpec
 
+    # ITK caches its thread count on first use: run each node in a new process
+    # so that num_threads is honoured (see MonitoredMultiProcPlugin).
+    fresh_process = True
+
     def _init_string(self):
         return "Kmeans[%d]" % self.inputs.number_classes
 
@@ -84,10 +87,7 @@ class AntsAtropos(BaseInterface):
         return abspath("atropos_seg.nii.gz")
 
     def _run_interface(self, runtime):
-        previous_threads = os.environ.get(ITK_THREADS_VAR)
-        if isdefined(self.inputs.num_threads):
-            os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
-        try:
+        with thread_env(self.inputs.num_threads):
             import ants
 
             img = ants.image_read(self.inputs.in_file, pixeltype="float")
@@ -124,11 +124,6 @@ class AntsAtropos(BaseInterface):
                 # input gives the same segmentation.
                 r=0,
             )
-        finally:
-            if previous_threads is None:
-                os.environ.pop(ITK_THREADS_VAR, None)
-            else:
-                os.environ[ITK_THREADS_VAR] = previous_threads
 
         probs = res["probabilityimages"]
         if len(probs) != self.inputs.number_classes:

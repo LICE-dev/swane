@@ -115,6 +115,7 @@ class TestSlicerHelpers:
         return config
 
     def test_need_slicer_check_trusts_intact_cache(self, tmp_path, monkeypatch):
+        """The check has no side effect: it never writes ~/.slicerrc.py."""
         from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 
         patched = []
@@ -125,7 +126,7 @@ class TestSlicerHelpers:
         )
         config = self._valid_slicer_config(tmp_path)
         assert DependencyManager.need_slicer_check(config) is False
-        assert patched == [True]
+        assert patched == []
 
     def test_need_slicer_check_detects_removed_extension(self, tmp_path, monkeypatch):
         import shutil
@@ -442,7 +443,6 @@ def test_check_freesurfer_matlab_absent_does_not_spawn(monkeypatch, tmp_path):
         return None
 
     monkeypatch.setattr(dm, "which", mock_which)
-    monkeypatch.setattr(dm.shutil, "which", lambda cmd: None)
 
     calls = 0
 
@@ -491,7 +491,6 @@ def test_check_freesurfer_matlab_candidate_in_freesurfer_home(monkeypatch, tmp_p
         return None
 
     monkeypatch.setattr(dm, "which", mock_which)
-    monkeypatch.setattr(dm.shutil, "which", lambda cmd: None)
 
     captured_args = []
 

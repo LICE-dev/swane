@@ -1,6 +1,8 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
+import multiprocessing as mp
 import traceback
+from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from threading import Lock
 
@@ -15,6 +17,7 @@ import logging
 logger = logging.getLogger("nipype.workflow")
 
 try:
+    from nipype.pipeline.plugins import multiproc as _nipype_multiproc
     from nipype.pipeline.plugins.multiproc import MultiProcPlugin, indent
 except Exception:
     MultiProcPlugin = object
@@ -49,6 +52,22 @@ from nipype.utils.ram_estimator import RamEstimator
 class MonitoredMultiProcPlugin(MultiProcPlugin):
     """
     Custom reimplementation of MultiProcPlugin to support UI signaling and GPU queue
+
+    Fresh processes
+    ---------------
+    Some libraries read their thread count once per process and cache it: ITK
+    (``ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS``, so every antspyx call) on the
+    first filter it runs, TensorFlow on its first initialization. In a reused
+    pool worker the first such node therefore fixes the thread count of every
+    later one, whatever ``num_threads`` (and the scheduler's ``n_procs``
+    reservation) they declare. An interface whose class sets
+    ``fresh_process = True`` is never run in the shared pool: each of its
+    nodes (and each MapNode subnode, which shares the interface class) runs
+    in a brand-new process of the pool's own start method, created for that
+    node alone and joined when its result is collected. This only isolates
+    the node from earlier nodes if the process running this plugin never
+    initialized those libraries itself: it must not run antspyx/TensorFlow
+    work (importing them is harmless).
     """
 
     def __init__(self, plugin_args=None):
@@ -59,6 +78,8 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         self._future_taskids = {}
         self._broken_pool_reported = False
         self._broken_pool_lock = Lock()
+        # future -> the single-use executor running it (see "Fresh processes")
+        self._fresh_pools = {}
 
         super().__init__(plugin_args=plugin_args)
 
@@ -129,7 +150,37 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         try:
             return super(MonitoredMultiProcPlugin, self)._async_callback(future)
         except BrokenProcessPool as error:
-            self._handle_broken_pool(error)
+            if future in self._fresh_pools:
+                self._handle_broken_fresh_process(future, error)
+            else:
+                self._handle_broken_pool(error)
+
+    def _handle_broken_fresh_process(self, future, error):
+        """Fail the one node whose fresh process died by signal.
+
+        Unlike the shared pool (see :meth:`_handle_broken_pool`), a fresh
+        process runs a single node, so the culprit is known and no other task
+        is affected. The failed result reaches :meth:`_report_crash` through
+        Nipype's poll loop like any other crash.
+        """
+        taskid = self._future_taskids.get(future)
+        if taskid is None:
+            return
+        logger.critical(
+            "[MultiProc] The fresh process of %s died: %s",
+            self._task_nodes.get(taskid, "unknown node"),
+            error,
+        )
+        self._taskresult.setdefault(
+            taskid,
+            {
+                "taskid": taskid,
+                "result": None,
+                "traceback": traceback.format_exception(
+                    type(error), error, error.__traceback__
+                ),
+            },
+        )
 
     def _handle_broken_pool(self, error, unsubmitted_node=None):
         """Turn an abruptly broken worker pool into terminal task results.
@@ -167,7 +218,14 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
 
             # Snapshot the in-flight tasks under the lock: the pool killed them
             # all, so every one needs a terminal result or Nipype waits forever.
-            pending_taskids = sorted(set(self._future_taskids.values()))
+            # Fresh processes are not part of the broken pool and keep running.
+            pending_taskids = sorted(
+                {
+                    taskid
+                    for future, taskid in self._future_taskids.items()
+                    if future not in self._fresh_pools
+                }
+            )
             node_names = [self._task_nodes.get(taskid) for taskid in pending_taskids]
             node_names = [name for name in node_names if name]
 
@@ -236,13 +294,27 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         if getattr(node.interface, "terminal_output", "") == "stream":
             node.interface.terminal_output = "allatonce"
 
-        try:
-            result_future = self.pool.submit(
+        if getattr(node.interface, "fresh_process", False):
+            # A new process for this node alone (see "Fresh processes").
+            fresh_pool = ProcessPoolExecutor(
+                max_workers=1,
+                # looked up at call time: swane_process_initializer once patched
+                initializer=_nipype_multiproc.process_initializer,
+                initargs=(self._cwd,),
+                mp_context=mp.get_context(self.plugin_args.get("mp_context")),
+            )
+            result_future = fresh_pool.submit(
                 swane_run_node, node, updatehash, self._taskid
             )
-        except BrokenProcessPool as error:
-            self._handle_broken_pool(error, unsubmitted_node=node.fullname)
-            raise
+            self._fresh_pools[result_future] = fresh_pool
+        else:
+            try:
+                result_future = self.pool.submit(
+                    swane_run_node, node, updatehash, self._taskid
+                )
+            except BrokenProcessPool as error:
+                self._handle_broken_pool(error, unsubmitted_node=node.fullname)
+                raise
         self._task_obj[self._taskid] = result_future
         self._task_nodes[self._taskid] = node.fullname
         self._future_taskids[result_future] = self._taskid
@@ -260,7 +332,20 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         future = self._task_obj.get(taskid)
         if future is not None:
             self._future_taskids.pop(future, None)
+            fresh_pool = self._fresh_pools.pop(future, None)
+            if fresh_pool is not None:
+                # The node is done: join its process now, not at the end of
+                # the run, so it never lingers holding the node's memory.
+                fresh_pool.shutdown(wait=True)
         return super(MonitoredMultiProcPlugin, self)._clear_task(taskid)
+
+    def _postrun_check(self):
+        # Normally empty: _clear_task joins each fresh process as soon as its
+        # result is collected. Join any left over with the shared pool.
+        for fresh_pool in self._fresh_pools.values():
+            fresh_pool.shutdown(wait=True, cancel_futures=True)
+        self._fresh_pools.clear()
+        return super(MonitoredMultiProcPlugin, self)._postrun_check()
 
     def _submit_mapnode(self, jobid):
         # This class implements signaling for mapnode start

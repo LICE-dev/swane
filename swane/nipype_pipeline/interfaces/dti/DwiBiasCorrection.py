@@ -29,11 +29,12 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.ants import ITK_THREADS_VAR, thread_env
+
 # antspyx is imported lazily inside _run_interface, as in AntsN4BiasFieldCorrection.
 
 OMP_THREADS_VAR = "OMP_NUM_THREADS"
 OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
-ITK_THREADS_VAR = "ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"
 
 # b-values at or below this threshold are treated as b0 (non-diffusion-weighted).
 B0_MAX_BVAL = 50.0
@@ -70,6 +71,10 @@ class DwiBiasCorrection(BaseInterface):
 
     input_spec = DwiBiasCorrectionInputSpec
     output_spec = DwiBiasCorrectionOutputSpec
+
+    # ITK caches its thread count on first use: run each node in a new process
+    # so that num_threads is honoured (see MonitoredMultiProcPlugin).
+    fresh_process = True
 
     def _run_interface(self, runtime):
         import ants
@@ -108,24 +113,14 @@ class DwiBiasCorrection(BaseInterface):
             mean_b0.astype(np.float32), spacing=tuple(float(z) for z in zooms)
         )
 
-        previous = {
-            var: os.environ.get(var)
-            for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR, ITK_THREADS_VAR)
-        }
-        if isdefined(self.inputs.num_threads):
-            for var in (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR, ITK_THREADS_VAR):
-                os.environ[var] = str(self.inputs.num_threads)
-        try:
+        with thread_env(
+            self.inputs.num_threads,
+            (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR, ITK_THREADS_VAR),
+        ):
             # Estimate the bias field once, on the mean b0.
             bias_img = ants.n4_bias_field_correction(
                 mean_b0_img, return_bias_field=True
             )
-        finally:
-            for var, value in previous.items():
-                if value is None:
-                    os.environ.pop(var, None)
-                else:
-                    os.environ[var] = value
 
         field = np.asarray(bias_img.numpy(), dtype=np.float32)
 
