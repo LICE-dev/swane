@@ -163,6 +163,59 @@ def test_workflow_crash_signal_updates_tab_states(
     assert tab.workflow_had_error is True
 
 
+@pytest.mark.parametrize(
+    "earlier, expected_texts",
+    [
+        ([], [strings.subj_tab_wf_crashed]),
+        (["node_error"], [strings.subj_tab_wf_node_failed]),
+        (["resources"], [strings.subj_tab_wf_insufficient_resources]),
+    ],
+)
+def test_workflow_crash_notice_follows_earlier_reports(
+    qtbot, monkeypatch, main_window, earlier, expected_texts
+):
+    """The workflow process sends WORKFLOW_CRASHED for every failed run: the
+    final notice names failed nodes when some were reported, and an
+    insufficient resources notice is not followed by a second one."""
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_crash_notice",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+
+    from PySide6.QtWidgets import QMessageBox
+
+    shown = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: shown.append(self.text()))
+
+    if "node_error" in earlier:
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        node_holder = MagicMock()
+        node_holder.isSelected.return_value = False
+        tab.node_list = {
+            "wf": SimpleNamespace(
+                node_list={"node": SimpleNamespace(node_holder=node_holder)},
+                node_holder=MagicMock(),
+            )
+        }
+        tab.update_node_list(
+            WorkflowReport(WorkflowSignals.NODE_ERROR, long_name="pt.wf.node")
+        )
+        node_holder.set_art.assert_called_once_with(main_window.ERROR_ICON_FILE)
+    if "resources" in earlier:
+        tab.update_node_list(
+            WorkflowReport(WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES)
+        )
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_CRASHED))
+
+    assert shown == expected_texts
+    assert tab.workflow_had_error is True
+
+
 def test_label_from_dicom():
     label_single = SubjectTab.label_from_dicom(176, "Subj01", "MR", "T1_MPRAGE", 1)
     assert label_single == "Subj01 - MR - <b>T1_MPRAGE</b>: 176 images, 1 volume"

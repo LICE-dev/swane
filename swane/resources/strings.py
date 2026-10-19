@@ -642,3 +642,7 @@ license_consent_fsl_not_installed = (
 subj_tab_wf_crashed = (
     "Workflow execution crashed unexpectedly. Check the logs for details."
 )
+subj_tab_wf_node_failed = (
+    "Workflow execution finished with failed nodes. Check the nodes marked in "
+    "red and their crash files for details."
+)

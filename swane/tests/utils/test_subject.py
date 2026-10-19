@@ -114,6 +114,41 @@ class TestSubjectWorkflowControl:
 
         assert subject.stop_workflow() == SubjectRet.ExecWfStatusError
 
+    def test_generate_workflow_survives_graph_failure(
+        self, global_config, dependency_manager, monkeypatch
+    ):
+        """Graphs are an optional extra: a failing ``dot`` (write_graph
+        raising) must not turn a valid workflow into a generation error, and
+        the remaining graphs are still drawn."""
+        subject = Subject(global_config, dependency_manager)
+        assert subject.create_new_subject_dir("subj_graph") == SubjectRet.ValidFolder
+        monkeypatch.setattr(subject, "can_generate_workflow", lambda: True)
+        monkeypatch.setattr(dependency_manager, "is_graphviz", lambda: True)
+
+        drawn = []
+
+        def write_graph(name):
+            def _write(**kwargs):
+                if name == "broken":
+                    raise RuntimeError("dot returned non-zero exit status")
+                drawn.append(name)
+
+            return _write
+
+        subject.workflow = SimpleNamespace(
+            get_interface_array=lambda: [],
+            get_node_array=lambda: {
+                name: SimpleNamespace(node_list={"node": None}, long_name=name)
+                for name in ("broken", "working")
+            },
+            get_node=lambda name: SimpleNamespace(write_graph=write_graph(name)),
+        )
+
+        assert subject.generate_workflow() == SubjectRet.GenWfCompleted
+        assert drawn == ["working"]
+        assert os.path.isdir(subject.graph_dir())
+        assert os.path.exists(os.path.join(subject.folder, "references.txt"))
+
 
 class TestSubjectDicomChecks:
     def test_check_input_folder_step3_accepts_no_status_callback(
