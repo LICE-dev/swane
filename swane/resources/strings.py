@@ -85,7 +85,7 @@ mainwindow_home_label_atlases = "\nAtlases:"
 mainwindow_dep_slicer_src = "Searching Slicer installation..."
 mainwindow_pref_disabled_error = "Preferences disabled during workflow execution!"
 aboutwindow_wiki_dependencylist = "Link to <a href='https://github.com/LICE-dev/swane/wiki/04-Dependencies-Guides'>dependencies list</a>"
-aboutwindow_wiki_changelog = "Link to versions <a href='https://github.com/LICE-dev/swane/wiki/11-Changelog'>changelog</a>"
+aboutwindow_wiki_changelog = "Link to versions <a href='https://github.com/LICE-dev/swane/wiki/12-Changelog'>changelog</a>"
 
 mainwindow_chatgpt_title = "SWANe Assistant"
 mainwindow_chatgpt_tooltip = "Open ChatGPT SWANe Assistant in your browser"

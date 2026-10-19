@@ -68,3 +68,11 @@ def test_home_tab_shows_windows_notice(monkeypatch, request):
 
     texts = [w.text() for w in window.homeTab.findChildren(QLabel)]
     assert any("experimental" in t for t in texts)
+
+
+def test_about_changelog_link_points_to_wiki_12_changelog():
+    from swane.resources import strings
+
+    assert strings.aboutwindow_wiki_changelog == (
+        "Link to versions <a href='https://github.com/LICE-dev/swane/wiki/12-Changelog'>changelog</a>"
+    )
