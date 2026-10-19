@@ -44,7 +44,15 @@ class WorkflowGenerateWorker(QRunnable):
                 # Continue even if preload fails, generate_workflow will handle errors
 
         self.signal.progress_msg.emit(strings.subj_tab_wf_gen_start)
-        ret = self.subject.generate_workflow(generate_graphs=self.generate_graphs)
+        # finished must always be emitted: the GUI keeps a non-closable modal
+        # progress dialog open until it arrives
+        try:
+            ret = self.subject.generate_workflow(generate_graphs=self.generate_graphs)
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            ret = SubjectRet.GenWfError
         self.signal.finished.emit(ret)
 
     def _load_pipeline_modules(self, strings):

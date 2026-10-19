@@ -296,3 +296,128 @@ def test_workflow_run_worker_crash_sets_exitcode(monkeypatch, tmp_path):
         wp.run()
     assert exc.value.code == 1
     assert getattr(wp, "run_raised", False) is True
+
+
+class _RecordingQueue:
+    """In-process stand-in for the multiprocessing queue read by the GUI."""
+
+    def __init__(self):
+        self.items = []
+
+    def put(self, item):
+        self.items.append(item)
+
+    def close(self):
+        pass
+
+    def join_thread(self):
+        pass
+
+    def signals(self):
+        return [item.signal_type for item in self.items]
+
+
+def _process_workflow(tmp_path, freesurfer=None):
+    class RecordingWorkflow(DummyWorkflow):
+        ran = False
+
+        def run(self, plugin=None):
+            RecordingWorkflow.ran = True
+
+    workflow = RecordingWorkflow()
+    workflow.base_dir = str(tmp_path)
+    workflow.freesurfer = freesurfer
+    workflow.config = {"execution": {}}
+    return workflow
+
+
+def test_workflow_crash_reports_crashed_then_stop(monkeypatch, tmp_path):
+    from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
+
+    class CrashingWorkflow(DummyWorkflow):
+        def run(self, plugin=None):
+            raise RuntimeError("node failed")
+
+    monkeypatch.chdir(tmp_path)
+    workflow = CrashingWorkflow()
+    workflow.base_dir = str(tmp_path)
+    workflow.freesurfer = None
+    workflow.config = {"execution": {}}
+    queue = _RecordingQueue()
+
+    with pytest.raises(SystemExit) as exc:
+        WorkflowProcess("subj", workflow, queue).run()
+    assert exc.value.code == 1
+    assert queue.signals() == [
+        WorkflowSignals.WORKFLOW_CRASHED,
+        WorkflowSignals.WORKFLOW_STOP,
+    ]
+
+
+@pytest.mark.parametrize("failure", ["symlink_unsupported", "link_is_directory"])
+def test_freesurfer_log_link_failure_does_not_block_the_run(
+    monkeypatch, tmp_path, failure
+):
+    """A recon-all.log that cannot be linked (no symlinks on FAT/exFAT/CIFS,
+    or a directory in its place) must neither stop the workflow nor keep
+    WORKFLOW_STOP from reaching the GUI."""
+    from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
+
+    monkeypatch.chdir(tmp_path)
+    if failure == "symlink_unsupported":
+
+        def no_symlink(*args, **kwargs):
+            raise OSError(95, "Operation not supported")
+
+        monkeypatch.setattr(os, "symlink", no_symlink)
+    else:
+        os.makedirs(os.path.join(tmp_path, "log", "recon-all.log"))
+
+    workflow = _process_workflow(tmp_path, freesurfer=object())
+    queue = _RecordingQueue()
+
+    WorkflowProcess("subj", workflow, queue).run()
+
+    assert workflow.ran is True
+    assert queue.signals() == [WorkflowSignals.WORKFLOW_STOP]
+
+
+def test_freesurfer_log_is_linked(monkeypatch, tmp_path):
+    from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
+
+    monkeypatch.chdir(tmp_path)
+    workflow = _process_workflow(tmp_path, freesurfer=object())
+
+    WorkflowProcess("subj", workflow, _RecordingQueue()).run()
+
+    log_link = os.path.join(tmp_path, "log", "recon-all.log")
+    assert os.path.islink(log_link)
+    assert os.readlink(log_link) == os.path.join(
+        str(tmp_path), FS_DIR, "scripts", "recon-all.log"
+    )
+
+
+def test_setup_failure_still_reports_stop(monkeypatch, tmp_path):
+    """An exception before the workflow thread starts must still deliver
+    WORKFLOW_CRASHED and WORKFLOW_STOP: the GUI monitor blocks until STOP."""
+    import swane.workers.WorkflowProcess as workflow_process_module
+    from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
+
+    def failing_handler(*args, **kwargs):
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        workflow_process_module, "ConcurrentRotatingFileHandler", failing_handler
+    )
+    workflow = _process_workflow(tmp_path)
+    queue = _RecordingQueue()
+
+    with pytest.raises(SystemExit) as exc:
+        WorkflowProcess("subj", workflow, queue).run()
+    assert exc.value.code == 1
+    assert workflow.ran is False
+    assert queue.signals() == [
+        WorkflowSignals.WORKFLOW_CRASHED,
+        WorkflowSignals.WORKFLOW_STOP,
+    ]

@@ -167,3 +167,26 @@ def test_load_pipeline_modules_shows_label_only_when_loading(monkeypatch, loaded
     else:
         assert messages == ["Loading modules..."]
         assert imported == [main_workflow_preload.MAIN_WORKFLOW_MODULE]
+
+
+def test_finished_is_emitted_when_generation_raises(monkeypatch):
+    """The GUI keeps a non-closable progress dialog open until ``finished``:
+    an exception from generate_workflow must still emit it, as GenWfError."""
+    from swane.utils.Subject import SubjectRet
+
+    subject = MagicMock()
+    subject.generate_workflow.side_effect = RuntimeError("dot failed")
+    worker = WorkflowGenerateWorker(subject)
+    for preload in (
+        "_load_pipeline_modules",
+        "_preload_templates",
+        "_preload_models",
+        "_preload_dipy_atlas",
+    ):
+        monkeypatch.setattr(worker, preload, lambda strings: None)
+
+    emitted = []
+    worker.signal.finished.connect(emitted.append)
+    worker.run()
+
+    assert emitted == [SubjectRet.GenWfError]
