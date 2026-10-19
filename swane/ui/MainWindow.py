@@ -410,6 +410,16 @@ class MainWindow(QMainWindow):
             QCoreApplication.exit(EXIT_CODE_REBOOT)
 
         if ret != 0:
+            # A lower ram_gb (or another changed requirement) may leave an
+            # engine or option selected that no longer fits: re-validate the
+            # global and the open subject configurations before any workflow
+            # is generated again.
+            self.global_config.check_dependencies(self.dependency_manager)
+            for subj in self.subject_tab_array:
+                if subj.subject is not None and subj.subject.config is not None:
+                    subj.subject.config.check_dependencies(
+                        self.dependency_manager, self.global_config
+                    )
             self.reset_workflows()
 
     def edit_wf_config(self):

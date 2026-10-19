@@ -2,6 +2,7 @@
 #
 #   max_cpu = 4
 #   step = SYNTHSEG
+#   synth_reconall = false
 #   test_run = True
 #
 # nodes=8 edges=11

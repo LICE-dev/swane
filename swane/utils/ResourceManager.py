@@ -52,13 +52,20 @@ class ResourceManager:
     #: BOLD extraction + first-level GLM).
     NILEARN_FMRI_RAM_REQUIREMENT = {"mac": 6, "linux": 6, "other": 6, "windows": 6}
 
-    #: In prerelease test_run mode ONLY, the SynthSeg (--fast, robust=False) and
-    #: SynthMorph (steps=5) paths do genuinely less work and use less RAM, so
-    #: both their gate (whether the host may run them) and the per-node mem_gb
-    #: reservation are scaled by this factor. SynthStrip and Synth recon-all get
-    #: no such flag, so they are NOT scaled. The application (test_run=False)
-    #: never applies this. See swane/tests/prerelease and the test_run branches
-    #: in interfaces/utils.py (SynthMorphReg) and workflows/freesurfer_workflow.py.
+    #: RAM scale for the Synth paths that do genuinely less work:
+    #:
+    #: - SynthSeg --fast (robust=False): scales its per-node mem_gb reservation
+    #:   whenever --fast is used, i.e. in prerelease test_run AND in the
+    #:   application when the subject's SynthSeg fast mode preference is on.
+    #: - In prerelease test_run only: SynthMorph joint (steps=5) and Synth
+    #:   recon-all (lighter iterations and SynthSeg --fast via the -expert
+    #:   file) scale their reservation too.
+    #:
+    #: The prerelease gate (swane/tests/prerelease/capabilities.py
+    #: _probe_synth_ram) lowers the same floors under test_run; the application's
+    #: preference gates are never scaled. SynthStrip is never scaled. See the
+    #: test_run/--fast branches in interfaces/utils.py (SynthMorphReg) and
+    #: workflows/freesurfer_workflow.py.
     TEST_RUN_SYNTH_RAM_FACTOR = 0.7
 
     #: Cap applied to SynthStrip/SynthMorph/SynthSeg CPU thread count and node
