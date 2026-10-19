@@ -4,6 +4,10 @@ import sys
 
 from swane.utils.platform_and_tools_utils import is_command_available, is_linux
 
+# Set by the generated launcher script before it re-runs itself through the
+# user's login shell, so the second run starts SWANe instead of looping.
+LOGIN_SHELL_MARKER = "SWANE_LAUNCHER_LOGIN_SHELL"
+
 
 def _data_home() -> str:
     return os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
@@ -17,18 +21,24 @@ def _launcher_script_path() -> str:
     return os.path.join(_data_home(), "swane", "swane-launcher.sh")
 
 
-def _launch_target() -> str:
+def _launch_target() -> list[str]:
     """
-    Return the executable the generated launcher script must run.
+    Return the command the generated launcher script must run.
 
     The SWANE_LAUNCHER environment variable (exported by the installer's
     ``~/.local/bin/swane`` launcher) wins when it names an existing executable file;
-    otherwise the real path of the running SWANe executable is used.
+    otherwise the real path of the running SWANe executable is used. When SWANe was
+    not started through an executable (``python -m swane``, where argv[0] is the
+    non-executable ``__main__.py``) the current interpreter runs the package.
+    The first element is the executable whose presence the launcher checks.
     """
     candidate = os.environ.get("SWANE_LAUNCHER")
     if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-        return candidate
-    return os.path.realpath(sys.argv[0])
+        return [candidate]
+    current = os.path.realpath(sys.argv[0])
+    if os.path.isfile(current) and not os.access(current, os.X_OK) and sys.executable:
+        return [sys.executable, "-m", "swane"]
+    return [current]
 
 
 def _refresh_desktop_database(applications_dir: str) -> None:
@@ -73,6 +83,14 @@ def ensure_desktop_entry(icon_path: str) -> None:
     SWANE_LAUNCHER environment variable names an executable file, the generated
     script runs that launcher instead of the current process's executable.
 
+    A menu launch does not read the user's shell startup files, where tools like
+    FreeSurfer (FREESURFER_HOME) and often FSL (FSLDIR) are set up. When the user's
+    login shell is bash or zsh, the generated script therefore re-runs itself once
+    through that shell as a login, interactive shell (interactive because e.g.
+    Debian/Ubuntu's ~/.bashrc returns early otherwise), so SWANe sees the same
+    environment as when started from a terminal. Any other shell starts SWANe
+    with the desktop session environment.
+
     This is a no-op on non-Linux platforms and never raises: desktop integration is
     cosmetic and must not prevent SWANe from starting.
 
@@ -82,14 +100,25 @@ def ensure_desktop_entry(icon_path: str) -> None:
         return
 
     try:
-        exec_path = _launch_target()
+        command = _launch_target()
+        exec_path = command[0]
+        exec_command = " ".join(f'"{arg}"' for arg in command)
         desktop_file = _desktop_file_path()
         launcher_script = _launcher_script_path()
 
         launcher_content = (
             "#!/bin/sh\n"
+            f'if [ -z "${{{LOGIN_SHELL_MARKER}:-}}" ]; then\n'
+            f"    {LOGIN_SHELL_MARKER}=1\n"
+            f"    export {LOGIN_SHELL_MARKER}\n"
+            '    case "${SHELL##*/}" in\n'
+            "        bash|zsh)\n"
+            '            exec "$SHELL" -lic \'exec "$0"\' "$0" </dev/null\n'
+            "            ;;\n"
+            "    esac\n"
+            "fi\n"
             f'if [ -x "{exec_path}" ]; then\n'
-            f'    exec "{exec_path}"\n'
+            f"    exec {exec_command}\n"
             "fi\n"
             f'rm -f "{launcher_script}" "{desktop_file}"\n'
             "if command -v notify-send >/dev/null 2>&1; then\n"
