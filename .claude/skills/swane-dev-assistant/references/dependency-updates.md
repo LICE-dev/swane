@@ -4,8 +4,8 @@ Read this reference before bumping a pinned dependency in `setup.py` (e.g. `nipy
 
 ## Why this needs care beyond `pip install -U`
 
-- `swane/patches/nipype_patches.py` monkeypatches private/internal Nipype surface (`nipype.utils.profiler.ResourceMonitor.__init__`, `nipype.pipeline.plugins.multiproc.run_node`) that is not part of Nipype's public API and can change silently between releases.
-- Several dependencies are pinned to an exact version specifically to work around a known bug (e.g. `dcm2niix>=1.0.20241211,<=1.0.20260724`, commented in `setup.py`). Bumping the pin without re-checking the reason can reintroduce the bug or leave a now-unnecessary pin in place — this happened with `filelock<3.19`, a Nipype 1.10.0 workaround that was dropped when Nipype was bumped to 1.12.0.
+- `swane/patches/` monkeypatches private/internal surface that is not public API and can change silently between releases: `nipype_patches.py` (`ResourceMonitor.__init__`, `multiproc.run_node`, the multiproc `process_initializer`, `EddyInputSpec.get_hashval`, `RamEstimator.negotiate`, plus the Windows command/memory/makedirs hooks), `dipy_patches.py` (SLR and RecoBundles thread counts) and `scipy_patches.py`. Read `apply_patches()` and each module for the current list.
+- Several dependencies are pinned to an exact version specifically to work around a known bug (read the comment above each pin in `setup.py`, e.g. the `matplotlib` range). Bumping the pin without re-checking the reason can reintroduce the bug or leave a now-unnecessary pin in place — this happened with `filelock<3.19`, a Nipype 1.10.0 workaround that was dropped when Nipype was bumped to 1.12.0.
 - SWANe orchestrates a wide dependency graph (Nipype → networkx, traits, etc.; PySide6 → Qt; SimpleITK, nibabel, pydicom for image/DICOM I/O) where a transitive dependency can shift on its own and change behavior SWANe never pins directly.
 
 ## Procedure
@@ -14,10 +14,10 @@ Read this reference before bumping a pinned dependency in `setup.py` (e.g. `nipy
 2. **Re-run every monkeypatch against the new version.** Import the patched module, call `apply_patches()`, and exercise the patched path (a resource-monitored workflow run) to confirm the redirected `.proc` file still lands in the configured `crashdump_dir`. A patch that stops raising but silently no-ops is the dangerous failure mode — assert on the actual file location, not just "no exception".
 3. **Surface deprecated-API usage** introduced by the bump, across SWANe's own code and `swane/patches/`:
    ```bash
-   python3 -W error::DeprecationWarning -m pytest swane/tests -m "not heavy"
+   python3 -m pytest -W error::DeprecationWarning swane/tests -m "not heavy"
    ```
    Treat any `DeprecationWarning` raised this way as a required follow-up, not noise to silence with a filter.
-4. **Check the dependency's own dependencies recursively, not just the top-level package.** A `nipype` bump can shift its `networkx` or `traits` requirement, which can conflict with — or silently coexist with — an existing direct SWANe pin (`networkx==3.4.2`, `numpy==2.2.4`, `pydicom==3.0.1`). Inspect the new version's own `install_requires`/`pyproject.toml`, then:
+4. **Check the dependency's own dependencies recursively, not just the top-level package.** A `nipype` bump can shift its `networkx` or `traits` requirement, which can conflict with — or silently coexist with — an existing direct SWANe pin (e.g. `networkx`, `pydicom`, or the `numpy` floor; read the current values in `setup.py`). Inspect the new version's own `install_requires`/`pyproject.toml`, then:
    ```bash
    pip show <package>          # after install: Requires / Required-by
    pipdeptree -p <package>      # full recursive tree, if available in the dev environment
@@ -29,7 +29,7 @@ Read this reference before bumping a pinned dependency in `setup.py` (e.g. `nipy
 
 ## Red flags requiring a stop-and-verify
 
-- The bump touches `nipype`, `networkx`, or `traits` — anything `swane/patches/` reaches into.
+- The bump touches `nipype`, `networkx`, `traits`, `dipy`, or `scipy` — anything `swane/patches/` reaches into.
 - The new version's changelog mentions renamed/removed methods anywhere near the patched surface.
 - `pip install` resolves a transitive dependency to a different version than before, without you having changed its pin.
 - A `DeprecationWarning` appears in or near `swane/patches/` under the new version.
