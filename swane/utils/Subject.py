@@ -684,8 +684,9 @@ class Subject:
 
     def generate_workflow(self, generate_graphs: bool = True) -> SubjectRet:
         """
-        Generates and populates the Main Workflow.
-        Generates the graphviz analysis graphs on a new thread.
+        Generates and populates the Main Workflow, then writes the tool
+        references file and the graphviz analysis graphs (best effort: their
+        failure is logged and does not fail the generation).
 
         Parameters
         ----------
@@ -721,10 +722,26 @@ class Subject:
                 # TODO: should we generate a crash file in the log folder?
                 return SubjectRet.GenWfError
 
-        graph_dir = self.graph_dir()
-        shutil.rmtree(graph_dir, ignore_errors=True)
-        os.mkdir(graph_dir)
+        # The references list and the analysis graphs are informative extras:
+        # a failure here must not turn a valid workflow into a generation error
+        try:
+            self._write_references_file()
+        except Exception:
+            print("Warning: tool references file not written:")
+            traceback.print_exc()
 
+        try:
+            self._write_workflow_graphs(generate_graphs)
+        except Exception:
+            print("Warning: workflow graphs not generated:")
+            traceback.print_exc()
+
+        return SubjectRet.GenWfCompleted
+
+    def _write_references_file(self):
+        """
+        Writes references.txt with the citation of every tool used by the workflow.
+        """
         interfaces = self.workflow.get_interface_array()
         reference_file = os.path.join(self.folder, "references.txt")
         with open(reference_file, "w", encoding="utf-8") as f:
@@ -739,25 +756,37 @@ class Subject:
                             f.write(f" - {ref}\n")
                     f.write("\n" + "=" * 50 + "\n\n")  # separator between tools
 
-        # Graphviz analysis graphs drawing
-        node_list = self.workflow.get_node_array()
-        if generate_graphs:
-            for node in node_list.keys():
-                if len(node_list[node].node_list.keys()) > 0:
-                    if self.dependency_manager.is_graphviz():
-                        self.workflow.get_node(node).write_graph(
-                            graph2use=self.GRAPH_TYPE,
-                            format=Subject.GRAPH_FILE_EXT,
-                            # The dot source must not share the output path:
-                            # nipype runs "dot -o <base>.svg <dotfile>" and on
-                            # Windows dot cannot overwrite its own open input
-                            dotfilename=os.path.splitext(
-                                self.graph_file(node_list[node].long_name)
-                            )[0]
-                            + ".dot",
-                        )
+    def _write_workflow_graphs(self, generate_graphs: bool):
+        """
+        Empties the graph folder and, if requested, draws the graphviz graph of
+        every subworkflow. A failing graph is skipped: the GUI hides graphs
+        whose file is missing.
+        """
+        graph_dir = self.graph_dir()
+        shutil.rmtree(graph_dir, ignore_errors=True)
+        os.mkdir(graph_dir)
 
-        return SubjectRet.GenWfCompleted
+        if not generate_graphs or not self.dependency_manager.is_graphviz():
+            return
+
+        node_list = self.workflow.get_node_array()
+        for node in node_list.keys():
+            if len(node_list[node].node_list.keys()) > 0:
+                try:
+                    self.workflow.get_node(node).write_graph(
+                        graph2use=self.GRAPH_TYPE,
+                        format=Subject.GRAPH_FILE_EXT,
+                        # The dot source must not share the output path:
+                        # nipype runs "dot -o <base>.svg <dotfile>" and on
+                        # Windows dot cannot overwrite its own open input
+                        dotfilename=os.path.splitext(
+                            self.graph_file(node_list[node].long_name)
+                        )[0]
+                        + ".dot",
+                    )
+                except Exception:
+                    print(f"Warning: graph of {node} not generated:")
+                    traceback.print_exc()
 
     def is_workflow_process_alive(self) -> bool:
         """

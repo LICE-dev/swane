@@ -170,84 +170,121 @@ class WorkflowProcess(Process):
         """
         The Process main code
         """
-        # log folder management
-        log_dir = os.path.join(self.workflow.base_dir, LOG_DIR_NAME)
-        if not os.path.exists(log_dir):
-            os.mkdir(log_dir)
+        file_handler = None
+        callback_logger = None
+        resource_log_handler = None
+        workflow_run_work = None
+        setup_failed = False
+        try:
+            # log folder management
+            log_dir = os.path.join(self.workflow.base_dir, LOG_DIR_NAME)
+            if not os.path.exists(log_dir):
+                os.mkdir(log_dir)
 
-        self.workflow.config["execution"]["crashdump_dir"] = log_dir
-        self.workflow.config["execution"]["crashfile_format"] = "txt"
-        log_filename = os.path.join(log_dir, "pypeline.log")
-        file_handler = ConcurrentRotatingFileHandler(
-            log_filename,
-            maxBytes=int(config.get("logging", "log_size")),
-            backupCount=int(config.get("logging", "log_rotate")),
-        )
-        formatter = orig_log.Formatter(fmt=nipype_log.fmt, datefmt=nipype_log.datefmt)
-        file_handler.setFormatter(formatter)
-        WorkflowProcess.add_handlers(file_handler)
+            self.workflow.config["execution"]["crashdump_dir"] = log_dir
+            self.workflow.config["execution"]["crashfile_format"] = "txt"
+            log_filename = os.path.join(log_dir, "pypeline.log")
+            file_handler = ConcurrentRotatingFileHandler(
+                log_filename,
+                maxBytes=int(config.get("logging", "log_size")),
+                backupCount=int(config.get("logging", "log_rotate")),
+            )
+            formatter = orig_log.Formatter(
+                fmt=nipype_log.fmt, datefmt=nipype_log.datefmt
+            )
+            file_handler.setFormatter(formatter)
+            WorkflowProcess.add_handlers(file_handler)
 
-        # freesurfer log
-        if self.workflow.freesurfer is not None:
-            from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
+            # freesurfer log
+            if self.workflow.freesurfer is not None:
+                self.link_freesurfer_log(log_dir)
 
-            fs_path = os.path.join(self.workflow.base_dir, FS_DIR)
-            log_target = os.path.join(fs_path, "scripts", "recon-all.log")
-            log_link = os.path.join(log_dir, "recon-all.log")
+            # enable resource monitor if required
+            if self.workflow.is_resource_monitor:
+                config.enable_resource_monitor()
+                # enable_resource_monitor() only flips the *global* nipype config,
+                # which a "spawn" worker does not inherit. Mirror the flag onto the
+                # workflow's own config so it propagates into every node.config
+                # (pickled to the worker), where swane_run_node re-enables the
+                # monitor. Without this, node.config["monitoring"]["enabled"] keeps
+                # the workflow-creation snapshot ("false") and wins the run() merge,
+                # so no .proc file is produced under spawn.
+                self.workflow.config.setdefault("monitoring", {})["enabled"] = "true"
+                resource_log_filename = os.path.join(log_dir, "resource_monitor.log")
+                callback_logger = orig_log.getLogger("callback")
+                callback_logger.setLevel(orig_log.DEBUG)
+                resource_log_handler = orig_log.FileHandler(resource_log_filename)
+                callback_logger.addHandler(resource_log_handler)
+
+            # start workflow subthread
+            workflow_run_work = Thread(target=self.workflow_run_worker)
+            workflow_run_work.start()
+
+            # Wait for stop_event. It can be set from the workflow subthread (if workflow is executed till end) or from
+            # the GUI to stop the execution
+            self.stop_event.wait()
+            # Let a normally finishing thread leave its final ``set()`` call before
+            # deciding that an alive thread represents cancellation/fatal failure.
+            workflow_run_work.join(timeout=0.1)
+        except Exception:
+            # A setup failure must still reach the GUI, which otherwise waits
+            # for WORKFLOW_STOP forever
+            setup_failed = True
+            traceback.print_exc()
+        finally:
+            # Handler removal
+            if file_handler is not None:
+                WorkflowProcess.remove_handlers(file_handler)
+            if resource_log_handler is not None:
+                callback_logger.removeHandler(resource_log_handler)
+
+            if setup_failed or getattr(self, "run_raised", False):
+                self.queue.put(
+                    WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_CRASHED)
+                )
+
+            # Signal workflow_stop to GUI and close queue
+            self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_STOP))
+            self.queue.close()
+            # Flush any pending NODE_ERROR (a broken pool reports through the normal
+            # crash path) and the WORKFLOW_STOP above before this process ends, so
+            # the parent cannot miss the terminal state.
+            self.queue.join_thread()
+
+        # If the thread is alive at this point the stop_event was set from GUI, so the user asked to kill the process
+        if workflow_run_work is not None and workflow_run_work.is_alive():
+            WorkflowProcess.kill_with_subprocess()
+
+        if setup_failed or getattr(self, "run_raised", False):
+            sys.exit(1)
+
+    def link_freesurfer_log(self, log_dir: str):
+        """
+        Links recon-all.log into the log folder, best effort: some file
+        systems (FAT, exFAT, CIFS) do not support symlinks, and a failure
+        must not stop the workflow.
+
+        Parameters
+        ----------
+        log_dir: str
+            The subject log folder
+        """
+        from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
+
+        fs_path = os.path.join(self.workflow.base_dir, FS_DIR)
+        log_target = os.path.join(fs_path, "scripts", "recon-all.log")
+        log_link = os.path.join(log_dir, "recon-all.log")
+        try:
             if os.path.lexists(log_link):
                 os.unlink(log_link)
             os.symlink(log_target, log_link)
-
-        # enable resource monitor if required
-        if self.workflow.is_resource_monitor:
-            config.enable_resource_monitor()
-            # enable_resource_monitor() only flips the *global* nipype config,
-            # which a "spawn" worker does not inherit. Mirror the flag onto the
-            # workflow's own config so it propagates into every node.config
-            # (pickled to the worker), where swane_run_node re-enables the
-            # monitor. Without this, node.config["monitoring"]["enabled"] keeps
-            # the workflow-creation snapshot ("false") and wins the run() merge,
-            # so no .proc file is produced under spawn.
-            self.workflow.config.setdefault("monitoring", {})["enabled"] = "true"
-            resource_log_filename = os.path.join(log_dir, "resource_monitor.log")
-            callback_logger = orig_log.getLogger("callback")
-            callback_logger.setLevel(orig_log.DEBUG)
-            resource_log_handler = orig_log.FileHandler(resource_log_filename)
-            callback_logger.addHandler(resource_log_handler)
-
-        # start workflow subthread
-        workflow_run_work = Thread(target=self.workflow_run_worker)
-        workflow_run_work.start()
-
-        # Wait for stop_event. It can be set from the workflow subthread (if workflow is executed till end) or from
-        # the GUI to stop the execution
-        self.stop_event.wait()
-        # Let a normally finishing thread leave its final ``set()`` call before
-        # deciding that an alive thread represents cancellation/fatal failure.
-        workflow_run_work.join(timeout=0.1)
-
-        # Handler removal
-        WorkflowProcess.remove_handlers(file_handler)
-        if self.workflow.is_resource_monitor:
-            callback_logger.removeHandler(resource_log_handler)
-
-        if getattr(self, "run_raised", False):
-            self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_CRASHED))
-
-        # Signal workflow_stop to GUI and close queue
-        self.queue.put(WorkflowReport(signal_type=WorkflowSignals.WORKFLOW_STOP))
-        self.queue.close()
-        # Flush any pending NODE_ERROR (a broken pool reports through the normal
-        # crash path) and the WORKFLOW_STOP above before this process ends, so
-        # the parent cannot miss the terminal state.
-        self.queue.join_thread()
-
-        # If the thread is alive at this point the stop_event was set from GUI, so the user asked to kill the process
-        if workflow_run_work.is_alive():
-            WorkflowProcess.kill_with_subprocess()
-
-        if getattr(self, "run_raised", False):
-            sys.exit(1)
+        except OSError as error:
+            nipype_log.getLogger("nipype.workflow").warning(
+                "recon-all.log not linked into %s (%s); read it from %s",
+                log_dir,
+                error,
+                log_target,
+            )
 
 
 # Log node stats function
