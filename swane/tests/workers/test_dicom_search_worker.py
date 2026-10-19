@@ -146,7 +146,7 @@ class TestDicomSearchFiltering:
     def test_derived_secondary_skipped(self, tmp_path):
         write_minimal_dicom(
             str(tmp_path / "derived.dcm"),
-            patient_id="P_SKIP",
+            subject_id="P_SKIP",
             image_type=["DERIVED", "SECONDARY"],
         )
         worker = DicomSearchWorker(str(tmp_path))
@@ -159,12 +159,12 @@ class TestDicomSearchFiltering:
     def test_asl_and_projection_skipped(self, tmp_path):
         write_minimal_dicom(
             str(tmp_path / "asl.dcm"),
-            patient_id="P_ASL",
+            subject_id="P_ASL",
             image_type=["ORIGINAL", "PRIMARY", "ASL"],
         )
         write_minimal_dicom(
             str(tmp_path / "proj.dcm"),
-            patient_id="P_PROJ",
+            subject_id="P_PROJ",
             image_type=["PROJECTION IMAGE"],
         )
         worker = DicomSearchWorker(str(tmp_path))
@@ -210,8 +210,8 @@ class TestDicomSearchRobustness:
         the remaining (valid) files."""
         good = str(tmp_path / "good.dcm")
         bad = str(tmp_path / "bad.dcm")
-        write_minimal_dicom(good, patient_id="P_GOOD")
-        write_minimal_dicom(bad, patient_id="P_BAD")
+        write_minimal_dicom(good, subject_id="P_GOOD")
+        write_minimal_dicom(bad, subject_id="P_BAD")
 
         import pydicom
 
@@ -230,11 +230,63 @@ class TestDicomSearchRobustness:
         # the good subject is still found, the corrupt one is silently skipped
         assert worker.tree.get_subject_list() == ["P_GOOD"]
 
+    def test_failing_series_does_not_stop_frame_refinement(
+        self, monkeypatch, tmp_path, caplog
+    ):
+        """A series whose frame refinement raises is made not importable (0
+        frames) and logged, and the frame refinement of every other series still
+        runs: a short non-mosaic series is zeroed whatever the scan order."""
+        from swane.utils.DicomTree import DicomSeries
+        from swane.tests.helpers.dicom_factory import write_series
+
+        study_uid = pydicom.uid.generate_uid()
+        # 12 files: refine_frame_number would keep them (>= 10 frames)
+        write_series(
+            str(tmp_path / "bad"),
+            n_slices=12,
+            series_number=1,
+            study_uid=study_uid,
+            subject_id="P_SERIES",
+        )
+        # 3 files: refine_frame_number zeroes them (< 10 frames, no MOSAIC)
+        write_series(
+            str(tmp_path / "short"),
+            n_slices=3,
+            series_number=2,
+            study_uid=study_uid,
+            subject_id="P_SERIES",
+        )
+
+        real_refine = DicomSeries.refine_frame_number
+
+        def flaky_refine(series):
+            if series.frames == 12:
+                raise ValueError("simulated corrupt series")
+            return real_refine(series)
+
+        monkeypatch.setattr(DicomSeries, "refine_frame_number", flaky_refine)
+
+        worker = DicomSearchWorker(str(tmp_path))
+        with caplog.at_level("WARNING", logger="swane.workers.DicomSearchWorker"):
+            worker.run()
+
+        tree = worker.tree
+        study = tree.get_studies_list("P_SERIES")[0]
+        frames = {
+            number: tree.get_series("P_SERIES", study, number).frames
+            for number in tree.get_series_list("P_SERIES", study)
+        }
+        assert frames == {1: 0, 2: 0}
+        assert any(
+            "Cannot refine frame number" in record.getMessage()
+            for record in caplog.records
+        )
+
     def test_missing_modality_and_name_do_not_raise(self, tmp_path):
         """Headers lacking Modality / PatientName must be handled via ds.get()
         instead of raising AttributeError and aborting the scan."""
         path = str(tmp_path / "no_modality.dcm")
-        write_minimal_dicom(path, patient_id="P_NOMOD")
+        write_minimal_dicom(path, subject_id="P_NOMOD")
 
         ds = pydicom.dcmread(path)
         del ds.Modality

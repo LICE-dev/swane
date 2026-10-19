@@ -1,6 +1,6 @@
 """Runtime generator for *phantom* DICOM files used by the test suite.
 
-The goal is to avoid shipping real (even if anonymised) patient DICOM files in
+The goal is to avoid shipping real (even if anonymised) subject DICOM files in
 the repository: every fixture is synthesised on the fly with :mod:`pydicom`.
 
 Only the tags actually read by :class:`swane.workers.DicomSearchWorker` and
@@ -46,7 +46,7 @@ def _new_dataset(path, file_meta=None):
 
 def write_minimal_dicom(
     path,
-    patient_id="PAT001",
+    subject_id="PAT001",
     series_desc=None,
     image_type=None,
     number_of_frames=None,
@@ -55,7 +55,7 @@ def write_minimal_dicom(
     series_number=1,
     sop_uid=None,
     series_uid=None,
-    patient_name=None,
+    subject_name=None,
     modality="MR",
 ):
     """Write a minimal DICOM file suitable for unit tests.
@@ -64,8 +64,8 @@ def write_minimal_dicom(
     ----------
     path : str
         Output file path.
-    patient_id : str
-        ``PatientID`` (also used as ``PatientName`` unless ``patient_name`` given).
+    subject_id : str
+        ``PatientID`` (also used as ``PatientName`` unless ``subject_name`` given).
     series_desc : str, optional
         ``SeriesDescription``.
     image_type : list | str, optional
@@ -82,8 +82,8 @@ def write_minimal_dicom(
         ``SOPInstanceUID`` (generated when omitted - keep it unique per file).
     series_uid : str, optional
         ``SeriesInstanceUID`` (generated when omitted).
-    patient_name : str, optional
-        ``PatientName`` (defaults to ``patient_id``).
+    subject_name : str, optional
+        ``PatientName`` (defaults to ``subject_id``).
     modality : str
         ``Modality`` (``MR``, ``CT``, ``PT``, ``XA`` ...).
 
@@ -93,8 +93,8 @@ def write_minimal_dicom(
         The path that was written.
     """
     ds = _new_dataset(path)
-    ds.PatientID = patient_id
-    ds.PatientName = patient_name if patient_name is not None else patient_id
+    ds.PatientID = subject_id
+    ds.PatientName = subject_name if subject_name is not None else subject_id
     ds.StudyInstanceUID = study_uid if study_uid is not None else generate_uid()
     ds.SeriesInstanceUID = series_uid if series_uid is not None else generate_uid()
     ds.SeriesNumber = series_number
@@ -122,8 +122,8 @@ def write_series(
     modality="MR",
     series_number=1,
     series_description=None,
-    patient_id="PAT001",
-    patient_name=None,
+    subject_id="PAT001",
+    subject_name=None,
     study_uid=None,
     series_uid=None,
     image_type=None,
@@ -158,8 +158,8 @@ def write_series(
             path = os.path.join(dest_dir, f"{filename_prefix}_{index:04d}.dcm")
             write_minimal_dicom(
                 path,
-                patient_id=patient_id,
-                patient_name=patient_name,
+                subject_id=subject_id,
+                subject_name=subject_name,
                 series_desc=series_description,
                 image_type=image_type,
                 slice_location=float(slice_index),
@@ -181,8 +181,8 @@ def write_multiframe(
     modality="MR",
     series_number=1,
     series_description=None,
-    patient_id="PAT_MF",
-    patient_name=None,
+    subject_id="PAT_MF",
+    subject_name=None,
     study_uid=None,
     series_uid=None,
 ):
@@ -193,8 +193,8 @@ def write_multiframe(
     so :meth:`DicomSeries.refine_frame_number` reports ``n_volumes`` volumes.
     """
     ds = _new_dataset(path)
-    ds.PatientID = patient_id
-    ds.PatientName = patient_name if patient_name is not None else patient_id
+    ds.PatientID = subject_id
+    ds.PatientName = subject_name if subject_name is not None else subject_id
     ds.StudyInstanceUID = study_uid if study_uid is not None else generate_uid()
     ds.SeriesInstanceUID = series_uid if series_uid is not None else generate_uid()
     ds.SeriesNumber = series_number
