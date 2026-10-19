@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -30,6 +30,11 @@ class ToolReferenceWindow(QDialog):
     Tools are grouped by package and displayed in dedicated vertical tabs.
     A global search field allows filtering tools by command name.
     """
+
+    DEFAULT_WIDTH = 720
+    DEFAULT_HEIGHT = 520
+    MIN_WIDTH = 600
+    MIN_HEIGHT = 420
 
     def __init__(
         self,
@@ -61,6 +66,8 @@ class ToolReferenceWindow(QDialog):
         )
         self.setWindowModality(Qt.NonModal)
         self.setModal(False)
+        self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
+        self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
 
         # Cache per package:
         # (
@@ -146,6 +153,17 @@ class ToolReferenceWindow(QDialog):
 
         if search_string:
             self.search_edit.setText(search_string)
+
+    def sizeHint(self) -> QSize:
+        """
+        Return the recommended default size for the tool reference window.
+
+        Returns
+        -------
+        QSize
+            Preferred initial size of the window.
+        """
+        return QSize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
 
     def search(self, tab: Package, string: str) -> None:
         """
