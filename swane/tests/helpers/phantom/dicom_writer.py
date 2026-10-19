@@ -47,7 +47,7 @@ MIN_SLICES = 10
 
 
 def _ras_to_lps(affine: np.ndarray) -> np.ndarray:
-    """DICOM patient space is LPS; NIfTI affines are RAS."""
+    """DICOM subject space (LPS); NIfTI affines are RAS."""
     flip = np.diag([-1.0, -1.0, 1.0, 1.0])
     return flip @ affine
 
@@ -98,8 +98,8 @@ def write_volume_series(
     modality: str = "MR",
     series_number: int = 1,
     series_description: str = "PHANTOM",
-    patient_id: str = "PHANTOM",
-    patient_name: str = "PHANTOM^SWANE",
+    subject_id: str = "PHANTOM",
+    subject_name: str = "PHANTOM^SWANE",
     study_uid: str | None = None,
     series_uid: str | None = None,
     frame_uid: str | None = None,
@@ -175,8 +175,8 @@ def write_volume_series(
             path = os.path.join(dest_dir, "%s_%05d.dcm" % (filename_prefix, instance))
             ds = _new_file_dataset(path, sop_class)
 
-            ds.PatientID = patient_id
-            ds.PatientName = patient_name
+            ds.PatientID = subject_id
+            ds.PatientName = subject_name
             ds.PatientBirthDate = ""
             ds.PatientSex = "O"
             ds.PatientPosition = "HFS"  # required for correct bvec signs
