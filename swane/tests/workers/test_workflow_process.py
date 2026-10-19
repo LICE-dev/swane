@@ -392,8 +392,10 @@ def test_freesurfer_log_is_linked(monkeypatch, tmp_path):
 
     log_link = os.path.join(tmp_path, "log", "recon-all.log")
     assert os.path.islink(log_link)
-    assert os.readlink(log_link) == os.path.join(
-        str(tmp_path), FS_DIR, "scripts", "recon-all.log"
+    # realpath, not readlink: on Windows readlink returns the target with the
+    # extended-length prefix (\\?\D:\...), a different string for the same path.
+    assert os.path.realpath(log_link) == os.path.realpath(
+        os.path.join(str(tmp_path), FS_DIR, "scripts", "recon-all.log")
     )
 
 

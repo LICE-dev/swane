@@ -50,6 +50,21 @@ if not os.environ.get("SUBJECTS_DIR") or not os.path.exists(os.environ["SUBJECTS
 
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DependencyManager import DependencyManager
+from swane.tests.helpers.fsl_policy_override import (
+    ENV_VAR as _FSL_POLICY_ENV_VAR,
+    apply_fsl_policy_override,
+)
+
+# TEMPORARY (see swane/tests/helpers/fsl_policy_override.py): the Windows CI
+# runner sets SWANE_TEST_FSL_MANDATORY=0 to test as if FSL were only
+# recommended. Applied before any test module is imported.
+_FSL_POLICY_OVERRIDDEN = apply_fsl_policy_override()
+
+
+def pytest_report_header(config):
+    if _FSL_POLICY_OVERRIDDEN:
+        return "%s=0: FSL_MANDATORY overridden to False" % _FSL_POLICY_ENV_VAR
+
 
 # DependencyManager reads the FSL/FreeSurfer versions from their install files
 # without importing nipype (to keep it off GUI startup), so the nipype version
