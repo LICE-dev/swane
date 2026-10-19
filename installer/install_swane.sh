@@ -853,6 +853,44 @@ swane_env_packages() {
     printf '%s\n' "$packages"
 }
 
+# launcher_pin NAME: print the value of the pinned assignment NAME='...' of
+# the launcher a previous run wrote (~/.local/bin/swane, one single-quoted
+# line each, see write_launcher). Return 1 if there is no such launcher (a
+# file without SWANE_LAUNCHER_MARKER is not ours) or no such line.
+launcher_pin() {
+    local file="$HOME/.local/bin/swane" line
+    [ -f "$file" ] && [ ! -L "$file" ] && grep -q "^$SWANE_LAUNCHER_MARKER" "$file" 2>/dev/null || return 1
+    line="$(sed -n "s/^$1='\\(.*\\)'\$/\\1/p" "$file" | head -n 1)"
+    [ -n "$line" ] || return 1
+    printf '%s\n' "$line" | sed "s/'\\\\''/'/g"
+}
+
+# resolve_install_dir ROOT: decide SWANE_INSTALL_DIR against the swane-env a
+# previous run left (the one its launcher pins, when it is in the conda ROOT
+# of this run and still an environment). Without --install-dir the directory
+# that swane-env is in is kept, unless it is conda's own environments
+# directory; with --install-dir naming another place, the old swane-env stays
+# untouched and a warning (repeated in the summary) says the launcher now
+# points to the new one. Never fails. Call it directly, not inside $(...).
+resolve_install_dir() {
+    local root="$1" pinned_root pinned_env dir
+    pinned_root="$(launcher_pin SWANE_CONDA_ROOT)" || return 0
+    pinned_env="$(launcher_pin SWANE_ENV_PREFIX)" || return 0
+    [ "$(physical_dir "$pinned_root")" = "$(physical_dir "$root")" ] || return 0
+    [ "$(basename -- "$pinned_env")" = "$SWANE_ENV_NAME" ] || return 0
+    [ -d "$pinned_env/conda-meta" ] || return 0
+    dir="$(dirname -- "$pinned_env")"
+    if [ -z "$SWANE_INSTALL_DIR" ]; then
+        if [ "$(physical_dir "$dir")" != "$(physical_dir "$root")/envs" ]; then
+            SWANE_INSTALL_DIR="$dir"
+            log_info "Keeping the install directory of the previous run: $dir (--install-dir changes it)"
+        fi
+    elif [ "$(physical_dir "$dir")" != "$(physical_dir "$SWANE_INSTALL_DIR")" ]; then
+        log_warn "A $SWANE_ENV_NAME from a previous run remains in $pinned_env, untouched; $SWANE_ENV_NAME in $SWANE_INSTALL_DIR is now the one the launcher starts"
+    fi
+    return 0
+}
+
 # ensure_swane_env ROOT SWANE_SPEC: create swane-env in the conda ROOT (Python
 # SWANE_ENV_PYTHON plus swane_env_packages), or update an existing one (same
 # Python required; swane_env_packages installed into it), then
@@ -1751,7 +1789,8 @@ Options:
                            DIR/swane-fsl (default: the environments directory
                            of conda). Environments already in the default
                            location are left alone; with this option only DIR
-                           is searched. Use the same DIR on every rerun.
+                           is searched. A rerun without the option keeps the
+                           DIR of the previous run.
   -h, --help               Show this help and exit.
 EOF
 }
@@ -1873,6 +1912,7 @@ install_flow() {
         root="$(install_miniforge "$MINIFORGE_PREFIX")" || exit 1
     fi
     warn_old_conda "$root"
+    resolve_install_dir "$root"
     linux_system_step
     ensure_swane_env "$root" "$SWANE_SPEC"
     fsl_step "$root" "$SWANE_ENV_PREFIX"

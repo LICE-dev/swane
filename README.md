@@ -108,7 +108,7 @@ Options can be passed after `bash -s --`, for example `curl -fsSL <url> | bash -
 | `--no-fsl` | Do not install or configure FSL (an FSL already wired into `swane-env` is kept). |
 | `--swane-spec SPEC` | What to install as SWANe, passed verbatim to `pip install -U` (default: `swane`, the latest release on PyPI). SWANe 0.2.5 or newer is required. Accepted forms: a PyPI version (`swane==0.2.5`), a local checkout (`/path/to/swane`), a git URL (`git+https://github.com/LICE-dev/swane.git@<branch>`), a wheel file (`/path/to/swane-0.2.5-py3-none-any.whl`). |
 | `--miniforge-prefix DIR` | Where to install Miniforge when no conda is found (default: `~/miniforge3`). |
-| `--install-dir DIR` | Directory for the conda environments the installer creates: `DIR/swane-env` and, when FSL is installed, `DIR/swane-fsl` (default: the environments directory of conda). With this option only `DIR` is searched: environments already in conda's default location are left alone, so use the same `DIR` on every rerun. |
+| `--install-dir DIR` | Directory for the conda environments the installer creates: `DIR/swane-env` and, when FSL is installed, `DIR/swane-fsl` (default: the environments directory of conda). With this option only `DIR` is searched: environments already in conda's default location are left alone, a rerun without the option keeps the directory of the previous run (the one the `swane` launcher points to), and a different `DIR` creates new environments there, leaving the old ones untouched. |
 | `-h`, `--help` | Show the help and exit. |
 
 What it installs and where:

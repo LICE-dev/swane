@@ -1564,6 +1564,114 @@ def test_conda_create_env_refuses_a_target_that_is_not_an_environment(sh, stub, 
     assert target.exists()
 
 
+def _write_pinned_launcher(sh, root, env_prefix, marker=True):
+    """A ~/.local/bin/swane as write_launcher pins it (one quoted line each)."""
+
+    def quoted(text):
+        return "'%s'" % str(text).replace("'", "'\\''")
+
+    launcher = sh.home / ".local" / "bin" / "swane"
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["#!/usr/bin/env bash"]
+    if marker:
+        lines.append("# Written by the SWANe installer (rerun it rather than editing)")
+    lines += [
+        "SWANE_CONDA_ROOT=%s" % quoted(root),
+        "SWANE_ENV_PREFIX=%s" % quoted(env_prefix),
+    ]
+    launcher.write_text("\n".join(lines) + "\n")
+    return launcher
+
+
+def _resolve(sh, root, **env):
+    """Run resolve_install_dir; print SWANE_INSTALL_DIR and the warnings."""
+    return sh.code(
+        'resolve_install_dir "$ROOT"; printf "%s|%s" "$SWANE_INSTALL_DIR" '
+        '"$SUMMARY_WARNINGS"',
+        env=dict({"ROOT": root}, **env),
+    )
+
+
+def _make_env(prefix):
+    (prefix / "conda-meta").mkdir(parents=True)
+    return prefix
+
+
+def test_launcher_pin_reads_back_quotes(sh):
+    path = sh.tmp / "it's here"
+    _write_pinned_launcher(sh, sh.tmp / "root", path)
+    result = sh.code("launcher_pin SWANE_ENV_PREFIX")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s\n" % path
+
+
+def test_launcher_pin_ignores_a_foreign_launcher_and_missing_pins(sh):
+    assert sh.code("launcher_pin SWANE_ENV_PREFIX").returncode == 1
+    _write_pinned_launcher(sh, sh.tmp / "root", sh.tmp / "env", marker=False)
+    assert sh.code("launcher_pin SWANE_ENV_PREFIX").returncode == 1
+    _write_pinned_launcher(sh, sh.tmp / "root", sh.tmp / "env")
+    assert sh.code("launcher_pin SWANE_NOPE").returncode == 1
+
+
+def test_resolve_install_dir_keeps_the_previous_choice(sh):
+    root = sh.tmp / "conda"
+    env = _make_env(sh.tmp / "my envs" / "swane-env")
+    _write_pinned_launcher(sh, root, env)
+    result = _resolve(sh, root)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s|" % (sh.tmp / "my envs")
+    assert "Keeping the install directory of the previous run" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "case", ["no_launcher", "default_envs", "other_conda", "env_gone", "foreign"]
+)
+def test_resolve_install_dir_ignores_what_is_not_a_previous_choice(sh, case):
+    root = sh.tmp / "conda"
+    env = sh.tmp / "my envs" / "swane-env"
+    if case == "default_envs":
+        env = root / "envs" / "swane-env"
+    if case != "env_gone":
+        _make_env(env)
+    if case != "no_launcher":
+        _write_pinned_launcher(
+            sh,
+            sh.tmp / "other conda" if case == "other_conda" else root,
+            env,
+            marker=case != "foreign",
+        )
+    root.mkdir(exist_ok=True)
+    result = _resolve(sh, root)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "|"
+    assert result.stderr == ""
+
+
+def test_resolve_install_dir_explicit_option_wins_and_same_dir_is_quiet(sh):
+    root = sh.tmp / "conda"
+    root.mkdir()
+    env = _make_env(sh.tmp / "old" / "swane-env")
+    _write_pinned_launcher(sh, root, env)
+    same = _resolve(sh, root, SWANE_INSTALL_DIR=sh.tmp / "old")
+    assert same.stdout == "%s|" % (sh.tmp / "old")
+    assert same.stderr == ""
+    other = _resolve(sh, root, SWANE_INSTALL_DIR=sh.tmp / "new")
+    assert other.returncode == 0, other.stderr
+    installed, warnings = other.stdout.split("|", 1)
+    assert installed == str(sh.tmp / "new")
+    assert "remains in %s, untouched" % env in warnings
+    assert "now the one the launcher starts" in warnings
+
+
+def test_resolve_install_dir_default_envs_old_env_warns_on_new_dir(sh):
+    """Moving from conda's own directory to --install-dir leaves the old env."""
+    root = sh.tmp / "conda"
+    env = _make_env(root / "envs" / "swane-env")
+    _write_pinned_launcher(sh, root, env)
+    result = _resolve(sh, root, SWANE_INSTALL_DIR=sh.tmp / "new")
+    assert "remains in %s, untouched" % env in result.stdout
+
+
 def test_ensure_swane_env_creates_in_install_dir(sh, stub):
     stub.platform("Linux", "x86_64")
     install = sh.tmp / "install dir"

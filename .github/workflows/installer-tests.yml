@@ -71,8 +71,10 @@ jobs:
         # only by a new key would be merged into an earlier one by GitHub's
         # "include".
         # scenario install: first run, checks, second run from a pipe.
-        # scenario install-dir: the same with --install-dir (both runs), whose
-        # environments must be in that directory and not in conda's own.
+        # scenario install-dir: the same, but the first run gets --install-dir
+        # (the environments must be in that directory, not in conda's own) and
+        # the second run does not: it must keep that choice (same env, no new
+        # environment in conda's own directory).
         # scenario update: first run and checks, then the FSL
         # update paths (phases A, B, C below) instead of the second run.
         include:
@@ -423,7 +425,7 @@ jobs:
           {
             # shellcheck disable=SC2002 # a real pipe, as with curl
             cat installer/install_swane.sh |
-              /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" ${INSTALL_DIR:+--install-dir "$INSTALL_DIR"} 2>&1 >&3 3>&- |
+              /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" 2>&1 >&3 3>&- |
               tee "$rerun_log" >&2 3>&-
           } 3>&1 | tee "$SUMMARY_2" || status=$?
           if [ "$status" != 0 ]; then
@@ -453,6 +455,14 @@ jobs:
           fi
           grep -qE '^SWANe installer: FSL .* existing$' "$SUMMARY_2" ||
             { echo "::error::Expected the second run to reuse the FSL of the first one"; exit 1; }
+          if [ -n "${INSTALL_DIR:-}" ]; then
+            for name in swane-env swane-fsl; do
+              if [ -e "$EXPECTED_CONDA_ROOT/envs/$name" ]; then
+                echo "::error::The second run (no --install-dir) created $name in $EXPECTED_CONDA_ROOT/envs"
+                exit 1
+              fi
+            done
+          fi
           first="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_1")"
           second="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_2")"
           if [ "$first" != "$second" ]; then
