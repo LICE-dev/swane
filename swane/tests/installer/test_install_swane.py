@@ -13,6 +13,11 @@ import sys
 
 import pytest
 
+# Skip before anything else runs: decorator arguments below (os.geteuid) are
+# evaluated at import time, before a module-level skip mark could apply.
+if sys.platform == "win32":
+    pytest.skip("bash installer", allow_module_level=True)
+
 from swane.tests.installer.harness import (
     BASH,
     SCRIPT,
@@ -20,8 +25,6 @@ from swane.tests.installer.harness import (
     make_conda_root,
     make_executable,
 )
-
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="bash installer")
 
 MINIFORGE_VERSION = "26.7.2-0"
 RELEASES = "https://github.com/conda-forge/miniforge/releases"
