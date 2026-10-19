@@ -9,8 +9,11 @@ ran on 4 cores, beyond the scheduler's reservation.
 The workflow runs under :class:`MonitoredMultiProcPlugin` with the platform's
 pool start method, from a fresh interpreter: like ``WorkflowProcess`` in
 production, the scheduling process itself has never run an ITK filter (this
-pytest process may have). Each node measures its own parallelism as process
-CPU time over wall time.
+pytest process may have). Each node records two measures: its parallelism
+(process CPU time over wall time), and the number of OS threads of its process
+after the filter ran -- ITK's thread pool holds exactly one thread per
+configured ITK thread, so this one does not depend on how loaded the machine
+is.
 """
 
 import json
@@ -31,15 +34,24 @@ MAX_THREADS = 4
 
 
 class TimedN4(AntsN4BiasFieldCorrection):
-    """N4 that records how many cores it effectively used."""
+    """N4 that records how many cores and threads it effectively used."""
 
     def _run_interface(self, runtime):
+        import psutil
+
         start_wall, start_cpu = time.perf_counter(), time.process_time()
         runtime = super()._run_interface(runtime)
         wall = time.perf_counter() - start_wall
         cpu = time.process_time() - start_cpu
         with open(PARALLELISM_FILE, "w") as handle:
-            json.dump({"parallelism": cpu / wall, "pid": os.getpid()}, handle)
+            json.dump(
+                {
+                    "parallelism": cpu / wall,
+                    "os_threads": psutil.Process().num_threads(),
+                    "pid": os.getpid(),
+                },
+                handle,
+            )
         return runtime
 
 
@@ -138,8 +150,11 @@ def test_second_itk_node_in_a_run_honours_its_own_thread_cap(tmp_path):
     line = [l for l in proc.stdout.splitlines() if l.startswith("RESULT=")][-1]
     result = json.loads(line[len("RESULT=") :])
 
-    wide, narrow = result["wide"]["parallelism"], result["narrow"]["parallelism"]
-    # the multithreaded node really runs on several cores...
-    assert wide > 1.8, result
-    # ...and the single-thread node that follows it is not stuck on its count
-    assert narrow < 1.3, result
+    wide, narrow = result["wide"], result["narrow"]
+    # Both nodes run the same code in identically started processes, so their
+    # thread counts differ only by ITK's pool: `threads` threads for the wide
+    # node, 1 for the narrow one. Sharing a process, the narrow node would
+    # inherit the wide pool and the difference would be 0.
+    assert wide["os_threads"] - narrow["os_threads"] >= threads - 1, result
+    # The narrow node really runs on one core (load can only lower this).
+    assert narrow["parallelism"] < 1.3, result
