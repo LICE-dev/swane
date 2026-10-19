@@ -365,8 +365,27 @@ if _swane_os.path.isdir(_swane_workers_dir):
         return content
 
     @staticmethod
-    def add_slicer_startup_patch():
-        """Add the SWANe patch to slicerrc.py. Replaces an outdated patch if different."""
+    def add_slicer_startup_patch() -> bool:
+        """
+        Add the SWANe patch to slicerrc.py. Replaces an outdated patch if different.
+
+        The file is written only when its content changes. The patch is a
+        convenience for SWANe's Slicer helpers, so an unreadable or read-only
+        slicerrc never raises: the patch is just left out.
+
+        Returns
+        -------
+        bool
+            False if slicerrc.py could not be read or written.
+        """
+        try:
+            SlicerCheckWorker._add_slicer_startup_patch()
+        except (OSError, UnicodeError):
+            return False
+        return True
+
+    @staticmethod
+    def _add_slicer_startup_patch():
         slicerrc_path = os.path.expanduser("~/.slicerrc.py")
 
         # Always drop legacy blocks from superseded SWANe versions, even when
