@@ -1,9 +1,40 @@
 from swane.utils.fsl_conflict_handler import fsl_conflict_check
 
+REMOVE_DESKTOP_ENTRY_FLAG = "--remove-desktop-entry"
+
+
+def remove_desktop_entry_requested() -> bool:
+    """
+    Handle the standalone command that immediately removes the Linux .desktop
+    entry created by ensure_desktop_entry().
+
+    Not required for normal cleanup after "pip uninstall swane": the entry's
+    launcher already self-removes itself and the entry the first time it is run
+    against a no-longer-existing SWANe executable. This is only for users who
+    want the menu entry gone right away.
+
+    Returns
+    -------
+    True if the flag was given and the entry was removed (SWANe must not start).
+    """
+    import sys
+
+    if REMOVE_DESKTOP_ENTRY_FLAG not in sys.argv:
+        return False
+    from swane.utils.linux_desktop_integration import remove_desktop_entry
+
+    remove_desktop_entry()
+    return True
+
 
 def main():
     import sys
     import os
+
+    # The console-script entry point ("swane") calls main() directly
+    if remove_desktop_entry_requested():
+        sys.exit(0)
+
     import psutil
     from swane.resources import strings
     from swane import resources
@@ -106,15 +137,7 @@ if __name__ == "__main__":
 
     import sys
 
-    # Standalone command to immediately remove the Linux .desktop entry created by
-    # ensure_desktop_entry(). Not required for normal cleanup after "pip uninstall
-    # swane": the entry's launcher already self-removes itself and the entry the
-    # first time it is run against a no-longer-existing SWANe executable. This is
-    # only for users who want the menu entry gone right away.
-    if "--remove-desktop-entry" in sys.argv:
-        from swane.utils.linux_desktop_integration import remove_desktop_entry
-
-        remove_desktop_entry()
+    if remove_desktop_entry_requested():
         sys.exit(0)
 
     # Before GUI execution check for fsl/python/freesurfer error
