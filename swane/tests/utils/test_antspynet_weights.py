@@ -196,21 +196,28 @@ def test_swane_cache_dir_matches_the_installed_antspynet_default():
     """If this fails after an antspynet upgrade, its default moved: SWANe's
     constant is still what both the pre-fetch and the nodes use (they pin it),
     but the previous cache would be left behind -- decide whether to migrate."""
-    pytest.importorskip("antspynet")
+    import importlib.util
+
+    # Not importorskip: importing antspynet loads TensorFlow, which must stay
+    # out of the long-lived pytest process (and can hang there on macOS).
+    if importlib.util.find_spec("antspynet") is None:
+        pytest.skip("antspynet is not installed")
     # Read in a fresh child: another test may already have pinned this process.
-    out = (
-        subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                "from antspynet.utilities import get_antsxnet_cache_directory;"
-                "print(get_antsxnet_cache_directory())",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        .stdout.strip()
-        .splitlines()[-1]
+    # The child dumps its stack and exits before the timeout, so a hang in the
+    # TensorFlow import is reported instead of eating the whole CI budget.
+    child = (
+        "import faulthandler;"
+        "faulthandler.dump_traceback_later(240, exit=True);"
+        "from antspynet.utilities import get_antsxnet_cache_directory;"
+        "print(get_antsxnet_cache_directory())"
     )
-    assert out == antspynet_weights.ANTSXNET_CACHE_DIR
+    result = subprocess.run(
+        [sys.executable, "-c", child],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert result.returncode == 0, result.stderr[-3000:]
+    assert result.stdout.strip().splitlines()[-1] == (
+        antspynet_weights.ANTSXNET_CACHE_DIR
+    )
