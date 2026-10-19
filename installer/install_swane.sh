@@ -43,6 +43,10 @@ ACCEPT_FSL_LICENSE="${ACCEPT_FSL_LICENSE:-0}"
 NO_FSL="${NO_FSL:-0}"
 SWANE_SPEC="${SWANE_SPEC:-swane}"
 MINIFORGE_PREFIX="${MINIFORGE_PREFIX:-$HOME/miniforge3}"
+# Directory that holds the swane-env and swane-fsl environments
+# (INSTALL_DIR/swane-env, INSTALL_DIR/swane-fsl); empty means conda's own
+# environments directory.
+SWANE_INSTALL_DIR="${SWANE_INSTALL_DIR:-}"
 
 # System-wide conda roots probed after the user's own (space-separated;
 # overridable so tests never see the machine's real conda).
@@ -711,9 +715,16 @@ env_in_fsl() {
 # remaining match is taken. Return 1 if there is none, 2 if the list cannot
 # be read. The JSON is parsed by the root's own Python, in isolated mode (-I)
 # so nothing in the current directory or the user's site-packages can be
-# imported.
+# imported. With SWANE_INSTALL_DIR set only INSTALL_DIR/NAME counts (an
+# environment there, i.e. with a conda-meta directory): the conda list and the
+# other conda installs are not consulted.
 find_env_prefix() {
     local root="$1" name="$2" listing matches candidate dir own_envs first=""
+    if [ -n "$SWANE_INSTALL_DIR" ]; then
+        [ -d "$SWANE_INSTALL_DIR/$name/conda-meta" ] || return 1
+        printf '%s\n' "$SWANE_INSTALL_DIR/$name"
+        return 0
+    fi
     listing="$(conda_cmd "$root" env list --json </dev/null)" || return 2
     matches="$(printf '%s\n' "$listing" | "$root/bin/python" -I -c '
 import json
@@ -742,6 +753,28 @@ $matches
 EOF
     [ -n "$first" ] || return 1
     printf '%s\n' "$first"
+}
+
+# conda_create_env ROOT NAME ARGS...: "conda create -y" the environment NAME
+# with ARGS: by name in conda's environments directory, or with SWANE_INSTALL_DIR
+# set at INSTALL_DIR/NAME. Dies, creating nothing, when that directory exists
+# and is not a conda environment: "conda create -y" would delete it. Output
+# is left to the caller's redirections.
+conda_create_env() {
+    local root="$1" name="$2" target
+    shift 2
+    if [ -z "$SWANE_INSTALL_DIR" ]; then
+        conda_cmd "$root" create -y -n "$name" ${1+"$@"}
+        return
+    fi
+    target="$SWANE_INSTALL_DIR/$name"
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        if [ ! -d "$target" ] || [ -n "$(ls -A -- "$target" 2>/dev/null)" ]; then
+            die "$target exists and is not a conda environment: remove it or choose another --install-dir"
+        fi
+    fi
+    mkdir -p -- "$SWANE_INSTALL_DIR" || die "Could not create $SWANE_INSTALL_DIR"
+    conda_cmd "$root" create -y -p "$target" ${1+"$@"}
 }
 
 # version_lt A B: return 0 if the dotted version A is lower than B. Compared
@@ -820,6 +853,44 @@ swane_env_packages() {
     printf '%s\n' "$packages"
 }
 
+# launcher_pin NAME: print the value of the pinned assignment NAME='...' of
+# the launcher a previous run wrote (~/.local/bin/swane, one single-quoted
+# line each, see write_launcher). Return 1 if there is no such launcher (a
+# file without SWANE_LAUNCHER_MARKER is not ours) or no such line.
+launcher_pin() {
+    local file="$HOME/.local/bin/swane" line
+    [ -f "$file" ] && [ ! -L "$file" ] && grep -q "^$SWANE_LAUNCHER_MARKER" "$file" 2>/dev/null || return 1
+    line="$(sed -n "s/^$1='\\(.*\\)'\$/\\1/p" "$file" | head -n 1)"
+    [ -n "$line" ] || return 1
+    printf '%s\n' "$line" | sed "s/'\\\\''/'/g"
+}
+
+# resolve_install_dir ROOT: decide SWANE_INSTALL_DIR against the swane-env a
+# previous run left (the one its launcher pins, when it is in the conda ROOT
+# of this run and still an environment). Without --install-dir the directory
+# that swane-env is in is kept, unless it is conda's own environments
+# directory; with --install-dir naming another place, the old swane-env stays
+# untouched and a warning (repeated in the summary) says the launcher now
+# points to the new one. Never fails. Call it directly, not inside $(...).
+resolve_install_dir() {
+    local root="$1" pinned_root pinned_env dir
+    pinned_root="$(launcher_pin SWANE_CONDA_ROOT)" || return 0
+    pinned_env="$(launcher_pin SWANE_ENV_PREFIX)" || return 0
+    [ "$(physical_dir "$pinned_root")" = "$(physical_dir "$root")" ] || return 0
+    [ "$(basename -- "$pinned_env")" = "$SWANE_ENV_NAME" ] || return 0
+    [ -d "$pinned_env/conda-meta" ] || return 0
+    dir="$(dirname -- "$pinned_env")"
+    if [ -z "$SWANE_INSTALL_DIR" ]; then
+        if [ "$(physical_dir "$dir")" != "$(physical_dir "$root")/envs" ]; then
+            SWANE_INSTALL_DIR="$dir"
+            log_info "Keeping the install directory of the previous run: $dir (--install-dir changes it)"
+        fi
+    elif [ "$(physical_dir "$dir")" != "$(physical_dir "$SWANE_INSTALL_DIR")" ]; then
+        log_warn "A $SWANE_ENV_NAME from a previous run remains in $pinned_env, untouched; $SWANE_ENV_NAME in $SWANE_INSTALL_DIR is now the one the launcher starts"
+    fi
+    return 0
+}
+
 # ensure_swane_env ROOT SWANE_SPEC: create swane-env in the conda ROOT (Python
 # SWANE_ENV_PYTHON plus swane_env_packages), or update an existing one (same
 # Python required; swane_env_packages installed into it), then
@@ -859,7 +930,7 @@ ensure_swane_env() {
             packages="$(swane_env_packages)"
             log_info "Creating the $SWANE_ENV_NAME environment (Python $SWANE_ENV_PYTHON${packages:+ $packages})"
             # shellcheck disable=SC2086 # word splitting intended, as above
-            conda_cmd "$root" create -y -n "$SWANE_ENV_NAME" --override-channels --strict-channel-priority -c conda-forge "python=$SWANE_ENV_PYTHON" $packages </dev/null >&2 ||
+            conda_create_env "$root" "$SWANE_ENV_NAME" --override-channels --strict-channel-priority -c conda-forge "python=$SWANE_ENV_PYTHON" $packages </dev/null >&2 ||
                 die "Could not create the $SWANE_ENV_NAME environment"
             prefix="$(find_env_prefix "$root" "$SWANE_ENV_NAME")" ||
                 die "conda does not list $SWANE_ENV_NAME after creating it"
@@ -1217,7 +1288,7 @@ install_or_update_fsl() {
     else
         log_info "Installing FSL $release into the conda environment $SWANE_FSL_ENV_NAME"
         # shellcheck disable=SC2086
-        conda_cmd "$root" create -y -n "$SWANE_FSL_ENV_NAME" --override-channels --strict-channel-priority -c "$FSL_CHANNEL" -c conda-forge $specs </dev/null >&2 ||
+        conda_create_env "$root" "$SWANE_FSL_ENV_NAME" --override-channels --strict-channel-priority -c "$FSL_CHANNEL" -c conda-forge $specs </dev/null >&2 ||
             die "Could not create the $SWANE_FSL_ENV_NAME environment"
         prefix="$(find_swane_fsl_env "$root")" ||
             die "conda does not list $SWANE_FSL_ENV_NAME after creating it"
@@ -1713,6 +1784,13 @@ Options:
                              a wheel file     /path/to/swane-0.2.5-py3-none-any.whl
   --miniforge-prefix DIR   Where to install Miniforge when no conda is found
                            (default: ~/miniforge3).
+  --install-dir DIR        Directory for the conda environments this installer
+                           creates: DIR/swane-env and, when FSL is installed,
+                           DIR/swane-fsl (default: the environments directory
+                           of conda). Environments already in the default
+                           location are left alone; with this option only DIR
+                           is searched. A rerun without the option keeps the
+                           DIR of the previous run.
   -h, --help               Show this help and exit.
 EOF
 }
@@ -1725,7 +1803,8 @@ usage_error() {
 
 # absolute_path PATH: print PATH made absolute against the current directory
 # (leading "./" dropped), without resolving symlinks or requiring it to exist:
-# a relative --miniforge-prefix would otherwise be pinned in the launcher as is.
+# a relative --miniforge-prefix or --install-dir would otherwise be pinned in the
+# launcher as is.
 absolute_path() {
     local path="$1"
     case "$path" in
@@ -1765,6 +1844,17 @@ parse_args() {
                     usage_error "--miniforge-prefix needs a value"
                 fi
                 MINIFORGE_PREFIX="$(absolute_path "$2")"
+                shift
+                ;;
+            --install-dir)
+                if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                    usage_error "--install-dir needs a value"
+                fi
+                SWANE_INSTALL_DIR="$(absolute_path "$2")"
+                # No trailing slash: the environments are INSTALL_DIR/NAME.
+                while [ "${SWANE_INSTALL_DIR%/}" != "$SWANE_INSTALL_DIR" ] && [ "$SWANE_INSTALL_DIR" != "/" ]; do
+                    SWANE_INSTALL_DIR="${SWANE_INSTALL_DIR%/}"
+                done
                 shift
                 ;;
             -h | --help)
@@ -1822,6 +1912,7 @@ install_flow() {
         root="$(install_miniforge "$MINIFORGE_PREFIX")" || exit 1
     fi
     warn_old_conda "$root"
+    resolve_install_dir "$root"
     linux_system_step
     ensure_swane_env "$root" "$SWANE_SPEC"
     fsl_step "$root" "$SWANE_ENV_PREFIX"
@@ -1837,6 +1928,7 @@ main() {
     NO_FSL=0
     SWANE_SPEC="swane"
     MINIFORGE_PREFIX="$HOME/miniforge3"
+    SWANE_INSTALL_DIR=""
     # ${1+"$@"}: an empty "$@" is an unbound-variable error under "set -u"
     # in old bash releases (macOS /bin/bash 3.2).
     parse_args ${1+"$@"}

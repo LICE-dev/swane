@@ -71,6 +71,10 @@ jobs:
         # only by a new key would be merged into an earlier one by GitHub's
         # "include".
         # scenario install: first run, checks, second run from a pipe.
+        # scenario install-dir: the same, but the first run gets --install-dir
+        # (the environments must be in that directory, not in conda's own) and
+        # the second run does not: it must keep that choice (same env, no new
+        # environment in conda's own directory).
         # scenario update: first run and checks, then the FSL
         # update paths (phases A, B, C below) instead of the second run.
         include:
@@ -103,6 +107,14 @@ jobs:
             conda: fresh
             login_shell: bash
             scenario: install
+          - os: ubuntu-latest
+            conda: fresh
+            login_shell: bash
+            scenario: install-dir
+          - os: macos-latest
+            conda: fresh
+            login_shell: bash
+            scenario: install-dir
           # The FSL update paths: Linux and macOS arm64,
           # not macOS Intel.
           - os: ubuntu-latest
@@ -115,6 +127,7 @@ jobs:
             scenario: update
     env:
       CONDA_MODE: ${{ matrix.conda }}
+      SCENARIO: ${{ matrix.scenario }}
       LOGIN_SHELL: ${{ matrix.login_shell }}
       EXPECT_CONDA_TENSORFLOW: ${{ matrix.os == 'macos-15-intel' }}
     steps:
@@ -259,6 +272,9 @@ jobs:
             if [ -n "$conda_exe" ]; then
               echo "CONDA_EXE=$conda_exe"
             fi
+            if [ "$SCENARIO" = install-dir ]; then
+              echo "INSTALL_DIR=$RUNNER_TEMP/swane-envs"
+            fi
           } >> "$GITHUB_ENV"
       # /bin/bash: on macOS that is bash 3.2, the shell of "curl ... | bash".
       # Only stdout (the summary) goes to the file; the log stays on stderr.
@@ -271,11 +287,26 @@ jobs:
             unset CONDA_EXE
           fi
           /bin/bash installer/install_swane.sh --yes --accept-fsl-license \
-            --swane-spec "$GITHUB_WORKSPACE" | tee "$SUMMARY_1"
+            --swane-spec "$GITHUB_WORKSPACE" ${INSTALL_DIR:+--install-dir "$INSTALL_DIR"} | tee "$SUMMARY_1"
           grep -qxF "SWANe installer: conda $EXPECTED_CONDA_ROOT" "$SUMMARY_1" ||
             { echo "::error::Expected the conda in $EXPECTED_CONDA_ROOT"; exit 1; }
           grep -qE '^SWANe installer: FSL .* installed$' "$SUMMARY_1" ||
             { echo "::error::Expected FSL to be installed on a runner without FSL"; exit 1; }
+          # --install-dir: both environments in that directory, none in conda's.
+          if [ -n "${INSTALL_DIR:-}" ]; then
+            grep -qxF "SWANe installer: env $INSTALL_DIR/swane-env" "$SUMMARY_1" ||
+              { echo "::error::Expected swane-env in $INSTALL_DIR/swane-env"; exit 1; }
+            grep -qE "^SWANe installer: FSL $INSTALL_DIR/swane-fsl " "$SUMMARY_1" ||
+              { echo "::error::Expected swane-fsl in $INSTALL_DIR/swane-fsl"; exit 1; }
+            for name in swane-env swane-fsl; do
+              [ -x "$INSTALL_DIR/$name/bin/python" ] ||
+                { echo "::error::No environment in $INSTALL_DIR/$name"; exit 1; }
+              if [ -e "$EXPECTED_CONDA_ROOT/envs/$name" ]; then
+                echo "::error::$name was also created in $EXPECTED_CONDA_ROOT/envs"
+                exit 1
+              fi
+            done
+          fi
           if grep -q '^WARNING: ' "$SUMMARY_1"; then
             sed -n 's/^WARNING: \(.*\)/::error::Installer warning: \1/p' "$SUMMARY_1"
             exit 1
@@ -328,7 +359,7 @@ jobs:
       # failure means a runtime library is missing: add its package to
       # APT_PACKAGES, never skip this check.
       - name: Check that Qt starts with the xcb platform
-        if: ${{ runner.os == 'Linux' && matrix.scenario == 'install' }}
+        if: ${{ runner.os == 'Linux' && startsWith(matrix.scenario, 'install') }}
         shell: bash
         timeout-minutes: 10
         run: |
@@ -383,7 +414,7 @@ jobs:
       # the pipeline (fd 3 carries the installer's stdout past it), so the
       # pipeline waits for it and the file is complete before the checks.
       - name: Run the installer again from a pipe (update path)
-        if: ${{ matrix.scenario == 'install' }}
+        if: ${{ startsWith(matrix.scenario, 'install') }}
         shell: bash
         run: |
           if [ "$CONDA_MODE" = fresh ]; then
@@ -424,6 +455,14 @@ jobs:
           fi
           grep -qE '^SWANe installer: FSL .* existing$' "$SUMMARY_2" ||
             { echo "::error::Expected the second run to reuse the FSL of the first one"; exit 1; }
+          if [ -n "${INSTALL_DIR:-}" ]; then
+            for name in swane-env swane-fsl; do
+              if [ -e "$EXPECTED_CONDA_ROOT/envs/$name" ]; then
+                echo "::error::The second run (no --install-dir) created $name in $EXPECTED_CONDA_ROOT/envs"
+                exit 1
+              fi
+            done
+          fi
           first="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_1")"
           second="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_2")"
           if [ "$first" != "$second" ]; then
@@ -454,7 +493,7 @@ jobs:
           done
           [ "$bad" = 0 ] || exit 1
       - name: Check the environment after the second run
-        if: ${{ matrix.scenario == 'install' }}
+        if: ${{ startsWith(matrix.scenario, 'install') }}
         shell: bash
         timeout-minutes: 20
         run: |

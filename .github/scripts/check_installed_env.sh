@@ -171,7 +171,22 @@ fsl_cluster_text="The following COMPULSORY options have not been set"
 output="$(run_usage fsl-cluster)"
 case "$output" in
     *"$fsl_cluster_text"*) echo "fsl-cluster runs FSL's cluster" ;;
-    *) fail "Unexpected output of fsl-cluster: $output" ;;
+    *)
+        # Evidence for a loader error ("Library not loaded"): how the binary
+        # is linked into the env and where its libraries are.
+        {
+            echo "--- fsl-cluster diagnostics"
+            ls -l "$FSLDIR/bin/fsl-cluster" || true
+            find "$FSLDIR/bin" -type l | head -n 5 || true
+            find "$FSLDIR/lib" -name 'libfsl-warpfns*' -exec ls -l {} + || true
+            if command -v otool >/dev/null 2>&1; then
+                otool -l "$FSLDIR/bin/fsl-cluster" | grep -A2 LC_RPATH || true
+                otool -L "$FSLDIR/bin/fsl-cluster" | grep -E 'warpfns|@rpath' || true
+            fi
+            conda config --show allow_softlinks always_softlink always_copy || true
+        } >&2
+        fail "Unexpected output of fsl-cluster: $output"
+        ;;
 esac
 if [ -e "$wrappers/cluster" ]; then
     output="$(run_usage "$wrappers/cluster")"
