@@ -64,7 +64,7 @@ When adding an analysis, trace this complete chain:
 ## Execution, reporting, and resources
 
 - Use node `mem_gb`, `n_procs`, GPU flags, and `RamEstimator` consistently with `MonitoredMultiProcPlugin`.
-- Avoid unbounded concurrency. Respect global CPU/RAM/GPU preferences and `CoreLimit` behavior.
+- Avoid unbounded concurrency. Respect global CPU/RAM/GPU preferences: `max_subj_cpu` feeds `get_tool_cpu_config` and each node's `num_threads`. Thread counts are scientifically relevant, not only scheduling: multi-threaded ANTs registration/motion correction is not bit-reproducible (see `AntsRegistration.py`, `AntsMotionCorrection.py`), and `num_threads` is not part of the node hash, so cached results are reused while new runs differ.
 - Account for both static memory declarations and input-dependent RAM estimators for image-size-sensitive nodes.
 - Preserve `WorkflowSignals`, `WorkflowReport` payloads, node status callbacks, and progress-tree identities when modifying monitored execution.
 - Keep the killable workflow boundary in `WorkflowProcess`: a multiprocessing `Process` owns an internal execution thread, subprocess cleanup, log handlers, and the queue used by `WorkflowMonitorWorker`.
@@ -102,6 +102,6 @@ Do not equate successful graph construction with scientific correctness. Require
 - Compile/import changed modules before graph tests.
 - Test Traits defaults, validation, generated commands, declared outputs, and failure paths for custom interfaces.
 - Construct affected graphs and assert boundary fields, node identities, connections, resource metadata, and deterministic output names.
-- Update the affected `swane/tests/nipype_pipeline/matrix/` golden snapshots for graph-level changes (`SWANE_SNAPSHOT_UPDATE=1 pytest swane/tests/nipype_pipeline/matrix`), and re-run `swane/tests/prerelease/` for execution-level changes; the latter needs `--run-heavy`-equivalent real tools (FSL/dcm2niix/FreeSurfer) and is opt-in (`python3 -m swane.tests.prerelease`).
+- Update the affected `swane/tests/nipype_pipeline/matrix/` golden snapshots for graph-level changes (`SWANE_SNAPSHOT_UPDATE=1 pytest swane/tests/nipype_pipeline/matrix`), and re-run `swane/tests/prerelease/` for execution-level changes; the latter needs real tools (dcm2niix always; FSL when `FSL_MANDATORY`; FreeSurfer, Slicer and the rest only for the passes that use them, see [testing.md](testing.md)) and is opt-in (`python3 -m swane.tests.prerelease`).
 - Use mocked or synthetic inputs for focused tests. Run real-tool smoke tests only in a suitable neuroimaging environment.
 - Compare representative de-identified outputs for scientific changes, including geometry and downstream visualization, and state what was not clinically validated.

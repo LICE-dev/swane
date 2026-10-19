@@ -19,8 +19,9 @@ swane/tests/            # (pytest.ini and a bootstrap conftest.py live in the re
 │   ├── engine/            #   engine helpers (report, ram estimator, workflow)
 │   ├── interfaces/        #   interface tests, mirroring nipype_pipeline/interfaces/ subfolders
 │   └── matrix/            #   settings matrix + golden snapshots (incl. CUDA on/off)
-├── prerelease/            # real-execution sweep on the phantom (opt-in, heavy)
-└── integration/           # slow end-to-end tests (real FSL/FreeSurfer/Slicer)
+├── patches/               # swane/patches (Nipype monkeypatches)
+├── installer/             # installer/ scripts
+└── prerelease/            # real-execution sweep on the phantom (opt-in, heavy)
 ```
 
 `swane/nipype_pipeline/` is covered by the light unit tests under
@@ -86,7 +87,7 @@ is missing:
 # light suite (Windows/CI friendly), Qt head-less
 pytest swane/tests -m "not heavy"
 
-# everything, including full-workflow integration tests
+# everything, including the heavy real-toolchain tests
 pytest swane/tests --run-heavy
 ```
 
