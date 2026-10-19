@@ -88,7 +88,11 @@ class AntsPyNetBrainExtraction(BaseInterface):
             import ants
             import antspynet
             from ants.core.ants_image import ANTsImage
+            from swane.utils.antspynet_weights import pin_antsxnet_cache_dir
 
+            # Read the weights from where the pre-fetch put them, whatever
+            # antspynet's own default is.
+            pin_antsxnet_cache_dir()
             out_file = self._gen_outfilename()
             img = ants.image_read(self.inputs.in_file, pixeltype="float")
 
