@@ -78,8 +78,7 @@ class WorkflowGenerateWorker(QRunnable):
         """
         Pre-downloads all templates used by SWANe.
         """
-        from swane.utils.templates import get_swane_template
-        from pathlib import Path
+        from swane.utils.templates import get_swane_template, is_template_cached
 
         templates_to_fetch = [
             ("MNI152NLin2009cSym", 1, "brain"),
@@ -88,16 +87,10 @@ class WorkflowGenerateWorker(QRunnable):
         ]
 
         # Fast check if all are already available
-        _SWANE_TEMPLATE_CACHE = Path.home() / ".cache" / "swane" / "templates"
-        needs_download = False
-        for name, res, desc in templates_to_fetch:
-            las_filename = f"{name}_res-{res}_desc-{desc}_T1w_LAS.nii.gz"
-            las_path = _SWANE_TEMPLATE_CACHE / las_filename
-            if not las_path.exists():
-                needs_download = True
-                break
-
-        if needs_download:
+        if not all(
+            is_template_cached(name, res, desc)
+            for name, res, desc in templates_to_fetch
+        ):
             self.signal.progress_msg.emit(strings.subj_tab_wf_gen_templates)
             for name, res, desc in templates_to_fetch:
                 get_swane_template(
@@ -107,6 +100,13 @@ class WorkflowGenerateWorker(QRunnable):
     def _preload_models(self, strings):
         """
         Pre-downloads all antspynet models used by SWANe.
+
+        Every network is fetched whatever modalities this subject has: the
+        download happens here, behind the modal progress dialog, so that no
+        later run waits on the network. This is intended (a subject without
+        FLAIR still gets the FLAIR weights); the workflow is not built yet at
+        this point, so the exact set of a run is only known to
+        ``WorkflowProcess.preload_antspynet_weights``, which is then a no-op.
         """
         from swane.config.config_enums import GlobalPrefCategoryList, DeskullEngine
         from swane.nipype_pipeline.interfaces.utils import resolve_deskull_engine
