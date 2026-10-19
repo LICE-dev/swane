@@ -147,6 +147,12 @@ python3 -m swane
 ```
 
 ### Updating
+To update a SWANe installation created with the quick installer, run the installer command again:
+```
+curl -fsSL https://raw.githubusercontent.com/LICE-dev/swane/main/installer/install_swane.sh | bash
+```
+
+For manual installations:
 ```
 pip3 install --upgrade swane
 ```
