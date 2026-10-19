@@ -2,6 +2,7 @@
 #
 #   max_cpu = 4
 #   step = RECONALL
+#   synth_reconall = false
 #   test_run = True
 #
 # nodes=12 edges=18

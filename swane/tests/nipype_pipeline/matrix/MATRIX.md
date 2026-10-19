@@ -1,6 +1,6 @@
 # SWANe workflow settings matrix
 
-Overview of 88 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
+Overview of 89 construction scenarios across 16 workflow families. Each row is one setting combination; follow the *snapshot* link for the full graph (nodes, commands, flags, wiring).
 
 > Generated from the golden snapshots by `python3 swane/tests/nipype_pipeline/matrix/generate_report.py` — do not edit by hand. Regenerate after refreshing the snapshots (`SWANE_SNAPSHOT_UPDATE=1 pytest .../matrix`).
 
@@ -80,11 +80,12 @@ Overview of 88 construction scenarios across 16 workflow families. Each row is o
 | [reconall](snapshots/freesurfer/reconall.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=RECONALL; synth_reconall=false; synthseg_fast=False | 12 / 18 | `mri_vol2vol`, `niimath`, `recon-all` | — |
 | [reconall_hippo](snapshots/freesurfer/reconall_hippo.txt) | hippo_amyg_labels=True; limit_synth_cores=false; max_cpu=4; step=RECONALL; synth_reconall=false; synthseg_fast=False | 15 / 25 | `mri_vol2vol`, `niimath`, `recon-all`, `segmentHA_T1.sh` | — |
 | [reconall_synth_tools](snapshots/freesurfer/reconall_synth_tools.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=RECONALL; synth_reconall=true; synthseg_fast=False | 12 / 18 | `mri_vol2vol`, `niimath`, `recon-all` | — |
-| [reconall_test_run](snapshots/freesurfer/reconall_test_run.txt) | max_cpu=4; step=RECONALL; test_run=True | 12 / 18 | `mri_vol2vol`, `niimath`, `recon-all` | — |
+| [reconall_synth_tools_test_run](snapshots/freesurfer/reconall_synth_tools_test_run.txt) | max_cpu=4; step=RECONALL; synth_reconall=true; test_run=True | 12 / 18 | `mri_vol2vol`, `niimath`, `recon-all` | — |
+| [reconall_test_run](snapshots/freesurfer/reconall_test_run.txt) | max_cpu=4; step=RECONALL; synth_reconall=false; test_run=True | 12 / 18 | `mri_vol2vol`, `niimath`, `recon-all` | — |
 | [synthseg](snapshots/freesurfer/synthseg.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=SYNTHSEG; synth_reconall=false; synthseg_fast=False | 8 / 11 | `mri_synthseg`, `mri_vol2vol`, `niimath` | — |
 | [synthseg_fast](snapshots/freesurfer/synthseg_fast.txt) | hippo_amyg_labels=False; limit_synth_cores=false; max_cpu=4; step=SYNTHSEG; synth_reconall=false; synthseg_fast=True | 8 / 11 | `mri_synthseg`, `mri_vol2vol`, `niimath` | — |
 | [synthseg_limit_cores](snapshots/freesurfer/synthseg_limit_cores.txt) | hippo_amyg_labels=False; limit_synth_cores=true; max_cpu=4; step=SYNTHSEG; synth_reconall=false; synthseg_fast=False | 8 / 11 | `mri_synthseg`, `mri_vol2vol`, `niimath` | — |
-| [synthseg_test_run](snapshots/freesurfer/synthseg_test_run.txt) | max_cpu=4; step=SYNTHSEG; test_run=True | 8 / 11 | `mri_synthseg`, `mri_vol2vol`, `niimath` | — |
+| [synthseg_test_run](snapshots/freesurfer/synthseg_test_run.txt) | max_cpu=4; step=SYNTHSEG; synth_reconall=false; test_run=True | 8 / 11 | `mri_synthseg`, `mri_vol2vol`, `niimath` | — |
 
 ## func_map
 

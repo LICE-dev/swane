@@ -66,11 +66,13 @@ def test_freesurfer_matrix(scenario, global_config, graph_snapshot):
     )
 
 
-# name -> step (test_run only branches on SYNTHSEG vs any recon-all directive,
-# not on hippo/synth_reconall, so one representative scenario per branch)
+# name -> (step, synth_reconall). test_run branches on SYNTHSEG vs any
+# recon-all directive; Synth recon-all also changes the recon-all reservation
+# (scaled by TEST_RUN_SYNTH_RAM_FACTOR) and must stay serial like production.
 TEST_RUN_SCENARIOS = {
-    "synthseg_test_run": FreesurferStep.SYNTHSEG,
-    "reconall_test_run": FreesurferStep.RECONALL,
+    "synthseg_test_run": (FreesurferStep.SYNTHSEG, False),
+    "reconall_test_run": (FreesurferStep.RECONALL, False),
+    "reconall_synth_tools_test_run": (FreesurferStep.RECONALL, True),
 }
 
 
@@ -83,8 +85,9 @@ def test_freesurfer_matrix_test_run(scenario, global_config, graph_snapshot):
     default test_run=True actually builds (recon-all is opt-in there via
     --with-reconall, but test_run applies to it all the same).
     """
-    step = TEST_RUN_SCENARIOS[scenario]
+    step, synth_reconall = TEST_RUN_SCENARIOS[scenario]
     synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["reconall"] = "true" if synth_reconall else "false"
 
     wf = freesurfer_workflow(
         "freesurfer",
@@ -97,6 +100,7 @@ def test_freesurfer_matrix_test_run(scenario, global_config, graph_snapshot):
 
     config_echo = {
         "step": step.name,
+        "synth_reconall": synth["reconall"],
         "max_cpu": MAX_CPU,
         "test_run": True,
     }

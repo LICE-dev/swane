@@ -537,16 +537,29 @@ class ConfigManager(configparser.ConfigParser):
 
         return mail_manager
 
-    def check_dependencies(self, dependency_manager):
+    def check_dependencies(self, dependency_manager, global_config=None):
         """
         Check if dependencies of each preference entry are met, otherwise set them to false
+
+        Enum options are also checked against their requirements on other
+        preferences (e.g. an engine's minimum RAM, ram_gb): a selected option
+        that does not meet them is reset like one whose dependency is missing.
+        Global boolean preferences are turned off when their requirements are
+        not met.
 
         Parameters
         ----------
         dependency_manager: DependencyManager
             The application dependencies
+        global_config: ConfigManager, optional
+            The global configuration holding the global preferences the
+            requirements refer to. Defaults to this configuration if it is the
+            global one; for a subject configuration without it the requirements
+            on global preferences are not checked.
 
         """
+        if global_config is None and self.global_config:
+            global_config = self
         changed = False
         for section in WF_PREFERENCES:
             for option in WF_PREFERENCES[section]:
@@ -562,7 +575,11 @@ class ConfigManager(configparser.ConfigParser):
                         continue
 
                 if self._reset_unavailable_enum_option(
-                    section, option, WF_PREFERENCES[section][option], dependency_manager
+                    section,
+                    option,
+                    WF_PREFERENCES[section][option],
+                    dependency_manager,
+                    global_config,
                 ):
                     changed = True
 
@@ -606,11 +623,29 @@ class ConfigManager(configparser.ConfigParser):
                             changed = True
                             continue
 
+                    # Boolean global preferences whose requirements on other
+                    # preferences are not met (e.g. Synth recon-all with too
+                    # little ram_gb) are turned off, as the preferences window
+                    # does when it disables them.
+                    if (
+                        entry.input_type == InputTypes.BOOLEAN
+                        and entry.pref_requirement is not None
+                        and self.has_option(str(category), option)
+                        and self.getboolean_safe(category, option)
+                        and not self._pref_requirement_met(
+                            entry.pref_requirement, global_config
+                        )
+                    ):
+                        self[category][option] = "false"
+                        changed = True
+                        continue
+
                     if self._reset_unavailable_enum_option(
                         category,
                         option,
                         GLOBAL_PREFERENCES[category][option],
                         dependency_manager,
+                        global_config,
                     ):
                         changed = True
 
@@ -618,11 +653,15 @@ class ConfigManager(configparser.ConfigParser):
             self.save()
 
     def _reset_unavailable_enum_option(
-        self, section, option: str, entry, dependency_manager
+        self, section, option: str, entry, dependency_manager, global_config=None
     ) -> bool:
         """
-        Reset an enum preference to its default if the dependency of its current
-        option is not met.
+        Reset an enum preference whose current option is unavailable: its
+        dependency is not met, or its requirements on other preferences (see
+        _pref_requirement_met) are not. It is reset to the default if that is
+        available, otherwise to the first available option. If no option is
+        available, a missing dependency still resets it to the default, while
+        unmet requirements leave it unchanged.
 
         Parameters
         ----------
@@ -634,6 +673,8 @@ class ConfigManager(configparser.ConfigParser):
             The preference metadata
         dependency_manager: DependencyManager
             The application dependencies
+        global_config: ConfigManager, optional
+            The global configuration for the requirements, see check_dependencies
 
         Returns
         -------
@@ -645,18 +686,112 @@ class ConfigManager(configparser.ConfigParser):
             or self[section][option] not in entry.value_enum.__members__
         ):
             return False
-        value_enum = entry.value_enum[self[section][option]]
-        if value_enum not in entry.option_dependency:
-            return False
-        dep_check = getattr(
-            dependency_manager, entry.option_dependency[value_enum][0], None
+        current = entry.value_enum[self[section][option]]
+        dependency_ok = self._enum_option_dependency_met(
+            entry, current, dependency_manager
         )
-        if dep_check is None or not callable(dep_check) or dep_check():
+        if dependency_ok and self._enum_option_requirement_met(
+            entry, current, global_config
+        ):
             return False
+
         default = self._section_defaults[str(section)][option].default
+        candidates = [default] if isinstance(default, Enum) else []
+        candidates += list(entry.value_enum)
+        for member in candidates:
+            if self._enum_option_dependency_met(
+                entry, member, dependency_manager
+            ) and self._enum_option_requirement_met(entry, member, global_config):
+                self[section][option] = member.name
+                return True
+
+        if dependency_ok:
+            return False
         self[section][option] = (
             default.name if isinstance(default, Enum) else str(default)
         )
+        return True
+
+    @staticmethod
+    def _enum_option_dependency_met(entry, member: Enum, dependency_manager) -> bool:
+        """
+        Returns
+        -------
+        False if the enum option has an external dependency that is not met.
+        """
+        if entry.option_dependency is None or member not in entry.option_dependency:
+            return True
+        dep_check = getattr(
+            dependency_manager, entry.option_dependency[member][0], None
+        )
+        return dep_check is None or not callable(dep_check) or bool(dep_check())
+
+    def _enum_option_requirement_met(
+        self, entry, member: Enum, global_config=None
+    ) -> bool:
+        """
+        Returns
+        -------
+        False if the enum option has requirements on other preferences that
+        are not met.
+        """
+        if (
+            entry.option_pref_requirement is None
+            or member not in entry.option_pref_requirement
+        ):
+            return True
+        return self._pref_requirement_met(
+            entry.option_pref_requirement[member], global_config
+        )
+
+    def _pref_requirement_met(self, pref_requirement: dict, global_config=None) -> bool:
+        """
+        Check requirements on other preferences against the saved values, as
+        the preferences window does for the ones it does not show.
+
+        Parameters
+        ----------
+        pref_requirement: dict
+            The requirements, {category: [(key, required value), ...]}. A
+            numeric requirement is a minimum.
+        global_config: ConfigManager, optional
+            The configuration holding the global preferences; the requirements
+            on them are skipped (considered met) when it is None.
+
+        Returns
+        -------
+        True if every requirement is met.
+        """
+        for req_cat, req_keys in pref_requirement.items():
+            if req_cat in GLOBAL_PREFERENCES:
+                source = global_config
+                preferences = GLOBAL_PREFERENCES
+            else:
+                source = self
+                preferences = WF_PREFERENCES
+            if source is None:
+                continue
+            for req_key, req_value in req_keys:
+                req = preferences[req_cat][req_key]
+                if req.input_type == InputTypes.BOOLEAN:
+                    check = req_value == source.getboolean_safe(req_cat, req_key)
+                elif req.input_type == InputTypes.ENUM:
+                    selected = source.getenum_safe(req_cat, req_key)
+                    enum_list = (
+                        req_value
+                        if isinstance(req_value, (list, tuple))
+                        else [req_value]
+                    )
+                    check = any(selected.name == e.name for e in enum_list)
+                elif req.input_type in (InputTypes.FLOAT, InputTypes.INT):
+                    value = source.getfloat_safe(req_cat, req_key)
+                    check = value >= req_value or bool(
+                        req.special_value_text and value == req.range[0]
+                    )
+                else:
+                    check = req_value == source[req_cat][req_key]
+                if not check:
+                    return False
         return True
 
     def get_last_pid(self) -> tuple[int, str | None]:

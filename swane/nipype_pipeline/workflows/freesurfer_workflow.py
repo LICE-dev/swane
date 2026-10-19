@@ -233,14 +233,17 @@ def freesurfer_workflow(
                 )
             else:
                 reconall_mem_gb = ResourceManager.synth_reconall_ram_requirements()
+            # Synth recon-all stays serial (also under test_run, so the
+            # prerelease exercises the production setup): its RAM reservation
+            # is the single-thread figure, and -parallel/-openmp may heavily
+            # increase its RAM usage.
         else:
             reconall_environ = {"FS_V8_XOPTS": "0"}
-
-        # parallel option splits some steps in right and left
-        if max_cpu > 1:
-            reconall_parallel = True
-            reconall_openmp = max(trunc(max_cpu / 2), 1)
-            reconall_nprocs = reconall_openmp * 2
+            # parallel option splits some steps in right and left
+            if max_cpu > 1:
+                reconall_parallel = True
+                reconall_openmp = max(trunc(max_cpu / 2), 1)
+                reconall_nprocs = reconall_openmp * 2
 
         # test_run: speed up recon-all with lighter iteration counts, via
         # top-level flags plus an -expert file of per-binary overrides. The

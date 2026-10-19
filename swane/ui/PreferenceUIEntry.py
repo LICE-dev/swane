@@ -66,6 +66,7 @@ class PreferenceUIEntry:
         self.informative_text = entry.informative_text
         self.special_value_text = entry.special_value_text
         self.suffix = entry.suffix
+        self.default = entry.default
         self.input_field, self.button = self.gen_input_field()
         self.informative_text_label = self.gen_informative_text_label()
         if self.input_type == InputTypes.ENUM and entry.value_enum is not None:
@@ -245,6 +246,22 @@ class PreferenceUIEntry:
             self.input_field.addItem(member.value, userData=member)
 
     def disable_combo_option(self, enum, enabled, tooltip):
+        """
+        Enable or disable a single QComboBox option. If the selected option is
+        disabled, the selection moves to the preference default when that is
+        enabled, otherwise to the first enabled option; with no enabled option
+        the selection is left unchanged.
+
+        Parameters
+        ----------
+        enum: Enum
+            The option to enable or disable
+        enabled: bool
+            True to enable the option, False to disable it
+        tooltip: str
+            The reason shown on a disabled option
+
+        """
         index = self.input_field.findData(enum)
         if index != -1:
             model = self.input_field.model()
@@ -254,7 +271,26 @@ class PreferenceUIEntry:
                 tooltip = ""
             item.setToolTip(tooltip)
             if not enabled and self.input_field.currentIndex() == index:
-                self.input_field.setCurrentIndex(0)
+                fallback = self._first_enabled_combo_index()
+                if fallback != -1:
+                    self.input_field.setCurrentIndex(fallback)
+
+    def _first_enabled_combo_index(self) -> int:
+        """
+        Returns
+        -------
+        The index of the preference default if enabled, otherwise of the first
+        enabled QComboBox option, or -1 if every option is disabled.
+        """
+        model = self.input_field.model()
+        candidates = list(range(self.input_field.count()))
+        default_index = self.input_field.findData(self.default)
+        if default_index != -1:
+            candidates.insert(0, default_index)
+        for index in candidates:
+            if model.item(index).isEnabled():
+                return index
+        return -1
 
     def set_value_from_config(self, config: ConfigManager):
         """
