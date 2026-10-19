@@ -93,6 +93,7 @@ def test_usage_explains_the_swane_spec_forms(sh):
         (["--bogus"], "Unknown option: --bogus"),
         (["--swane-spec"], "--swane-spec needs a value"),
         (["--miniforge-prefix"], "--miniforge-prefix needs a value"),
+        (["--install-dir"], "--install-dir needs a value"),
     ],
 )
 def test_bad_command_line_exits_2_with_usage(sh, args, message):
@@ -106,12 +107,49 @@ def test_bad_command_line_exits_2_with_usage(sh, args, message):
 def test_parse_args_sets_every_option(sh):
     result = sh.code(
         "parse_args --yes --accept-fsl-license --no-fsl --swane-spec /x/y "
-        '--miniforge-prefix "/p q"; '
+        '--miniforge-prefix "/p q" --install-dir "/e f"; '
         'printf "%s|" "$ASSUME_YES" "$ACCEPT_FSL_LICENSE" "$NO_FSL" '
-        '"$SWANE_SPEC" "$MINIFORGE_PREFIX"'
+        '"$SWANE_SPEC" "$MINIFORGE_PREFIX" "$SWANE_INSTALL_DIR"'
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "1|1|1|/x/y|/p q|"
+    assert result.stdout == "1|1|1|/x/y|/p q|/e f|"
+
+
+@pytest.mark.parametrize(
+    "given, expected",
+    [
+        ("./envs", "{cwd}/envs"),
+        ("envs", "{cwd}/envs"),
+        ("/abs/envs", "/abs/envs"),
+        ("/abs/envs///", "/abs/envs"),
+        ("rel/envs/", "{cwd}/rel/envs"),
+    ],
+)
+def test_parse_args_makes_the_install_dir_absolute_without_trailing_slash(
+    sh, given, expected
+):
+    """The envs are INSTALL_DIR/NAME and the launcher pins their prefix."""
+    result = sh.code(
+        'parse_args --install-dir "$P"; printf "%s" "$SWANE_INSTALL_DIR"',
+        env={"P": given},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == expected.replace("{cwd}", str(sh.tmp))
+
+
+def test_install_dir_defaults_to_conda_envs_dir(sh):
+    """main forgets an inherited SWANE_INSTALL_DIR, like the other options."""
+    result = sh.code('parse_args --yes; printf "%s" "$SWANE_INSTALL_DIR"')
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+
+
+def test_usage_documents_install_dir(sh):
+    result = sh("usage")
+    text = " ".join(result.stdout.split())
+    assert "--install-dir DIR" in text
+    assert "DIR/swane-env" in text
+    assert "DIR/swane-fsl" in text
 
 
 @pytest.mark.parametrize(
@@ -1247,11 +1285,14 @@ class FakeConda:
     running the tests, so the installer's JSON parsing is the real one.
     """
 
-    def __init__(self, sh, stub, version="conda 24.11.3", create_exit=0):
+    def __init__(
+        self, sh, stub, version="conda 24.11.3", create_exit=0, install_dir=None
+    ):
         self.stub = stub
         self.root = make_conda_root(sh.tmp / "conda root")
         self.envs_json = sh.tmp / "envs.json"
-        self.new_prefix = self.root / "envs" / "swane-env"
+        # With ``install_dir`` (--install-dir) ``create -p`` makes the env there.
+        self.new_prefix = (install_dir or self.root / "envs") / "swane-env"
         self.set_envs()
         make_executable(
             self.root / "bin" / "python", 'exec %s "$@"' % bash_quote(sys.executable)
@@ -1268,7 +1309,7 @@ class FakeConda:
             "    env) cat %s ;;\n"
             '    create) echo "conda create output"\n'
             "        [ %d = 0 ] || exit %d\n"
-            "        mkdir -p %s\n"
+            "        mkdir -p %s %s\n"
             "        cp %s %s\n"
             "        printf '%%s' %s > %s ;;\n"
             '    install) echo "conda install output" ;;\n'
@@ -1279,6 +1320,7 @@ class FakeConda:
                 create_exit,
                 create_exit,
                 bash_quote(str(self.new_prefix / "bin")),
+                bash_quote(str(self.new_prefix / "conda-meta")),
                 bash_quote(str(template)),
                 bash_quote(str(self.new_prefix / "bin" / "python")),
                 bash_quote(created),
@@ -1438,6 +1480,129 @@ def test_find_env_prefix_unreadable_list_returns_2(sh, stub):
     conda = FakeConda(sh, stub)
     conda.envs_json.write_text("not json")
     assert sh("find_env_prefix", conda.root, "swane-env").returncode == 2
+
+
+def test_find_env_prefix_with_install_dir_looks_only_there(sh, stub):
+    """DIR/NAME with a conda-meta directory; conda's list is never read."""
+    conda = FakeConda(sh, stub)
+    install = sh.tmp / "install dir"
+    listed = conda.root / "envs" / "swane-env"
+    conda.set_envs(listed)
+    env = {"SWANE_INSTALL_DIR": install}
+    # Nothing there yet: absent, whatever conda lists.
+    result = sh("find_env_prefix", conda.root, "swane-env", env=env)
+    assert result.returncode == 1
+    assert result.stdout == ""
+    # A directory that is not an environment (no conda-meta) is absent too.
+    (install / "swane-env").mkdir(parents=True)
+    assert sh("find_env_prefix", conda.root, "swane-env", env=env).returncode == 1
+    (install / "swane-env" / "conda-meta").mkdir()
+    result = sh("find_env_prefix", conda.root, "swane-env", env=env)
+    assert result.returncode == 0
+    assert result.stdout == "%s\n" % (install / "swane-env")
+    assert stub.calls("conda") == []
+
+
+def test_conda_create_env_by_name_without_install_dir(sh, stub):
+    conda = FakeConda(sh, stub)
+    result = sh("conda_create_env", conda.root, "swane-env", "-c", "x", "python=3.12")
+    assert result.returncode == 0, result.stderr
+    assert conda.conda_calls("create") == [
+        "conda create -y -n swane-env -c x python=3.12"
+    ]
+
+
+def test_conda_create_env_in_install_dir(sh, stub):
+    conda = FakeConda(sh, stub)
+    install = sh.tmp / "new" / "install dir"
+    result = sh(
+        "conda_create_env",
+        conda.root,
+        "swane-fsl",
+        "-c",
+        "x",
+        env={"SWANE_INSTALL_DIR": install},
+    )
+    assert result.returncode == 0, result.stderr
+    assert conda.conda_calls("create") == [
+        "conda create -y -p %s -c x" % (install / "swane-fsl")
+    ]
+    # The parent directory is made; conda makes the environment itself.
+    assert install.is_dir()
+
+
+def test_conda_create_env_accepts_an_empty_target_directory(sh, stub):
+    conda = FakeConda(sh, stub)
+    install = sh.tmp / "install"
+    (install / "swane-env").mkdir(parents=True)
+    result = sh(
+        "conda_create_env", conda.root, "swane-env", env={"SWANE_INSTALL_DIR": install}
+    )
+    assert result.returncode == 0, result.stderr
+    assert len(conda.conda_calls("create")) == 1
+
+
+@pytest.mark.parametrize("kind", ["files", "file"])
+def test_conda_create_env_refuses_a_target_that_is_not_an_environment(sh, stub, kind):
+    """``conda create -y -p DIR`` deletes an existing DIR: never let it."""
+    conda = FakeConda(sh, stub)
+    install = sh.tmp / "install"
+    target = install / "swane-env"
+    if kind == "files":
+        target.mkdir(parents=True)
+        (target / "precious.txt").write_text("data")
+    else:
+        install.mkdir()
+        target.write_text("data")
+    result = sh(
+        "conda_create_env", conda.root, "swane-env", env={"SWANE_INSTALL_DIR": install}
+    )
+    assert result.returncode == 1
+    assert "is not a conda environment" in result.stderr
+    assert "--install-dir" in result.stderr
+    assert conda.conda_calls("create") == []
+    assert target.exists()
+
+
+def test_ensure_swane_env_creates_in_install_dir(sh, stub):
+    stub.platform("Linux", "x86_64")
+    install = sh.tmp / "install dir"
+    conda = FakeConda(sh, stub, install_dir=install)
+    # An swane-env in conda's own directory is ignored with --install-dir.
+    old = conda.root / "envs" / "swane-env"
+    old_python = conda.add_env(old, dot=True)
+    conda.set_envs(old)
+    result = sh.code(
+        'ensure_swane_env "$ROOT" swane; printf "%s\\n" "$SWANE_ENV_PREFIX"',
+        env={"ROOT": conda.root, "SWANE_INSTALL_DIR": install},
+    )
+    assert result.returncode == 0, result.stderr
+    assert conda.conda_calls("create") == [
+        "conda create -y -p %s %s python=3.12 graphviz"
+        % (install / "swane-env", CHANNELS)
+    ]
+    assert conda.conda_calls("install") == []
+    assert stub.calls(str(old_python)) == []
+    assert result.stdout == "%s\n" % (install / "swane-env")
+
+
+def test_ensure_swane_env_updates_the_one_in_install_dir(sh, stub):
+    stub.platform("Linux", "x86_64")
+    install = sh.tmp / "install"
+    conda = FakeConda(sh, stub, install_dir=install)
+    existing = install / "swane-env"
+    conda.add_env(existing)
+    (existing / "conda-meta").mkdir()
+    result = sh.code(
+        'ensure_swane_env "$ROOT" swane; printf "%s\\n" "$SWANE_ENV_PREFIX"',
+        env={"ROOT": conda.root, "SWANE_INSTALL_DIR": install},
+    )
+    assert result.returncode == 0, result.stderr
+    assert conda.conda_calls("create") == []
+    assert conda.conda_calls("install") == [
+        "conda install -y -p %s %s graphviz" % (existing, CHANNELS)
+    ]
+    assert result.stdout == "%s\n" % existing
 
 
 @pytest.mark.parametrize(
@@ -2014,15 +2179,17 @@ class FslWorld:
     would (:func:`_fake_fsl_solver`).
     """
 
-    def __init__(self, sh, stub, resolver_exit=0, specs=FSL_SPECS):
+    def __init__(self, sh, stub, resolver_exit=0, specs=FSL_SPECS, install_dir=None):
         self.sh = sh
         self.stub = stub
         self.root = make_conda_root(sh.tmp / "conda root")
         make_executable(
             self.root / "bin" / "python", 'exec %s "$@"' % bash_quote(sys.executable)
         )
-        self.env = self.root / "envs" / "swane-env"
-        self.fsl_prefix = self.root / "envs" / "swane-fsl"
+        # With ``install_dir`` (--install-dir) both envs live there.
+        base = install_dir or self.root / "envs"
+        self.env = base / "swane-env"
+        self.fsl_prefix = base / "swane-fsl"
         self.envs_json = sh.tmp / "envs.json"
         self.set_envs()
         self.python = self.env / "bin" / "python"
@@ -2117,6 +2284,34 @@ class FslWorld:
 
     def conda_calls(self):
         return self.stub.calls("conda")
+
+
+def test_no_fsl_accept_installs_swane_fsl_in_install_dir(sh, stub):
+    install = sh.tmp / "install dir"
+    world = FslWorld(sh, stub, install_dir=install)
+    result, info = world.run(env={"SWANE_INSTALL_DIR": install}, tty="y\nyes\n")
+    assert result.returncode == 0, result.stderr
+    # Looked up in the install dir only (conda's list is never read).
+    assert world.conda_calls() == [
+        "conda create -y -p %s %s %s"
+        % (install / "swane-fsl", FSL_CHANNELS, FSL_SPECS),
+    ]
+    assert (world.fsl_prefix / "etc" / "swane_installer_fsl").is_file()
+    assert world.hook_dir() == str(install / "swane-fsl")
+    assert info["state"] == "installed"
+    assert info["dir"] == str(install / "swane-fsl")
+
+
+def test_swane_fsl_in_install_dir_is_updated_not_recreated(sh, stub):
+    install = sh.tmp / "install"
+    world = FslWorld(sh, stub, install_dir=install)
+    first, _ = world.run(env={"SWANE_INSTALL_DIR": install}, tty="y\nyes\n")
+    assert first.returncode == 0, first.stderr
+    stub.calls_log.write_text("")
+    second, info = world.run(env={"SWANE_INSTALL_DIR": install})
+    assert second.returncode == 0, second.stderr
+    assert not any(" create " in call for call in world.conda_calls())
+    assert info["dir"] == str(install / "swane-fsl")
 
 
 def test_no_fsl_accept_installs_swane_fsl(sh, stub):
