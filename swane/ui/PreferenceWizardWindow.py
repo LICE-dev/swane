@@ -487,7 +487,7 @@ class PreferenceWizardWindow(QDialog):
         page = QWidget()
         lay = QVBoxLayout()
         welcome_text = strings.wizard_welcome_text
-        if is_windows():
+        if is_windows() and not dependency_policy.FSL_MANDATORY:
             welcome_text += "<br><br>" + strings.windows_experimental_warn
         lay.addWidget(self._make_title(strings.wizard_welcome_title, welcome_text)[0])
 
