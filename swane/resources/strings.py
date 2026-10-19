@@ -44,7 +44,7 @@ mainwindow_max_subj_error = "Max subject tab limit reached!"
 mainwindow_update_available = (
     "New version available (%s). We recommend you to update "
     + APPNAME
-    + " with:<br><b><center>pip3 install --upgrade swane"
+    + " with:<br><b><center>curl -fsSL https://raw.githubusercontent.com/LICE-dev/swane/main/installer/install_swane.sh | bash</center></b>"
 )
 mainwindow_new_subj_name = "Write the name of the new subject:"
 mainwindow_new_subj_title = "New subject"

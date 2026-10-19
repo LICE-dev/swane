@@ -256,8 +256,8 @@ more than the budget are skipped rather than left to be OOM-killed.
 ### Resuming
 
 A full sweep takes hours. Progress is saved after every pass, so re-running the
-same command continues where it stopped. `--retry-failed` re-runs the passes
-that failed; `--no-resume` starts over.
+same command continues where it stopped and retries the passes that failed;
+`--no-resume` starts over.
 
 Only one sweep may use a work directory at a time. A second invocation exits
 with the PID of the current owner instead of sharing subject folders and

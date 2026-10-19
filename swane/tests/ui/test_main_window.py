@@ -61,13 +61,48 @@ class TestPreferencesWindow:
 
 def test_home_tab_shows_windows_notice(monkeypatch, request):
     import swane.ui.MainWindow as main_window_module
+    from swane.config import dependency_policy
 
     monkeypatch.setattr(main_window_module, "is_windows", lambda: True)
+    monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", False)
     window = request.getfixturevalue("main_window")
     from PySide6.QtWidgets import QLabel
 
     texts = [w.text() for w in window.homeTab.findChildren(QLabel)]
     assert any("experimental" in t for t in texts)
+
+
+def test_home_tab_hides_windows_notice_when_fsl_mandatory(monkeypatch, request):
+    import swane.ui.MainWindow as main_window_module
+    from swane.config import dependency_policy
+
+    monkeypatch.setattr(main_window_module, "is_windows", lambda: True)
+    monkeypatch.setattr(dependency_policy, "FSL_MANDATORY", True)
+    window = request.getfixturevalue("main_window")
+    from PySide6.QtWidgets import QLabel
+
+    texts = [w.text() for w in window.homeTab.findChildren(QLabel)]
+    assert not any("experimental" in t for t in texts)
+
+
+def test_update_available_shows_conda_installer_command(monkeypatch, main_window):
+    from PySide6.QtWidgets import QMessageBox
+
+    captured = {}
+
+    def fake_exec(self):
+        captured["text"] = self.text()
+        return QMessageBox.StandardButton.Ok
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+    main_window.update_available("1.2.3")
+
+    assert "1.2.3" in captured["text"]
+    assert (
+        "curl -fsSL https://raw.githubusercontent.com/LICE-dev/swane/main/installer/install_swane.sh | bash"
+        in captured["text"]
+    )
+    assert "pip3 install --upgrade swane" not in captured["text"]
 
 
 def test_about_changelog_link_points_to_wiki_12_changelog():
