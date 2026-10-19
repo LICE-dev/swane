@@ -9,6 +9,16 @@ from nipype.utils.ram_estimator import RamEstimator
 from swane.utils.ResourceManager import ResourceManager
 
 
+def _in_file_shape(inputs):
+    """Return ``(spatial_voxels, volumes)`` of ``inputs.in_file`` from its
+    header alone."""
+    img = nib.load(inputs.in_file)
+    shape = img.header.get_data_shape()
+    voxels = int(math.prod(shape[:3]))
+    volumes = int(shape[3]) if len(shape) > 3 else 1
+    return voxels, volumes
+
+
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
 class FlirtRamEstimator(RamEstimator):
     """
@@ -133,14 +143,7 @@ class DipyCropRamEstimator(RamEstimator):
             max_gb=None,
         )
 
-    @staticmethod
-    def _shape(inputs):
-        """Return ``(spatial_voxels, volumes)`` from the input header alone."""
-        img = nib.load(inputs.in_file)
-        shape = img.header.get_data_shape()
-        voxels = int(math.prod(shape[:3]))
-        volumes = int(shape[3]) if len(shape) > 3 else 1
-        return voxels, volumes
+    _shape = staticmethod(_in_file_shape)
 
     def estimate_gb(self, voxels, volumes):
         total = (
@@ -239,14 +242,7 @@ class DipyMotionRamEstimator(RamEstimator):
             max_gb=None,
         )
 
-    @staticmethod
-    def _shape(inputs):
-        """Return ``(spatial_voxels, volumes)`` from the input header alone."""
-        img = nib.load(inputs.in_file)
-        shape = img.header.get_data_shape()
-        voxels = int(math.prod(shape[:3]))
-        volumes = int(shape[3]) if len(shape) > 3 else 1
-        return voxels, volumes
+    _shape = staticmethod(_in_file_shape)
 
     @staticmethod
     def _declared_workers(inputs):
@@ -756,14 +752,7 @@ class DipyCsdRamEstimator(RamEstimator):
             max_gb=None,
         )
 
-    @staticmethod
-    def _shape(inputs):
-        """Return ``(spatial_voxels, volumes)`` from the input header alone."""
-        img = nib.load(inputs.in_file)
-        shape = img.header.get_data_shape()
-        voxels = int(math.prod(shape[:3]))
-        volumes = int(shape[3]) if len(shape) > 3 else 1
-        return voxels, volumes
+    _shape = staticmethod(_in_file_shape)
 
     @staticmethod
     def _n_coeff(inputs):
@@ -1078,6 +1067,13 @@ class DipyRecoBundlesChunkerRamEstimator(RamEstimator):
     fits the RAM budget, using :class:`RecoBundlesRamEstimator`'s model, and
     injects it as the tuned ``n_chunks`` parameter (applied to the node before
     it runs).
+
+    Unlike the other tuned parameters (thread counts, streaming buffer sizes),
+    ``n_chunks`` is NOT quality-neutral and stays hashed: RecoBundles clusters
+    and recognises each chunk separately, so the bundles depend on the RAM
+    budget (the subject's ``ram_gb``). The same subject with a different
+    ``ram_gb`` may give different bundles, and changing ``ram_gb`` reruns the
+    bundle stage.
     """
 
     def __init__(self):

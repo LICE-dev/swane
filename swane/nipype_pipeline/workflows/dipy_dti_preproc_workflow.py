@@ -448,7 +448,10 @@ def dipy_dti_preproc_workflow(
         # n_chunks is chosen at scheduling time by the chunker's estimator from
         # the real tractogram's point count and the RAM budget, so each
         # downstream RecoBundles chunk fits; the static value is only the
-        # negotiation-failed fail-safe.
+        # negotiation-failed fail-safe. n_chunks is deliberately hashed: the
+        # per-chunk clustering/recognition makes the bundles depend on it, so
+        # the same subject run with a different RAM budget (ram_gb) may yield
+        # different bundles, and changing ram_gb reruns this stage.
         chunker = Node(DipyTractogramChunker(), name="dipy_chunker")
         chunker._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
         chunker.ram_estimator = DipyRecoBundlesChunkerRamEstimator()

@@ -10,7 +10,7 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
-from swane.nipype_pipeline.interfaces.ants.AntsRegistration import ITK_THREADS_VAR
+from swane.nipype_pipeline.interfaces.ants import ITK_THREADS_VAR, thread_env
 
 # antspyx is imported lazily inside _run_interface, as in AntsRegistration.
 
@@ -75,11 +75,12 @@ class AntsComposeTransform(BaseInterface):
     input_spec = AntsComposeTransformInputSpec
     output_spec = AntsComposeTransformOutputSpec
 
+    # ITK caches its thread count on first use: run each node in a new process
+    # so that num_threads is honoured (see MonitoredMultiProcPlugin).
+    fresh_process = True
+
     def _run_interface(self, runtime):
-        previous_threads = os.environ.get(ITK_THREADS_VAR)
-        if isdefined(self.inputs.num_threads):
-            os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
-        try:
+        with thread_env(self.inputs.num_threads):
             import ants
 
             kwargs = {}
@@ -101,11 +102,6 @@ class AntsComposeTransform(BaseInterface):
                 compose=self._compose_prefix(),
                 **kwargs,
             )
-        finally:
-            if previous_threads is None:
-                os.environ.pop(ITK_THREADS_VAR, None)
-            else:
-                os.environ[ITK_THREADS_VAR] = previous_threads
 
         # antspyx returns None instead of raising when the composite was not
         # written, and the name it picks is the contract _list_outputs relies
