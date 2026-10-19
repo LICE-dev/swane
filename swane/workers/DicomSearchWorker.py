@@ -1,3 +1,4 @@
+import logging
 import os
 from swane.utils.qt_compat import Signal, QObject, QRunnable
 from swane.utils.DicomTree import DicomTree
@@ -190,15 +191,23 @@ class DicomSearchWorker(QRunnable):
                 # unreadable/corrupt file: skip it and keep scanning the rest
                 continue
 
-        try:
-            for subject in self.tree.dicom_subjects:
-                for study in self.tree.dicom_subjects[subject].studies:
-                    for series in self.tree.dicom_subjects[subject].studies[study]:
-                        self.tree.dicom_subjects[subject].studies[study][
-                            series
-                        ].refine_frame_number()
-        except Exception:
-            pass
+        for subject in self.tree.dicom_subjects:
+            for study in self.tree.dicom_subjects[subject].studies:
+                for series in self.tree.dicom_subjects[subject].studies[study]:
+                    dicom_series = self.tree.dicom_subjects[subject].studies[study][
+                        series
+                    ]
+                    try:
+                        dicom_series.refine_frame_number()
+                    except Exception:
+                        # unreadable series: make it not importable (0 frames) and
+                        # keep refining the remaining ones
+                        logging.getLogger(__name__).warning(
+                            "Cannot refine frame number of series %s, skipping it",
+                            series,
+                            exc_info=True,
+                        )
+                        dicom_series.frames = 0
 
         self.signal.sig_loop.emit(1)
         self.signal.sig_finish.emit(self)

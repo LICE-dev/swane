@@ -49,7 +49,7 @@ def fMRI_task_workflow(
         workflow settings.
     synth_config: SectionProxy
         The Synth-tools configuration section used to resolve the registration
-        engine. EPI avoids SynthMorph, so SYNTH falls back to FSL; the resolved
+        engine. EPI avoids SynthMorph, so SYNTH falls back to ANTS; the resolved
         engine drives both the shared func->ref registration and the
         cluster->reference resamples.
     base_dir : path, optional

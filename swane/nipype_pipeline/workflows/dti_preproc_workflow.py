@@ -243,7 +243,7 @@ def dti_preproc_workflow(
     # diff<->ref affine as FSL: on FSL the FLIRT .mat and its ConvertXFM inverse
     # pass straight through; on ANTs the ITK affine is converted with
     # nitransforms (AffineToFSL), which needs no FSL/FreeSurfer CLI. dif2ref is
-    # affine-only and SYNTH is downgraded to FSL above, so engine is FSL or ANTS.
+    # affine-only and SYNTH is downgraded to ANTS above, so engine is FSL or ANTS.
     if engine == RegistrationEngine.FSL:
         fwd_node, fwd_field = dif2ref.fwd_transforms[0]
         workflow.connect(fwd_node, fwd_field, outputnode, "diff2ref_mat")

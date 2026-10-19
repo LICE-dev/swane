@@ -57,24 +57,29 @@ def write_streamlines_vtp(streamlines, path):
     from vtkmodules.vtkIOXML import vtkXMLPolyDataWriter
     from vtkmodules.util.numpy_support import numpy_to_vtk
 
-    lines = vtkCellArray()
     blocks = []
-    offset = 0
     for streamline in streamlines:
         arr = np.asarray(streamline, dtype=np.float32) @ RAS_TO_LPS.T.astype(np.float32)
-        n = len(arr)
-        if n == 0:
+        if len(arr) == 0:
             continue
         blocks.append(arr)
-        lines.InsertNextCell(n)
-        for i in range(n):
-            lines.InsertCellPoint(offset + i)
-        offset += n
 
     if blocks:
         all_points = np.vstack(blocks).astype(np.float32)
     else:
         all_points = np.zeros((0, 3), dtype=np.float32)
+
+    # One polyline cell per streamline, built in bulk: the cell offsets are the
+    # cumulative streamline lengths and the connectivity is simply the point
+    # index sequence (points are stored streamline after streamline).
+    lengths = np.array([len(block) for block in blocks], dtype=np.int64)
+    offsets = np.concatenate(([0], np.cumsum(lengths))).astype(np.int64)
+    connectivity = np.arange(len(all_points), dtype=np.int64)
+    lines = vtkCellArray()
+    lines.SetData(
+        numpy_to_vtk(offsets, deep=True),
+        numpy_to_vtk(connectivity, deep=True),
+    )
 
     points = vtkPoints()
     points.SetData(numpy_to_vtk(all_points, deep=True))
