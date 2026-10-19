@@ -243,3 +243,36 @@ def test_broken_pool_on_submit_without_in_flight_tasks_still_reports_failure(
     assert report.signal_type == WorkflowSignals.NODE_ERROR
     assert report.node_name == "prerelease_wf.ref_bias_correction"
     assert "terminated abruptly" in report.info
+
+
+def test_broken_shared_pool_spares_in_flight_fresh_process_nodes(make_plugin):
+    """A fresh process is not part of the shared pool: when the pool breaks,
+    a node running in its own fresh process keeps running and must not be
+    handed a failure it never had (see test_fresh_process.py)."""
+    plugin, _ = make_plugin()
+    pooled = _register_task(plugin, 17, "wf.pooled")
+    fresh = _register_task(plugin, 18, "wf.fresh")
+    plugin._fresh_pools[fresh] = object()
+
+    pooled.set_exception(BrokenProcessPool("worker terminated abruptly"))
+    plugin._async_callback(pooled)
+
+    assert plugin._taskresult[17]["traceback"]
+    assert 18 not in plugin._taskresult
+
+
+def test_broken_fresh_process_fails_only_its_node(make_plugin):
+    plugin, _ = make_plugin()
+    pooled = _register_task(plugin, 17, "wf.pooled")
+    fresh = _register_task(plugin, 18, "wf.fresh")
+    plugin._fresh_pools[fresh] = object()
+
+    fresh.set_exception(BrokenProcessPool("worker terminated abruptly"))
+    plugin._async_callback(fresh)
+
+    assert any(
+        "BrokenProcessPool" in line for line in plugin._taskresult[18]["traceback"]
+    )
+    assert 17 not in plugin._taskresult
+    assert not pooled.done()
+    assert not plugin._broken_pool_reported

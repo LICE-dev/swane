@@ -11,7 +11,14 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.ants import thread_env
+
 # antspyx is imported lazily inside _run_interface, as in AntsRegistration.
+
+# Resampling is independent per voxel, so the thread count never changes the
+# result; one thread matches the single core the scheduler reserves for the
+# node (its default n_procs).
+NUM_THREADS = 1
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
@@ -63,9 +70,11 @@ class AntsApplyTransforms(BaseInterface):
     input_spec = AntsApplyTransformsInputSpec
     output_spec = AntsApplyTransformsOutputSpec
 
-    def _run_interface(self, runtime):
-        import ants
+    # ITK caches its thread count on first use: run each node in a new process
+    # so that NUM_THREADS is honoured (see MonitoredMultiProcPlugin).
+    fresh_process = True
 
+    def _run_interface(self, runtime):
         kwargs = {}
         if isdefined(self.inputs.which_to_invert):
             if len(self.inputs.which_to_invert) != len(self.inputs.transformlist):
@@ -76,25 +85,28 @@ class AntsApplyTransforms(BaseInterface):
                 )
             kwargs["whichtoinvert"] = self.inputs.which_to_invert
 
-        moving = ants.image_read(self.inputs.input_image)
-        # antspyx refuses a 4D moving image (e.g. a whole fMRI run) under the
-        # default imagetype=0 (scalar) with "Set imagetype 3 to transform time
-        # series images." -- moving.dimension is 4 exactly for that case in
-        # every caller of this generic node (every 3D use -- FA, CT, ROI masks
-        # -- stays imagetype 0).
-        imagetype = 3 if moving.dimension == 4 else 0
+        with thread_env(NUM_THREADS):
+            import ants
 
-        resampled = ants.apply_transforms(
-            fixed=ants.image_read(self.inputs.reference_image),
-            moving=moving,
-            transformlist=self.inputs.transformlist,
-            interpolator=self.inputs.interpolator,
-            imagetype=imagetype,
-            **kwargs,
-        )
+            moving = ants.image_read(self.inputs.input_image)
+            # antspyx refuses a 4D moving image (e.g. a whole fMRI run) under the
+            # default imagetype=0 (scalar) with "Set imagetype 3 to transform time
+            # series images." -- moving.dimension is 4 exactly for that case in
+            # every caller of this generic node (every 3D use -- FA, CT, ROI masks
+            # -- stays imagetype 0).
+            imagetype = 3 if moving.dimension == 4 else 0
 
-        out_file = self._gen_outfilename()
-        ants.image_write(resampled, out_file)
+            resampled = ants.apply_transforms(
+                fixed=ants.image_read(self.inputs.reference_image),
+                moving=moving,
+                transformlist=self.inputs.transformlist,
+                interpolator=self.inputs.interpolator,
+                imagetype=imagetype,
+                **kwargs,
+            )
+
+            out_file = self._gen_outfilename()
+            ants.image_write(resampled, out_file)
         self._restamp_reference_header(out_file)
 
         return runtime
