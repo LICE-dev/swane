@@ -161,6 +161,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
 
+    # TEMPORARY (see swane/tests/helpers/fsl_policy_override.py): FSL-free
+    # planning on the Windows CI runner despite the shipped FSL_MANDATORY.
+    from swane.tests.helpers.fsl_policy_override import apply_fsl_policy_override
+
+    if apply_fsl_policy_override():
+        # stderr: --list-json keeps stdout for the JSON list only.
+        print(
+            "SWANE_TEST_FSL_MANDATORY=0: FSL_MANDATORY overridden to False",
+            file=sys.stderr,
+        )
+
     # Imported late so --help and --list stay instant.
     from swane.tests.prerelease import capabilities as caps_mod
     from swane.tests.prerelease import report as report_mod
