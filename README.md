@@ -184,7 +184,7 @@ This project includes subsection derived from other software, which licenses can
 - **New default processing engines**: ANTs (antspynet) for brain extraction, dipy (CSD + RecoBundles) for tractography, ANTs (antspyx Atropos) for tissue segmentation and Python (nilearn/scikit-learn) for task fMRI. Registration still runs with ANTs (antspyx).
 - **Resting State fMRI** requires FSL: without FSL the Resting State fMRI optional series cannot be enabled.
 
-### [0.3.0] - Unreleased
+### [0.3] - Unreleased
 
 #### Added
 
