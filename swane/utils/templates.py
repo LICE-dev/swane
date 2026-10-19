@@ -11,6 +11,52 @@ _SWANE_TEMPLATE_CACHE = Path.home() / ".cache" / "swane" / "templates"
 _SWANE_TEMPLATE_CACHE.mkdir(parents=True, exist_ok=True)
 
 
+def template_cache_path(
+    name: str, resolution: int, desc: str, suffix: str = "T1w"
+) -> Path:
+    """Return where the LAS version of a template lives in the SWANe cache."""
+    return (
+        _SWANE_TEMPLATE_CACHE
+        / f"{name}_res-{resolution}_desc-{desc}_{suffix}_LAS.nii.gz"
+    )
+
+
+def is_template_cached(
+    name: str, resolution: int, desc: str, suffix: str = "T1w"
+) -> bool:
+    """Return True if the LAS version of a template is already in the cache.
+
+    A cheap filesystem check that never touches TemplateFlow. The cache is only
+    ever populated by an atomic rename (see :func:`_atomic_save`), so a file
+    found here is complete.
+    """
+    return template_cache_path(name, resolution, desc, suffix).exists()
+
+
+def _atomic_save(final_path: Path, write) -> None:
+    """Create ``final_path`` by calling ``write(tmp_path)`` and renaming.
+
+    The cache is read without a lock (``is_template_cached``), so the final name
+    must never exist half-written: a process killed during the write would leave
+    a truncated file that every later call trusts. The temporary file lives in
+    the same directory, where ``os.replace`` is atomic on Linux, macOS and
+    Windows, and keeps the ``.nii.gz`` ending so nibabel picks the format.
+
+    Parameters
+    ----------
+    final_path : Path
+        Destination, replaced if present.
+    write : callable
+        Called with the temporary path, which it must create.
+    """
+    tmp_path = final_path.with_name(f".{final_path.name}.{os.getpid()}.tmp.nii.gz")
+    try:
+        write(tmp_path)
+        os.replace(tmp_path, final_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
 def get_swane_template(
     name: str, resolution: int, desc: str, suffix: str = "T1w", enforce_las: bool = True
 ) -> str:
@@ -37,11 +83,8 @@ def get_swane_template(
         Path to the requested template (in LAS if requested).
     """
     # Check SWANe cache first if enforcing LAS to avoid slow TemplateFlow initialization
-    if enforce_las:
-        las_filename = f"{name}_res-{resolution}_desc-{desc}_{suffix}_LAS.nii.gz"
-        las_path = _SWANE_TEMPLATE_CACHE / las_filename
-        if las_path.exists():
-            return str(las_path)
+    if enforce_las and is_template_cached(name, resolution, desc, suffix):
+        return str(template_cache_path(name, resolution, desc, suffix))
 
     # We use a global lock file to prevent concurrent TemplateFlow downloads
     # and concurrent RAS-to-LAS conversions.
@@ -87,8 +130,7 @@ def get_swane_template(
 
         # Handle LAS enforcement
         # We save the LAS converted file in the SWANe cache to avoid modifying TemplateFlow's cache
-        las_filename = f"{name}_res-{resolution}_desc-{desc}_{suffix}_LAS.nii.gz"
-        las_path = _SWANE_TEMPLATE_CACHE / las_filename
+        las_path = template_cache_path(name, resolution, desc, suffix)
 
         # If it was cached during another process's lock hold, return it
         if las_path.exists():
@@ -99,13 +141,10 @@ def get_swane_template(
         axcodes = nib.aff2axcodes(img.affine)
 
         if axcodes == ("L", "A", "S"):
-            # It is already LAS, just link it to avoid copying. Windows without
-            # Developer Mode (or a filesystem without links) refuses symlinks:
-            # copy instead, the file is small.
-            try:
-                os.symlink(tf_path, str(las_path))
-            except (OSError, NotImplementedError):
-                shutil.copy2(tf_path, str(las_path))
+            # Already LAS: copy it (the file is small). Not a symlink: it would
+            # dangle if the TemplateFlow cache is purged and some filesystems
+            # (Windows without Developer Mode) refuse it.
+            _atomic_save(las_path, lambda tmp: shutil.copyfile(tf_path, tmp))
             return str(las_path)
 
         logging.getLogger(__name__).info(f"Reorienting {name} to LAS convention...")
@@ -119,7 +158,7 @@ def get_swane_template(
         las_img = img.as_reoriented(transform)
 
         las_path.parent.mkdir(parents=True, exist_ok=True)
-        nib.save(las_img, str(las_path))
+        _atomic_save(las_path, lambda tmp: nib.save(las_img, str(tmp)))
 
         return str(las_path)
 
@@ -127,13 +166,12 @@ def get_swane_template(
 def _compute_brain_template(name: str, resolution: int, enforce_las: bool) -> str:
     """Compute a skull-stripped template by multiplying the T1w and brain mask."""
 
-    cache_name = f"{name}_res-{resolution}_desc-brain_T1w"
     if enforce_las:
-        cache_name += "_LAS.nii.gz"
+        out_path = template_cache_path(name, resolution, "brain")
     else:
-        cache_name += ".nii.gz"
-
-    out_path = _SWANE_TEMPLATE_CACHE / cache_name
+        out_path = (
+            _SWANE_TEMPLATE_CACHE / f"{name}_res-{resolution}_desc-brain_T1w.nii.gz"
+        )
     if out_path.exists():
         return str(out_path)
 
@@ -180,5 +218,5 @@ def _compute_brain_template(name: str, resolution: int, enforce_las: bool) -> st
             brain_img = brain_img.as_reoriented(transform)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    nib.save(brain_img, str(out_path))
+    _atomic_save(out_path, lambda tmp: nib.save(brain_img, str(tmp)))
     return str(out_path)

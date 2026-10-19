@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 
@@ -100,3 +101,123 @@ def test_preload_points_the_child_at_certifi_bundle(monkeypatch):
 def test_preload_keeps_a_user_configured_ca_bundle(monkeypatch):
     monkeypatch.setenv("SSL_CERT_FILE", "/custom/ca.pem")
     assert _capture_child_env(monkeypatch)["SSL_CERT_FILE"] == "/custom/ca.pem"
+
+
+def _populate_cache(directory, names=("brainExtractionRobustT1",)):
+    directory.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (directory / (name + ".h5")).touch()
+    (directory / (antspynet_weights.TEMPLATE_NAME + ".nii.gz")).touch()
+
+
+def test_cache_dir_matches_the_antspynet_default():
+    # antspynet 0.3.2 default; the heavy test below guards against upstream drift.
+    assert antspynet_weights.ANTSXNET_CACHE_DIR == os.path.join(
+        os.path.expanduser("~"), ".keras", "ANTsXNet"
+    )
+
+
+def test_weights_are_fetched_checks_only_the_swane_cache_dir(tmp_path, monkeypatch):
+    ours = tmp_path / "ours"
+    monkeypatch.setattr(antspynet_weights, "ANTSXNET_CACHE_DIR", str(ours))
+    names = ["brainExtractionRobustT1"]
+
+    assert not antspynet_weights.weights_are_fetched(names)
+    _populate_cache(ours)
+    assert antspynet_weights.weights_are_fetched(names)
+    assert not antspynet_weights.weights_are_fetched(names + ["brainExtractionFLAIR"])
+
+
+def test_weights_are_fetched_ignores_keras_home(tmp_path, monkeypatch):
+    # antspynet never reads KERAS_HOME: weights there are invisible to the nodes.
+    ours = tmp_path / "ours"
+    elsewhere = tmp_path / "keras_home"
+    _populate_cache(elsewhere / "ANTsXNet")
+    monkeypatch.setattr(antspynet_weights, "ANTSXNET_CACHE_DIR", str(ours))
+    monkeypatch.setenv("KERAS_HOME", str(elsewhere))
+
+    assert not antspynet_weights.weights_are_fetched(["brainExtractionRobustT1"])
+
+    # And a populated SWANe cache is enough whatever KERAS_HOME says.
+    _populate_cache(ours)
+    assert antspynet_weights.weights_are_fetched(["brainExtractionRobustT1"])
+
+
+def test_weights_are_fetched_ignores_tmp_keras(tmp_path, monkeypatch):
+    # Stale /tmp/.keras weights used to make the pre-fetch skip.
+    monkeypatch.setattr(antspynet_weights, "ANTSXNET_CACHE_DIR", str(tmp_path / "x"))
+    real_isdir = os.path.isdir
+    monkeypatch.setattr(
+        os.path,
+        "isdir",
+        lambda p: True if str(p).startswith("/tmp/.keras") else real_isdir(p),
+    )
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda p: True if str(p).startswith("/tmp/.keras") else os.path.lexists(p),
+    )
+    assert not antspynet_weights.weights_are_fetched(["brainExtractionRobustT1"])
+
+
+@pytest.fixture
+def fake_antspynet_utilities(monkeypatch):
+    """Fake ``antspynet.utilities`` recording every call, in order."""
+    import types
+
+    calls = []
+    utilities = types.ModuleType("antspynet.utilities")
+    utilities.set_antsxnet_cache_directory = lambda d: calls.append(("set", d))
+    utilities.get_pretrained_network = lambda n: calls.append(("network", n))
+    utilities.get_antsxnet_data = lambda n: calls.append(("data", n))
+    package = types.ModuleType("antspynet")
+    package.utilities = utilities
+    monkeypatch.setitem(sys.modules, "antspynet", package)
+    monkeypatch.setitem(sys.modules, "antspynet.utilities", utilities)
+    return calls
+
+
+def test_pin_sets_the_swane_cache_dir_in_antspynet(fake_antspynet_utilities):
+    antspynet_weights.pin_antsxnet_cache_dir()
+    assert fake_antspynet_utilities == [("set", antspynet_weights.ANTSXNET_CACHE_DIR)]
+
+
+def test_fetch_pins_the_cache_dir_before_downloading(fake_antspynet_utilities):
+    antspynet_weights.fetch_weights(["brainExtractionRobustT1"])
+    assert fake_antspynet_utilities == [
+        ("set", antspynet_weights.ANTSXNET_CACHE_DIR),
+        ("network", "brainExtractionRobustT1"),
+        ("data", antspynet_weights.TEMPLATE_NAME),
+    ]
+
+
+@pytest.mark.heavy
+def test_swane_cache_dir_matches_the_installed_antspynet_default():
+    """If this fails after an antspynet upgrade, its default moved: SWANe's
+    constant is still what both the pre-fetch and the nodes use (they pin it),
+    but the previous cache would be left behind -- decide whether to migrate."""
+    import importlib.util
+
+    # Not importorskip: importing antspynet loads TensorFlow, which must stay
+    # out of the long-lived pytest process (and can hang there on macOS).
+    if importlib.util.find_spec("antspynet") is None:
+        pytest.skip("antspynet is not installed")
+    # Read in a fresh child: another test may already have pinned this process.
+    # The child dumps its stack and exits before the timeout, so a hang in the
+    # TensorFlow import is reported instead of eating the whole CI budget.
+    child = (
+        "import faulthandler;"
+        "faulthandler.dump_traceback_later(240, exit=True);"
+        "from antspynet.utilities import get_antsxnet_cache_directory;"
+        "print(get_antsxnet_cache_directory())"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", child],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert result.returncode == 0, result.stderr[-3000:]
+    assert result.stdout.strip().splitlines()[-1] == (
+        antspynet_weights.ANTSXNET_CACHE_DIR
+    )

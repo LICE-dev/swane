@@ -12,6 +12,19 @@ from swane.nipype_pipeline.interfaces.ants.AntsPyNetBrainExtraction import (
 )
 
 
+@pytest.fixture(autouse=True)
+def pin_calls(monkeypatch):
+    """Record pin_antsxnet_cache_dir calls instead of importing the real
+    ``antspynet.utilities`` (which would pull in TensorFlow)."""
+    from swane.utils import antspynet_weights
+
+    calls = []
+    monkeypatch.setattr(
+        antspynet_weights, "pin_antsxnet_cache_dir", lambda: calls.append("pin")
+    )
+    return calls
+
+
 @pytest.fixture
 def fake_antspynet(monkeypatch):
     """Inject a fake `antspynet` whose brain_extraction returns a real ants
@@ -55,6 +68,26 @@ def test_produces_brain_and_binary_mask(tmp_path, fake_antspynet):
     brain = ants.image_read(str(tmp_path / "brain.nii.gz")).numpy()
     # Brain image is input masked: zero wherever mask is zero.
     assert np.all(brain[mask == 0] == 0)
+
+
+def test_cache_dir_is_pinned_before_the_network_is_loaded(
+    tmp_path, fake_antspynet, pin_calls
+):
+    """The node must read the weights from the directory the pre-fetch filled,
+    whatever antspynet's own default is."""
+    real_be = sys.modules["antspynet"].brain_extraction
+
+    def spy(image, modality=None, **kwargs):
+        pin_calls.append("brain_extraction")
+        return real_be(image, modality=modality, **kwargs)
+
+    sys.modules["antspynet"].brain_extraction = spy
+    node = AntsPyNetBrainExtraction()
+    node.inputs.in_file = _write_image(str(tmp_path / "in.nii.gz"))
+    node.inputs.modality = "t1"
+    node.inputs.out_file = str(tmp_path / "brain.nii.gz")
+    node.run()
+    assert pin_calls == ["pin", "brain_extraction"]
 
 
 def test_num_threads_sets_itk_env(tmp_path, fake_antspynet):
