@@ -12,14 +12,14 @@ from nipype.interfaces.base import (
 
 from swane.nipype_pipeline.interfaces.ants import (
     DEFAULT_RANDOM_SEED,
+    ITK_THREADS_VAR,  # noqa: F401  (re-exported, imported from here)
     ants_random_seed,
+    thread_env,
 )
 
 # antspyx is imported lazily inside _run_interface so that merely importing this
 # module (as the workflow builders and the graph tests do) never pays the cost of
 # loading the ITK bindings.
-
-ITK_THREADS_VAR = "ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"
 
 # ANTs names its products by role, and antspyx returns those file names as-is:
 # <prefix>0GenericAffine.mat, <prefix>1Warp.nii.gz, <prefix>1InverseWarp.nii.gz.
@@ -137,11 +137,12 @@ class AntsRegistration(BaseInterface):
     input_spec = AntsRegistrationInputSpec
     output_spec = AntsRegistrationOutputSpec
 
+    # ITK caches its thread count on first use: run each node in a new process
+    # so that num_threads is honoured (see MonitoredMultiProcPlugin).
+    fresh_process = True
+
     def _run_interface(self, runtime):
-        previous_threads = os.environ.get(ITK_THREADS_VAR)
-        if isdefined(self.inputs.num_threads):
-            os.environ[ITK_THREADS_VAR] = str(self.inputs.num_threads)
-        try:
+        with thread_env(self.inputs.num_threads):
             import ants
 
             kwargs = {
@@ -177,11 +178,6 @@ class AntsRegistration(BaseInterface):
                     outprefix=os.path.join(os.getcwd(), self.inputs.out_prefix),
                     **kwargs,
                 )
-        finally:
-            if previous_threads is None:
-                os.environ.pop(ITK_THREADS_VAR, None)
-            else:
-                os.environ[ITK_THREADS_VAR] = previous_threads
 
         self._fwd = [os.path.abspath(path) for path in result["fwdtransforms"]]
         self._inv = [os.path.abspath(path) for path in result["invtransforms"]]
