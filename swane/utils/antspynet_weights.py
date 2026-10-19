@@ -21,8 +21,17 @@ measured) in the long-lived caller, and every worker forked from it would
 inherit that footprint. The child exits as soon as the files are on disk.
 """
 
+import os
 import subprocess
 import sys
+
+#: Where the pretrained networks and the shared template live. antspynet's own
+#: default (0.3.2), which ignores ``KERAS_HOME``; it cannot be read from
+#: antspynet without importing TensorFlow. SWANe owns it: the fetching child and
+#: every ``AntsPyNetBrainExtraction`` node call :func:`pin_antsxnet_cache_dir`,
+#: so a future antspynet default cannot send the nodes to another directory than
+#: the one the pre-fetch filled.
+ANTSXNET_CACHE_DIR = os.path.join(os.path.expanduser("~"), ".keras", "ANTsXNet")
 
 #: antspynet modality key -> the pretrained network ``brain_extraction`` loads
 #: for it (see ``antspynet/utilities/brain_extraction.py``). Only the keys
@@ -69,33 +78,26 @@ def weights_are_fetched(names) -> bool:
     """Return True if all weights (and the shared template) are already cached.
 
     This performs a fast filesystem check without importing ``antspynet`` or
-    TensorFlow, making it safe and cheap to call from the main UI thread.
+    TensorFlow, making it safe and cheap to call from the main UI thread. Only
+    :data:`ANTSXNET_CACHE_DIR` counts: weights anywhere else (``KERAS_HOME``,
+    ``/tmp/.keras``) are invisible to the nodes.
     """
-    import os
+    wanted = [weight + ".h5" for weight in names] + [TEMPLATE_NAME + ".nii.gz"]
+    return all(
+        os.path.exists(os.path.join(ANTSXNET_CACHE_DIR, filename))
+        for filename in wanted
+    )
 
-    candidates = [
-        os.path.expanduser(os.environ.get("KERAS_HOME") or "~/.keras"),
-        "/tmp/.keras",
-    ]
-    cache_dirs = [os.path.join(c, "ANTsXNet") for c in candidates]
-    existing_dirs = [d for d in cache_dirs if os.path.isdir(d)]
 
-    if not existing_dirs:
-        return False
+def pin_antsxnet_cache_dir() -> None:
+    """Make antspynet read and write its data in :data:`ANTSXNET_CACHE_DIR`.
 
-    for weight in names:
-        if not any(
-            os.path.exists(os.path.join(d, weight + ".h5")) for d in existing_dirs
-        ):
-            return False
+    Imports ``antspynet`` (and therefore TensorFlow): call it only from the
+    fetching child and from the node that is about to run the network.
+    """
+    from antspynet.utilities import set_antsxnet_cache_directory
 
-    if not any(
-        os.path.exists(os.path.join(d, TEMPLATE_NAME + ".nii.gz"))
-        for d in existing_dirs
-    ):
-        return False
-
-    return True
+    set_antsxnet_cache_directory(ANTSXNET_CACHE_DIR)
 
 
 def workflow_modalities(workflow) -> list:
@@ -124,6 +126,7 @@ def fetch_weights(names) -> None:
     """Fetch ``names`` plus the shared template. Runs in the child process."""
     from antspynet.utilities import get_antsxnet_data, get_pretrained_network
 
+    pin_antsxnet_cache_dir()
     for weight in names:
         get_pretrained_network(weight)
     get_antsxnet_data(TEMPLATE_NAME)
@@ -139,8 +142,6 @@ def preload_weights(names) -> None:
     """
     if weights_are_fetched(names):
         return
-
-    import os
 
     env = os.environ.copy()
     # python.org builds of Python on macOS ship without CA certificates until

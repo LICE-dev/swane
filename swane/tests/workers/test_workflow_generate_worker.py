@@ -47,6 +47,77 @@ def test_preload_models_only_when_antspynet(monkeypatch):
     mock_preload_weights.assert_called_once()
 
 
+def test_preload_models_fetches_every_network_whatever_the_modalities(monkeypatch):
+    """Intentional: the generate worker downloads all the antspynet networks
+    behind the modal progress dialog, so that a later run never downloads."""
+    from swane.utils.antspynet_weights import WEIGHTS_BY_MODALITY
+
+    subject = MagicMock()
+    subject.global_config = {GlobalPrefCategoryList.SYNTH: MagicMock()}
+    worker = WorkflowGenerateWorker(subject)
+    monkeypatch.setattr(
+        "swane.nipype_pipeline.interfaces.utils.resolve_deskull_engine",
+        lambda config: DeskullEngine.ANTSPYNET,
+    )
+    monkeypatch.setattr(
+        "swane.utils.antspynet_weights.weights_are_fetched", lambda names: False
+    )
+    fetched = MagicMock()
+    monkeypatch.setattr("swane.utils.antspynet_weights.preload_weights", fetched)
+
+    worker._preload_models(MagicMock())
+
+    fetched.assert_called_once()
+    assert set(fetched.call_args.args[0]) == set(WEIGHTS_BY_MODALITY.values())
+
+
+TEMPLATES = [
+    ("MNI152NLin2009cSym", 1, "brain"),
+    ("MNI152NLin6Asym", 1, "brain"),
+    ("MNI152NLin6Asym", 2, "brain"),
+]
+
+
+def _template_worker(monkeypatch, cached):
+    """A worker whose template cache holds exactly ``cached``; returns the
+    worker, the progress messages and the get_swane_template mock."""
+    import swane.utils.templates as templates
+
+    monkeypatch.setattr(
+        templates,
+        "is_template_cached",
+        lambda name, res, desc, suffix="T1w": (name, res, desc) in cached,
+    )
+    fetch = MagicMock()
+    monkeypatch.setattr(templates, "get_swane_template", fetch)
+    worker = WorkflowGenerateWorker(MagicMock())
+    messages = []
+    worker.signal.progress_msg.connect(messages.append)
+    return worker, messages, fetch
+
+
+def test_preload_templates_silent_when_all_cached(monkeypatch):
+    worker, messages, fetch = _template_worker(monkeypatch, set(TEMPLATES))
+    strings = MagicMock()
+    strings.subj_tab_wf_gen_templates = "Downloading templates..."
+
+    worker._preload_templates(strings)
+
+    assert messages == []
+    fetch.assert_not_called()
+
+
+def test_preload_templates_fetches_all_when_one_is_missing(monkeypatch):
+    worker, messages, fetch = _template_worker(monkeypatch, set(TEMPLATES[:2]))
+    strings = MagicMock()
+    strings.subj_tab_wf_gen_templates = "Downloading templates..."
+
+    worker._preload_templates(strings)
+
+    assert messages == ["Downloading templates..."]
+    assert [c.kwargs["name"] for c in fetch.call_args_list] == [t[0] for t in TEMPLATES]
+
+
 def _dipy_subject(engine, dti_loaded, tractography):
     from swane.utils.DataInputList import DataInputList as DIL
 
