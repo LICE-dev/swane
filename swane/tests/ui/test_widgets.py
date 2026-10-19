@@ -21,6 +21,7 @@ from PySide6.QtCore import Qt
 from swane.ui.VerticalScrollArea import VerticalScrollArea
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
+from swane.ui.HtmlItemDelegate import HtmlItemDelegate
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
 
 
@@ -79,3 +80,46 @@ class TestCustomTreeWidgetItem:
         assert item.get_status() == WorkflowSignals.NODE_COMPLETED
         item.set_art(resources.errorIcon_file)
         assert item.get_status() == WorkflowSignals.NODE_ERROR
+
+
+class TestHtmlItemDelegate:
+
+    def test_html_delegate_paints_and_sizes(self, qtbot):
+        from PySide6.QtWidgets import QListWidget, QListWidgetItem, QStyleOptionViewItem
+        from PySide6.QtGui import QPixmap, QPainter
+
+        list_widget = QListWidget()
+        qtbot.addWidget(list_widget)
+        delegate = HtmlItemDelegate(list_widget)
+        list_widget.setItemDelegate(delegate)
+
+        item = QListWidgetItem("Subject - MR - <b>T1</b>: 176 images, 1 volume")
+        list_widget.addItem(item)
+
+        option = QStyleOptionViewItem()
+        option.rect = list_widget.visualItemRect(item)
+        size_hint = delegate.sizeHint(option, list_widget.model().index(0, 0))
+        assert size_hint.isValid()
+        assert size_hint.width() > 0
+        assert size_hint.height() > 0
+
+        # Tags must be consumed: the hint matches the same text without markup
+        plain_item = QListWidgetItem("Subject - MR - T1: 176 images, 1 volume")
+        list_widget.addItem(plain_item)
+        plain_hint = delegate.sizeHint(option, list_widget.model().index(1, 0))
+        assert abs(size_hint.width() - plain_hint.width()) < 10  # bold only
+
+        # Test rendering without errors
+        pixmap = QPixmap(max(size_hint.width(), 100), max(size_hint.height(), 30))
+        painter = QPainter(pixmap)
+        option.rect = pixmap.rect()
+        delegate.paint(painter, option, list_widget.model().index(0, 0))
+        painter.end()
+
+        # Test rendering selected state
+        from PySide6.QtWidgets import QStyle
+
+        painter = QPainter(pixmap)
+        option.state |= QStyle.StateFlag.State_Selected
+        delegate.paint(painter, option, list_widget.model().index(0, 0))
+        painter.end()
