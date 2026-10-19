@@ -99,16 +99,20 @@ def _set_fsl_engines(config):
 def test_check_dependencies_resets_fsl_engines_without_fsl(tmp_path):
     config = ConfigManager(global_base_folder=str(tmp_path))
     _set_fsl_engines(config)
+    # Enough RAM for every engine, so only the FSL dependency matters.
+    config[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = "64"
 
     config.check_dependencies(_Deps(fsl=False))
 
-    synth = GLOBAL_PREFERENCES[GlobalPrefCategoryList.SYNTH]
+    # Reset to the default when available, otherwise to the first available
+    # option: without FSL that is the FSL-free engine set.
+    expected = default_engines(False)
     for key in FSL_OPTIONS:
-        assert config[GlobalPrefCategoryList.SYNTH][key] == synth[key].default.name
+        assert config[GlobalPrefCategoryList.SYNTH][key] == expected[key].name
     # The reset is persisted.
     reloaded = ConfigManager(global_base_folder=str(tmp_path))
     for key in FSL_OPTIONS:
-        assert reloaded[GlobalPrefCategoryList.SYNTH][key] == synth[key].default.name
+        assert reloaded[GlobalPrefCategoryList.SYNTH][key] == expected[key].name
 
 
 def test_check_dependencies_keeps_fsl_engines_with_fsl(tmp_path):
