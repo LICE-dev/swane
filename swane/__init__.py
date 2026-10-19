@@ -1,4 +1,4 @@
-__version__ = "0.2.5"
+__version__ = "0.3"
 EXIT_CODE_REBOOT = -123
 
 # Install lightweight platform shims that do NOT import third-party libraries:
