@@ -172,41 +172,80 @@ This project includes subsection derived from other software, which licenses can
 
 ## Changelog
 
-### [Unreleased]
+### [0.3.1] - Unreleased
 
 #### Added
 
-- License consent gate: on startup (after the setup wizard) SWANe shows and requires acceptance of the licenses of the detected external tools (FSL, FreeSurfer, 3D Slicer, dcm2niix, ANTs/antspyx). Acceptance is stored per tool and re-prompted only when a tool's version changes.
-- Home dependency labels now include an inline link to each detected tool's license, opening the locally installed license file when available, otherwise the official source.
-- dipy tractography engine: added a CSD and RecoBundles tractography engine as an alternative to FSL XTRACT. A new global `tractography_engine` preference selects the engine (dipy is the default only when FSL is not mandatory).
-- On the first DTI tractography run, the ~649 MB HCP842 bundle atlas (`Atlas_80_Bundles` via dipy) is automatically downloaded into the local dipy directory.
-- dipy tractography results are exported as `.vtp` streamline bundle models in reference space rather than thresholded `.nii.gz` density maps; re-running an old subject will not reproduce its previous output.
-- Tracking defaults updated to use percentile-based FA stopping (`FA_STOP_PERCENTILE = 10%`, floored at 0.10) and volume-based seeding (`REFERENCE_VOXEL_MM3 = 2.2 mm³`) for consistent tracking across differing voxel sizes and contrasts.
-- Acoustic radiation (`ar`) produces no dipy bundle and remains FSL-only.
-- Low-confidence bundles are flagged rather than hidden: bundles that remain poorly matched to the atlas model after recovery retry generate a `r-<tract>_<side>.lowconf.json` sidecar (or `r-fx.lowconf.json` for fornix) and are labeled with `(LOW CONFIDENCE)` in 3D Slicer.
-- The dipy tractography engine requires a 6 GB RAM floor (`DIPY_TRACTOGRAPHY_RAM_REQUIREMENT`).
+- **Experimental native Windows support**: SWANe can be installed on Windows 10/11 with pip and run with the processing engines that do not need FSL and FreeSurfer (see [SWANe on Windows](https://github.com/LICE-dev/swane/wiki/05-SWANe-on-Windows)).
 
 #### Changed
 
-- Resting state fMRI requires FSL: it always runs on FSL MELODIC, whatever the fMRI engine preference (now labelled "Task fMRI engine", which only selects the task fMRI engine). Without FSL the "Resting State fMRI" optional series cannot be enabled, and a stored choice is turned off.
-- Resting state preference `melodic_dim` renamed `ic_dim`; existing configurations are migrated automatically.
-- Resting state results: the component time courses are saved as `ica_mix` (FSL results used `melodic_mix`); 3D Slicer still loads older result folders. Component maps remain `r-thresh_zstatNN.nii.gz`.
-- Resting state, FSL engine with ICA-AROMA: the ICA-AROMA decomposition and the denoising now use the data before the temporal high-pass, and the high-pass is applied after denoising, before the final MELODIC.
-- Python task fMRI engine: motion correction now uses a fixed random seed and a single thread, so the same input always gives the same output. It is slower, and results of earlier versions are not reproduced.
-- The FSL license is always shown at first launch, also when FSL is not installed, because it covers the MNI152NLin6Asym template used by SWANe.
-- FSL remains a mandatory dependency, and the FSL tools are the default brain extraction, tractography, segmentation and task fMRI engines (registration defaults to ANTs). SWANe can also run without FSL using the FSL-free engines (ANTs, antspynet, dipy, nilearn): a build-time flag (`FSL_MANDATORY` in `swane/config/dependency_policy.py`, currently `True`) set to `False` makes FSL a recommended dependency and the FSL-free engines the defaults. The FSL engines are disabled in the preferences when FSL is not installed, and stored FSL engine choices fall back to the default.
+- **FSL** is now a **recommended** dependency: SWANe runs all the analyses except the Resting State fMRI with the new default processing engines, which do not need FSL. The FSL engines can still be selected when FSL is installed; a stored FSL engine choice falls back to the default if FSL is not detected.
+- **New default processing engines**: ANTs (antspynet) for brain extraction, dipy (CSD + RecoBundles) for tractography, ANTs (antspyx Atropos) for tissue segmentation and Python (nilearn/scikit-learn) for task fMRI. Registration still runs with ANTs (antspyx).
+- **Resting State fMRI** requires FSL: without FSL the Resting State fMRI optional series cannot be enabled.
+
+### [0.3.0] - Unreleased
+
+#### Added
+
+- **SWANe installer** for Ubuntu and macOS: a single command creates a dedicated conda environment (`swane-env`) with Python 3.12 and SWANe, optionally installs a minimal FSL, installs the Ubuntu system packages and adds a `swane` launcher. It is now the recommended installation method (see [Getting Started](https://github.com/LICE-dev/swane/wiki/03-Getting-Started#quick-install-ubuntumacos)).
+- **Processing engines**: the former *Synth Tools* section of the Application Settings is now called **Processing engines** and lets the user choose the tool used for each processing step:
+  - **Brain extraction engine**: FSL BET (default), ANTs (antspynet) or FreeSurfer SynthStrip;
+  - **Registration engine**: ANTs (antspyx, default), FSL (FLIRT/FNIRT) or FreeSurfer SynthMorph;
+  - **Tractography engine**: FSL (XTRACT/probtrackx2, default) or dipy (CSD + RecoBundles, experimental);
+  - **Segmentation engine**: FSL (FAST, default) or ANTs (antspyx Atropos);
+  - **Task fMRI engine**: FSL (FEAT, default) or Python (nilearn/scikit-learn, experimental).
+- **ANTs registration**: linear and nonlinear registrations run by default with ANTs (antspyx), for every workflow.
+- **antspynet brain extraction** as an alternative to FSL BET, with a new *antspynet brain-extraction threshold* workflow preference.
+- **dipy tractography engine** (experimental, untested): constrained spherical deconvolution, probabilistic tracking and bundle recognition with RecoBundles and the HCP842 bundle atlas. New DTI preferences: *Cingulum*, *Seed density for tractography*, *Maximum tracking angle*, *Tracking step size*. Results are exported as streamline bundles; bundles poorly matched to the atlas are flagged as **(LOW CONFIDENCE)** in 3D Slicer.
+- **ANTs Atropos tissue segmentation** as an alternative to FSL FAST. The tissue segmentation is computed once on the 3D T1w and shared by the analyses that need it.
+- **Python task fMRI engine** (nilearn/scikit-learn, experimental, untested) as an alternative to FSL FEAT.
+- **FreeSurfer analysis step** workflow preference: *Disabled*, *SynthSeg Cortical Parcellation only*, *Surfaces + Cortical Parcellation*, *Complete Recon-all*.
+- **SynthSeg fast mode** workflow preference.
+- **Limit Synth tools CPU cores** application setting.
+- **Estimated RAM allocation per subject** and **Enable resource monitor** application settings.
+- **Third-party license consent**: at the first launch, and whenever the version of a detected tool changes, SWANe shows the licenses of the external tools (FSL, FreeSurfer, 3D Slicer, dcm2niix, antspyx, antspynet, dipy) and requires their acceptance.
+- **Home tab**: each detected dependency shows a link to its license, and a new **Atlases** column lists the atlases and templates used by SWANe with their licenses.
+- **Resting State fMRI**: the independent component time courses are saved as `ica_mix` and shown in 3D Slicer next to the component maps.
+- **Kurtosis** venous volume detection mode for Venous MRA, now the default.
+- Progress messages while the processing modules load and while templates, antspynet models and the dipy atlas are downloaded at workflow generation.
+- SWANe icon in the Linux taskbar/dock and Linux desktop entry.
+- Link to the FreeSurfer recon-all log in the subject log folder.
+
+#### Changed
+
+- **Python requirement**: from >=3.10 to >=3.12.
+- **FSL requirement**: from >=6.0.6 to >=6.0.7.8. FSL remains a mandatory dependency: in the next releases it will be possible to choose directly whether to use SWANe with or without FSL.
+- **dcm2niix** and **niimath** are now installed automatically as Python packages together with SWANe: a separate dcm2niix installation is no longer needed.
+- Image maths steps now run with niimath instead of fslmaths.
+- **Nipype** updated to 1.12; other Python package requirements updated.
+- The MNI and symmetric atlases are now downloaded from TemplateFlow at the first workflow generation; the `swane_supplement` package is no longer needed.
+- Bias field correction of the reference image with ANTs N4.
+- **Configuration Wizard** redesigned: the user chooses the share of the computer SWANe can use (Light, Balanced, High) and how many subjects can be analysed at the same time, then the processing engines, the GPU acceleration and the FreeSurfer outputs.
+- All the subject tabs together cannot use more than 90% of the RAM; the number of parallel subjects is also limited by the CPU cores.
+- ANTs registration RAM requirement lowered to 4 GB.
+- **Resting State fMRI** always runs on FSL MELODIC. The *Melodic dimensionality* preference is renamed **Independent Components to estimate** (existing configurations are migrated automatically).
+- **Resting State fMRI with ICA-AROMA**: decomposition and denoising use the data before the temporal high-pass filter, which is applied after denoising.
+- Venous CT and Stereo-EEG CT registrations follow the selected registration engine.
+- *FLIRT between modalities cost function* (ASL/PET) is used only with the FSL registration engine.
+- Preferences that cannot be used with the selected engines are hidden or disabled, with a tooltip explaining why.
+- Faster startup: dependency checks and processing modules are loaded in background.
+- The 3D Slicer installation is checked again at every startup.
+
+#### Removed
+
+- *CPU management for multicore steps* and *Exclude FreeSurfer Synth tools* application settings, replaced by the processing engine choices and the *Limit Synth tools CPU cores* setting.
+- fsaverage atlas references.
 
 #### Fixed
 
-- Without the FSL XTRACT data, the tracts supported by the dipy tractography engine are no longer removed from the DTI preferences.
-- niimath-based nodes always write compressed `.nii.gz` images, also when the FSL environment (`FSLOUTPUTTYPE`) is not set.
-- License consent preparation no longer repeats dependency detection on the GUI thread and keeps the interface responsive while license texts are resolved.
-- Changing the DTI CPU allocation no longer invalidates cached Eddy results.
-- DTI: FSL `eddy`'s rotated b-vectors are now used for tensor fitting (dtifit)
-  and bedpostx. Previously the unrotated vectors were used; rotating the volumes
-  without reorienting the gradients biased FA, MD and tractography in proportion
-  to subject motion (Leemans & Jones 2009). Re-processing a subject will not
-  reproduce results from earlier versions.
+- DTI: the b-vectors rotated by FSL `eddy` are now used by `dtifit` and `bedpostx`. Re-processing a subject will not reproduce the results of previous versions.
+- Changing the DTI CPU allocation no longer invalidates the cached Eddy results.
+- ASL/PET surface sampling no longer starts before recon-all completes.
+- Resting state model order estimation.
+- IC time course viewer with a single independent component.
+- Occasional 3D Slicer process hang.
+- Preference wizard window placement and FreeSurfer Synth checkbox availability on low-RAM computers.
 
 ### [0.2.1.1] - 2026-08-08
 
