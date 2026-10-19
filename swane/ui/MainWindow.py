@@ -947,7 +947,7 @@ class MainWindow(QMainWindow):
         x += 1
         self.home_grid_layout.addWidget(label_welcome3, x, 0, 1, 5)
         x += 1
-        if is_windows():
+        if is_windows() and not dependency_policy.FSL_MANDATORY:
             label_windows = QLabel(strings.windows_experimental_warn)
             label_windows.setWordWrap(True)
             self.home_grid_layout.addWidget(label_windows, x, 0, 1, 5)

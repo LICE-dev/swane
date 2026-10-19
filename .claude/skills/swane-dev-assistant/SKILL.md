@@ -11,7 +11,7 @@ Develop SWANe while preserving its workflow contracts, scientific behavior, pers
 
 ## Choose a reference
 
-Always read [references/architecture-and-change-map.md](references/architecture-and-change-map.md) first — it routes to the others based on what is changing.
+Always read [references/architecture-and-change-map.md](references/architecture-and-change-map.md) first — then pick the reference for the area that is changing from the table below.
 
 | Change area | Reference |
 |---|---|
@@ -25,7 +25,7 @@ Always read [references/architecture-and-change-map.md](references/architecture-
 
 1. Check the active branch and working tree (`git branch --show-current`, `git status --short --branch`).
 2. Trace the requested behavior end to end: configuration/input → subject state → `MainWorkflow` → subworkflow → Nipype interface/external tool → result/report → GUI or Slicer consumer.
-3. Identify the stable contracts touched by the change (see `CLAUDE.md`).
+3. Identify the stable contracts touched by the change (see `AGENTS.md`).
 4. Implement the smallest coherent change using existing abstractions and patterns.
 5. Add or update focused regression coverage — see [references/testing.md](references/testing.md).
 6. Run the narrowest useful checks first, then broaden validation in proportion to risk. Report every check that could not run and why.

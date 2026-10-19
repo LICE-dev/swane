@@ -4,7 +4,7 @@ Read this reference to decide which suite to run and how to add or update tests 
 
 ## Suites
 
-- **Light suite**: `swane/tests/{config,utils,workers,ui,installer,nipype_pipeline}` (includes `nipype_pipeline/matrix/`), run with `-m "not heavy"`. Headless (Qt forced offscreen by `swane/tests/conftest.py`). Needs no external tool for the vast majority of tests: `swane/tests/conftest.py` marks tests `requires_dcm2niix` / `requires_fsl` / `requires_freesurfer` / `requires_slicer` / `requires_display`, and auto-skips each one whose tool/display isn't detected — this is separate from, and in addition to, the `-m "not heavy"` marker filter.
+- **Light suite**: the whole tree, `pytest swane/tests -m "not heavy"` (as CI runs it; includes `patches/`, `installer/` and `nipype_pipeline/matrix/`). Headless (Qt forced offscreen by `swane/tests/conftest.py`). Needs no external tool for the vast majority of tests: `swane/tests/conftest.py` marks tests `requires_dcm2niix` / `requires_fsl` / `requires_freesurfer` / `requires_slicer` / `requires_display`, and auto-skips each one whose tool/display isn't detected — this is separate from, and in addition to, the `-m "not heavy"` marker filter.
 - **Heavy tests**: marked `@pytest.mark.heavy`, opt-in via `--run-heavy` (skipped by default even without `-m`), interleaved in the same directories, run against a real toolchain where nothing can be mocked (e.g. `workers/test_slicer_check_worker.py::TestSlicerCheckWorkerReal` against a real installed Slicer).
 - **Matrix (construction-only golden snapshots)**: `swane/tests/nipype_pipeline/matrix/` — see dedicated section below.
 - **Prerelease (real execution sweep)**: `swane/tests/prerelease/` — see dedicated section below.
@@ -20,11 +20,11 @@ python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
 
 **Pytest configuration.** `pytest.ini` and a root `conftest.py` live at the repository root (not in `swane/tests/`). The root conftest runs before pytest imports the `swane` package: it installs the Windows `pwd` stub and nipype's FSL-version fallback, which must exist before `swane` (and therefore `nipype.interfaces.fsl`) is imported. `swane/tests/conftest.py` keeps the fixtures, markers handling and `--run-heavy`.
 
-**Interpreter / environment.** Use an interpreter that has SWANe's runtime dependencies (nipype, PySide6, etc.) — a dedicated virtualenv/conda env — and never a neuroimaging tool's bundled Python (FSL's fslpython / FreeSurfer's fspython); see the interpreter rule in `CLAUDE.md` and verify with `python -c "import sys; print(sys.executable)"` before a general test run. If the environment carries a broken `datalad` pytest plugin (`ModuleNotFoundError: fasteners` at collection), add `-p no:datalad` to the pytest commands.
+**Interpreter / environment.** Use an interpreter that has SWANe's runtime dependencies (nipype, PySide6, etc.) — a dedicated virtualenv/conda env — and never a neuroimaging tool's bundled Python (FSL's fslpython / FreeSurfer's fspython); see the interpreter rule in `AGENTS.md` and verify with `python -c "import sys; print(sys.executable)"` before a general test run. If the environment carries a broken `datalad` pytest plugin (`ModuleNotFoundError: fasteners` at collection), add `-p no:datalad` to the pytest commands.
 
 ## Matrix — construction-only golden snapshots (delicate)
 
-`swane/tests/nipype_pipeline/matrix/` builds every workflow factory across a settings matrix (66 scenarios / 14 workflow families) and records each resulting graph as a deterministic, human-reviewed text snapshot in `snapshots/<workflow>/<scenario>.txt`. It never executes FSL/FreeSurfer/Slicer/dcm2niix and reads no real DICOM — it only asserts what graph SWANe *assembles* for a given preference combination. A handful of scenarios do read real FSL data files (MNI templates, XTRACT protocols) at construction time and **skip** (not fail) when that data is absent, via `conftest.require_fsl_data`.
+`swane/tests/nipype_pipeline/matrix/` builds every workflow factory across a settings matrix (88 scenarios / 16 workflow families at the time of writing; `MATRIX.md` has the current count) and records each resulting graph as a deterministic, human-reviewed text snapshot in `snapshots/<workflow>/<scenario>.txt`. It never executes FSL/FreeSurfer/Slicer/dcm2niix and reads no real DICOM — it only asserts what graph SWANe *assembles* for a given preference combination. A handful of scenarios do read real FSL data files (MNI templates, XTRACT protocols) at construction time and **skip** (not fail) when that data is absent, via `conftest.require_fsl_data`.
 
 - **Regression check** (run this for any change that could alter graph shape — node names, connections, boundary fields, conditional wiring):
   ```bash
@@ -61,7 +61,7 @@ python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
   python3 -m swane.tests.prerelease --view <pass_name>         # open finished pass in Slicer
   ```
   Pick `--ram` to what the machine actually has — Synth tools have hard floors (SynthStrip 5 GB, SynthMorph/SynthSeg 14 GB, Synth recon-all 20 GB on Linux); passes needing more are skipped, not OOM-killed.
-- A full sweep takes hours; progress is saved after every pass, so re-running the same command resumes. `--retry-failed` re-runs failed passes; `--no-resume` starts over.
+- A full sweep takes hours; progress is saved after every pass, so re-running the same command resumes and retries the passes that failed; `--no-resume` starts over.
 - Coverage is enforced, not just attempted: `plan.py`'s `coverage()` walks every settings axis and reports **unreachable** (host cannot run it — expected), **deferred** (a pass covers it but was skipped this run — expected for opt-in passes), or **missing** (no pass anywhere covers it — this is a plan bug and fails the sweep). Never treat a coverage hole as acceptable without checking which of the three it is.
 - Exit status is 0 only when every pass ran, every error-level check passed, and there are no coverage holes. Inspect `~/test_swane/prerelease/prerelease_report.html` for anything suspicious before treating a green sweep as sufficient scientific evidence.
 
@@ -83,7 +83,7 @@ python3 -m pytest swane/tests -m "not heavy" --color=yes --verbose
 4. For execution/scientific changes, run the relevant `prerelease/` pass(es) when the required tools are available.
 5. Review the test diff/output yourself — "no errors" is not sufficient without checking the test actually exercises the changed behavior.
 6. Note any check that could not run and why (missing tool, no display, no dataset).
-7. Confirm the change has been exercised on both Linux and macOS where the change can plausibly behave differently (subprocess paths, filesystem case-sensitivity, Qt/Slicer integration); state explicitly if only one platform was available. When developing on a non-Linux system, also run the Ubuntu jobs of the manual workflow (`-f os=ubuntu-latest`) for changes that can behave differently on Linux. Windows support is experimental: when a change can behave differently there (paths, quoting, subprocesses, multiprocessing), run the manual workflow below on Windows too.
+7. Confirm the change has been exercised on both Linux and macOS where the change can plausibly behave differently (subprocess paths, filesystem case-sensitivity, Qt/Slicer integration); state explicitly if only one platform was available. Covering a platform the host lacks means pushing the branch and dispatching the manual workflow below: ask the user before the push and again before launching the GitHub CI run, and if they decline, report the platform as unverified. When developing on a non-Linux system, also run the Ubuntu jobs of the manual workflow (`-f os=ubuntu-latest`) for changes that can behave differently on Linux. Windows support is experimental: when a change can behave differently there (paths, quoting, subprocesses, multiprocessing), run the manual workflow below on Windows too.
 
 ## Windows and macOS CI (manual workflow)
 
