@@ -204,13 +204,14 @@ def _probe_synth_ram(caps: Capabilities, test_run: bool = False) -> None:
     """Each Synth tool has its own RAM floor; check the allocated budget.
 
     ``test_run`` mirrors the sweep's own test_run mode: SynthSeg (``--fast``,
-    ``robust=False``) and SynthMorph (``steps=5``) then do less work and fit in
-    less RAM, so their floor is lowered by ``TEST_RUN_SYNTH_RAM_FACTOR``. This
-    must stay in lock-step with the per-node ``mem_gb`` those tools reserve
+    ``robust=False``), SynthMorph (``steps=5``) and Synth recon-all (lighter
+    iterations, SynthSeg ``--fast`` via the -expert file) then do less work and
+    fit in less RAM, so their floor is lowered by ``TEST_RUN_SYNTH_RAM_FACTOR``.
+    This must stay in lock-step with the per-node ``mem_gb`` those tools reserve
     under test_run (interfaces/utils.py, freesurfer_workflow.py): lower the gate but
     not the reservation and the pass is planned yet aborts in the plugin's
     prerun check; lower the reservation but not the gate and it is never planned.
-    SynthStrip and Synth recon-all have no such flag, so they are not scaled.
+    SynthStrip has no such flag, so it is not scaled.
     """
     has_synth = caps.has("freesurfer_synth")
     factor = ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR if test_run else 1.0
