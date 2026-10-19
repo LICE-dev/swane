@@ -1,4 +1,5 @@
 import os
+from html import escape
 from functools import partial
 from datetime import datetime
 from PySide6.QtCore import Qt, QFileSystemWatcher, QTimer, QUrl
@@ -31,6 +32,7 @@ from swane.workers.SlicerExportWorker import SlicerExportWorker
 from swane.workers.SlicerViewerWorker import SlicerViewerWorker
 from swane.workers.worker_pool import start_worker
 from swane.ui.CustomTreeWidgetItem import CustomTreeWidgetItem
+from swane.ui.HtmlItemDelegate import HtmlItemDelegate
 from swane.ui.PersistentProgressDialog import PersistentProgressDialog
 from swane.ui.PreferencesWindow import PreferencesWindow
 from swane.ui.VerticalScrollArea import VerticalScrollArea
@@ -88,6 +90,9 @@ class SubjectTab(QTabWidget):
         self.input_report = {}
         self.dicom_scan_series_list = []
         self.importable_series_list = QListWidget()
+        self.importable_series_list.setItemDelegate(
+            HtmlItemDelegate(self.importable_series_list)
+        )
         self.workflow_type_combo = None
         self.generate_workflow_button = None
         self.node_list_treeWidget = None
@@ -1325,15 +1330,22 @@ class SubjectTab(QTabWidget):
 
     @staticmethod
     def label_from_dicom(
-        frames: int, subject_name: str, mod: str, series_description: str, vols: int
+        frames: int,
+        subject_name: str,
+        mod: str,
+        series_description: str,
+        vols: int,
+        bold: bool = True,
     ) -> str:
         """
-        Compose dicom scan result into a readable label
+        Compose dicom scan result into a readable HTML label.
+
+        DICOM-derived text is HTML-escaped, so the label is safe to render as rich text.
 
         Parameters
         ----------
-        image_list : list[str]
-            The list of file found
+        frames : int
+            The number of frames found in the series
         subject_name: str
             The subject name found
         mod: str
@@ -1342,6 +1354,8 @@ class SubjectTab(QTabWidget):
             The series description found
         vols: int
             The volumes count found in the series
+        bold: bool
+            If True, the series description is wrapped in <b> tags. Default is True.
 
         Returns
         -------
@@ -1350,13 +1364,16 @@ class SubjectTab(QTabWidget):
         """
         try:
             # TODO: show correct image number for multiframe dicom
+            description = escape(series_description)
+            if bold:
+                description = "<b>" + description + "</b>"
             label = (
-                subject_name
+                escape(subject_name)
                 + " - "
-                + mod
-                + " - <b>"
-                + series_description
-                + "</b> :"
+                + escape(mod)
+                + " - "
+                + description
+                + ": "
                 + str(frames)
                 + " images, "
                 + str(vols)
@@ -1431,6 +1448,7 @@ class SubjectTab(QTabWidget):
                     frames, subject_name, mod, series_description, vols
                 )
 
+                # Index 5: escaped label without tags, for the rich-text auto-import prompt
                 self.dicom_scan_series_list.append(
                     [
                         label,
@@ -1438,6 +1456,14 @@ class SubjectTab(QTabWidget):
                         mod,
                         vols,
                         dicom_series.classification,
+                        SubjectTab.label_from_dicom(
+                            frames,
+                            subject_name,
+                            mod,
+                            series_description,
+                            vols,
+                            bold=False,
+                        ),
                     ]
                 )
 
@@ -1454,7 +1480,7 @@ class SubjectTab(QTabWidget):
                             msg_box = QMessageBox()
                             msg_box.setText(
                                 strings.subj_tab_found_series_type.format(
-                                    series_description=series[0],
+                                    series_description=series[5],
                                     data_label=data_input.value.label,
                                 )
                             )

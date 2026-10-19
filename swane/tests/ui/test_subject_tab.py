@@ -161,3 +161,207 @@ def test_workflow_crash_signal_updates_tab_states(
 
     tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_CRASHED))
     assert tab.workflow_had_error is True
+
+
+def test_label_from_dicom():
+    label_single = SubjectTab.label_from_dicom(176, "Subj01", "MR", "T1_MPRAGE", 1)
+    assert label_single == "Subj01 - MR - <b>T1_MPRAGE</b>: 176 images, 1 volume"
+
+    label_multi = SubjectTab.label_from_dicom(320, "Subj01", "MR", "DTI", 32)
+    assert label_multi == "Subj01 - MR - <b>DTI</b>: 320 images, 32 volumes"
+
+    # Exception safety
+    assert SubjectTab.label_from_dicom(None, None, None, None, None) == ""
+
+
+def test_label_from_dicom_escapes_dicom_text():
+    from PySide6.QtGui import QTextDocument
+
+    label = SubjectTab.label_from_dicom(10, "S<1>", "MR", "T1 <MPR> & 3D", 1)
+    assert "<MPR>" not in label
+    assert "&lt;MPR&gt; &amp; 3D" in label
+
+    # Rendered text must show the DICOM strings verbatim, with only the bold tag consumed
+    doc = QTextDocument()
+    doc.setHtml(label)
+    assert doc.toPlainText() == "S<1> - MR - T1 <MPR> & 3D: 10 images, 1 volume"
+
+    # An unbalanced tag in the description cannot break the surrounding markup
+    doc.setHtml(SubjectTab.label_from_dicom(10, "S", "MR", "<b>x", 1))
+    assert doc.toPlainText() == "S - MR - <b>x: 10 images, 1 volume"
+
+
+def test_label_from_dicom_without_bold():
+    label = SubjectTab.label_from_dicom(176, "S", "MR", "T1 & T2", 1, bold=False)
+    assert label == "S - MR - T1 &amp; T2: 176 images, 1 volume"
+
+
+def test_importable_series_list_delegate(qtbot, main_window):
+    from swane.ui.HtmlItemDelegate import HtmlItemDelegate
+
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_delegate",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+
+    assert isinstance(tab.importable_series_list.itemDelegate(), HtmlItemDelegate)
+
+
+def test_show_scan_result_populates_importable_series_list(
+    qtbot, main_window, tmp_path
+):
+    from swane.config.config_enums import GlobalPrefCategoryList
+
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_scan_result",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+
+    main_window.global_config.set(
+        str(GlobalPrefCategoryList.MAIN), "auto_import", "False"
+    )
+
+    scan_dir = tmp_path / "dicom_scan"
+    scan_dir.mkdir()
+
+    class FakeSeries:
+        frames = 176
+        modality = "MR"
+        description = "T1_MPRAGE"
+        volumes = 1
+        dicom_locs = ["file1.dcm", "file2.dcm"]
+        classification = None
+
+    class FakeSubject:
+        subject_name = "Subject01"
+
+    class FakeTree:
+        dicom_subjects = {"subj1": FakeSubject()}
+
+        @staticmethod
+        def get_subject_list():
+            return ["subj1"]
+
+        @staticmethod
+        def get_studies_list(s):
+            return ["study1"]
+
+        @staticmethod
+        def get_series_list(s, st):
+            return ["series1"]
+
+        @staticmethod
+        def get_series(s, st, se):
+            return FakeSeries()
+
+    class FakeWorker:
+        dicom_dir = str(scan_dir)
+        tree = FakeTree()
+        error_message = ""
+
+    tab.show_scan_result(FakeWorker())
+
+    assert len(tab.dicom_scan_series_list) == 1
+    assert tab.importable_series_list.count() == 1
+    expected_label = "Subject01 - MR - <b>T1_MPRAGE</b>: 176 images, 1 volume"
+    assert tab.importable_series_list.item(0).text() == expected_label
+    # Tag-free variant used by the auto-import prompt
+    assert (
+        tab.dicom_scan_series_list[0][5]
+        == "Subject01 - MR - T1_MPRAGE: 176 images, 1 volume"
+    )
+
+    tab.clear_scan_result()
+    assert len(tab.dicom_scan_series_list) == 0
+    assert tab.importable_series_list.count() == 0
+
+
+def test_auto_import_prompt_uses_tag_free_label(
+    qtbot, main_window, tmp_path, monkeypatch
+):
+    from swane.config.config_enums import GlobalPrefCategoryList
+    import importlib
+
+    subject_tab_module = importlib.import_module("swane.ui.SubjectTab")
+    from PySide6.QtWidgets import QMessageBox
+
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_auto_import",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+
+    main_window.global_config.set(
+        str(GlobalPrefCategoryList.MAIN), "auto_import", "True"
+    )
+    data_input = next(iter(subject.input_state_list))
+    scan_dir = tmp_path / "dicom_scan"
+    scan_dir.mkdir()
+
+    class FakeSeries:
+        frames = 10
+        modality = "MR"
+        description = "T1 <MPR>"
+        volumes = 1
+        dicom_locs = ["file1.dcm"]
+        classification = data_input.value.name
+
+    class FakeSubject:
+        subject_name = "Subject01"
+
+    class FakeTree:
+        dicom_subjects = {"subj1": FakeSubject()}
+
+        @staticmethod
+        def get_subject_list():
+            return ["subj1"]
+
+        @staticmethod
+        def get_studies_list(s):
+            return ["study1"]
+
+        @staticmethod
+        def get_series_list(s, st):
+            return ["series1"]
+
+        @staticmethod
+        def get_series(s, st, se):
+            return FakeSeries()
+
+    class FakeWorker:
+        dicom_dir = str(scan_dir)
+        tree = FakeTree()
+        error_message = ""
+
+    texts = []
+
+    class FakeMessageBox:
+        Icon = QMessageBox.Icon
+        StandardButton = QMessageBox.StandardButton
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def setText(self, text):
+            texts.append(text)
+
+        def exec(self):
+            return QMessageBox.StandardButton.No
+
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: None
+
+    monkeypatch.setattr(subject_tab_module, "QMessageBox", FakeMessageBox)
+    tab.show_scan_result(FakeWorker())
+
+    assert len(texts) == 1
+    assert "T1 &lt;MPR&gt;" in texts[0]
+    assert "<b>T1" not in texts[0]
