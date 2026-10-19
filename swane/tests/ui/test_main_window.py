@@ -103,3 +103,11 @@ def test_update_available_shows_conda_installer_command(monkeypatch, main_window
         in captured["text"]
     )
     assert "pip3 install --upgrade swane" not in captured["text"]
+
+
+def test_about_changelog_link_points_to_wiki_12_changelog():
+    from swane.resources import strings
+
+    assert strings.aboutwindow_wiki_changelog == (
+        "Link to versions <a href='https://github.com/LICE-dev/swane/wiki/12-Changelog'>changelog</a>"
+    )
