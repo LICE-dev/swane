@@ -1078,6 +1078,13 @@ class DipyRecoBundlesChunkerRamEstimator(RamEstimator):
     fits the RAM budget, using :class:`RecoBundlesRamEstimator`'s model, and
     injects it as the tuned ``n_chunks`` parameter (applied to the node before
     it runs).
+
+    Unlike the other tuned parameters (thread counts, streaming buffer sizes),
+    ``n_chunks`` is NOT quality-neutral and stays hashed: RecoBundles clusters
+    and recognises each chunk separately, so the bundles depend on the RAM
+    budget (the subject's ``ram_gb``). The same subject with a different
+    ``ram_gb`` may give different bundles, and changing ``ram_gb`` reruns the
+    bundle stage.
     """
 
     def __init__(self):

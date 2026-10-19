@@ -56,7 +56,9 @@ class DipyTractogramChunkerInputSpec(BaseInterfaceInputSpec):
         1,
         usedefault=True,
         desc="number of representative sub-tractograms to produce (>=1); 1 is a "
-        "pass-through of the whole tractogram",
+        "pass-through of the whole tractogram. Chosen from the RAM budget by "
+        "DipyRecoBundlesChunkerRamEstimator and hashed on purpose: it changes "
+        "the recognised bundles, so they depend on the RAM preference",
     )
     out_prefix = traits.Str(desc="basename prefix for the written chunk files")
 

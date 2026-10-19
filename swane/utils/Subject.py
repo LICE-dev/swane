@@ -397,7 +397,7 @@ class Subject:
 
         """
         self.config = ConfigManager(self.folder, global_config=self.global_config)
-        self.config.check_dependencies(dependency_manager)
+        self.config.check_dependencies(dependency_manager, self.global_config)
 
     def dicom_folder(self, data_input: DataInputList = None) -> str:
         """

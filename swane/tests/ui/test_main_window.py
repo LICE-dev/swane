@@ -111,3 +111,36 @@ def test_about_changelog_link_points_to_wiki_12_changelog():
     assert strings.aboutwindow_wiki_changelog == (
         "Link to versions <a href='https://github.com/LICE-dev/swane/wiki/12-Changelog'>changelog</a>"
     )
+
+
+def test_saving_preferences_revalidates_ram_requirements(monkeypatch, main_window):
+    """A lower ram_gb saved from the Global Preferences must not leave an
+    engine selected whose RAM requirement no longer fits (S3.2): its node
+    would exceed the workflow budget and every workflow would be refused.
+    """
+    import swane.ui.MainWindow as main_window_module
+    from swane.config.config_enums import DeskullEngine, GlobalPrefCategoryList
+
+    config = main_window.global_config
+    synth = GlobalPrefCategoryList.SYNTH
+    config[synth]["deskull_engine"] = DeskullEngine.ANTSPYNET.name
+
+    class _SavedLowRam:
+        """Stands in for the dialog: saves a ram_gb below ANTSPYNET's 5 GB."""
+
+        def __init__(self, global_config, *args):
+            self.global_config = global_config
+
+        def exec(self):
+            self.global_config[GlobalPrefCategoryList.PERFORMANCE]["ram_gb"] = "2.5"
+            self.global_config.save()
+            return 1
+
+    # BET (no RAM requirement) is the engine left that fits on any host.
+    monkeypatch.setattr(main_window.dependency_manager, "is_fsl", lambda: True)
+    monkeypatch.setattr(main_window, "check_running_workflows", lambda: False)
+    monkeypatch.setattr(main_window_module, "PreferencesWindow", _SavedLowRam)
+
+    main_window.edit_config()
+
+    assert config.getenum_safe(synth, "deskull_engine") != DeskullEngine.ANTSPYNET
