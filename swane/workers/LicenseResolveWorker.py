@@ -7,8 +7,6 @@ from swane.utils.license_consent import (
     resolve_license_text,
 )
 
-MAX_LICENSE_RESOLVE_WORKERS = 5
-
 
 class LicenseResolveSignaler(QObject):
     resolved = Signal(list)
@@ -40,11 +38,11 @@ class LicenseResolveWorker(QRunnable):
                 self.signal.resolved.emit([])
                 return
 
-            # At most five tools participate in the gate. Resolving all of them
-            # concurrently turns the network wait into one bounded timeout
-            # window instead of accumulating one timeout per missing local file.
+            # Resolve every tool of the gate concurrently (one thread each), so
+            # the network wait is one bounded timeout window instead of one
+            # timeout per missing local file.
             resolved = [None] * len(self.tool_ids)
-            max_workers = min(MAX_LICENSE_RESOLVE_WORKERS, len(self.tool_ids))
+            max_workers = len(self.tool_ids)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
                     executor.submit(
