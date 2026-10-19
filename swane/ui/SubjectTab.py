@@ -106,6 +106,9 @@ class SubjectTab(QTabWidget):
         self.result_tree = None
         self.generate_scene_button = None
         self.workflow_had_error = False
+        # What the running workflow already reported, to word its final notice
+        self.workflow_node_failed = False
+        self.workflow_resources_notified = False
         self.progress: PersistentProgressDialog = None
 
         self.data_tab_ui()
@@ -167,20 +170,29 @@ class SubjectTab(QTabWidget):
                 self.workflow_process.stop_event.set()
             except Exception:
                 pass
+            self.workflow_resources_notified = True
+            self.workflow_had_error = True
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_wf_insufficient_resources)
             msg_box.exec()
-            self.workflow_had_error = True
             return
         elif wf_report.signal_type == WorkflowSignals.WORKFLOW_CRASHED:
             try:
                 self.workflow_process.stop_event.set()
             except Exception:
                 pass
-            msg_box = QMessageBox()
-            msg_box.setText(strings.subj_tab_wf_crashed)
-            msg_box.exec()
             self.workflow_had_error = True
+            # The workflow process reports every failed run as crashed: word the
+            # notice after what was already reported, and do not repeat the
+            # insufficient resources one
+            if self.workflow_resources_notified:
+                return
+            msg_box = QMessageBox()
+            if self.workflow_node_failed:
+                msg_box.setText(strings.subj_tab_wf_node_failed)
+            else:
+                msg_box.setText(strings.subj_tab_wf_crashed)
+            msg_box.exec()
             return
 
         if wf_report.signal_type == WorkflowSignals.NODE_STARTED:
@@ -190,6 +202,7 @@ class SubjectTab(QTabWidget):
         else:
             icon = self.main_window.ERROR_ICON_FILE
             self.workflow_had_error = True
+            self.workflow_node_failed = True
             # Mail manager initialization
             mail_manager = self.global_config.get_mail_manager()
             if mail_manager is not None:
@@ -783,6 +796,8 @@ class SubjectTab(QTabWidget):
 
         # Workflow not started
         if not self.subject.is_workflow_process_alive():
+            self.workflow_node_failed = False
+            self.workflow_resources_notified = False
             workflow_start_ret = self.subject.start_workflow(
                 resume=resume,
                 resume_freesurfer=resume_freesurfer,
@@ -1327,6 +1342,8 @@ class SubjectTab(QTabWidget):
             self.workflow_type_combo.setEnabled(True)
             self.subject_config_button.setEnabled(True)
             self.workflow_had_error = False
+            self.workflow_node_failed = False
+            self.workflow_resources_notified = False
 
     @staticmethod
     def label_from_dicom(
