@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QSpinBox,
-    QMessageBox,
 )
 
 from swane.resources import strings
@@ -76,39 +75,6 @@ RESOURCE_LEVELS = [
 ]
 
 
-def low_subject_resources(subjects: int, ram_gb: float, cpu: int) -> dict:
-    """
-    Warnings for the resources per subject below ResourceManager.LOW_SUBJECT_RAM_GB
-    or ResourceManager.LOW_SUBJECT_CPU.
-
-    Parameters
-    ----------
-    subjects : int
-        Subjects analysed at the same time.
-    ram_gb : float
-        RAM per subject.
-    cpu : int
-        CPU cores per subject.
-
-    Returns
-    -------
-    dict
-        "ram" and/or "cpu" -> warning text, only for the low resources.
-
-    """
-
-    warnings = {}
-    if ram_gb < ResourceManager.LOW_SUBJECT_RAM_GB:
-        warnings["ram"] = strings.low_subject_ram_warning.format(
-            subjects=subjects, ram_gb=ram_gb, limit=ResourceManager.LOW_SUBJECT_RAM_GB
-        )
-    if cpu < ResourceManager.LOW_SUBJECT_CPU:
-        warnings["cpu"] = strings.low_subject_cpu_warning.format(
-            subjects=subjects, cpu=cpu, limit=ResourceManager.LOW_SUBJECT_CPU
-        )
-    return warnings
-
-
 @dataclass
 class UserPreferences:
     """
@@ -121,8 +87,8 @@ class UserPreferences:
     ----------
     performance_profile : PerformanceProfile
         Share of this computer SWANe can use.
-    parallel_subjects : int
-        Subjects analysed at the same time, sharing the profile resources.
+    max_subj : int
+        Subject tab limit; each tab can use all the profile resources.
     gpu_capable : bool
         Whether the current system appears to support GPU/CUDA acceleration.
     use_gpu_acceleration : bool
@@ -142,7 +108,7 @@ class UserPreferences:
     """
 
     performance_profile: PerformanceProfile = PerformanceProfile.BALANCED
-    parallel_subjects: int = 1
+    max_subj: int = 1
 
     gpu_capable: bool = False
     use_gpu_acceleration: bool = False
@@ -173,8 +139,9 @@ class WizardPlan:
     Attributes
     ----------
     resources : dict
-        PERFORMANCE preferences set by the profile (ram_gb, max_subj_cpu,
-        max_subj), see ConfigManager.get_resource_profile_values.
+        PERFORMANCE preferences of the resource choice: ram_gb and
+        max_subj_cpu set by the profile (see
+        ConfigManager.get_resource_profile_values) and max_subj.
     cuda : bool
         CUDA preference.
     engines : dict
@@ -321,7 +288,7 @@ class PreferenceWizardWindow(QDialog):
 
         if self.first_run:
             prefs.performance_profile = PerformanceProfile.BALANCED
-            prefs.parallel_subjects = 1
+            prefs.max_subj = 1
             prefs.use_gpu_acceleration = prefs.gpu_capable
             ram_gb = self._resources()["ram_gb"]
             prefs.use_synth_freesurfer = (
@@ -338,18 +305,15 @@ class PreferenceWizardWindow(QDialog):
         config = self.global_config
         perf = GlobalPrefCategoryList.PERFORMANCE
         ram_gb = config.getfloat_safe(perf, "ram_gb")
-        max_subj = max(1, config.get_max_subject_tabs())
 
-        # Closest resource level to the current total RAM allocation
-        current_total = ram_gb * max_subj
+        # Closest resource level to the current RAM per subject tab
         prefs.performance_profile = min(
             (level for level, _ in RESOURCE_LEVELS),
-            key=lambda level: abs(
-                ConfigManager.get_resource_budget(level)[0] - current_total
-            ),
+            key=lambda level: abs(ConfigManager.get_resource_budget(level)[0] - ram_gb),
         )
-        prefs.parallel_subjects = min(
-            max_subj, ConfigManager.get_max_parallel_subjects(prefs.performance_profile)
+        prefs.max_subj = min(
+            max(1, config.get_max_subject_tabs()),
+            ResourceManager.MAX_PARALLEL_SUBJECTS,
         )
 
         prefs.use_gpu_acceleration = prefs.gpu_capable and config.getboolean_safe(
@@ -507,9 +471,8 @@ class PreferenceWizardWindow(QDialog):
         Creates the page that asks how much of this computer SWANe can use.
 
         The user picks one of three resource levels (each showing the RAM and
-        CPU cores it allows) and how many subjects are analysed at the same
-        time. The level resources are split among those subjects, so all the
-        subject tabs together never exceed the chosen share.
+        CPU cores it allows) and the subject tab limit. Each subject tab can
+        use all the level resources: they are not split among the tabs.
 
         Returns
         -------
@@ -543,24 +506,20 @@ class PreferenceWizardWindow(QDialog):
             self._perf_buttons[level] = button
             lay.addWidget(button)
 
-        parallel_row = QHBoxLayout()
-        parallel_row.addWidget(QLabel(strings.wizard_parallel_subjects))
-        self._parallel_spin = QSpinBox()
-        self._parallel_spin.setMinimum(1)
-        parallel_row.addWidget(self._parallel_spin)
-        parallel_row.addStretch(1)
+        max_subj_row = QHBoxLayout()
+        max_subj_row.addWidget(QLabel(strings.wizard_max_subj))
+        self._max_subj_spin = QSpinBox()
+        self._max_subj_spin.setRange(1, ResourceManager.MAX_PARALLEL_SUBJECTS)
+        self._max_subj_spin.setValue(self.user_prefs.max_subj)
+        max_subj_row.addWidget(self._max_subj_spin)
+        max_subj_row.addStretch(1)
         lay.addSpacing(8)
-        lay.addLayout(parallel_row)
+        lay.addLayout(max_subj_row)
 
         self._per_subject_label = QLabel("")
         self._per_subject_label.setWordWrap(True)
         self._per_subject_label.setTextFormat(Qt.TextFormat.RichText)
         lay.addWidget(self._per_subject_label)
-
-        self._low_resources_label = QLabel("")
-        self._low_resources_label.setWordWrap(True)
-        self._low_resources_label.setStyleSheet("color: #c0392b;")
-        lay.addWidget(self._low_resources_label)
 
         if not self.first_run:
             current = QLabel(self._current_resources_text())
@@ -579,7 +538,7 @@ class PreferenceWizardWindow(QDialog):
                 lambda checked, my_level=level: checked
                 and self._set_performance_profile(my_level)
             )
-        self._parallel_spin.valueChanged.connect(self._set_parallel_subjects)
+        self._max_subj_spin.valueChanged.connect(self._set_max_subj)
 
         return page
 
@@ -606,8 +565,8 @@ class PreferenceWizardWindow(QDialog):
 
     def _set_performance_profile(self, profile: PerformanceProfile) -> None:
         """
-        Stores the chosen resource level and bounds the parallel subjects to
-        its CPU cores (at least one per subject).
+        Stores the chosen resource level and refreshes the resources per
+        subject tab.
 
         Parameters
         ----------
@@ -621,26 +580,21 @@ class PreferenceWizardWindow(QDialog):
         """
 
         self.user_prefs.performance_profile = profile
-        max_parallel = ConfigManager.get_max_parallel_subjects(profile)
-        self._parallel_spin.blockSignals(True)
-        self._parallel_spin.setMaximum(max_parallel)
-        self._parallel_spin.setValue(
-            min(max(1, self.user_prefs.parallel_subjects), max_parallel)
+        resources = self._resources()
+        self._per_subject_label.setText(
+            strings.wizard_per_subject_resources.format(
+                ram_gb=float(resources["ram_gb"]), cpu=int(resources["max_subj_cpu"])
+            )
         )
-        self._parallel_spin.blockSignals(False)
-        self._set_parallel_subjects(self._parallel_spin.value())
 
-    def _set_parallel_subjects(self, value: int) -> None:
+    def _set_max_subj(self, value: int) -> None:
         """
-        Stores the parallel subjects and refreshes the per-subject resources.
-        Adding a subject that brings the RAM or the CPU cores per subject
-        below ResourceManager.LOW_SUBJECT_RAM_GB / LOW_SUBJECT_CPU raises an
-        alert.
+        Stores the subject tab limit.
 
         Parameters
         ----------
         value : int
-            Subjects analysed at the same time.
+            Subject tab limit.
 
         Returns
         -------
@@ -648,54 +602,7 @@ class PreferenceWizardWindow(QDialog):
 
         """
 
-        previous = self._resources()
-        added = int(value) > self.user_prefs.parallel_subjects
-        self.user_prefs.parallel_subjects = int(value)
-        resources = self._resources()
-        ram_gb = float(resources["ram_gb"])
-        cpu = int(resources["max_subj_cpu"])
-        self._per_subject_label.setText(
-            strings.wizard_per_subject_resources.format(ram_gb=ram_gb, cpu=cpu)
-        )
-
-        # Warnings are about splitting the share: a single subject has it all
-        warnings = (
-            low_subject_resources(resources["max_subj"], ram_gb, cpu)
-            if resources["max_subj"] > 1
-            else {}
-        )
-        self._low_resources_label.setText("<br>".join(warnings.values()))
-        self._low_resources_label.setVisible(bool(warnings))
-
-        if added:
-            lowered = [
-                warnings[key]
-                for key, before, now in (
-                    ("ram", float(previous["ram_gb"]), ram_gb),
-                    ("cpu", int(previous["max_subj_cpu"]), cpu),
-                )
-                if key in warnings and now < before
-            ]
-            if lowered:
-                self._alert_low_subject_resources("\n\n".join(lowered))
-
-    def _alert_low_subject_resources(self, warning: str) -> None:
-        """
-        Alerts that the RAM or CPU cores per subject fell below
-        ResourceManager.LOW_SUBJECT_RAM_GB / LOW_SUBJECT_CPU.
-
-        Parameters
-        ----------
-        warning : str
-            The alert text.
-
-        Returns
-        -------
-        None.
-
-        """
-
-        QMessageBox.warning(self, strings.low_subject_resources_title, warning)
+        self.user_prefs.max_subj = int(value)
 
     def _resources(self) -> dict:
         """
@@ -706,9 +613,12 @@ class PreferenceWizardWindow(QDialog):
 
         """
 
-        return ConfigManager.get_resource_profile_values(
-            self.user_prefs.performance_profile, self.user_prefs.parallel_subjects
-        )
+        return {
+            **ConfigManager.get_resource_profile_values(
+                self.user_prefs.performance_profile
+            ),
+            "max_subj": self.user_prefs.max_subj,
+        }
 
     # --------------------------
     # Page: Hardware Acceleration (optional)
@@ -1140,7 +1050,6 @@ class PreferenceWizardWindow(QDialog):
             )
             + "<br />"
             + strings.wizard_resources.format(
-                total_gb=plan.ram_gb * int(resources["max_subj"]),
                 machine_gb=ResourceManager.total_memory_gb(),
                 max_subj=resources["max_subj"],
                 ram_gb=plan.ram_gb,
@@ -1576,10 +1485,9 @@ class PreferenceWizardWindow(QDialog):
 
         """
 
-        self.global_config.apply_resource_profile(
-            self.user_prefs.performance_profile, self.user_prefs.parallel_subjects
-        )
+        self.global_config.apply_resource_profile(self.user_prefs.performance_profile)
         perf = GlobalPrefCategoryList.PERFORMANCE
+        self.global_config[perf]["max_subj"] = str(self.user_prefs.max_subj)
         plan = self._build_plan(
             {
                 "ram_gb": self.global_config.getfloat_safe(perf, "ram_gb"),

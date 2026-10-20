@@ -124,10 +124,6 @@ class ConfigManager(configparser.ConfigParser):
                 self[GlobalPrefCategoryList.MAIN] = {}
             self[GlobalPrefCategoryList.MAIN]["last_swane_version"] = __version__
 
-        # Configurations saved by older versions may let the subject tabs
-        # together request more RAM than the computer has.
-        self.enforce_resource_limit()
-
         self.save()
 
     def reload(self):
@@ -1061,7 +1057,7 @@ class ConfigManager(configparser.ConfigParser):
 
     #: Share of this computer each resource profile lets SWANe use, as
     #: (percentage of the total RAM, fraction of the CPU cores). The share is
-    #: the total for all the subjects analysed at the same time.
+    #: what each subject tab can use, whatever the number of tabs.
     RESOURCE_PROFILE_SHARES = {
         PerformanceProfile.LOW_RESOURCE: (ResourceManager.MINIMUM_RAM_PERC, 1 / 3),
         PerformanceProfile.BALANCED: (ResourceManager.DEFAULT_RAM_PERC, 1 / 2),
@@ -1071,7 +1067,7 @@ class ConfigManager(configparser.ConfigParser):
     @staticmethod
     def get_resource_budget(profile: PerformanceProfile) -> tuple[float, int]:
         """
-        Total RAM and CPU cores a resource profile lets SWANe use.
+        RAM and CPU cores a resource profile lets each subject tab use.
 
         Parameters
         ----------
@@ -1080,8 +1076,7 @@ class ConfigManager(configparser.ConfigParser):
 
         Returns
         -------
-        The RAM in GB and the number of CPU cores, both shared by all the
-        subjects analysed at the same time.
+        The RAM in GB and the number of CPU cores of each subject tab.
         """
         ram_perc, cpu_fraction = ConfigManager.RESOURCE_PROFILE_SHARES[profile]
         ram_gb = ResourceManager.get_ram_by_perc(ram_perc)
@@ -1089,41 +1084,17 @@ class ConfigManager(configparser.ConfigParser):
         return ram_gb, cpu
 
     @staticmethod
-    def get_max_parallel_subjects(profile: PerformanceProfile) -> int:
-        """
-        Most subjects a resource profile can analyse at the same time: each
-        one needs at least one of the profile CPU cores.
-
-        Parameters
-        ----------
-        profile: PerformanceProfile
-            The resource profile.
-
-        Returns
-        -------
-        The maximum number of subjects analysed at the same time.
-        """
-        _, cpu = ConfigManager.get_resource_budget(profile)
-        return max(1, min(ResourceManager.get_max_parallel_subjects(), cpu))
-
-    @staticmethod
-    def get_resource_profile_values(
-        profile: PerformanceProfile, parallel_subjects: int = 1
-    ) -> dict:
+    def get_resource_profile_values(profile: PerformanceProfile) -> dict:
         """
         Performance preferences that a resource profile sets.
 
-        The profile budget (see get_resource_budget) is split among the
-        subjects analysed at the same time, so that all the subject tabs
-        together never exceed its RAM or its CPU cores.
+        The values apply to each subject tab, whatever the subject tab limit:
+        they are never split among the tabs.
 
         Parameters
         ----------
         profile: PerformanceProfile
             The resource profile.
-        parallel_subjects: int, optional
-            Subjects analysed at the same time (the subject tab limit), clamped
-            to 1..get_max_parallel_subjects(profile). Default is 1.
 
         Returns
         -------
@@ -1131,64 +1102,15 @@ class ConfigManager(configparser.ConfigParser):
         (non-serialized) value.
         """
         ram_gb, cpu = ConfigManager.get_resource_budget(profile)
-        parallel_subjects = max(
-            1,
-            min(
-                int(parallel_subjects), ConfigManager.get_max_parallel_subjects(profile)
-            ),
-        )
         return {
-            "ram_gb": math.floor(ram_gb / parallel_subjects * 100) / 100,
-            "max_subj_cpu": max(1, cpu // parallel_subjects),
-            "max_subj": parallel_subjects,
+            "ram_gb": math.floor(ram_gb * 100) / 100,
+            "max_subj_cpu": cpu,
         }
 
-    def apply_resource_profile(
-        self, profile: PerformanceProfile, parallel_subjects: int = 1
-    ):
+    def apply_resource_profile(self, profile: PerformanceProfile):
 
         if not self.global_config:
             return
 
-        for key, value in ConfigManager.get_resource_profile_values(
-            profile, parallel_subjects
-        ).items():
+        for key, value in ConfigManager.get_resource_profile_values(profile).items():
             self[GlobalPrefCategoryList.PERFORMANCE][key] = str(value)
-
-    def enforce_resource_limit(self) -> bool:
-        """
-        Keeps all the subject tabs together within the RAM share
-        (ResourceManager.get_maximum_ram) and the CPU cores of this computer,
-        lowering the subject tab limit, the RAM per subject and the CPU cores
-        per subject when needed.
-
-        Returns
-        -------
-        True if a value was lowered.
-        """
-
-        if not self.global_config:
-            return False
-
-        perf = GlobalPrefCategoryList.PERFORMANCE
-        changed = False
-
-        max_subj = max(1, self.getint_safe(perf, "max_subj"))
-        if max_subj > ResourceManager.get_max_parallel_subjects():
-            max_subj = ResourceManager.get_max_parallel_subjects()
-            self[perf]["max_subj"] = str(max_subj)
-            changed = True
-
-        ram_limit = ResourceManager.get_max_subject_ram(max_subj)
-        if self.getfloat_safe(perf, "ram_gb") > ram_limit:
-            self[perf]["ram_gb"] = str(ram_limit)
-            changed = True
-
-        # With one subject "no limit" (-1) is all the cores, which is fine
-        cpu = self.getint_safe(perf, "max_subj_cpu")
-        cpu_limit = ResourceManager.get_max_subject_cpu(max_subj)
-        if max_subj > 1 and (cpu < 1 or cpu > cpu_limit):
-            self[perf]["max_subj_cpu"] = str(cpu_limit)
-            changed = True
-
-        return changed

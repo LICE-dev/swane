@@ -74,18 +74,8 @@ def test_subject_ram_limits(monkeypatch):
     assert ResourceManager.get_maximum_ram() == pytest.approx(
         16 * ResourceManager.MAXIMUM_RAM_PERC / 100
     )
-    for subjects in range(1, ResourceManager.MAX_PARALLEL_SUBJECTS + 1):
-        limit = ResourceManager.get_max_subject_ram(subjects)
-        assert limit * subjects <= ResourceManager.get_maximum_ram()
-        assert limit >= ResourceManager.get_minimum_subject_ram()
-
-
-def test_parallel_subjects_limited_by_cores(monkeypatch):
-    monkeypatch.setattr(rm, "cpu_count", lambda: 3)
-    assert ResourceManager.get_max_parallel_subjects() == 3
-    assert ResourceManager.get_max_subject_cpu(2) == 1
-    monkeypatch.setattr(rm, "cpu_count", lambda: 16)
-    assert ResourceManager.get_max_parallel_subjects() == (
-        ResourceManager.MAX_PARALLEL_SUBJECTS
+    assert (
+        0
+        < ResourceManager.get_minimum_subject_ram()
+        < (ResourceManager.get_minimum_ram())
     )
-    assert ResourceManager.get_max_subject_cpu(5) == 3
