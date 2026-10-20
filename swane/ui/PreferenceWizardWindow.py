@@ -80,8 +80,8 @@ class UserPreferences:
     """
     Container for the choices collected by the configuration wizard.
 
-    On the first run the choices start from the recommendations for this
-    computer; on later runs they start from the current configuration.
+    The choices always start from the recommendations for this computer,
+    whatever the current configuration.
 
     Attributes
     ----------
@@ -192,9 +192,6 @@ class PreferenceWizardWindow(QDialog):
         SWANe global configuration, updated and saved when the user applies.
     dependency_manager : DependencyManager
         SWANe dependency manager used to check the installed tools.
-    first_run : bool, optional
-        If True the choices start from the recommendations for this computer,
-        otherwise from the current configuration. Default is False.
     parent : QWidget, optional
         Parent widget.
 
@@ -204,8 +201,6 @@ class PreferenceWizardWindow(QDialog):
         Stored configuration object passed to the constructor.
     dependency_manager : DependencyManager
         Stored dependency manager passed to the constructor.
-    first_run : bool
-        Whether the wizard started from the recommendations.
     user_prefs : UserPreferences
         The in-memory container of user choices collected by the wizard.
 
@@ -215,14 +210,12 @@ class PreferenceWizardWindow(QDialog):
         self,
         global_config: ConfigManager,
         dependency_manager: DependencyManager,
-        first_run: bool = False,
         parent=None,
     ):
         super(PreferenceWizardWindow, self).__init__(parent)
 
         self.global_config: ConfigManager = global_config
         self.dependency_manager: DependencyManager = dependency_manager
-        self.first_run = first_run
         self.user_prefs = UserPreferences()
 
         self.setWindowTitle(strings.preference_wizard_title)
@@ -275,8 +268,8 @@ class PreferenceWizardWindow(QDialog):
 
     def _load_initial_choices(self) -> None:
         """
-        Fills `user_prefs` with the recommendations (first run) or with the
-        current configuration (later runs).
+        Fills `user_prefs` with the recommendations for this computer,
+        ignoring the current configuration.
 
         Returns
         -------
@@ -285,62 +278,18 @@ class PreferenceWizardWindow(QDialog):
         """
 
         prefs = self.user_prefs
-
-        if self.first_run:
-            prefs.performance_profile = PerformanceProfile.BALANCED
-            prefs.max_subj = 1
-            prefs.use_gpu_acceleration = prefs.gpu_capable
-            ram_gb = self._resources()["ram_gb"]
-            prefs.use_synth_freesurfer = (
-                prefs.synth_capable
-                and not is_mac()
-                and ram_gb >= self._min_synth_freesurfer_ram()
-            )
-            prefs.engines = {
-                key: self._select_engine(key, ram_gb)[0]
-                for key in ENGINE_PREFERENCE_ORDER
-            }
-            return
-
-        config = self.global_config
-        perf = GlobalPrefCategoryList.PERFORMANCE
-        ram_gb = config.getfloat_safe(perf, "ram_gb")
-
-        # Closest resource level to the current RAM per subject tab
-        prefs.performance_profile = min(
-            (level for level, _ in RESOURCE_LEVELS),
-            key=lambda level: abs(ConfigManager.get_resource_budget(level)[0] - ram_gb),
+        prefs.performance_profile = PerformanceProfile.BALANCED
+        prefs.max_subj = 1
+        prefs.use_gpu_acceleration = prefs.gpu_capable
+        ram_gb = self._resources()["ram_gb"]
+        prefs.use_synth_freesurfer = (
+            prefs.synth_capable
+            and not is_mac()
+            and ram_gb >= self._min_synth_freesurfer_ram()
         )
-        prefs.max_subj = min(
-            max(1, config.get_max_subject_tabs()),
-            ResourceManager.MAX_PARALLEL_SUBJECTS,
-        )
-
-        prefs.use_gpu_acceleration = prefs.gpu_capable and config.getboolean_safe(
-            perf, "cuda"
-        )
-
         prefs.engines = {
-            key: config.getenum_safe(GlobalPrefCategoryList.SYNTH, key)
-            for key in ENGINE_PREFERENCE_ORDER
+            key: self._select_engine(key, ram_gb)[0] for key in ENGINE_PREFERENCE_ORDER
         }
-
-        step = config.getenum_safe(DataInputList.T13D, "freesurfer_step")
-        prefs.full_reconall_enabled = step is FreesurferStep.RECONALL
-        prefs.surfaces_enabled = step is FreesurferStep.AUTORECON_PIAL
-        prefs.cortical_parcellation_enabled = step in (
-            FreesurferStep.SYNTHSEG,
-            FreesurferStep.AUTORECON_PIAL,
-        )
-        prefs.hippocampal_segmentation_enabled = (
-            prefs.matlab_capable
-            and step.has_surface()
-            and config.getboolean_safe(DataInputList.T13D, "hippo_amyg_labels")
-        )
-        prefs.use_synth_freesurfer = prefs.synth_capable and (
-            step is FreesurferStep.SYNTHSEG
-            or config.getboolean_safe(GlobalPrefCategoryList.SYNTH, "reconall")
-        )
 
     # --------------------------
     # Pages builder
@@ -521,13 +470,6 @@ class PreferenceWizardWindow(QDialog):
         self._per_subject_label.setTextFormat(Qt.TextFormat.RichText)
         lay.addWidget(self._per_subject_label)
 
-        if not self.first_run:
-            current = QLabel(self._current_resources_text())
-            current.setWordWrap(True)
-            current.setTextFormat(Qt.TextFormat.RichText)
-            lay.addSpacing(8)
-            lay.addWidget(current)
-
         lay.addStretch(1)
         page.setLayout(lay)
 
@@ -541,27 +483,6 @@ class PreferenceWizardWindow(QDialog):
         self._max_subj_spin.valueChanged.connect(self._set_max_subj)
 
         return page
-
-    def _current_resources_text(self) -> str:
-        """
-        Describes the current resource configuration.
-
-        Returns
-        -------
-        str
-            Rich text description.
-
-        """
-
-        perf = GlobalPrefCategoryList.PERFORMANCE
-        ram_gb = self.global_config.getfloat_safe(perf, "ram_gb")
-        cpu = self.global_config.getint_safe(perf, "max_subj_cpu")
-        if cpu < 1:
-            cpu = ResourceManager.get_max_cpu()
-        max_subj = max(1, self.global_config.get_max_subject_tabs())
-        return strings.wizard_current_resources.format(
-            ram_gb=ram_gb, cpu=cpu, max_subj=max_subj
-        )
 
     def _set_performance_profile(self, profile: PerformanceProfile) -> None:
         """

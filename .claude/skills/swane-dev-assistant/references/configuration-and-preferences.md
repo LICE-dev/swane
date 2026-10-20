@@ -72,7 +72,7 @@ Use `PreferenceEntry` metadata rather than ad hoc UI/runtime checks:
 - Keep preference-specific widgets and interactions under this reference, even though their files live in `swane/ui/`.
 - `PreferencesWindow` selects global or subject catalogs, builds rows, evaluates requirements, saves only changed entries, and returns a restart/reset result to its caller.
 - `PreferenceUIEntry` maps `InputTypes` to Qt widgets, loads typed values, applies ranges and enum data, tracks changes, encrypts password fields, and marks restart-required edits.
-- `PreferenceWizardWindow` owns first-run choices and applies performance profiles, CUDA/Synth settings, working folders, and workflow defaults through `ConfigManager`.
+- `PreferenceWizardWindow` owns first-run choices and applies performance profiles, CUDA/Synth settings, working folders, and workflow defaults through `ConfigManager`; every run (first start or Menu → Configuration Wizard) proposes the recommendations for this computer, ignoring the current configuration.
 - `ram_gb` and `max_subj_cpu` are limits of each subject tab, whatever `max_subj` (the subject tab limit): nothing splits them among the tabs, and running several tabs within the computer is the user's choice. `ConfigManager.get_resource_profile_values` returns the whole profile share (`get_resource_budget`), and the wizard writes `max_subj` on its own.
 - Avoid duplicating preference validation in ad hoc dialogs. Extend `PreferenceEntry` metadata and the shared generators when a new input type or requirement is broadly useful.
 - Keep display labels separate from persisted values. Enum UI labels come from `.value`, while storage and comparisons use `.name`.
