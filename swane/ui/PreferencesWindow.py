@@ -24,7 +24,6 @@ from swane.utils.CryptographyManager import CryptographyManager
 
 from swane.utils.MailManager import MailManager
 from swane.utils.ResourceManager import ResourceManager
-from swane.ui.PreferenceWizardWindow import low_subject_resources
 
 
 class PreferencesWindow(QDialog):
@@ -261,8 +260,6 @@ class PreferencesWindow(QDialog):
 
                 grid.addWidget(test_button, x, 0, 1, 2)
 
-        self._bind_subject_resource_limit()
-
         layout.addWidget(tab_widget)
         layout.addWidget(self.saveButton)
 
@@ -280,89 +277,6 @@ class PreferencesWindow(QDialog):
             layout.addWidget(reset_button)
 
         self.setLayout(layout)
-
-    def _bind_subject_resource_limit(self):
-        """
-        Keeps the RAM and the CPU cores per subject within what all the subject
-        tabs together can use (see ResourceManager.get_max_subject_ram and
-        get_max_subject_cpu), updating their maximum whenever the subject tab
-        limit changes.
-        """
-        perf = GlobalPrefCategoryList.PERFORMANCE
-        if perf not in self.input_keys:
-            return
-        keys = self.input_keys[perf]
-        if any(key not in keys for key in ("max_subj", "ram_gb", "max_subj_cpu")):
-            return
-        self._max_subj_input = self.inputs[keys["max_subj"]]
-        self._ram_input = self.inputs[keys["ram_gb"]]
-        self._cpu_input = self.inputs[keys["max_subj_cpu"]]
-        self._max_subj_input.input_field.valueChanged.connect(
-            self.subject_tab_limit_changed
-        )
-        self._last_max_subj = self._max_subj_input.input_field.value()
-        self.subject_tab_limit_changed(self._last_max_subj)
-
-    def subject_tab_limit_changed(self, max_subj: int):
-        """
-        Lowers the RAM and CPU cores per subject maximum (and values, if
-        needed) to the share of the new subject tab limit, alerting when an
-        added subject brings them below ResourceManager.LOW_SUBJECT_RAM_GB /
-        LOW_SUBJECT_CPU.
-
-        Parameters
-        ----------
-        max_subj: int
-            The new subject tab limit.
-        """
-        ram_field = self._ram_input.input_field
-        cpu_field = self._cpu_input.input_field
-        cores = ResourceManager.get_max_cpu()
-
-        def subject_cpu() -> int:
-            # "No limit" (-1) means every core
-            return cpu_field.value() if cpu_field.value() >= 1 else cores
-
-        previous_ram = ram_field.value()
-        previous_cpu = subject_cpu()
-
-        ram_field.setMaximum(ResourceManager.get_max_subject_ram(max_subj))
-        if max_subj > 1:
-            # Every subject using every core is not allowed with more subjects
-            cpu_limit = ResourceManager.get_max_subject_cpu(max_subj)
-            if cpu_field.value() < 1:
-                cpu_field.setValue(cpu_limit)
-            # The special text is shown at the minimum, which is no longer -1
-            cpu_field.setSpecialValueText("")
-            cpu_field.setMinimum(1)
-            cpu_field.setMaximum(cpu_limit)
-        else:
-            cpu_entry = GLOBAL_PREFERENCES[GlobalPrefCategoryList.PERFORMANCE][
-                "max_subj_cpu"
-            ]
-            cpu_field.setMinimum(cpu_entry.range[0])
-            cpu_field.setMaximum(cpu_entry.range[1])
-            cpu_field.setSpecialValueText(cpu_entry.special_value_text or "")
-
-        added = max_subj > self._last_max_subj
-        self._last_max_subj = max_subj
-        if not added:
-            return
-        ram_gb, cpu = ram_field.value(), subject_cpu()
-        warnings = low_subject_resources(max_subj, ram_gb, cpu)
-        lowered = [
-            warnings[key]
-            for key, before, now in (
-                ("ram", previous_ram, ram_gb),
-                ("cpu", previous_cpu, cpu),
-            )
-            if key in warnings and now < before
-        ]
-        if lowered:
-            self._alert_low_subject_resources("\n\n".join(lowered))
-
-    def _alert_low_subject_resources(self, warning: str):
-        QMessageBox.warning(self, strings.low_subject_resources_title, warning)
 
     def send_test_mail(self):
         try:
@@ -642,8 +556,6 @@ class PreferencesWindow(QDialog):
                     pref_entry.key
                 ] = pref_entry.get_value()
 
-        # Defense in depth: the subject tabs together never exceed the RAM share
-        self.my_config.enforce_resource_limit()
         self.my_config.save()
         if self.restart:
             ret_code = EXIT_CODE_REBOOT

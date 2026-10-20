@@ -85,9 +85,7 @@ def wizard(qtbot, global_config, dependency_manager, monkeypatch):
     whose engine choices are left to the recommendation."""
     wizard = PreferenceWizardWindow(global_config, dependency_manager)
     qtbot.addWidget(wizard)
-    monkeypatch.setattr(
-        global_config, "apply_resource_profile", lambda profile, parallel=1: None
-    )
+    monkeypatch.setattr(global_config, "apply_resource_profile", lambda profile: None)
     wizard.user_prefs.engines = {}
     return wizard
 
@@ -237,25 +235,17 @@ class TestPreferenceWizard:
 
 
 class TestResourceShare:
-    """The chosen share of the computer is split among the subjects analysed at
-    the same time: all the subject tabs together never exceed its RAM or its
-    CPU cores."""
+    """The chosen share of the computer applies to each subject tab: it is
+    never split among the tabs, whatever the subject tab limit."""
 
     @pytest.mark.parametrize("level", [level for level, _ in RESOURCE_LEVELS])
-    def test_subjects_never_exceed_the_share(self, level):
+    def test_profile_values_are_the_whole_share(self, level):
         budget_ram, budget_cpu = ConfigManager.get_resource_budget(level)
         assert budget_ram <= ResourceManager.get_maximum_ram()
-        max_parallel = ConfigManager.get_max_parallel_subjects(level)
-        assert 1 <= max_parallel <= ResourceManager.get_max_parallel_subjects()
-        assert max_parallel <= budget_cpu or max_parallel == 1
-        for parallel in range(1, ResourceManager.MAX_PARALLEL_SUBJECTS + 3):
-            values = ConfigManager.get_resource_profile_values(level, parallel)
-            assert values["max_subj"] == min(parallel, max_parallel)
-            # Tolerance for float rounding (e.g. 2.1 * 3 = 6.300000000000001)
-            assert values["ram_gb"] * values["max_subj"] <= budget_ram + 1e-6
-            assert values["max_subj_cpu"] * values["max_subj"] <= budget_cpu
-            assert values["ram_gb"] >= ResourceManager.get_minimum_subject_ram()
-            assert values["max_subj_cpu"] >= 1
+        values = ConfigManager.get_resource_profile_values(level)
+        assert set(values) == {"ram_gb", "max_subj_cpu"}
+        assert values["ram_gb"] == pytest.approx(budget_ram, abs=0.01)
+        assert values["max_subj_cpu"] == budget_cpu
 
     def test_levels_are_50_70_90_percent(self):
         total = ResourceManager.total_memory_gb()
@@ -264,99 +254,39 @@ class TestResourceShare:
             [total * p / 100 for p in (50, 70, 90)], abs=0.02
         )
 
-    def test_parallel_subjects_limited_by_cores(self, monkeypatch):
-        monkeypatch.setattr(
-            ConfigManager, "get_resource_budget", staticmethod(lambda profile: (64, 3))
-        )
-        monkeypatch.setattr(ResourceManager, "get_max_cpu", staticmethod(lambda: 8))
-        assert ConfigManager.get_max_parallel_subjects(PerformanceProfile.BALANCED) == 3
-        values = ConfigManager.get_resource_profile_values(
-            PerformanceProfile.BALANCED, 5
-        )
-        assert values["max_subj"] == 3 and values["max_subj_cpu"] == 1
-
-    def test_split_ram_is_a_valid_preference_value(self):
-        # The Preferences window must accept the RAM of any split share
+    def test_profile_values_are_valid_preference_values(self):
         low, high = GLOBAL_PREFERENCES[PERF]["ram_gb"].range
         assert low == ResourceManager.get_minimum_subject_ram()
         assert high == ResourceManager.get_maximum_ram()
         assert GLOBAL_PREFERENCES[PERF]["max_subj"].range == [
             1,
-            ResourceManager.get_max_parallel_subjects(),
+            ResourceManager.MAX_PARALLEL_SUBJECTS,
         ]
+        cpu_low, cpu_high = GLOBAL_PREFERENCES[PERF]["max_subj_cpu"].range
         for level, _ in RESOURCE_LEVELS:
-            values = ConfigManager.get_resource_profile_values(
-                level, ResourceManager.MAX_PARALLEL_SUBJECTS
-            )
+            values = ConfigManager.get_resource_profile_values(level)
             assert low <= values["ram_gb"] <= high
+            assert cpu_low <= values["max_subj_cpu"] <= cpu_high
 
-    def _computer(self, monkeypatch, alerts, ram_gb, cpu):
-        monkeypatch.setattr(
-            ConfigManager,
-            "get_resource_budget",
-            staticmethod(lambda profile: (ram_gb, cpu)),
-        )
-        monkeypatch.setattr(ResourceManager, "get_max_cpu", staticmethod(lambda: 64))
-        monkeypatch.setattr(
-            PreferenceWizardWindow,
-            "_alert_low_subject_resources",
-            lambda self, warning: alerts.append(warning),
-        )
-
-    def test_alert_when_new_subject_goes_below_low_ram(
-        self, qtbot, global_config, dependency_manager, monkeypatch
+    def test_subject_tab_limit_does_not_change_the_resources(
+        self, qtbot, global_config, dependency_manager
     ):
-        # 6 GB share: below 2 GB per subject from 4 subjects
-        alerts = []
-        self._computer(monkeypatch, alerts, 6, 20)
         wizard = PreferenceWizardWindow(
             global_config, dependency_manager, first_run=True
         )
         qtbot.addWidget(wizard)
-        assert wizard._parallel_spin.maximum() == ResourceManager.MAX_PARALLEL_SUBJECTS
+        assert wizard._max_subj_spin.maximum() == ResourceManager.MAX_PARALLEL_SUBJECTS
+        single = wizard._resources()
+        label = wizard._per_subject_label.text()
+        wizard._max_subj_spin.setValue(ResourceManager.MAX_PARALLEL_SUBJECTS)
+        assert wizard.user_prefs.max_subj == ResourceManager.MAX_PARALLEL_SUBJECTS
+        many = wizard._resources()
+        assert many["ram_gb"] == single["ram_gb"]
+        assert many["max_subj_cpu"] == single["max_subj_cpu"]
+        assert many["max_subj"] == ResourceManager.MAX_PARALLEL_SUBJECTS
+        assert wizard._per_subject_label.text() == label
 
-        wizard._parallel_spin.setValue(3)
-        assert alerts == []
-        assert wizard._low_resources_label.isHidden()
-
-        wizard._parallel_spin.setValue(4)
-        assert len(alerts) == 1 and "GB of RAM" in alerts[0]
-        assert not wizard._low_resources_label.isHidden()
-
-        wizard._parallel_spin.setValue(5)
-        assert len(alerts) == 2
-
-        # Removing a subject or changing level never pops the alert
-        wizard._parallel_spin.setValue(4)
-        wizard._perf_buttons[PerformanceProfile.LOW_RESOURCE].setChecked(True)
-        assert len(alerts) == 2
-
-    def test_alert_when_new_subject_goes_below_low_cpu(
-        self, qtbot, global_config, dependency_manager, monkeypatch
-    ):
-        # 4 cores share: at most 4 subjects, below 2 cores per subject from 3
-        alerts = []
-        self._computer(monkeypatch, alerts, 64, 4)
-        wizard = PreferenceWizardWindow(
-            global_config, dependency_manager, first_run=True
-        )
-        qtbot.addWidget(wizard)
-        assert wizard._parallel_spin.maximum() == 4
-
-        wizard._parallel_spin.setValue(2)
-        assert alerts == []
-        assert wizard._low_resources_label.isHidden()
-
-        wizard._parallel_spin.setValue(3)
-        assert len(alerts) == 1 and "CPU core" in alerts[0]
-        assert not wizard._low_resources_label.isHidden()
-
-        # Still 1 core each: nothing lowered, no new alert
-        wizard._parallel_spin.setValue(4)
-        assert len(alerts) == 1
-        assert wizard.user_prefs.parallel_subjects == 4
-
-    def test_apply_writes_the_split_share(
+    def test_apply_writes_the_whole_share_for_each_tab(
         self, qtbot, global_config, dependency_manager
     ):
         wizard = PreferenceWizardWindow(
@@ -364,14 +294,15 @@ class TestResourceShare:
         )
         qtbot.addWidget(wizard)
         level = PerformanceProfile.MAX_PERF
-        parallel = ConfigManager.get_max_parallel_subjects(level)
         wizard.user_prefs.performance_profile = level
-        wizard.user_prefs.parallel_subjects = parallel
+        wizard.user_prefs.max_subj = ResourceManager.MAX_PARALLEL_SUBJECTS
 
         wizard._apply_settings_config()
 
-        expected = ConfigManager.get_resource_profile_values(level, parallel)
-        assert global_config.getint_safe(PERF, "max_subj") == parallel
+        expected = ConfigManager.get_resource_profile_values(level)
+        assert global_config.get_max_subject_tabs() == (
+            ResourceManager.MAX_PARALLEL_SUBJECTS
+        )
         assert global_config.getfloat_safe(PERF, "ram_gb") == expected["ram_gb"]
         assert (
             global_config.getint_safe(PERF, "max_subj_cpu") == expected["max_subj_cpu"]
@@ -401,11 +332,8 @@ class TestInitialChoices:
         qtbot.addWidget(wizard)
 
         prefs = wizard.user_prefs
-        expected_parallel = min(
-            2, ConfigManager.get_max_parallel_subjects(prefs.performance_profile)
-        )
-        assert prefs.parallel_subjects == expected_parallel
-        assert wizard._parallel_spin.value() == expected_parallel
+        assert prefs.max_subj == 2
+        assert wizard._max_subj_spin.value() == 2
         assert prefs.engines["tractography_engine"] is TractographyEngine.FSL_XTRACT
         assert prefs.full_reconall_enabled
         assert prefs.hippocampal_segmentation_enabled
@@ -417,7 +345,9 @@ class TestInitialChoices:
         self, qtbot, global_config, dependency_manager
     ):
         level = PerformanceProfile.LOW_RESOURCE
-        global_config.apply_resource_profile(level, 2)
+        global_config.apply_resource_profile(level)
+        # More subject tabs do not move the level: the RAM is per tab
+        global_config[PERF]["max_subj"] = "3"
         wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
         assert wizard.user_prefs.performance_profile is level
@@ -436,7 +366,7 @@ class TestInitialChoices:
 
         prefs = wizard.user_prefs
         assert prefs.performance_profile is PerformanceProfile.BALANCED
-        assert prefs.parallel_subjects == 1
+        assert prefs.max_subj == 1
         assert not prefs.full_reconall_enabled
         ram_gb = ConfigManager.get_resource_profile_values(prefs.performance_profile)[
             "ram_gb"
