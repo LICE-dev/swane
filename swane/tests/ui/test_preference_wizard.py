@@ -158,7 +158,7 @@ class TestPreferenceWizard:
         wizard._refresh_freesurfer_page()
         assert wizard._cb_freesurfer_synth.isEnabled()
 
-    def test_synth_not_recommended_on_first_run_with_low_ram(
+    def test_synth_not_recommended_with_low_ram(
         self, qtbot, global_config, dependency_manager, monkeypatch
     ):
         set_tools(monkeypatch, dependency_manager, "is_freesurfer_synth")
@@ -271,9 +271,7 @@ class TestResourceShare:
     def test_subject_tab_limit_does_not_change_the_resources(
         self, qtbot, global_config, dependency_manager
     ):
-        wizard = PreferenceWizardWindow(
-            global_config, dependency_manager, first_run=True
-        )
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
         assert wizard._max_subj_spin.maximum() == ResourceManager.MAX_PARALLEL_SUBJECTS
         single = wizard._resources()
@@ -289,9 +287,7 @@ class TestResourceShare:
     def test_apply_writes_the_whole_share_for_each_tab(
         self, qtbot, global_config, dependency_manager
     ):
-        wizard = PreferenceWizardWindow(
-            global_config, dependency_manager, first_run=True
-        )
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
         level = PerformanceProfile.MAX_PERF
         wizard.user_prefs.performance_profile = level
@@ -310,8 +306,8 @@ class TestResourceShare:
 
 
 class TestInitialChoices:
-    """Later runs start from the current configuration; the first run starts
-    from the recommendations."""
+    """Every run starts from the recommendations, ignoring the current
+    configuration."""
 
     def _configure(self, global_config):
         global_config[PERF]["max_subj"] = "2"
@@ -322,52 +318,25 @@ class TestInitialChoices:
         ] = FreesurferStep.RECONALL.name
         global_config[DataInputList.T13D]["hippo_amyg_labels"] = "true"
 
-    def test_rerun_shows_current_settings(
+    def test_starts_from_recommendations_ignoring_the_configuration(
         self, qtbot, global_config, dependency_manager, monkeypatch
     ):
         self._configure(global_config)
+        set_tools(monkeypatch, dependency_manager, "is_dipy", "is_fsl")
         monkeypatch.setattr(dependency_manager, "is_freesurfer", lambda: True)
         monkeypatch.setattr(dependency_manager, "is_freesurfer_matlab", lambda: True)
         wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
 
         prefs = wizard.user_prefs
-        assert prefs.max_subj == 2
-        assert wizard._max_subj_spin.value() == 2
-        assert prefs.engines["tractography_engine"] is TractographyEngine.FSL_XTRACT
-        assert prefs.full_reconall_enabled
-        assert prefs.hippocampal_segmentation_enabled
-        assert not prefs.surfaces_enabled
-        assert wizard._cb_freesurfer_full_reconall.isChecked()
-        assert wizard._cb_freesurfer_hippocampal_segmentation.isChecked()
-
-    def test_rerun_picks_the_closest_level(
-        self, qtbot, global_config, dependency_manager
-    ):
-        level = PerformanceProfile.LOW_RESOURCE
-        global_config.apply_resource_profile(level)
-        # More subject tabs do not move the level: the RAM is per tab
-        global_config[PERF]["max_subj"] = "3"
-        wizard = PreferenceWizardWindow(global_config, dependency_manager)
-        qtbot.addWidget(wizard)
-        assert wizard.user_prefs.performance_profile is level
-        assert wizard._perf_buttons[level].isChecked()
-
-    def test_first_run_uses_recommendations(
-        self, qtbot, global_config, dependency_manager, monkeypatch
-    ):
-        self._configure(global_config)
-        set_tools(monkeypatch, dependency_manager, "is_dipy", "is_fsl")
-        monkeypatch.setattr(dependency_manager, "is_freesurfer", lambda: True)
-        wizard = PreferenceWizardWindow(
-            global_config, dependency_manager, first_run=True
-        )
-        qtbot.addWidget(wizard)
-
-        prefs = wizard.user_prefs
         assert prefs.performance_profile is PerformanceProfile.BALANCED
+        assert wizard._perf_buttons[PerformanceProfile.BALANCED].isChecked()
         assert prefs.max_subj == 1
+        assert wizard._max_subj_spin.value() == 1
         assert not prefs.full_reconall_enabled
+        assert not prefs.hippocampal_segmentation_enabled
+        assert not wizard._cb_freesurfer_full_reconall.isChecked()
+        assert not wizard._cb_freesurfer_hippocampal_segmentation.isChecked()
         ram_gb = ConfigManager.get_resource_profile_values(prefs.performance_profile)[
             "ram_gb"
         ]
@@ -510,9 +479,7 @@ class TestEnginePage:
         self, qtbot, global_config, dependency_manager, monkeypatch
     ):
         set_tools(monkeypatch, dependency_manager, "is_dipy", "is_antspyx")
-        wizard = PreferenceWizardWindow(
-            global_config, dependency_manager, first_run=True
-        )
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
         self._enter_engine_page(wizard)
 
@@ -533,9 +500,7 @@ class TestEnginePage:
         self, qtbot, global_config, dependency_manager, monkeypatch
     ):
         set_tools(monkeypatch, dependency_manager, "is_dipy", "is_fsl")
-        wizard = PreferenceWizardWindow(
-            global_config, dependency_manager, first_run=True
-        )
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
         self._enter_engine_page(wizard)
 
@@ -616,9 +581,7 @@ class TestPreferenceWizardReview:
         self, qtbot, global_config, dependency_manager, monkeypatch
     ):
         set_tools(monkeypatch, dependency_manager, "is_fsl", "is_antspyx")
-        wizard = PreferenceWizardWindow(
-            global_config, dependency_manager, first_run=True
-        )
+        wizard = PreferenceWizardWindow(global_config, dependency_manager)
         qtbot.addWidget(wizard)
         while not wizard._is_review_page():
             wizard._go_next()
@@ -635,9 +598,8 @@ class TestPreferenceWizardReview:
 class TestPreferenceWizardParent:
     """The wizard must be a child of the main window to stack above it."""
 
-    @pytest.mark.parametrize("first_run", [True, False])
     def test_wizard_is_parented_to_main_window(
-        self, monkeypatch, global_config, dependency_manager, first_run
+        self, monkeypatch, global_config, dependency_manager
     ):
         import swane.ui.MainWindow as main_window_module
 
@@ -661,8 +623,7 @@ class TestPreferenceWizardParent:
 
         monkeypatch.setattr(main_window_module, "PreferenceWizardWindow", FakeWizard)
         main = FakeMainWindow()
-        main_window_module.MainWindow.start_preference_wizard(main, first_run=first_run)
+        main_window_module.MainWindow.start_preference_wizard(main)
 
         assert captured["executed"]
         assert captured["kwargs"].get("parent") is main
-        assert captured["kwargs"].get("first_run") is first_run

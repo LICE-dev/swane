@@ -271,7 +271,8 @@ wizard_welcome_text = (
     "• Choose the processing engines.<br>"
     "• Select the FreeSurfer outputs of your interest, if supported.<br>"
     "• Review a summary of your configuration before applying it.<br><br>"
-    "Every page starts from your current settings. They can always be adjusted "
+    "Every page starts from the recommendations for this computer. They can "
+    "always be adjusted "
     "later in Application Settings, or you can rerun this wizard at any time from "
     "Menu → Configuration Wizard."
 )
@@ -303,10 +304,6 @@ wizard_max_subj = "Subject tab limit"
 wizard_per_subject_resources = (
     "Each subject tab can use up to <b>{ram_gb:.2f} GB RAM</b> and "
     "<b>{cpu} CPU cores</b>, whatever the number of tabs."
-)
-wizard_current_resources = (
-    "<b>Current setting</b>: {ram_gb:.2f} GB RAM and {cpu} CPU cores per subject "
-    "tab, up to {max_subj} subject tabs."
 )
 
 wizard_hardware_accelleration_title = "Hardware Acceleration"
