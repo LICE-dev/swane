@@ -2667,16 +2667,34 @@ def test_fsldir_without_wrappers_keeps_the_installers_swane_fsl(sh, stub):
     assert info["warnings"] == ""
 
 
-@pytest.mark.parametrize("answer", ["y", "Y", "Yes", "YES", "NO", "n", ""])
-def test_licence_requires_literal_yes(sh, stub, answer):
-    """Anything but the literal yes or no asks again; no declines."""
+@pytest.mark.parametrize("answer", ["y", "Y", "yes", "Yes", " YES "])
+def test_licence_accepts_the_yes_answers_of_every_prompt(sh, stub, answer):
+    """The licence takes the same answers as prompt_yes_no, in any case."""
     world = FslWorld(sh, stub)
-    result, info = world.run(tty="y\n%s\nno\n" % answer)
+    result, info = world.run(tty="y\n%s\n" % answer)
+    assert result.returncode == 0, result.stderr
+    assert result.stderr.count(LICENCE_PROMPT) == 1
+    assert "licence not accepted" not in result.stderr
+    assert info["state"] == "installed"
+
+
+@pytest.mark.parametrize("answers", ["n\n", "NO\n", "No\n", "\nno\n", "maybe\nn\n"])
+def test_licence_declined(sh, stub, answers):
+    """No declines; an empty or unrecognised answer asks again first."""
+    world = FslWorld(sh, stub)
+    result, info = world.run(tty="y\n" + answers)
     assert result.returncode == 0, result.stderr
     assert world.conda_calls() == []
     assert FSL_LICENSE_NOTICE in result.stderr
-    assert result.stderr.count(LICENCE_PROMPT) == 2
-    assert result.stderr.count("Please type yes or no.") == 1
+    asked = answers.count("\n")
+    assert result.stderr.count(LICENCE_PROMPT) == asked
+    assert result.stderr.count("Please type yes or no.") == asked - 1
+    assert "licence not accepted" in result.stderr
+    assert info["state"] == "skipped"
+    assert info["dir"] == ""
+    assert info["warnings"] == NEEDS_FSL
+    assert not world.activate.exists()
+    assert not world.deactivate.exists()
     assert "licence not accepted" in result.stderr
     assert info["state"] == "skipped"
     assert info["dir"] == ""
@@ -2685,7 +2703,7 @@ def test_licence_requires_literal_yes(sh, stub, answer):
     assert not world.deactivate.exists()
 
 
-@pytest.mark.parametrize("tty", ["y\n", "y\n\n", "y\nY\n"])
+@pytest.mark.parametrize("tty", ["y\n", "y\n\n", "y\nmaybe\n"])
 def test_licence_at_end_of_input_dies(sh, stub, tty):
     world = FslWorld(sh, stub)
     result, _ = world.run(tty=tty)

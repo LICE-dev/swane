@@ -125,22 +125,18 @@ read_tty() {
     printf -v "$__read_tty_var" '%s' "$__read_tty_line"
 }
 
-# prompt_yes_no QUESTION: return 0 for yes, 1 for no. There is no default:
-# an empty or unrecognised answer asks the same question again, and end of
-# input stops the installer. --yes (ASSUME_YES=1) answers yes without
-# reading the terminal.
-prompt_yes_no() {
-    local question="$1" answer="" status
-    if [ "$ASSUME_YES" = "1" ]; then
-        log_info "$question yes (--yes)"
-        return 0
-    fi
+# read_yes_no PROMPT NO_TTY_ERROR EOF_ERROR: ask PROMPT on the terminal
+# until the answer is y/yes (return 0) or n/no (return 1), in any case.
+# There is no default: an empty or unrecognised answer asks again. Die with
+# NO_TTY_ERROR without a terminal and with EOF_ERROR at end of input.
+read_yes_no() {
+    local prompt="$1" no_tty_error="$2" eof_error="$3" answer="" status
     while :; do
         status=0
-        read_tty answer "$question [yes/no] " || status=$?
+        read_tty answer "$prompt" || status=$?
         case "$status" in
-            1) die "No terminal available: rerun with --yes" ;;
-            2) die "No answer to \"$question\" (end of input): rerun the installer and type yes or no" ;;
+            1) die "$no_tty_error" ;;
+            2) die "$eof_error" ;;
         esac
         case "$answer" in
             [yY] | [yY][eE][sS]) return 0 ;;
@@ -148,6 +144,19 @@ prompt_yes_no() {
         esac
         log_info "Please type yes or no."
     done
+}
+
+# prompt_yes_no QUESTION: return 0 for yes, 1 for no (read_yes_no).
+# --yes (ASSUME_YES=1) answers yes without reading the terminal.
+prompt_yes_no() {
+    local question="$1"
+    if [ "$ASSUME_YES" = "1" ]; then
+        log_info "$question yes (--yes)"
+        return 0
+    fi
+    read_yes_no "$question [yes/no] " \
+        "No terminal available: rerun with --yes" \
+        "No answer to \"$question\" (end of input): rerun the installer and type yes or no"
 }
 
 # ---------------------------------------------------------------------------
@@ -1120,13 +1129,11 @@ fsl_license_notice() {
 
 # confirm_fsl_install: return 0 if FSL may be installed: the user answers yes
 # to installing it (--yes does), reads the licence notice, then accepts the
-# FSL licence by typing the literal word "yes" (only --accept-fsl-license
-# skips that, still after the notice; --yes never does); the literal "no"
-# declines it, anything else asks again and end of input stops the
-# installer. --no-fsl returns 1 without asking. Call it directly, not inside
+# FSL licence by answering yes, with the answers of prompt_yes_no
+# (read_yes_no; only --accept-fsl-license skips that, still after the
+# notice; --yes never does). --no-fsl returns 1 without asking. Call it directly, not inside
 # $(...): it reads the terminal.
 confirm_fsl_install() {
-    local answer="" status
     if [ "$NO_FSL" = "1" ]; then
         return 1
     fi
@@ -1139,22 +1146,13 @@ confirm_fsl_install() {
         return 0
     fi
     log_info "Type yes to accept it, or no to install SWANe without FSL; press Ctrl+C to stop the installer."
-    while :; do
-        status=0
-        read_tty answer "Type yes to accept the FSL licence, or no to decline it: " || status=$?
-        case "$status" in
-            1) die "No terminal available to accept the FSL licence: rerun with --accept-fsl-license (or --no-fsl)" ;;
-            2) die "No answer to the FSL licence (end of input): rerun the installer and type yes or no, or rerun with --accept-fsl-license (or --no-fsl)" ;;
-        esac
-        case "$answer" in
-            yes) return 0 ;;
-            no)
-                log_info "FSL licence not accepted"
-                return 1
-                ;;
-        esac
-        log_info "Please type yes or no."
-    done
+    if read_yes_no "Type yes to accept the FSL licence, or no to decline it: " \
+        "No terminal available to accept the FSL licence: rerun with --accept-fsl-license (or --no-fsl)" \
+        "No answer to the FSL licence (end of input): rerun the installer and type yes or no, or rerun with --accept-fsl-license (or --no-fsl)"; then
+        return 0
+    fi
+    log_info "FSL licence not accepted"
+    return 1
 }
 
 # find_swane_fsl_env ROOT: find_env_prefix ROOT swane-fsl, with FSLDIR unset.
