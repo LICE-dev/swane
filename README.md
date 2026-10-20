@@ -195,7 +195,7 @@ This project includes subsection derived from other software, which licenses can
 
 #### Added
 
-- **SWANe installer** for Ubuntu and macOS: a single command creates a dedicated conda environment (`swane-env`) with Python 3.12 and SWANe, optionally installs a minimal FSL, installs the Ubuntu system packages and adds a `swane` launcher. It is now the recommended installation method (see [Getting Started](https://github.com/LICE-dev/swane/wiki/03-Getting-Started#quick-install-ubuntumacos)).
+- **SWANe installer** for Ubuntu and macOS: a single command creates a dedicated conda environment (`swane-env`) with Python 3.12 and SWANe, optionally installs a minimal FSL, installs the Ubuntu system packages and adds a `swane` launcher. The `--install-dir` option places the environments in a folder of your choice. It is now the recommended installation method (see [[Getting Started|03-Getting-Started#quick-install-ubuntumacos]]).
 - **Processing engines**: the former *Synth Tools* section of the Application Settings is now called **Processing engines** and lets the user choose the tool used for each processing step:
   - **Brain extraction engine**: FSL BET (default), ANTs (antspynet) or FreeSurfer SynthStrip;
   - **Registration engine**: ANTs (antspyx, default), FSL (FLIRT/FNIRT) or FreeSurfer SynthMorph;
