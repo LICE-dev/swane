@@ -120,10 +120,10 @@ What it installs and where:
 
 FreeSurfer, the MATLAB Runtime and 3D Slicer are not installed by the installer: install them separately (see [Optional Dependencies](#optional-dependencies) and the [Wiki](https://github.com/LICE-dev/swane/wiki)).
 
-Every prompt is read from the terminal, so the command also works through `curl | bash`. Running the installer again updates the existing installation. Run it from a shell where no conda environment whose name starts with `swane` (`swane-env`, `swane-fsl`, ...) is active, not even one stacked below another: otherwise it stops before changing anything and asks you to run `conda deactivate` until none is active (or to open a new terminal).
+Every prompt is read from the terminal, so the command also works through `curl | bash`. Questions have no default answer: type `yes` or `no` (pressing Enter alone asks the same question again). Running the installer again updates the existing installation. Run it from a shell where no conda environment whose name starts with `swane` (`swane-env`, `swane-fsl`, ...) is active, not even one stacked below another: otherwise it stops before changing anything and asks you to run `conda deactivate` until none is active (or to open a new terminal).
 
 > [!NOTE]
-FSL is free for non-commercial use only, under its own licence (https://fsl.fmrib.ox.ac.uk/fsl/docs/license.html): installing it means accepting that licence. Before installing FSL the installer says so and links the licence, and it installs FSL only if you type `yes`. `--yes` does not accept the FSL licence: use `--accept-fsl-license` (or `--no-fsl` to skip FSL).
+FSL is free for non-commercial use only, under its own licence (https://fsl.fmrib.ox.ac.uk/fsl/docs/license.html): installing it means accepting that licence. Before installing FSL the installer says so and links the licence, and it installs FSL only if you type `yes` (`no` installs SWANe without FSL). `--yes` does not accept the FSL licence: use `--accept-fsl-license` (or `--no-fsl` to skip FSL).
 
 To remove everything the installer created, use the conda printed on the `SWANe installer: conda` line of the summary (here the default Miniforge one):
 ```

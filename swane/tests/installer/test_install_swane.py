@@ -432,14 +432,43 @@ def test_refuse_swane_conda_env_passes(sh, env):
 
 @pytest.mark.parametrize(
     "tty, code",
-    [("n\n", 1), ("y\n", 0), ("yes\n", 0), ("  Y \n", 0), ("\n", 1), ("", 1)],
+    [
+        ("n\n", 1),
+        ("no\n", 1),
+        (" NO \n", 1),
+        ("y\n", 0),
+        ("yes\n", 0),
+        ("  Y \n", 0),
+        ("YeS\n", 0),
+    ],
 )
 def test_prompt_reads_tty_not_stdin(sh, tty, code):
     """Review Focus 1: under ``curl | bash`` stdin is the script body."""
     result = sh("prompt_yes_no", "Continue?", tty=tty, input="yes\n")
     assert result.returncode == code
-    assert "Continue? [y/N]" in result.stderr
+    assert result.stderr.count("Continue? [yes/no] ") == 1
+    assert "Please type yes or no" not in result.stderr
     assert result.stdout == ""
+
+
+@pytest.mark.parametrize("invalid", ["\n", "   \n", "maybe\n", "yess\n", "\n\n"])
+@pytest.mark.parametrize("final, code", [("y\n", 0), ("no\n", 1)])
+def test_prompt_has_no_default_and_asks_again(sh, invalid, final, code):
+    """An empty or unrecognised answer repeats the same question."""
+    result = sh("prompt_yes_no", "Continue?", tty=invalid + final)
+    assert result.returncode == code, result.stderr
+    asked = invalid.count("\n") + 1
+    assert result.stderr.count("Continue? [yes/no] ") == asked
+    assert result.stderr.count("Please type yes or no.") == asked - 1
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize("tty", ["", "\n", "maybe\n"])
+def test_prompt_at_end_of_input_dies(sh, tty):
+    """End of input is never an answer: no endless loop, no silent no."""
+    result = sh("prompt_yes_no", "Continue?", tty=tty)
+    assert result.returncode == 1
+    assert 'No answer to "Continue?" (end of input)' in result.stderr
 
 
 def test_prompt_without_tty_dies(sh):
@@ -466,7 +495,7 @@ def test_consecutive_prompts_read_consecutive_lines(sh):
         "for q in a b c; do "
         'if prompt_yes_no "$q"; then echo "$q=y"; else echo "$q=n"; fi; '
         "done",
-        tty="n\ny\n",
+        tty="n\n\ny\nno\n",
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout == "a=n\nb=y\nc=n\n"
@@ -477,6 +506,17 @@ def test_read_tty_keeps_a_last_line_without_newline(sh):
     assert result.returncode == 0
     assert result.stdout == "[yes]"
     assert "Type yes: " in result.stderr
+
+
+@pytest.mark.parametrize("tty", ["", "first\n"])
+def test_read_tty_reports_end_of_input(sh, tty):
+    result = sh.code(
+        'rc=0; read_tty answer "Q: " || rc=$?; '
+        'read_tty answer "Q: " || :; printf "%s[%s]" "$rc" "$answer"',
+        tty=tty,
+    )
+    assert result.stdout == "%s[]" % ("2" if tty == "" else "0")
+    assert result.returncode == 0
 
 
 # ---------------------------------------------------------------------------
@@ -975,13 +1015,13 @@ def test_system_step_asks_once_and_runs_both_steps(sh, stub, answer):
     assert result.stdout == "", "nothing to warn about"
 
 
-@pytest.mark.parametrize("answer", ["n\n", "\n", "no\n"])
+@pytest.mark.parametrize("answer", ["n\n", "\nno\n", "no\n"])
 def test_system_step_declined_runs_no_sudo_and_warns(sh, stub, answer):
     _stub_linux_system(stub)
     _stub_locale(sh, stub)
     result = sh.code(SYSTEM_STEP, tty=answer)
     assert result.returncode == 0, result.stderr
-    assert result.stderr.count(SYSTEM_QUESTION) == 1
+    assert result.stderr.count(SYSTEM_QUESTION) == answer.count("\n")
     assert stub.calls("sudo") == []
     assert stub.calls("apt-get") == []
     assert stub.calls("locale-gen") == []
@@ -2102,7 +2142,8 @@ FSL_LICENSE_NOTICE = (
     % FSL_LICENSE_URL
 )
 #: The hint shown only when the licence is accepted at the terminal.
-FSL_DECLINE_HINT = "If you do not accept it, answer anything but yes"
+FSL_DECLINE_HINT = "Type yes to accept it, or no to install SWANe without FSL"
+LICENCE_PROMPT = "Type yes to accept the FSL licence, or no to decline it: "
 NEEDS_FSL = (
     "SWANe needs FSL; rerun the installer or install FSL from fsl.fmrib.ox.ac.uk"
 )
@@ -2450,7 +2491,7 @@ def test_no_fsl_accept_installs_swane_fsl(sh, stub):
     question = result.stderr.index("Install a minimal FSL")
     notice = result.stderr.index(FSL_LICENSE_NOTICE)
     hint = result.stderr.index(FSL_DECLINE_HINT)
-    prompt = result.stderr.index("Type yes to accept the FSL licence: ")
+    prompt = result.stderr.index(LICENCE_PROMPT)
     assert question < notice < hint < prompt
     assert "licenses" not in stub.calls_log.read_text()
     assert "fsl.txt" not in result.stderr
@@ -2626,19 +2667,32 @@ def test_fsldir_without_wrappers_keeps_the_installers_swane_fsl(sh, stub):
     assert info["warnings"] == ""
 
 
-@pytest.mark.parametrize("answer", ["y", "Y", "Yes", "YES", "no", ""])
+@pytest.mark.parametrize("answer", ["y", "Y", "Yes", "YES", "NO", "n", ""])
 def test_licence_requires_literal_yes(sh, stub, answer):
+    """Anything but the literal yes or no asks again; no declines."""
     world = FslWorld(sh, stub)
-    result, info = world.run(tty="y\n%s\n" % answer)
+    result, info = world.run(tty="y\n%s\nno\n" % answer)
     assert result.returncode == 0, result.stderr
     assert world.conda_calls() == []
     assert FSL_LICENSE_NOTICE in result.stderr
+    assert result.stderr.count(LICENCE_PROMPT) == 2
+    assert result.stderr.count("Please type yes or no.") == 1
     assert "licence not accepted" in result.stderr
     assert info["state"] == "skipped"
     assert info["dir"] == ""
     assert info["warnings"] == NEEDS_FSL
     assert not world.activate.exists()
     assert not world.deactivate.exists()
+
+
+@pytest.mark.parametrize("tty", ["y\n", "y\n\n", "y\nY\n"])
+def test_licence_at_end_of_input_dies(sh, stub, tty):
+    world = FslWorld(sh, stub)
+    result, _ = world.run(tty=tty)
+    assert result.returncode == 1
+    assert "No answer to the FSL licence (end of input)" in result.stderr
+    assert "--accept-fsl-license" in result.stderr
+    assert world.conda_calls() == []
 
 
 def test_declining_the_install_skips_before_the_licence(sh, stub):
@@ -2654,7 +2708,7 @@ def test_declining_the_install_skips_before_the_licence(sh, stub):
 def test_assume_yes_does_not_accept_the_licence(sh, stub):
     world = FslWorld(sh, stub)
     # --yes answers the install question only: the licence line is read.
-    result, info = world.run(env={"ASSUME_YES": "1"}, tty="y\n")
+    result, info = world.run(env={"ASSUME_YES": "1"}, tty="no\n")
     assert result.returncode == 0, result.stderr
     assert world.conda_calls() == []
     assert info["state"] == "skipped"
