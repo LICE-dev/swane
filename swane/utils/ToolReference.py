@@ -503,6 +503,7 @@ equivalent_command_list = {
     "FeatureFrequency": "AromaClassification",
     "FeatureSpatial": "AromaClassification",
     "SynthMorphApply": "SynthMorphReg",
+    "CustomEddy": "Eddy",
     "EddyCorrect": "Eddy",
     "AntsApplyTransforms": "AntsRegistration",
     "AntsComposeTransform": "AntsRegistration",
