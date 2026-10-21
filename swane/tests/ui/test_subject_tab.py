@@ -216,6 +216,96 @@ def test_workflow_crash_notice_follows_earlier_reports(
     assert tab.workflow_had_error is True
 
 
+@pytest.fixture
+def shutdown_calls(monkeypatch):
+    """Record the power-off attempts of ``safe_shutdown_after_workflow``.
+
+    ``os.system`` and ``exit`` are replaced, so no test can power the machine
+    off or quit the interpreter.
+    """
+    import swane.ui.MainWindow as main_window_mod
+
+    calls = []
+    monkeypatch.setattr(main_window_mod, "is_mac", lambda: False)
+    monkeypatch.setattr(main_window_mod.os, "system", lambda cmd: calls.append(cmd))
+    monkeypatch.setattr(main_window_mod, "exit", lambda: None, raising=False)
+    return calls
+
+
+def _shutdown_tab(qtbot, main_window, name):
+    subject = _loaded_subject(
+        main_window.global_config, main_window.dependency_manager, name=name
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+    main_window.subject_tab_array.append(tab)
+    tab.global_config.getboolean_safe = lambda *args, **kwargs: True
+    return tab
+
+
+def test_shutdown_after_completed_workflow(qtbot, main_window, shutdown_calls):
+    tab = _shutdown_tab(qtbot, main_window, "subj_shutdown_ok")
+
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_STOP))
+
+    assert shutdown_calls == ["systemctl poweroff"]
+
+
+def test_no_shutdown_after_user_stop(qtbot, monkeypatch, main_window, shutdown_calls):
+    """Stopping a workflow resets it (clearing the error flag) before the
+    WORKFLOW_STOP of the terminated process reaches the GUI: that terminal
+    report must not power the machine off."""
+    from unittest.mock import MagicMock
+    from PySide6.QtWidgets import QMessageBox
+
+    tab = _shutdown_tab(qtbot, main_window, "subj_shutdown_stop")
+    tab.subject.workflow = MagicMock()
+    tab.node_list = {}
+    monkeypatch.setattr(tab.subject, "is_workflow_process_alive", lambda: True)
+    monkeypatch.setattr(tab.subject, "stop_workflow", lambda: SubjectRet.ExecWfStopped)
+    monkeypatch.setattr(
+        QMessageBox, "exec", lambda self: QMessageBox.StandardButton.Yes
+    )
+
+    tab.toggle_workflow_execution()
+    assert tab.workflow_had_error is False
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_STOP))
+
+    assert shutdown_calls == []
+
+
+def test_shutdown_after_stop_then_completed_run(
+    qtbot, monkeypatch, main_window, shutdown_calls
+):
+    """A new run clears the user-stop mark: its normal end shuts down again."""
+    from unittest.mock import MagicMock
+    from PySide6.QtWidgets import QMessageBox
+
+    tab = _shutdown_tab(qtbot, main_window, "subj_shutdown_rerun")
+    tab.subject.workflow = MagicMock()
+    tab.node_list = {}
+    alive = {"value": True}
+    monkeypatch.setattr(
+        tab.subject, "is_workflow_process_alive", lambda: alive["value"]
+    )
+    monkeypatch.setattr(tab.subject, "stop_workflow", lambda: SubjectRet.ExecWfStopped)
+    monkeypatch.setattr(
+        QMessageBox, "exec", lambda self: QMessageBox.StandardButton.Yes
+    )
+    tab.toggle_workflow_execution()
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_STOP))
+    assert shutdown_calls == []
+
+    alive["value"] = False
+    monkeypatch.setattr(
+        tab.subject, "start_workflow", lambda **kwargs: SubjectRet.ExecWfStarted
+    )
+    tab.toggle_workflow_execution()
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_STOP))
+
+    assert shutdown_calls == ["systemctl poweroff"]
+
+
 def test_label_from_dicom():
     label_single = SubjectTab.label_from_dicom(176, "Subj01", "MR", "T1_MPRAGE", 1)
     assert label_single == "Subj01 - MR - <b>T1_MPRAGE</b>: 176 images, 1 volume"
