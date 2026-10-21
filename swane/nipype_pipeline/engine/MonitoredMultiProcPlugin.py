@@ -4,7 +4,7 @@ import multiprocessing as mp
 import traceback
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
-from threading import Lock
+from threading import RLock
 
 from nipype.interfaces.base import isdefined
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
@@ -77,7 +77,10 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         self._task_nodes = {}
         self._future_taskids = {}
         self._broken_pool_reported = False
-        self._broken_pool_lock = Lock()
+        # Guards the two task maps above and the broken-pool flag: the
+        # scheduler thread changes the maps while the executor's callback
+        # thread snapshots them (see _handle_broken_pool).
+        self._task_maps_lock = RLock()
         # future -> the single-use executor running it (see "Fresh processes")
         self._fresh_pools = {}
 
@@ -221,7 +224,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         traceback_lines = traceback.format_exception(
             type(error), error, error.__traceback__
         )
-        with self._broken_pool_lock:
+        with self._task_maps_lock:
             if self._broken_pool_reported:
                 return
             self._broken_pool_reported = True
@@ -328,10 +331,12 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 )
                 raise
         self._task_obj[self._taskid] = result_future
-        self._task_nodes[self._taskid] = node.fullname
-        self._future_taskids[result_future] = self._taskid
-        # Register only after the task maps are populated: add_done_callback()
-        # invokes synchronously when the future has already completed.
+        with self._task_maps_lock:
+            self._task_nodes[self._taskid] = node.fullname
+            self._future_taskids[result_future] = self._taskid
+        # Register only after the task maps are populated, and outside the
+        # lock: add_done_callback() invokes synchronously when the future has
+        # already completed.
         result_future.add_done_callback(self._async_callback)
 
         logger.debug(
@@ -340,15 +345,18 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         return self._taskid
 
     def _clear_task(self, taskid):
-        self._task_nodes.pop(taskid, None)
-        future = self._task_obj.get(taskid)
-        if future is not None:
-            self._future_taskids.pop(future, None)
-            fresh_pool = self._fresh_pools.pop(future, None)
-            if fresh_pool is not None:
-                # The node is done: join its process now, not at the end of
-                # the run, so it never lingers holding the node's memory.
-                fresh_pool.shutdown(wait=True)
+        fresh_pool = None
+        with self._task_maps_lock:
+            self._task_nodes.pop(taskid, None)
+            future = self._task_obj.get(taskid)
+            if future is not None:
+                self._future_taskids.pop(future, None)
+                fresh_pool = self._fresh_pools.pop(future, None)
+        if fresh_pool is not None:
+            # The node is done: join its process now, not at the end of the
+            # run, so it never lingers holding the node's memory. Outside the
+            # lock: the join can take a while.
+            fresh_pool.shutdown(wait=True)
         return super(MonitoredMultiProcPlugin, self)._clear_task(taskid)
 
     def _postrun_check(self):
