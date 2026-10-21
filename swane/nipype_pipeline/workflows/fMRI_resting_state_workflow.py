@@ -57,7 +57,9 @@ def fMRI_resting_state_workflow(
         Thresholded component maps in reference space
         (``r-thresh_zstatNN``), MELODIC's thresholded maps resampled.
     aroma_classification : path
-        ICA-AROMA classification overview (AROMA enabled only).
+        ICA-AROMA classification overview (AROMA enabled only). Exposed for
+        possible future uses; MainWorkflow deliberately does not save it in the
+        results folder.
     ic_mix : path
         Mixing matrix of the final ICA.
 
@@ -122,6 +124,9 @@ def fMRI_resting_state_workflow(
     )
 
     if run_aroma:
+        # Only on the output node for possible future uses: MainWorkflow
+        # deliberately does not sink it in the results folder, so the overview
+        # stays in the Nipype working directory.
         workflow.connect(
             workflow.get_node("aroma_classification"),
             "classification_overview",

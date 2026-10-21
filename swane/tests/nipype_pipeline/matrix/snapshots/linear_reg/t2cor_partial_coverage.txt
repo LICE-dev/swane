@@ -67,6 +67,6 @@ t2_cor_conv.converted_files -> t2_cor_reorient.in_file
 t2_cor_flirt.out_matrix_file -> outputnode.out_matrix_file
 t2_cor_flirt.out_matrix_file -> t2_cor_apply_xfm.in_matrix_file
 t2_cor_reorient.out_file -> t2_cor_robustfov.in_file
-t2_cor_robustfov.out_roi -> t2_cor_apply_xfm.in_file
-t2_cor_robustfov.out_roi -> t2_cor_flirt.in_file
+t2_cor_robustfov.out_file -> t2_cor_apply_xfm.in_file
+t2_cor_robustfov.out_file -> t2_cor_flirt.in_file
 unbetted_name.out_file -> t2_cor_apply_xfm.out_file

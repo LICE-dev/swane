@@ -5,7 +5,7 @@
 #   tractography = true
 #   tractography_engine = DIPY_RECOBUNDLES
 #
-# nodes=20 edges=40
+# nodes=20 edges=42
 
 - dif2ref_antsreg [AntsRegistration] mem_gb=4 n_procs=4
     aff_metric = 'mattes'
@@ -93,8 +93,7 @@ dipy_chunker.chunks -> dipy_recobundles_build.tractogram_chunk
 dipy_chunker.chunks -> outputnode.recobundles_chunks
 dipy_conv.bvals -> dipy_denoise.bval
 dipy_conv.bvals -> dipy_motion.bval
-dipy_conv.bvecs -> dipy_denoise.bvec
-dipy_conv.bvecs -> dipy_motion.bvec
+dipy_conv.bvecs -> dipy_reOrient.in_bvec
 dipy_conv.converted_files -> dipy_reOrient.in_file
 dipy_crop.out_file -> dipy_denoise.in_file
 dipy_crop.out_file -> dipy_nodif.in_file
@@ -113,6 +112,8 @@ dipy_motion.out_bvec -> dipy_tensorfit.bvec
 dipy_motion.out_file -> dipy_bias.in_file
 dipy_nodif.out_file -> dipy_deskull_antspynet.in_file
 dipy_nodif.out_file -> pve_wm_2_diff_ants_apply.reference_image
+dipy_reOrient.out_bvec -> dipy_denoise.bvec
+dipy_reOrient.out_bvec -> dipy_motion.bvec
 dipy_reOrient.out_file -> dipy_crop.in_file
 dipy_recobundles_build.recobundles_pickle -> outputnode.recobundles_builds
 dipy_slr.atlas2native -> outputnode.atlas2native

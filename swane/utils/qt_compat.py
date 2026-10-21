@@ -53,20 +53,41 @@ if _use_real_qt:
 
 if not _use_real_qt:
     # Lightweight, headless fallback implementations.
-    class Signal:
-        def __init__(self, *args, **kwargs):
+    class _BoundSignal:
+        """The slots of one signal on one instance."""
+
+        def __init__(self):
             self._slots = []
 
         def connect(self, fn):
             self._slots.append(fn)
 
         def emit(self, *args, **kwargs):
+            # Like Qt, a failing slot does not stop the others; unlike Qt the
+            # first error is re-raised so a failing test callback is not lost.
+            first_error = None
             for fn in list(self._slots):
                 try:
                     fn(*args, **kwargs)
-                except Exception:
-                    # swallow exceptions from test callbacks
-                    pass
+                except Exception as error:
+                    if first_error is None:
+                        first_error = error
+            if first_error is not None:
+                raise first_error
+
+    class Signal:
+        """Descriptor giving every instance of the owner class its own slots."""
+
+        def __init__(self, *args, **kwargs):
+            self._name = "_signal_%x" % id(self)
+
+        def __set_name__(self, owner, name):
+            self._name = name
+
+        def __get__(self, instance, owner=None):
+            if instance is None:
+                return self
+            return instance.__dict__.setdefault(self._name, _BoundSignal())
 
     class QObject:
         pass
@@ -76,11 +97,9 @@ if not _use_real_qt:
 
     class _QThreadPoolGlobal:
         def start(self, runnable):
-            # run synchronously to keep tests deterministic
-            try:
-                runnable.run()
-            except Exception:
-                pass
+            # run synchronously to keep tests deterministic; an error in run()
+            # reaches the caller so a failing worker is not lost
+            runnable.run()
 
     class QThreadPool:
         @staticmethod

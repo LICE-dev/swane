@@ -51,11 +51,9 @@ def start_worker(worker):
         Any object exposing ``run()``, typically a ``swane.workers`` QRunnable.
     """
     if not QT_AVAILABLE:
-        # Headless fallback: run synchronously, as qt_compat's pool does.
-        try:
-            worker.run()
-        except Exception:
-            traceback.print_exc()
+        # Headless fallback: run synchronously, as qt_compat's pool does. An
+        # error in run() reaches the caller: there is no pool thread to print it.
+        worker.run()
         return
 
     global _releaser

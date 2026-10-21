@@ -90,7 +90,7 @@ mdc_flirt.out_matrix_file -> deskulled_mdc_apply_xfm.in_matrix_file
 mdc_flirt.out_matrix_file -> mdc_apply_xfm.in_matrix_file
 mdc_flirt.out_matrix_file -> outputnode.out_matrix_file
 mdc_reorient.out_file -> mdc_robustfov.in_file
-mdc_robustfov.out_roi -> mdc_apply_xfm.in_file
-mdc_robustfov.out_roi -> mdc_deskull_bet.in_file
+mdc_robustfov.out_file -> mdc_apply_xfm.in_file
+mdc_robustfov.out_file -> mdc_deskull_bet.in_file
 unbetted_name.out_file -> bias_correction.out_file
 unbetted_name.out_file -> mdc_apply_xfm.out_file
