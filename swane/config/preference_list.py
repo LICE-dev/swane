@@ -743,12 +743,13 @@ GLOBAL_PREFERENCES[category]["max_subj"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Subject tab limit",
     default=1,
-    range=[1, ResourceManager.get_max_parallel_subjects()],
+    range=[1, ResourceManager.MAX_PARALLEL_SUBJECTS],
 )
 GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="CPU core limit per subject",
-    tooltip="To use all CPU cores set value equal to -1",
+    tooltip="Applies to each subject tab, whatever the number of tabs. "
+    "To use all CPU cores set value equal to -1",
     default=ResourceManager.get_default_cpu(),
     range=[-1, ResourceManager.get_max_cpu()],
     special_value_text="No limit",
@@ -757,8 +758,7 @@ GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["ram_gb"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Estimated RAM allocation per subject",
-    tooltip="All the subject tabs together cannot use more than %d%% of the RAM"
-    % ResourceManager.MAXIMUM_RAM_PERC,
+    tooltip="Applies to each subject tab, whatever the number of tabs",
     default=ResourceManager.get_default_ram(),
     range=[
         ResourceManager.get_minimum_subject_ram(),

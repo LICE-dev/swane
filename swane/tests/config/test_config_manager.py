@@ -91,41 +91,31 @@ class TestGlobalConfig:
 
     def test_apply_resource_profile(self, tmp_path):
         config = ConfigManager(global_base_folder=str(tmp_path))
-        config.apply_resource_profile(PerformanceProfile.LOW_RESOURCE)
-        assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == "1"
-        config.apply_resource_profile(PerformanceProfile.MAX_PERF)
-        assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == "1"
-        config.apply_resource_profile(PerformanceProfile.MAX_PERF, 99)
-        assert config[GlobalPrefCategoryList.PERFORMANCE]["max_subj"] == str(
-            ConfigManager.get_max_parallel_subjects(PerformanceProfile.MAX_PERF)
-        )
+        perf = GlobalPrefCategoryList.PERFORMANCE
+        config[perf]["max_subj"] = "3"
+        for profile in PerformanceProfile:
+            config.apply_resource_profile(profile)
+            ram_gb, cpu = ConfigManager.get_resource_budget(profile)
+            assert config.getfloat_safe(perf, "ram_gb") == pytest.approx(
+                ram_gb, abs=0.01
+            )
+            assert config.getint_safe(perf, "max_subj_cpu") == cpu
+            # The profile does not touch the subject tab limit
+            assert config[perf]["max_subj"] == "3"
 
-    def test_overflowing_ram_is_lowered_at_load(self, tmp_path):
+    def test_resources_are_per_subject_tab_at_load(self, tmp_path):
+        # The values apply to each subject tab: more tabs never lower them
         config = ConfigManager(global_base_folder=str(tmp_path))
         perf = GlobalPrefCategoryList.PERFORMANCE
-        config[perf]["max_subj"] = "99"
-        config[perf]["ram_gb"] = str(ResourceManager.get_maximum_ram())
+        ram_gb = str(ResourceManager.get_maximum_ram())
+        config[perf]["max_subj"] = str(ResourceManager.MAX_PARALLEL_SUBJECTS)
+        config[perf]["ram_gb"] = ram_gb
         config[perf]["max_subj_cpu"] = "-1"
         config.save()
 
         config = ConfigManager(global_base_folder=str(tmp_path))
-        max_subj = config.getint_safe(perf, "max_subj")
-        assert max_subj == ResourceManager.get_max_parallel_subjects()
-        ram_gb = config.getfloat_safe(perf, "ram_gb")
-        assert ram_gb == ResourceManager.get_max_subject_ram(max_subj)
-        # Tolerance for float rounding (e.g. 2.1 * 3 = 6.300000000000001)
-        assert ram_gb * max_subj <= ResourceManager.get_maximum_ram() + 1e-6
-        cpu = config.getint_safe(perf, "max_subj_cpu")
-        if max_subj > 1:
-            assert cpu == ResourceManager.get_max_subject_cpu(max_subj)
-            assert cpu * max_subj <= ResourceManager.get_max_cpu()
-
-    def test_single_subject_keeps_no_cpu_limit(self, tmp_path):
-        config = ConfigManager(global_base_folder=str(tmp_path))
-        perf = GlobalPrefCategoryList.PERFORMANCE
-        config[perf]["max_subj"] = "1"
-        config[perf]["max_subj_cpu"] = "-1"
-        assert not config.enforce_resource_limit()
+        assert config.get_max_subject_tabs() == ResourceManager.MAX_PARALLEL_SUBJECTS
+        assert config[perf]["ram_gb"] == ram_gb
         assert config.getint_safe(perf, "max_subj_cpu") == -1
 
 

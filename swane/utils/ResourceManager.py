@@ -8,18 +8,13 @@ class ResourceManager:
     MINIMUM_CPU_MULTIPLIER = 1 / 3
     DEFAULT_CPU_MULTIPLIER = 1 / 2
     #: Shares of the total RAM of the Light, Balanced and High resource
-    #: profiles. MAXIMUM_RAM_PERC is also the limit of all the subject tabs
-    #: together: ram_gb x max_subj never exceeds it.
+    #: profiles. MAXIMUM_RAM_PERC is also the most RAM a subject tab can use.
+    #: The limits apply to each subject tab, whatever the number of tabs.
     MINIMUM_RAM_PERC = 50
     DEFAULT_RAM_PERC = 70
     MAXIMUM_RAM_PERC = 90
     #: Most subjects analysed at the same time (subject tab limit).
     MAX_PARALLEL_SUBJECTS = 5
-    #: Below this RAM per subject, the user is warned that analyses may fail.
-    LOW_SUBJECT_RAM_GB = 2
-    #: Below these CPU cores per subject, the user is warned that analyses
-    #: will be slow.
-    LOW_SUBJECT_CPU = 2
 
     SYNTH_STRIP_RAM_REQUIREMENT = {"mac": 30, "linux": 5, "other": 5, "windows": 5}
     SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 20, "linux": 14, "other": 14, "windows": 14}
@@ -87,14 +82,14 @@ class ResourceManager:
 
     @staticmethod
     def get_maximum_ram() -> float:
-        """RAM that all the subject tabs together can use."""
+        """Most RAM a subject tab can use."""
         return ResourceManager.get_ram_by_perc(ResourceManager.MAXIMUM_RAM_PERC)
 
     @staticmethod
     def get_minimum_subject_ram() -> float:
         """
-        Smallest RAM allocation per subject: the lightest profile split among
-        the most subjects analysed at the same time.
+        Smallest RAM allocation a subject tab can be given (the ram_gb range
+        minimum): a fifth of the lightest profile, at least 0.1 GB.
         """
         return max(
             0.1,
@@ -105,52 +100,6 @@ class ResourceManager:
             )
             / 10,
         )
-
-    @staticmethod
-    def get_max_parallel_subjects() -> int:
-        """
-        Most subjects analysed at the same time: MAX_PARALLEL_SUBJECTS, and
-        never more than the CPU cores, since each subject needs at least one.
-        """
-        return max(
-            1,
-            min(ResourceManager.MAX_PARALLEL_SUBJECTS, ResourceManager.get_max_cpu()),
-        )
-
-    @staticmethod
-    def get_max_subject_cpu(subjects: int) -> int:
-        """
-        Most CPU cores per subject that keep the given number of subjects
-        analysed at the same time within the CPU cores of this computer.
-
-        Parameters
-        ----------
-        subjects: int
-            Subjects analysed at the same time.
-
-        Returns
-        -------
-        The CPU cores, at least 1.
-        """
-        return max(1, ResourceManager.get_max_cpu() // max(1, int(subjects)))
-
-    @staticmethod
-    def get_max_subject_ram(subjects: int) -> float:
-        """
-        Largest RAM allocation per subject that keeps the given number of
-        subjects analysed at the same time within get_maximum_ram.
-
-        Parameters
-        ----------
-        subjects: int
-            Subjects analysed at the same time.
-
-        Returns
-        -------
-        The RAM in GB, rounded down to 0.01 GB.
-        """
-        subjects = max(1, int(subjects))
-        return floor(ResourceManager.get_maximum_ram() / subjects * 100) / 100
 
     @staticmethod
     def get_ram_by_perc(perc: int) -> float:

@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         self.initialize_ui()
 
         if need_setting_wizard:
-            self.start_preference_wizard(first_run=True)
+            self.start_preference_wizard()
 
         # Check for update
         update_thread = UpdateCheckWorker()
@@ -461,15 +461,9 @@ class MainWindow(QMainWindow):
         )
         self.global_config[GlobalPrefCategoryList.MAIN]["shutdown"] = str(not shutdown)
 
-    def start_preference_wizard(self, first_run: bool = False):
+    def start_preference_wizard(self):
         """
         Open the Preference Wizard Window.
-
-        Parameters
-        ----------
-        first_run: bool, optional
-            Start from the recommendations instead of the current settings.
-            Default is False.
 
         Returns
         -------
@@ -488,7 +482,6 @@ class MainWindow(QMainWindow):
         wf_preference_window = PreferenceWizardWindow(
             self.global_config,
             self.dependency_manager,
-            first_run=first_run,
             parent=self,
         )
         wf_preference_window.exec()
