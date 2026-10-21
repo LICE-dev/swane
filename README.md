@@ -44,7 +44,7 @@ A few of the analyses you can do with SWANe:
 * **Tractography**: perrforms tractography execution for chosen tract using FSL xtract protocols;
 * **dipy Tractography**: performs CSD tractography and bundle recognition using dipy and the HCP842 atlas (RecoBundles);
 * **Task fMRI**: performs fMRI first level analysis for a single or double task with constant task-rest paradigm;
-* **Resting State fMRI**: performs single-subject spatial ICA with optional ICA-AROMA denoising, with a Python engine (nilearn/scikit-learn) or FSL MELODIC, and returns the thresholded component maps in reference space;
+* **Resting State fMRI**: performs single-subject spatial ICA with FSL MELODIC (requires FSL) and optional ICA-AROMA denoising, and returns the thresholded component maps in reference space;
 * **Venous MRA**: performs analysis of phase contrasts image (in single or two series) to obtain in-skull veins in reference space.
 
 
