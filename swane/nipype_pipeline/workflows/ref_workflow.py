@@ -129,7 +129,7 @@ def ref_workflow(
 
     # NODE 3: Crop neck
     ref_robustfov = Node(NiiMathRobustFov(), name="%s_robustfov" % name)
-    ref_robustfov.inputs.out_roi = "ref_robustfov.nii.gz"
+    ref_robustfov.inputs.out_file = "ref_robustfov.nii.gz"
     workflow.connect(ref_reOrient, "out_file", ref_robustfov, "in_file")
 
     # NODE 4: Crop FOV larger than 256mm for subsequent freesurfer
@@ -137,7 +137,7 @@ def ref_workflow(
     ref_reScale.long_name = "Crop large FOV"
     ref_reScale.inputs.max_dim = 256
     ref_reScale.inputs.out_file = "ref_uncorrected.nii.gz"
-    workflow.connect(ref_robustfov, "out_roi", ref_reScale, "in_file")
+    workflow.connect(ref_robustfov, "out_file", ref_reScale, "in_file")
 
     # NODE 5: Scalp removal
     ref_deskull = get_deskull_node(

@@ -126,3 +126,20 @@ def test_fsl_known_slice_timing_keeps_custom_slice_timer():
     assert type(node.interface).__name__ == "CustomSliceTimer"
     classes = [type(n.interface).__name__ for n in wf._get_all_nodes()]
     assert "NiiMathSliceTimer" not in classes
+
+
+def test_nilearn_has_no_reference_volume_node():
+    """AntsMotionCorrection picks the middle volume itself: nothing reads the
+    volume that ``extract_ref`` would select."""
+    wf = _build(FmriEngine.NILEARN, SliceTiming.UNKNOWN)
+    assert wf.get_node("test_st_extract_ref") is None
+    assert "ExtractVolumes" not in [
+        type(n.interface).__name__ for n in wf._get_all_nodes()
+    ]
+
+
+def test_fsl_reference_volume_feeds_mcflirt():
+    wf = _build(FmriEngine.FSL, SliceTiming.UNKNOWN)
+    node = wf.get_node("test_st_extract_ref")
+    assert type(node.interface).__name__ == "ExtractVolumes"
+    assert _consumers(wf, node) == {("test_st_motion_correct", "ref_file")}

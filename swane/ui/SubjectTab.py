@@ -109,6 +109,9 @@ class SubjectTab(QTabWidget):
         # What the running workflow already reported, to word its final notice
         self.workflow_node_failed = False
         self.workflow_resources_notified = False
+        # Set when the user stops the run: the reset that follows clears the
+        # error flag, so the terminal WORKFLOW_STOP must not look like a success
+        self.workflow_stopped_by_user = False
         self.progress: PersistentProgressDialog = None
 
         self.data_tab_ui()
@@ -151,25 +154,20 @@ class SubjectTab(QTabWidget):
             shutdown = self.global_config.getboolean_safe(
                 GlobalPrefCategoryList.MAIN, "shutdown"
             )
-            if shutdown:
+            if shutdown and not self.workflow_stopped_by_user:
                 self.main_window.safe_shutdown_after_workflow(self.subject)
             return
         elif wf_report.signal_type == WorkflowSignals.INVALID_SIGNAL:
             # Invalid signal sent from WF to UI, code error intercept
-            try:
-                self.workflow_process.stop_event.set()
-            except Exception:
-                pass
+            self.subject.stop_workflow()
+            # Before the modal box: its event loop delivers the WORKFLOW_STOP
+            self.workflow_had_error = True
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_wf_invalid_signal)
             msg_box.exec()
-            self.workflow_had_error = True
             return
         elif wf_report.signal_type == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES:
-            try:
-                self.workflow_process.stop_event.set()
-            except Exception:
-                pass
+            self.subject.stop_workflow()
             self.workflow_resources_notified = True
             self.workflow_had_error = True
             msg_box = QMessageBox()
@@ -177,10 +175,7 @@ class SubjectTab(QTabWidget):
             msg_box.exec()
             return
         elif wf_report.signal_type == WorkflowSignals.WORKFLOW_CRASHED:
-            try:
-                self.workflow_process.stop_event.set()
-            except Exception:
-                pass
+            self.subject.stop_workflow()
             self.workflow_had_error = True
             # The workflow process reports every failed run as crashed: word the
             # notice after what was already reported, and do not repeat the
@@ -467,7 +462,13 @@ class SubjectTab(QTabWidget):
                 # We need to hide "old" progress to prevent a loading bar to appear during user choice
                 self.progress.deleteLater()
                 if ret == QMessageBox.StandardButton.Yes:
-                    self.dicom_import_to_folder(data_input, force_mod=True)
+                    # Retry with the already resolved series (no selection is
+                    # read again) and leave the state and progress dialog to
+                    # the nested call
+                    self.dicom_import_to_folder(
+                        data_input, force_mod=True, force_copy_list=origin
+                    )
+                    return
             self.set_error(data_input, "")
             self.progress.deleteLater()
             return
@@ -798,6 +799,7 @@ class SubjectTab(QTabWidget):
         if not self.subject.is_workflow_process_alive():
             self.workflow_node_failed = False
             self.workflow_resources_notified = False
+            self.workflow_stopped_by_user = False
             workflow_start_ret = self.subject.start_workflow(
                 resume=resume,
                 resume_freesurfer=resume_freesurfer,
@@ -877,6 +879,7 @@ class SubjectTab(QTabWidget):
                 # Not running, should not be possible
                 pass
             else:
+                self.workflow_stopped_by_user = True
                 # UI updating
                 self.remove_running_icon()
                 self.exec_button.setText(strings.EXECBUTTONTEXT)

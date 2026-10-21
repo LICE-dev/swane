@@ -1,7 +1,10 @@
 from nipype import Node, SelectFiles, Merge
-from nipype.interfaces.fsl import MELODIC, FilterRegressor
+from nipype.interfaces.fsl import MELODIC
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
+from swane.nipype_pipeline.interfaces.fsl.CustomFilterRegressor import (
+    CustomFilterRegressor,
+)
 from swane.nipype_pipeline.interfaces.niimath import ImageMaths
 from swane.nipype_pipeline.workflows.fMRI_preproc_workflow import highpass_op_string
 from swane.nipype_pipeline.workflows.fMRI_resting_state_aroma import (
@@ -145,7 +148,11 @@ def build_fsl_resting(
         max_cpu=max_cpu,
     )
 
-    nonaggr_denoising = Node(FilterRegressor(), name="nonaggr_denoising", mem_gb=5)
+    # No motion component: the data go through unchanged (fsl_regfilt rejects an
+    # empty list).
+    nonaggr_denoising = Node(
+        CustomFilterRegressor(), name="nonaggr_denoising", mem_gb=5
+    )
     nonaggr_denoising.inputs.out_file = "denoised_func_data_nonaggr.nii.gz"
     workflow.connect(intnorm, "out_file", nonaggr_denoising, "in_file")
     workflow.connect(preproc_ica_output, "mel_mix", nonaggr_denoising, "design_file")
