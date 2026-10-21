@@ -79,8 +79,17 @@ class NilearnFirstLevel(BaseInterface):
         mask_file = self.inputs.mask_file
         tr = self.inputs.tr
 
-        # Build events DataFrame from Nipype Bunch
+        # The condition names are free text, but nilearn names the design
+        # matrix columns after them and evaluates the contrast expression as
+        # Python code: a name like "finger-tapping", "2back" or "class" breaks
+        # the expression and "constant" clashes with nilearn's own column. The
+        # conditions get internal identifiers (one per distinct name) instead.
         info = self.inputs.subject_info
+        cond_ids = {
+            name: "cond%d" % k for k, name in enumerate(dict.fromkeys(info.conditions))
+        }
+
+        # Build events DataFrame from Nipype Bunch
         events_list = []
         for i, cond in enumerate(info.conditions):
             onsets_i = info.onsets[i]
@@ -92,7 +101,7 @@ class NilearnFirstLevel(BaseInterface):
                     {
                         "onset": onset,
                         "duration": duration,
-                        "trial_type": cond.replace(" ", "_"),
+                        "trial_type": cond_ids[cond],
                     }
                 )
         events = pd.DataFrame(events_list)
@@ -137,9 +146,9 @@ class NilearnFirstLevel(BaseInterface):
             c_conds = contrast_def[2]
             c_weights = contrast_def[3]
 
-            # Construct contrast expression (e.g. "TaskA - TaskB")
+            # Construct contrast expression (e.g. "cond0 - cond1")
             cexpr = " + ".join(
-                [f"({w}) * {c.replace(' ', '_')}" for w, c in zip(c_weights, c_conds)]
+                [f"({w}) * {cond_ids[c]}" for w, c in zip(c_weights, c_conds)]
             )
 
             zmap = flm.compute_contrast(cexpr, output_type="z_score")
