@@ -476,3 +476,30 @@ def test_broken_pool_snapshot_survives_concurrent_submit_and_clear(make_plugin):
         sys.setswitchinterval(interval)
 
     assert not failures, "%d snapshots failed: %s" % (len(failures), failures[0])
+
+
+def test_master_thread_node_failure_makes_run_raise(tmp_path):
+    """A node run on the scheduler's own thread (run_without_submitting) that
+    fails must make Workflow.run() raise, as in nipype's MultiProcPlugin: the
+    workflow process only flags a failed run when run() raises."""
+    workflow = Workflow(name="wf", base_dir=str(tmp_path))
+    workflow.config["execution"]["poll_sleep_duration"] = "0.05"
+    workflow.config["execution"]["crashdump_dir"] = str(tmp_path)
+    failing = Node(_FailOnOne(), name="failing", run_without_submitting=True)
+    failing.inputs.value = 1
+    workflow.add_nodes([failing])
+
+    queue = Queue()
+    plugin = MonitoredMultiProcPlugin(
+        plugin_args={
+            "n_procs": 1,
+            "memory_gb": 1.0,
+            "n_gpu_procs": 0,
+            "queue": queue,
+        }
+    )
+    with pytest.raises(RuntimeError, match="synthetic subnode failure"):
+        workflow.run(plugin=plugin)
+
+    errors = [r for r in _drain(queue) if r.signal_type == WorkflowSignals.NODE_ERROR]
+    assert [r.node_name for r in errors] == ["wf.failing"]
