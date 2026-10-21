@@ -125,7 +125,8 @@ class TestSumMultiVolsOutputs:
         monkeypatch.chdir(tmp_path)
         node = self._node(tmp_path)
 
-        assert node.cmdline.endswith(str(tmp_path / "a_maths.nii.gz"))
+        # Windows quotes the paths in the command line: compare them unquoted.
+        assert node.cmdline.replace('"', "").endswith(str(tmp_path / "a_maths.nii.gz"))
 
 
 def test_real_niimath_sums_the_volumes(tmp_path, monkeypatch):
