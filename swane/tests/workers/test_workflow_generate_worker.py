@@ -261,3 +261,32 @@ def test_finished_is_emitted_when_generation_raises(monkeypatch):
     worker.run()
 
     assert emitted == [SubjectRet.GenWfError]
+
+
+def test_timed_out_weights_preload_still_generates(monkeypatch):
+    """A weights download that times out must not keep the non-closable
+    progress dialog up: generation goes on and finished is emitted."""
+    import subprocess
+
+    from swane.utils.Subject import SubjectRet
+
+    subject = MagicMock()
+    subject.generate_workflow.return_value = SubjectRet.GenWfCompleted
+    worker = WorkflowGenerateWorker(subject)
+    for preload in (
+        "_load_pipeline_modules",
+        "_preload_templates",
+        "_preload_dipy_atlas",
+    ):
+        monkeypatch.setattr(worker, preload, lambda strings: None)
+
+    def _timed_out(_strings):
+        raise subprocess.TimeoutExpired(["python"], 1800, stderr="stuck here")
+
+    monkeypatch.setattr(worker, "_preload_models", _timed_out)
+    emitted = []
+    worker.signal.finished.connect(emitted.append)
+
+    worker.run()
+
+    assert emitted == [SubjectRet.GenWfCompleted]

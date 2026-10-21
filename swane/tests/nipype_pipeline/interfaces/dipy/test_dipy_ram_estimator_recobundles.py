@@ -221,3 +221,26 @@ class TestPluginIntegration:
         assert node.mem_gb_runtime == pytest.approx(
             node.ram_estimator.estimate_gb(250 * 5)
         )
+
+    def test_one_chunk_mapnode_is_priced_like_its_chunk(self, tmp_path):
+        """nipype submits a one-element MapNode unexpanded: the estimator must
+        still price the chunk, not fall back to the static reservation."""
+        from nipype import MapNode
+
+        path = _phantom_trx(
+            tmp_path / "chunk_0.trx", n_streamlines=250, pts_per_streamline=5
+        )
+        node = MapNode(
+            DipyRecoBundlesBuild(), iterfield=["tractogram_chunk"], name="build"
+        )
+        node.base_dir = str(tmp_path)
+        node._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
+        node.ram_estimator = RecoBundlesRamEstimator()
+        node.inputs.tractogram_chunk = [path]
+
+        _bare_plugin(32.0)._negotiate_ram(node)
+
+        assert node.mem_gb_runtime == pytest.approx(
+            node.ram_estimator.estimate_gb(250 * 5)
+        )
+        assert "points=1250" in node.ram_estimator_str
