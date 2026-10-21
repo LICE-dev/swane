@@ -420,3 +420,91 @@ class TestMainExportDtiThreshold:
         assert (
             f"{EDITOR}.activeEffect().setParameter('MinimumThreshold', 2000.0)" in log
         )
+
+
+def _failing_loader(log, name):
+    """A ``slicer.util`` loader that, like the real one on a corrupt or empty
+    file, raises ``RuntimeError`` after recording the call."""
+
+    def load(path):
+        log.append(f"slicer.util.{name}({path!r})")
+        raise RuntimeError(f"Failed to load node from file: {path}")
+
+    return load
+
+
+class TestUnreadableTractFile:
+    """One unreadable tract file must cost only that tract, not the scene."""
+
+    def test_unreadable_bundle_is_skipped(
+        self, slicer_script, tmp_path, monkeypatch, capsys
+    ):
+        module, log = slicer_script
+        (tmp_path / "r-cst_lh.vtp").write_text("garbage")
+        monkeypatch.setattr(
+            module.slicer.util, "loadModel", _failing_loader(log, "loadModel")
+        )
+
+        module.tract_bundle(dti_dir=str(tmp_path), tract=CST, side="lh")
+
+        assert normalise(log, dti=tmp_path) == [
+            "slicer.util.loadModel('<dti>/r-cst_lh.vtp')"
+        ]
+        assert "Failed to load tract bundle" in capsys.readouterr().out
+
+    def test_unreadable_probability_map_is_skipped(
+        self, slicer_script, tmp_path, monkeypatch, capsys
+    ):
+        module, log = slicer_script
+        (tmp_path / "r-cst_lh.nii.gz").write_bytes(b"")
+        monkeypatch.setattr(
+            module.slicer.util, "loadVolume", _failing_loader(log, "loadVolume")
+        )
+
+        node = CallSpy("segmentation_node", log)
+        module.tract_model(
+            segmentation_node=node, dti_dir=str(tmp_path), tract=CST, side="lh"
+        )
+
+        assert normalise(log, dti=tmp_path) == [
+            "slicer.util.loadVolume('<dti>/r-cst_lh.nii.gz')"
+        ]
+        assert "Failed to load tract" in capsys.readouterr().out
+
+    def test_scene_is_saved_despite_an_unreadable_bundle(
+        self, slicer_script, tmp_path, monkeypatch
+    ):
+        module, log = slicer_script
+        dti_dir = tmp_path / "dti"
+        dti_dir.mkdir()
+        (dti_dir / "r-cst_lh.vtp").write_text("garbage")
+        (dti_dir / "r-af_lh.vtp").write_text("<VTKFile/>")
+        loaded = []
+
+        def load_model(path):
+            loaded.append(os.path.basename(path))
+            if path.endswith("r-cst_lh.vtp"):
+                raise RuntimeError(f"Failed to load node from file: {path}")
+            return CallSpy("model", log)
+
+        monkeypatch.setattr(module.slicer.util, "loadModel", load_model)
+        for loader in (
+            "load_fmri_task",
+            "load_fmri_resting_state",
+            "load_vein",
+            "load_freesurfer",
+            "load_seeg",
+        ):
+            monkeypatch.setattr(module, loader, lambda *a, **k: None)
+        monkeypatch.setattr(module, "load_anat", lambda *a, **k: CallSpy("ref", log))
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["slicer_script_result.py"])
+
+        module.main_export()
+
+        # the bundle after the unreadable one is still loaded
+        assert loaded == ["r-cst_lh.vtp", "r-af_lh.vtp"]
+        assert any(
+            line.startswith("slicer.util.saveScene(") and "scene.mrb" in line
+            for line in log
+        )

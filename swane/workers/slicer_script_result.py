@@ -1167,7 +1167,11 @@ def tract_model(
     # ------------------------------------------------------------------
     # Load tract volume and set segmentation geometry
     # ------------------------------------------------------------------
-    tract_node = slicer.util.loadVolume(tract_file)
+    try:
+        tract_node = slicer.util.loadVolume(tract_file)
+    except Exception as e:
+        print(f"SLICERLOADER: Failed to load tract {tract_file}: {e}")
+        return
     segmentation_node.SetReferenceImageGeometryParameterFromVolumeNode(tract_node)
 
     # ------------------------------------------------------------------
@@ -1271,7 +1275,11 @@ def tract_bundle(dti_dir: str, tract: dict, side: str = None):
 
     print(f"SLICERLOADER: Loading tract bundle '{tract['name']}'{side_print}")
 
-    model_node = slicer.util.loadModel(bundle_file)
+    try:
+        model_node = slicer.util.loadModel(bundle_file)
+    except Exception as e:
+        print(f"SLICERLOADER: Failed to load tract bundle {bundle_file}: {e}")
+        return
     model_node.SetName(f"{tract['name']}{name_suffix}")
     model_node.CreateDefaultDisplayNodes()
 
