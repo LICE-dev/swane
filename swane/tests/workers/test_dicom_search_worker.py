@@ -282,6 +282,40 @@ class TestDicomSearchRobustness:
             for record in caplog.records
         )
 
+    def test_scan_failure_still_emits_finish(self, monkeypatch, tmp_path, caplog):
+        """An error outside the per-file/per-series guards must be logged and
+        must not leave the GUI waiting for sig_finish (its progress dialog is
+        not closable)."""
+        write_minimal_dicom(str(tmp_path / "a.dcm"), subject_id="P_FAIL")
+        worker = DicomSearchWorker(str(tmp_path))
+
+        def failing_load_dir():
+            raise OSError("simulated scan failure")
+
+        monkeypatch.setattr(worker, "load_dir", failing_load_dir)
+        finished = []
+        worker.signal.sig_finish.connect(finished.append)
+
+        with caplog.at_level("ERROR", logger="swane.workers.DicomSearchWorker"):
+            worker.run()
+
+        assert finished == [worker]
+        assert any(
+            record.exc_info and "simulated scan failure" in str(record.exc_info[1])
+            for record in caplog.records
+        )
+
+    def test_normal_scan_emits_finish_once(self, tmp_path):
+        write_minimal_dicom(str(tmp_path / "a.dcm"), subject_id="P_ONCE")
+        worker = DicomSearchWorker(str(tmp_path))
+        finished = []
+        worker.signal.sig_finish.connect(finished.append)
+
+        worker.run()
+
+        assert finished == [worker]
+        assert worker.tree.get_subject_list() == ["P_ONCE"]
+
     def test_missing_modality_and_name_do_not_raise(self, tmp_path):
         """Headers lacking Modality / PatientName must be handled via ds.get()
         instead of raising AttributeError and aborting the scan."""
