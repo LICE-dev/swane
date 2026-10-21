@@ -49,7 +49,9 @@ class ConfigManager(configparser.ConfigParser):
             The already loaded global configuration used to initialize a subject
             configuration. It is not persisted in the subject configuration.
         """
-        super(ConfigManager, self).__init__()
+        # No interpolation: SWANe never uses it, and values (folders, Slicer
+        # extension folders, free text) must keep a "%" verbatim
+        super(ConfigManager, self).__init__(interpolation=None)
         self._section_defaults = {}
         self._source_global_config = global_config
 
@@ -127,7 +129,7 @@ class ConfigManager(configparser.ConfigParser):
             return False
         try:
             # main.last_swane_version should exist in both global and subject config file
-            temp_config = configparser.ConfigParser()
+            temp_config = configparser.ConfigParser(interpolation=None)
             temp_config.read(self.config_file, encoding="utf-8")
             last_swane_version = temp_config[str(GlobalPrefCategoryList.MAIN)][
                 "last_swane_version"
@@ -387,10 +389,7 @@ class ConfigManager(configparser.ConfigParser):
             JSON produced by SlicerCheckWorker.encode_extensions_state
         """
         if self.global_config:
-            # configparser interpolation: a literal "%" must be doubled
-            self[GlobalPrefCategoryList.MAIN]["slicer_extensions_state"] = (
-                state.replace("%", "%%")
-            )
+            self[GlobalPrefCategoryList.MAIN]["slicer_extensions_state"] = state
 
     def get_slicer_revision(self) -> str:
         """
