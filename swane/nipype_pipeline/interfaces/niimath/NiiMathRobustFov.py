@@ -17,10 +17,7 @@ class NiiMathRobustFov(ImageMaths):
     input_spec = NiiMathRobustFovInputSpec
     output_spec = ImageMathsOutputSpec
 
-    def _parse_inputs(self, skip=None):
+    def _command_inputs(self):
         if self.inputs.brainsize:
-            self.inputs.op_string = f"-robustfov {self.inputs.brainsize}"
-        else:
-            self.inputs.op_string = "-robustfov"
-
-        return super(NiiMathRobustFov, self)._parse_inputs(skip)
+            return {"op_string": f"-robustfov {self.inputs.brainsize}"}
+        return {"op_string": "-robustfov"}
