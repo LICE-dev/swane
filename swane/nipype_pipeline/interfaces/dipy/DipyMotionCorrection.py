@@ -5,7 +5,8 @@ Between-volumes DWI motion correction with gradient reorientation.
 Each diffusion volume is registered to the b0 reference and the gradient
 directions are reoriented to compensate for the applied rotations (Leemans &
 Jones 2009), using dipy's official ``reorient_bvecs`` helper rather than a
-hand-rolled rotation.
+hand-rolled rotation. The registration rotations are world-space, so they are
+first expressed in the image frame the FSL-convention b-vectors live in.
 
 Two interchangeable paths sit behind the same interface:
 
@@ -35,6 +36,7 @@ from os.path import abspath, basename
 
 import numpy as np
 import nibabel as nib
+from scipy.linalg import polar
 from threadpoolctl import threadpool_limits
 from nipype.interfaces.base import (
     traits,
@@ -244,6 +246,47 @@ def _register_moving_volumes(
     return xformed, affines
 
 
+def _fsl_bvec_frame(image_affine):
+    """Orthonormal 3x3 taking an FSL-convention b-vector to world (RAS) space.
+
+    FSL b-vectors (as dcm2niix writes them) lie along the voxel axes, scaled to
+    mm, with x mirrored when the voxel-to-world determinant is positive. The
+    voxel axes are the orthonormal (polar) factor of the affine's 3x3, which
+    drops the zooms and keeps any obliquity.
+    """
+    frame, _ = polar(np.asarray(image_affine, dtype=float)[:3, :3])
+    if np.linalg.det(frame) > 0:
+        frame = frame @ np.diag([-1.0, 1.0, 1.0])
+    return frame
+
+
+def _rotations_to_bvec_frame(affines, image_affine):
+    """Express world-space registration affines in the b-vector frame.
+
+    dipy's registration returns world (RAS mm) affines, and ``reorient_bvecs``
+    applies their inverse rotation in that same frame, while the b-vectors are
+    in the image's FSL frame W. The rotation acting on those b-vectors is the
+    conjugate W^T A W: applying the world rotation directly reverses any
+    rotation that does not commute with W (for axial LAS storage, yaw and
+    roll). The polar factor of the conjugate is the conjugate of the polar
+    factor, so ``reorient_bvecs`` extracts the right rotation from it.
+
+    Parameters
+    ----------
+    affines : ndarray of shape (4, 4, n)
+        The registration affines of the non-b0 volumes.
+    image_affine : ndarray of shape (4, 4)
+        The voxel-to-world affine of the series the b-vectors refer to.
+
+    Returns
+    -------
+    ndarray of shape (3, 3, n)
+        The affines' linear parts in the b-vector frame.
+    """
+    frame = _fsl_bvec_frame(image_affine)
+    return np.einsum("ji,jkn,kl->iln", frame, affines[:3, :3], frame)
+
+
 def _serial_motion_correction(img, gtab, blas_threads=1):
     """Reference path: dipy's ``motion_correction`` with BLAS pinned.
 
@@ -404,8 +447,13 @@ class DipyMotionCorrection(BaseInterface):
         # Reorient the gradients. THE INDEXING TRAP: motion_correction returns
         # affines for *all* volumes, while reorient_bvecs expects only the
         # non-b0 ones, ordered as gtab.bvecs[~gtab.b0s_mask]. Passing the full
-        # array would silently misalign every gradient.
-        reoriented = reorient_bvecs(gtab, affine_array[..., ~gtab.b0s_mask])
+        # array would silently misalign every gradient. THE FRAME TRAP: those
+        # affines are world-space, the bvecs are in the image's FSL frame, so
+        # the rotations are conjugated into that frame first.
+        reoriented = reorient_bvecs(
+            gtab,
+            _rotations_to_bvec_frame(affine_array[..., ~gtab.b0s_mask], img.affine),
+        )
         out_bvec = self._gen_outfilename("out_bvec", "moco_", ".bvec")
         np.savetxt(out_bvec, reoriented.bvecs.T, fmt="%.10f")
 
