@@ -2,7 +2,7 @@
 
 import multiprocessing as mp
 import traceback
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from threading import RLock
 
@@ -184,6 +184,15 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             self._task_nodes.get(taskid, "unknown node"),
             error,
         )
+        self._feed_failed_result(taskid, error)
+
+    def _feed_failed_result(self, taskid, error):
+        """Give ``taskid`` a failed result carrying ``error``'s traceback.
+
+        Nipype's poll loop then reports it through :meth:`_report_crash` like
+        any other node failure. ``setdefault`` keeps a result the task may have
+        legitimately produced already.
+        """
         self._taskresult.setdefault(
             taskid,
             {
@@ -307,19 +316,37 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         if getattr(node.interface, "terminal_output", "") == "stream":
             node.interface.terminal_output = "allatonce"
 
+        start_error = None
         if getattr(node.interface, "fresh_process", False):
             # A new process for this node alone (see "Fresh processes").
-            fresh_pool = ProcessPoolExecutor(
-                max_workers=1,
-                # looked up at call time: swane_process_initializer once patched
-                initializer=_nipype_multiproc.process_initializer,
-                initargs=(self._cwd,),
-                mp_context=mp.get_context(self.plugin_args.get("mp_context")),
-            )
-            result_future = fresh_pool.submit(
-                swane_run_node, node, updatehash, self._taskid
-            )
-            self._fresh_pools[result_future] = fresh_pool
+            fresh_pool = None
+            try:
+                fresh_pool = ProcessPoolExecutor(
+                    max_workers=1,
+                    # looked up at call time: swane_process_initializer once patched
+                    initializer=_nipype_multiproc.process_initializer,
+                    initargs=(self._cwd,),
+                    mp_context=mp.get_context(self.plugin_args.get("mp_context")),
+                )
+                result_future = fresh_pool.submit(
+                    swane_run_node, node, updatehash, self._taskid
+                )
+                self._fresh_pools[result_future] = fresh_pool
+            except Exception as error:
+                # The process could not be started (e.g. fork refused under
+                # memory pressure or a process limit): a failure of this node
+                # alone, not of the run. Release the half-made pool and hand
+                # the node a failed result for nipype's crash path.
+                logger.critical(
+                    "[MultiProc] Cannot start the fresh process of %s: %s",
+                    node.fullname,
+                    error,
+                )
+                if fresh_pool is not None:
+                    fresh_pool.shutdown(wait=False, cancel_futures=True)
+                start_error = error
+                result_future = Future()
+                result_future.set_exception(error)
         else:
             try:
                 result_future = self.pool.submit(
@@ -334,6 +361,9 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         with self._task_maps_lock:
             self._task_nodes[self._taskid] = node.fullname
             self._future_taskids[result_future] = self._taskid
+        if start_error is not None:
+            self._feed_failed_result(self._taskid, start_error)
+            return self._taskid
         # Register only after the task maps are populated, and outside the
         # lock: add_done_callback() invokes synchronously when the future has
         # already completed.

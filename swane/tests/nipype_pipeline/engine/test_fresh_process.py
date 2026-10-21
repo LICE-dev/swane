@@ -12,8 +12,10 @@ process each node ran in by its PID, for every start method this platform
 offers.
 """
 
+import errno
 import multiprocessing as mp
 import os
+from concurrent.futures import ProcessPoolExecutor
 from queue import Queue
 
 import pytest
@@ -25,6 +27,7 @@ from nipype.interfaces.base import (
     traits,
 )
 
+import swane.nipype_pipeline.engine.MonitoredMultiProcPlugin as plugin_module
 from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
     MonitoredMultiProcPlugin,
 )
@@ -218,3 +221,59 @@ def test_crashed_fresh_subnode_is_reported_on_its_mapnode(tmp_path, start_method
         if report.signal_type == WorkflowSignals.NODE_ERROR:
             errors.add(report.node_name)
     assert errors == {"fresh_map_crash.mapped"}
+
+
+class _UnforkableSubmitPool(ProcessPoolExecutor):
+    """A fresh pool whose process cannot be forked, as under strict memory
+    overcommit or a process limit."""
+
+    shutdowns = []
+
+    def submit(self, *args, **kwargs):
+        raise OSError(errno.ENOMEM, "Cannot allocate memory")
+
+    def shutdown(self, *args, **kwargs):
+        type(self).shutdowns.append(self)
+        return super().shutdown(*args, **kwargs)
+
+
+class _UncreatablePool:
+    def __init__(self, *args, **kwargs):
+        raise OSError(errno.EAGAIN, "Resource temporarily unavailable")
+
+
+@pytest.mark.parametrize("failing_pool", [_UnforkableSubmitPool, _UncreatablePool])
+def test_fresh_process_that_cannot_start_fails_only_its_node(
+    tmp_path, monkeypatch, failing_pool
+):
+    """A fresh process that cannot be started is a failure of that node, not of
+    the run: the pooled nodes running and queued must still complete."""
+    # only the plugin's fresh pools: nipype's shared pool stays a real one
+    monkeypatch.setattr(plugin_module, "ProcessPoolExecutor", failing_pool)
+    _UnforkableSubmitPool.shutdowns = []
+    workflow = _workflow(tmp_path, "fresh_unstartable")
+    fresh = Node(FreshPid(), name="fresh")
+    pooled = [Node(PooledPid(), name="pooled_%d" % i) for i in range(3)]
+    workflow.add_nodes([fresh])
+    _chain(workflow, pooled)
+
+    queue = Queue()
+    plugin = _plugin("fork" if "fork" in START_METHODS else None, 2, queue)
+    # nipype's "Workflow did not execute cleanly", not the OSError
+    with pytest.raises(RuntimeError):
+        workflow.run(plugin=plugin)
+
+    reports = []
+    while not queue.empty():
+        reports.append(queue.get_nowait())
+    errors = [r for r in reports if r.signal_type == WorkflowSignals.NODE_ERROR]
+    completed = {
+        r.node_name for r in reports if r.signal_type == WorkflowSignals.NODE_COMPLETED
+    }
+    assert [r.node_name for r in errors] == ["fresh_unstartable.fresh"]
+    assert errors[0].crash_file and os.path.isfile(errors[0].crash_file)
+    assert {"fresh_unstartable.pooled_%d" % i for i in range(3)} <= completed
+    assert not plugin._fresh_pools
+    if failing_pool is _UnforkableSubmitPool:
+        # the half-made pool is released, not leaked
+        assert len(_UnforkableSubmitPool.shutdowns) == 1
