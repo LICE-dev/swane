@@ -645,6 +645,12 @@ WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
 # global config files keep working.
 RENAMED_PREFERENCES = {str(DataInputList.FMRI_RS): {"melodic_dim": "ic_dim"}}
 
+# Global and subject configuration files written by a SWANe version older than
+# this one (or with no readable last_swane_version) are discarded and replaced
+# by the defaults at load. Raise it in a release whose changes cannot be
+# migrated; never above __version__, or every start would reset again.
+PREF_RESET_BEFORE_VERSION = "0.2.5"
+
 GLOBAL_PREFERENCES = {}
 
 category = GlobalPrefCategoryList.MAIN
@@ -703,11 +709,6 @@ for _license_tool in (
         default="",
         hidden=True,
     )
-GLOBAL_PREFERENCES[category]["force_pref_reset"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    hidden=True,
-    default="true",
-)
 GLOBAL_PREFERENCES[category]["slicer_scene_ext"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     hidden=True,
