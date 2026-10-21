@@ -145,7 +145,7 @@ def get_tool_cpu_config(max_cpu: int, limit_synth_cores: bool) -> int:
     the Node.n_procs property), so the reservation is always nipype-aware.
 
     max_cpu is already resolved to a real budget by MainWorkflow (max_subj_cpu
-    < 1 becomes cpu_count()). A max_cpu of 0 is a deliberate "auto/all cores"
+    < 1 or above the computer cores becomes the computer cores). A max_cpu of 0 is a deliberate "auto/all cores"
     sentinel used by callers that never received a subject budget: it flows
     through as num_threads=0, which the tools treat as auto, and keeps golden
     snapshots deterministic (no machine-specific core count is baked in).

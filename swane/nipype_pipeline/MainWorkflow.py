@@ -1,6 +1,5 @@
 from datetime import datetime
 import os
-from multiprocessing import cpu_count
 from os.path import abspath
 
 from swane.patches.nipype_patches import apply_patches
@@ -176,8 +175,10 @@ class MainWorkflow(CustomWorkflow):
         self.max_cpu = self.global_config.getint_safe(
             GlobalPrefCategoryList.PERFORMANCE, "max_subj_cpu"
         )
-        if self.max_cpu < 1:
-            self.max_cpu = cpu_count()
+        # A configuration from another computer (copied ~/.SWANe, shared home,
+        # resized VM) can hold more cores than this one: never oversubscribe
+        if self.max_cpu < 1 or self.max_cpu > ResourceManager.get_max_cpu():
+            self.max_cpu = ResourceManager.get_max_cpu()
 
         # GPU management
         self.max_gpu = self.global_config.getint_safe(

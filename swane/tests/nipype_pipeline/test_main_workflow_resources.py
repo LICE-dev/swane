@@ -30,3 +30,21 @@ def test_max_gpu(monkeypatch, resources_owner, max_subj_gpu, expected):
     MainWorkflow.set_resources_configuration(resources_owner)
 
     assert resources_owner.max_gpu == expected
+
+
+@pytest.mark.parametrize(
+    "max_subj_cpu, expected", [("32", 7), ("7", 7), ("2", 2), ("-1", 7)]
+)
+def test_max_cpu_is_within_the_computer_cores(
+    monkeypatch, resources_owner, max_subj_cpu, expected
+):
+    # A configuration from a computer with more cores (copied ~/.SWANe, shared
+    # home, resized VM) never asks for more threads than this computer has
+    from swane.utils.ResourceManager import ResourceManager
+
+    monkeypatch.setattr(ResourceManager, "get_max_cpu", staticmethod(lambda: 7))
+    resources_owner.global_config[PERF]["max_subj_cpu"] = max_subj_cpu
+
+    MainWorkflow.set_resources_configuration(resources_owner)
+
+    assert resources_owner.max_cpu == expected
