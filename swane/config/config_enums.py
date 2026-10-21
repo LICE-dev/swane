@@ -95,6 +95,9 @@ class DeskullModality(Enum):
     BOLD = "bold"
     # Per-input antspynet networks; see the note at the deskull node in
     # venous_mr_workflow for the VENOUS choice.
+    # NODIF (the DTI b0) deliberately shares the BOLD network: with the same
+    # value it is an Enum alias of BOLD (its name is "BOLD" and iteration skips
+    # it), so never branch on it to tell the DTI b0 from a BOLD volume.
     NODIF = "bold"
     VENOUS = "flair.v0"
 

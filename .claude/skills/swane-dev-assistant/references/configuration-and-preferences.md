@@ -44,14 +44,15 @@ Use `PreferenceEntry` metadata rather than ad hoc UI/runtime checks:
 
 1. Resolve global (`~/.SWANe` or test override) versus subject (`.config`) scope.
 2. Load schema defaults into `_section_defaults` and the in-memory `ConfigParser`.
-3. Evaluate `force_pref_reset` and `last_swane_version` compatibility.
+3. Discard the existing file (global or subject alike) when its `main.last_swane_version` is missing, unreadable or older than `PREF_RESET_BEFORE_VERSION` (`preference_list.py`); a file from that version or later is always kept.
 4. Read an existing file when it remains compatible.
 5. Reassign known values through `set` so `validate_type` normalizes them; restore `default_at_startup` values instead of the persisted value.
 6. Update version metadata and save.
 
+- `ConfigManager` disables configparser interpolation (`interpolation=None`): every value, a `%` included, is stored and read verbatim. Never escape `%` or rely on `%(name)s` substitution.
 - Use `getboolean_safe`, `getint_safe`, `getfloat_safe`, and `getenum_safe` for typed reads. Keep invalid-value fallback behavior covered by tests.
 - Use `ConfigManager.set` or section assignment compatible with the existing schema. Do not bypass normalization for user-editable values.
-- Preserve unknown-version/reset behavior deliberately. A change to `force_pref_reset` can discard user choices across every category.
+- Preserve unknown-version/reset behavior deliberately. Raising `PREF_RESET_BEFORE_VERSION` discards user choices across every category, subject analysis parameters included; prefer a migration (e.g. `RENAMED_PREFERENCES`) and never set it above `__version__` (every start would reset). The old `force_pref_reset` option is no longer read and is dropped from files at load.
 - Use `reset_to_defaults` only for the intended scope and preserve the confirmation flow in `PreferencesWindow`/`SubjectTab`.
 - Treat `set_workflow_option` as a subject-only preset application. Keep `DEFAULT_WF` complete and coherent for every supported `WorkflowTypes` member.
 - Save only after a coherent set of changes; avoid exposing partially updated dependent values to runtime consumers.
@@ -59,6 +60,7 @@ Use `PreferenceEntry` metadata rather than ad hoc UI/runtime checks:
 ## Preference requirements and runtime enforcement
 
 - Treat UI disablement as guidance, not the sole enforcement layer.
+- `PreferencesWindow` hides (does not uncheck) a subject boolean whose requirement is a global preference or an unloaded input series, so its stored value, possibly `true`, is kept: its runtime consumer must re-check that gate. `swane/tests/nipype_pipeline/test_hidden_pref_runtime_gates.py` lists every such boolean and fails when a new one has no runtime gate test.
 - `PreferencesWindow` evaluates external dependencies, resources, cross-preference requirements, input requirements, and option-level requirements for presentation.
 - `ConfigManager.check_dependencies` sanitizes subject workflow choices when dependencies or resources are unavailable and, on the global config, turns off (and saves) every global boolean preference whose `dependency` is unmet (e.g. `optional_series.fmri_resting_state` without FSL, `synth.reconall` without Synth recon-all) and resets any enum preference (e.g. the Synth-tools engines) whose selected option's `option_dependency` or `option_pref_requirement` (e.g. a minimum `ram_gb`) is unmet — to the default if available, otherwise to the first available option; with no available option an unmet dependency still resets to the default, while an unmet requirement leaves it unchanged. Global booleans whose `pref_requirement` is unmet (e.g. `synth.reconall` below its RAM) are turned off too. Requirements on global preferences are checked for a subject config only when the global config is passed (`Subject.create_config` does). `MainWindow.edit_config` re-runs the check on the global and open subject configs after the Global Preferences are saved, and `PreferenceUIEntry.disable_combo_option` moves a disabled selection with the same default-then-first-enabled rule. A shell without FSL/FreeSurfer sourced therefore persistently disables those booleans. Keep this runtime enforcement aligned with the catalog metadata.
 - `swane/config/dependency_policy.py` holds the build-time `FSL_MANDATORY` flag. True: `Subject.can_generate_workflow` requires FSL, the home tab lists it as mandatory, and `default_engines` makes the FSL tools the default deskull/tractography/segmentation/fMRI engines (registration stays ANTs). False: FSL is a recommended dependency and the FSL-free engines are the defaults. Consumers read `dependency_policy.FSL_MANDATORY` at call time so tests can monkeypatch it; the preference defaults are fixed at import time.
