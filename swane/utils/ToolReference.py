@@ -495,6 +495,7 @@ equivalent_command_list = {
     "SpatialFilter": "MathsCommand",
     "ApplyXFM": "FLIRT",
     "CustomSliceTimer": "FEAT",
+    "CustomFilterRegressor": "FilterRegressor",
     "FEATModel": "FEAT",
     "FILMGLS": "FEAT",
     "SmoothEstimate": "Cluster",

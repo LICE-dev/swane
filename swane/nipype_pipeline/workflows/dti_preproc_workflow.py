@@ -136,9 +136,12 @@ def dti_preproc_workflow(
     conversion.inputs.name_conflicts = 1
     conversion.inputs.merge_imgs = 2
 
-    # NODE 1b: Orienting in radiological convention
+    # NODE 1b: Orienting in radiological convention. The b-vectors lie along the
+    # voxel axes, so they follow the same permutation/flip: every consumer reads
+    # the reoriented ones, never dcm2niix's.
     reorient = Node(ForceOrient(), name="dti_reOrient")
     workflow.connect(conversion, "converted_files", reorient, "in_file")
+    workflow.connect(conversion, "bvecs", reorient, "in_bvec")
 
     # NODE 2: b0 image extraction
     nodif = Node(ExtractVolumes(), name="dti_nodif")
@@ -173,8 +176,8 @@ def dti_preproc_workflow(
         eddy.inputs.out_file = "data.nii.gz"
         workflow.connect(reorient, "out_file", eddy, "in_file")
         eddy_output_name = "eddy_corrected"
-        # EddyCorrect emits no rotated b-vectors, so the raw ones stay.
-        bvec_source, bvec_field = conversion, "bvecs"
+        # EddyCorrect emits no rotated b-vectors, so the unrotated ones stay.
+        bvec_source, bvec_field = reorient, "out_bvec"
     else:
         # NODE 4a: Generate Eddy files
         eddy_files = Node(GenEddyFiles(), name="dti_eddy_files")
@@ -203,7 +206,7 @@ def dti_preproc_workflow(
 
         workflow.connect(reorient, "out_file", eddy, "in_file")
         workflow.connect(conversion, "bvals", eddy, "in_bval")
-        workflow.connect(conversion, "bvecs", eddy, "in_bvec")
+        workflow.connect(reorient, "out_bvec", eddy, "in_bvec")
         workflow.connect(eddy_files, "acqp", eddy, "in_acqp")
         workflow.connect(eddy_files, "index", eddy, "in_index")
         workflow.connect(b0_deskull, "mask_file", eddy, "in_mask")

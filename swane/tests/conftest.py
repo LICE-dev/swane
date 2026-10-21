@@ -191,6 +191,20 @@ def _has_display():
     return bool(os.environ.get("DISPLAY"))
 
 
+@pytest.fixture
+def slicer_executable():
+    """The 3D Slicer executable a ``requires_slicer`` test should launch, found
+    the same way that marker looks for one."""
+    for path in (
+        os.environ.get("SWANE_SLICER_PATH"),
+        _configured_slicer_path(),
+        shutil.which("Slicer"),
+    ):
+        if path and os.path.exists(path):
+            return path
+    pytest.skip("no 3D Slicer executable found")
+
+
 # --------------------------------------------------------------------------- #
 # Filesystem / config fixtures
 # --------------------------------------------------------------------------- #

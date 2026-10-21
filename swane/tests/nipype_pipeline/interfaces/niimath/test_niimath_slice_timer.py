@@ -90,11 +90,10 @@ class TestCmdline:
         node.inputs.in_file = _save_series(tmp_path / "bold.nii.gz", n_slices=5)
         node.inputs.time_repetition = 2.5
         node.inputs.slice_timing = SliceTiming.INTERLEAVED
-        node._parse_inputs()
-        assert node.inputs.op_string == (
+        assert (
             "-stc --slicetiming 0.000000,1.500000,0.500000,2.000000,1.000000"
             " -tzero 1.250000"
-        )
+        ) in node.cmdline
 
 
 def test_real_execution_aligns_slices_to_half_tr(tmp_path, monkeypatch):
