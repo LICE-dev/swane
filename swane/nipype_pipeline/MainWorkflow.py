@@ -53,9 +53,6 @@ from swane.nipype_pipeline.workflows.tractography_workflow import (
 )
 from swane.config.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
-from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
-    MonitoredMultiProcPlugin,
-)
 
 DEBUG = False
 
@@ -187,7 +184,9 @@ class MainWorkflow(CustomWorkflow):
             GlobalPrefCategoryList.PERFORMANCE, "max_subj_gpu"
         )
         if self.max_gpu < 0:
-            self.max_gpu = MonitoredMultiProcPlugin.gpu_count()
+            from nipype.utils.gpu_count import gpu_count
+
+            self.max_gpu = gpu_count()
 
         # RAM management
         self.memory_gb = self.global_config.getfloat_safe(
