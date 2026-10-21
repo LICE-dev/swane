@@ -66,16 +66,50 @@ def test_every_ram_requirement_has_a_windows_value():
             assert table["windows"] == table["other"], name
 
 
-def test_subject_ram_limits(monkeypatch):
+def _fake_total_ram(monkeypatch, total_gb):
     class FakeVM:
-        total = 16 * 1024**3
+        total = total_gb * 1024**3
 
     monkeypatch.setattr(rm, "virtual_memory", lambda: FakeVM)
+
+
+def test_subject_ram_limits(monkeypatch):
+    _fake_total_ram(monkeypatch, 16)
     assert ResourceManager.get_maximum_ram() == pytest.approx(
         16 * ResourceManager.MAXIMUM_RAM_PERC / 100
     )
-    assert (
-        0
-        < ResourceManager.get_minimum_subject_ram()
-        < (ResourceManager.get_minimum_ram())
+    # The floor is the same whatever the subject tab limit: the limits apply
+    # to each tab and are never split among the tabs
+    assert ResourceManager.get_minimum_subject_ram() == (
+        ResourceManager.MINIMUM_SUBJECT_RAM
     )
+
+
+@pytest.mark.parametrize(
+    "total_gb, expected_min, expected_max",
+    [
+        (64, 5, 57.6),
+        (8, 5, 7.2),
+        # 90% of the RAM is below the floor: the maximum is raised to it
+        (5.2, 5, 5),
+        # Less RAM than the floor: both limits are the whole RAM
+        (4, 4, 4),
+    ],
+)
+def test_subject_ram_range_is_never_inverted(
+    monkeypatch, total_gb, expected_min, expected_max
+):
+    _fake_total_ram(monkeypatch, total_gb)
+    low = ResourceManager.get_minimum_subject_ram()
+    high = ResourceManager.get_maximum_ram()
+    assert low == pytest.approx(expected_min, abs=0.01)
+    assert high == pytest.approx(expected_max, abs=0.01)
+    assert low <= high <= ResourceManager.total_memory_gb()
+
+
+@pytest.mark.parametrize("total_gb, expected", [(16, 11.2), (6, 5), (4, 4)])
+def test_default_ram_is_within_the_subject_range(monkeypatch, total_gb, expected):
+    # The ram_gb default (DEFAULT_RAM_PERC of the RAM) never goes below the
+    # floor of a subject tab
+    _fake_total_ram(monkeypatch, total_gb)
+    assert ResourceManager.get_default_ram() == pytest.approx(expected, abs=0.01)

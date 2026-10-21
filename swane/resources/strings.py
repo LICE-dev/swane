@@ -158,6 +158,12 @@ subj_tab_old_wf_found = (
     + """. Do you want to resume the previous analysis? If you want to delete all
 previous analyses and start over press NO, otherwise press YES"""
 )
+subj_tab_old_wf_incompatible = (
+    "This subject has a previous analysis made by a different "
+    + APPNAME
+    + """ version, which cannot be resumed. Do you want to delete it and start
+a new analysis?"""
+)
 subj_tab_old_wf_resume = "Resume execution"
 subj_tab_old_wf_reset = "New execution"
 subj_tab_old_fs_found = "An existing FreeSurfer folder was detected. Do you want to keep or delete the existing folder?"

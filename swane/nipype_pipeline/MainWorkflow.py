@@ -1,6 +1,5 @@
 from datetime import datetime
 import os
-from multiprocessing import cpu_count
 from os.path import abspath
 
 from swane.patches.nipype_patches import apply_patches
@@ -53,9 +52,6 @@ from swane.nipype_pipeline.workflows.tractography_workflow import (
 )
 from swane.config.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
-from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
-    MonitoredMultiProcPlugin,
-)
 
 DEBUG = False
 
@@ -179,15 +175,19 @@ class MainWorkflow(CustomWorkflow):
         self.max_cpu = self.global_config.getint_safe(
             GlobalPrefCategoryList.PERFORMANCE, "max_subj_cpu"
         )
-        if self.max_cpu < 1:
-            self.max_cpu = cpu_count()
+        # A configuration from another computer (copied ~/.SWANe, shared home,
+        # resized VM) can hold more cores than this one: never oversubscribe
+        if self.max_cpu < 1 or self.max_cpu > ResourceManager.get_max_cpu():
+            self.max_cpu = ResourceManager.get_max_cpu()
 
         # GPU management
         self.max_gpu = self.global_config.getint_safe(
             GlobalPrefCategoryList.PERFORMANCE, "max_subj_gpu"
         )
         if self.max_gpu < 0:
-            self.max_gpu = MonitoredMultiProcPlugin.gpu_count()
+            from nipype.utils.gpu_count import gpu_count
+
+            self.max_gpu = gpu_count()
 
         # RAM management
         self.memory_gb = self.global_config.getfloat_safe(

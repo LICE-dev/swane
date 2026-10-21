@@ -415,12 +415,25 @@ class MainWindow(QMainWindow):
             # global and the open subject configurations before any workflow
             # is generated again.
             self.global_config.check_dependencies(self.dependency_manager)
-            for subj in self.subject_tab_array:
-                if subj.subject is not None and subj.subject.config is not None:
-                    subj.subject.config.check_dependencies(
-                        self.dependency_manager, self.global_config
-                    )
+            self._check_subject_dependencies()
             self.reset_workflows()
+
+    def _check_subject_dependencies(self):
+        """
+        Re-validate the configuration of the open subjects against the
+        global preferences (e.g. an option above the current ram_gb).
+
+        Returns
+        -------
+        None.
+
+        """
+
+        for subj in self.subject_tab_array:
+            if subj.subject is not None and subj.subject.config is not None:
+                subj.subject.config.check_dependencies(
+                    self.dependency_manager, self.global_config
+                )
 
     def edit_wf_config(self):
         """
@@ -477,6 +490,10 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
+        # The wizard may change the resources and the engines: no workflow
+        # generated with the previous ones survives, whatever the user does.
+        self.reset_workflows()
+
         # Parenting makes the window manager keep the dialog above the main
         # window, which on first run is shown right before the wizard.
         wf_preference_window = PreferenceWizardWindow(
@@ -485,6 +502,10 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         wf_preference_window.exec()
+
+        # The wizard picks the global engines and defaults within the new
+        # ram_gb, but the open subjects keep their own choices (e.g. SynthSeg).
+        self._check_subject_dependencies()
 
     def run_license_consent_gate(self) -> bool:
         """
