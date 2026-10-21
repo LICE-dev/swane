@@ -71,3 +71,64 @@ class TestZscoreComputation:
 
         with pytest.raises(RuntimeError):
             node.run()
+
+
+class TestZscoreDegenerateRoi:
+    """An ROI without a usable reference distribution must fail, not write NaNs.
+
+    With fewer than two non-zero input voxels in the ROI the sample standard
+    deviation is undefined (NaN), and ``nan == 0`` is false: without an explicit
+    check the node saved an all-NaN map that was then sampled on the surfaces.
+    """
+
+    @staticmethod
+    def _run(make_nifti, in_data, roi):
+        node = Zscore()
+        node.inputs.in_file = make_nifti("map.nii.gz", data=in_data)
+        node.inputs.ROI_file = make_nifti("roi.nii.gz", data=roi)
+        node.inputs.out_file = "z.nii.gz"
+        node.run()
+
+    @pytest.mark.parametrize(
+        "roi_voxels, nonzero_voxels, expected_count",
+        [
+            ([], [], 0),  # empty ROI
+            ([0, 1], [4, 5, 6], 0),  # ROI only over zero (background) voxels
+            ([0], [0, 1], 1),  # a single usable voxel
+        ],
+    )
+    def test_fewer_than_two_voxels_raises(
+        self, workspace, make_nifti, roi_voxels, nonzero_voxels, expected_count
+    ):
+        in_data = np.zeros(8, dtype=np.float32)
+        in_data[nonzero_voxels] = [3.0, 5.0, 7.0][: len(nonzero_voxels)]
+        roi = np.zeros(8, dtype=np.float32)
+        roi[roi_voxels] = 1
+
+        with pytest.raises(
+            RuntimeError, match=r"contains %d non-zero" % expected_count
+        ):
+            self._run(make_nifti, in_data.reshape(2, 2, 2), roi.reshape(2, 2, 2))
+
+        assert not os.path.exists(workspace / "z.nii.gz")
+
+    def test_two_voxels_are_enough(self, workspace, make_nifti):
+        in_data = np.array([2, 4, 9, 0, 0, 0, 0, 0], dtype=np.float32)
+        roi = np.array([1, 1, 0, 0, 0, 0, 0, 0], dtype=np.float32)
+
+        self._run(make_nifti, in_data.reshape(2, 2, 2), roi.reshape(2, 2, 2))
+
+        out = nib.load(workspace / "z.nii.gz").get_fdata().ravel()
+        # mean 3, sample std sqrt(2)
+        assert out[0] == pytest.approx((2 - 3) / np.sqrt(2), rel=1e-5)
+        assert out[2] == pytest.approx((9 - 3) / np.sqrt(2), rel=1e-5)
+        assert np.isfinite(out).all()
+
+    def test_nan_inside_the_roi_raises(self, workspace, make_nifti):
+        in_data = np.array([1, 2, np.nan, 4, 0, 0, 0, 0], dtype=np.float32)
+        roi = np.array([1, 1, 1, 1, 0, 0, 0, 0], dtype=np.float32)
+
+        with pytest.raises(RuntimeError, match="not finite"):
+            self._run(make_nifti, in_data.reshape(2, 2, 2), roi.reshape(2, 2, 2))
+
+        assert not os.path.exists(workspace / "z.nii.gz")
