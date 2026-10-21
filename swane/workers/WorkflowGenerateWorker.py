@@ -1,4 +1,4 @@
-from swane.utils.qt_compat import QRunnable, Signal, QObject
+from PySide6.QtCore import QRunnable, Signal, QObject
 from swane.utils.Subject import SubjectRet, Subject
 
 
