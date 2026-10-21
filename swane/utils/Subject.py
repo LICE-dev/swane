@@ -13,7 +13,7 @@ from swane.resources import strings
 import traceback
 from swane.nipype_pipeline.workflows.workflow_constants import FS_DIR, RESULT_DIR
 from multiprocessing import Queue
-from swane.utils.ToolReference import tool_reference_list
+from swane.utils.ToolReference import get_command_info
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -745,9 +745,12 @@ class Subject:
         interfaces = self.workflow.get_interface_array()
         reference_file = os.path.join(self.folder, "references.txt")
         with open(reference_file, "w", encoding="utf-8") as f:
+            written = set()
             for key in interfaces:
-                if key in tool_reference_list:
-                    tool = tool_reference_list[key]
+                tool = get_command_info(key)
+                # Several interface classes can share one reference (aliases)
+                if tool is not None and id(tool) not in written:
+                    written.add(id(tool))
                     f.write(f"Command: {tool.command}\n")
                     f.write(f"URL: {tool.url}\n")
                     if tool.references:
