@@ -306,6 +306,82 @@ def test_shutdown_after_stop_then_completed_run(
     assert shutdown_calls == ["systemctl poweroff"]
 
 
+@pytest.mark.parametrize(
+    "signal",
+    [
+        WorkflowSignals.INVALID_SIGNAL,
+        WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES,
+        WorkflowSignals.WORKFLOW_CRASHED,
+    ],
+)
+def test_fatal_workflow_reports_stop_the_running_process(
+    qtbot, monkeypatch, main_window, signal
+):
+    """The process lives on the Subject: a fatal report must reach its stop
+    event, not an attribute of the tab that is never assigned."""
+    import threading
+    from types import SimpleNamespace
+    from PySide6.QtWidgets import QMessageBox
+
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_fatal_stop",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
+    stop_event = threading.Event()
+    subject.workflow_process = SimpleNamespace(
+        is_alive=lambda: True, stop_event=stop_event
+    )
+
+    tab.update_node_list(WorkflowReport(signal))
+
+    assert stop_event.is_set()
+    assert tab.workflow_had_error is True
+
+
+def test_fatal_workflow_report_without_live_process_does_not_raise(
+    qtbot, monkeypatch, main_window
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_fatal_dead",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
+
+    tab.update_node_list(WorkflowReport(WorkflowSignals.INVALID_SIGNAL))
+
+    assert tab.workflow_had_error is True
+
+
+def test_invalid_signal_stop_delivered_during_notice_does_not_shut_down(
+    qtbot, monkeypatch, main_window, shutdown_calls
+):
+    """The notice is modal: the WORKFLOW_STOP that follows the stop is
+    delivered while it is open, and must already see the error."""
+    from PySide6.QtWidgets import QMessageBox
+
+    tab = _shutdown_tab(qtbot, main_window, "subj_invalid_shutdown")
+    monkeypatch.setattr(
+        QMessageBox,
+        "exec",
+        lambda self: tab.update_node_list(
+            WorkflowReport(WorkflowSignals.WORKFLOW_STOP)
+        ),
+    )
+
+    tab.update_node_list(WorkflowReport(WorkflowSignals.INVALID_SIGNAL))
+
+    assert shutdown_calls == []
+
+
 def test_label_from_dicom():
     label_single = SubjectTab.label_from_dicom(176, "Subj01", "MR", "T1_MPRAGE", 1)
     assert label_single == "Subj01 - MR - <b>T1_MPRAGE</b>: 176 images, 1 volume"

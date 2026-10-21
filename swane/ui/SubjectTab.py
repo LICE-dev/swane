@@ -159,20 +159,15 @@ class SubjectTab(QTabWidget):
             return
         elif wf_report.signal_type == WorkflowSignals.INVALID_SIGNAL:
             # Invalid signal sent from WF to UI, code error intercept
-            try:
-                self.workflow_process.stop_event.set()
-            except Exception:
-                pass
+            self.subject.stop_workflow()
+            # Before the modal box: its event loop delivers the WORKFLOW_STOP
+            self.workflow_had_error = True
             msg_box = QMessageBox()
             msg_box.setText(strings.subj_tab_wf_invalid_signal)
             msg_box.exec()
-            self.workflow_had_error = True
             return
         elif wf_report.signal_type == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES:
-            try:
-                self.workflow_process.stop_event.set()
-            except Exception:
-                pass
+            self.subject.stop_workflow()
             self.workflow_resources_notified = True
             self.workflow_had_error = True
             msg_box = QMessageBox()
@@ -180,10 +175,7 @@ class SubjectTab(QTabWidget):
             msg_box.exec()
             return
         elif wf_report.signal_type == WorkflowSignals.WORKFLOW_CRASHED:
-            try:
-                self.workflow_process.stop_event.set()
-            except Exception:
-                pass
+            self.subject.stop_workflow()
             self.workflow_had_error = True
             # The workflow process reports every failed run as crashed: word the
             # notice after what was already reported, and do not repeat the
