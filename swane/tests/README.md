@@ -81,6 +81,10 @@ is missing:
 | `requires_display`   | a real display is available                  |
 | `heavy`              | `--run-heavy` is passed                      |
 
+A `requires_slicer` test that launches Slicer itself takes the
+`slicer_executable` fixture, which returns the executable found in that same
+order.
+
 ## Running
 
 ```bash

@@ -24,7 +24,6 @@ import sys
 import glob
 import subprocess
 import argparse
-import SimpleITK as sitk
 
 # slicer/vtk/qt are auto-injected as globals only into the script Slicer runs
 # directly via --python-script; this module must import them explicitly so
@@ -34,8 +33,6 @@ import SimpleITK as sitk
 import slicer
 import vtk
 import qt
-
-os.environ["QT_LOGGING_RULES"] = "*.warning=false"
 
 # -----------------------------
 # Utility Functions
@@ -160,6 +157,10 @@ def load_anat(
 
     try:
         print(f"SLICERLOADER: Loading {volume_name}")
+        # Imported here: only the export needs it, and this module is also
+        # imported at every Slicer start by slicerrc_swane.py.
+        import SimpleITK as sitk
+
         reader = sitk.ImageFileReader()
         reader.SetFileName(file_path)
         reader.ReadImageInformation()
@@ -632,33 +633,55 @@ class TimecourseViewer:
         self._chart_node = None
         self._observed_composite_nodes = []
 
+    def _plot_nodes(self):
+        return (self._plot_table_node, self._series_node, self._chart_node)
+
     def _ensure_plot_nodes(self):
-        if self._plot_table_node is None:
-            self._plot_table_node = slicer.mrmlScene.AddNewNodeByClass(
-                "vtkMRMLTableNode", self.TABLE_NAME
-            )
-            table = self._plot_table_node.GetTable()
-            x_array = vtk.vtkIntArray()
-            x_array.SetName("Volume")
-            y_array = vtk.vtkDoubleArray()
-            y_array.SetName("Timecourse")
-            table.AddColumn(x_array)
-            table.AddColumn(y_array)
+        scene = slicer.mrmlScene
+        if all(
+            node is not None and scene.IsNodePresent(node)
+            for node in self._plot_nodes()
+        ):
+            return
+        # First use, or a node left the scene (deleted by the user): rebuild
+        # the whole table/series/chart set, dropping what is left of the old one.
+        for node in self._plot_nodes():
+            if node is not None and scene.IsNodePresent(node):
+                scene.RemoveNode(node)
 
-        if self._series_node is None:
-            self._series_node = slicer.mrmlScene.AddNewNodeByClass(
-                "vtkMRMLPlotSeriesNode", self.SERIES_NAME
-            )
-            self._series_node.SetAndObserveTableNodeID(self._plot_table_node.GetID())
-            self._series_node.SetXColumnName("Volume")
-            self._series_node.SetYColumnName("Timecourse")
-            self._series_node.SetPlotType(self._series_node.PlotTypeLine)
+        self._plot_table_node = scene.AddNewNodeByClass(
+            "vtkMRMLTableNode", self.TABLE_NAME
+        )
+        table = self._plot_table_node.GetTable()
+        x_array = vtk.vtkIntArray()
+        x_array.SetName("Volume")
+        y_array = vtk.vtkDoubleArray()
+        y_array.SetName("Timecourse")
+        table.AddColumn(x_array)
+        table.AddColumn(y_array)
 
-        if self._chart_node is None:
-            self._chart_node = slicer.mrmlScene.AddNewNodeByClass(
-                "vtkMRMLPlotChartNode", self.CHART_NAME
-            )
-            self._chart_node.AddAndObservePlotSeriesNodeID(self._series_node.GetID())
+        self._series_node = scene.AddNewNodeByClass(
+            "vtkMRMLPlotSeriesNode", self.SERIES_NAME
+        )
+        self._series_node.SetAndObserveTableNodeID(self._plot_table_node.GetID())
+        self._series_node.SetXColumnName("Volume")
+        self._series_node.SetYColumnName("Timecourse")
+        self._series_node.SetPlotType(self._series_node.PlotTypeLine)
+
+        self._chart_node = scene.AddNewNodeByClass(
+            "vtkMRMLPlotChartNode", self.CHART_NAME
+        )
+        self._chart_node.AddAndObservePlotSeriesNodeID(self._series_node.GetID())
+
+    def _on_scene_closed(self, caller, event):
+        # Everything cached here belongs to the scene that was just closed:
+        # its plot nodes are gone, and neither the last plotted IC nor the
+        # remembered layout applies to the next scene.
+        self._last_ic = None
+        self._previous_layout = None
+        self._plot_table_node = None
+        self._series_node = None
+        self._chart_node = None
 
     def _show(self, ic: int, volume_name: str) -> bool:
         """
@@ -772,6 +795,9 @@ class TimecourseViewer:
                 self._observe_composite_node(calldata)
 
         slicer.mrmlScene.AddObserver(slicer.vtkMRMLScene.NodeAddedEvent, _on_node_added)
+        slicer.mrmlScene.AddObserver(
+            slicer.vtkMRMLScene.EndCloseEvent, self._on_scene_closed
+        )
         # keep the callback (and its closure over self) alive for the
         # session, since AddObserver doesn't hold a Python reference
         self._on_node_added = _on_node_added
@@ -1167,7 +1193,11 @@ def tract_model(
     # ------------------------------------------------------------------
     # Load tract volume and set segmentation geometry
     # ------------------------------------------------------------------
-    tract_node = slicer.util.loadVolume(tract_file)
+    try:
+        tract_node = slicer.util.loadVolume(tract_file)
+    except Exception as e:
+        print(f"SLICERLOADER: Failed to load tract {tract_file}: {e}")
+        return
     segmentation_node.SetReferenceImageGeometryParameterFromVolumeNode(tract_node)
 
     # ------------------------------------------------------------------
@@ -1271,7 +1301,11 @@ def tract_bundle(dti_dir: str, tract: dict, side: str = None):
 
     print(f"SLICERLOADER: Loading tract bundle '{tract['name']}'{side_print}")
 
-    model_node = slicer.util.loadModel(bundle_file)
+    try:
+        model_node = slicer.util.loadModel(bundle_file)
+    except Exception as e:
+        print(f"SLICERLOADER: Failed to load tract bundle {bundle_file}: {e}")
+        return
     model_node.SetName(f"{tract['name']}{name_suffix}")
     model_node.CreateDefaultDisplayNodes()
 
@@ -1479,7 +1513,7 @@ def main_export():
     load_freesurfer(results_folder, ref_node)
     dtiDir = os.path.join(results_folder, "dti")
     if os.path.isdir(dtiDir):
-        main_tract(dtiDir, results_folder)
+        main_tract(dtiDir, results_folder, dti_threshold=args.dti_threshold)
     load_seeg(results_folder)
     show_node(ref_node)
 
@@ -1494,6 +1528,7 @@ if __name__ == "__main__":
     # Guarded so this file can also be imported (e.g. by slicerrc_swane.py, at
     # Slicer startup) to reuse install_timecourse_viewer() without
     # re-running the whole batch export.
+    os.environ["QT_LOGGING_RULES"] = "*.warning=false"
     try:
         main_export()
     except Exception:
