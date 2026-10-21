@@ -31,7 +31,7 @@ This file is versioned with the repository so every trusted clone uses the same 
 ## Terminology
 
 - SWANe is a research tool, not a medical device: never describe or imply clinical/medical use in code, comments, docstrings, UI strings, documentation, or commit messages.
-- Never use "patient" (or its translations) anywhere in code or docs — always use "subject".
+- Never use "patient" (or its translations) anywhere in code or docs — always use "subject". Exceptions, kept as published: verbatim third-party licence text (`NOTICE.md`, `swane/licenses/`) and standard DICOM attribute keywords (e.g. `PatientID`).
 
 ## SWANe component map
 
