@@ -1,6 +1,7 @@
 """Unit tests for :class:`swane.config.ConfigManager.ConfigManager`."""
 
 import configparser
+import json
 import os
 import shutil
 
@@ -383,6 +384,87 @@ class TestPreferenceResetOnUpgrade:
         _, subject_config = self._load(global_dir, subject_dir)
         assert "force_pref_reset" not in subject_config[self.MAIN]
         assert "force_pref_reset" not in GLOBAL_PREFERENCES[GlobalPrefCategoryList.MAIN]
+
+
+class TestPercentValues:
+    """SWANe uses no configparser interpolation: a "%" in any value (folders,
+    Slicer extension folders, free text) is stored and read back verbatim."""
+
+    STATE = json.dumps({"revision": "1", "paths": {"A": "/home/u%20x/100%/ext"}})
+
+    def test_slicer_extensions_state_survives_reload(self, tmp_path):
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        config.set_slicer_extensions_state(self.STATE)
+        config.save()
+
+        reloaded = ConfigManager(global_base_folder=str(tmp_path))
+
+        assert reloaded.get_slicer_extensions_state() == self.STATE
+        assert self.STATE in (tmp_path / ".SWANe").read_text(encoding="utf-8")
+
+    def test_main_working_directory_survives_reload(self, tmp_path):
+        folder = tmp_path / "50%done"
+        folder.mkdir()
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        config.set_main_working_directory(str(folder))
+
+        reloaded = ConfigManager(global_base_folder=str(tmp_path))
+
+        assert reloaded.get_main_working_directory() == str(folder)
+
+    def test_subject_text_value_survives_reload(self, tmp_path):
+        global_dir = tmp_path / "global"
+        global_dir.mkdir()
+        subject_dir = tmp_path / "subj"
+        subject_dir.mkdir()
+        global_config = ConfigManager(global_base_folder=str(global_dir))
+        config = ConfigManager(str(subject_dir), global_config=global_config)
+        config[DataInputList.FMRI_0]["task_a_name"] = "Motor 50%"
+        config.save()
+
+        reloaded = ConfigManager(str(subject_dir), global_config=global_config)
+
+        assert reloaded[DataInputList.FMRI_0]["task_a_name"] == "Motor 50%"
+
+    def test_hand_edited_percent_is_literal(self, tmp_path):
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        config.save()
+        path = tmp_path / ".SWANe"
+        text = path.read_text(encoding="utf-8").replace(
+            "default_dicom_folder = dicom", "default_dicom_folder = a%b%(x)s"
+        )
+        path.write_text(text, encoding="utf-8")
+
+        reloaded = ConfigManager(global_base_folder=str(tmp_path))
+
+        assert reloaded.get_default_dicom_folder() == "a%b%(x)s"
+
+    def test_state_escaped_by_an_older_build_falls_back_to_full_check(self, tmp_path):
+        # Builds before this fix stored a "%" of the state as "%%": read
+        # verbatim, that folder does not exist, so the full Slicer check runs
+        # again and records the state anew.
+        from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+        folder = tmp_path / "100%"
+        folder.mkdir()
+        config = ConfigManager(global_base_folder=str(tmp_path))
+        config.save()
+        path = tmp_path / ".SWANe"
+        escaped = json.dumps({"paths": {"A": str(folder)}}).replace("%", "%%")
+        text = path.read_text(encoding="utf-8").replace(
+            "slicer_extensions_state = ", "slicer_extensions_state = " + escaped
+        )
+        path.write_text(text, encoding="utf-8")
+
+        reloaded = ConfigManager(global_base_folder=str(tmp_path))
+
+        assert reloaded.get_slicer_extensions_state() == escaped
+        assert (
+            SlicerCheckWorker.extensions_state_is_valid(
+                reloaded.get_slicer_extensions_state(), ["A"]
+            )
+            is False
+        )
 
 
 class TestMailManagerFactory:

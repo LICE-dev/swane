@@ -49,6 +49,7 @@ Use `PreferenceEntry` metadata rather than ad hoc UI/runtime checks:
 5. Reassign known values through `set` so `validate_type` normalizes them; restore `default_at_startup` values instead of the persisted value.
 6. Update version metadata and save.
 
+- `ConfigManager` disables configparser interpolation (`interpolation=None`): every value, a `%` included, is stored and read verbatim. Never escape `%` or rely on `%(name)s` substitution.
 - Use `getboolean_safe`, `getint_safe`, `getfloat_safe`, and `getenum_safe` for typed reads. Keep invalid-value fallback behavior covered by tests.
 - Use `ConfigManager.set` or section assignment compatible with the existing schema. Do not bypass normalization for user-editable values.
 - Preserve unknown-version/reset behavior deliberately. Raising `PREF_RESET_BEFORE_VERSION` discards user choices across every category, subject analysis parameters included; prefer a migration (e.g. `RENAMED_PREFERENCES`) and never set it above `__version__` (every start would reset). The old `force_pref_reset` option is no longer read and is dropped from files at load.
