@@ -16,10 +16,6 @@ import types
 
 import pytest
 
-# slicer_script_result imports SimpleITK at module level (it normally runs inside
-# 3D Slicer); SimpleITK is not a SWANe dependency, so skip when it is absent.
-pytest.importorskip("SimpleITK", reason="SimpleITK is not installed")
-
 import swane
 
 MODULE_PATH = os.path.join(
@@ -508,3 +504,24 @@ class TestUnreadableTractFile:
             line.startswith("slicer.util.saveScene(") and "scene.mrb" in line
             for line in log
         )
+
+
+def test_import_has_no_startup_side_effects(monkeypatch):
+    """
+    slicerrc_swane imports this module at every Slicer start, so importing it
+    must neither load SimpleITK nor silence Qt warnings in the whole process
+    (and, through it, in every child process).
+    """
+    monkeypatch.delenv("QT_LOGGING_RULES", raising=False)
+    monkeypatch.delitem(sys.modules, "SimpleITK", raising=False)
+    log = []
+    for name in ("slicer", "vtk", "qt"):
+        monkeypatch.setitem(sys.modules, name, _fake_module(name, log))
+
+    spec = importlib.util.spec_from_file_location(
+        "swane_slicer_script_result_import_check", MODULE_PATH
+    )
+    spec.loader.exec_module(importlib.util.module_from_spec(spec))
+
+    assert "SimpleITK" not in sys.modules
+    assert "QT_LOGGING_RULES" not in os.environ

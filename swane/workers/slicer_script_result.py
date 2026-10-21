@@ -24,7 +24,6 @@ import sys
 import glob
 import subprocess
 import argparse
-import SimpleITK as sitk
 
 # slicer/vtk/qt are auto-injected as globals only into the script Slicer runs
 # directly via --python-script; this module must import them explicitly so
@@ -34,8 +33,6 @@ import SimpleITK as sitk
 import slicer
 import vtk
 import qt
-
-os.environ["QT_LOGGING_RULES"] = "*.warning=false"
 
 # -----------------------------
 # Utility Functions
@@ -160,6 +157,10 @@ def load_anat(
 
     try:
         print(f"SLICERLOADER: Loading {volume_name}")
+        # Imported here: only the export needs it, and this module is also
+        # imported at every Slicer start by slicerrc_swane.py.
+        import SimpleITK as sitk
+
         reader = sitk.ImageFileReader()
         reader.SetFileName(file_path)
         reader.ReadImageInformation()
@@ -1527,6 +1528,7 @@ if __name__ == "__main__":
     # Guarded so this file can also be imported (e.g. by slicerrc_swane.py, at
     # Slicer startup) to reuse install_timecourse_viewer() without
     # re-running the whole batch export.
+    os.environ["QT_LOGGING_RULES"] = "*.warning=false"
     try:
         main_export()
     except Exception:
