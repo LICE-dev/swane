@@ -1,27 +1,38 @@
 """
-Real-Slicer regression tests for ``workers/slicer_seg_endocranium.py``.
+Regression tests for ``workers/slicer_seg_endocranium.py``.
 
-The script runs inside 3D Slicer's own Python, so every test here launches the
-installed Slicer the way the ``SegmentEndocranium`` node does
+The script runs inside 3D Slicer's own Python. The ``real_slicer`` tests launch
+the installed Slicer the way the ``SegmentEndocranium`` node does
 (``--no-splash --no-main-window --python-script``) on synthetic volumes built
-in ``tmp_path``. They are heavy, opt-in tests (``--run-heavy``).
+in ``tmp_path``; they are heavy, opt-in tests (``--run-heavy``). The others run
+the script with stand-in ``slicer``/``vtkITK`` modules.
 """
 
 import json
 import os
+import runpy
 import subprocess
+import sys
 import textwrap
+import threading
+import time
+import types
 
 import numpy as np
 import pytest
 
 import swane
 
-pytestmark = [
-    pytest.mark.heavy,
-    pytest.mark.requires_slicer,
-    pytest.mark.requires_display,
-]
+
+def real_slicer(test):
+    for mark in (
+        pytest.mark.heavy,
+        pytest.mark.requires_slicer,
+        pytest.mark.requires_display,
+    ):
+        test = mark(test)
+    return test
+
 
 WORKERS_DIR = os.path.join(os.path.dirname(swane.__file__), "workers")
 SCRIPT_PATH = os.path.join(WORKERS_DIR, "slicer_seg_endocranium.py")
@@ -142,6 +153,7 @@ CLOSING_DRIVER = textwrap.dedent("""
     """)
 
 
+@real_slicer
 def test_closing_kernel_is_in_mm_and_fills_the_smoothed_segment(
     slicer_executable, tmp_path
 ):
@@ -190,6 +202,7 @@ def _write_ct_phantom(path):
     nib.save(nib.Nifti1Image(img.astype(np.int16), affine), str(path))
 
 
+@real_slicer
 def test_kernel_size_changes_the_endocranium_mask(slicer_executable, tmp_path):
     import nibabel as nib
 
@@ -223,3 +236,90 @@ def test_kernel_size_changes_the_endocranium_mask(slicer_executable, tmp_path):
 
     assert masks["1"].any() and masks["6"].any()
     assert not np.array_equal(masks["1"], masks["6"])
+
+
+def _stand_in_modules(calls):
+    """``slicer``/``vtkITK`` stand-ins whose ``loadVolume`` fails, so
+    the script takes its failure path right after parsing the arguments."""
+
+    def load_volume(path):
+        raise RuntimeError(f"cannot load {path}")
+
+    slicer = types.ModuleType("slicer")
+    slicer.util = types.SimpleNamespace(
+        loadVolume=load_volume,
+        exit=lambda status=0: calls.append(("slicer.util.exit", status)),
+    )
+    return {"slicer": slicer, "vtkITK": types.ModuleType("vtkITK")}
+
+
+def test_failure_exits_with_status_1_even_if_slicer_shutdown_hangs(
+    monkeypatch, tmp_path
+):
+    calls = []
+    for name, module in _stand_in_modules(calls).items():
+        monkeypatch.setitem(sys.modules, name, module)
+    # the script sets QT_LOGGING_RULES at import: restore it afterwards
+    monkeypatch.setenv("QT_LOGGING_RULES", "")
+
+    threads = []
+
+    class RecordingThread:
+        def __init__(self, target=None, **kwargs):
+            self.target = target
+            self.daemon = False
+            threads.append(self)
+
+        def start(self):
+            calls.append(("thread.start", self.daemon))
+
+    monkeypatch.setattr(threading, "Thread", RecordingThread)
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(os, "_exit", lambda status: calls.append(("os._exit", status)))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            SCRIPT_PATH,
+            "--input",
+            str(tmp_path / "ct.nii.gz"),
+            "--output",
+            str(tmp_path / "mask.nii.gz"),
+        ],
+    )
+
+    runpy.run_path(SCRIPT_PATH, run_name="__main__")
+
+    # A clean exit with status 1 is requested, and a daemon thread is armed
+    # to force the same status if Slicer's shutdown never completes.
+    assert ("slicer.util.exit", 1) in calls
+    assert ("thread.start", True) in calls
+    assert len(threads) == 1
+    threads[0].target()
+    assert calls[-1] == ("os._exit", 1)
+
+
+@real_slicer
+def test_failure_exits_non_zero_with_real_slicer(slicer_executable, tmp_path):
+    ct = tmp_path / "ct.nii.gz"
+    _write_ct_phantom(ct)
+
+    # 3000 HU is above the phantom's 1500 HU bone: the empty-skull failure.
+    # A hung shutdown would raise TimeoutExpired.
+    proc = _run_slicer(
+        slicer_executable,
+        SCRIPT_PATH,
+        [
+            "--input",
+            ct,
+            "--output",
+            tmp_path / "mask.nii.gz",
+            "--skull_threshold",
+            "3000",
+        ],
+        timeout=120,
+    )
+
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "selects no voxel" in proc.stdout + proc.stderr
+    assert not (tmp_path / "mask.nii.gz").exists()

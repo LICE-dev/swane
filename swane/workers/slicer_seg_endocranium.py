@@ -2,7 +2,6 @@ import slicer
 import sys
 import vtkITK
 import argparse
-import qt
 import os
 
 os.environ["QT_LOGGING_RULES"] = "*.warning=false"
@@ -50,6 +49,26 @@ def smooth_segment_morphological_closing(
     effect.self().onApply()
 
     segmentEditorNode.SetOverwriteMode(overwriteMode)
+
+
+def quit_slicer(status):
+    """Exit Slicer with the given status, even if its shutdown hangs.
+
+    Headless Slicer occasionally hangs on shutdown, which would leave the
+    calling node waiting forever: a daemon thread forces the exit, with the
+    same status, if the clean exit has not happened within 5 s.
+    """
+    import threading
+    import time
+
+    def force_exit():
+        time.sleep(5)
+        os._exit(status)
+
+    t = threading.Thread(target=force_exit)
+    t.daemon = True
+    t.start()
+    slicer.util.exit(status)
 
 
 def main(argv=None):
@@ -225,19 +244,7 @@ def main(argv=None):
     # Exit Slicer
     segmentEditorWidget = None
     segmentEditorNode = None
-    qt.QTimer.singleShot(0, slicer.app.quit)
-
-    import threading
-    import os
-    import time
-
-    def force_exit():
-        time.sleep(5)
-        os._exit(0)
-
-    t = threading.Thread(target=force_exit)
-    t.daemon = True
-    t.start()
+    quit_slicer(0)
 
 
 if __name__ == "__main__":
@@ -251,4 +258,4 @@ if __name__ == "__main__":
         import traceback
 
         traceback.print_exc()
-        slicer.util.exit(status=1)
+        quit_slicer(1)
