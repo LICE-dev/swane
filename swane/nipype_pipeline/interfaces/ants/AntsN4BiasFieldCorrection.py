@@ -2,7 +2,6 @@
 import os
 from os.path import abspath
 
-import numpy as np
 from nipype.interfaces.base import (
     traits,
     BaseInterface,
@@ -12,7 +11,7 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
-from swane.nipype_pipeline.interfaces.ants import thread_env
+from swane.nipype_pipeline.interfaces.ants import match_mask_geometry, thread_env
 
 # antspyx is imported lazily inside _run_interface, as in AntsRegistration.
 
@@ -91,22 +90,7 @@ class AntsN4BiasFieldCorrection(BaseInterface):
                 mask = ants.otsu_segmentation(img, k=1)
 
             # --- Check geometrical coherence between mask and img ---
-            max_tolerance = 0.1
-            origin_img = np.array(img.origin)
-            origin_mask = np.array(mask.origin)
-            distance = np.linalg.norm(origin_img - origin_mask)
-            if distance > 0:
-                if distance <= max_tolerance:
-                    # If mask and img have minimal difference, force mask in img geometrical space
-                    mask.set_origin(img.origin)
-                    mask.set_spacing(img.spacing)
-                    mask.set_direction(img.direction)
-                else:
-                    # If difference is bigger, stop
-                    raise RuntimeError(
-                        f"Image and Mask do not coincide! Origin distance: {distance:.4f} mm. "
-                        f"Maximum allowed threshold is {max_tolerance} mm."
-                    )
+            mask = match_mask_geometry(img, mask)
 
             # --- N4 (antspyx standard parameters, aside from mask/iterations) ---
             kwargs = {}

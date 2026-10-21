@@ -16,8 +16,14 @@ Three layers, mirroring the design's "DipyMotionCorrection equivalence":
   *out of order*; volume *i* must land at position *i*.
 * 1b - bvec reorientation + indexing trap: a known rigid rotation must produce
   the analytic reoriented gradients, b0 rows stay ``[0, 0, 0]`` and norms are
-  preserved; ``reorient_bvecs`` must be called with ``affines[..., ~b0s_mask]``
-  (the non-b0 volumes only), never the full affine array.
+  preserved; ``reorient_bvecs`` must be called with the non-b0 rotations only
+  (``affines[..., ~b0s_mask]``), never the full affine array.
+* 1b-bis - bvec frame: the registration rotations are world (RAS mm) rotations
+  while the bvecs are FSL-convention vectors in the image frame, so the
+  rotations must be conjugated into that frame. The same physical motion must
+  give the same physical gradients whatever the storage orientation (light,
+  mocked registration), and a phantom acquired with known head rotations must
+  give back its fibre direction after the real registration (heavy).
 * 1c - serial-vs-parallel oracle (``@pytest.mark.heavy``): real dipy on both
   sides with BLAS pinned to one thread, asserting exact equality.
 """
@@ -49,10 +55,45 @@ def _write_bval_bvec(directory, bvals, bvecs):
     return bval_path, bvec_path
 
 
+def _rotation_x(angle):
+    """A right-handed rotation about the x axis (orthonormal 3x3)."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]])
+
+
+def _rotation_y(angle):
+    """A right-handed rotation about the y axis (orthonormal 3x3)."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+
+
 def _rotation_z(angle):
     """A right-handed rotation about the z axis (orthonormal 3x3)."""
     c, s = np.cos(angle), np.sin(angle)
     return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+
+
+# x-axis flip of the FSL b-vector convention.
+_FLIP_X = np.diag([-1.0, 1.0, 1.0])
+
+
+def _storage_affine(axes, zooms=(2.0, 2.0, 2.0)):
+    """A 4x4 affine whose voxel axes point along the columns of ``axes``."""
+    affine = np.eye(4)
+    affine[:3, :3] = np.asarray(axes, dtype=float) @ np.diag(zooms)
+    affine[:3, 3] = [40.0, -30.0, 20.0]
+    return affine
+
+
+def _fsl_frame(axes):
+    """FSL-convention b-vector -> world direction, for voxel axes ``axes``.
+
+    FSL b-vectors are expressed along the voxel axes, with x mirrored when the
+    voxel-to-world determinant is positive (neurological storage). Written out
+    from the known axes, independently of the node's own implementation.
+    """
+    axes = np.asarray(axes, dtype=float)
+    return axes @ _FLIP_X if np.linalg.det(axes) > 0 else axes
 
 
 class TestDefaultPipelineIsRigidOnly:
@@ -479,13 +520,15 @@ class TestBlasWorkerInitializer:
 # --------------------------------------------------------------------------- #
 # Layer 1b - bvec reorientation + the indexing trap
 # --------------------------------------------------------------------------- #
-class TestBvecReorientation:
+class _ControlledAffinesHarness:
     def _run_with_controlled_affines(
-        self, workspace, monkeypatch, bvals, bvecs, rotation
+        self, workspace, monkeypatch, bvals, bvecs, rotation, affine=None
     ):
         """Drive the node with the registration mocked to a known affine array.
 
-        b0 volumes get an identity affine, non-b0 volumes get ``rotation``. The
+        b0 volumes get an identity affine, non-b0 volumes get ``rotation`` (a
+        world-space rotation, as dipy's registration returns it). The image is
+        stored with ``affine`` (LAS by default, as ForceOrient leaves it). The
         real ``reorient_bvecs`` runs on whatever the node passes it; a spy
         records that argument so the test can assert the indexing.
         """
@@ -493,7 +536,8 @@ class TestBvecReorientation:
         n_vols = bvals.shape[0]
         shape = (4, 4, 3)
         data = np.random.default_rng(0).random(shape + (n_vols,))
-        affine = np.eye(4)
+        if affine is None:
+            affine = _storage_affine(_FLIP_X)
         in_file = os.path.join(str(workspace), "dwi.nii.gz")
         nib.save(nib.Nifti1Image(data, affine), in_file)
         bval_path, bvec_path = _write_bval_bvec(workspace, bvals, bvecs)
@@ -533,6 +577,8 @@ class TestBvecReorientation:
         out_bvec = np.loadtxt(result.outputs.out_bvec)  # 3 x N
         return out_bvec, b0s_mask, affine_array, recorded
 
+
+class TestBvecReorientation(_ControlledAffinesHarness):
     def test_reorients_nonb0_only_and_preserves_b0_and_norms(
         self, workspace, monkeypatch
     ):
@@ -556,24 +602,129 @@ class TestBvecReorientation:
             workspace, monkeypatch, bvals, bvecs, rotation
         )
 
-        # The call must pass only the non-b0 affines, keyed by ~b0s_mask.
-        expected_affines = affine_array[..., ~b0s_mask]
+        # The call must pass only the non-b0 rotations, keyed by ~b0s_mask,
+        # each expressed in the LAS bvec frame (F R F, F the x flip).
+        expected_affines = np.stack(
+            [
+                _FLIP_X @ affine_array[:3, :3, i] @ _FLIP_X
+                for i in np.flatnonzero(~b0s_mask)
+            ],
+            axis=-1,
+        )
         assert recorded["affines"].shape == expected_affines.shape
         assert recorded["affines"].shape[-1] == int(np.sum(~b0s_mask))
-        assert np.array_equal(recorded["affines"], expected_affines)
+        assert np.allclose(recorded["affines"], expected_affines, atol=1e-12)
 
         out_bvec = out_bvec.T  # -> N x 3
         # b0 row stays exactly zero.
         assert np.allclose(out_bvec[0], [0.0, 0.0, 0.0])
-        # Non-b0 rows are the analytic R^T @ bvec (reorient applies the inverse
-        # rotation), unit-normed.
+        # Non-b0 rows are the analytic F R^T F @ bvec (reorient applies the
+        # inverse rotation, in the LAS bvec frame), unit-normed.
         for i in range(1, len(bvals)):
-            expected = rotation.T @ bvecs[i]
+            expected = _FLIP_X @ rotation.T @ _FLIP_X @ bvecs[i]
             expected /= np.linalg.norm(expected)
             assert np.allclose(
                 out_bvec[i], expected, atol=1e-6
             ), f"gradient {i} not reoriented as expected"
             assert np.isclose(np.linalg.norm(out_bvec[i]), 1.0, atol=1e-6)
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1b-bis - the bvec frame (world rotations vs FSL image-frame bvecs)
+# --------------------------------------------------------------------------- #
+class TestBvecFrame(_ControlledAffinesHarness):
+    """dipy's registration returns world (RAS mm) rotations R, mapping the
+    reference onto the moved head; ``reorient_bvecs`` applies R^-1 in whatever
+    frame R is written in. The bvecs are FSL-convention vectors in the image
+    frame W (W maps them to world), so the correct reoriented gradient is
+    W^T R^-1 W b, not R^-1 b. For axial LAS storage W = diag(-1, 1, 1): a pitch
+    (about x) commutes with W and was right, while a yaw (z) or roll (y) was
+    applied backwards, a 2 x angle error.
+    """
+
+    BVALS = [0, 1000, 1000, 1000, 1000, 1000]
+
+    def _gradients(self):
+        g = np.array(
+            [
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [1.0, 1.0, 0.0],
+                [0.3, -0.5, 0.8],
+            ]
+        )
+        return g / np.linalg.norm(g, axis=1, keepdims=True)
+
+    def _reorient(self, workspace, monkeypatch, bvecs, rotation, affine):
+        all_bvecs = np.vstack([[0.0, 0.0, 0.0], bvecs])
+        out_bvec, _, _, _ = self._run_with_controlled_affines(
+            workspace, monkeypatch, self.BVALS, all_bvecs, rotation, affine
+        )
+        return out_bvec.T[1:]
+
+    def test_axial_las_yaw_and_roll_follow_the_image_frame(
+        self, workspace, monkeypatch
+    ):
+        g = self._gradients()
+        affine = _storage_affine(_FLIP_X)
+        for rotation in (
+            _rotation_z(np.deg2rad(6.0)),
+            _rotation_y(np.deg2rad(6.0)),
+        ):
+            out = self._reorient(workspace, monkeypatch, g, rotation, affine)
+            # Conjugating by the x flip reverses a z/y rotation: F R^T F = R.
+            assert np.allclose(out, g @ rotation.T, atol=1e-6)
+
+    def test_axial_las_pitch_is_unchanged_by_the_frame(self, workspace, monkeypatch):
+        g = self._gradients()
+        rotation = _rotation_x(np.deg2rad(6.0))
+        out = self._reorient(
+            workspace, monkeypatch, g, rotation, _storage_affine(_FLIP_X)
+        )
+        assert np.allclose(out, g @ rotation, atol=1e-6)
+
+    @pytest.mark.parametrize(
+        "axes",
+        [
+            pytest.param(_FLIP_X, id="axial-LAS"),
+            pytest.param(np.eye(3), id="axial-RAS"),
+            pytest.param(
+                _rotation_x(np.deg2rad(15.0)) @ _rotation_z(np.deg2rad(10.0)) @ _FLIP_X,
+                id="oblique-LAS",
+            ),
+            pytest.param(
+                [[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]],
+                id="sagittal-PIR",
+            ),
+            pytest.param(
+                [[-1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]],
+                id="coronal-LSA",
+            ),
+            pytest.param(
+                [[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                id="permuted-ASL",
+            ),
+        ],
+    )
+    def test_same_motion_gives_same_physical_gradients_in_any_storage(
+        self, workspace, monkeypatch, axes
+    ):
+        """The reoriented gradient, taken back to world, is R^-1 g whatever the
+        storage orientation: the physics does not depend on how the voxels are
+        laid out on disk."""
+        g_world = self._gradients()
+        rotation = (
+            _rotation_x(np.deg2rad(5.0))
+            @ _rotation_y(np.deg2rad(-7.0))
+            @ _rotation_z(np.deg2rad(9.0))
+        )
+        frame = _fsl_frame(axes)
+        bvecs = g_world @ frame  # rows of W^T g: the dcm2niix FSL bvecs
+        out = self._reorient(
+            workspace, monkeypatch, bvecs, rotation, _storage_affine(axes)
+        )
+        assert np.allclose(out @ frame.T, g_world @ rotation, atol=1e-6)
 
 
 class TestMotionOutputDtype:
@@ -751,3 +902,158 @@ class TestSerialParallelOracle:
             out_dir, in_file, bval, bvec, parallel=True, num_threads=1
         )
         assert np.array_equal(np.loadtxt(outputs.out_bval), np.loadtxt(bval))
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1b-ter - known head rotations on a single-fibre phantom (heavy)
+# --------------------------------------------------------------------------- #
+# Asymmetric Gaussian blobs (centre in mm from the FOV centre, sigma in mm,
+# amplitude) giving the registration an unambiguous anatomy to lock onto.
+_PHANTOM_BLOBS = [
+    ((-20.0, 10.0, 5.0), 9.0, 1.0),
+    ((15.0, -18.0, -6.0), 7.0, 0.8),
+    ((25.0, 22.0, 10.0), 6.0, 0.6),
+    ((-8.0, -25.0, 12.0), 8.0, 0.7),
+    ((5.0, 5.0, -14.0), 10.0, 0.9),
+]
+_PHANTOM_EVALS = np.array([1.7e-3, 0.3e-3, 0.3e-3])
+_PHANTOM_BVAL = 1000.0
+
+
+def _phantom_s0(points):
+    out = np.full(points.shape[:-1], 50.0)
+    for centre, sigma, amplitude in _PHANTOM_BLOBS:
+        d2 = np.sum((points - np.asarray(centre)) ** 2, axis=-1)
+        out += 1000.0 * amplitude * np.exp(-d2 / (2.0 * sigma**2))
+    return out
+
+
+def _make_rotated_phantom_dwi(directory, axes, rotations, gradients, fibre):
+    """A single-fibre DWI acquired with the head rotated before each DW volume.
+
+    Every voxel holds the same tensor (principal direction ``fibre``, world
+    frame). The b0 has no motion; DW volume ``k`` is acquired with gradient
+    ``gradients[k]`` (world) while the head is rotated by ``rotations[k]``
+    (world, about the FOV centre): the voxel at world point x shows the anatomy
+    at R^T x, attenuated along R^T g. The bvecs are written in FSL convention
+    for the stored axes, as dcm2niix does.
+
+    The world origin is put at the FOV centre: dipy's rigid parameters rotate
+    about the world origin and, with the pinned loose ``ftol``, an origin far
+    from the head leaves a rotation residual of its own (2 degrees for a 6
+    degree yaw at 57 mm) that would blur the frame check this phantom is for.
+    """
+    shape = (40, 40, 28)
+    affine = _storage_affine(axes, zooms=(2.5, 2.5, 2.5))
+    affine[:3, 3] -= (affine @ np.r_[(np.array(shape) - 1) / 2.0, 1.0])[:3]
+    ijk = np.stack(np.meshgrid(*[np.arange(n) for n in shape], indexing="ij"), -1)
+    world = ijk @ affine[:3, :3].T + affine[:3, 3]
+
+    e1 = fibre / np.linalg.norm(fibre)
+    e2 = np.cross(e1, [0.0, 0.0, 1.0])
+    e2 /= np.linalg.norm(e2)
+    e3 = np.cross(e1, e2)
+    basis = np.stack([e1, e2, e3], axis=1)
+    tensor = basis @ np.diag(_PHANTOM_EVALS) @ basis.T
+
+    volumes = [_phantom_s0(world)]
+    for rotation, g in zip(rotations, gradients):
+        g_anat = rotation.T @ g
+        attenuation = np.exp(-_PHANTOM_BVAL * g_anat @ tensor @ g_anat)
+        volumes.append(_phantom_s0(world @ rotation) * attenuation)
+    in_file = os.path.join(str(directory), "phantom_dwi.nii.gz")
+    nib.save(
+        nib.Nifti1Image(np.stack(volumes, axis=-1).astype(np.float32), affine),
+        in_file,
+    )
+    bvals = [0.0] + [_PHANTOM_BVAL] * len(gradients)
+    bvecs = np.vstack([[0.0, 0.0, 0.0], np.asarray(gradients) @ _fsl_frame(axes)])
+    bval_path, bvec_path = _write_bval_bvec(directory, bvals, bvecs)
+    return in_file, bval_path, bvec_path
+
+
+def _phantom_analytic_fa():
+    md = np.mean(_PHANTOM_EVALS)
+    return np.sqrt(1.5 * np.sum((_PHANTOM_EVALS - md) ** 2) / np.sum(_PHANTOM_EVALS**2))
+
+
+@pytest.mark.heavy
+class TestReorientationOnRotatedPhantom:
+    """Real dipy registration on a phantom whose head rotations are known.
+
+    After motion correction the tensor fitted with the reoriented bvecs must
+    point along the phantom's fibre (taken back to world through the voxel
+    axes, the frame dipy fits in for LAS storage). With the world rotations
+    applied to the image-frame bvecs unconjugated, a 6 degree yaw gave an
+    11.7 degree V1 error and a 6 degree roll 8.6 degrees; random +-4 degree
+    motion gave a 1.5 degree median error and an FA 0.01 too high.
+    """
+
+    FIBRE = np.array([1.0, 1.0, 0.3]) / np.linalg.norm([1.0, 1.0, 0.3])
+
+    def _v1_errors_and_fa(self, tmp_path, axes, rotations, gradients):
+        from dipy.core.gradients import gradient_table
+        from dipy.reconst.dti import TensorModel
+
+        in_file, bval, bvec = _make_rotated_phantom_dwi(
+            tmp_path, axes, rotations, gradients, self.FIBRE
+        )
+        node = DipyMotionCorrection()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.num_threads = min(4, os.cpu_count() or 1)
+        node.inputs.parallel = True
+        node.inputs.out_file = os.path.join(str(tmp_path), "moco.nii.gz")
+        node.inputs.out_bvec = os.path.join(str(tmp_path), "moco.bvec")
+        node.inputs.out_bval = os.path.join(str(tmp_path), "moco.bval")
+        outputs = node.run().outputs
+
+        gtab = gradient_table(
+            np.loadtxt(outputs.out_bval), bvecs=np.loadtxt(outputs.out_bvec).T
+        )
+        data = nib.load(outputs.out_file).get_fdata()
+        c = np.array(data.shape[:3]) // 2
+        roi = data[c[0] - 4 : c[0] + 4, c[1] - 4 : c[1] + 4, c[2] - 3 : c[2] + 3]
+        fit = TensorModel(gtab).fit(roi)
+        v1_world = fit.evecs[..., 0].reshape(-1, 3) @ np.asarray(axes, float).T
+        cosines = np.clip(np.abs(v1_world @ self.FIBRE), 0.0, 1.0)
+        return np.rad2deg(np.arccos(cosines)), fit.fa.ravel()
+
+    def _gradients(self):
+        g = np.random.default_rng(0).normal(size=(30, 3))
+        return g / np.linalg.norm(g, axis=1, keepdims=True)
+
+    @pytest.mark.parametrize(
+        "axes, rotation",
+        [
+            pytest.param(_FLIP_X, _rotation_z(np.deg2rad(6.0)), id="LAS-yaw"),
+            pytest.param(_FLIP_X, _rotation_y(np.deg2rad(6.0)), id="LAS-roll"),
+            pytest.param(
+                _rotation_x(np.deg2rad(15.0)) @ _rotation_z(np.deg2rad(10.0)) @ _FLIP_X,
+                _rotation_x(np.deg2rad(6.0)),
+                id="obliqueLAS-pitch",
+            ),
+        ],
+    )
+    def test_uniform_rotation_recovers_the_fibre(self, tmp_path, axes, rotation):
+        gradients = self._gradients()
+        errors, _ = self._v1_errors_and_fa(
+            tmp_path, axes, [rotation] * len(gradients), gradients
+        )
+        assert np.max(errors) < 0.5, f"V1 error up to {np.max(errors):.2f} deg"
+
+    def test_random_motion_recovers_the_fibre_and_fa(self, tmp_path):
+        rng = np.random.default_rng(1)
+        gradients = self._gradients()
+        rotations = [
+            _rotation_x(np.deg2rad(rng.uniform(-4.0, 4.0)))
+            @ _rotation_y(np.deg2rad(rng.uniform(-4.0, 4.0)))
+            @ _rotation_z(np.deg2rad(rng.uniform(-4.0, 4.0)))
+            for _ in gradients
+        ]
+        axes = _rotation_x(np.deg2rad(15.0)) @ _rotation_z(np.deg2rad(10.0)) @ _FLIP_X
+        errors, fa = self._v1_errors_and_fa(tmp_path, axes, rotations, gradients)
+        assert np.median(errors) < 0.75, f"median V1 error {np.median(errors):.2f}"
+        assert np.max(errors) < 1.0, f"V1 error up to {np.max(errors):.2f} deg"
+        assert abs(np.median(fa) - _phantom_analytic_fa()) < 0.005
