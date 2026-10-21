@@ -645,6 +645,12 @@ class TestPreferenceWizardParent:
             def check_running_workflows(self):
                 return False
 
+            def reset_workflows(self):
+                pass
+
+            def _check_subject_dependencies(self):
+                pass
+
         monkeypatch.setattr(main_window_module, "PreferenceWizardWindow", FakeWizard)
         main = FakeMainWindow()
         main_window_module.MainWindow.start_preference_wizard(main)
