@@ -127,7 +127,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                     break
             self.queue.put(
                 WorkflowReport(
-                    long_name=node.fullname,
+                    long_name=self._report_long_name(node),
                     signal_type=WorkflowSignals.NODE_ERROR,
                     info=info,
                     crash_file=crash_file,
@@ -137,6 +137,16 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             traceback.print_exc()
 
         return crash_file
+
+    @staticmethod
+    def _report_long_name(node):
+        """Name under which ``node`` is reported to the GUI.
+
+        nipype names a MapNode subnode ``_<mapnode><i>`` with no hierarchy, a
+        name the GUI cannot map to a row: :meth:`_submit_mapnode` tags each
+        subnode with its MapNode's full name, which is reported instead.
+        """
+        return getattr(node, "swane_report_name", node.fullname)
 
     def _async_callback(self, future):
         """Turn an abruptly terminated worker into a terminal task result.
@@ -313,7 +323,9 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                     swane_run_node, node, updatehash, self._taskid
                 )
             except BrokenProcessPool as error:
-                self._handle_broken_pool(error, unsubmitted_node=node.fullname)
+                self._handle_broken_pool(
+                    error, unsubmitted_node=self._report_long_name(node)
+                )
                 raise
         self._task_obj[self._taskid] = result_future
         self._task_nodes[self._taskid] = node.fullname
@@ -362,9 +374,11 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         ret = super(MonitoredMultiProcPlugin, self)._submit_mapnode(jobid)
 
         # we do this here to not subclass _submit_mapnode
-        if hasattr(self.procs[jobid], "ram_estimator"):
-            for sub_id, original_id in self.mapnodesubids.items():
-                if original_id == jobid:
+        for sub_id, original_id in self.mapnodesubids.items():
+            if original_id == jobid:
+                # A failed subnode is reported on its MapNode's row
+                self.procs[sub_id].swane_report_name = self.procs[jobid].fullname
+                if hasattr(self.procs[jobid], "ram_estimator"):
                     self.procs[sub_id].ram_estimator = self.procs[
                         original_id
                     ].ram_estimator
