@@ -45,7 +45,7 @@ Overview of 89 construction scenarios across 16 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [nilearn_ants](snapshots/fmri_preproc/nilearn_ants.txt) | TR=2.0; del_end_vols=0; del_start_vols=0; fmri_engine=NILEARN; hpcutoff=30; n_vols=100; registration_engine=ANTS; slice_timing=UP | 25 / 36 | `dcm2niix`, `niimath` | — |
+| [nilearn_ants](snapshots/fmri_preproc/nilearn_ants.txt) | TR=2.0; del_end_vols=0; del_start_vols=0; fmri_engine=NILEARN; hpcutoff=30; n_vols=100; registration_engine=ANTS; slice_timing=UP | 24 / 34 | `dcm2niix`, `niimath` | — |
 | [slicetiming_interleaved](snapshots/fmri_preproc/slicetiming_interleaved.txt) | TR=2.0; del_end_vols=0; del_start_vols=0; hpcutoff=30; n_vols=100; slice_timing=INTERLEAVED | 27 / 41 | `dcm2niix`, `flirt`, `mcflirt`, `niimath`, `slicetimer`, `susan` | — |
 | [slicetiming_unknown](snapshots/fmri_preproc/slicetiming_unknown.txt) | TR=2.0; del_end_vols=0; del_start_vols=0; hpcutoff=30; n_vols=100; slice_timing=UNKNOWN | 26 / 39 | `dcm2niix`, `flirt`, `mcflirt`, `niimath`, `susan` | — |
 | [slicetiming_up](snapshots/fmri_preproc/slicetiming_up.txt) | TR=2.0; del_end_vols=0; del_start_vols=0; hpcutoff=30; n_vols=100; slice_timing=UP | 27 / 41 | `dcm2niix`, `flirt`, `mcflirt`, `niimath`, `slicetimer`, `susan` | — |
@@ -65,8 +65,8 @@ Overview of 89 construction scenarios across 16 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [nilearn_rara_ants](snapshots/fmri_task/nilearn_rara_ants.txt) | block_design=RARA; fmri_engine=NILEARN; registration_engine=ANTS; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 31 / 59 | `dcm2niix`, `niimath` | — |
-| [nilearn_rara_ants_slicetiming_up](snapshots/fmri_task/nilearn_rara_ants_slicetiming_up.txt) | block_design=RARA; fmri_engine=NILEARN; registration_engine=ANTS; rest_duration=30; slice_timing=UP; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 32 / 61 | `dcm2niix`, `niimath` | — |
+| [nilearn_rara_ants](snapshots/fmri_task/nilearn_rara_ants.txt) | block_design=RARA; fmri_engine=NILEARN; registration_engine=ANTS; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 30 / 57 | `dcm2niix`, `niimath` | — |
+| [nilearn_rara_ants_slicetiming_up](snapshots/fmri_task/nilearn_rara_ants_slicetiming_up.txt) | block_design=RARA; fmri_engine=NILEARN; registration_engine=ANTS; rest_duration=30; slice_timing=UP; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 31 / 59 | `dcm2niix`, `niimath` | — |
 | [single_contrast_rara](snapshots/fmri_task/single_contrast_rara.txt) | block_design=RARA; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 42 / 86 | `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fsl-cluster`, `mcflirt`, `niimath`, `smoothest`, `susan` | — |
 | [test_run](snapshots/fmri_task/test_run.txt) | block_design=RARA; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30; test_run=True | 42 / 86 | `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fsl-cluster`, `mcflirt`, `niimath`, `smoothest`, `susan` | — |
 | [two_contrasts_rarb](snapshots/fmri_task/two_contrasts_rarb.txt) | block_design=RARB; rest_duration=30; task_a_name=Task_A; task_b_name=Task_B; task_duration=30 | 50 / 116 | `dcm2niix`, `feat_model`, `film_gls`, `flirt`, `fsl-cluster`, `mcflirt`, `niimath`, `smoothest`, `susan` | — |
