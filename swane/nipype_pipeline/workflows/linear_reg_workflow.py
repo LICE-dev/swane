@@ -196,7 +196,7 @@ def linear_reg_workflow(
             max_cpu=max_cpu,
             limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
         )
-        workflow.connect(robustfov, "out_roi", deskull, "in_file")
+        workflow.connect(robustfov, "out_file", deskull, "in_file")
         moving_brain = [deskull, "out_file"]
 
     reg_wrap = get_registration_node(
@@ -205,7 +205,7 @@ def linear_reg_workflow(
         name_suffix="to reference",
         engine=engine,
         workflow=workflow,
-        moving=[robustfov, "out_roi"],
+        moving=[robustfov, "out_file"],
         moving_brain=moving_brain,
         reference=[inputnode, "reference"],
         reference_brain=reference_brain,
@@ -225,7 +225,7 @@ def linear_reg_workflow(
         workflow=workflow,
         warp=[reg_wrap.out_registered_node, reg_wrap.warp],
         registration=reg_wrap,
-        moving=[robustfov, "out_roi"],
+        moving=[robustfov, "out_file"],
         reference=[inputnode, "reference"],
         out_file=[unbetted_name, "out_file"],
         non_linear=False,
