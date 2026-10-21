@@ -418,3 +418,55 @@ def test_auto_import_prompt_uses_tag_free_label(
     assert len(texts) == 1
     assert "T1 &lt;MPR&gt;" in texts[0]
     assert "<b>T1" not in texts[0]
+
+
+@pytest.mark.parametrize("confirm", [True, False])
+def test_incompatible_previous_workflow_asks_for_a_new_execution(
+    qtbot, monkeypatch, main_window, confirm
+):
+    """A previous execution that cannot be resumed is never resumed: the user
+    can only start a new execution (resume=False) or cancel."""
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_incompatible",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+    monkeypatch.setattr(subject, "is_workflow_process_alive", lambda: False)
+
+    calls = []
+
+    def fake_start_workflow(
+        resume=None, resume_freesurfer=None, update_node_callback=None
+    ):
+        calls.append(resume)
+        if resume is False:
+            return SubjectRet.ExecWfStarted
+        return SubjectRet.ExecWfResumeIncompatible
+
+    monkeypatch.setattr(subject, "start_workflow", fake_start_workflow)
+
+    from PySide6.QtWidgets import QMessageBox
+
+    shown = []
+
+    def fake_exec(box):
+        shown.append(box.text())
+        return (
+            QMessageBox.StandardButton.Yes
+            if confirm
+            else QMessageBox.StandardButton.Cancel
+        )
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+
+    tab.toggle_workflow_execution()
+
+    assert shown == [strings.subj_tab_old_wf_incompatible]
+    if confirm:
+        assert calls == [None, False]
+        assert tab.exec_button.text() == strings.EXECBUTTONTEXT_STOP
+    else:
+        assert calls == [None]
+        assert tab.exec_button.text() != strings.EXECBUTTONTEXT_STOP
