@@ -71,7 +71,7 @@ When adding an analysis, trace this complete chain:
 - Keep the killable workflow boundary in `WorkflowProcess`: a multiprocessing `Process` owns an internal execution thread, subprocess cleanup, log handlers, and the queue used by `WorkflowMonitorWorker`.
 - Never call `WorkflowProcess.kill_with_subprocess` outside the workflow process; its contract intentionally kills the current process and descendants.
 - The worker pool start method comes from `swane/utils/mp_start_method.py`: `forkserver` on macOS (Apple frameworks are not fork-safe), `fork` on Linux, overridable with `SWANE_MP_START_METHOD`. Anything a node needs must therefore reach the worker through the pickled node (inputs, `node.config`) or a module import, never through state inherited from the workflow process.
-- Nodes must not download data inside a worker. `WorkflowProcess` pre-fetches the antspynet weights of every `AntsPyNetBrainExtraction` node in a short-lived child (`swane/utils/antspynet_weights.py`); a new `DeskullModality` needs its network in `WEIGHTS_BY_MODALITY`.
+- Nodes must not download data inside a worker. `WorkflowProcess` pre-fetches the antspynet weights of every `AntsPyNetBrainExtraction` node in a short-lived child (`swane/utils/antspynet_weights.py`); a new `DeskullModality` needs its network in `WEIGHTS_BY_MODALITY`. The child is bounded (`SOCKET_TIMEOUT_S` per stalled read, `PRELOAD_TIMEOUT_S` overall, with a faulthandler stack dump before the kill) because `WorkflowGenerateWorker` waits on it behind a non-closable dialog.
 - Close queues, detach log/resource handlers, and emit `WORKFLOW_STOP` on every terminal path.
 - Keep resource-monitor logging and crash directories inside the subject workflow area; never commit generated logs.
 

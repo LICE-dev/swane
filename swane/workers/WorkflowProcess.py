@@ -73,7 +73,7 @@ class WorkflowProcess(Process):
         swane.utils.antspynet_weights). A failure is logged, never fatal: the
         node that needs the weights then fails with its own diagnostics.
         """
-        from subprocess import CalledProcessError
+        from subprocess import CalledProcessError, TimeoutExpired
         from swane.utils.antspynet_weights import (
             preload_weights,
             weight_names,
@@ -93,6 +93,17 @@ class WorkflowProcess(Process):
                 "try to download them themselves:\n%s",
                 error.returncode,
                 (error.stderr or "")[-2000:],
+            )
+        except TimeoutExpired as error:
+            # partial output, raw bytes on POSIX even for a text-mode child
+            stderr = error.stderr or ""
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode(errors="replace")
+            logger.warning(
+                "antspynet weights pre-fetch timed out after %s s; nodes will "
+                "try to download them themselves:\n%s",
+                error.timeout,
+                stderr[-2000:],
             )
         except Exception:
             logger.warning(

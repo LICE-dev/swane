@@ -19,6 +19,12 @@ The fetch happens in a **short-lived child process** started with ``exec``.
 Importing antspynet pulls in TensorFlow, which would stay resident (~700 MB
 measured) in the long-lived caller, and every worker forked from it would
 inherit that footprint. The child exits as soon as the files are on disk.
+
+The child is bounded, since its callers wait on it (one behind a non-closable
+progress dialog): a read stalled for :data:`SOCKET_TIMEOUT_S` fails the
+download, a child still running after :data:`PRELOAD_TIMEOUT_S` (e.g. a hung
+TensorFlow import) dumps its stack and exits, and the parent kills it if it
+cannot.
 """
 
 import os
@@ -48,11 +54,19 @@ WEIGHTS_BY_MODALITY = {
 #: The reorientation template every one of those networks reads.
 TEMPLATE_NAME = "S_template3"
 
+#: Seconds a single network read may stall before the download fails. It bounds
+#: a dead connection, not a slow transfer that keeps receiving data.
+SOCKET_TIMEOUT_S = 60
+
+#: Seconds the parent waits on the child before killing it: generous for five
+#: networks and the template on a slow link, but finite.
+PRELOAD_TIMEOUT_S = 1800
+
 #: What the child runs. Kept as a one-liner so the child imports antspynet (and
 #: therefore TensorFlow) and nothing else of SWANe's runtime.
 _CHILD = (
-    "from swane.utils.antspynet_weights import fetch_weights;"
-    "import sys; fetch_weights(sys.argv[1:])"
+    "from swane.utils.antspynet_weights import run_child;"
+    "import sys; run_child(float(sys.argv[1]), sys.argv[2:])"
 )
 
 
@@ -132,13 +146,36 @@ def fetch_weights(names) -> None:
     get_antsxnet_data(TEMPLATE_NAME)
 
 
+def run_child(dump_after, names) -> None:
+    """Entry point of the child: bound it, then :func:`fetch_weights`.
+
+    Parameters
+    ----------
+    dump_after : float
+        Seconds after which the child writes every thread's stack to stderr and
+        exits, before the parent's timeout would kill it silently.
+    names : list of str
+        The weights to fetch.
+    """
+    import faulthandler
+    import socket
+
+    faulthandler.dump_traceback_later(dump_after, exit=True)
+    socket.setdefaulttimeout(SOCKET_TIMEOUT_S)
+    fetch_weights(names)
+
+
 def preload_weights(names) -> None:
     """Download ``names`` (and the shared template) in a child process.
 
     Raises
     ------
     subprocess.CalledProcessError
-        If the child cannot get them. Its captured output is on the exception.
+        If the child cannot get them, a stalled read and a child that dumped
+        its stack included. Its captured output is on the exception.
+    subprocess.TimeoutExpired
+        If the child is still running after :data:`PRELOAD_TIMEOUT_S`; it is
+        killed first.
     """
     if weights_are_fetched(names):
         return
@@ -162,10 +199,13 @@ def preload_weights(names) -> None:
             os.path.join(os.path.dirname(__file__), "..", "..")
         )
 
+    # The child dumps its stack shortly before the parent gives up on it.
+    dump_after = PRELOAD_TIMEOUT_S - min(60, PRELOAD_TIMEOUT_S / 2)
     subprocess.run(
-        [sys.executable, "-c", _CHILD, *names],
+        [sys.executable, "-c", _CHILD, str(dump_after), *names],
         check=True,
         capture_output=True,
         text=True,
         env=env,
+        timeout=PRELOAD_TIMEOUT_S,
     )
