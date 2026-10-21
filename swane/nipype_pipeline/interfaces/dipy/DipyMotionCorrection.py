@@ -77,6 +77,18 @@ DEFAULT_PIPELINE = ["center_of_mass", "translation", "rigid"]
 # ftol (~2.2e-9) and diverged from the serial path. Pinning them here keeps both
 # paths bit-for-bit equal and the output identical to dipy 1.12.0. Each call gets
 # a fresh copy because dipy's AffineRegistration mutates the dict (maxfun).
+#
+# TODO: rotations are under-recovered when the head is far from the world
+# origin. dipy's rigid parameters rotate about world (0, 0, 0), the scanner
+# isocentre in dcm2niix output, so rotation and translation are strongly
+# coupled and this loose ftol stops the optimiser early. Synthetic phantom,
+# ~5 degree true rotation: 0.09 degrees left uncorrected with the head at the
+# origin, 2.3 at 20 mm, 3.3 at 40 mm, 3.7 at 80 mm; volumes stay rotated and
+# the bvecs are reoriented only by the recovered part. Registering with both
+# affines shifted so the FOV centre is the origin (same voxel mapping, same
+# rotation matrices, original affine re-stamped on the output) brings every
+# case to 0.09 degrees at no cost; ftol=1e-7 gets close at 4-8x the run time.
+# The phantom tests put the origin at the FOV centre, so they do not see it.
 DEFAULT_OPTIMIZER_OPTIONS = {"gtol": 1e-4, "ftol": 1e-3}
 
 # Module-level globals populated by ``_worker_initializer`` in each worker.
