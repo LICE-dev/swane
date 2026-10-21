@@ -400,7 +400,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
 
         return super(MonitoredMultiProcPlugin, self)._task_finished_cb(jobid, cached)
 
-    def _negotiate_ram(self, node):
+    def _negotiate_ram(self, node, collating=False):
         """Apply the bidirectional RAM plan for a node carrying an estimator.
 
         This extends the one-way reservation that ``Node.mem_gb_runtime``
@@ -425,6 +425,19 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         The MapNode-inheritance path in :meth:`_submit_mapnode` already copies
         the estimator onto each subnode, so each subnode is negotiated here in
         turn.
+
+        A MapNode reaching here whole (see :meth:`_negotiate_mapnode`) has list
+        iterfield inputs, which an estimator written for one element cannot
+        read: it is priced element by element, and its plan is never applied
+        as tuning.
+
+        Parameters
+        ----------
+        node : Node
+            The node about to be scheduled.
+        collating : bool
+            ``True`` for a MapNode whose subnodes already ran, submitted again
+            only to collate their results.
         """
         estimator = getattr(node, "ram_estimator", None)
         if not isinstance(estimator, RamEstimator):
@@ -435,7 +448,10 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         try:
             # Resolve upstream inputs first, exactly as mem_gb_runtime does.
             node._get_inputs()
-            plan = estimator.negotiate(node.inputs, self.memory_gb)
+            if isinstance(node, MapNode):
+                plan = self._negotiate_mapnode(node, estimator, collating)
+            else:
+                plan = estimator.negotiate(node.inputs, self.memory_gb)
 
             traits = node.inputs.traits()
             for key, value in (plan.tuned_params or {}).items():
@@ -461,6 +477,37 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 node.mem_gb,
                 traceback.format_exc(),
             )
+
+    def _negotiate_mapnode(self, node, estimator, collating):
+        """RAM plan for a MapNode submitted whole.
+
+        nipype submits a MapNode unexpanded when it has a single element (or is
+        serial): its elements then run one after another in the same process,
+        so each is negotiated on its own inputs and the plan reserves the
+        largest of them. A MapNode submitted again to collate its subnodes'
+        results only loads them from cache and reserves the estimator's floor.
+        No tuning is returned: a tuned value per element has no single place
+        on the MapNode's inputs.
+        """
+        from swane.patches.nipype_patches import RamPlan
+
+        if collating:
+            return RamPlan(
+                mem_gb=estimator.min_gb or 0.0,
+                debug_str="collating cached subnode results",
+            )
+        plans = [
+            estimator.negotiate(subnode.inputs, self.memory_gb)
+            for _, subnode in node._make_nodes(cwd=node.output_dir())
+        ]
+        n_procs = [plan.n_procs for plan in plans if plan.n_procs is not None]
+        return RamPlan(
+            mem_gb=max(plan.mem_gb for plan in plans),
+            n_procs=max(n_procs) if n_procs else None,
+            debug_str="; ".join(
+                "[%d] %s" % (index, plan.debug_str) for index, plan in enumerate(plans)
+            ),
+        )
 
     def _send_procs_to_workers(self, updatehash=False, graph=None):
         """
@@ -554,7 +601,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             # set the reservation before reading mem_gb_runtime below. No-op for
             # nodes without an estimator; back-compatible for one-way (FSL)
             # estimators (negotiate wraps __call__ with empty tuning).
-            self._negotiate_ram(self.procs[jobid])
+            self._negotiate_ram(self.procs[jobid], collating=jobid in self.mapnodes)
 
             # Check requirements of this job
             next_job_gb = min(self.procs[jobid].mem_gb_runtime, self.memory_gb)
