@@ -25,6 +25,7 @@ from swane.config.ConfigManager import ConfigManager
 from swane.config.preference_list import GLOBAL_PREFERENCES, WF_PREFERENCES
 from swane.utils.DataInputList import DataInputList
 from swane.utils.ResourceManager import ResourceManager
+import swane.utils.ResourceManager as resource_manager_module
 import swane.ui.PreferenceWizardWindow as wizard_module
 from swane.ui.PreferenceWizardWindow import (
     PreferenceWizardWindow,
@@ -63,6 +64,15 @@ def ram_requirement(key, option):
 
 def set_ram(global_config, ram_gb):
     global_config[PERF]["ram_gb"] = str(ram_gb)
+
+
+def fake_total_ram(monkeypatch, total_gb):
+    """Make ResourceManager see a computer with total_gb GB of RAM."""
+
+    class FakeVM:
+        total = total_gb * 1024**3
+
+    monkeypatch.setattr(resource_manager_module, "virtual_memory", lambda: FakeVM)
 
 
 def engine(global_config, key):
@@ -247,12 +257,26 @@ class TestResourceShare:
         assert values["ram_gb"] == pytest.approx(budget_ram, abs=0.01)
         assert values["max_subj_cpu"] == budget_cpu
 
-    def test_levels_are_50_70_90_percent(self):
-        total = ResourceManager.total_memory_gb()
+    def test_levels_are_50_70_90_percent(self, monkeypatch):
+        fake_total_ram(monkeypatch, 32)
         budgets = [ConfigManager.get_resource_budget(l)[0] for l, _ in RESOURCE_LEVELS]
-        assert budgets == pytest.approx(
-            [total * p / 100 for p in (50, 70, 90)], abs=0.02
-        )
+        assert budgets == pytest.approx([16, 22.4, 28.8], abs=0.02)
+
+    @pytest.mark.parametrize(
+        "total_gb, expected",
+        [(8, [5, 5.6, 7.2]), (5.2, [5, 5, 5]), (4, [4, 4, 4])],
+    )
+    def test_levels_never_go_below_the_ram_floor(self, monkeypatch, total_gb, expected):
+        # On a small computer no profile proposes less than the RAM floor of
+        # a subject tab (the ram_gb range minimum)
+        fake_total_ram(monkeypatch, total_gb)
+        for (level, _), ram_gb in zip(RESOURCE_LEVELS, expected):
+            assert ConfigManager.get_resource_budget(level)[0] == pytest.approx(
+                ram_gb, abs=0.01
+            )
+            values = ConfigManager.get_resource_profile_values(level)
+            assert values["ram_gb"] >= ResourceManager.get_minimum_subject_ram()
+            assert values["ram_gb"] <= ResourceManager.get_maximum_ram()
 
     def test_profile_values_are_valid_preference_values(self):
         low, high = GLOBAL_PREFERENCES[PERF]["ram_gb"].range
@@ -620,6 +644,12 @@ class TestPreferenceWizardParent:
 
             def check_running_workflows(self):
                 return False
+
+            def reset_workflows(self):
+                pass
+
+            def _check_subject_dependencies(self):
+                pass
 
         monkeypatch.setattr(main_window_module, "PreferenceWizardWindow", FakeWizard)
         main = FakeMainWindow()

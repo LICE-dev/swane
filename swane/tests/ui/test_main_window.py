@@ -144,3 +144,96 @@ def test_saving_preferences_revalidates_ram_requirements(monkeypatch, main_windo
     main_window.edit_config()
 
     assert config.getenum_safe(synth, "deskull_engine") != DeskullEngine.ANTSPYNET
+
+
+class TestPreferenceWizardFromMainWindow:
+    """Rerunning the wizard (Menu -> Configuration Wizard) must leave no
+    generated workflow or open subject configuration built on the previous
+    resources."""
+
+    @staticmethod
+    def _open_subject_tab(main_window, tmp_path):
+        from types import SimpleNamespace
+
+        from swane.config.ConfigManager import ConfigManager
+
+        folder = tmp_path / "subject"
+        folder.mkdir()
+        tab = SimpleNamespace(
+            subject=SimpleNamespace(
+                config=ConfigManager(
+                    subject_folder=str(folder),
+                    global_config=main_window.global_config,
+                )
+            ),
+            resets=[],
+        )
+        tab.reset_workflow = lambda: tab.resets.append(True)
+        main_window.subject_tab_array = [tab]
+        return tab
+
+    def test_opening_the_wizard_resets_the_workflows(
+        self, monkeypatch, tmp_path, main_window
+    ):
+        import swane.ui.MainWindow as main_window_module
+
+        tab = self._open_subject_tab(main_window, tmp_path)
+        resets_at_exec = []
+
+        class _Wizard:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def exec(self):
+                # Cancelled: the workflows are reset all the same
+                resets_at_exec.append(len(tab.resets))
+                return 0
+
+        monkeypatch.setattr(main_window, "check_running_workflows", lambda: False)
+        monkeypatch.setattr(main_window_module, "PreferenceWizardWindow", _Wizard)
+
+        main_window.start_preference_wizard()
+
+        assert resets_at_exec == [1]
+
+    def test_a_lower_ram_revalidates_the_open_subjects(
+        self, monkeypatch, tmp_path, main_window
+    ):
+        import swane.ui.MainWindow as main_window_module
+        from swane.config.config_enums import FreesurferStep, GlobalPrefCategoryList
+        from swane.utils.DataInputList import DataInputList
+        from swane.utils.ResourceManager import ResourceManager
+
+        perf = GlobalPrefCategoryList.PERFORMANCE
+        dependency_manager = main_window.dependency_manager
+        monkeypatch.setattr(dependency_manager, "is_freesurfer", lambda: True)
+        monkeypatch.setattr(dependency_manager, "is_freesurfer_synth", lambda: True)
+        main_window.global_config[perf]["ram_gb"] = str(
+            ResourceManager.synth_seg_ram_requirements()
+        )
+        tab = self._open_subject_tab(main_window, tmp_path)
+        subject_config = tab.subject.config
+        subject_config[DataInputList.T13D][
+            "freesurfer_step"
+        ] = FreesurferStep.SYNTHSEG.name
+
+        class _LowRamWizard:
+            """Stands in for the wizard: applies a profile below SynthSeg's RAM."""
+
+            def __init__(self, global_config, *args, **kwargs):
+                self.global_config = global_config
+
+            def exec(self):
+                self.global_config[perf]["ram_gb"] = "8.0"
+                self.global_config.save()
+                return 1
+
+        monkeypatch.setattr(main_window, "check_running_workflows", lambda: False)
+        monkeypatch.setattr(main_window_module, "PreferenceWizardWindow", _LowRamWizard)
+
+        main_window.start_preference_wizard()
+
+        assert (
+            subject_config.getenum_safe(DataInputList.T13D, "freesurfer_step")
+            is not FreesurferStep.SYNTHSEG
+        )

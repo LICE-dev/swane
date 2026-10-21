@@ -5,6 +5,7 @@ from swane.utils.ResourceManager import ResourceManager
 
 from swane.resources import strings
 from swane.config.PreferenceEntry import PreferenceEntry
+from swane.utils.LicenseReference import TOOL_IDS as LICENSE_TOOL_IDS
 from swane.config.config_enums import *
 from swane.config.dependency_policy import FSL_MANDATORY, default_engines
 from swane.nipype_pipeline.workflows.workflow_constants import DIPY_TRACT_ATLAS
@@ -645,6 +646,12 @@ WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
 # global config files keep working.
 RENAMED_PREFERENCES = {str(DataInputList.FMRI_RS): {"melodic_dim": "ic_dim"}}
 
+# Global and subject configuration files written by a SWANe version older than
+# this one (or with no readable last_swane_version) are discarded and replaced
+# by the defaults at load. Raise it in a release whose changes cannot be
+# migrated; never above __version__, or every start would reset again.
+PREF_RESET_BEFORE_VERSION = "0.2.5"
+
 GLOBAL_PREFERENCES = {}
 
 category = GlobalPrefCategoryList.MAIN
@@ -689,25 +696,14 @@ GLOBAL_PREFERENCES[category]["last_swane_version"] = PreferenceEntry(
     hidden=True,
     default=__version__,
 )
-for _license_tool in (
-    "fsl",
-    "freesurfer",
-    "slicer",
-    "dcm2niix",
-    "antspyx",
-    "antspynet",
-):
+# One acceptance per tool of the license consent gate (LicenseReference.TOOL_IDS)
+for _license_tool in LICENSE_TOOL_IDS:
     GLOBAL_PREFERENCES[category]["accepted_license_" + _license_tool] = PreferenceEntry(
         input_type=InputTypes.TEXT,
         label="Accepted license version for " + _license_tool,
         default="",
         hidden=True,
     )
-GLOBAL_PREFERENCES[category]["force_pref_reset"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    hidden=True,
-    default="true",
-)
 GLOBAL_PREFERENCES[category]["slicer_scene_ext"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     hidden=True,
