@@ -1,7 +1,6 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 from os.path import abspath
 
-import numpy as np
 from nipype.interfaces.base import (
     traits,
     BaseInterface,
@@ -12,7 +11,7 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
-from swane.nipype_pipeline.interfaces.ants import thread_env
+from swane.nipype_pipeline.interfaces.ants import match_mask_geometry, thread_env
 
 # antspyx is imported lazily inside _run_interface, as in AntsN4BiasFieldCorrection.
 
@@ -95,20 +94,8 @@ class AntsAtropos(BaseInterface):
             if isdefined(self.inputs.mask_file):
                 mask = ants.image_read(self.inputs.mask_file)
                 mask = (mask > 0).clone("float")
-                # geometry-coherence guard (same tolerance as AntsN4BiasFieldCorrection)
-                max_tolerance = 0.1
-                distance = np.linalg.norm(np.array(img.origin) - np.array(mask.origin))
-                if distance > 0:
-                    if distance <= max_tolerance:
-                        mask.set_origin(img.origin)
-                        mask.set_spacing(img.spacing)
-                        mask.set_direction(img.direction)
-                    else:
-                        raise RuntimeError(
-                            f"Image and Mask do not coincide! Origin distance: "
-                            f"{distance:.4f} mm. Maximum allowed threshold is "
-                            f"{max_tolerance} mm."
-                        )
+                # geometry-coherence guard, shared with AntsN4BiasFieldCorrection
+                mask = match_mask_geometry(img, mask)
             else:
                 mask = (img > 0).clone("float")
 

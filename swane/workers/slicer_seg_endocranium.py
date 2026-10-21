@@ -1,9 +1,7 @@
 import slicer
 import sys
-import vtk
 import vtkITK
 import argparse
-import qt
 import os
 
 os.environ["QT_LOGGING_RULES"] = "*.warning=false"
@@ -30,37 +28,47 @@ def export_segment_as_nifti(segmentationNode, segmentId, referenceVolumeNode, ou
 # Headless morphological closing smoothing
 # ------------------------------------------------------------
 def smooth_segment_morphological_closing(
-    segmentationNode, segmentId, referenceVolumeNode, kernelSizeMm
+    segmentEditorWidget, segmentEditorNode, segmentId, kernelSizeMm
 ):
+    """Close one segment with the Segment Editor's Smoothing effect.
 
-    labelmapNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
+    The effect sizes the kernel per axis from the segment's real spacing, so
+    kernelSizeMm is in millimetres. It is fetched with effectByName and applied
+    without being activated: activating it (setActiveEffectByName) segfaults
+    when Slicer runs with --no-main-window. Overwriting other segments is
+    switched off for the call, so the closing only adds voxels to segmentId.
+    """
+    segmentEditorNode.SetSelectedSegmentID(segmentId)
+    overwriteMode = segmentEditorNode.GetOverwriteMode()
+    segmentEditorNode.SetOverwriteMode(slicer.vtkMRMLSegmentEditorNode.OverwriteNone)
 
-    slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
-        segmentationNode, [segmentId], labelmapNode, referenceVolumeNode
-    )
+    effect = segmentEditorWidget.effectByName("Smoothing")
+    effect.setParameter("SmoothingMethod", "MORPHOLOGICAL_CLOSING")
+    effect.setParameter("KernelSizeMm", str(kernelSizeMm))
+    effect.setParameter("ApplyToAllVisibleSegments", "0")
+    effect.self().onApply()
 
-    imageData = labelmapNode.GetImageData()
-    spacing = imageData.GetSpacing()
+    segmentEditorNode.SetOverwriteMode(overwriteMode)
 
-    kernelSizeVoxel = [
-        int(round((kernelSizeMm / spacing[i] + 1) / 2) * 2 - 1) for i in range(3)
-    ]
-    kernelSizeVoxel = [k if k % 2 == 1 else k + 1 for k in kernelSizeVoxel]
 
-    closeFilter = vtk.vtkImageOpenClose3D()
-    closeFilter.SetInputData(imageData)
-    closeFilter.SetKernelSize(
-        kernelSizeVoxel[0], kernelSizeVoxel[1], kernelSizeVoxel[2]
-    )
-    closeFilter.SetOpenValue(0)
-    closeFilter.SetCloseValue(1)
-    closeFilter.Update()
+def quit_slicer(status):
+    """Exit Slicer with the given status, even if its shutdown hangs.
 
-    slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(
-        labelmapNode, segmentationNode
-    )
+    Headless Slicer occasionally hangs on shutdown, which would leave the
+    calling node waiting forever: a daemon thread forces the exit, with the
+    same status, if the clean exit has not happened within 5 s.
+    """
+    import threading
+    import time
 
-    slicer.mrmlScene.RemoveNode(labelmapNode)
+    def force_exit():
+        time.sleep(5)
+        os._exit(status)
+
+    t = threading.Thread(target=force_exit)
+    t.daemon = True
+    t.start()
+    slicer.util.exit(status)
 
 
 def main(argv=None):
@@ -184,9 +192,9 @@ def main(argv=None):
     seg.GetSegment(boneSmoothID).DeepCopy(seg.GetSegment(boneRawID))
 
     smooth_segment_morphological_closing(
-        segmentationNode=segmentationNode,
+        segmentEditorWidget=segmentEditorWidget,
+        segmentEditorNode=segmentEditorNode,
         segmentId=boneSmoothID,
-        referenceVolumeNode=inputVolume,
         kernelSizeMm=smoothingKernelSize,
     )
 
@@ -236,19 +244,7 @@ def main(argv=None):
     # Exit Slicer
     segmentEditorWidget = None
     segmentEditorNode = None
-    qt.QTimer.singleShot(0, slicer.app.quit)
-
-    import threading
-    import os
-    import time
-
-    def force_exit():
-        time.sleep(5)
-        os._exit(0)
-
-    t = threading.Thread(target=force_exit)
-    t.daemon = True
-    t.start()
+    quit_slicer(0)
 
 
 if __name__ == "__main__":
@@ -262,4 +258,4 @@ if __name__ == "__main__":
         import traceback
 
         traceback.print_exc()
-        slicer.util.exit(status=1)
+        quit_slicer(1)

@@ -20,6 +20,12 @@ def test_get_command_info_equivalent_key():
     assert get_command_info("ApplyXFM") is get_command_info("FLIRT")
 
 
+def test_custom_filter_regressor_shares_the_fsl_regfilt_reference():
+    ref = get_command_info("CustomFilterRegressor")
+    assert ref is get_command_info("FilterRegressor")
+    assert ref.command == "fsl_regfilt"
+
+
 def test_get_command_info_unknown_key():
     assert get_command_info("DoesNotExist") is None
 

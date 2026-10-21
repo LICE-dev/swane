@@ -30,6 +30,7 @@ Read this reference for changes to workflow graphs, custom interfaces, analysis 
 - Give nodes stable operational names. Add `long_name` when progress reporting needs a clearer user label; `CustomWorkflow.format_node_name` consumes it.
 - Reuse an existing workflow family before creating a one-off graph. For example, prefer extending the established linear/nonlinear registration or functional-map patterns when their scientific contract fits.
 - Avoid changing a node identity solely for readability; a rename can invalidate cached work and graph assertions.
+- Node results pickle interface, spec and output classes by module path, so moving or renaming such a class makes older work directories unloadable. `Subject.start_workflow` checks them with `engine/cache_compatibility.find_unloadable_result` (a static `pickletools` scan, nothing unpickled) and returns `SubjectRet.ExecWfResumeIncompatible` instead of resuming; `SubjectTab` then offers only a new execution (the `FS/` subject folder is asked about separately). Keep that check working when changing the result format or the interface layout.
 
 When adding an analysis, trace this complete chain:
 

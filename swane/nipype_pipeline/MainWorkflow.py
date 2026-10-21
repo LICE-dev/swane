@@ -1350,6 +1350,8 @@ class MainWorkflow(CustomWorkflow):
             self.fMRI_resting_state,
             "inputnode.reference_brain",
         )
+        # The ICA-AROMA classification overview ("aroma_classification" on the
+        # output node) is deliberately not saved in the results folder.
         self.fMRI_resting_state.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",

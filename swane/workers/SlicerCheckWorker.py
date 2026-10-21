@@ -336,32 +336,51 @@ if _swane_os.path.isdir(_swane_workers_dir):
     # -------------------------
     @staticmethod
     def check_patch(slicerrc_path):
-        """Return True if the SWANe patch exists and matches the current stub."""
+        """Return True if the file holds exactly one SWANe patch and it matches
+        the current stub."""
         content = SlicerCheckWorker.read_slicerrc(slicerrc_path)
-        if (
-            SlicerCheckWorker.BEGIN_MARKER in content
-            and SlicerCheckWorker.END_MARKER in content
-        ):
-            start = content.index(SlicerCheckWorker.BEGIN_MARKER)
-            end = content.index(SlicerCheckWorker.END_MARKER) + len(
-                SlicerCheckWorker.END_MARKER
-            )
-            current_patch = content[start:end]
-            return (
-                current_patch.strip() == SlicerCheckWorker.build_startup_patch().strip()
-            )
-        return False
+        blocks = SlicerCheckWorker._find_blocks(
+            content, SlicerCheckWorker.BEGIN_MARKER, SlicerCheckWorker.END_MARKER
+        )
+        if len(blocks) != 1:
+            return False
+        start, end = blocks[0]
+        return (
+            content[start:end].strip()
+            == SlicerCheckWorker.build_startup_patch().strip()
+        )
 
     # -------------------------
     # Add or replace patch
     # -------------------------
     @staticmethod
+    def _find_blocks(content, begin_marker, end_marker):
+        """Return the (start, end) span of every complete begin/end block.
+
+        Each end marker is searched after its own begin marker, so a stray end
+        marker before a begin (e.g. the user deleted a begin line) is never
+        paired with it.
+        """
+        blocks = []
+        pos = 0
+        while True:
+            start = content.find(begin_marker, pos)
+            if start == -1:
+                return blocks
+            end = content.find(end_marker, start + len(begin_marker))
+            if end == -1:
+                return blocks
+            pos = end + len(end_marker)
+            blocks.append((start, pos))
+
+    @staticmethod
     def _strip_marked_block(content, begin_marker, end_marker):
-        """Return content with a single begin/end-delimited block removed."""
-        if begin_marker in content and end_marker in content:
-            start = content.index(begin_marker)
-            end = content.index(end_marker) + len(end_marker)
-            return content[:start] + content[end:]
+        """Return content with every complete begin/end-delimited block
+        removed; text outside those blocks is left untouched."""
+        for start, end in reversed(
+            SlicerCheckWorker._find_blocks(content, begin_marker, end_marker)
+        ):
+            content = content[:start] + content[end:]
         return content
 
     @staticmethod
@@ -420,20 +439,13 @@ if _swane_os.path.isdir(_swane_workers_dir):
     def remove_patch(slicerrc_path, return_content=False):
         """Remove the SWANe patch from slicerrc.py, leaving the rest untouched."""
         content = SlicerCheckWorker.read_slicerrc(slicerrc_path)
-        if (
-            SlicerCheckWorker.BEGIN_MARKER in content
-            and SlicerCheckWorker.END_MARKER in content
-        ):
-            start = content.index(SlicerCheckWorker.BEGIN_MARKER)
-            end = content.index(SlicerCheckWorker.END_MARKER) + len(
-                SlicerCheckWorker.END_MARKER
-            )
-            new_content = content[:start] + content[end:]
-            if return_content:
-                return new_content
+        new_content = SlicerCheckWorker._strip_marked_block(
+            content, SlicerCheckWorker.BEGIN_MARKER, SlicerCheckWorker.END_MARKER
+        )
+        if return_content:
+            return new_content
+        if new_content != content:
             SlicerCheckWorker.write_slicerrc(slicerrc_path, new_content)
-        elif return_content:
-            return content
 
     def run(self):
         repeat = True

@@ -2,9 +2,18 @@
 import os
 from contextlib import contextmanager
 
+import numpy as np
 from nipype.interfaces.base import isdefined
 
 ITK_THREADS_VAR = "ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"
+
+# How far a mask's geometry may drift from its image's before the pair is
+# refused (match_mask_geometry). Within them the drift is header rounding
+# (e.g. float32 qform/sform written by other tools) and the mask is given the
+# image's exact geometry, since ITK itself demands agreement to about 1e-6.
+MASK_ORIGIN_TOLERANCE_MM = 0.1
+MASK_SPACING_TOLERANCE_MM = 1e-3
+MASK_DIRECTION_TOLERANCE = 1e-3
 
 
 @contextmanager
@@ -63,3 +72,52 @@ def ants_random_seed(seed):
         yield
     finally:
         ants.config._random_seed = previous
+
+
+def match_mask_geometry(img, mask):
+    """Give ``mask`` the exact geometry of ``img``, or refuse the pair.
+
+    The shapes must be equal, and the spacing, direction cosines and origin
+    within MASK_SPACING_TOLERANCE_MM, MASK_DIRECTION_TOLERANCE and
+    MASK_ORIGIN_TOLERANCE_MM: the mask then takes the image's origin, spacing
+    and direction. Anything further apart is a mask on another grid, which
+    relabelling would silently misplace and ITK would reject with an opaque
+    error, so a RuntimeError names what differs.
+
+    Parameters
+    ----------
+    img : ants.ANTsImage
+        The image the mask is used with.
+    mask : ants.ANTsImage
+        The mask, aligned in place.
+
+    Returns
+    -------
+    ants.ANTsImage
+        ``mask``, with the image's geometry.
+    """
+    problems = []
+    if tuple(mask.shape) != tuple(img.shape):
+        problems.append("shape %s vs %s" % (tuple(mask.shape), tuple(img.shape)))
+    spacing_diff = np.max(np.abs(np.subtract(mask.spacing, img.spacing)))
+    if spacing_diff > MASK_SPACING_TOLERANCE_MM:
+        problems.append(
+            "spacing %s vs %s mm"
+            % (tuple(np.round(mask.spacing, 4)), tuple(np.round(img.spacing, 4)))
+        )
+    direction_diff = np.max(np.abs(np.subtract(mask.direction, img.direction)))
+    if direction_diff > MASK_DIRECTION_TOLERANCE:
+        problems.append("direction cosines differ by up to %.4g" % direction_diff)
+    distance = np.linalg.norm(np.subtract(mask.origin, img.origin))
+    if distance > MASK_ORIGIN_TOLERANCE_MM:
+        problems.append(
+            "origin distance %.4f mm (maximum %g mm)"
+            % (distance, MASK_ORIGIN_TOLERANCE_MM)
+        )
+    if problems:
+        raise RuntimeError("Image and Mask do not coincide! " + "; ".join(problems))
+
+    mask.set_origin(img.origin)
+    mask.set_spacing(img.spacing)
+    mask.set_direction(img.direction)
+    return mask

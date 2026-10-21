@@ -188,31 +188,32 @@ def fMRI_preproc_workflow(
     img2float.inputs.suffix = "_dtype"
     workflow.connect(reorient, "out_file", img2float, "in_file")
 
-    # NODE 6: Extract the middle volume of the first run as the reference
-    extract_ref = Node(ExtractVolumes(), name="%s_extract_ref" % name)
-    extract_ref.long_name = "Reference volume selection"
-    extract_ref.inputs.num_volumes = 1
-
-    # Function to extract the middle volume number
-    def get_middle_volume(func):
-        from nibabel import load
-
-        funcfile = func
-        if isinstance(func, list):
-            funcfile = func[0]
-        _, _, _, timepoints = load(funcfile).shape
-        middle = int(timepoints / 2)
-        return middle
-
-    workflow.connect(img2float, "out_file", extract_ref, "in_file")
-    workflow.connect(
-        reorient, ("out_file", get_middle_volume), extract_ref, "start_volume"
-    )
-
     # NODE 7: Realign the functional runs to the middle volume of the first run
     if fmri_engine == FmriEngine.NILEARN:
+        # AntsMotionCorrection picks the middle volume itself.
         motion_correct = Node(AntsMotionCorrection(), name="%s_motion_correct" % name)
     else:
+        # NODE 6: Extract the middle volume of the first run as the reference
+        extract_ref = Node(ExtractVolumes(), name="%s_extract_ref" % name)
+        extract_ref.long_name = "Reference volume selection"
+        extract_ref.inputs.num_volumes = 1
+
+        # Function to extract the middle volume number
+        def get_middle_volume(func):
+            from nibabel import load
+
+            funcfile = func
+            if isinstance(func, list):
+                funcfile = func[0]
+            _, _, _, timepoints = load(funcfile).shape
+            middle = int(timepoints / 2)
+            return middle
+
+        workflow.connect(img2float, "out_file", extract_ref, "in_file")
+        workflow.connect(
+            reorient, ("out_file", get_middle_volume), extract_ref, "start_volume"
+        )
+
         motion_correct = Node(MCFLIRT(), name="%s_motion_correct" % name)
         motion_correct.inputs.save_mats = True
         motion_correct.inputs.save_plots = True
@@ -226,9 +227,8 @@ def fMRI_preproc_workflow(
             motion_correct.inputs.stages = 1
         else:
             motion_correct.inputs.interpolation = "spline"
-    workflow.connect(img2float, "out_file", motion_correct, "in_file")
-    if fmri_engine != FmriEngine.NILEARN:
         workflow.connect(extract_ref, "out_file", motion_correct, "ref_file")
+    workflow.connect(img2float, "out_file", motion_correct, "in_file")
 
     # NODE 8: Perform slice timing correction if needed. Both engines correct
     # along the third voxel axis of the reoriented series, so the correction

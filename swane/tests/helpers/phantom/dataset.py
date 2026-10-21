@@ -55,7 +55,10 @@ from swane.tests.helpers.phantom.tissue import TissueClass as TC, build_tissue_m
 #: maps (TemplateFlow).
 #: v11: resting-state network maps weighted by the grey-matter partial-volume
 #: fraction, so they no longer leak into the WM/CSF nuisance ROIs.
-GENERATOR_VERSION = "11"
+#: v12: DWI gradients written in the LPS frame of DICOM's
+#: DiffusionGradientOrientation (they were RAS, mirroring x and y; the RAS grid
+#: hid it behind ForceOrient's unreoriented b-vectors, now reoriented).
+GENERATOR_VERSION = "12"
 
 #: Default cache root; ``SWANE_PHANTOM_DIR`` overrides it.
 DEFAULT_CACHE_ROOT = os.path.join(os.path.expanduser("~"), "test_swane", "phantom")

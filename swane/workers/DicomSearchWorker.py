@@ -100,6 +100,20 @@ class DicomSearchWorker(QRunnable):
             return 0
 
     def run(self):
+        # The GUI waits for sig_finish (its progress dialog is not closable), so
+        # an unexpected error must be logged and still end with the signal: the
+        # listeners then see whatever the scan collected so far
+        try:
+            self._scan()
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "DICOM scan of %s failed, reporting the partial result",
+                self.dicom_dir,
+            )
+        self.signal.sig_loop.emit(1)
+        self.signal.sig_finish.emit(self)
+
+    def _scan(self):
         if len(self.unsorted_list) == 0:
             self.load_dir()
 
@@ -208,9 +222,6 @@ class DicomSearchWorker(QRunnable):
                             exc_info=True,
                         )
                         dicom_series.frames = 0
-
-        self.signal.sig_loop.emit(1)
-        self.signal.sig_finish.emit(self)
 
     @staticmethod
     def find_series_description(image_list: list[str]) -> str:

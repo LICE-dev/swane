@@ -216,6 +216,172 @@ def test_workflow_crash_notice_follows_earlier_reports(
     assert tab.workflow_had_error is True
 
 
+@pytest.fixture
+def shutdown_calls(monkeypatch):
+    """Record the power-off attempts of ``safe_shutdown_after_workflow``.
+
+    ``os.system`` and ``exit`` are replaced, so no test can power the machine
+    off or quit the interpreter.
+    """
+    import swane.ui.MainWindow as main_window_mod
+
+    calls = []
+    monkeypatch.setattr(main_window_mod, "is_mac", lambda: False)
+    monkeypatch.setattr(main_window_mod.os, "system", lambda cmd: calls.append(cmd))
+    monkeypatch.setattr(main_window_mod, "exit", lambda: None, raising=False)
+    return calls
+
+
+def _shutdown_tab(qtbot, main_window, name):
+    subject = _loaded_subject(
+        main_window.global_config, main_window.dependency_manager, name=name
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+    main_window.subject_tab_array.append(tab)
+    tab.global_config.getboolean_safe = lambda *args, **kwargs: True
+    return tab
+
+
+def test_shutdown_after_completed_workflow(qtbot, main_window, shutdown_calls):
+    tab = _shutdown_tab(qtbot, main_window, "subj_shutdown_ok")
+
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_STOP))
+
+    assert shutdown_calls == ["systemctl poweroff"]
+
+
+def test_no_shutdown_after_user_stop(qtbot, monkeypatch, main_window, shutdown_calls):
+    """Stopping a workflow resets it (clearing the error flag) before the
+    WORKFLOW_STOP of the terminated process reaches the GUI: that terminal
+    report must not power the machine off."""
+    from unittest.mock import MagicMock
+    from PySide6.QtWidgets import QMessageBox
+
+    tab = _shutdown_tab(qtbot, main_window, "subj_shutdown_stop")
+    tab.subject.workflow = MagicMock()
+    tab.node_list = {}
+    monkeypatch.setattr(tab.subject, "is_workflow_process_alive", lambda: True)
+    monkeypatch.setattr(tab.subject, "stop_workflow", lambda: SubjectRet.ExecWfStopped)
+    monkeypatch.setattr(
+        QMessageBox, "exec", lambda self: QMessageBox.StandardButton.Yes
+    )
+
+    tab.toggle_workflow_execution()
+    assert tab.workflow_had_error is False
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_STOP))
+
+    assert shutdown_calls == []
+
+
+def test_shutdown_after_stop_then_completed_run(
+    qtbot, monkeypatch, main_window, shutdown_calls
+):
+    """A new run clears the user-stop mark: its normal end shuts down again."""
+    from unittest.mock import MagicMock
+    from PySide6.QtWidgets import QMessageBox
+
+    tab = _shutdown_tab(qtbot, main_window, "subj_shutdown_rerun")
+    tab.subject.workflow = MagicMock()
+    tab.node_list = {}
+    alive = {"value": True}
+    monkeypatch.setattr(
+        tab.subject, "is_workflow_process_alive", lambda: alive["value"]
+    )
+    monkeypatch.setattr(tab.subject, "stop_workflow", lambda: SubjectRet.ExecWfStopped)
+    monkeypatch.setattr(
+        QMessageBox, "exec", lambda self: QMessageBox.StandardButton.Yes
+    )
+    tab.toggle_workflow_execution()
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_STOP))
+    assert shutdown_calls == []
+
+    alive["value"] = False
+    monkeypatch.setattr(
+        tab.subject, "start_workflow", lambda **kwargs: SubjectRet.ExecWfStarted
+    )
+    tab.toggle_workflow_execution()
+    tab.update_node_list(WorkflowReport(WorkflowSignals.WORKFLOW_STOP))
+
+    assert shutdown_calls == ["systemctl poweroff"]
+
+
+@pytest.mark.parametrize(
+    "signal",
+    [
+        WorkflowSignals.INVALID_SIGNAL,
+        WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES,
+        WorkflowSignals.WORKFLOW_CRASHED,
+    ],
+)
+def test_fatal_workflow_reports_stop_the_running_process(
+    qtbot, monkeypatch, main_window, signal
+):
+    """The process lives on the Subject: a fatal report must reach its stop
+    event, not an attribute of the tab that is never assigned."""
+    import threading
+    from types import SimpleNamespace
+    from PySide6.QtWidgets import QMessageBox
+
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_fatal_stop",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
+    stop_event = threading.Event()
+    subject.workflow_process = SimpleNamespace(
+        is_alive=lambda: True, stop_event=stop_event
+    )
+
+    tab.update_node_list(WorkflowReport(signal))
+
+    assert stop_event.is_set()
+    assert tab.workflow_had_error is True
+
+
+def test_fatal_workflow_report_without_live_process_does_not_raise(
+    qtbot, monkeypatch, main_window
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_fatal_dead",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
+
+    tab.update_node_list(WorkflowReport(WorkflowSignals.INVALID_SIGNAL))
+
+    assert tab.workflow_had_error is True
+
+
+def test_invalid_signal_stop_delivered_during_notice_does_not_shut_down(
+    qtbot, monkeypatch, main_window, shutdown_calls
+):
+    """The notice is modal: the WORKFLOW_STOP that follows the stop is
+    delivered while it is open, and must already see the error."""
+    from PySide6.QtWidgets import QMessageBox
+
+    tab = _shutdown_tab(qtbot, main_window, "subj_invalid_shutdown")
+    monkeypatch.setattr(
+        QMessageBox,
+        "exec",
+        lambda self: tab.update_node_list(
+            WorkflowReport(WorkflowSignals.WORKFLOW_STOP)
+        ),
+    )
+
+    tab.update_node_list(WorkflowReport(WorkflowSignals.INVALID_SIGNAL))
+
+    assert shutdown_calls == []
+
+
 def test_label_from_dicom():
     label_single = SubjectTab.label_from_dicom(176, "Subj01", "MR", "T1_MPRAGE", 1)
     assert label_single == "Subj01 - MR - <b>T1_MPRAGE</b>: 176 images, 1 volume"
@@ -418,3 +584,218 @@ def test_auto_import_prompt_uses_tag_free_label(
     assert len(texts) == 1
     assert "T1 &lt;MPR&gt;" in texts[0]
     assert "<b>T1" not in texts[0]
+
+
+@pytest.mark.parametrize("confirm", [True, False])
+def test_incompatible_previous_workflow_asks_for_a_new_execution(
+    qtbot, monkeypatch, main_window, confirm
+):
+    """A previous execution that cannot be resumed is never resumed: the user
+    can only start a new execution (resume=False) or cancel."""
+    subject = _loaded_subject(
+        main_window.global_config,
+        main_window.dependency_manager,
+        name="subj_incompatible",
+    )
+    tab = SubjectTab(main_window.global_config, subject, main_window)
+    qtbot.addWidget(tab)
+    monkeypatch.setattr(subject, "is_workflow_process_alive", lambda: False)
+
+    calls = []
+
+    def fake_start_workflow(
+        resume=None, resume_freesurfer=None, update_node_callback=None
+    ):
+        calls.append(resume)
+        if resume is False:
+            return SubjectRet.ExecWfStarted
+        return SubjectRet.ExecWfResumeIncompatible
+
+    monkeypatch.setattr(subject, "start_workflow", fake_start_workflow)
+
+    from PySide6.QtWidgets import QMessageBox
+
+    shown = []
+
+    def fake_exec(box):
+        shown.append(box.text())
+        return (
+            QMessageBox.StandardButton.Yes
+            if confirm
+            else QMessageBox.StandardButton.Cancel
+        )
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+
+    tab.toggle_workflow_execution()
+
+    assert shown == [strings.subj_tab_old_wf_incompatible]
+    if confirm:
+        assert calls == [None, False]
+        assert tab.exec_button.text() == strings.EXECBUTTONTEXT_STOP
+    else:
+        assert calls == [None]
+        assert tab.exec_button.text() != strings.EXECBUTTONTEXT_STOP
+
+
+class _ModalityMismatchHarness:
+    """Drives ``SubjectTab.dicom_import_to_folder`` through the modality-mismatch prompt.
+
+    The subject import, the message box and the progress dialog are replaced
+    with recorders so the test observes only what the tab does with them.
+    """
+
+    def __init__(self, qtbot, main_window, monkeypatch, answer, import_results):
+        import importlib
+        from PySide6.QtWidgets import QMessageBox
+
+        module = importlib.import_module("swane.ui.SubjectTab")
+        subject = _loaded_subject(
+            main_window.global_config,
+            main_window.dependency_manager,
+            name="subj_modality_mismatch",
+        )
+        self.tab = SubjectTab(main_window.global_config, subject, main_window)
+        qtbot.addWidget(self.tab)
+        self.data_input = next(iter(subject.input_state_list))
+
+        self.message_texts = []
+        self.dialogs = []
+        self.import_calls = []
+        self.set_error_calls = []
+        results = iter(import_results)
+        harness = self
+
+        class FakeMessageBox:
+            Icon = QMessageBox.Icon
+            StandardButton = QMessageBox.StandardButton
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def setText(self, text):
+                harness.message_texts.append(text)
+
+            def exec(self):
+                return answer
+
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: None
+
+        class FakeProgress:
+            def __init__(self, *args, **kwargs):
+                self.deleted = 0
+                harness.dialogs.append(self)
+
+            def deleteLater(self):
+                self.deleted += 1
+
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: None
+
+        def fake_import(**kwargs):
+            self.import_calls.append(kwargs)
+            return next(results)
+
+        monkeypatch.setattr(module, "QMessageBox", FakeMessageBox)
+        monkeypatch.setattr(module, "PersistentProgressDialog", FakeProgress)
+        monkeypatch.setattr(subject, "dicom_import_to_folder", fake_import)
+        monkeypatch.setattr(subject, "check_input_folder", lambda *a, **k: None)
+        monkeypatch.setattr(self.tab, "reset_workflow", lambda: None)
+        monkeypatch.setattr(
+            self.tab,
+            "set_error",
+            lambda data_input, tooltip: self.set_error_calls.append(
+                (data_input, tooltip)
+            ),
+        )
+
+    @staticmethod
+    def series(name, modality="CT"):
+        return ["label", ["%s_1.dcm" % name, "%s_2.dcm" % name], modality, 1]
+
+
+def test_modality_mismatch_yes_reimports_the_auto_import_series(
+    qtbot, main_window, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    harness = _ModalityMismatchHarness(
+        qtbot,
+        main_window,
+        monkeypatch,
+        answer=QMessageBox.StandardButton.Yes,
+        import_results=[
+            SubjectRet.DataImportErrorModality,
+            SubjectRet.DataImportCompleted,
+        ],
+    )
+    origin = harness.series("auto")
+
+    # Auto-import: the series is handed in and no row is selected
+    assert harness.tab.importable_series_list.currentRow() == -1
+    harness.tab.dicom_import_to_folder(harness.data_input, force_copy_list=origin)
+
+    assert strings.subj_tab_selected_series_error not in harness.message_texts
+    assert len(harness.import_calls) == 2
+    first, second = harness.import_calls
+    assert first["force_modality"] is False
+    assert second["force_modality"] is True
+    assert second["copy_list"] == first["copy_list"] == origin[1]
+    assert second["mod"] == first["mod"] == "CT"
+    # The outer frame must not clear the state set by the second import or
+    # delete the dialog its worker is still updating
+    assert harness.set_error_calls == []
+    assert [dialog.deleted for dialog in harness.dialogs] == [1, 0]
+
+
+def test_modality_mismatch_yes_reimports_the_selected_series(
+    qtbot, main_window, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    harness = _ModalityMismatchHarness(
+        qtbot,
+        main_window,
+        monkeypatch,
+        answer=QMessageBox.StandardButton.Yes,
+        import_results=[
+            SubjectRet.DataImportErrorModality,
+            SubjectRet.DataImportCompleted,
+        ],
+    )
+    harness.tab.dicom_scan_series_list = [
+        harness.series("first", "MR"),
+        harness.series("second"),
+    ]
+    harness.tab.importable_series_list.addItem("first")
+    harness.tab.importable_series_list.addItem("second")
+    harness.tab.importable_series_list.setCurrentRow(1)
+    harness.tab.dicom_import_to_folder(harness.data_input)
+
+    assert len(harness.import_calls) == 2
+    first, second = harness.import_calls
+    assert second["copy_list"] == first["copy_list"] == ["second_1.dcm", "second_2.dcm"]
+    assert second["force_modality"] is True
+    assert harness.set_error_calls == []
+    assert [dialog.deleted for dialog in harness.dialogs] == [1, 0]
+
+
+def test_modality_mismatch_no_keeps_the_input_in_error(qtbot, main_window, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    harness = _ModalityMismatchHarness(
+        qtbot,
+        main_window,
+        monkeypatch,
+        answer=QMessageBox.StandardButton.No,
+        import_results=[SubjectRet.DataImportErrorModality],
+    )
+    harness.tab.dicom_import_to_folder(
+        harness.data_input, force_copy_list=harness.series("auto")
+    )
+
+    assert len(harness.import_calls) == 1
+    assert harness.set_error_calls == [(harness.data_input, "")]
+    assert len(harness.dialogs) == 1
+    assert harness.dialogs[0].deleted >= 1

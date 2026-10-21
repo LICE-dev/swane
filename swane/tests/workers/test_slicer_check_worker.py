@@ -216,6 +216,66 @@ def test_patch_migrates_away_legacy_hidezero_block(monkeypatch, tmp_path):
     assert SlicerCheckWorker.check_patch(str(slicerrc))
 
 
+def test_patch_settles_when_the_user_deleted_its_begin_line(monkeypatch, tmp_path):
+    # An END marker with no BEGIN before it must not be paired with the BEGIN
+    # of the block appended later: that slicing duplicated the text between
+    # them on every startup and never recognised the patch.
+    slicerrc = tmp_path / ".slicerrc.py"
+    orphan = SlicerCheckWorker.build_startup_patch().split("\n", 1)[1]
+    slicerrc.write_text('print("user before")\n' + orphan + 'print("user after")\n')
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(slicerrc))
+
+    SlicerCheckWorker.add_slicer_startup_patch()
+    first = SlicerCheckWorker.read_slicerrc(str(slicerrc))
+    for _ in range(3):
+        SlicerCheckWorker.add_slicer_startup_patch()
+
+    content = SlicerCheckWorker.read_slicerrc(str(slicerrc))
+    assert content == first
+    assert content.count('print("user before")') == 1
+    assert content.count('print("user after")') == 1
+    assert content.count(SlicerCheckWorker.BEGIN_MARKER) == 1
+    # the orphaned text is the user's file: left as it was
+    assert content.startswith('print("user before")\n' + orphan)
+    assert SlicerCheckWorker.check_patch(str(slicerrc))
+
+
+def test_patch_collapses_duplicated_blocks(monkeypatch, tmp_path):
+    slicerrc = tmp_path / ".slicerrc.py"
+    patch = SlicerCheckWorker.build_startup_patch()
+    slicerrc.write_text('print("hello")\n' + patch + "\n" + patch + "\n")
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(slicerrc))
+
+    SlicerCheckWorker.add_slicer_startup_patch()
+
+    content = SlicerCheckWorker.read_slicerrc(str(slicerrc))
+    assert content.count(SlicerCheckWorker.BEGIN_MARKER) == 1
+    assert content.count(SlicerCheckWorker.END_MARKER) == 1
+    assert content.count('print("hello")') == 1
+    assert SlicerCheckWorker.check_patch(str(slicerrc))
+
+
+def test_legacy_block_with_end_before_begin_duplicates_nothing(monkeypatch, tmp_path):
+    slicerrc = tmp_path / ".slicerrc.py"
+    slicerrc.write_text(
+        "# === END HIDEZERO PATCH ===\n"
+        'print("user line")\n'
+        "# === BEGIN HIDEZERO PATCH ===\n"
+        "def apply_hide_zero(node):\n"
+        "    pass\n"
+        "# === END HIDEZERO PATCH ===\n"
+    )
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(slicerrc))
+
+    SlicerCheckWorker.add_slicer_startup_patch()
+
+    content = SlicerCheckWorker.read_slicerrc(str(slicerrc))
+    assert content.count('print("user line")') == 1
+    assert "BEGIN HIDEZERO" not in content
+    assert "apply_hide_zero" not in content
+    assert SlicerCheckWorker.check_patch(str(slicerrc))
+
+
 def test_run_detects_slicer_and_modules(monkeypatch, tmp_path):
     # Prepare worker
     w = SlicerCheckWorker(current_slicer_path="")

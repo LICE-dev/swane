@@ -16,10 +16,6 @@ import types
 
 import pytest
 
-# slicer_script_result imports SimpleITK at module level (it normally runs inside
-# 3D Slicer); SimpleITK is not a SWANe dependency, so skip when it is absent.
-pytest.importorskip("SimpleITK", reason="SimpleITK is not installed")
-
 import swane
 
 MODULE_PATH = os.path.join(
@@ -385,3 +381,147 @@ class TestVtpBundleBranch:
         ] + expected
 
         assert normalise(log, dti=dti_dir, scene=scene_dir) == expected
+
+
+class TestMainExportDtiThreshold:
+    """``main_export`` must threshold the FSL tracts with the ``--dti_threshold``
+    that ``SlicerExportWorker`` fills from the ``tractography_threshold``
+    preference, not with ``main_tract``'s own default."""
+
+    def test_dti_threshold_argument_reaches_the_tract_threshold(
+        self, slicer_script, tmp_path, monkeypatch
+    ):
+        module, log = slicer_script
+        dti_dir = tmp_path / "dti"
+        dti_dir.mkdir()
+        (dti_dir / "r-cst_lh.nii.gz").write_bytes(b"")
+        (dti_dir / "r-cst_lh_waytotal").write_text("200000\n")
+        for loader in (
+            "load_fmri_task",
+            "load_fmri_resting_state",
+            "load_vein",
+            "load_freesurfer",
+            "load_seeg",
+        ):
+            monkeypatch.setattr(module, loader, lambda *a, **k: None)
+        monkeypatch.setattr(module, "load_anat", lambda *a, **k: CallSpy("ref", log))
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            sys, "argv", ["slicer_script_result.py", "--dti_threshold", "0.01"]
+        )
+
+        module.main_export()
+
+        # 200000 * 0.01 = 2000.0, not 200000 * 0.0035 = 700.0
+        assert (
+            f"{EDITOR}.activeEffect().setParameter('MinimumThreshold', 2000.0)" in log
+        )
+
+
+def _failing_loader(log, name):
+    """A ``slicer.util`` loader that, like the real one on a corrupt or empty
+    file, raises ``RuntimeError`` after recording the call."""
+
+    def load(path):
+        log.append(f"slicer.util.{name}({path!r})")
+        raise RuntimeError(f"Failed to load node from file: {path}")
+
+    return load
+
+
+class TestUnreadableTractFile:
+    """One unreadable tract file must cost only that tract, not the scene."""
+
+    def test_unreadable_bundle_is_skipped(
+        self, slicer_script, tmp_path, monkeypatch, capsys
+    ):
+        module, log = slicer_script
+        (tmp_path / "r-cst_lh.vtp").write_text("garbage")
+        monkeypatch.setattr(
+            module.slicer.util, "loadModel", _failing_loader(log, "loadModel")
+        )
+
+        module.tract_bundle(dti_dir=str(tmp_path), tract=CST, side="lh")
+
+        assert normalise(log, dti=tmp_path) == [
+            "slicer.util.loadModel('<dti>/r-cst_lh.vtp')"
+        ]
+        assert "Failed to load tract bundle" in capsys.readouterr().out
+
+    def test_unreadable_probability_map_is_skipped(
+        self, slicer_script, tmp_path, monkeypatch, capsys
+    ):
+        module, log = slicer_script
+        (tmp_path / "r-cst_lh.nii.gz").write_bytes(b"")
+        monkeypatch.setattr(
+            module.slicer.util, "loadVolume", _failing_loader(log, "loadVolume")
+        )
+
+        node = CallSpy("segmentation_node", log)
+        module.tract_model(
+            segmentation_node=node, dti_dir=str(tmp_path), tract=CST, side="lh"
+        )
+
+        assert normalise(log, dti=tmp_path) == [
+            "slicer.util.loadVolume('<dti>/r-cst_lh.nii.gz')"
+        ]
+        assert "Failed to load tract" in capsys.readouterr().out
+
+    def test_scene_is_saved_despite_an_unreadable_bundle(
+        self, slicer_script, tmp_path, monkeypatch
+    ):
+        module, log = slicer_script
+        dti_dir = tmp_path / "dti"
+        dti_dir.mkdir()
+        (dti_dir / "r-cst_lh.vtp").write_text("garbage")
+        (dti_dir / "r-af_lh.vtp").write_text("<VTKFile/>")
+        loaded = []
+
+        def load_model(path):
+            loaded.append(os.path.basename(path))
+            if path.endswith("r-cst_lh.vtp"):
+                raise RuntimeError(f"Failed to load node from file: {path}")
+            return CallSpy("model", log)
+
+        monkeypatch.setattr(module.slicer.util, "loadModel", load_model)
+        for loader in (
+            "load_fmri_task",
+            "load_fmri_resting_state",
+            "load_vein",
+            "load_freesurfer",
+            "load_seeg",
+        ):
+            monkeypatch.setattr(module, loader, lambda *a, **k: None)
+        monkeypatch.setattr(module, "load_anat", lambda *a, **k: CallSpy("ref", log))
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["slicer_script_result.py"])
+
+        module.main_export()
+
+        # the bundle after the unreadable one is still loaded
+        assert loaded == ["r-cst_lh.vtp", "r-af_lh.vtp"]
+        assert any(
+            line.startswith("slicer.util.saveScene(") and "scene.mrb" in line
+            for line in log
+        )
+
+
+def test_import_has_no_startup_side_effects(monkeypatch):
+    """
+    slicerrc_swane imports this module at every Slicer start, so importing it
+    must neither load SimpleITK nor silence Qt warnings in the whole process
+    (and, through it, in every child process).
+    """
+    monkeypatch.delenv("QT_LOGGING_RULES", raising=False)
+    monkeypatch.delitem(sys.modules, "SimpleITK", raising=False)
+    log = []
+    for name in ("slicer", "vtk", "qt"):
+        monkeypatch.setitem(sys.modules, name, _fake_module(name, log))
+
+    spec = importlib.util.spec_from_file_location(
+        "swane_slicer_script_result_import_check", MODULE_PATH
+    )
+    spec.loader.exec_module(importlib.util.module_from_spec(spec))
+
+    assert "SimpleITK" not in sys.modules
+    assert "QT_LOGGING_RULES" not in os.environ
