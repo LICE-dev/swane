@@ -380,3 +380,99 @@ def test_broken_pool_on_subnode_submit_reports_its_mapnode(make_plugin):
 
     errors = [r for r in _drain(queue) if r.signal_type == WorkflowSignals.NODE_ERROR]
     assert [(r.workflow_name, r.node_name) for r in errors] == [("sub_wf", "mapped")]
+
+
+class _FuturePool:
+    """A shared pool stand-in whose tasks never run: submit() just hands out a
+    pending future, so only the plugin's bookkeeping is exercised."""
+
+    def submit(self, *args, **kwargs):
+        return Future()
+
+    def shutdown(self, *args, **kwargs):
+        pass
+
+
+def _bare_task_node(name):
+    return SimpleNamespace(
+        name=name,
+        fullname="wf.%s" % name,
+        interface=SimpleNamespace(inputs=SimpleNamespace()),
+    )
+
+
+def _use_future_pool(plugin):
+    plugin.pool.shutdown(wait=False, cancel_futures=True)
+    plugin.pool = _FuturePool()
+
+
+def test_task_maps_are_changed_under_the_lock(make_plugin):
+    """The broken-pool callback snapshots the task maps from the executor's
+    thread: every change the scheduler thread makes must hold the same lock."""
+    plugin, _ = make_plugin()
+    _use_future_pool(plugin)
+    lock = plugin._task_maps_lock
+
+    class _GuardedDict(dict):
+        def __setitem__(self, key, value):
+            assert lock._is_owned(), "task map written without the lock"
+            super().__setitem__(key, value)
+
+        def pop(self, *args):
+            assert lock._is_owned(), "task map changed without the lock"
+            return super().pop(*args)
+
+    plugin._future_taskids = _GuardedDict()
+    plugin._task_nodes = _GuardedDict()
+
+    taskid = plugin._submit_job(_bare_task_node("_guarded"))
+    plugin._clear_task(taskid)
+
+    assert not plugin._future_taskids and not plugin._task_nodes
+
+
+def test_broken_pool_snapshot_survives_concurrent_submit_and_clear(make_plugin):
+    """Snapshotting while the scheduler submits and clears must never fail.
+
+    A failed snapshot leaves _broken_pool_reported set with no result fed, so
+    every other broken future's callback returns early and nipype waits
+    forever. The thread switch interval is shortened to make the race likely.
+    """
+    import logging
+    import sys
+    import threading
+
+    plugin, _ = make_plugin()
+    _use_future_pool(plugin)
+    for index in range(2000):
+        plugin._submit_job(_bare_task_node("_in_flight%d" % index))
+
+    stop = threading.Event()
+
+    def scheduler():
+        while not stop.is_set():
+            taskids = [plugin._submit_job(_bare_task_node("_churn")) for _ in range(50)]
+            for taskid in taskids:
+                plugin._clear_task(taskid)
+
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    logging.disable(logging.CRITICAL)
+    thread = threading.Thread(target=scheduler)
+    thread.start()
+    failures = []
+    try:
+        for _ in range(300):
+            plugin._broken_pool_reported = False
+            plugin._taskresult.clear()
+            try:
+                plugin._handle_broken_pool(BrokenProcessPool("worker died"))
+            except RuntimeError as error:
+                failures.append(error)
+    finally:
+        stop.set()
+        thread.join()
+        logging.disable(logging.NOTSET)
+        sys.setswitchinterval(interval)
+
+    assert not failures, "%d snapshots failed: %s" % (len(failures), failures[0])
