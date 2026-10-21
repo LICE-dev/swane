@@ -125,7 +125,9 @@ def write_volume_series(
         4x4 voxel -> RAS transform for the 3D grid.
     bvals, bvecs : sequence, optional
         When given (4D diffusion), the standard diffusion tags are written per
-        volume so dcm2niix emits ``.bval``/``.bvec``.
+        volume so dcm2niix emits ``.bval``/``.bvec``. ``bvecs`` are world (RAS)
+        directions, like ``affine``; they are written in the patient (LPS)
+        frame DICOM's ``DiffusionGradientOrientation`` is defined in.
 
     Returns
     -------
@@ -253,7 +255,8 @@ def write_volume_series(
             # --- diffusion (standard tags; dcm2niix reads these) ---
             if bvals is not None and bvecs is not None:
                 b = float(np.asarray(bvals)[t])
-                g = np.asarray(bvecs)[t].astype(float)
+                # RAS -> LPS, as for the geometry (_ras_to_lps).
+                g = np.asarray(bvecs)[t].astype(float) * [-1.0, -1.0, 1.0]
                 ds.DiffusionBValue = b
                 ds.DiffusionGradientOrientation = [float(v) for v in g]
                 ds.DiffusionDirectionality = "NONE" if b <= 0 else "DIRECTIONAL"

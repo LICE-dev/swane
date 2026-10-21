@@ -8,7 +8,7 @@
 #   task_b_name = Task_B
 #   task_duration = 30
 #
-# nodes=31 edges=59
+# nodes=30 edges=57
 
 - fmri_0_2_ref_antsreg [AntsRegistration] mem_gb=4 n_procs=0
     aff_metric = 'mattes'
@@ -58,9 +58,6 @@
     op_string = '-dilF'
     output_type = 'NIFTI_GZ'
     suffix = '_dil'
-- fmri_0_extract_ref [ExtractVolumes] mem_gb=0.2 n_procs=1
-    num_volumes = 1
-    start_volume = 0
 - fmri_0_genSpec [FMRIGenSpec] mem_gb=0.2 n_procs=1
     block_design = <BlockDesign.RARA: 'rArA...'>
     rest_duration = 30
@@ -171,7 +168,6 @@ fmri_0_getTR.TR -> fmri_0_genSpec.TR
 fmri_0_getTR.TR -> fmri_0_merge_tr_meanfunc3.in1
 fmri_0_getTR.TR -> fmri_0_nilearn_glm.tr
 fmri_0_highpass.out_file -> fmri_0_nilearn_glm.in_file
-fmri_0_img2float.out_file -> fmri_0_extract_ref.in_file
 fmri_0_img2float.out_file -> fmri_0_motion_correct.in_file
 fmri_0_intnorm.out_file -> fmri_0_highpass.in_file
 fmri_0_intnorm.out_file -> fmri_0_meanfunc3.in_file
@@ -199,7 +195,6 @@ fmri_0_nilearn_glm.threshold_file_cont1_thresh1 -> fmri_0_cluster_t3_1_to_ref_an
 fmri_0_nilearn_glm.threshold_file_cont1_thresh2 -> fmri_0_cluster_t5_1_to_ref_ants_apply.input_image
 fmri_0_nilearn_glm.threshold_file_cont1_thresh3 -> fmri_0_cluster_t7_1_to_ref_ants_apply.input_image
 fmri_0_nvols.nvols -> fmri_0_del_vols.nvols
-fmri_0_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle', ()) -> fmri_0_extract_ref.start_volume
 fmri_0_reorient.out_file -> fmri_0_img2float.in_file
 fmri_0_smooth.out_file -> fmri_0_maskfunc3.in_file
 inputnode.reference_brain -> fmri_0_2_ref_antsreg.fixed

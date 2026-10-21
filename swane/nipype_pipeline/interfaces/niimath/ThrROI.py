@@ -24,15 +24,13 @@ class ThrROI(ImageMaths):
 
     input_spec = ThrROIInputSpec
 
-    def _parse_inputs(self, skip=None):
+    def _command_inputs(self):
         """
-        Custom implementation of _parse_inputs func to build the threshold op_string.
+        The threshold op_string, built from the segmentation bounds.
 
         """
 
-        self.inputs.op_string = "-thr %.10f -uthr %.10f -bin" % (
-            self.inputs.seg_val_min,
-            self.inputs.seg_val_max,
-        )
-
-        return super(ThrROI, self)._parse_inputs(skip)
+        return {
+            "op_string": "-thr %.10f -uthr %.10f -bin"
+            % (self.inputs.seg_val_min, self.inputs.seg_val_max)
+        }

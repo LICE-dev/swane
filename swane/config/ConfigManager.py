@@ -3,6 +3,8 @@ import math
 from configparser import SectionProxy
 from typing import Literal, cast
 
+from packaging.version import Version
+
 from swane.resources import strings
 from swane import __version__
 from swane.config.preference_list import *
@@ -47,7 +49,9 @@ class ConfigManager(configparser.ConfigParser):
             The already loaded global configuration used to initialize a subject
             configuration. It is not persisted in the subject configuration.
         """
-        super(ConfigManager, self).__init__()
+        # No interpolation: SWANe never uses it, and values (folders, Slicer
+        # extension folders, free text) must keep a "%" verbatim
+        super(ConfigManager, self).__init__(interpolation=None)
         self._section_defaults = {}
         self._source_global_config = global_config
 
@@ -69,26 +73,7 @@ class ConfigManager(configparser.ConfigParser):
         # initialization; subject changes must remain independent afterwards.
         self._source_global_config = None
 
-        # check if this version need pref reset
-        force_pref_reset = self.getboolean_safe(
-            GlobalPrefCategoryList.MAIN, "force_pref_reset"
-        )
-
-        # if version need pref reset, load old config file in a temp variable to get just last_swane_version
-        reset_pref = False
-        if force_pref_reset:
-            try:
-                # main.last_swane_version should exist in both global and  subject config file
-                temp_config = configparser.ConfigParser()
-                temp_config.read(self.config_file, encoding="utf-8")
-                last_swane_version = temp_config[str(GlobalPrefCategoryList.MAIN)][
-                    "last_swane_version"
-                ]
-                if __version__ != last_swane_version:
-                    reset_pref = True
-            except:
-                # otherwise assume outdated version
-                reset_pref = True
+        reset_pref = self._is_older_than_reset_version()
 
         if not reset_pref and os.path.exists(self.config_file):
             self.read(self.config_file, encoding="utf-8")
@@ -107,6 +92,11 @@ class ConfigManager(configparser.ConfigParser):
                         self[section][new] = self[section][old]
                         self.remove_option(section, old)
 
+            # force_pref_reset is no longer used: PREF_RESET_BEFORE_VERSION
+            # decides, so a value persisted by an older version is dropped.
+            if str(GlobalPrefCategoryList.MAIN) in self:
+                self.remove_option(str(GlobalPrefCategoryList.MAIN), "force_pref_reset")
+
             # Cycle all read values and reassign them to invoke validate_type without rewriting read method
             for section in self._section_defaults.keys():
                 for option in self._section_defaults[section].keys():
@@ -119,12 +109,35 @@ class ConfigManager(configparser.ConfigParser):
                     else:
                         self.set(section, option, self[section][option])
 
-            # set last_swane_version in subject config to ensure force_pref_reset compatibility
+            # set last_swane_version in subject config for the PREF_RESET_BEFORE_VERSION check
             if str(GlobalPrefCategoryList.MAIN) not in self:
                 self[GlobalPrefCategoryList.MAIN] = {}
             self[GlobalPrefCategoryList.MAIN]["last_swane_version"] = __version__
 
         self.save()
+
+    def _is_older_than_reset_version(self) -> bool:
+        """
+        Check whether the configuration file must be discarded at load
+
+        Returns
+        -------
+        True if the file exists and its main.last_swane_version is missing,
+        unreadable or older than PREF_RESET_BEFORE_VERSION, False otherwise.
+        """
+        if not os.path.exists(self.config_file):
+            return False
+        try:
+            # main.last_swane_version should exist in both global and subject config file
+            temp_config = configparser.ConfigParser(interpolation=None)
+            temp_config.read(self.config_file, encoding="utf-8")
+            last_swane_version = temp_config[str(GlobalPrefCategoryList.MAIN)][
+                "last_swane_version"
+            ]
+            return Version(last_swane_version) < Version(PREF_RESET_BEFORE_VERSION)
+        except Exception:
+            # otherwise assume outdated version
+            return True
 
     def reload(self):
         """
@@ -193,9 +206,6 @@ class ConfigManager(configparser.ConfigParser):
             self[GlobalPrefCategoryList.MAIN]["last_swane_version"] = tmp_config[
                 GlobalPrefCategoryList.MAIN
             ]["last_swane_version"]
-            self[GlobalPrefCategoryList.MAIN]["force_pref_reset"] = tmp_config[
-                GlobalPrefCategoryList.MAIN
-            ]["force_pref_reset"]
 
             self.set_workflow_option(
                 tmp_config.getenum_safe(GlobalPrefCategoryList.MAIN, "default_wf_type")
@@ -379,10 +389,7 @@ class ConfigManager(configparser.ConfigParser):
             JSON produced by SlicerCheckWorker.encode_extensions_state
         """
         if self.global_config:
-            # configparser interpolation: a literal "%" must be doubled
-            self[GlobalPrefCategoryList.MAIN]["slicer_extensions_state"] = (
-                state.replace("%", "%%")
-            )
+            self[GlobalPrefCategoryList.MAIN]["slicer_extensions_state"] = state
 
     def get_slicer_revision(self) -> str:
         """
@@ -411,7 +418,7 @@ class ConfigManager(configparser.ConfigParser):
         Parameters
         ----------
         tool_id: str
-            Canonical tool id ("fsl", "freesurfer", "slicer", "dcm2niix").
+            Canonical tool id, one of LicenseReference.TOOL_IDS.
         """
         if not self.global_config:
             return ""
@@ -427,7 +434,7 @@ class ConfigManager(configparser.ConfigParser):
         Parameters
         ----------
         tool_id: str
-            Canonical tool id ("fsl", "freesurfer", "slicer", "dcm2niix").
+            Canonical tool id, one of LicenseReference.TOOL_IDS.
         tool_version: str
             The detected tool version accepted by the user.
         """
