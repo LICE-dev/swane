@@ -97,6 +97,29 @@ def test_ants_motion_correction_is_deterministic(tmp_path):
     assert par_1 == par_2, "realignment parameters differ"
 
 
+def test_ants_motion_correction_leaves_no_files_in_the_system_temp_dir(
+    tmp_path, monkeypatch
+):
+    """The per-volume transforms are written inside the node folder and removed.
+
+    ``ants.motion_correction`` without an ``outprefix`` saves one
+    ``GenericAffine.mat`` per volume under a ``mktemp()`` prefix in the system
+    temp dir, where nothing ever removed them.
+    """
+    system_tmp = tmp_path / "system_tmp"
+    system_tmp.mkdir()
+    # the child interpreter inherits the environment, so it uses this dir
+    monkeypatch.setenv("TMPDIR", str(system_tmp))
+    in_file = _synthetic_moving_series(tmp_path / "func.nii.gz", n=16, n_vols=3)
+    run_dir = tmp_path / "node"
+    run_dir.mkdir()
+
+    AntsMotionCorrection(in_file=in_file).run(cwd=str(run_dir))
+
+    assert os.listdir(system_tmp) == []
+    assert sorted(os.listdir(run_dir)) == ["mc.nii.gz", "motion.par"]
+
+
 def test_ants_motion_correction_leaves_process_state_unchanged(tmp_path, monkeypatch):
     """The single-thread/seed setup never leaks into the calling process."""
     import ants
