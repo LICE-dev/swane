@@ -632,33 +632,55 @@ class TimecourseViewer:
         self._chart_node = None
         self._observed_composite_nodes = []
 
+    def _plot_nodes(self):
+        return (self._plot_table_node, self._series_node, self._chart_node)
+
     def _ensure_plot_nodes(self):
-        if self._plot_table_node is None:
-            self._plot_table_node = slicer.mrmlScene.AddNewNodeByClass(
-                "vtkMRMLTableNode", self.TABLE_NAME
-            )
-            table = self._plot_table_node.GetTable()
-            x_array = vtk.vtkIntArray()
-            x_array.SetName("Volume")
-            y_array = vtk.vtkDoubleArray()
-            y_array.SetName("Timecourse")
-            table.AddColumn(x_array)
-            table.AddColumn(y_array)
+        scene = slicer.mrmlScene
+        if all(
+            node is not None and scene.IsNodePresent(node)
+            for node in self._plot_nodes()
+        ):
+            return
+        # First use, or a node left the scene (deleted by the user): rebuild
+        # the whole table/series/chart set, dropping what is left of the old one.
+        for node in self._plot_nodes():
+            if node is not None and scene.IsNodePresent(node):
+                scene.RemoveNode(node)
 
-        if self._series_node is None:
-            self._series_node = slicer.mrmlScene.AddNewNodeByClass(
-                "vtkMRMLPlotSeriesNode", self.SERIES_NAME
-            )
-            self._series_node.SetAndObserveTableNodeID(self._plot_table_node.GetID())
-            self._series_node.SetXColumnName("Volume")
-            self._series_node.SetYColumnName("Timecourse")
-            self._series_node.SetPlotType(self._series_node.PlotTypeLine)
+        self._plot_table_node = scene.AddNewNodeByClass(
+            "vtkMRMLTableNode", self.TABLE_NAME
+        )
+        table = self._plot_table_node.GetTable()
+        x_array = vtk.vtkIntArray()
+        x_array.SetName("Volume")
+        y_array = vtk.vtkDoubleArray()
+        y_array.SetName("Timecourse")
+        table.AddColumn(x_array)
+        table.AddColumn(y_array)
 
-        if self._chart_node is None:
-            self._chart_node = slicer.mrmlScene.AddNewNodeByClass(
-                "vtkMRMLPlotChartNode", self.CHART_NAME
-            )
-            self._chart_node.AddAndObservePlotSeriesNodeID(self._series_node.GetID())
+        self._series_node = scene.AddNewNodeByClass(
+            "vtkMRMLPlotSeriesNode", self.SERIES_NAME
+        )
+        self._series_node.SetAndObserveTableNodeID(self._plot_table_node.GetID())
+        self._series_node.SetXColumnName("Volume")
+        self._series_node.SetYColumnName("Timecourse")
+        self._series_node.SetPlotType(self._series_node.PlotTypeLine)
+
+        self._chart_node = scene.AddNewNodeByClass(
+            "vtkMRMLPlotChartNode", self.CHART_NAME
+        )
+        self._chart_node.AddAndObservePlotSeriesNodeID(self._series_node.GetID())
+
+    def _on_scene_closed(self, caller, event):
+        # Everything cached here belongs to the scene that was just closed:
+        # its plot nodes are gone, and neither the last plotted IC nor the
+        # remembered layout applies to the next scene.
+        self._last_ic = None
+        self._previous_layout = None
+        self._plot_table_node = None
+        self._series_node = None
+        self._chart_node = None
 
     def _show(self, ic: int, volume_name: str) -> bool:
         """
@@ -772,6 +794,9 @@ class TimecourseViewer:
                 self._observe_composite_node(calldata)
 
         slicer.mrmlScene.AddObserver(slicer.vtkMRMLScene.NodeAddedEvent, _on_node_added)
+        slicer.mrmlScene.AddObserver(
+            slicer.vtkMRMLScene.EndCloseEvent, self._on_scene_closed
+        )
         # keep the callback (and its closure over self) alive for the
         # session, since AddObserver doesn't hold a Python reference
         self._on_node_added = _on_node_added

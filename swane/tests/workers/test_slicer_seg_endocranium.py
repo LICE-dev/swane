@@ -11,7 +11,6 @@ the script with stand-in ``slicer``/``vtkITK`` modules.
 import json
 import os
 import runpy
-import subprocess
 import sys
 import textwrap
 import threading
@@ -22,6 +21,7 @@ import numpy as np
 import pytest
 
 import swane
+from swane.tests.helpers.slicer_runner import run_slicer_script
 
 
 def real_slicer(test):
@@ -36,27 +36,6 @@ def real_slicer(test):
 
 WORKERS_DIR = os.path.join(os.path.dirname(swane.__file__), "workers")
 SCRIPT_PATH = os.path.join(WORKERS_DIR, "slicer_seg_endocranium.py")
-
-
-def _run_slicer(slicer_cmd, script, args=(), timeout=600):
-    # conftest forces QT_QPA_PLATFORM=offscreen for swane's own Qt app;
-    # Slicer's bundled Qt has no such plugin and would refuse to start.
-    env = dict(os.environ)
-    env.pop("QT_QPA_PLATFORM", None)
-    return subprocess.run(
-        [
-            slicer_cmd,
-            "--no-splash",
-            "--no-main-window",
-            "--python-script",
-            str(script),
-            *map(str, args),
-        ],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
 
 
 # The driver builds a bone block on a 1 x 1 x 2 mm grid crossed by two gaps
@@ -163,7 +142,7 @@ def test_closing_kernel_is_in_mm_and_fills_the_smoothed_segment(
         CLOSING_DRIVER.format(workers_dir=WORKERS_DIR, out_json=str(out_json))
     )
 
-    proc = _run_slicer(slicer_executable, driver)
+    proc = run_slicer_script(slicer_executable, driver)
 
     assert out_json.exists(), proc.stdout + proc.stderr
     result = json.loads(out_json.read_text())
@@ -212,7 +191,7 @@ def test_kernel_size_changes_the_endocranium_mask(slicer_executable, tmp_path):
     masks = {}
     for kernel in ("1", "6"):
         out = tmp_path / f"inskull_k{kernel}.nii.gz"
-        proc = _run_slicer(
+        proc = run_slicer_script(
             slicer_executable,
             SCRIPT_PATH,
             [
@@ -306,7 +285,7 @@ def test_failure_exits_non_zero_with_real_slicer(slicer_executable, tmp_path):
 
     # 3000 HU is above the phantom's 1500 HU bone: the empty-skull failure.
     # A hung shutdown would raise TimeoutExpired.
-    proc = _run_slicer(
+    proc = run_slicer_script(
         slicer_executable,
         SCRIPT_PATH,
         [
