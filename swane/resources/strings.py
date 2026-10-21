@@ -271,7 +271,8 @@ wizard_welcome_text = (
     "• Choose the processing engines.<br>"
     "• Select the FreeSurfer outputs of your interest, if supported.<br>"
     "• Review a summary of your configuration before applying it.<br><br>"
-    "Every page starts from your current settings. They can always be adjusted "
+    "Every page starts from the recommendations for this computer. They can "
+    "always be adjusted "
     "later in Application Settings, or you can rerun this wizard at any time from "
     "Menu → Configuration Wizard."
 )
@@ -280,8 +281,8 @@ wizard_performance_title = "How much of this computer can " + APPNAME + " use?"
 wizard_performance_text = (
     "This computer has {ram_gb:.1f} GB of RAM and {cpu} CPU cores. "
     + APPNAME
-    + " never uses more than the share you choose: when more subjects are "
-    "analysed at the same time, the share is split among them."
+    + " uses up to the share you choose for each subject tab: the share is not "
+    "split among the subjects analysed at the same time."
 )
 performance_profile_max = "High"
 performance_profile_max_tooltip = (
@@ -299,22 +300,10 @@ performance_profile_min_tooltip = (
 wizard_resource_level = (
     "{name}: up to {ram_gb:.1f} GB RAM and {cpu} CPU cores\n{tooltip}"
 )
-wizard_parallel_subjects = "Subjects analysed at the same time"
+wizard_max_subj = "Subject tab limit"
 wizard_per_subject_resources = (
-    "Each subject can use up to <b>{ram_gb:.2f} GB RAM</b> and <b>{cpu} CPU cores</b>."
-)
-wizard_current_resources = (
-    "<b>Current setting</b>: {ram_gb:.2f} GB RAM and {cpu} CPU cores per subject, "
-    "up to {max_subj} subjects at the same time."
-)
-low_subject_resources_title = "Low resources per subject"
-low_subject_ram_warning = (
-    "With {subjects} subjects at the same time, each subject can use only "
-    "{ram_gb:.2f} GB of RAM, less than {limit} GB: analyses may fail or be very slow."
-)
-low_subject_cpu_warning = (
-    "With {subjects} subjects at the same time, each subject can use only "
-    "{cpu} CPU core(s), fewer than {limit}: analyses will be slow."
+    "Each subject tab can use up to <b>{ram_gb:.2f} GB RAM</b> and "
+    "<b>{cpu} CPU cores</b>, whatever the number of tabs."
 )
 
 wizard_hardware_accelleration_title = "Hardware Acceleration"
@@ -388,9 +377,9 @@ wizard_applied_text = (
 
 wizard_selected_profile = "<b>Computer share</b>: {profile}"
 wizard_resources = (
-    "<b>Total</b>: up to {total_gb:.2f} GB RAM of {machine_gb:.1f} GB<br />"
-    "<b>Subjects at the same time</b>: {max_subj}<br />"
-    "<b>Each subject</b>: {ram_gb:.2f} GB RAM, {cpu} CPU cores"
+    "<b>Subject tab limit</b>: {max_subj}<br />"
+    "<b>Each subject tab</b>: {ram_gb:.2f} GB RAM of {machine_gb:.1f} GB, "
+    "{cpu} CPU cores"
 )
 wizard_gpu_accelleration = "<b>GPU acceleration</b>: {gpu_status}"
 wizard_engines = "<b>Processing engines</b>:<br />{engines}"
