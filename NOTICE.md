@@ -173,11 +173,40 @@ are refreshed from upstream before releases via `tools/refresh_bundled_licenses.
 ## dipy (tractography engine)
 
 SWANe's dipy-based tractography engine depends on the `dipy` pip package.
-SWANe does not modify or redistribute dipy's source; it is installed as a
-regular Python dependency (see `setup.py`).
+SWANe does not redistribute dipy; it is installed as a regular Python
+dependency (see `setup.py`). The only dipy source adapted in this repository is
+`_parallel_motion_correction` in
+`swane/nipype_pipeline/interfaces/dipy/DipyMotionCorrection.py`, adapted from
+`dipy.align._public.register_dwi_series` to dispatch the per-volume
+registrations across a process pool; the file carries a source disclaimer.
 
 **License**: BSD 3-Clause License.
 https://github.com/dipy/dipy/blob/master/LICENSE
+
+**Copyright**: (c) 2008-2026, dipy developers. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+- Neither the name of the dipy developers nor the names of any contributors
+  may be used to endorse or promote products derived from this software
+  without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Like the other detected third-party tools, SWANe shows dipy's license at first
 launch (and whenever its detected version changes) and requires explicit
