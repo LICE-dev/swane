@@ -73,7 +73,8 @@ class TestCommandLine:
             make_nifti("in.nii.gz"), out_file="cropped.nii.gz", brainsize=brainsize
         )
 
-        args = interface.cmdline.split(" ", 1)[1]
+        # Windows quotes the paths in the command line: compare them unquoted.
+        args = interface.cmdline.replace('"', "").split(" ", 1)[1]
 
         assert args == "%s %s cropped.nii.gz" % (workspace / "in.nii.gz", expected_op)
 
