@@ -247,6 +247,8 @@ This project includes subsection derived from other software, which licenses can
 #### Fixed
 
 - DTI: the b-vectors rotated by FSL `eddy` are now used by `dtifit` and `bedpostx`. Re-processing a subject will not reproduce the results of previous versions.
+- DTI: the b-vectors now follow the reorientation of the DWI to the radiological convention. Sagittal and coronal DWI acquisitions had their gradient directions permuted, giving wrong fibre orientations and tractography (FA and MD were not affected); the DTI analyses of existing subjects are recomputed.
+- dipy tractography: the motion-correction gradient reorientation is applied in the image frame; head rotations about the vertical and antero-posterior axes were compensated in the wrong direction.
 - 3D T1w reference with a field of view larger than 256 mm: the crop needed by FreeSurfer now removes only the excess on each axis, without resampling the image and keeping its radiological orientation. Subjects already processed with such a reference keep the previous result until their analyses are reset.
 - Changing the DTI CPU allocation no longer invalidates the cached Eddy results.
 - ASL/PET surface sampling no longer starts before recon-all completes.
