@@ -1,12 +1,12 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
 from nibabel import load, save
-from nibabel.processing import conform
 
 from os.path import abspath
 import os
 import shutil
 
+import numpy as np
 from nipype.interfaces.base import (
     traits,
     BaseInterface,
@@ -29,10 +29,33 @@ class CropFovOutputSpec(TraitedSpec):
     out_file = File(desc="the output image")
 
 
+def _crop_window(profile, keep):
+    """First index of the ``keep``-voxel window along one axis.
+
+    The window is centred on the intensity centre of mass of ``profile`` (the
+    image summed over the other axes), so a head off-centre in a wide field of
+    view stays whole, and is clamped to the image bounds.
+    """
+    size = profile.shape[0]
+    weights = np.clip(profile, 0, None)
+    total = weights.sum()
+    if total > 0:
+        centre = float(np.dot(np.arange(size), weights) / total)
+    else:
+        centre = (size - 1) / 2.0
+    start = int(round(centre - (keep - 1) / 2.0))
+    return min(max(start, 0), size - keep)
+
+
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class CropFov(BaseInterface):
     """
-    If FOV exceeds 250mm, crop the borders.
+    If the FOV exceeds max_dim mm on any axis, crop that axis to max_dim mm.
+
+    recon-all stops on a field of view larger than 256 mm. Each oversized axis
+    keeps floor(max_dim / voxel size) voxels around the head's intensity
+    centre of mass; the result is a plain voxel subset of the input, with the
+    same grid orientation, voxel values and header, no resampling.
 
     """
 
@@ -42,32 +65,33 @@ class CropFov(BaseInterface):
     def _run_interface(self, runtime):
         out_file = self._gen_outfilename()
 
-        # Calculate current fov in mm
         img = load(self.inputs.in_file)
-        dim1, dim2, dim3 = img.header.get_data_shape()
-        vox1, vox2, vox3 = img.header.get_zooms()
-        fov = [dim1 * vox1, dim2 * vox2, dim3 * vox3]
-        current_max_dim = max(fov)
+        shape = img.header.get_data_shape()[:3]
+        zooms = img.header.get_zooms()[:3]
+        fov = [dim * vox for dim, vox in zip(shape, zooms)]
 
-        if current_max_dim <= self.inputs.max_dim:
+        if max(fov) <= self.inputs.max_dim:
             shutil.copyfile(self.inputs.in_file, out_file)
         else:
+            data = img.get_fdata(dtype=np.float32)
+            slicers = []
+            for axis, (dim, vox) in enumerate(zip(shape, zooms)):
+                if fov[axis] <= self.inputs.max_dim:
+                    slicers.append(slice(None))
+                    continue
+                # the tolerance keeps an exact multiple (e.g. 256 / 0.8) whole
+                keep = int(np.floor(self.inputs.max_dim / vox + 1e-6))
+                other_axes = tuple(a for a in range(data.ndim) if a != axis)
+                start = _crop_window(data.sum(axis=other_axes), keep)
+                slicers.append(slice(start, start + keep))
 
-            rescale_factor = (self.inputs.max_dim - 1) / current_max_dim
-
-            t_dim1 = (
-                dim1 if fov[0] <= self.inputs.max_dim else int(dim1 * rescale_factor)
-            )
-            t_dim2 = (
-                dim2 if fov[1] <= self.inputs.max_dim else int(dim2 * rescale_factor)
-            )
-            t_dim3 = (
-                dim3 if fov[2] <= self.inputs.max_dim else int(dim3 * rescale_factor)
-            )
-
-            scaled_img = conform(img, (t_dim1, t_dim2, t_dim3), img.header.get_zooms())
-
-            save(scaled_img, out_file)
+            cropped = img.slicer[tuple(slicers)]
+            # the slicer rebuilds the header from the shifted affine and drops
+            # the original qform/sform codes; restore them
+            for kind in ("qform", "sform"):
+                code = int(img.header["%s_code" % kind])
+                getattr(cropped, "set_%s" % kind)(cropped.affine, code=code)
+            save(cropped, out_file)
 
         return runtime
 

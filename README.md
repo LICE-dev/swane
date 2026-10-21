@@ -247,6 +247,7 @@ This project includes subsection derived from other software, which licenses can
 #### Fixed
 
 - DTI: the b-vectors rotated by FSL `eddy` are now used by `dtifit` and `bedpostx`. Re-processing a subject will not reproduce the results of previous versions.
+- 3D T1w reference with a field of view larger than 256 mm: the crop needed by FreeSurfer now removes only the excess on each axis, without resampling the image and keeping its radiological orientation. Subjects already processed with such a reference keep the previous result until their analyses are reset.
 - Changing the DTI CPU allocation no longer invalidates the cached Eddy results.
 - ASL/PET surface sampling no longer starts before recon-all completes.
 - Resting state model order estimation.
