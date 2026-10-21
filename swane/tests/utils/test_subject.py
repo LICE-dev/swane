@@ -150,6 +150,35 @@ class TestSubjectWorkflowControl:
         assert os.path.exists(os.path.join(subject.folder, "references.txt"))
 
 
+class TestSubjectReferencesFile:
+    def test_references_file_resolves_aliased_interfaces_once(
+        self, global_config, dependency_manager
+    ):
+        """Interface classes registered as aliases (FEATModel -> FEAT,
+        ImageMaths/BinaryMaths -> niimath) get their tool citation, and a
+        reference shared by several classes is written a single time."""
+        subject = Subject(global_config, dependency_manager)
+        assert subject.create_new_subject_dir("subj_refs") == SubjectRet.ValidFolder
+        subject.workflow = SimpleNamespace(
+            get_interface_array=lambda: [
+                "BinaryMaths",
+                "FEATModel",
+                "ImageMaths",
+                "NotARegisteredInterface",
+            ]
+        )
+
+        subject._write_references_file()
+
+        with open(
+            os.path.join(subject.folder, "references.txt"), encoding="utf-8"
+        ) as f:
+            text = f.read()
+        assert text.count("Command: niimath\n") == 1
+        assert "Command: feat\n" in text
+        assert "NotARegisteredInterface" not in text
+
+
 class TestSubjectDicomChecks:
     def test_check_input_folder_step3_accepts_no_status_callback(
         self, global_config, dependency_manager
