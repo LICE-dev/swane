@@ -110,8 +110,8 @@ veins_ct_subtraction.out_file -> outputnode.contrast
 veins_ct_subtraction.out_file -> veins_ct_sum.vol_files
 veins_ct_sum.out_file -> veins_ct_mask.in_file
 veins_mask_reOrient.out_file -> veins_ct_mask.mask_file
-venous_ct2_robustfov.out_roi -> veins_ct_2_contrast_flirt.in_file
-venous_ct_robustfov.out_roi -> segment_endocranium.in_file
-venous_ct_robustfov.out_roi -> veins_ct_2_contrast_flirt.reference
-venous_ct_robustfov.out_roi -> veins_ct_2_ref_flirt.in_file
-venous_ct_robustfov.out_roi -> veins_ct_subtraction.operand_file
+venous_ct2_robustfov.out_file -> veins_ct_2_contrast_flirt.in_file
+venous_ct_robustfov.out_file -> segment_endocranium.in_file
+venous_ct_robustfov.out_file -> veins_ct_2_contrast_flirt.reference
+venous_ct_robustfov.out_file -> veins_ct_2_ref_flirt.in_file
+venous_ct_robustfov.out_file -> veins_ct_subtraction.operand_file

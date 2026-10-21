@@ -72,3 +72,48 @@ class TestZIntNorm:
         node.inputs.in_file = in_file
         out = node._gen_outfilename()
         assert os.path.basename(out) == "normalized_t1.nii.gz"
+
+
+class TestZIntNormDegenerateMask:
+    """An empty mask has no statistics: fail instead of writing an all-NaN image."""
+
+    def test_image_without_positive_voxels_raises(self, workspace, make_nifti):
+        in_file = make_nifti("zeros.nii.gz", data=np.zeros((3, 3, 3)))
+        node = ZIntNorm()
+        node.inputs.in_file = in_file
+
+        with pytest.raises(RuntimeError, match="No voxel"):
+            node.run()
+
+    def test_empty_explicit_mask_raises(self, workspace, make_nifti):
+        in_file = make_nifti("img.nii.gz", data=np.arange(1, 28).reshape(3, 3, 3))
+        mask_file = make_nifti("mask.nii.gz", data=np.zeros((3, 3, 3)))
+        node = ZIntNorm()
+        node.inputs.in_file = in_file
+        node.inputs.mask_file = mask_file
+
+        with pytest.raises(RuntimeError, match="No voxel"):
+            node.run()
+
+    def test_nan_inside_the_mask_raises(self, workspace, make_nifti):
+        data = np.arange(1, 28, dtype=np.float32).reshape(3, 3, 3)
+        data[1, 1, 1] = np.nan
+        in_file = make_nifti("img.nii.gz", data=data)
+        mask_file = make_nifti("mask.nii.gz", data=np.ones((3, 3, 3)))
+        node = ZIntNorm()
+        node.inputs.in_file = in_file
+        node.inputs.mask_file = mask_file
+
+        with pytest.raises(RuntimeError, match="not finite"):
+            node.run()
+
+    def test_failure_leaves_no_output_file(self, workspace, make_nifti):
+        in_file = make_nifti("zeros.nii.gz", data=np.zeros((3, 3, 3)))
+        node = ZIntNorm()
+        node.inputs.in_file = in_file
+        node.inputs.out_file = "norm.nii.gz"
+
+        with pytest.raises(RuntimeError):
+            node.run()
+
+        assert not (workspace / "norm.nii.gz").exists()

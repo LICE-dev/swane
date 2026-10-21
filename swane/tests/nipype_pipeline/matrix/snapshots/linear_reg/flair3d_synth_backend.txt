@@ -74,9 +74,9 @@ flair3d_deskull_synthstrip.out_file -> deskulled_flair3d_morph_apply.in_file
 flair3d_morph_apply.out_file -> bias_correction.in_file
 flair3d_morph_apply.out_file -> outputnode.uncorrected_registered_file
 flair3d_reorient.out_file -> flair3d_robustfov.in_file
-flair3d_robustfov.out_roi -> flair3d_deskull_synthstrip.in_file
-flair3d_robustfov.out_roi -> flair3d_morph_apply.in_file
-flair3d_robustfov.out_roi -> flair3d_synthmorphreg.in_file
+flair3d_robustfov.out_file -> flair3d_deskull_synthstrip.in_file
+flair3d_robustfov.out_file -> flair3d_morph_apply.in_file
+flair3d_robustfov.out_file -> flair3d_synthmorphreg.in_file
 flair3d_synthmorphreg.warp_file -> deskulled_flair3d_morph_apply.warp_file
 flair3d_synthmorphreg.warp_file -> flair3d_morph_apply.warp_file
 flair3d_synthmorphreg.warp_file -> outputnode.out_matrix_file
