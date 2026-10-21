@@ -132,3 +132,51 @@ class TestDipyTensorFitThreadPinning:
 
         assert seen["omp"] == "1"
         assert OMP_THREADS_VAR not in os.environ
+
+
+class TestDipyTensorFitOutputDtype:
+    """FA is a float map: it must be written as float32 whatever the on-disk
+    dtype of the DWI whose header it inherits. With an int16 DWI header the FA
+    was written as scaled int16, quantised to ~1e-5 steps."""
+
+    def _fit(self, workspace, make_nifti, data_dtype):
+        shape = (5, 5, 4)
+        bval, bvec, bvals, bvecs = _single_shell_gtab_files(workspace)
+        tensor = np.diag([1.7e-3, 0.3e-3, 0.3e-3])
+        signal = 1000 * np.exp(-bvals * np.einsum("ni,ij,nj->n", bvecs, tensor, bvecs))
+        rng = np.random.default_rng(3)
+        data = np.tile(signal, shape + (1,)) + rng.random(shape + (len(bvals),)) * 20
+        img = nib.Nifti1Image(data.astype(data_dtype), np.eye(4))
+        img.header.set_data_dtype(data_dtype)
+        in_file = str(workspace / "dwi.nii.gz")
+        nib.save(img, in_file)
+        mask_file = make_nifti("mask.nii.gz", data=np.ones(shape, dtype=np.float32))
+
+        node = DipyTensorFit()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.mask = mask_file
+        node.run()
+        return in_file, bval, bvec, nib.load(node._list_outputs()["fa"])
+
+    def _expected_fa(self, in_file, bval, bvec):
+        from dipy.core.gradients import gradient_table
+        from dipy.io.gradients import read_bvals_bvecs
+        from dipy.reconst import dti
+
+        bvals, bvecs = read_bvals_bvecs(bval, bvec)
+        data = nib.load(in_file).get_fdata(dtype=np.float32)
+        return dti.TensorModel(gradient_table(bvals, bvecs=bvecs)).fit(data).fa
+
+    def test_int16_dwi_gives_an_unquantised_float32_fa(self, workspace, make_nifti):
+        in_file, bval, bvec, fa = self._fit(workspace, make_nifti, np.int16)
+        assert fa.get_data_dtype() == np.dtype(np.float32)
+        assert fa.shape == (5, 5, 4)
+        assert np.allclose(
+            fa.get_fdata(), self._expected_fa(in_file, bval, bvec), atol=1e-6
+        )
+
+    def test_float32_dwi_keeps_a_float32_fa(self, workspace, make_nifti):
+        _, _, _, fa = self._fit(workspace, make_nifti, np.float32)
+        assert fa.get_data_dtype() == np.dtype(np.float32)

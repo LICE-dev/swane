@@ -18,9 +18,9 @@ Overview of 89 construction scenarios across 16 workflow families. Each row is o
 
 | scenario | settings | nodes/edges | commands | GPU |
 |----------|----------|-------------|----------|-----|
-| [no_tractography](snapshots/dipy_dti_preproc/no_tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=false; tractography_engine=DIPY_RECOBUNDLES | 13 / 18 | `dcm2niix` | — |
-| [tractography](snapshots/dipy_dti_preproc/tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 20 / 40 | `dcm2niix` | — |
-| [tractography_single_thread](snapshots/dipy_dti_preproc/tractography_single_thread.txt) | deskull_engine=ANTSPYNET; max_cpu=1; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 20 / 40 | `dcm2niix` | — |
+| [no_tractography](snapshots/dipy_dti_preproc/no_tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=false; tractography_engine=DIPY_RECOBUNDLES | 13 / 20 | `dcm2niix` | — |
+| [tractography](snapshots/dipy_dti_preproc/tractography.txt) | deskull_engine=ANTSPYNET; max_cpu=4; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 20 / 42 | `dcm2niix` | — |
+| [tractography_single_thread](snapshots/dipy_dti_preproc/tractography_single_thread.txt) | deskull_engine=ANTSPYNET; max_cpu=1; tractography=true; tractography_engine=DIPY_RECOBUNDLES | 20 / 42 | `dcm2niix` | — |
 
 ## dti_preproc
 
@@ -29,7 +29,7 @@ Overview of 89 construction scenarios across 16 workflow families. Each row is o
 | [new_eddy_cpu](snapshots/dti_preproc/new_eddy_cpu.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=false; synth_morph=False; tractography=false | 12 / 21 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False` |
 | [new_eddy_cuda](snapshots/dti_preproc/new_eddy_cuda.txt) | cuda=true; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=false; synth_morph=False; tractography=false | 12 / 21 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy`, `flirt` | `use_cuda=True` |
 | [new_eddy_tractography](snapshots/dti_preproc/new_eddy_tractography.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=false; synth_morph=False; tractography=true | 13 / 25 | `bedpostx`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False`, `use_gpu=False` |
-| [old_eddy_correct](snapshots/dti_preproc/old_eddy_correct.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=true; synth_morph=False; tractography=false | 11 / 17 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_correct`, `flirt` | — |
+| [old_eddy_correct](snapshots/dti_preproc/old_eddy_correct.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=true; synth_morph=False; tractography=false | 11 / 18 | `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_correct`, `flirt` | — |
 | [test_run](snapshots/dti_preproc/test_run.txt) | cuda=false; deskull_engine=ANTSPYNET; max_cpu=4; old_eddy_correct=false; synth_morph=False; test_run=True; tractography=true | 13 / 25 | `bedpostx`, `convert_xfm`, `dcm2niix`, `dtifit`, `eddy_openmp`, `flirt` | `use_cuda=False`, `use_gpu=False` |
 
 ## flat1
