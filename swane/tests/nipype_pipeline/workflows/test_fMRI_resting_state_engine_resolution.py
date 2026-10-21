@@ -74,7 +74,7 @@ def test_fsl_aroma_pass_on_unfiltered_intnorm(
     assert (merge_node, "out", "in_files") in _incoming(wf, preproc_melodic)
 
     nonaggr = _node(wf, "nonaggr_denoising")
-    assert type(nonaggr.interface).__name__ == "FilterRegressor"
+    assert type(nonaggr.interface).__name__ == "CustomFilterRegressor"
     inc = _incoming(wf, nonaggr)
     assert (intnorm, "out_file", "in_file") in inc
     assert not any(src is highpass for src, _, _ in inc)

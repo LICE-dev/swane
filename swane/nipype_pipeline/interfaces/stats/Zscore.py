@@ -46,8 +46,24 @@ class Zscore(BaseInterface):
         # use only the non-zero voxels inside the ROI; the standard deviation
         # is the sample one (ddof=1)
         roi_vals = in_data[roi & (in_data != 0)]
+
+        # With fewer than two voxels the sample standard deviation is NaN, which
+        # the zero check below would let through as an all-NaN map.
+        if roi_vals.size < 2:
+            raise RuntimeError(
+                "The ROI contains %d non-zero voxel(s) of the input image: at "
+                "least 2 are needed to compute a standard deviation (check that "
+                "the input covers the ROI)" % roi_vals.size
+            )
+
         mean = roi_vals.mean()
         std = roi_vals.std(ddof=1)
+
+        if not (np.isfinite(mean) and np.isfinite(std)):
+            raise RuntimeError(
+                "Mean or standard deviation inside the ROI is not finite "
+                "(NaN or infinite values in the input image)"
+            )
 
         if std == 0:
             raise RuntimeError("Standard deviation inside the ROI is zero")

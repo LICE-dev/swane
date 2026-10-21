@@ -71,15 +71,13 @@ class NiiMathSliceTimer(ImageMaths):
             times[slice_index] = position * tr / n_slices
         return times
 
-    def _parse_inputs(self, skip=None):
+    def _command_inputs(self):
         from nibabel import load
 
         n_slices = load(self.inputs.in_file).shape[2]
         tr = self.inputs.time_repetition
         times = self.slice_times(n_slices, tr, self.inputs.slice_timing)
-        self.inputs.op_string = "-stc --slicetiming %s -tzero %.6f" % (
-            ",".join("%.6f" % t for t in times),
-            tr / 2,
-        )
-
-        return super()._parse_inputs(skip)
+        return {
+            "op_string": "-stc --slicetiming %s -tzero %.6f"
+            % (",".join("%.6f" % t for t in times), tr / 2)
+        }

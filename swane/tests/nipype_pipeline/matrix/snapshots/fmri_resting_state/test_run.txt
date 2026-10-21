@@ -180,7 +180,7 @@
     axis = 'vstack'
     no_flatten = False
     ravel_inputs = False
-- nonaggr_denoising [FilterRegressor] cmd=fsl_regfilt mem_gb=5 n_procs=1
+- nonaggr_denoising [CustomFilterRegressor] cmd=fsl_regfilt mem_gb=5 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     out_file = 'denoised_func_data_nonaggr.nii.gz'
     output_type = 'NIFTI_GZ'

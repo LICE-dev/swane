@@ -115,3 +115,127 @@ def test_slice_time_ref_reaches_first_level_model(
     interface.run()
 
     assert seen["slice_time_ref"] == (slice_time_ref or 0.0)
+
+
+# --- Free-text task names -------------------------------------------------
+# The task names are free text preferences. nilearn evaluates the contrast
+# expression as Python code and names the design matrix columns after the
+# conditions, so they must not reach it as they are.
+
+N_VOLS = 40
+ONSETS_A = [10, 50]
+ONSETS_B = [30, 70]
+
+
+def _synthetic_inputs(directory):
+    """4D data: noise plus an A-locked response and a B-locked (negative) one.
+
+    Both responses are the SPM-HRF regressors of the block design, so the
+    contrasts below have a known sign and a clearly non-null z in the mask.
+    """
+    from nilearn.glm.first_level import make_first_level_design_matrix
+
+    events = pd.DataFrame(
+        [("A", o, 10) for o in ONSETS_A] + [("B", o, 10) for o in ONSETS_B],
+        columns=["trial_type", "onset", "duration"],
+    )
+    design = make_first_level_design_matrix(
+        np.arange(N_VOLS) * 2.0, events, hrf_model="spm", drift_model=None
+    )
+    data = np.random.RandomState(0).randn(5, 5, 5, N_VOLS)
+    data[1:4, 1:4, 1:4, :] += 3.0 * design["A"].to_numpy()
+    data[1:4, 1:4, 1:4, :] -= 2.0 * design["B"].to_numpy()
+    nib.save(nib.Nifti1Image(data, np.eye(4)), directory / "preproc.nii.gz")
+    mask = np.zeros((5, 5, 5))
+    mask[1:4, 1:4, 1:4] = 1
+    nib.save(nib.Nifti1Image(mask, np.eye(4)), directory / "mask.nii.gz")
+    np.savetxt(directory / "motion.par", np.zeros((N_VOLS, 6)), fmt="%.6f")
+    (directory / "outliers.txt").write_text("5\n")
+
+
+def _run_first_level(directory, monkeypatch, task_names):
+    """Run the node in ``directory``; one task -> A vs rest, two -> A-B and B-A."""
+    _synthetic_inputs(directory)
+    monkeypatch.chdir(directory)
+    if len(task_names) == 1:
+        (a,) = task_names
+        subject_info = Bunch(conditions=[a], onsets=[ONSETS_A], durations=[[10]])
+        contrasts = [["%s_versus_Rest" % a, "T", [a], [1]]]
+    else:
+        a, b = task_names
+        subject_info = Bunch(
+            conditions=[a, b], onsets=[ONSETS_A, ONSETS_B], durations=[[10], [10]]
+        )
+        contrasts = [
+            ["%s_versus_%s" % (a, b), "T", [a, b], [1, -1]],
+            ["%s_versus_%s" % (b, a), "T", [a, b], [-1, 1]],
+        ]
+    interface = NilearnFirstLevel()
+    interface.inputs.in_file = str(directory / "preproc.nii.gz")
+    interface.inputs.mask_file = str(directory / "mask.nii.gz")
+    interface.inputs.tr = 2.0
+    interface.inputs.subject_info = subject_info
+    interface.inputs.realignment_parameters = str(directory / "motion.par")
+    interface.inputs.outlier_files = str(directory / "outliers.txt")
+    interface.inputs.contrasts = contrasts
+    return interface.run().outputs, contrasts
+
+
+def _zmap(path):
+    return nib.load(path).get_fdata()
+
+
+@pytest.mark.parametrize(
+    "task_name",
+    [
+        "finger-tapping",  # hyphen: read as a subtraction
+        "2back",  # starts with a digit
+        "a.b",  # attribute access
+        "class",  # Python keyword
+        "constant",  # nilearn's own design matrix column
+        "mot00",  # a motion confound column
+        "été",  # accents are fine as-is
+    ],
+)
+def test_task_names_that_are_not_python_identifiers(tmp_path, monkeypatch, task_name):
+    outputs, contrasts = _run_first_level(tmp_path, monkeypatch, (task_name,))
+
+    # the files keep the user's name: only the nilearn-facing labels are internal
+    assert [os.path.basename(z) for z in outputs.zstats] == [
+        "z_%s_versus_Rest.nii.gz" % task_name
+    ]
+    zmap = _zmap(outputs.zstats[0])
+    assert np.isfinite(zmap).all()
+    # the A-locked signal in the mask is actually found, not a null map
+    assert zmap[2, 2, 2] > 3.0
+
+
+def test_two_task_names_give_opposite_contrasts(tmp_path, monkeypatch):
+    outputs, _ = _run_first_level(tmp_path, monkeypatch, ("finger-tapping", "2back"))
+
+    a_vs_b, b_vs_a = (_zmap(z) for z in outputs.zstats)
+    assert a_vs_b[2, 2, 2] > 3.0
+    np.testing.assert_allclose(a_vs_b, -b_vs_a)
+
+
+def test_task_names_do_not_change_the_numbers(tmp_path, monkeypatch):
+    """Same design under a valid and an invalid name: identical z-maps."""
+    valid_dir = tmp_path / "valid"
+    other_dir = tmp_path / "other"
+    valid_dir.mkdir()
+    other_dir.mkdir()
+
+    valid, _ = _run_first_level(valid_dir, monkeypatch, ("Task_A", "Task_B"))
+    other, _ = _run_first_level(other_dir, monkeypatch, ("finger-tapping", "2back"))
+
+    assert len(valid.zstats) == len(other.zstats) == 2
+    for z_valid, z_other in zip(valid.zstats, other.zstats):
+        np.testing.assert_array_equal(_zmap(z_valid), _zmap(z_other))
+    for key in (
+        "threshold_file_cont1_thresh1",
+        "threshold_file_cont2_thresh2",
+        "threshold_file_cont2_thresh3",
+    ):
+        np.testing.assert_array_equal(
+            _zmap(getattr(valid, key)), _zmap(getattr(other, key))
+        )

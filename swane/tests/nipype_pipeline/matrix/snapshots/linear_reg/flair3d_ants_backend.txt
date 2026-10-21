@@ -80,8 +80,8 @@ flair3d_conv.converted_files -> flair3d_reorient.in_file
 flair3d_deskull_antspynet.out_file -> deskulled_flair3d_ants_apply.input_image
 flair3d_deskull_antspynet.out_file -> flair3d_antsreg.moving
 flair3d_reorient.out_file -> flair3d_robustfov.in_file
-flair3d_robustfov.out_roi -> flair3d_ants_apply.input_image
-flair3d_robustfov.out_roi -> flair3d_deskull_antspynet.in_file
+flair3d_robustfov.out_file -> flair3d_ants_apply.input_image
+flair3d_robustfov.out_file -> flair3d_deskull_antspynet.in_file
 inputnode.output_name -> betted_name.basename
 inputnode.output_name -> unbetted_name.basename
 inputnode.reference -> deskulled_flair3d_ants_apply.reference_image

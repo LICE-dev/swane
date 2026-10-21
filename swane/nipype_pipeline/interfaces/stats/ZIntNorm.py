@@ -56,8 +56,19 @@ class ZIntNorm(BaseInterface):
         # --- Z-SCORE NORMALIZATION ---
         vals = img[mask]
 
+        # An empty mask has no statistics (NaN mean and std, which the zero
+        # check below would let through as an all-NaN image).
+        if vals.size == 0:
+            raise RuntimeError("No voxel inside the mask to compute the statistics")
+
         mean = vals.mean()
         std = vals.std()
+
+        if not (np.isfinite(mean) and np.isfinite(std)):
+            raise RuntimeError(
+                "Mean or standard deviation is not finite "
+                "(NaN or infinite values inside the mask)"
+            )
 
         if std == 0:
             raise RuntimeError("Standard deviation is zero")
