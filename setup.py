@@ -25,7 +25,6 @@ setup(
             "resources/icons/*",
             "resources/atlas/*",
             "resources/atlas/FLAT1/*",
-            "resources/priors/*",
         ]
     },
     classifiers=[
