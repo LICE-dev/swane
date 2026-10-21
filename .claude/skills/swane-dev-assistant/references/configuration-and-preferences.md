@@ -44,14 +44,14 @@ Use `PreferenceEntry` metadata rather than ad hoc UI/runtime checks:
 
 1. Resolve global (`~/.SWANe` or test override) versus subject (`.config`) scope.
 2. Load schema defaults into `_section_defaults` and the in-memory `ConfigParser`.
-3. Evaluate `force_pref_reset` and `last_swane_version` compatibility.
+3. Discard the existing file (global or subject alike) when its `main.last_swane_version` is missing, unreadable or older than `PREF_RESET_BEFORE_VERSION` (`preference_list.py`); a file from that version or later is always kept.
 4. Read an existing file when it remains compatible.
 5. Reassign known values through `set` so `validate_type` normalizes them; restore `default_at_startup` values instead of the persisted value.
 6. Update version metadata and save.
 
 - Use `getboolean_safe`, `getint_safe`, `getfloat_safe`, and `getenum_safe` for typed reads. Keep invalid-value fallback behavior covered by tests.
 - Use `ConfigManager.set` or section assignment compatible with the existing schema. Do not bypass normalization for user-editable values.
-- Preserve unknown-version/reset behavior deliberately. A change to `force_pref_reset` can discard user choices across every category.
+- Preserve unknown-version/reset behavior deliberately. Raising `PREF_RESET_BEFORE_VERSION` discards user choices across every category, subject analysis parameters included; prefer a migration (e.g. `RENAMED_PREFERENCES`) and never set it above `__version__` (every start would reset). The old `force_pref_reset` option is no longer read and is dropped from files at load.
 - Use `reset_to_defaults` only for the intended scope and preserve the confirmation flow in `PreferencesWindow`/`SubjectTab`.
 - Treat `set_workflow_option` as a subject-only preset application. Keep `DEFAULT_WF` complete and coherent for every supported `WorkflowTypes` member.
 - Save only after a coherent set of changes; avoid exposing partially updated dependent values to runtime consumers.
