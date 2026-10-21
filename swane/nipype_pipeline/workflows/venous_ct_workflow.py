@@ -161,7 +161,7 @@ def venous_ct_workflow(
     )
     deskull.inputs.oversampling = seg_oversampling
     deskull.inputs.skull_threshold = config.getint_safe("skull_threshold")
-    workflow.connect(veins_robustfov, "out_roi", deskull, "in_file")
+    workflow.connect(veins_robustfov, "out_file", deskull, "in_file")
 
     # NODE 6: Mask in radiological convention
     veins_mask_reOrient = Node(ForceOrient(), name="veins_mask_reOrient")
@@ -175,7 +175,7 @@ def venous_ct_workflow(
         name_suffix="to reference space",
         engine=engine,
         workflow=workflow,
-        moving=[veins_robustfov, "out_roi"],
+        moving=[veins_robustfov, "out_file"],
         reference=[inputnode, "reference"],
         non_linear=False,
         is_volumetric=True,
@@ -203,8 +203,8 @@ def venous_ct_workflow(
         name_suffix="to non-contrast scan",
         engine=engine,
         workflow=workflow,
-        moving=[veins2_robustfov, "out_roi"],
-        reference=[veins_robustfov, "out_roi"],
+        moving=[veins2_robustfov, "out_file"],
+        reference=[veins_robustfov, "out_file"],
         non_linear=False,
         is_volumetric=True,
         flirt_cost="mutualinfo",
@@ -229,7 +229,7 @@ def venous_ct_workflow(
         veins_subtraction,
         "in_file",
     )
-    workflow.connect(veins_robustfov, "out_roi", veins_subtraction, "operand_file")
+    workflow.connect(veins_robustfov, "out_file", veins_subtraction, "operand_file")
 
     # NODE 10: Sum all contrasts
     veins_sum = Node(SumMultiVols(), name="veins_ct_sum")

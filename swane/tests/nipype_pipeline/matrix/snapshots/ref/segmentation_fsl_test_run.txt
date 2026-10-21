@@ -46,7 +46,7 @@
     out_file = 'ref_uncorrected.nii.gz'
 - ref_robustfov [NiiMathRobustFov] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    out_roi = 'ref_robustfov.nii.gz'
+    out_file = 'ref_robustfov.nii.gz'
     output_type = 'NIFTI_GZ'
 - ref_segmentation [FAST] cmd=fast mem_gb=4 n_procs=1
     bias_iters = 1
@@ -73,6 +73,6 @@ ref_reOrient.out_file -> ref_robustfov.in_file
 ref_reScale.out_file -> outputnode.uncorrected_reference
 ref_reScale.out_file -> ref_bias_correction.in_file
 ref_reScale.out_file -> ref_deskull_biased_antspynet.in_file
-ref_robustfov.out_roi -> ref_reScale.in_file
+ref_robustfov.out_file -> ref_reScale.in_file
 ref_segmentation.partial_volume_files -> outputnode.tissue_pve
 ref_segmentation.restored_image -> outputnode.tissue_restored
