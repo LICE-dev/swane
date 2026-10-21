@@ -824,6 +824,24 @@ class SubjectTab(QTabWidget):
                 self.toggle_workflow_execution(
                     resume=resume, resume_freesurfer=resume_freesurfer
                 )
+            elif workflow_start_ret == SubjectRet.ExecWfResumeIncompatible:
+                # A previous execution that cannot be resumed: only a new
+                # execution, which deletes it, can start
+                msg_box = QMessageBox()
+                msg_box.setText(strings.subj_tab_old_wf_incompatible)
+                msg_box.setIcon(QMessageBox.Icon.Warning)
+                msg_box.setStandardButtons(
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
+                )
+                msg_box.button(QMessageBox.StandardButton.Yes).setText(
+                    strings.subj_tab_old_wf_reset
+                )
+                msg_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+                ret = msg_box.exec()
+                if ret == QMessageBox.StandardButton.Yes:
+                    self.toggle_workflow_execution(
+                        resume=False, resume_freesurfer=resume_freesurfer
+                    )
             elif workflow_start_ret == SubjectRet.ExecWfResumeFreesurfer:
                 msg_box = QMessageBox()
                 msg_box.setText(strings.subj_tab_old_fs_found)
