@@ -177,3 +177,133 @@ class TestPluginNegotiationHook:
         assert node.mem_gb_runtime == pytest.approx(2.75)
         assert node.inputs.num_threads == 4
         assert node._ram_estimated is True
+
+
+class _SizedInputs(BaseInterfaceInputSpec):
+    size = traits.Int(desc="RAM (GB) and CPUs the stub estimator asks for")
+    num_threads = traits.Int(4, usedefault=True)
+
+
+class _SizedInterface(BaseInterface):
+    input_spec = _SizedInputs
+
+    def _run_interface(self, runtime):
+        return runtime
+
+
+class _ScalarOnlyEstimator(RamEstimator):
+    """Prices one element; like most estimators it cannot read a list."""
+
+    def __init__(self):
+        super().__init__(input_multipliers={}, overhead_gb=0.0, min_gb=0.25)
+        self.calls = 0
+
+    def negotiate(self, inputs, ram_budget_gb):
+        self.calls += 1
+        size = inputs.size
+        if isinstance(size, list):
+            raise TypeError("list-unaware estimator got %r" % (size,))
+        return RamPlan(
+            mem_gb=float(size),
+            tuned_params={"num_threads": 1},
+            n_procs=size,
+            debug_str="size=%d" % size,
+        )
+
+
+def _sized_mapnode(sizes, tmp_path, serial=False):
+    from nipype import MapNode
+
+    node = MapNode(_SizedInterface(), iterfield=["size"], name="mapped", serial=serial)
+    node.base_dir = str(tmp_path)
+    node.inputs.size = sizes
+    node._mem_gb = 6.0
+    node.ram_estimator = _ScalarOnlyEstimator()
+    return node
+
+
+class TestMapNodeNegotiation:
+    """A MapNode submitted whole is priced element by element.
+
+    nipype submits a MapNode unexpanded when it has a single element (or is
+    serial), and again to collate once its subnodes ran: in both cases the
+    iterfield inputs are lists, which an estimator written for one element
+    cannot read.
+    """
+
+    def test_single_element_mapnode_is_priced_as_its_element(self, tmp_path):
+        node = _sized_mapnode([3], tmp_path)
+
+        _bare_plugin(8.0)._negotiate_ram(node)
+
+        assert node.mem_gb_runtime == pytest.approx(3.0)
+        assert node.n_procs == 3
+        assert "size=3" in node.ram_estimator_str
+
+    def test_serial_mapnode_reserves_its_largest_element(self, tmp_path):
+        node = _sized_mapnode([1, 3, 2], tmp_path, serial=True)
+
+        _bare_plugin(8.0)._negotiate_ram(node)
+
+        # the elements run one after another in the same process
+        assert node.mem_gb_runtime == pytest.approx(3.0)
+        assert node.n_procs == 3
+        assert node.ram_estimator.calls == 3
+
+    def test_mapnode_tuning_is_not_applied(self, tmp_path):
+        node = _sized_mapnode([3], tmp_path)
+
+        _bare_plugin(8.0)._negotiate_ram(node)
+
+        # a tuned value per element has no single place on the MapNode
+        assert node.inputs.num_threads == 4
+
+    def test_collating_mapnode_reserves_the_floor(self, tmp_path):
+        node = _sized_mapnode([1, 3], tmp_path)
+
+        _bare_plugin(8.0)._negotiate_ram(node, collating=True)
+
+        # its subnodes already ran: it only loads their cached results
+        assert node.mem_gb_runtime == pytest.approx(0.25)
+        assert node.ram_estimator.calls == 0
+        assert node._ram_estimated is True
+
+
+def _run_mapnode(sizes, tmp_path):
+    from multiprocessing import Queue
+
+    from nipype import Workflow
+
+    workflow = Workflow(name="wf", base_dir=str(tmp_path))
+    workflow.config["execution"]["poll_sleep_duration"] = "0.05"
+    workflow.config["execution"]["crashdump_dir"] = str(tmp_path)
+    workflow.add_nodes([_sized_mapnode(sizes, tmp_path)])
+
+    plugin = MonitoredMultiProcPlugin(
+        plugin_args={
+            "n_procs": 4,
+            "memory_gb": 8.0,
+            "n_gpu_procs": 0,
+            "queue": Queue(),
+        }
+    )
+    workflow.run(plugin=plugin)
+    # the scheduler's own copies, as _send_procs_to_workers priced them
+    return {p.name: p for p in plugin.procs}
+
+
+def test_single_element_mapnode_negotiated_in_a_real_run(tmp_path):
+    scheduled = _run_mapnode([2], tmp_path)["mapped"]
+
+    assert scheduled.mem_gb_runtime == pytest.approx(2.0)
+    assert "size=2" in scheduled.ram_estimator_str
+
+
+def test_collating_mapnode_in_a_real_run(tmp_path):
+    procs = _run_mapnode([1, 3], tmp_path)
+
+    assert procs["_mapped0"].mem_gb_runtime == pytest.approx(1.0)
+    assert procs["_mapped1"].mem_gb_runtime == pytest.approx(3.0)
+    # submitted again to collate: priced at the floor, not per element
+    assert procs["mapped"].mem_gb_runtime == pytest.approx(0.25)
+    assert "collating" in procs["mapped"].ram_estimator_str

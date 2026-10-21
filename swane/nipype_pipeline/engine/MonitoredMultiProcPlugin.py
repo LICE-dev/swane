@@ -2,11 +2,14 @@
 
 import multiprocessing as mp
 import traceback
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
-from threading import Lock
+from threading import RLock
 
+from nipype import MapNode
 from nipype.interfaces.base import isdefined
+from nipype.pipeline.plugins import multiproc as _nipype_multiproc
+from nipype.pipeline.plugins.multiproc import MultiProcPlugin, indent
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.patches.nipype_patches import swane_run_node
 from swane.resources import strings
@@ -15,24 +18,6 @@ from logging import INFO
 import logging
 
 logger = logging.getLogger("nipype.workflow")
-
-try:
-    from nipype.pipeline.plugins import multiproc as _nipype_multiproc
-    from nipype.pipeline.plugins.multiproc import MultiProcPlugin, indent
-except Exception:
-    MultiProcPlugin = object
-
-    def indent(text, prefix=" "):
-        return text
-
-
-try:
-    from nipype import MapNode
-except Exception:
-
-    class MapNode:
-        pass
-
 
 from traceback import format_exception
 import sys
@@ -77,7 +62,10 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         self._task_nodes = {}
         self._future_taskids = {}
         self._broken_pool_reported = False
-        self._broken_pool_lock = Lock()
+        # Guards the two task maps above and the broken-pool flag: the
+        # scheduler thread changes the maps while the executor's callback
+        # thread snapshots them (see _handle_broken_pool).
+        self._task_maps_lock = RLock()
         # future -> the single-use executor running it (see "Fresh processes")
         self._fresh_pools = {}
 
@@ -127,7 +115,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                     break
             self.queue.put(
                 WorkflowReport(
-                    long_name=node.fullname,
+                    long_name=self._report_long_name(node),
                     signal_type=WorkflowSignals.NODE_ERROR,
                     info=info,
                     crash_file=crash_file,
@@ -137,6 +125,16 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             traceback.print_exc()
 
         return crash_file
+
+    @staticmethod
+    def _report_long_name(node):
+        """Name under which ``node`` is reported to the GUI.
+
+        nipype names a MapNode subnode ``_<mapnode><i>`` with no hierarchy, a
+        name the GUI cannot map to a row: :meth:`_submit_mapnode` tags each
+        subnode with its MapNode's full name, which is reported instead.
+        """
+        return getattr(node, "swane_report_name", node.fullname)
 
     def _async_callback(self, future):
         """Turn an abruptly terminated worker into a terminal task result.
@@ -171,6 +169,15 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             self._task_nodes.get(taskid, "unknown node"),
             error,
         )
+        self._feed_failed_result(taskid, error)
+
+    def _feed_failed_result(self, taskid, error):
+        """Give ``taskid`` a failed result carrying ``error``'s traceback.
+
+        Nipype's poll loop then reports it through :meth:`_report_crash` like
+        any other node failure. ``setdefault`` keeps a result the task may have
+        legitimately produced already.
+        """
         self._taskresult.setdefault(
             taskid,
             {
@@ -211,7 +218,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         traceback_lines = traceback.format_exception(
             type(error), error, error.__traceback__
         )
-        with self._broken_pool_lock:
+        with self._task_maps_lock:
             if self._broken_pool_reported:
                 return
             self._broken_pool_reported = True
@@ -294,32 +301,57 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         if getattr(node.interface, "terminal_output", "") == "stream":
             node.interface.terminal_output = "allatonce"
 
+        start_error = None
         if getattr(node.interface, "fresh_process", False):
             # A new process for this node alone (see "Fresh processes").
-            fresh_pool = ProcessPoolExecutor(
-                max_workers=1,
-                # looked up at call time: swane_process_initializer once patched
-                initializer=_nipype_multiproc.process_initializer,
-                initargs=(self._cwd,),
-                mp_context=mp.get_context(self.plugin_args.get("mp_context")),
-            )
-            result_future = fresh_pool.submit(
-                swane_run_node, node, updatehash, self._taskid
-            )
-            self._fresh_pools[result_future] = fresh_pool
+            fresh_pool = None
+            try:
+                fresh_pool = ProcessPoolExecutor(
+                    max_workers=1,
+                    # looked up at call time: swane_process_initializer once patched
+                    initializer=_nipype_multiproc.process_initializer,
+                    initargs=(self._cwd,),
+                    mp_context=mp.get_context(self.plugin_args.get("mp_context")),
+                )
+                result_future = fresh_pool.submit(
+                    swane_run_node, node, updatehash, self._taskid
+                )
+                self._fresh_pools[result_future] = fresh_pool
+            except Exception as error:
+                # The process could not be started (e.g. fork refused under
+                # memory pressure or a process limit): a failure of this node
+                # alone, not of the run. Release the half-made pool and hand
+                # the node a failed result for nipype's crash path.
+                logger.critical(
+                    "[MultiProc] Cannot start the fresh process of %s: %s",
+                    node.fullname,
+                    error,
+                )
+                if fresh_pool is not None:
+                    fresh_pool.shutdown(wait=False, cancel_futures=True)
+                start_error = error
+                result_future = Future()
+                result_future.set_exception(error)
         else:
             try:
                 result_future = self.pool.submit(
                     swane_run_node, node, updatehash, self._taskid
                 )
             except BrokenProcessPool as error:
-                self._handle_broken_pool(error, unsubmitted_node=node.fullname)
+                self._handle_broken_pool(
+                    error, unsubmitted_node=self._report_long_name(node)
+                )
                 raise
         self._task_obj[self._taskid] = result_future
-        self._task_nodes[self._taskid] = node.fullname
-        self._future_taskids[result_future] = self._taskid
-        # Register only after the task maps are populated: add_done_callback()
-        # invokes synchronously when the future has already completed.
+        with self._task_maps_lock:
+            self._task_nodes[self._taskid] = node.fullname
+            self._future_taskids[result_future] = self._taskid
+        if start_error is not None:
+            self._feed_failed_result(self._taskid, start_error)
+            return self._taskid
+        # Register only after the task maps are populated, and outside the
+        # lock: add_done_callback() invokes synchronously when the future has
+        # already completed.
         result_future.add_done_callback(self._async_callback)
 
         logger.debug(
@@ -328,15 +360,18 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         return self._taskid
 
     def _clear_task(self, taskid):
-        self._task_nodes.pop(taskid, None)
-        future = self._task_obj.get(taskid)
-        if future is not None:
-            self._future_taskids.pop(future, None)
-            fresh_pool = self._fresh_pools.pop(future, None)
-            if fresh_pool is not None:
-                # The node is done: join its process now, not at the end of
-                # the run, so it never lingers holding the node's memory.
-                fresh_pool.shutdown(wait=True)
+        fresh_pool = None
+        with self._task_maps_lock:
+            self._task_nodes.pop(taskid, None)
+            future = self._task_obj.get(taskid)
+            if future is not None:
+                self._future_taskids.pop(future, None)
+                fresh_pool = self._fresh_pools.pop(future, None)
+        if fresh_pool is not None:
+            # The node is done: join its process now, not at the end of the
+            # run, so it never lingers holding the node's memory. Outside the
+            # lock: the join can take a while.
+            fresh_pool.shutdown(wait=True)
         return super(MonitoredMultiProcPlugin, self)._clear_task(taskid)
 
     def _postrun_check(self):
@@ -362,9 +397,11 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         ret = super(MonitoredMultiProcPlugin, self)._submit_mapnode(jobid)
 
         # we do this here to not subclass _submit_mapnode
-        if hasattr(self.procs[jobid], "ram_estimator"):
-            for sub_id, original_id in self.mapnodesubids.items():
-                if original_id == jobid:
+        for sub_id, original_id in self.mapnodesubids.items():
+            if original_id == jobid:
+                # A failed subnode is reported on its MapNode's row
+                self.procs[sub_id].swane_report_name = self.procs[jobid].fullname
+                if hasattr(self.procs[jobid], "ram_estimator"):
                     self.procs[sub_id].ram_estimator = self.procs[
                         original_id
                     ].ram_estimator
@@ -386,7 +423,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
 
         return super(MonitoredMultiProcPlugin, self)._task_finished_cb(jobid, cached)
 
-    def _negotiate_ram(self, node):
+    def _negotiate_ram(self, node, collating=False):
         """Apply the bidirectional RAM plan for a node carrying an estimator.
 
         This extends the one-way reservation that ``Node.mem_gb_runtime``
@@ -411,6 +448,19 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         The MapNode-inheritance path in :meth:`_submit_mapnode` already copies
         the estimator onto each subnode, so each subnode is negotiated here in
         turn.
+
+        A MapNode reaching here whole (see :meth:`_negotiate_mapnode`) has list
+        iterfield inputs, which an estimator written for one element cannot
+        read: it is priced element by element, and its plan is never applied
+        as tuning.
+
+        Parameters
+        ----------
+        node : Node
+            The node about to be scheduled.
+        collating : bool
+            ``True`` for a MapNode whose subnodes already ran, submitted again
+            only to collate their results.
         """
         estimator = getattr(node, "ram_estimator", None)
         if not isinstance(estimator, RamEstimator):
@@ -421,7 +471,10 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
         try:
             # Resolve upstream inputs first, exactly as mem_gb_runtime does.
             node._get_inputs()
-            plan = estimator.negotiate(node.inputs, self.memory_gb)
+            if isinstance(node, MapNode):
+                plan = self._negotiate_mapnode(node, estimator, collating)
+            else:
+                plan = estimator.negotiate(node.inputs, self.memory_gb)
 
             traits = node.inputs.traits()
             for key, value in (plan.tuned_params or {}).items():
@@ -447,6 +500,37 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                 node.mem_gb,
                 traceback.format_exc(),
             )
+
+    def _negotiate_mapnode(self, node, estimator, collating):
+        """RAM plan for a MapNode submitted whole.
+
+        nipype submits a MapNode unexpanded when it has a single element (or is
+        serial): its elements then run one after another in the same process,
+        so each is negotiated on its own inputs and the plan reserves the
+        largest of them. A MapNode submitted again to collate its subnodes'
+        results only loads them from cache and reserves the estimator's floor.
+        No tuning is returned: a tuned value per element has no single place
+        on the MapNode's inputs.
+        """
+        from swane.patches.nipype_patches import RamPlan
+
+        if collating:
+            return RamPlan(
+                mem_gb=estimator.min_gb or 0.0,
+                debug_str="collating cached subnode results",
+            )
+        plans = [
+            estimator.negotiate(subnode.inputs, self.memory_gb)
+            for _, subnode in node._make_nodes(cwd=node.output_dir())
+        ]
+        n_procs = [plan.n_procs for plan in plans if plan.n_procs is not None]
+        return RamPlan(
+            mem_gb=max(plan.mem_gb for plan in plans),
+            n_procs=max(n_procs) if n_procs else None,
+            debug_str="; ".join(
+                "[%d] %s" % (index, plan.debug_str) for index, plan in enumerate(plans)
+            ),
+        )
 
     def _send_procs_to_workers(self, updatehash=False, graph=None):
         """
@@ -540,7 +624,7 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
             # set the reservation before reading mem_gb_runtime below. No-op for
             # nodes without an estimator; back-compatible for one-way (FSL)
             # estimators (negotiate wraps __call__ with empty tuning).
-            self._negotiate_ram(self.procs[jobid])
+            self._negotiate_ram(self.procs[jobid], collating=jobid in self.mapnodes)
 
             # Check requirements of this job
             next_job_gb = min(self.procs[jobid].mem_gb_runtime, self.memory_gb)
@@ -598,6 +682,8 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                     self.procs[jobid].run(updatehash=updatehash)
                 except Exception:
                     traceback = format_exception(*sys.exc_info())
+                    # as nipype's own copy: makes Workflow.run() raise
+                    self._run_errors.append(traceback)
                     self._clean_queue(
                         jobid, graph, result={"result": None, "traceback": traceback}
                     )

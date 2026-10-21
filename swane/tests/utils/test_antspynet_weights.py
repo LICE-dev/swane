@@ -221,3 +221,85 @@ def test_swane_cache_dir_matches_the_installed_antspynet_default():
     assert result.stdout.strip().splitlines()[-1] == (
         antspynet_weights.ANTSXNET_CACHE_DIR
     )
+
+
+_FAKE_UTILITIES = """
+import os
+import socket
+import time
+
+
+def set_antsxnet_cache_directory(directory):
+    pass
+
+
+def get_pretrained_network(name):
+    with open(os.environ["FAKE_ANTSPYNET_OUT"], "w") as handle:
+        handle.write(repr(socket.getdefaulttimeout()))
+    if os.environ.get("FAKE_ANTSPYNET_HANG"):
+        time.sleep(120)
+
+
+def get_antsxnet_data(name):
+    pass
+"""
+
+
+@pytest.fixture
+def fake_antspynet_on_disk(tmp_path, monkeypatch):
+    """A fake ``antspynet`` the real exec child imports instead of TensorFlow."""
+    package = tmp_path / "fake_site" / "antspynet"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / "utilities.py").write_text(_FAKE_UTILITIES)
+    repo = os.path.abspath(
+        os.path.join(os.path.dirname(antspynet_weights.__file__), "..", "..")
+    )
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join([str(package.parent), repo]))
+    out = tmp_path / "socket_timeout.txt"
+    monkeypatch.setenv("FAKE_ANTSPYNET_OUT", str(out))
+    monkeypatch.setattr(antspynet_weights, "weights_are_fetched", lambda x: False)
+    return out
+
+
+def test_child_downloads_with_a_socket_timeout(fake_antspynet_on_disk):
+    """A stalled HTTPS read must fail the child instead of hanging it: urllib
+    (keras get_file) waits forever on a dead connection without one."""
+    antspynet_weights.preload_weights(["brainExtractionRobustT1"])
+
+    assert float(fake_antspynet_on_disk.read_text()) == pytest.approx(
+        antspynet_weights.SOCKET_TIMEOUT_S
+    )
+
+
+def test_hung_child_dumps_its_stack_and_fails(fake_antspynet_on_disk, monkeypatch):
+    """A child stuck in Python (e.g. the TensorFlow import) reports where it
+    hung and exits before the parent's timeout."""
+    monkeypatch.setenv("FAKE_ANTSPYNET_HANG", "1")
+    monkeypatch.setattr(antspynet_weights, "PRELOAD_TIMEOUT_S", 6)
+
+    with pytest.raises(subprocess.CalledProcessError) as raised:
+        antspynet_weights.preload_weights(["brainExtractionRobustT1"])
+
+    assert "get_pretrained_network" in raised.value.stderr
+
+
+def test_unresponsive_child_is_killed_at_the_timeout(monkeypatch):
+    """The parent never waits on the child for longer than PRELOAD_TIMEOUT_S."""
+    import time
+
+    import psutil
+
+    monkeypatch.setattr(antspynet_weights, "weights_are_fetched", lambda x: False)
+    monkeypatch.setattr(antspynet_weights, "PRELOAD_TIMEOUT_S", 2)
+    # sleeps without ever running the child's watchdog
+    monkeypatch.setattr(antspynet_weights, "_CHILD", "import time; time.sleep(120)")
+    children_before = {p.pid for p in psutil.Process().children()}
+
+    start = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        antspynet_weights.preload_weights(["brainExtractionRobustT1"])
+
+    assert time.monotonic() - start < 30
+    leftover = {p.pid for p in psutil.Process().children()} - children_before
+    assert not leftover, "the timed-out child is still alive"

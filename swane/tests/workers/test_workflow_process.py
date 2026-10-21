@@ -423,3 +423,34 @@ def test_setup_failure_still_reports_stop(monkeypatch, tmp_path):
         WorkflowSignals.WORKFLOW_CRASHED,
         WorkflowSignals.WORKFLOW_STOP,
     ]
+
+
+def test_timed_out_weights_preload_is_logged_not_fatal(monkeypatch):
+    """A pre-fetch child killed at its timeout is a warning carrying the
+    stack it dumped, never an error that stops the run."""
+    import logging
+    import subprocess
+
+    from swane.utils import antspynet_weights
+
+    # built at run time: a literal would also show up in the logged
+    # traceback's source line and make the check below pass on its own
+    dumped_stack = "".join(["dumped", "_stack", "_marker"])
+
+    def timed_out(names):
+        raise subprocess.TimeoutExpired(["python"], 1800, stderr=dumped_stack)
+
+    monkeypatch.setattr(antspynet_weights, "workflow_modalities", lambda wf: ["t1"])
+    monkeypatch.setattr(antspynet_weights, "preload_weights", timed_out)
+    records = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger = logging.getLogger("nipype.workflow")
+    logger.addHandler(handler)
+    try:
+        WorkflowProcess("subj", DummyWorkflow(), Queue()).preload_antspynet_weights()
+    finally:
+        logger.removeHandler(handler)
+
+    messages = [r.getMessage() for r in records if r.levelno == logging.WARNING]
+    assert any("timed out" in m and dumped_stack in m for m in messages), messages
