@@ -197,3 +197,24 @@ def test_no_fresh_process_outlives_the_run(tmp_path, start_method):
         for pid in pids:
             # joined, not just signalled: a zombie would still exist
             assert not psutil.pid_exists(pid), "fresh process %d outlived the run" % pid
+
+
+@pytest.mark.parametrize("start_method", START_METHODS)
+def test_crashed_fresh_subnode_is_reported_on_its_mapnode(tmp_path, start_method):
+    """A subnode is named ``_<mapnode><i>`` with no hierarchy: its crash must
+    reach the GUI under its MapNode's name, the row the GUI knows."""
+    workflow = _workflow(tmp_path, "fresh_map_crash")
+    mapped = MapNode(FreshCrash(), iterfield=["tag"], name="mapped")
+    mapped.inputs.tag = [1, 2]
+    workflow.add_nodes([mapped])
+
+    queue = Queue()
+    with pytest.raises(RuntimeError):
+        workflow.run(plugin=_plugin(start_method, 1, queue))
+
+    errors = set()
+    while not queue.empty():
+        report = queue.get_nowait()
+        if report.signal_type == WorkflowSignals.NODE_ERROR:
+            errors.add(report.node_name)
+    assert errors == {"fresh_map_crash.mapped"}
