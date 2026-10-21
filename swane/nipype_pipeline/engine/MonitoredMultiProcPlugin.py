@@ -697,6 +697,8 @@ class MonitoredMultiProcPlugin(MultiProcPlugin):
                     self.procs[jobid].run(updatehash=updatehash)
                 except Exception:
                     traceback = format_exception(*sys.exc_info())
+                    # as nipype's own copy: makes Workflow.run() raise
+                    self._run_errors.append(traceback)
                     self._clean_queue(
                         jobid, graph, result={"result": None, "traceback": traceback}
                     )
