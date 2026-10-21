@@ -40,6 +40,7 @@ def _motion_correct(in_file, out_dir, random_seed):
     environment, see :class:`AntsMotionCorrection`.
     """
     import locale
+    import tempfile
     import numpy as np
     import nibabel as nib
     import ants
@@ -64,30 +65,40 @@ def _motion_correct(in_file, out_dir, random_seed):
     img = ants.image_read(in_file)
     fixed = img.ndimage_to_list()[mid]
 
-    # Run ANTs motion correction
-    res = ants.motion_correction(img, fixed=fixed, type_of_transform="Rigid")
+    # Without an outprefix ants.registration saves one transform file per volume
+    # under a mktemp() prefix in the system temp dir, where nothing removes them.
+    # They go in a folder of the node instead, removed once the parameters are
+    # read.
+    with tempfile.TemporaryDirectory(dir=out_dir, prefix="mc_tx_") as tx_dir:
+        # Run ANTs motion correction
+        res = ants.motion_correction(
+            img,
+            fixed=fixed,
+            type_of_transform="Rigid",
+            outprefix=os.path.join(tx_dir, "vol"),
+        )
 
-    # Save motion corrected image
-    out_file = os.path.join(out_dir, "mc.nii.gz")
-    ants.image_write(res["motion_corrected"], out_file)
+        # Save motion corrected image
+        out_file = os.path.join(out_dir, "mc.nii.gz")
+        ants.image_write(res["motion_corrected"], out_file)
 
-    # Decompose parameters
-    params = []
-    for m in res["motion_parameters"]:
-        mat_path = m[0]
-        p = np.asarray(ants.read_transform(mat_path).parameters, dtype=float)
-        R = p[:9].reshape(3, 3)
-        t = p[9:12]
-        sy = float(np.sqrt(R[0, 0] ** 2 + R[1, 0] ** 2))
-        if sy > 1e-6:
-            rx = np.arctan2(R[2, 1], R[2, 2])
-            ry = np.arctan2(-R[2, 0], sy)
-            rz = np.arctan2(R[1, 0], R[0, 0])
-        else:
-            rx = np.arctan2(-R[1, 2], R[1, 1])
-            ry = np.arctan2(-R[2, 0], sy)
-            rz = 0.0
-        params.append([t[0], t[1], t[2], rx, ry, rz])
+        # Decompose parameters
+        params = []
+        for m in res["motion_parameters"]:
+            mat_path = m[0]
+            p = np.asarray(ants.read_transform(mat_path).parameters, dtype=float)
+            R = p[:9].reshape(3, 3)
+            t = p[9:12]
+            sy = float(np.sqrt(R[0, 0] ** 2 + R[1, 0] ** 2))
+            if sy > 1e-6:
+                rx = np.arctan2(R[2, 1], R[2, 2])
+                ry = np.arctan2(-R[2, 0], sy)
+                rz = np.arctan2(R[1, 0], R[0, 0])
+            else:
+                rx = np.arctan2(-R[1, 2], R[1, 1])
+                ry = np.arctan2(-R[2, 0], sy)
+                rz = 0.0
+            params.append([t[0], t[1], t[2], rx, ry, rz])
 
     params = np.array(params, dtype=float)
     par_file = os.path.join(out_dir, "motion.par")

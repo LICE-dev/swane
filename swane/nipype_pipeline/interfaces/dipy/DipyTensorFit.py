@@ -77,10 +77,12 @@ class DipyTensorFit(BaseInterface):
             else:
                 os.environ[OMP_THREADS_VAR] = previous_omp
 
-        nib.save(
-            nib.Nifti1Image(fa.astype(np.float32), in_nii.affine, in_nii.header),
-            out_fa,
-        )
+        # FA is a float map: write float32 whatever the DWI's on-disk dtype
+        # (an int16 header would quantise it), keeping the affine/orientation
+        # from the source header, as the sibling dipy nodes do.
+        out_img = nib.Nifti1Image(fa.astype(np.float32), in_nii.affine, in_nii.header)
+        out_img.header.set_data_dtype(np.float32)
+        nib.save(out_img, out_fa)
 
         return runtime
 

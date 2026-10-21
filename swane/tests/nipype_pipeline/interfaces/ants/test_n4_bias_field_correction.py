@@ -76,10 +76,10 @@ class TestN4BiasFieldCorrectionMaskSelection:
         """A non-binary mask (e.g. multi-label) must collapse to 0/1."""
         node = AntsN4BiasFieldCorrection()
         node.inputs.in_file = make_nifti("img.nii.gz", shape=(6, 6, 6))
-        node.inputs.mask_file = make_nifti(
-            "mask.nii.gz",
-            data=np.array([[[0, 2], [0, 3]], [[0, 0], [1, 0]]], dtype=np.float32),
-        )
+        # on the image's own grid: the geometry guard refuses any other shape
+        labels = np.zeros((6, 6, 6), dtype=np.float32)
+        labels[:2, :2, :2] = [[[0, 2], [0, 3]], [[0, 0], [1, 0]]]
+        node.inputs.mask_file = make_nifti("mask.nii.gz", data=labels)
         created = _run(node, monkeypatch)
         assert set(np.unique(created["mask"].numpy())) <= {0.0, 1.0}
         assert created["mask"].numpy()[0, 0, 1] == 1.0

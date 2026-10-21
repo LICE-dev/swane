@@ -196,19 +196,22 @@ def dipy_dti_preproc_workflow(
     conversion.inputs.name_conflicts = 1
     conversion.inputs.merge_imgs = 2
 
-    # NODE 1b: Orienting in radiological convention
+    # NODE 1b: Orienting in radiological convention. The b-vectors lie along the
+    # voxel axes, so they follow the same permutation/flip: every consumer reads
+    # the reoriented ones, never dcm2niix's.
     reorient = Node(ForceOrient(), name="dipy_reOrient")
     workflow.connect(conversion, "converted_files", reorient, "in_file")
+    workflow.connect(conversion, "bvecs", reorient, "in_bvec")
 
     # NODE 1c: Upfront brain bounding-box crop of the 4D series (median_otsu mask
     # on the mean of all volumes -- the motion envelope, since this runs before
     # motion correction), so every downstream node works on the brain sub-box
     # instead of the empty FOV margin (spec section "C1"). bvals/bvecs are
-    # crop-invariant and are not needed here; they keep flowing from conversion to
-    # the consumers. The affine is shifted (shift_affine_for_crop) so world
-    # coordinates survive the crop. median_otsu is single-threaded scipy work, so
-    # num_threads (and the derived n_procs) is 1 -- honest HARD_CAP accounting,
-    # not a parallel reservation.
+    # crop-invariant and are not needed here; they keep flowing from conversion
+    # (bvals) and the reorientation (bvecs) to the consumers. The affine is
+    # shifted (shift_affine_for_crop) so world coordinates survive the crop.
+    # median_otsu is single-threaded scipy work, so num_threads (and the derived
+    # n_procs) is 1 -- honest HARD_CAP accounting, not a parallel reservation.
     crop = Node(DwiCrop(), name="dipy_crop")
     # RAM is reserved at scheduling time from the 4D series' voxel x volume
     # count (one-way: median_otsu/numpy here are single-threaded, no lever).
@@ -255,7 +258,7 @@ def dipy_dti_preproc_workflow(
     denoise.inputs.num_threads = parallel_cpu
     workflow.connect(crop, "out_file", denoise, "in_file")
     workflow.connect(conversion, "bvals", denoise, "bval")
-    workflow.connect(conversion, "bvecs", denoise, "bvec")
+    workflow.connect(reorient, "out_bvec", denoise, "bvec")
 
     # NODE 5: motion correction + reorient_bvecs (parallel over volumes)
     motion = Node(DipyMotionCorrection(), name="dipy_motion")
@@ -271,7 +274,7 @@ def dipy_dti_preproc_workflow(
     motion.inputs.num_threads = parallel_cpu
     workflow.connect(denoise, "out_file", motion, "in_file")
     workflow.connect(conversion, "bvals", motion, "bval")
-    workflow.connect(conversion, "bvecs", motion, "bvec")
+    workflow.connect(reorient, "out_bvec", motion, "bvec")
 
     # NODE 6: single N4 field on the mean b0, applied to all volumes
     bias = Node(DwiBiasCorrection(), name="dipy_bias")
