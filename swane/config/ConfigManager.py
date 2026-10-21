@@ -1076,6 +1076,9 @@ class ConfigManager(configparser.ConfigParser):
         """
         RAM and CPU cores a resource profile lets each subject tab use.
 
+        The RAM never goes below the ram_gb range minimum
+        (ResourceManager.get_minimum_subject_ram), whatever the profile.
+
         Parameters
         ----------
         profile: PerformanceProfile
@@ -1086,7 +1089,7 @@ class ConfigManager(configparser.ConfigParser):
         The RAM in GB and the number of CPU cores of each subject tab.
         """
         ram_perc, cpu_fraction = ConfigManager.RESOURCE_PROFILE_SHARES[profile]
-        ram_gb = ResourceManager.get_ram_by_perc(ram_perc)
+        ram_gb = ResourceManager.get_ram_by_perc_safe(ram_perc)
         cpu = max(1, int(ResourceManager.get_max_cpu() * cpu_fraction))
         return ram_gb, cpu
 

@@ -15,6 +15,13 @@ class ResourceManager:
     MAXIMUM_RAM_PERC = 90
     #: Most subjects analysed at the same time (subject tab limit).
     MAX_PARALLEL_SUBJECTS = 5
+    #: Least RAM (GB) a subject tab can be given (the ram_gb range minimum).
+    #: nipype aborts the whole subject workflow when one node reserves more
+    #: than the budget, and nodes with no ram_gb requirement reserve up to
+    #: 5 GB: classic recon-all, segment_ha, the resting-state nonaggr_denoising
+    #: (FSL FAST reserves 4 GB). Heavier nodes are gated by the ram_gb
+    #: requirement of their preference (tests/nipype_pipeline/matrix/test_ram_floor.py).
+    MINIMUM_SUBJECT_RAM = 5
 
     SYNTH_STRIP_RAM_REQUIREMENT = {"mac": 30, "linux": 5, "other": 5, "windows": 5}
     SYNTH_MORPH_RAM_REQUIREMENT = {"mac": 20, "linux": 14, "other": 14, "windows": 14}
@@ -82,23 +89,23 @@ class ResourceManager:
 
     @staticmethod
     def get_maximum_ram() -> float:
-        """Most RAM a subject tab can use."""
-        return ResourceManager.get_ram_by_perc(ResourceManager.MAXIMUM_RAM_PERC)
+        """
+        Most RAM a subject tab can use: MAXIMUM_RAM_PERC of the total RAM,
+        raised to the subject tab minimum when the computer has little RAM.
+        """
+        return max(
+            ResourceManager.get_ram_by_perc(ResourceManager.MAXIMUM_RAM_PERC),
+            ResourceManager.get_minimum_subject_ram(),
+        )
 
     @staticmethod
     def get_minimum_subject_ram() -> float:
         """
         Smallest RAM allocation a subject tab can be given (the ram_gb range
-        minimum): a fifth of the lightest profile, at least 0.1 GB.
+        minimum): MINIMUM_SUBJECT_RAM, or the total RAM if lower.
         """
-        return max(
-            0.1,
-            floor(
-                ResourceManager.get_minimum_ram()
-                / ResourceManager.MAX_PARALLEL_SUBJECTS
-                * 10
-            )
-            / 10,
+        return min(
+            ResourceManager.MINIMUM_SUBJECT_RAM, ResourceManager.total_memory_gb()
         )
 
     @staticmethod
@@ -108,11 +115,12 @@ class ResourceManager:
 
     @staticmethod
     def get_ram_by_perc_safe(perc: int) -> float:
+        """A percentage of the total RAM, within the ram_gb range."""
         ram_by_perc = ResourceManager.get_ram_by_perc(perc)
         if ram_by_perc > ResourceManager.get_maximum_ram():
             ram_by_perc = ResourceManager.get_maximum_ram()
-        elif ram_by_perc < ResourceManager.get_minimum_ram():
-            ram_by_perc = ResourceManager.get_minimum_ram()
+        elif ram_by_perc < ResourceManager.get_minimum_subject_ram():
+            ram_by_perc = ResourceManager.get_minimum_subject_ram()
         return ram_by_perc
 
     @staticmethod
