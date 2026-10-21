@@ -6,7 +6,10 @@ from concurrent.futures import Future, ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from threading import RLock
 
+from nipype import MapNode
 from nipype.interfaces.base import isdefined
+from nipype.pipeline.plugins import multiproc as _nipype_multiproc
+from nipype.pipeline.plugins.multiproc import MultiProcPlugin, indent
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from swane.patches.nipype_patches import swane_run_node
 from swane.resources import strings
@@ -15,24 +18,6 @@ from logging import INFO
 import logging
 
 logger = logging.getLogger("nipype.workflow")
-
-try:
-    from nipype.pipeline.plugins import multiproc as _nipype_multiproc
-    from nipype.pipeline.plugins.multiproc import MultiProcPlugin, indent
-except Exception:
-    MultiProcPlugin = object
-
-    def indent(text, prefix=" "):
-        return text
-
-
-try:
-    from nipype import MapNode
-except Exception:
-
-    class MapNode:
-        pass
-
 
 from traceback import format_exception
 import sys
