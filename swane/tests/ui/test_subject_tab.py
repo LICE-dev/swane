@@ -418,3 +418,166 @@ def test_auto_import_prompt_uses_tag_free_label(
     assert len(texts) == 1
     assert "T1 &lt;MPR&gt;" in texts[0]
     assert "<b>T1" not in texts[0]
+
+
+class _ModalityMismatchHarness:
+    """Drives ``SubjectTab.dicom_import_to_folder`` through the modality-mismatch prompt.
+
+    The subject import, the message box and the progress dialog are replaced
+    with recorders so the test observes only what the tab does with them.
+    """
+
+    def __init__(self, qtbot, main_window, monkeypatch, answer, import_results):
+        import importlib
+        from PySide6.QtWidgets import QMessageBox
+
+        module = importlib.import_module("swane.ui.SubjectTab")
+        subject = _loaded_subject(
+            main_window.global_config,
+            main_window.dependency_manager,
+            name="subj_modality_mismatch",
+        )
+        self.tab = SubjectTab(main_window.global_config, subject, main_window)
+        qtbot.addWidget(self.tab)
+        self.data_input = next(iter(subject.input_state_list))
+
+        self.message_texts = []
+        self.dialogs = []
+        self.import_calls = []
+        self.set_error_calls = []
+        results = iter(import_results)
+        harness = self
+
+        class FakeMessageBox:
+            Icon = QMessageBox.Icon
+            StandardButton = QMessageBox.StandardButton
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def setText(self, text):
+                harness.message_texts.append(text)
+
+            def exec(self):
+                return answer
+
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: None
+
+        class FakeProgress:
+            def __init__(self, *args, **kwargs):
+                self.deleted = 0
+                harness.dialogs.append(self)
+
+            def deleteLater(self):
+                self.deleted += 1
+
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: None
+
+        def fake_import(**kwargs):
+            self.import_calls.append(kwargs)
+            return next(results)
+
+        monkeypatch.setattr(module, "QMessageBox", FakeMessageBox)
+        monkeypatch.setattr(module, "PersistentProgressDialog", FakeProgress)
+        monkeypatch.setattr(subject, "dicom_import_to_folder", fake_import)
+        monkeypatch.setattr(subject, "check_input_folder", lambda *a, **k: None)
+        monkeypatch.setattr(self.tab, "reset_workflow", lambda: None)
+        monkeypatch.setattr(
+            self.tab,
+            "set_error",
+            lambda data_input, tooltip: self.set_error_calls.append(
+                (data_input, tooltip)
+            ),
+        )
+
+    @staticmethod
+    def series(name, modality="CT"):
+        return ["label", ["%s_1.dcm" % name, "%s_2.dcm" % name], modality, 1]
+
+
+def test_modality_mismatch_yes_reimports_the_auto_import_series(
+    qtbot, main_window, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    harness = _ModalityMismatchHarness(
+        qtbot,
+        main_window,
+        monkeypatch,
+        answer=QMessageBox.StandardButton.Yes,
+        import_results=[
+            SubjectRet.DataImportErrorModality,
+            SubjectRet.DataImportCompleted,
+        ],
+    )
+    origin = harness.series("auto")
+
+    # Auto-import: the series is handed in and no row is selected
+    assert harness.tab.importable_series_list.currentRow() == -1
+    harness.tab.dicom_import_to_folder(harness.data_input, force_copy_list=origin)
+
+    assert strings.subj_tab_selected_series_error not in harness.message_texts
+    assert len(harness.import_calls) == 2
+    first, second = harness.import_calls
+    assert first["force_modality"] is False
+    assert second["force_modality"] is True
+    assert second["copy_list"] == first["copy_list"] == origin[1]
+    assert second["mod"] == first["mod"] == "CT"
+    # The outer frame must not clear the state set by the second import or
+    # delete the dialog its worker is still updating
+    assert harness.set_error_calls == []
+    assert [dialog.deleted for dialog in harness.dialogs] == [1, 0]
+
+
+def test_modality_mismatch_yes_reimports_the_selected_series(
+    qtbot, main_window, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    harness = _ModalityMismatchHarness(
+        qtbot,
+        main_window,
+        monkeypatch,
+        answer=QMessageBox.StandardButton.Yes,
+        import_results=[
+            SubjectRet.DataImportErrorModality,
+            SubjectRet.DataImportCompleted,
+        ],
+    )
+    harness.tab.dicom_scan_series_list = [
+        harness.series("first", "MR"),
+        harness.series("second"),
+    ]
+    harness.tab.importable_series_list.addItem("first")
+    harness.tab.importable_series_list.addItem("second")
+    harness.tab.importable_series_list.setCurrentRow(1)
+    harness.tab.dicom_import_to_folder(harness.data_input)
+
+    assert len(harness.import_calls) == 2
+    first, second = harness.import_calls
+    assert second["copy_list"] == first["copy_list"] == ["second_1.dcm", "second_2.dcm"]
+    assert second["force_modality"] is True
+    assert harness.set_error_calls == []
+    assert [dialog.deleted for dialog in harness.dialogs] == [1, 0]
+
+
+def test_modality_mismatch_no_keeps_the_input_in_error(qtbot, main_window, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    harness = _ModalityMismatchHarness(
+        qtbot,
+        main_window,
+        monkeypatch,
+        answer=QMessageBox.StandardButton.No,
+        import_results=[SubjectRet.DataImportErrorModality],
+    )
+    harness.tab.dicom_import_to_folder(
+        harness.data_input, force_copy_list=harness.series("auto")
+    )
+
+    assert len(harness.import_calls) == 1
+    assert harness.set_error_calls == [(harness.data_input, "")]
+    assert len(harness.dialogs) == 1
+    assert harness.dialogs[0].deleted >= 1
