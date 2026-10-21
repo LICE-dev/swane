@@ -222,28 +222,17 @@ https://github.com/maartenmennes/ICA-AROMA
 **Reference**: Pruim, R. H., et al. (2015). ICA-AROMA: A robust ICA-based strategy for removing motion artifacts from fMRI data. NeuroImage, 112, 267-277.
 **License**: Apache License, Version 2.0.
 
-**CSF mask**: the NILEARN resting-state engine builds its CSF nuisance ROI from
-the CSF mask bundled in the installed `ica_aroma_py` package
+**CSF mask**: the ICA-AROMA spatial feature extraction reads the CSF mask
+bundled in the installed `ica_aroma_py` package
 (`ica_aroma_py/resources/mask_csf.nii.gz`, read at run time, not shipped by
 SWANe). Pruim et al. (2015) describe this mask as "a CSF segmentation prior,
 supplied as part of FSL", thresholded "at 95% of the robust range".
 
 ---
-## MNI152NLin2009cAsym Probseg (TemplateFlow) and WM Prior Transform
+## MNI152NLin6Asym (TemplateFlow)
 
-SWANe fetches the MNI152NLin2009cAsym WM probseg from TemplateFlow and applies a shipped transformation to map it to the MNI152NLin6Asym grid. 
-
-**Copyright**: (C) 1993–2004 Louis Collins, McConnell Brain Imaging Centre, Montreal Neurological Institute, McGill University.
-
-**License**: Permission to use, copy, modify, and distribute this software and its documentation for any purpose and without fee is hereby granted, provided that the above copyright notice appear in all copies. The authors and McGill University make no representations about the suitability of this software for any purpose. It is provided “as is” without express or implied warranty. The authors are not responsible for any data loss, equipment damage, property loss, or injury to subjects or patients resulting from the use or misuse of this software package.
-
-**Note on MNI152NLin6Asym**: SWANe ships a transformation
-(`swane/resources/priors/tpl-MNI152NLin6Asym_from-MNI152NLin2009cAsym_desc-swaneSyN_warp.nii.gz`
-and `..._affine.mat`) defined on the MNI152NLin6Asym 2 mm grid. It is a
-displacement field computed by SWANe (antspyx SyN) from the TemplateFlow
-`tpl-MNI152NLin2009cAsym` and `tpl-MNI152NLin6Asym` 2 mm T1w images and brain
-masks (see `swane/resources/priors/provenance.json`). SWANe does not ship
-either template image; both are fetched from TemplateFlow at run time.
+SWANe fetches the MNI152NLin6Asym templates from TemplateFlow at run time and
+does not ship them.
 
 MNI152NLin6Asym is "FSL's MNI ICBM 152 non-linear 6th Generation Asymmetric
 Average Brain Stereotaxic Registration Model" (TemplateFlow
