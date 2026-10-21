@@ -4,13 +4,20 @@ Consolidates the former top-level ``test_4_subject`` (full import lifecycle,
 now fed by phantom DICOMs) and the lightweight folder-validation checks.
 """
 
+import gzip
 import os
+import pickle
+import sys
+import types
 from types import SimpleNamespace
+
+import pytest
 
 import swane.utils.Subject as subject_module
 from swane.utils.DicomTree import DicomTree
 from swane.utils.Subject import Subject, SubjectRet
 from swane.utils.DataInputList import DataInputList
+from swane.workers.WorkflowProcess import WorkflowProcess as RealWorkflowProcess
 
 
 def _scan_first_series(dicom_path):
@@ -91,6 +98,181 @@ class TestSubjectFolders:
             subject.create_new_subject_dir("subj_config_error")
             == SubjectRet.ConfigError
         )
+
+
+def _write_legacy_result(monkeypatch, node_dir, module_name):
+    """Write a node result pickling a class of ``module_name``, then make that
+    module disappear, as a SWANe release that moved the interface would."""
+    package_name = module_name.rsplit(".", 1)[0]
+    monkeypatch.setitem(sys.modules, package_name, types.ModuleType(package_name))
+    module = types.ModuleType(module_name)
+    legacy = type("CustomDcm2niix", (), {})
+    legacy.__module__ = module_name
+    module.CustomDcm2niix = legacy
+    monkeypatch.setitem(sys.modules, module_name, module)
+    os.makedirs(node_dir, exist_ok=True)
+    with gzip.open(os.path.join(node_dir, "result_convert.pklz"), "wb") as f:
+        f.write(pickle.dumps({"interface": legacy()}))
+    monkeypatch.delitem(sys.modules, module_name)
+    monkeypatch.delitem(sys.modules, package_name)
+
+
+class TestResumeIncompatibleWorkflowDir:
+    """A workflow directory whose results this version cannot load (e.g. a
+    0.2.x one pickling swane.nipype_pipeline.nodes.*) must not be resumed."""
+
+    LEGACY_MODULE = "swane.nipype_pipeline.nodes.CustomDcm2niix"
+
+    @pytest.fixture
+    def subject(self, global_config, dependency_manager, monkeypatch):
+        subject = Subject(global_config, dependency_manager)
+        assert subject.create_new_subject_dir("subj_resume") == SubjectRet.ValidFolder
+        started = []
+
+        class FakeWorkflowProcess:
+            def __init__(self, *args):
+                pass
+
+            def start(self):
+                started.append(True)
+
+        monkeypatch.setattr(
+            "swane.workers.WorkflowProcess.WorkflowProcess", FakeWorkflowProcess
+        )
+        monkeypatch.setattr(subject_module, "start_worker", lambda worker: None)
+        subject.started = started
+        return subject
+
+    @pytest.mark.parametrize("resume", [None, True])
+    def test_incompatible_workflow_dir_is_not_resumed(
+        self, subject, monkeypatch, resume
+    ):
+        _write_legacy_result(
+            monkeypatch,
+            os.path.join(subject.workflow_dir(), "convert"),
+            self.LEGACY_MODULE,
+        )
+
+        ret = subject.start_workflow(resume=resume)
+
+        assert ret == SubjectRet.ExecWfResumeIncompatible
+        assert subject.workflow_dir_exists()
+        assert subject.started == []
+
+    def test_new_execution_deletes_it_and_keeps_freesurfer(self, subject, monkeypatch):
+        _write_legacy_result(
+            monkeypatch,
+            os.path.join(subject.workflow_dir(), "convert"),
+            self.LEGACY_MODULE,
+        )
+        os.makedirs(os.path.join(subject.freesurfer_dir(), "mri"))
+        monkeypatch.setattr(
+            subject.config, "get_workflow_freesurfer_pref", lambda *a, **k: False
+        )
+
+        ret = subject.start_workflow(resume=False)
+
+        assert ret == SubjectRet.ExecWfStarted
+        assert not subject.workflow_dir_exists()
+        assert subject.freesurfer_dir_exists()
+        assert subject.started == [True]
+
+    def test_compatible_workflow_dir_still_asks_to_resume(self, subject):
+        os.makedirs(os.path.join(subject.workflow_dir(), "convert"))
+
+        assert subject.start_workflow() == SubjectRet.ExecWfResume
+        assert subject.started == []
+
+    @pytest.mark.skipif(
+        "fork" not in __import__("multiprocessing").get_all_start_methods(),
+        reason="needs the fork start method to share the temporary module",
+    )
+    def test_real_run_whose_interface_moved_is_not_resumed(
+        self, subject, monkeypatch, tmp_path
+    ):
+        """Same mechanism as a 0.2.x work dir: a real run through
+        WorkflowProcess and MonitoredMultiProcPlugin, then the interface module
+        disappears; resuming is refused before anything runs."""
+        from multiprocessing import Queue
+
+        from nipype import Node, Workflow
+        from nipype.interfaces.base import (
+            BaseInterface,
+            BaseInterfaceInputSpec,
+            TraitedSpec,
+            traits,
+        )
+
+        from swane.utils.mp_start_method import START_METHOD_ENV_VAR
+
+        monkeypatch.setenv(START_METHOD_ENV_VAR, "fork")
+        module_name = "swane_test_legacy_nodes.Touch"
+        monkeypatch.setitem(
+            sys.modules,
+            "swane_test_legacy_nodes",
+            types.ModuleType("swane_test_legacy_nodes"),
+        )
+        module = types.ModuleType(module_name)
+        monkeypatch.setitem(sys.modules, module_name, module)
+
+        class TouchInputSpec(BaseInterfaceInputSpec):
+            value = traits.Int(mandatory=True)
+
+        class TouchOutputSpec(TraitedSpec):
+            out = traits.Int()
+
+        class Touch(BaseInterface):
+            input_spec = TouchInputSpec
+            output_spec = TouchOutputSpec
+
+            def _run_interface(self, runtime):
+                return runtime
+
+            def _list_outputs(self):
+                return {"out": self.inputs.value + 1}
+
+        for cls in (TouchInputSpec, TouchOutputSpec, Touch):
+            cls.__module__ = module_name
+            cls.__qualname__ = cls.__name__
+            setattr(module, cls.__name__, cls)
+
+        workflow = Workflow(
+            name=os.path.basename(subject.workflow_dir()), base_dir=subject.folder
+        )
+        first = Node(Touch(value=1), name="convert")
+        second = Node(Touch(), name="next")
+        workflow.connect(first, "out", second, "value")
+        workflow.max_cpu = 1
+        workflow.max_gpu = 0
+        workflow.memory_gb = 1.0
+        workflow.config["execution"]["poll_sleep_duration"] = "0.1"
+        # Run with the real class, which the fixture fakes for start_workflow
+        import swane.workers.WorkflowProcess as workflow_process_module
+
+        fake = workflow_process_module.WorkflowProcess
+        monkeypatch.setattr(
+            workflow_process_module, "WorkflowProcess", RealWorkflowProcess
+        )
+        queue = Queue()
+        prev_cwd = os.getcwd()
+        try:
+            RealWorkflowProcess(subject.name, workflow, queue).workflow_run_worker()
+        finally:
+            os.chdir(prev_cwd)
+            queue.close()
+            queue.cancel_join_thread()
+        monkeypatch.setattr(workflow_process_module, "WorkflowProcess", fake)
+        assert os.path.exists(
+            os.path.join(subject.workflow_dir(), "next", "result_next.pklz")
+        )
+        assert subject.start_workflow() == SubjectRet.ExecWfResume
+
+        monkeypatch.delitem(sys.modules, module_name)
+
+        assert (
+            subject.start_workflow(resume=True) == SubjectRet.ExecWfResumeIncompatible
+        )
+        assert subject.started == []
 
 
 class TestSubjectWorkflowControl:

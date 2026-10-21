@@ -47,6 +47,7 @@ class SubjectRet(Enum):
     GenWfError = auto()
     GenWfCompleted = auto()
     ExecWfResume = auto()
+    ExecWfResumeIncompatible = auto()
     ExecWfResumeFreesurfer = auto()
     ExecWfStarted = auto()
     ExecWfStopped = auto()
@@ -822,6 +823,24 @@ class Subject:
         """
         return os.path.exists(self.workflow_dir())
 
+    def can_resume_workflow(self) -> bool:
+        """
+        Returns
+        -------
+        False if a previous workflow execution has results that this version
+        cannot load (e.g. written by an older SWANe whose interfaces have since
+        moved), True otherwise
+        """
+        from swane.nipype_pipeline.engine.cache_compatibility import (
+            find_unloadable_result,
+        )
+
+        unloadable = find_unloadable_result(self.workflow_dir())
+        if unloadable is not None:
+            print("Previous workflow execution cannot be resumed: " + unloadable)
+            return False
+        return True
+
     def delete_workflow_dir(self):
         """
         Delete any previous workflow execution
@@ -875,7 +894,8 @@ class Subject:
         Parameters
         ----------
         resume: bool, optional
-            If True resume previous run, if False delete them, if None and previous run is found, stops. Default is None
+            If True resume previous run, if False delete them, if None and previous run is found, stops. Default is None.
+            A previous run whose results this version cannot load is never resumed: unless resume is False, stops
         resume_freesurfer: bool, optional
             If True resume previous fs run , if False delete them, if None and previous fs run is found, stops. Default is None
         update_node_callback: callable, optional
@@ -891,6 +911,8 @@ class Subject:
             return SubjectRet.ExecWfStatusError
         # Checks for a previous workflow execution
         if self.workflow_dir_exists():
+            if resume is not False and not self.can_resume_workflow():
+                return SubjectRet.ExecWfResumeIncompatible
             if resume is None:
                 return SubjectRet.ExecWfResume
             elif not resume:
