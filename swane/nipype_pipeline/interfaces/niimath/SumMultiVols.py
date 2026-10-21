@@ -2,7 +2,7 @@
 
 from nipype.interfaces.fsl.utils import ImageMathsInputSpec
 from swane.nipype_pipeline.interfaces.niimath.maths import ImageMaths
-from nipype.interfaces.base import InputMultiPath, File
+from nipype.interfaces.base import InputMultiPath, File, isdefined
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.utils.ImageMathsInputSpec)  -*-
@@ -18,26 +18,31 @@ class SumMultiVols(ImageMaths):
     """
     Sum multiple volumes.
 
+    The first volume is the command's ``in_file`` and the others are added to
+    it. The default output name derives from the first volume.
+
     """
 
     input_spec = SumMultiVolsInputSpec
 
-    def _parse_inputs(self, skip=None):
+    def _command_inputs(self):
         """
-        Custom implementation of _parse_inputs func to manage summ.
+        The first volume as in_file and the op_string adding the others.
 
         """
 
-        first = True
+        if not self.inputs.vol_files:
+            return {}
+        first, *others = self.inputs.vol_files
+        return {
+            "in_file": first,
+            "op_string": "".join("-add " + vol + " " for vol in others),
+        }
 
-        for vol in self.inputs.vol_files:
-            if first:
-                self.inputs.op_string = ""
-                self.inputs.in_file = vol
-                first = False
-            else:
-                self.inputs.op_string += "-add " + vol + " "
-
-        parse = super(SumMultiVols, self)._parse_inputs(skip)
-
-        return parse
+    def _list_outputs(self):
+        # The default output name derives from in_file, which is set only while
+        # the command is built.
+        if isdefined(self.inputs.out_file) or not isdefined(self.inputs.vol_files):
+            return super()._list_outputs()
+        with self._inputs_set(in_file=self.inputs.vol_files[0]):
+            return super()._list_outputs()

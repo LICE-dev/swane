@@ -14,6 +14,8 @@ Only the maths interfaces actually used by SWANe's workflows are provided here,
 plus ``ImageMaths`` which the ``ThrROI`` and ``SumMultiVols`` interfaces extend.
 """
 
+from contextlib import contextmanager
+
 import niimath
 
 from swane.patches.windows_compat import shell_executable
@@ -44,10 +46,35 @@ NIIMATH_OUTPUT_TYPE = "NIFTI_GZ"
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.ImageMaths)  -*-
 class ImageMaths(_ImageMaths):
-    """``fslmaths`` generic maths, executed through the niimath binary."""
+    """``fslmaths`` generic maths, executed through the niimath binary.
+
+    Subclasses that compute part of their command (the ``op_string``, or an
+    ``in_file``) from other inputs return it from :meth:`_command_inputs`. The
+    values are set only while the command line is built and the inputs are
+    restored afterwards: they are not user inputs, and the outputs must not
+    depend on the command line having been built.
+    """
 
     _cmd = NIIMATH_CMD
     _output_type = NIIMATH_OUTPUT_TYPE
+
+    def _command_inputs(self) -> dict:
+        """Inputs computed from the other inputs, set while building the command."""
+        return {}
+
+    @contextmanager
+    def _inputs_set(self, **values):
+        """Set ``values`` on the inputs, restoring the previous ones on exit."""
+        previous = {name: getattr(self.inputs, name) for name in values}
+        self.inputs.trait_set(**values)
+        try:
+            yield
+        finally:
+            self.inputs.trait_set(**previous)
+
+    def _parse_inputs(self, skip=None):
+        with self._inputs_set(**self._command_inputs()):
+            return super()._parse_inputs(skip)
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.fsl.BinaryMaths)  -*-

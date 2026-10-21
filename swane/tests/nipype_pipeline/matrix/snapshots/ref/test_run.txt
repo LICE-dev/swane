@@ -45,7 +45,7 @@
     out_file = 'ref_uncorrected.nii.gz'
 - ref_robustfov [NiiMathRobustFov] cmd=niimath mem_gb=0.2 n_procs=1
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
-    out_roi = 'ref_robustfov.nii.gz'
+    out_file = 'ref_robustfov.nii.gz'
     output_type = 'NIFTI_GZ'
 # connections
 ref_bias_correction.out_file -> outputnode.reference
@@ -60,4 +60,4 @@ ref_reOrient.out_file -> ref_robustfov.in_file
 ref_reScale.out_file -> outputnode.uncorrected_reference
 ref_reScale.out_file -> ref_bias_correction.in_file
 ref_reScale.out_file -> ref_deskull_biased_antspynet.in_file
-ref_robustfov.out_roi -> ref_reScale.in_file
+ref_robustfov.out_file -> ref_reScale.in_file
