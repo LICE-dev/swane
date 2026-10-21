@@ -85,8 +85,8 @@ flair3d_flirt.out_matrix_file -> deskulled_flair3d_apply_xfm.in_matrix_file
 flair3d_flirt.out_matrix_file -> flair3d_apply_xfm.in_matrix_file
 flair3d_flirt.out_matrix_file -> outputnode.out_matrix_file
 flair3d_reorient.out_file -> flair3d_robustfov.in_file
-flair3d_robustfov.out_roi -> flair3d_apply_xfm.in_file
-flair3d_robustfov.out_roi -> flair3d_deskull_bet.in_file
+flair3d_robustfov.out_file -> flair3d_apply_xfm.in_file
+flair3d_robustfov.out_file -> flair3d_deskull_bet.in_file
 inputnode.output_name -> betted_name.basename
 inputnode.output_name -> unbetted_name.basename
 inputnode.reference -> deskulled_flair3d_apply_xfm.reference

@@ -9,7 +9,7 @@
 #   registration_engine = ANTS
 #   slice_timing = UP
 #
-# nodes=25 edges=36
+# nodes=24 edges=34
 
 - fmri_0_2_ref_antsreg [AntsRegistration] mem_gb=4 n_procs=0
     aff_metric = 'mattes'
@@ -41,9 +41,6 @@
     op_string = '-dilF'
     output_type = 'NIFTI_GZ'
     suffix = '_dil'
-- fmri_0_extract_ref [ExtractVolumes] mem_gb=0.2 n_procs=1
-    num_volumes = 1
-    start_volume = 0
 - fmri_0_getTR [GetNiftiTR] mem_gb=0.2 n_procs=1
     force_value = 2.0
 - fmri_0_highpass [ImageMaths] cmd=niimath mem_gb=0.2 n_procs=1
@@ -129,7 +126,6 @@ fmri_0_dilatemask.out_file -> fmri_0_maskfunc3.in_file2
 fmri_0_dilatemask.out_file -> fmri_0_smooth.mask_file
 fmri_0_getTR.TR -> fmri_0_merge_tr_meanfunc3.in1
 fmri_0_getTR.TR -> fmri_0_timing_correction.time_repetition
-fmri_0_img2float.out_file -> fmri_0_extract_ref.in_file
 fmri_0_img2float.out_file -> fmri_0_motion_correct.in_file
 fmri_0_intnorm.out_file -> fmri_0_highpass.in_file
 fmri_0_intnorm.out_file -> fmri_0_meanfunc3.in_file
@@ -148,7 +144,6 @@ fmri_0_medianval.('percentile_values', 'def get_first_percentile(percentile_valu
 fmri_0_merge_tr_meanfunc3.('out', "def highpass_op_string(merged, real_hpcutoff):\n    hp_sigma_vol = real_hpcutoff / (2 * merged[0])\n    return '-bptf %f -1 -add %s' % (hp_sigma_vol, merged[1])", (30,)) -> fmri_0_highpass.op_string
 fmri_0_motion_correct.out_file -> fmri_0_timing_correction.in_file
 fmri_0_nvols.nvols -> fmri_0_del_vols.nvols
-fmri_0_reorient.('out_file', 'def get_middle_volume(func):\n    from nibabel import load\n    funcfile = func\n    if isinstance(func, list):\n        funcfile = func[0]\n    _, _, _, timepoints = load(funcfile).shape\n    middle = int(timepoints / 2)\n    return middle', ()) -> fmri_0_extract_ref.start_volume
 fmri_0_reorient.out_file -> fmri_0_img2float.in_file
 fmri_0_smooth.out_file -> fmri_0_maskfunc3.in_file
 fmri_0_timing_correction.out_file -> fmri_0_maskfunc.in_file
