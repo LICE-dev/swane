@@ -1,6 +1,5 @@
 import slicer
 import sys
-import vtk
 import vtkITK
 import argparse
 import qt
@@ -30,37 +29,27 @@ def export_segment_as_nifti(segmentationNode, segmentId, referenceVolumeNode, ou
 # Headless morphological closing smoothing
 # ------------------------------------------------------------
 def smooth_segment_morphological_closing(
-    segmentationNode, segmentId, referenceVolumeNode, kernelSizeMm
+    segmentEditorWidget, segmentEditorNode, segmentId, kernelSizeMm
 ):
+    """Close one segment with the Segment Editor's Smoothing effect.
 
-    labelmapNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
+    The effect sizes the kernel per axis from the segment's real spacing, so
+    kernelSizeMm is in millimetres. It is fetched with effectByName and applied
+    without being activated: activating it (setActiveEffectByName) segfaults
+    when Slicer runs with --no-main-window. Overwriting other segments is
+    switched off for the call, so the closing only adds voxels to segmentId.
+    """
+    segmentEditorNode.SetSelectedSegmentID(segmentId)
+    overwriteMode = segmentEditorNode.GetOverwriteMode()
+    segmentEditorNode.SetOverwriteMode(slicer.vtkMRMLSegmentEditorNode.OverwriteNone)
 
-    slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
-        segmentationNode, [segmentId], labelmapNode, referenceVolumeNode
-    )
+    effect = segmentEditorWidget.effectByName("Smoothing")
+    effect.setParameter("SmoothingMethod", "MORPHOLOGICAL_CLOSING")
+    effect.setParameter("KernelSizeMm", str(kernelSizeMm))
+    effect.setParameter("ApplyToAllVisibleSegments", "0")
+    effect.self().onApply()
 
-    imageData = labelmapNode.GetImageData()
-    spacing = imageData.GetSpacing()
-
-    kernelSizeVoxel = [
-        int(round((kernelSizeMm / spacing[i] + 1) / 2) * 2 - 1) for i in range(3)
-    ]
-    kernelSizeVoxel = [k if k % 2 == 1 else k + 1 for k in kernelSizeVoxel]
-
-    closeFilter = vtk.vtkImageOpenClose3D()
-    closeFilter.SetInputData(imageData)
-    closeFilter.SetKernelSize(
-        kernelSizeVoxel[0], kernelSizeVoxel[1], kernelSizeVoxel[2]
-    )
-    closeFilter.SetOpenValue(0)
-    closeFilter.SetCloseValue(1)
-    closeFilter.Update()
-
-    slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(
-        labelmapNode, segmentationNode
-    )
-
-    slicer.mrmlScene.RemoveNode(labelmapNode)
+    segmentEditorNode.SetOverwriteMode(overwriteMode)
 
 
 def main(argv=None):
@@ -184,9 +173,9 @@ def main(argv=None):
     seg.GetSegment(boneSmoothID).DeepCopy(seg.GetSegment(boneRawID))
 
     smooth_segment_morphological_closing(
-        segmentationNode=segmentationNode,
+        segmentEditorWidget=segmentEditorWidget,
+        segmentEditorNode=segmentEditorNode,
         segmentId=boneSmoothID,
-        referenceVolumeNode=inputVolume,
         kernelSizeMm=smoothingKernelSize,
     )
 
