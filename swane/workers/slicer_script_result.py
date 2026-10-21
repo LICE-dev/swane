@@ -1479,7 +1479,7 @@ def main_export():
     load_freesurfer(results_folder, ref_node)
     dtiDir = os.path.join(results_folder, "dti")
     if os.path.isdir(dtiDir):
-        main_tract(dtiDir, results_folder)
+        main_tract(dtiDir, results_folder, dti_threshold=args.dti_threshold)
     load_seeg(results_folder)
     show_node(ref_node)
 
