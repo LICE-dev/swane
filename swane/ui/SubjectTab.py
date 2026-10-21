@@ -462,7 +462,13 @@ class SubjectTab(QTabWidget):
                 # We need to hide "old" progress to prevent a loading bar to appear during user choice
                 self.progress.deleteLater()
                 if ret == QMessageBox.StandardButton.Yes:
-                    self.dicom_import_to_folder(data_input, force_mod=True)
+                    # Retry with the already resolved series (no selection is
+                    # read again) and leave the state and progress dialog to
+                    # the nested call
+                    self.dicom_import_to_folder(
+                        data_input, force_mod=True, force_copy_list=origin
+                    )
+                    return
             self.set_error(data_input, "")
             self.progress.deleteLater()
             return
