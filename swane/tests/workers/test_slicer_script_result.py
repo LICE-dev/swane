@@ -385,3 +385,38 @@ class TestVtpBundleBranch:
         ] + expected
 
         assert normalise(log, dti=dti_dir, scene=scene_dir) == expected
+
+
+class TestMainExportDtiThreshold:
+    """``main_export`` must threshold the FSL tracts with the ``--dti_threshold``
+    that ``SlicerExportWorker`` fills from the ``tractography_threshold``
+    preference, not with ``main_tract``'s own default."""
+
+    def test_dti_threshold_argument_reaches_the_tract_threshold(
+        self, slicer_script, tmp_path, monkeypatch
+    ):
+        module, log = slicer_script
+        dti_dir = tmp_path / "dti"
+        dti_dir.mkdir()
+        (dti_dir / "r-cst_lh.nii.gz").write_bytes(b"")
+        (dti_dir / "r-cst_lh_waytotal").write_text("200000\n")
+        for loader in (
+            "load_fmri_task",
+            "load_fmri_resting_state",
+            "load_vein",
+            "load_freesurfer",
+            "load_seeg",
+        ):
+            monkeypatch.setattr(module, loader, lambda *a, **k: None)
+        monkeypatch.setattr(module, "load_anat", lambda *a, **k: CallSpy("ref", log))
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            sys, "argv", ["slicer_script_result.py", "--dti_threshold", "0.01"]
+        )
+
+        module.main_export()
+
+        # 200000 * 0.01 = 2000.0, not 200000 * 0.0035 = 700.0
+        assert (
+            f"{EDITOR}.activeEffect().setParameter('MinimumThreshold', 2000.0)" in log
+        )
