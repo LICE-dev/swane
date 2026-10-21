@@ -219,6 +219,25 @@ class TestDwiChainOrder:
         assert (fa_apply, "out_file", "FA") in _incoming(dipy_wf, outputnode)
 
 
+class TestBvecsFollowTheReorientation:
+    """ForceOrient permutes/flips the voxel axes, so the b-vectors it
+    re-expresses on the LAS grid -- not dcm2niix's -- feed the diffusion
+    stream."""
+
+    def test_reorient_reads_the_conversion_bvecs(self, dipy_wf):
+        conv = _node_by_name(dipy_wf, "dipy_conv")
+        reorient = _node_by_name(dipy_wf, "dipy_reOrient")
+        assert (conv, "bvecs", "in_bvec") in _incoming(dipy_wf, reorient)
+
+    @pytest.mark.parametrize("consumer", ["dipy_denoise", "dipy_motion"])
+    def test_consumers_read_the_reoriented_bvecs(self, dipy_wf, consumer):
+        conv = _node_by_name(dipy_wf, "dipy_conv")
+        reorient = _node_by_name(dipy_wf, "dipy_reOrient")
+        incoming = _incoming(dipy_wf, _node_by_name(dipy_wf, consumer))
+        assert (reorient, "out_bvec", "bvec") in incoming
+        assert (conv, "bvecs", "bvec") not in incoming
+
+
 class TestTissueBranchAndTracking:
     def test_pve_wm_resampled_ref_to_diff_and_reaches_tracking(self, dipy_wf):
         inputnode = _node_by_name(dipy_wf, "inputnode")

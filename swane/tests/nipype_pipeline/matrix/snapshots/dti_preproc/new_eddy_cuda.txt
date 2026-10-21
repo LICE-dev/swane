@@ -82,7 +82,7 @@ dif2ref_invwarp.out_file -> outputnode.ref2diff_mat
 dti_conv.bvals -> dti_dtifit.bvals
 dti_conv.bvals -> dti_eddy.in_bval
 dti_conv.bvals -> dti_eddy_files.bval
-dti_conv.bvecs -> dti_eddy.in_bvec
+dti_conv.bvecs -> dti_reOrient.in_bvec
 dti_conv.converted_files -> dti_reOrient.in_file
 dti_deskull_antspynet.mask_file -> dti_dtifit.mask
 dti_deskull_antspynet.mask_file -> dti_eddy.in_mask
@@ -94,6 +94,7 @@ dti_eddy.out_rotated_bvecs -> dti_dtifit.bvecs
 dti_eddy_files.acqp -> dti_eddy.in_acqp
 dti_eddy_files.index -> dti_eddy.in_index
 dti_nodif.out_file -> dti_deskull_antspynet.in_file
+dti_reOrient.out_bvec -> dti_eddy.in_bvec
 dti_reOrient.out_file -> dti_eddy.in_file
 dti_reOrient.out_file -> dti_nodif.in_file
 fa_2_ref_apply_xfm.out_file -> outputnode.FA

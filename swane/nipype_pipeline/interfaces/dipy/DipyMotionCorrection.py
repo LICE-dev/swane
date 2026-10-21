@@ -36,7 +36,6 @@ from os.path import abspath, basename
 
 import numpy as np
 import nibabel as nib
-from scipy.linalg import polar
 from threadpoolctl import threadpool_limits
 from nipype.interfaces.base import (
     traits,
@@ -51,6 +50,8 @@ from dipy.align import motion_correction, affine_registration, register_series
 from dipy.align._public import read_img_arr_or_path
 from dipy.core.gradients import gradient_table, reorient_bvecs
 from dipy.io.gradients import read_bvals_bvecs
+
+from swane.nipype_pipeline.interfaces.geometry.bvec_frame import fsl_bvec_frame
 
 # BLAS/OpenMP thread-count environment variables, pinned like the ITK variable
 # in AntsN4BiasFieldCorrection so numpy's OpenBLAS backend does not multithread
@@ -246,20 +247,6 @@ def _register_moving_volumes(
     return xformed, affines
 
 
-def _fsl_bvec_frame(image_affine):
-    """Orthonormal 3x3 taking an FSL-convention b-vector to world (RAS) space.
-
-    FSL b-vectors (as dcm2niix writes them) lie along the voxel axes, scaled to
-    mm, with x mirrored when the voxel-to-world determinant is positive. The
-    voxel axes are the orthonormal (polar) factor of the affine's 3x3, which
-    drops the zooms and keeps any obliquity.
-    """
-    frame, _ = polar(np.asarray(image_affine, dtype=float)[:3, :3])
-    if np.linalg.det(frame) > 0:
-        frame = frame @ np.diag([-1.0, 1.0, 1.0])
-    return frame
-
-
 def _rotations_to_bvec_frame(affines, image_affine):
     """Express world-space registration affines in the b-vector frame.
 
@@ -283,7 +270,7 @@ def _rotations_to_bvec_frame(affines, image_affine):
     ndarray of shape (3, 3, n)
         The affines' linear parts in the b-vector frame.
     """
-    frame = _fsl_bvec_frame(image_affine)
+    frame = fsl_bvec_frame(image_affine)
     return np.einsum("ji,jkn,kl->iln", frame, affines[:3, :3], frame)
 
 
