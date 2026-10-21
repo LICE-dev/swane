@@ -418,7 +418,7 @@ class ConfigManager(configparser.ConfigParser):
         Parameters
         ----------
         tool_id: str
-            Canonical tool id ("fsl", "freesurfer", "slicer", "dcm2niix").
+            Canonical tool id, one of LicenseReference.TOOL_IDS.
         """
         if not self.global_config:
             return ""
@@ -434,7 +434,7 @@ class ConfigManager(configparser.ConfigParser):
         Parameters
         ----------
         tool_id: str
-            Canonical tool id ("fsl", "freesurfer", "slicer", "dcm2niix").
+            Canonical tool id, one of LicenseReference.TOOL_IDS.
         tool_version: str
             The detected tool version accepted by the user.
         """

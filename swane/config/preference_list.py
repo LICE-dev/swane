@@ -5,6 +5,7 @@ from swane.utils.ResourceManager import ResourceManager
 
 from swane.resources import strings
 from swane.config.PreferenceEntry import PreferenceEntry
+from swane.utils.LicenseReference import TOOL_IDS as LICENSE_TOOL_IDS
 from swane.config.config_enums import *
 from swane.config.dependency_policy import FSL_MANDATORY, default_engines
 from swane.nipype_pipeline.workflows.workflow_constants import DIPY_TRACT_ATLAS
@@ -695,14 +696,8 @@ GLOBAL_PREFERENCES[category]["last_swane_version"] = PreferenceEntry(
     hidden=True,
     default=__version__,
 )
-for _license_tool in (
-    "fsl",
-    "freesurfer",
-    "slicer",
-    "dcm2niix",
-    "antspyx",
-    "antspynet",
-):
+# One acceptance per tool of the license consent gate (LicenseReference.TOOL_IDS)
+for _license_tool in LICENSE_TOOL_IDS:
     GLOBAL_PREFERENCES[category]["accepted_license_" + _license_tool] = PreferenceEntry(
         input_type=InputTypes.TEXT,
         label="Accepted license version for " + _license_tool,
