@@ -173,11 +173,40 @@ are refreshed from upstream before releases via `tools/refresh_bundled_licenses.
 ## dipy (tractography engine)
 
 SWANe's dipy-based tractography engine depends on the `dipy` pip package.
-SWANe does not modify or redistribute dipy's source; it is installed as a
-regular Python dependency (see `setup.py`).
+SWANe does not redistribute dipy; it is installed as a regular Python
+dependency (see `setup.py`). The only dipy source adapted in this repository is
+`_parallel_motion_correction` in
+`swane/nipype_pipeline/interfaces/dipy/DipyMotionCorrection.py`, adapted from
+`dipy.align._public.register_dwi_series` to dispatch the per-volume
+registrations across a process pool; the file carries a source disclaimer.
 
 **License**: BSD 3-Clause License.
 https://github.com/dipy/dipy/blob/master/LICENSE
+
+**Copyright**: (c) 2008-2026, dipy developers. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+- Neither the name of the dipy developers nor the names of any contributors
+  may be used to endorse or promote products derived from this software
+  without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Like the other detected third-party tools, SWANe shows dipy's license at first
 launch (and whenever its detected version changes) and requires explicit
@@ -222,28 +251,17 @@ https://github.com/maartenmennes/ICA-AROMA
 **Reference**: Pruim, R. H., et al. (2015). ICA-AROMA: A robust ICA-based strategy for removing motion artifacts from fMRI data. NeuroImage, 112, 267-277.
 **License**: Apache License, Version 2.0.
 
-**CSF mask**: the NILEARN resting-state engine builds its CSF nuisance ROI from
-the CSF mask bundled in the installed `ica_aroma_py` package
+**CSF mask**: the ICA-AROMA spatial feature extraction reads the CSF mask
+bundled in the installed `ica_aroma_py` package
 (`ica_aroma_py/resources/mask_csf.nii.gz`, read at run time, not shipped by
 SWANe). Pruim et al. (2015) describe this mask as "a CSF segmentation prior,
 supplied as part of FSL", thresholded "at 95% of the robust range".
 
 ---
-## MNI152NLin2009cAsym Probseg (TemplateFlow) and WM Prior Transform
+## MNI152NLin6Asym (TemplateFlow)
 
-SWANe fetches the MNI152NLin2009cAsym WM probseg from TemplateFlow and applies a shipped transformation to map it to the MNI152NLin6Asym grid. 
-
-**Copyright**: (C) 1993–2004 Louis Collins, McConnell Brain Imaging Centre, Montreal Neurological Institute, McGill University.
-
-**License**: Permission to use, copy, modify, and distribute this software and its documentation for any purpose and without fee is hereby granted, provided that the above copyright notice appear in all copies. The authors and McGill University make no representations about the suitability of this software for any purpose. It is provided “as is” without express or implied warranty. The authors are not responsible for any data loss, equipment damage, property loss, or injury to subjects or patients resulting from the use or misuse of this software package.
-
-**Note on MNI152NLin6Asym**: SWANe ships a transformation
-(`swane/resources/priors/tpl-MNI152NLin6Asym_from-MNI152NLin2009cAsym_desc-swaneSyN_warp.nii.gz`
-and `..._affine.mat`) defined on the MNI152NLin6Asym 2 mm grid. It is a
-displacement field computed by SWANe (antspyx SyN) from the TemplateFlow
-`tpl-MNI152NLin2009cAsym` and `tpl-MNI152NLin6Asym` 2 mm T1w images and brain
-masks (see `swane/resources/priors/provenance.json`). SWANe does not ship
-either template image; both are fetched from TemplateFlow at run time.
+SWANe fetches the MNI152NLin6Asym templates from TemplateFlow at run time and
+does not ship them.
 
 MNI152NLin6Asym is "FSL's MNI ICBM 152 non-linear 6th Generation Asymmetric
 Average Brain Stereotaxic Registration Model" (TemplateFlow

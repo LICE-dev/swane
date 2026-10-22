@@ -143,3 +143,39 @@ def test_venous_mr_matrix_test_run(
         config=config_echo,
         title="venous_mr / test_run",
     )
+
+
+def test_venous_mr_ants_applies_the_registration_with_its_invert_flags(
+    subject_config, global_config, make_input_dir
+):
+    """On the ANTs engine the venous phase is resampled through the wrapper
+    path: the forward ``which_to_invert`` flags of the anatomic-phase
+    registration reach the apply node, not a bare single-field Merge."""
+    section = subject_config[DataInputList.VENOUS_MR]
+    synth = global_config[GlobalPrefCategoryList.SYNTH]
+    synth["engine"] = "ANTS"
+
+    wf = venous_mr_workflow(
+        "venous_mr",
+        venous_mr_dir=make_input_dir("phase1"),
+        config=section,
+        synth_config=synth,
+        max_cpu=MAX_CPU,
+    )
+
+    edges = {
+        (src.name, dst.name, conn)
+        for src, dst, data in wf._graph.edges(data=True)
+        for conn in data["connect"]
+    }
+    assert (
+        "anat_2_ref_antsreg",
+        "veins_2_ref_ants_apply",
+        ("fwd_which_to_invert", "which_to_invert"),
+    ) in edges
+    assert (
+        "anat_2_ref_antsreg",
+        "veins_2_ref_ants_apply",
+        ("fwd_transforms", "transformlist"),
+    ) in edges
+    assert "veins_2_ref_transformlist" not in {n.name for n in wf._graph.nodes()}

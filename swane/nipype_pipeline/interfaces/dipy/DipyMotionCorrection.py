@@ -1,4 +1,5 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
+# -*- DISCLAIMER: _parallel_motion_correction is adapted from dipy.align._public.register_dwi_series (https://github.com/dipy/dipy/blob/master/LICENSE, BSD 3-Clause)  -*-
 """
 Between-volumes DWI motion correction with gradient reorientation.
 
@@ -12,8 +13,8 @@ Two interchangeable paths sit behind the same interface:
 
 * a **serial** path calling dipy's ``motion_correction`` directly, kept
   permanently reachable as reference and fallback (``parallel=False``);
-* a **parallel** path that reproduces ``dipy.align._public.register_dwi_series``
-  (dipy is BSD-3-licensed; see ``NOTICE.md``) but dispatches the independent
+* a **parallel** path adapted from ``dipy.align._public.register_dwi_series``
+  (dipy is BSD-3-licensed; attribution in ``NOTICE.md``) that dispatches the independent
   per-volume affine registrations across our own process pool, reassembling
   strictly by volume index.
 
@@ -307,9 +308,10 @@ def _serial_motion_correction(img, gtab, blas_threads=1):
 
 
 def _parallel_motion_correction(img, gtab, num_threads):
-    """Parallel path reproducing ``register_dwi_series`` over our own pool.
+    """Parallel path adapted from ``register_dwi_series``, over our own pool.
 
-    Mirrors dipy's ``dipy.align._public.register_dwi_series`` (BSD-3) so the b0
+    Adapted from dipy's ``dipy.align._public.register_dwi_series`` (BSD-3, see
+    ``NOTICE.md``; Copyright (c) 2008-2026, dipy developers) so the b0
     reference is built identically, then registers the diffusion-weighted
     volumes across a process pool. The returned ``(image, affine_array)`` is
     bit-for-bit equal to the serial path when BLAS threads match.
