@@ -313,7 +313,7 @@ class TestAntsRegistrationTestRun:
         return _run(node, monkeypatch, NONLINEAR_FILES)["kwargs"]
 
     def test_full_accuracy_by_default(self, workspace, make_nifti, monkeypatch):
-        """Without the knob, the node explicitly sets clinical standards,
+        """Without the knob, the node explicitly sets the full-accuracy schedules,
         because antspyx's own SyN defaults are inadequate (e.g. 0 iterations
         at native resolution)."""
         kwargs = self._kwargs(monkeypatch, make_nifti)
@@ -330,7 +330,7 @@ class TestAntsRegistrationTestRun:
         assert "aff_iterations" in kwargs
         assert len(kwargs["aff_iterations"]) == 4
         assert max(kwargs["aff_iterations"]) < 2100  # antspyx default coarsest
-        # The SyN deformable stage: fewer iterations than the clinical (100, 70, 50, 20).
+        # The SyN deformable stage: fewer iterations than the full-accuracy (100, 70, 50, 20).
         assert "reg_iterations" in kwargs
         assert max(kwargs["reg_iterations"]) < 100
 

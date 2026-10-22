@@ -80,8 +80,7 @@ def venous_mr_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
-    # Not yet ported to the ANTs transform-list format: keep this workflow on
-    # its prior backend (FSL/SynthMorph), so the ANTs default falls back to FSL.
+    # The workflow follows the configured registration engine (ANTs by default).
     engine = resolve_registration_engine(synth_config)
 
     # Input Node
@@ -214,6 +213,9 @@ def venous_mr_workflow(
         engine=engine,
         workflow=workflow,
         warp=[anat_2_ref.out_registered_node, anat_2_ref.warp],
+        # Mandatory on the ANTs engine: applies the transform list through its
+        # paired which_to_invert flags instead of the single-field boundary path
+        registration=anat_2_ref,
         moving=[veins_inskull_mask, "out_file"],
         reference=[inputnode, "reference"],
         non_linear=False,

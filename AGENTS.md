@@ -17,7 +17,7 @@ This file is versioned with the repository so every trusted clone uses the same 
 
 ## Licensing
 
-- SWANe orchestrates external neuroimaging tools (FSL, FreeSurfer, dcm2niix, 3D Slicer, etc.) as separate processes/dependencies. Never copy, adapt, or embed code derived from those tools into this repository — their licenses are distinct from SWANe's and must not be violated. Check `NOTICE.md` before touching anything that looks derived from Nipype or another project, and preserve existing source disclaimers.
+- SWANe orchestrates external neuroimaging tools (FSL, FreeSurfer, dcm2niix, 3D Slicer, etc.) as separate processes/dependencies. Never copy, adapt, or embed code derived from those tools into this repository — their licenses are distinct from SWANe's and must not be violated. The only exception is a small piece of code from a permissively licensed Python library (BSD, MIT or Apache-2.0) that SWANe already depends on, adapted only when no public API gives the required behavior: it needs the user's explicit approval for that specific piece, a file-level source disclaimer, and the upstream copyright notice and licence conditions in `NOTICE.md`. Code of FSL, FreeSurfer and any other non-permissively licensed tool is never covered by this exception. Check `NOTICE.md` before touching anything that looks derived from Nipype or another project, and preserve existing source disclaimers.
 
 ## Safety and evidence
 
@@ -31,7 +31,7 @@ This file is versioned with the repository so every trusted clone uses the same 
 ## Terminology
 
 - SWANe is a research tool, not a medical device: never describe or imply clinical/medical use in code, comments, docstrings, UI strings, documentation, or commit messages.
-- Never use "patient" (or its translations) anywhere in code or docs — always use "subject".
+- Never use "patient" (or its translations) anywhere in code or docs — always use "subject". Exceptions, kept as published: verbatim third-party licence text (`NOTICE.md`, `swane/licenses/`) and standard DICOM attribute keywords (e.g. `PatientID`).
 
 ## SWANe component map
 

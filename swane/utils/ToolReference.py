@@ -300,7 +300,7 @@ tool_reference_list = {
     ),
     "MathsCommand": ToolReference(
         command="niimath",
-        package=Package.OTHER,
+        package=Package.NIIMATH,
         url="https://github.com/rordenlab/niimath",
         references=[
             "Rorden C, Webster M, Drake C, et al. niimath and fslmaths: replication as a method to enhance popular neuroimaging tools. Aperture Neuro. 2024."
@@ -504,6 +504,7 @@ equivalent_command_list = {
     "FeatureFrequency": "AromaClassification",
     "FeatureSpatial": "AromaClassification",
     "SynthMorphApply": "SynthMorphReg",
+    "CustomEddy": "Eddy",
     "EddyCorrect": "Eddy",
     "AntsApplyTransforms": "AntsRegistration",
     "AntsComposeTransform": "AntsRegistration",
