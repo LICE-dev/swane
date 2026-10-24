@@ -3,6 +3,7 @@ import json
 import locale
 import logging
 import os
+import re
 import subprocess
 
 import psutil
@@ -182,7 +183,8 @@ if _swane_os.path.isdir(_swane_workers_dir):
 
         Slicer's Windows installer puts each version in its own folder, by
         default ``%LOCALAPPDATA%\\slicer.org\\Slicer <version>`` (per user) or
-        ``%ProgramFiles%\\Slicer <version>`` (all users). Newest version first.
+        ``%ProgramFiles%\\Slicer <version>`` (all users). Newest version first:
+        see :meth:`_windows_install_rank`.
         """
         if current_slicer_path:
             roots = [current_slicer_path]
@@ -200,8 +202,32 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 pattern = os.path.join(root, depth, "bin", "PythonSlicer.exe")
                 found.extend(glob.glob(pattern))
             if found:
-                return sorted(set(found), reverse=True)
+                return sorted(
+                    set(found),
+                    key=SlicerCheckWorker._windows_install_rank,
+                    reverse=True,
+                )
         return []
+
+    @staticmethod
+    def _windows_install_rank(python_slicer: str) -> tuple:
+        """Sort key of a found PythonSlicer, higher is newer.
+
+        The build revision in ``bin/SlicerLauncherSettings.ini`` decides, as the
+        install folder may have any name; installs without a readable revision
+        rank below, by folder name with its numbers compared as numbers
+        (``Slicer 5.10.0`` after ``Slicer 5.8.1``).
+        """
+        revision = SlicerCheckWorker.read_slicer_revision(python_slicer)
+        try:
+            revision = int(revision)
+        except (TypeError, ValueError):
+            revision = -1
+        name = tuple(
+            (1, int(part), "") if part.isdigit() else (0, 0, part)
+            for part in re.split(r"(\d+)", python_slicer)
+        )
+        return revision, name
 
     @staticmethod
     def parse_extension_report(output: str) -> dict:
