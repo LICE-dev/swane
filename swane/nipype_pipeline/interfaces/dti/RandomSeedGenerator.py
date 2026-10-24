@@ -8,6 +8,11 @@ from nipype.interfaces.base import (
     File,
 )
 
+# Seed bounds: the seeds become probtrackx2 --rseed values, read as a C int, so
+# they stay positive and within a signed 32-bit int.
+MIN_SEED = 1
+MAX_SEED = 2**31 - 1
+
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class RandomSeedGeneratorInputSpec(BaseInterfaceInputSpec):
@@ -23,7 +28,11 @@ class RandomSeedGeneratorOutputSpec(TraitedSpec):
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
 class RandomSeedGenerator(BaseInterface):
     """
-    Generates a list of random integers. Used to obtains a series of random seeds.
+    Generates a list of distinct random integers in ``[MIN_SEED, MAX_SEED)``,
+    one probtrackx2 seed per parallel run.
+
+    The seeds are drawn without replacement: two equal seeds would make two runs
+    identical, and SumMultiTracks would count that realisation twice.
 
     """
 
@@ -32,11 +41,9 @@ class RandomSeedGenerator(BaseInterface):
     seed_list: list
 
     def _run_interface(self, runtime):
-        from random import randrange
+        from random import sample
 
-        self.seed_list = []
-        for x in range(self.inputs.seeds_n):
-            self.seed_list.append(randrange(1000))
+        self.seed_list = sample(range(MIN_SEED, MAX_SEED), self.inputs.seeds_n)
 
         return runtime
 
