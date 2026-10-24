@@ -18,6 +18,7 @@ from nipype.interfaces.base import (
     File,
     isdefined,
 )
+from threadpoolctl import threadpool_limits
 
 OMP_THREADS_VAR = "OMP_NUM_THREADS"
 
@@ -66,11 +67,16 @@ class DipyTensorFit(BaseInterface):
         bvals, bvecs = read_bvals_bvecs(self.inputs.bval, self.inputs.bvec)
         gtab = gradient_table(bvals, bvecs=bvecs)
 
+        # The node reserves one CPU (n_procs=1). OpenBLAS sized its pool when
+        # numpy was imported, so exporting OMP_NUM_THREADS here cannot shrink
+        # it: threadpool_limits resizes the live pool. The variable stays for
+        # any process started from this one by spawn/forkserver.
         previous_omp = os.environ.get(OMP_THREADS_VAR)
         os.environ[OMP_THREADS_VAR] = "1"
         try:
-            tenfit = dti.TensorModel(gtab).fit(data, mask=mask_data)
-            fa = tenfit.fa
+            with threadpool_limits(limits=1):
+                tenfit = dti.TensorModel(gtab).fit(data, mask=mask_data)
+                fa = tenfit.fa
         finally:
             if previous_omp is None:
                 os.environ.pop(OMP_THREADS_VAR, None)
