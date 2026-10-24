@@ -187,8 +187,10 @@ def cmdline_quote(value: str) -> str:
 def shell_executable(path: str) -> str:
     """Return an absolute executable path ready to be a Nipype ``_cmd``.
 
-    On Windows the path is :func:`windows_quote`-d (it may contain spaces, e.g.
-    under the user profile). Elsewhere it is returned unchanged, as SWANe has
-    always used it.
+    Nipype finds the executable with ``shlex.split(cmd)[0]`` and runs ``cmd``
+    through a shell, so the path is quoted with :func:`cmdline_quote`: it may
+    contain spaces (the user profile on Windows, an environment installed under
+    a folder with a space elsewhere). ``shlex.quote`` leaves a path made only
+    of shell-safe characters unchanged.
     """
-    return windows_quote(path) if is_windows() else path
+    return cmdline_quote(path)

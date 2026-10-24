@@ -105,3 +105,13 @@ def test_render_cmd_keeps_posix_double_quotes_visible():
     repl = build_replacements(tmp_root=os.getcwd())
     assert _render_cmd('"/opt/env/dcm2niix/dcm2niix"', repl) == 'dcm2niix"'
     assert _render_cmd('"niimath"', repl) == '"niimath"'
+
+
+def test_render_cmd_posix_quoted_executable_matches_bare_path():
+    """Off Windows ``windows_compat.shell_executable`` ``shlex.quote``-s an
+    executable path holding a space; it must render like the bare path."""
+    repl = build_replacements(tmp_root=os.getcwd())
+    assert _render_cmd("'/opt/my env/site-packages/niimath/niimath'", repl) == (
+        "niimath"
+    )
+    assert _render_cmd("'niimath'", repl) == "'niimath'"
