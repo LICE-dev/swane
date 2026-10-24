@@ -308,6 +308,48 @@ def test_launch_target_runs_the_package_when_started_with_python_m(
     assert desktop_file.exists() and launcher_script.exists()
 
 
+@posix_host
+def test_launcher_self_heals_when_the_python_m_package_is_gone(monkeypatch, tmp_path):
+    """A "python -m swane" entry after `pip uninstall swane`: the interpreter
+    still exists, but the package does not, so the launcher must remove itself
+    and the .desktop entry instead of running a failing "python -m"."""
+    import sys
+
+    monkeypatch.setattr(mod, "is_linux", lambda: True)
+    monkeypatch.setattr(mod, "is_command_available", lambda cmd: False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setattr(
+        mod,
+        "_launch_target",
+        lambda: [sys.executable, "-m", "swane_synthetic_uninstalled_package"],
+    )
+
+    ensure_desktop_entry("/opt/swane/icon.png")
+    launcher_script = tmp_path / "data" / "swane" / "swane-launcher.sh"
+    desktop_file = tmp_path / "data" / "applications" / "swane.desktop"
+    assert desktop_file.exists() and launcher_script.exists()
+
+    subprocess.run(["sh", str(launcher_script)], check=True, timeout=60)
+
+    assert not desktop_file.exists()
+    assert not launcher_script.exists()
+
+
+@posix_host
+def test_launcher_keeps_the_entry_of_an_executable_target(monkeypatch, tmp_path):
+    """The package check applies to "python -m" entries only: an executable
+    target keeps the plain existence check."""
+    monkeypatch.setattr(mod, "is_linux", lambda: True)
+    monkeypatch.setattr(mod, "is_command_available", lambda cmd: False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    target = _write_script(tmp_path / "bin" / "swane", "exit 0\n")
+    monkeypatch.setattr(mod.sys, "argv", [str(target)])
+
+    ensure_desktop_entry("/opt/swane/icon.png")
+    launcher_script = tmp_path / "data" / "swane" / "swane-launcher.sh"
+    assert "find_spec" not in launcher_script.read_text()
+
+
 def test_main_handles_remove_desktop_entry_flag(monkeypatch):
     """The console script ("swane") calls main() directly: the flag must be
     handled there instead of starting the GUI."""
