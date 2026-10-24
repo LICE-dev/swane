@@ -22,11 +22,13 @@ from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
 from swane.nipype_pipeline.interfaces.ram_estimators import (
     RecoBundlesRamEstimator,
     DipyRecoBundlesChunkerRamEstimator,
+    DipyBundleRecoveryRamEstimator,
 )
 from swane.nipype_pipeline.interfaces.dipy.DipyTractogramChunker import (
     DipyTractogramChunker,
 )
 from swane.nipype_pipeline.interfaces.dipy.DipyRecoBundles import DipyRecoBundlesBuild
+from swane.nipype_pipeline.interfaces.dipy.DipyBundleRecovery import DipyBundleRecovery
 
 GB = 1024**3
 
@@ -244,3 +246,45 @@ class TestPluginIntegration:
             node.ram_estimator.estimate_gb(250 * 5)
         )
         assert "points=1250" in node.ram_estimator_str
+
+
+class TestRecoveryEstimator:
+    """The recovery node's retry re-recognises every chunk in turn, one chunk in
+    memory at a time: it reserves what a recognise node reserves for the largest
+    chunk."""
+
+    def _chunks(self, tmp_path):
+        return [
+            _phantom_trx(tmp_path / "chunk_0.trx", n_streamlines=200),
+            _phantom_trx(tmp_path / "chunk_1.trx", n_streamlines=300),
+            _phantom_trx(tmp_path / "chunk_2.trx", n_streamlines=100),
+        ]
+
+    def test_reserves_the_recognise_estimate_of_the_largest_chunk(self, tmp_path):
+        class _Inputs:
+            tractogram_chunks = self._chunks(tmp_path)
+
+        mem_gb, debug = DipyBundleRecoveryRamEstimator()(_Inputs())
+        assert mem_gb == pytest.approx(RecoBundlesRamEstimator().estimate_gb(300 * 4))
+        assert "largest chunk points=1200" in debug
+
+    @pytest.mark.parametrize("points", [0, 10_000_000, 150_000_000, 400_000_000])
+    def test_never_differs_from_the_recognise_estimate(self, points):
+        # so it fits ram_gb whenever the recognise nodes do (the chunker sizes
+        # the chunks for that).
+        assert DipyBundleRecoveryRamEstimator().estimate_gb(
+            points
+        ) == RecoBundlesRamEstimator().estimate_gb(points)
+
+    def test_recovery_node_reserves_from_its_largest_chunk(self, tmp_path):
+        node = Node(DipyBundleRecovery(), name="recovery")
+        node._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
+        node.inputs.tractogram_chunks = self._chunks(tmp_path)
+        node.ram_estimator = DipyBundleRecoveryRamEstimator()
+
+        _bare_plugin(32.0)._negotiate_ram(node)
+
+        assert node._ram_estimated is True
+        assert node.mem_gb_runtime == pytest.approx(
+            RecoBundlesRamEstimator().estimate_gb(300 * 4)
+        )
