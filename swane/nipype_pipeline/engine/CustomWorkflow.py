@@ -124,6 +124,11 @@ class CustomWorkflow(Workflow):
         data_sink.long_name = "%s: " + result_name
         data_sink.inputs.base_directory = save_path
         data_sink.inputs.container = sub_folder
+        # SWANe uses no iterables. With parameterization DataSink keeps every
+        # "_"-prefixed folder of the source path, including ancestors of the
+        # subject folder (e.g. /data/_mri/), so results would land in nested
+        # folders that the Slicer loaders never list.
+        data_sink.inputs.parameterization = False
 
         if regexp_substitutions is not None:
             data_sink.inputs.regexp_substitutions = regexp_substitutions
