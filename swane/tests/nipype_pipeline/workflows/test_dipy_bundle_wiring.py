@@ -99,6 +99,19 @@ class TestBilateral:
         for recog in _nodes_by_iface(af_wf, "DipyRecoBundlesRecognize"):
             assert isinstance(recog.ram_estimator, RecoBundlesRamEstimator)
 
+    def test_recovery_carries_its_ram_estimator(self, af_wf):
+        from swane.nipype_pipeline.interfaces.ram_estimators import (
+            DipyBundleRecoveryRamEstimator,
+            RecoBundlesRamEstimator,
+        )
+
+        recoveries = _nodes_by_iface(af_wf, "DipyBundleRecovery")
+        assert len(recoveries) == 2
+        for recovery in recoveries:
+            assert isinstance(recovery.ram_estimator, DipyBundleRecoveryRamEstimator)
+            # the static reservation stays the negotiation-failed fail-safe
+            assert recovery._mem_gb == RecoBundlesRamEstimator.STATIC_FALLBACK_GB
+
     def test_side_model_mapping(self, af_wf):
         names = {
             r.inputs.model_bundle_name
