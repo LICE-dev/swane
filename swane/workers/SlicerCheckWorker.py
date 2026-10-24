@@ -1,7 +1,11 @@
 import glob
 import json
+import locale
+import logging
 import os
 import subprocess
+
+import psutil
 from swane.utils.qt_compat import QRunnable, Signal, QObject
 from swane.resources import strings
 from swane.utils.DependencyManager import DependencyManager, DependenceStatus
@@ -31,6 +35,9 @@ class SlicerCheckWorker(QRunnable):
     LEGACY_MARKERS = [
         ("# === BEGIN HIDEZERO PATCH ===", "# === END HIDEZERO PATCH ==="),
     ]
+    # seconds before a Slicer subprocess is considered hung and killed
+    VERSION_TIMEOUT = 60
+    MODULE_INSTALL_TIMEOUT = 600
 
     @staticmethod
     def build_startup_patch() -> str:
@@ -111,9 +118,11 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 f'-wholename "{pattern}" -print -quit 2>/dev/null'
             )
             try:
-                output = subprocess.run(
-                    cmd, shell=True, stdout=subprocess.PIPE, timeout=timeout
-                ).stdout.decode("utf-8")
+                output = SlicerCheckWorker._decode(
+                    subprocess.run(
+                        cmd, shell=True, stdout=subprocess.PIPE, timeout=timeout
+                    ).stdout
+                )
             except subprocess.TimeoutExpired:
                 output = ""
             split = output.split("\n")
@@ -447,7 +456,78 @@ if _swane_os.path.isdir(_swane_workers_dir):
         if new_content != content:
             SlicerCheckWorker.write_slicerrc(slicerrc_path, new_content)
 
+    @staticmethod
+    def _decode(raw: bytes) -> str:
+        """Decode a subprocess output: UTF-8, else the locale encoding.
+
+        On Windows Slicer's Python writes piped output in the ANSI code page,
+        so a non-ASCII path (e.g. under the user profile) is not valid UTF-8.
+        """
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return raw.decode(locale.getpreferredencoding(False), errors="replace")
+
+    @staticmethod
+    def _communicate(cmd: list[str], timeout: float) -> bytes:
+        """Run ``cmd`` without a shell and return its stdout.
+
+        On a timeout the whole process tree is killed before
+        ``subprocess.TimeoutExpired`` is raised: the Slicer launcher starts the
+        real application as a child that inherits the stdout pipe, and reading
+        that pipe would otherwise wait for an EOF that never comes.
+        """
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        try:
+            return proc.communicate(timeout=timeout)[0]
+        except subprocess.TimeoutExpired:
+            SlicerCheckWorker._kill_tree(proc.pid)
+            try:
+                proc.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            raise
+
+    @staticmethod
+    def _kill_tree(pid: int):
+        """Kill a process and all its descendants."""
+        try:
+            parent = psutil.Process(pid)
+            procs = parent.children(recursive=True) + [parent]
+        except psutil.NoSuchProcess:
+            return
+        for proc in procs:
+            try:
+                proc.kill()
+            except psutil.NoSuchProcess:
+                pass
+        psutil.wait_procs(procs, timeout=10)
+
+    def _run_slicer(self, cmd: list[str], timeout: float) -> str | None:
+        """Slicer's decoded stdout, or None if it cannot run or hangs."""
+        try:
+            return SlicerCheckWorker._decode(
+                SlicerCheckWorker._communicate(cmd, timeout)
+            )
+        except subprocess.TimeoutExpired:
+            logging.getLogger(__name__).warning(
+                "3D Slicer did not answer within %s s: %s", timeout, cmd
+            )
+            return None
+        except OSError:
+            # stale path / not executable
+            return None
+
     def run(self):
+        result = ("", "", strings.check_dep_slicer_error1, DependenceStatus.MISSING)
+        try:
+            result = self._check()
+        except Exception:
+            # never leave the caller waiting for a result
+            logging.getLogger(__name__).exception("3D Slicer check failed")
+        self.signal.slicer.emit(*result)
+
+    def _check(self) -> tuple[str, str, str, DependenceStatus]:
         repeat = True
         cmd = ""
         state: DependenceStatus = DependenceStatus.MISSING
@@ -467,13 +547,11 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 break
             output2 = None
             if cmd != "" and os.path.exists(cmd):
-                try:
-                    output2 = subprocess.run(
-                        [cmd, "--version"], stdout=subprocess.PIPE
-                    ).stdout.decode("utf-8")
-                except OSError:
-                    # stale path / not executable: treat as not found
-                    output2 = None
+                output2 = self._run_slicer(
+                    [cmd, "--version"], SlicerCheckWorker.VERSION_TIMEOUT
+                )
+                if output2 is None:
+                    # stale path / not executable / hung: treat as not found
                     cmd = ""
             if output2 is None:
                 # if slicer executable is not found, search entire filesystem if we were searchng a specific folder
@@ -509,12 +587,10 @@ if _swane_os.path.isdir(_swane_workers_dir):
                         module_install_script,
                         ",".join(DependencyManager.SLICER_MODULES),
                     ]
-                    try:
-                        output3 = subprocess.run(
-                            cmd3, stdout=subprocess.PIPE
-                        ).stdout.decode("utf-8")
-                    except OSError:
-                        output3 = ""
+                    output3 = (
+                        self._run_slicer(cmd3, SlicerCheckWorker.MODULE_INSTALL_TIMEOUT)
+                        or ""
+                    )
                     if "MODULE FOUND" in output3:
                         self.signal.extensions.emit(
                             json.dumps(
@@ -537,7 +613,7 @@ if _swane_os.path.isdir(_swane_workers_dir):
                         state = DependenceStatus.WARNING
                         label = strings.check_dep_slicer_error2 % missing_modules
 
-        self.signal.slicer.emit(cmd, slicer_version, label, state)
+        return cmd, slicer_version, label, state
 
     def terminate(self):
         return
