@@ -37,6 +37,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.dipy import TrxWorkingDirMixin
+
 from swane.patches.dipy_patches import dipy_slr_num_threads
 
 # Layout of the fetched atlas, matching dipy's fetcher. The whole-brain
@@ -221,7 +223,7 @@ class DipyAtlasSLROutputSpec(TraitedSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyAtlasSLR(BaseInterface):
+class DipyAtlasSLR(TrxWorkingDirMixin, BaseInterface):
     """
     Aligns a subject whole-brain tractogram to the HCP842 atlas with a single
     streamline-based linear registration, publishing the aligned tractogram and

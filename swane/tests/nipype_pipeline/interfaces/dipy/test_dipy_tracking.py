@@ -811,6 +811,7 @@ class TestTunableRamTraits:
 
         def _capture_track(seed_positions, sc, affine, **kwargs):
             seen["seed_buffer_fraction"] = kwargs.get("seed_buffer_fraction")
+            seen["seeds"] = len(seed_positions)
             return [np.array([[1.0, 1.0, 1.0], [1.0, 1.0, 2.0]])]
 
         import dipy.tracking.tracker as tracker
@@ -823,6 +824,7 @@ class TestTunableRamTraits:
 
         def _capture_chunk(obj, reference, *args, **kwargs):
             seen["chunk_size"] = kwargs.get("chunk_size")
+            seen["extra_buffer"] = kwargs.get("extra_buffer")
             return real_from_lazy(obj, reference, *args, **kwargs)
 
         monkeypatch.setattr(
@@ -847,3 +849,47 @@ class TestTunableRamTraits:
 
         assert seen["seed_buffer_fraction"] == tuned_fraction
         assert seen["chunk_size"] == tuned_chunk
+        # The writer preallocates for every seed (an upper bound on the
+        # streamline count), so appending a chunk does not reallocate and copy
+        # everything written so far.
+        assert seen["seeds"] > 0
+        assert seen["extra_buffer"] == seen["seeds"]
+
+
+# --------------------------------------------------------------------------- #
+# trx's temporary memmaps stay in the node directory, never in the system tmp.
+# --------------------------------------------------------------------------- #
+def test_tracking_node_keeps_trx_temporaries_out_of_the_system_tmp(
+    tracking_inputs, tmp_path, monkeypatch
+):
+    import glob
+    import tempfile
+
+    from nipype import Node
+
+    system_tmp = tmp_path / "system_tmp"
+    system_tmp.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(system_tmp))
+    monkeypatch.delenv("TRX_TMPDIR", raising=False)
+
+    import trx.trx_file_memmap as trx_mod
+
+    created = []
+    real_tmp_dir = trx_mod.get_trx_tmp_dir
+
+    def _recording_tmp_dir():
+        handle = real_tmp_dir()
+        created.append(os.path.dirname(handle.name))
+        return handle
+
+    monkeypatch.setattr(trx_mod, "get_trx_tmp_dir", _recording_tmp_dir)
+
+    node = Node(DipyTracking(), name="tracking", base_dir=str(tmp_path / "wf"))
+    _configure(node.interface, tracking_inputs, seed_density=1)
+    node.run()
+
+    assert created  # the streamed write did use trx temporaries...
+    assert set(created) == {node.output_dir()}  # ...in the node directory
+    assert not list(system_tmp.iterdir())
+    assert glob.glob(os.path.join(node.output_dir(), "trx_*")) == []
+    assert "TRX_TMPDIR" not in os.environ

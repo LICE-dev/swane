@@ -1056,6 +1056,38 @@ class RecoBundlesRamEstimator(RamEstimator):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
+class DipyBundleRecoveryRamEstimator(RecoBundlesRamEstimator):
+    """
+    RAM estimator for :class:`DipyBundleRecovery`.
+
+    Model
+    -----
+    When its retry fires, the node re-recognises every chunk in turn with the
+    recognise nodes' own function, holding one chunk in memory at a time, so its
+    peak is a recognise node's peak on the largest chunk::
+
+        mem_gb = OVERHEAD_GB + BYTES_PER_POINT * max_chunk_points / 2**30
+
+    It reuses :class:`RecoBundlesRamEstimator`'s calibration unchanged; what else
+    stays resident (the default and model bundles, the retry partials, the
+    capped metric distance matrix) is tract-sized and folds into the overhead.
+    Whether the retry fires is only known at run time, so the reservation is
+    the retry's even for a bundle that needs none. The chunker sizes chunks for
+    the recognise estimate to fit ``ram_gb``, so this one fits it as well.
+    """
+
+    def __call__(self, inputs):
+        """One-way estimate from the largest ``tractogram_chunks`` point count."""
+        counts = [_trx_counts(chunk) for chunk in inputs.tractogram_chunks]
+        n_points, n_streamlines = max(counts)
+        mem_gb = self.estimate_gb(n_points)
+        return mem_gb, (
+            "chunks=%d, largest chunk points=%d, streamlines=%d, estimated RAM=%.2f GB"
+            % (len(counts), n_points, n_streamlines, mem_gb)
+        )
+
+
+# -*- DISCLAIMER: this class extends a Nipype class (nipype.utils.ram_estimator.RamEstimator)  -*-
 class DipyRecoBundlesChunkerRamEstimator(RamEstimator):
     """
     RAM estimator for :class:`DipyTractogramChunker` that also decides

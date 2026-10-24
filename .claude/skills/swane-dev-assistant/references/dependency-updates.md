@@ -5,6 +5,7 @@ Read this reference before bumping a pinned dependency in `setup.py` (e.g. `nipy
 ## Why this needs care beyond `pip install -U`
 
 - `swane/patches/` monkeypatches private/internal surface that is not public API and can change silently between releases: `nipype_patches.py` (`ResourceMonitor.__init__`, `multiproc.run_node`, the multiproc `process_initializer`, `EddyInputSpec.get_hashval`, `RamEstimator.negotiate`, plus the Windows command/memory/makedirs hooks), `dipy_patches.py` (SLR and RecoBundles thread counts) and `scipy_patches.py`. Read `apply_patches()` and each module for the current list.
+- `trx-python`: `TrxWorkingDirMixin` relies on `get_trx_tmp_dir` honouring `TRX_TMPDIR=use_working_dir` and on its `trx_` directory prefix; `DipyTracking` relies on `from_lazy_tractogram(extra_buffer=...)`. Re-run the dipy tests (`--run-heavy`) and the Windows light suite after a trx bump.
 - Several dependencies are pinned to an exact version specifically to work around a known bug (read the comment above each pin in `setup.py`, e.g. the `matplotlib` range). Bumping the pin without re-checking the reason can reintroduce the bug or leave a now-unnecessary pin in place — this happened with `filelock<3.19`, a Nipype 1.10.0 workaround that was dropped when Nipype was bumped to 1.12.0.
 - SWANe orchestrates a wide dependency graph (Nipype → networkx, traits, etc.; PySide6 → Qt; SimpleITK, nibabel, pydicom for image/DICOM I/O) where a transitive dependency can shift on its own and change behavior SWANe never pins directly.
 

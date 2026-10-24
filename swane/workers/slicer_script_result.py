@@ -18,6 +18,7 @@ Note:
 - External libraries: SimpleITK, subprocess, os, glob, argparse
 """
 
+import json
 import os
 import re
 import sys
@@ -1252,6 +1253,23 @@ def tract_model(
     slicer.mrmlScene.RemoveNode(tract_node)
 
 
+def _is_low_confidence(flag_file: str) -> bool:
+    """
+    Whether a dipy bundle's ``.conf.json`` sidecar flags it as low-confidence.
+
+    The recovery node always writes the sidecar, so its ``low_confidence``
+    field, not its existence, is the flag. No sidecar means nothing to flag; an
+    unreadable one is treated as flagged, to be safe.
+    """
+    if not os.path.exists(flag_file):
+        return False
+    try:
+        with open(flag_file) as file:
+            return bool(json.load(file)["low_confidence"])
+    except Exception:
+        return True
+
+
 def tract_bundle(dti_dir: str, tract: dict, side: str = None):
     """
     Load a single dipy fiber bundle as a 3D model.
@@ -1281,12 +1299,12 @@ def tract_bundle(dti_dir: str, tract: dict, side: str = None):
     """
     if side:
         bundle_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.vtp")
-        flag_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.lowconf.json")
+        flag_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.conf.json")
         name_suffix = f"_{side}"
         side_print = f" ({side.upper()})"
     else:
         bundle_file = os.path.join(dti_dir, f"r-{tract['name']}.vtp")
-        flag_file = os.path.join(dti_dir, f"r-{tract['name']}.lowconf.json")
+        flag_file = os.path.join(dti_dir, f"r-{tract['name']}.conf.json")
         name_suffix = ""
         side_print = " (BILATERAL)"
 
@@ -1294,7 +1312,7 @@ def tract_bundle(dti_dir: str, tract: dict, side: str = None):
         print(f"SLICERLOADER: Bundle file not found: {bundle_file}")
         return
 
-    low_conf = os.path.exists(flag_file)
+    low_conf = _is_low_confidence(flag_file)
     if low_conf:
         side_print += " [LOW CONFIDENCE]"
         name_suffix += " (LOW CONFIDENCE)"

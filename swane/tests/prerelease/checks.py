@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import glob
 import itertools
+import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -237,6 +238,17 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
     return checks
 
 
+def _is_low_confidence(conf_file):
+    """Whether a dipy ``.conf.json`` sidecar flags its bundle (unreadable: yes)."""
+    if not os.path.isfile(conf_file):
+        return False
+    try:
+        with open(conf_file) as f:
+            return bool(json.load(f)["low_confidence"])
+    except Exception:
+        return True
+
+
 def _check_no_mapnode_subfolder(subject_dir: str, files: list) -> CheckResult:
     """No result may sit in a ``_<name><n>`` MapNode subfolder.
 
@@ -269,13 +281,13 @@ def _check_dipy_bundle_recovery(result, files: list) -> list:
     reference-space bundles to ``<subject>/results/dti/r-<tract>_<side>.vtp``
     (see ``MainWorkflow.launch_dipy_dti_analysis`` -> ``dipy_bundle_workflow``,
     whose ``to_ref`` node writes ``out_name='r-<tract>_<side>'`` + ``.vtp``). A
-    low-confidence bundle additionally leaves a ``r-<tract>_<side>.lowconf.json``
-    sidecar (``DipyBundleRecovery._gen_flagname``); a confident bundle leaves
-    none. So recovery is "the ``.vtp`` exists" and confidence is "no
-    ``.lowconf.json`` sits beside it".
+    ``r-<tract>_<side>.conf.json`` sidecar always sits beside it
+    (``DipyBundleRecovery._gen_flagname``), its ``low_confidence`` field set for
+    a low-confidence bundle. So recovery is "the ``.vtp`` exists" and confidence
+    is "the sidecar is absent or readable with ``low_confidence`` false".
 
     Recovery (the ``.vtp`` existing) stays an error: a missing bundle means the
-    node chain broke. Confidence (no ``.lowconf.json``) is only a warning: this
+    node chain broke. Confidence (``low_confidence`` false) is only a warning: this
     pass pins ``registration_engine=FSL`` + ``deskull_engine=BET`` on purpose
     (to exercise that axis on the dipy engine too), and RecoBundles' recognition
     thresholds were calibrated against ANTS-quality registration only -- on this
@@ -298,7 +310,7 @@ def _check_dipy_bundle_recovery(result, files: list) -> list:
     for side in ["lh", "rh"]:
         name = "%s_%s" % (SWEEP_TRACT, side)
         vtp_file = os.path.join(tract_dir, "r-%s.vtp" % name)
-        lowconf_file = os.path.join(tract_dir, "r-%s.lowconf.json" % name)
+        conf_file = os.path.join(tract_dir, "r-%s.conf.json" % name)
         checks.append(
             CheckResult(
                 "dipy.recovery.%s" % name,
@@ -309,7 +321,7 @@ def _check_dipy_bundle_recovery(result, files: list) -> list:
         checks.append(
             CheckResult(
                 "dipy.confidence.%s" % name,
-                not os.path.isfile(lowconf_file),
+                not _is_low_confidence(conf_file),
                 "%s is not flagged as low confidence" % name,
                 severity=WARNING,
             )

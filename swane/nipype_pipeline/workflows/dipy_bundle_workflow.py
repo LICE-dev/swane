@@ -14,8 +14,8 @@ Per side (``lh``/``rh`` -> the atlas's ``_L``/``_R`` convention) the chain is:
 
 ``DipyRecoBundlesRecognize`` -> ``DipyBundleUnion`` -> ``DipyBundleRecovery`` ->
 ``DipyBundlesToRef`` -> ``outputnode.bundle_lh``/``bundle_rh`` (``.vtp``,
-reference space), with ``outputnode.flag_lh``/``flag_rh`` a sidecar written only
-for a low-confidence bundle.
+reference space), with ``outputnode.flag_lh``/``flag_rh`` its ``.conf.json``
+confidence sidecar (``low_confidence`` true/false, always written).
 
 The recognise node is always a :class:`nipype.MapNode` over the shared build
 pickles and their ``.trx`` chunks, iterated in lockstep with the same
@@ -46,10 +46,13 @@ from swane.nipype_pipeline.interfaces.dipy.DipyRecoBundles import (
 from swane.nipype_pipeline.interfaces.dipy.DipyBundleUnion import DipyBundleUnion
 from swane.nipype_pipeline.interfaces.dipy.DipyBundlesToRef import DipyBundlesToRef
 from swane.nipype_pipeline.interfaces.dipy.DipyBundleRecovery import DipyBundleRecovery
-from swane.nipype_pipeline.interfaces.ram_estimators import RecoBundlesRamEstimator
+from swane.nipype_pipeline.interfaces.ram_estimators import (
+    DipyBundleRecoveryRamEstimator,
+    RecoBundlesRamEstimator,
+)
 from swane.nipype_pipeline.workflows.workflow_constants import DIPY_TRACT_ATLAS
 
-# Fixed per-node memory reservations (GB), no estimator: all three nodes work
+# Fixed per-node memory reservations (GB), no estimator: both nodes work
 # on one recognised tract's streamlines (a small subset of the whole-brain
 # tractogram RecoBundles selects from), never the whole tractogram, so their
 # RAM does not scale with subject size the way the preproc nodes' does.
@@ -84,11 +87,13 @@ def _add_recovery(
     contaminated or scarce, retries recognition once from the same chunks/builds
     with an adjusted configuration (see :class:`DipyBundleRecovery`). Returns the
     node so the caller wires ``bundle`` to ``to_ref`` and ``confidence_flag`` to
-    the outputnode. It may re-run recognition, so it reserves the same static RAM
-    as the recognise node.
+    the outputnode. Its retry re-runs recognition chunk by chunk, so it reserves
+    what a recognise node reserves for the largest chunk (static fallback
+    included).
     """
     recovery = Node(DipyBundleRecovery(), name="recovery_%s" % suffix)
     recovery._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
+    recovery.ram_estimator = DipyBundleRecoveryRamEstimator()
     recovery.inputs.model_bundle_name = model_bundle_name
     recovery.inputs.num_threads = num_threads
     recovery.inputs.out_bundle = out_bundle_name + ".trx"
@@ -148,6 +153,9 @@ def dipy_bundle_workflow(
     bundle_bilateral : path
         The bilateral recognised bundle in reference space (``.vtp``), for tracts
         like the fornix that are not split by side.
+    flag_lh, flag_rh, flag_bilateral : path
+        The matching bundle's ``.conf.json`` confidence sidecar (see
+        :class:`DipyBundleRecovery`), always written.
     """
 
     atlas_base = DIPY_TRACT_ATLAS.get(name)

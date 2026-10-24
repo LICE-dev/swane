@@ -124,6 +124,28 @@ class TestAdjustedParams:
         assert base["r_pruning_thr"] == 6.0
         assert base["reduction_thr"] == 15.0
 
+    def test_tighten_never_loosens_an_already_tighter_pruning(self):
+        base = self._base()
+        base["r_pruning_thr"] = TIGHTEN_R_PRUNING_THR - 1.0
+        assert adjusted_params(base, "tighten") == base
+
+    def test_widen_never_narrows_an_already_wider_reduction(self):
+        base = self._base()
+        base["reduction_thr"] = WIDEN_REDUCTION_THR + 5.0
+        assert adjusted_params(base, "widen") == base
+
+    @pytest.mark.parametrize("bundle", ["AST_L", "AST_R", "CST_L", "CST_R"])
+    @pytest.mark.parametrize("arm", ["tighten", "widen"])
+    def test_overrides_already_at_the_retry_value_give_no_retry(self, bundle, arm):
+        # AST/CST baselines already use the retry thresholds: both arms are no-ops
+        # (the node then skips the retry, see TestRecoveryNode).
+        from swane.nipype_pipeline.interfaces.dipy.DipyRecoBundles import (
+            recognition_params,
+        )
+
+        params = recognition_params(bundle)
+        assert adjusted_params(params, arm) == params
+
 
 class TestLowConfidenceFlag:
     def test_too_few_streamlines_is_flagged(self):
@@ -222,8 +244,10 @@ def _build_chunk(streamlines, tmp_path, name):
     return chunk, node._list_outputs()["recobundles_pickle"]
 
 
-def _run_recovery(default_bundle, chunk, pkl, atlas_dir, tmp_path):
+def _run_recovery(default_bundle, chunk, pkl, atlas_dir, tmp_path, params=None):
     node = DipyBundleRecovery()
+    for trait, value in (params or {}).items():
+        setattr(node.inputs, trait, value)
     node.inputs.default_bundle = default_bundle
     node.inputs.recobundles_pickles = [pkl]
     node.inputs.tractogram_chunks = [chunk]
@@ -249,8 +273,15 @@ class TestRecoveryNode:
         outs = node._list_outputs()
         assert os.path.exists(outs["bundle"])
         assert _n(outs["bundle"]) == len(model_like)  # default kept as-is
-        assert not isdefined(outs["confidence_flag"])
-        assert not os.path.exists(node._gen_flagname())
+        # the sidecar is always written, so a re-run overwrites a stale flag
+        import json
+
+        assert outs["confidence_flag"] == node._gen_flagname()
+        assert outs["confidence_flag"].endswith("recovered.conf.json")
+        data = json.load(open(outs["confidence_flag"]))
+        assert data["low_confidence"] is False
+        assert data["model_bundle"] == "IFOF_R"
+        assert data["retry_arm"] is None
 
     def test_displaced_default_is_recovered_by_the_retry(self, atlas_dir, tmp_path):
         rng = np.random.default_rng(2)
@@ -267,7 +298,11 @@ class TestRecoveryNode:
         # the retry found the real bundle: far more streamlines than the default,
         # and good enough coverage that it is not flagged.
         assert _n(outs["bundle"]) > len(far)
-        assert not isdefined(outs["confidence_flag"])
+        import json
+
+        data = json.load(open(outs["confidence_flag"]))
+        assert data["low_confidence"] is False
+        assert data["retry_arm"] == "widen"
 
     def test_unrecoverable_default_is_flagged(self, atlas_dir, tmp_path):
         rng = np.random.default_rng(3)
@@ -288,3 +323,55 @@ class TestRecoveryNode:
         data = json.load(open(outs["confidence_flag"]))
         assert data["low_confidence"] is True
         assert data["model_bundle"] == "IFOF_R"
+
+    def _gated_default(self, tmp_path):
+        """A default far from the model (metric ~0 -> the widen arm) plus a chunk."""
+        rng = np.random.default_rng(4)
+        far = _make_streamlines(_bundle(rng, 20, *_FAR_SHAPE))
+        default = str(tmp_path / "default.trx")
+        _save(far, default)
+        chunk, pkl = _build_chunk(
+            _make_streamlines(_bundle(rng, 250, *_MODEL_SHAPE)), tmp_path, "subject"
+        )
+        return default, chunk, pkl
+
+    def _count_retries(self, monkeypatch):
+        import swane.nipype_pipeline.interfaces.dipy.DipyBundleRecovery as module
+
+        calls = []
+        real = module.recognize_chunk
+
+        def counting(*args, **kwargs):
+            calls.append(args)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(module, "recognize_chunk", counting)
+        return calls
+
+    def test_retry_that_changes_no_threshold_is_skipped(
+        self, atlas_dir, tmp_path, monkeypatch
+    ):
+        from swane.nipype_pipeline.interfaces.dipy.DipyRecoBundles import (
+            recognition_params,
+        )
+
+        default, chunk, pkl = self._gated_default(tmp_path)
+        calls = self._count_retries(monkeypatch)
+        node = _run_recovery(
+            default, chunk, pkl, atlas_dir, tmp_path, recognition_params("AST_L")
+        )
+        assert calls == []
+        # the default is shipped, flagged as before (the retry could not change it)
+        assert _n(node._list_outputs()["bundle"]) == 20
+        import json
+
+        data = json.load(open(node._list_outputs()["confidence_flag"]))
+        assert data["low_confidence"] is True
+
+    def test_retry_that_changes_a_threshold_runs_once_per_chunk(
+        self, atlas_dir, tmp_path, monkeypatch
+    ):
+        default, chunk, pkl = self._gated_default(tmp_path)
+        calls = self._count_retries(monkeypatch)
+        _run_recovery(default, chunk, pkl, atlas_dir, tmp_path)
+        assert len(calls) == 1
