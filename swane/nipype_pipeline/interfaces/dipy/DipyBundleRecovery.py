@@ -45,6 +45,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.dipy import TrxWorkingDirMixin
+
 from swane.nipype_pipeline.interfaces.dipy.DipyRecoBundles import (
     RECOGNITION_DEFAULTS,
     bundle_path,
@@ -243,7 +245,7 @@ class DipyBundleRecoveryOutputSpec(TraitedSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyBundleRecovery(BaseInterface):
+class DipyBundleRecovery(TrxWorkingDirMixin, BaseInterface):
     """Score a recognised bundle against the atlas model and, when it looks
     contaminated or scarce, retry recognition once with an adjusted configuration,
     keeping whichever result matches the model better; flag one that stays poor.

@@ -36,6 +36,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.dipy import TrxWorkingDirMixin
+
 VTP_EXTENSION = ".vtp"
 
 # RAS millimetre -> LPS millimetre: negate the first two (x, y) coordinates,
@@ -121,7 +123,7 @@ class DipyBundlesToRefOutputSpec(TraitedSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyBundlesToRef(BaseInterface):
+class DipyBundlesToRef(TrxWorkingDirMixin, BaseInterface):
     """
     Transforms a recognised atlas-space bundle into reference space with the
     Phase-1 ``atlas2native`` transform and writes it as a ``.vtp`` (VTK PolyData,

@@ -69,6 +69,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.dipy import TrxWorkingDirMixin
+
 # Reuse the atlas layout constants so the bundles path stays a single source of
 # truth with the whole-brain SLR node.
 from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import ATLAS_SUBDIR, ATLAS_NAME
@@ -459,7 +461,7 @@ class DipyRecoBundlesBuildOutputSpec(TraitedSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyRecoBundlesBuild(BaseInterface):
+class DipyRecoBundlesBuild(TrxWorkingDirMixin, BaseInterface):
     """
     Builds dipy's :class:`RecoBundles` on one atlas-space (sub-)tractogram --
     the expensive whole-tractogram QuickBundlesX clustering -- and saves it as a
@@ -589,7 +591,7 @@ class DipyRecoBundlesRecognizeOutputSpec(TraitedSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyRecoBundlesRecognize(BaseInterface):
+class DipyRecoBundlesRecognize(TrxWorkingDirMixin, BaseInterface):
     """
     Recognises one named HCP842 atlas bundle inside an atlas-space
     (sub-)tractogram by reloading a :class:`DipyRecoBundlesBuild` pickle (plus
