@@ -58,7 +58,8 @@ When adding an analysis, trace this complete chain:
 - Pass the relevant global or subject configuration section into workflow factories instead of re-reading configuration inside nodes.
 - Keep cross-workflow connections explicit. Verify source/destination direction, especially for reference/moving images and transforms.
 - Propagate resource choices from `MainWorkflow` rather than querying host capacity independently inside each workflow.
-- Use `CustomWorkflow.sink_result` for persisted outputs and preserve its result names, subfolders, and regular-expression substitutions.
+- Use `CustomWorkflow.sink_result` for persisted outputs and preserve its result names, subfolders, and regular-expression substitutions. Its `DataSink` runs with `parameterization=False`, so every file lands directly in `<save_path>/<sub_folder>/` whatever the subject folder's ancestors are called: outputs of different MapNode iterations sunk to the same folder need distinct filenames, or they overwrite each other.
+- `DataSink` applies `regexp_substitutions` to a destination joined with `os.sep`: build any pattern that matches separators from `os.sep` (as `mapnode_subdir_substitution()` does), never with a hard-coded `/`, or it silently makes no substitution on Windows.
 - Treat result filenames as downstream contracts. Search `Subject`, result-tree code, Slicer scripts, tests, and documentation before changing them.
 - Ensure new outputs appear in the UI/export path only when the file contract actually exists.
 
