@@ -295,11 +295,83 @@ class TestRemoveMapnodeSubdir:
         )
         wf.run()
 
-        # DataSink also keeps every "_"-prefixed folder of the source path
-        # (e.g. a CI runner's "_temp"); only the MapNode folder must be gone.
+        # The MapNode folder must be gone (TestSinkResultLayoutUnderUnderscoreAncestor
+        # covers "_"-prefixed ancestors of the work directory).
         saved = sorted(out.rglob("*.nii.gz"))
         assert [p.name for p in saved] == ["r-0.nii.gz", "r-1.nii.gz"]
         assert saved[0].parent == saved[1].parent
         parts = saved[0].relative_to(out).parts
         assert parts[0] == "fMRI"
         assert not any(re.fullmatch(r"_gen\d+", part) for part in parts)
+
+
+class TestSinkResultLayoutUnderUnderscoreAncestor:
+    """The results layout does not depend on the subject folder's ancestors.
+
+    ``DataSink`` with ``parameterization`` keeps every ``_``-prefixed folder
+    of the source path, so an ancestor such as ``/data/_mri/`` or a CI
+    runner's ``_temp`` would reach the destination. ``sink_result`` turns
+    parameterization off: every file lands directly in the container folder.
+    """
+
+    @staticmethod
+    def _run(subject_dir, remove_mapnode_subdir):
+        """Run a SWANe-shaped graph (a sub workflow sinking into the main
+        workflow's ``base_dir``) and return the saved files, relative to it."""
+        from nipype import MapNode
+
+        save_path = str(subject_dir)
+        main = CustomWorkflow(name="main", base_dir=save_path)
+        sub = CustomWorkflow(name="sub")
+        single = Node(
+            Function(
+                input_names=["index"],
+                output_names=["out_file"],
+                function=_write_named_file,
+            ),
+            name="single",
+        )
+        single.inputs.index = 9
+        mapped = MapNode(
+            Function(
+                input_names=["index"],
+                output_names=["out_file"],
+                function=_write_named_file,
+            ),
+            iterfield=["index"],
+            name="mapped",
+        )
+        mapped.inputs.index = [0, 1]
+        sub.add_nodes([single, mapped])
+        sub.sink_result(save_path, "single", "out_file", "results")
+        sub.sink_result(
+            save_path,
+            "mapped",
+            "out_file",
+            "results",
+            remove_mapnode_subdir=remove_mapnode_subdir,
+        )
+        main.add_nodes([sub])
+        main.run()
+
+        results = subject_dir / "results"
+        return sorted(p.relative_to(results).as_posix() for p in results.rglob("*.gz"))
+
+    def test_mapnode_subdir_removed(self, tmp_path):
+        """Plain Node and flattened MapNode outputs land directly in the
+        container folder."""
+        saved = self._run(tmp_path / "_parent" / "subj", remove_mapnode_subdir=True)
+        assert saved == ["r-0.nii.gz", "r-1.nii.gz", "r-9.nii.gz"]
+
+    def test_mapnode_without_remove_subdir_is_flat(self, tmp_path):
+        """Without parameterization no ``_<name><n>`` MapNode folder is kept,
+        even when ``remove_mapnode_subdir`` is not requested."""
+        saved = self._run(tmp_path / "_parent" / "subj", remove_mapnode_subdir=False)
+        assert saved == ["r-0.nii.gz", "r-1.nii.gz", "r-9.nii.gz"]
+
+    def test_layout_matches_plain_ancestors(self, tmp_path):
+        """A ``_``-prefixed ancestor yields the same layout as a plain one."""
+        for remove in (True, False):
+            plain = self._run(tmp_path / "parent" / str(remove), remove)
+            underscored = self._run(tmp_path / "_parent" / str(remove), remove)
+            assert underscored == plain
