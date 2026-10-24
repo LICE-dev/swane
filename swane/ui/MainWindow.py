@@ -217,9 +217,12 @@ class MainWindow(QMainWindow):
             self.global_config, dependency_manager=self.dependency_manager
         )
 
-        # Guard to avoid an already loaded subject directory
+        # Guard to avoid an already loaded subject directory, however its path
+        # is spelled (QFileDialog returns "/" separators even on Windows)
         for tab in self.subject_tab_array:
-            if tab.subject.folder == folder_path:
+            if folder_path and os.path.normcase(
+                os.path.realpath(tab.subject.folder)
+            ) == os.path.normcase(os.path.realpath(folder_path)):
                 msg_box = QMessageBox()
                 msg_box.setIcon(QMessageBox.Icon.Warning)
                 msg_box.setText(strings.mainwindow_subj_already_loaded_error)

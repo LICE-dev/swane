@@ -225,6 +225,7 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
         return checks
 
     checks.extend(_check_expected_outputs(result, files))
+    checks.append(_check_no_mapnode_subfolder(result.subject_dir, files))
     checks.extend(_check_integrity(files))
     checks.extend(_check_fmri_activation(result, files))
     checks.extend(_check_reference(result, files))
@@ -234,6 +235,30 @@ def check_pass(result, ground_truth: GroundTruth = None) -> list:
     if ground_truth is not None:
         checks.extend(_check_plausibility(result, files, ground_truth))
     return checks
+
+
+def _check_no_mapnode_subfolder(subject_dir: str, files: list) -> CheckResult:
+    """No result may sit in a ``_<name><n>`` MapNode subfolder.
+
+    ``sink_result(remove_mapnode_subdir=True)`` strips that folder; where it
+    does not (a host-separator mismatch), the files still exist and every
+    recursive check finds them, but the Slicer scene loader lists only the
+    results folder itself and misses them.
+    """
+    root = _results_root(subject_dir)
+    nested = [
+        os.path.relpath(f, root)
+        for f in files
+        if any(
+            part.startswith("_")
+            for part in os.path.relpath(os.path.dirname(f), root).split(os.sep)
+        )
+    ]
+    return CheckResult(
+        "results.no_mapnode_subfolder",
+        not nested,
+        "in a MapNode subfolder: %s" % ", ".join(nested[:5]) if nested else "",
+    )
 
 
 def _check_dipy_bundle_recovery(result, files: list) -> list:
