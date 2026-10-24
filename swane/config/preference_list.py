@@ -972,8 +972,9 @@ GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
 GLOBAL_PREFERENCES[category]["limit_cores"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Limit Synth tools to %d CPU cores" % ResourceManager.SYNTH_CORE_LIMIT,
-    tooltip="Caps Synth tools CPU usage instead of "
-    "following the general multi-core policy",
+    tooltip="Caps FreeSurfer Synth tools (SynthStrip, SynthMorph, SynthSeg) at "
+    "%d CPU cores instead of the per-subject CPU budget. ANTs, antspynet and "
+    "Atropos always use the per-subject budget" % ResourceManager.SYNTH_CORE_LIMIT,
     default=False,
     pref_requirement={
         GlobalPrefCategoryList.PERFORMANCE: [
