@@ -811,6 +811,7 @@ class TestTunableRamTraits:
 
         def _capture_track(seed_positions, sc, affine, **kwargs):
             seen["seed_buffer_fraction"] = kwargs.get("seed_buffer_fraction")
+            seen["seeds"] = len(seed_positions)
             return [np.array([[1.0, 1.0, 1.0], [1.0, 1.0, 2.0]])]
 
         import dipy.tracking.tracker as tracker
@@ -823,6 +824,7 @@ class TestTunableRamTraits:
 
         def _capture_chunk(obj, reference, *args, **kwargs):
             seen["chunk_size"] = kwargs.get("chunk_size")
+            seen["extra_buffer"] = kwargs.get("extra_buffer")
             return real_from_lazy(obj, reference, *args, **kwargs)
 
         monkeypatch.setattr(
@@ -847,3 +849,8 @@ class TestTunableRamTraits:
 
         assert seen["seed_buffer_fraction"] == tuned_fraction
         assert seen["chunk_size"] == tuned_chunk
+        # The writer preallocates for every seed (an upper bound on the
+        # streamline count), so appending a chunk does not reallocate and copy
+        # everything written so far.
+        assert seen["seeds"] > 0
+        assert seen["extra_buffer"] == seen["seeds"]

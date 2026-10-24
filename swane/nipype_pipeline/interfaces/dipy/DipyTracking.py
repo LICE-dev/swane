@@ -455,8 +455,17 @@ class DipyTracking(BaseInterface):
             lazy = LazyTractogram(
                 streamlines=streamlines_ref, affine_to_rasmm=np.eye(4)
             )
+            # trx preallocates extra_buffer streamlines (and 100 points each)
+            # whenever a chunk does not fit; the default 0 reallocates and copies
+            # everything written so far on every chunk (quadratic in the
+            # tractogram size). The seed count bounds the streamline count, so
+            # only a few reallocations remain; the final resize trims the
+            # (sparse) unused tail and the output is bit-for-bit identical.
             trx = TrxFile.from_lazy_tractogram(
-                lazy, reference_img, chunk_size=trx_chunk_size
+                lazy,
+                reference_img,
+                extra_buffer=len(seeds),
+                chunk_size=trx_chunk_size,
             )
         finally:
             for var, value in previous.items():
