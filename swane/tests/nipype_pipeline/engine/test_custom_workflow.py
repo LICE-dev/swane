@@ -8,6 +8,8 @@ in-memory workflows out of ``IdentityInterface``/``Function`` nodes, so they
 need nipype but no FSL/FreeSurfer/Slicer installation.
 """
 
+import re
+
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import DataSink
@@ -216,11 +218,12 @@ class TestSinkResult:
         assert wf.get_node("SaveResults_gen_nested") is not None
 
 
-def _write_named_file(tmp_dir, index):
-    """Write ``r-<index>.nii.gz`` in ``tmp_dir`` and return its path."""
+def _write_named_file(index):
+    """Write ``r-<index>.nii.gz`` in the node's working folder, as a real
+    interface does, and return its path."""
     import os
 
-    path = os.path.join(tmp_dir, "r-%d.nii.gz" % index)
+    path = os.path.abspath("r-%d.nii.gz" % index)
     with open(path, "w") as handle:
         handle.write("x")
     return path
@@ -273,14 +276,13 @@ class TestRemoveMapnodeSubdir:
         wf = CustomWorkflow(name="wf", base_dir=str(tmp_path / "work"))
         gen = MapNode(
             Function(
-                input_names=["tmp_dir", "index"],
+                input_names=["index"],
                 output_names=["out_file"],
                 function=_write_named_file,
             ),
             iterfield=["index"],
             name="gen",
         )
-        gen.inputs.tmp_dir = str(tmp_path)
         gen.inputs.index = [0, 1]
         wf.add_nodes([gen])
         out = tmp_path / "out"
@@ -293,5 +295,11 @@ class TestRemoveMapnodeSubdir:
         )
         wf.run()
 
-        saved = sorted(p.relative_to(out).as_posix() for p in out.rglob("*.nii.gz"))
-        assert saved == ["fMRI/r-0.nii.gz", "fMRI/r-1.nii.gz"]
+        # DataSink also keeps every "_"-prefixed folder of the source path
+        # (e.g. a CI runner's "_temp"); only the MapNode folder must be gone.
+        saved = sorted(out.rglob("*.nii.gz"))
+        assert [p.name for p in saved] == ["r-0.nii.gz", "r-1.nii.gz"]
+        assert saved[0].parent == saved[1].parent
+        parts = saved[0].relative_to(out).parts
+        assert parts[0] == "fMRI"
+        assert not any(re.fullmatch(r"_gen\d+", part) for part in parts)
