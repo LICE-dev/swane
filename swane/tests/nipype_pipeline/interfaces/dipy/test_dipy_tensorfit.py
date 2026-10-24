@@ -11,6 +11,7 @@ import os
 
 import numpy as np
 import nibabel as nib
+import pytest
 
 from swane.nipype_pipeline.interfaces.dipy.DipyTensorFit import (
     DipyTensorFit,
@@ -132,6 +133,42 @@ class TestDipyTensorFitThreadPinning:
 
         assert seen["omp"] == "1"
         assert OMP_THREADS_VAR not in os.environ
+
+    def test_live_blas_pool_is_one_thread_during_fit(
+        self, workspace, make_nifti, monkeypatch
+    ):
+        """OpenBLAS sizes its pool when numpy is imported, so exporting
+        OMP_NUM_THREADS at run time changes nothing: the live pool, as
+        threadpoolctl reports it, must be one thread while the fit runs."""
+        import dipy.reconst.dti as dti_module
+        from threadpoolctl import threadpool_info
+
+        if not any(info["num_threads"] > 1 for info in threadpool_info()):
+            pytest.skip("the default thread pools are already single-threaded")
+
+        shape = (4, 4, 4)
+        bval, bvec, bvals, bvecs = _single_shell_gtab_files(workspace)
+        data = np.ones(shape + (len(bvals),), dtype=np.float32) * 100
+        in_file = make_nifti("dwi.nii.gz", data=data)
+        mask_file = make_nifti("mask.nii.gz", data=np.ones(shape, dtype=np.float32))
+
+        seen = {}
+        real_fit = dti_module.TensorModel.fit
+
+        def _spy_fit(self, *args, **kwargs):
+            seen["pools"] = [info["num_threads"] for info in threadpool_info()]
+            return real_fit(self, *args, **kwargs)
+
+        monkeypatch.setattr(dti_module.TensorModel, "fit", _spy_fit)
+
+        node = DipyTensorFit()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.mask = mask_file
+        node.run()
+
+        assert seen["pools"] and set(seen["pools"]) == {1}
 
 
 class TestDipyTensorFitOutputDtype:

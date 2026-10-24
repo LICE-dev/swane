@@ -24,6 +24,7 @@ from __future__ import annotations
 import ast
 import os
 import re
+import shlex
 import site
 import sysconfig
 import tempfile
@@ -221,6 +222,19 @@ def _is_quoted_windows_executable(cmd: Any) -> bool:
     )
 
 
+def _is_quoted_posix_executable(cmd: Any) -> bool:
+    """True for a ``shlex.quote``-d absolute POSIX path (one single-quoted
+    token), as ``windows_compat.shell_executable`` builds when the path holds a
+    character that is not shell-safe."""
+    if not isinstance(cmd, str) or len(cmd) < 3 or not cmd[0] == cmd[-1] == "'":
+        return False
+    try:
+        tokens = shlex.split(cmd)
+    except ValueError:
+        return False
+    return len(tokens) == 1 and tokens[0].startswith("/")
+
+
 def _render_cmd(cmd: str, repl: list[tuple[str, str]]) -> str:
     """Render an interface command stably across machines and OSes.
 
@@ -251,6 +265,10 @@ def _render_cmd(cmd: str, repl: list[tuple[str, str]]) -> str:
     # unquoted, so a quoting regression on POSIX stays visible in the goldens.
     if _is_quoted_windows_executable(cmd):
         text = text[1:-1]
+    elif _is_quoted_posix_executable(cmd):
+        # ``shlex.quote`` of an executable path with a space (an environment
+        # installed under such a folder): render it like the bare path.
+        text = shlex.split(text)[0]
     if text == "eddy_cuda":
         return "eddy"
     if text == "cluster":

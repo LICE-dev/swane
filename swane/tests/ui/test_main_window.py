@@ -4,6 +4,8 @@ The real application spins up an update-check thread (network) on start; the
 ``offline_update`` / ``main_window`` fixtures (ui/conftest.py) keep it offline.
 """
 
+import os
+
 import pytest
 
 from swane.utils.qt_compat import QT_AVAILABLE
@@ -237,3 +239,77 @@ class TestPreferenceWizardFromMainWindow:
             subject_config.getenum_safe(DataInputList.T13D, "freesurfer_step")
             is not FreesurferStep.SYNTHSEG
         )
+
+
+class TestAlreadyLoadedSubjectGuard:
+    """``search_subject_dir`` refuses a subject folder already open in a tab,
+    however the path is spelled (``Subject.folder`` is normalised, the
+    QFileDialog path uses ``/`` even on Windows)."""
+
+    @pytest.fixture
+    def guard(self, monkeypatch, main_window, tmp_path):
+        import types
+
+        from swane.ui import MainWindow as main_window_module
+        from swane.utils.Subject import Subject, SubjectRet
+
+        folder = tmp_path / "subj_1"
+        folder.mkdir()
+        open_tab = types.SimpleNamespace(
+            subject=types.SimpleNamespace(
+                folder=os.path.abspath(str(folder)),
+                is_workflow_process_alive=lambda: False,
+            )
+        )
+        main_window.subject_tab_array.append(open_tab)
+        monkeypatch.setattr(main_window, "check_subject_limit", lambda: True)
+        calls = {"warnings": 0, "loads": []}
+
+        def fake_exec(box):
+            calls["warnings"] += 1
+
+        def fake_load(subject, path):
+            calls["loads"].append(path)
+            return SubjectRet.FolderNotFound
+
+        monkeypatch.setattr(main_window_module.QMessageBox, "exec", fake_exec)
+        monkeypatch.setattr(Subject, "load", fake_load)
+        yield main_window, folder, calls
+        main_window.subject_tab_array.remove(open_tab)
+
+    def _assert_refused(self, calls):
+        assert calls == {"warnings": 1, "loads": []}
+
+    def test_forward_slash_path(self, guard):
+        window, folder, calls = guard
+        window.search_subject_dir(folder_path=str(folder).replace(os.sep, "/"))
+        self._assert_refused(calls)
+
+    def test_trailing_separator(self, guard):
+        window, folder, calls = guard
+        window.search_subject_dir(folder_path=str(folder) + os.sep)
+        self._assert_refused(calls)
+
+    def test_symlinked_folder(self, guard, tmp_path):
+        window, folder, calls = guard
+        link = tmp_path / "link"
+        try:
+            link.symlink_to(folder, target_is_directory=True)
+        except OSError:
+            pytest.skip("symlinks not available")
+        window.search_subject_dir(folder_path=str(link))
+        self._assert_refused(calls)
+
+    def test_other_folder_is_loaded(self, guard, tmp_path):
+        window, folder, calls = guard
+        other = str(tmp_path / "subj_2")
+        window.search_subject_dir(folder_path=other)
+        assert calls == {"warnings": 0, "loads": [other]}
+
+    def test_cancelled_dialog_is_not_a_duplicate(self, guard, monkeypatch):
+        """An empty path (dialog cancelled) must not match the subject folder
+        even when it is the current directory."""
+        window, folder, calls = guard
+        monkeypatch.chdir(folder)
+        window.search_subject_dir(folder_path="")
+        assert calls == {"warnings": 0, "loads": [""]}
