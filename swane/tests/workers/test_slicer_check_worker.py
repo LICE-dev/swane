@@ -417,6 +417,43 @@ def test_find_slicer_python_windows_prefers_newest_and_user_path(monkeypatch, tm
     assert paths == [str(chosen / "bin" / "PythonSlicer.exe")]
 
 
+def _fake_windows_slicer(root, folder, revision=None):
+    bin_dir = root / "slicer.org" / folder / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "PythonSlicer.exe").write_bytes(b"")
+    if revision is not None:
+        (bin_dir / "SlicerLauncherSettings.ini").write_text(
+            "[Application]\nname=Slicer\nrevision=%s\n" % revision
+        )
+    return str(bin_dir / "PythonSlicer.exe")
+
+
+def test_find_slicer_python_windows_orders_versions_numerically(monkeypatch, tmp_path):
+    """Without readable metadata the folder name decides, compared as
+    numbers: 5.10.0 is newer than 5.8.1."""
+    for folder in ("Slicer 5.8.1", "Slicer 5.10.0", "Slicer 5.6.2"):
+        _fake_windows_slicer(tmp_path, folder)
+    monkeypatch.setattr(platform, "system", lambda: "Windows")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    paths, _ = SlicerCheckWorker.find_slicer_python("")
+    assert ["Slicer 5.10.0" in p for p in paths] == [True, False, False]
+    assert "Slicer 5.8.1" in paths[1]
+
+
+def test_find_slicer_python_windows_prefers_the_highest_revision(monkeypatch, tmp_path):
+    """The build revision decides whatever the folder is called; an
+    install without readable metadata ranks last."""
+    newest = _fake_windows_slicer(tmp_path, "Slicer", revision="34045")
+    older = _fake_windows_slicer(tmp_path, "Slicer 5.10.0", revision="33241")
+    unknown = _fake_windows_slicer(tmp_path, "Slicer 9.9.9")
+    monkeypatch.setattr(platform, "system", lambda: "Windows")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    paths, _ = SlicerCheckWorker.find_slicer_python("")
+    assert paths == [newest, older, unknown]
+
+
 class TestSlicerCheckWorkerReal:
     """Exercises :class:`SlicerCheckWorker` against a real, installed Slicer.
 
