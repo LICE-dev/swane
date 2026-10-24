@@ -214,10 +214,9 @@ def ref_workflow(
                 # num_threads (a nipype-aware reservation the node exports as
                 # ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS at run time), exactly
                 # like the antspynet deskull node. Left unbudgeted when max_cpu
-                # is 0.
-                threads = get_tool_cpu_config(
-                    max_cpu, synth_config.getboolean_safe("limit_cores")
-                )
+                # is 0. Not a Synth tool: the "limit Synth tools" preference
+                # does not apply.
+                threads = get_tool_cpu_config(max_cpu, limit_synth_cores=False)
                 apply_tool_num_threads(segmentation, threads, max_cpu=max_cpu)
             workflow.connect(ref_corrected_deskull, "out_file", segmentation, "in_file")
             workflow.connect(
