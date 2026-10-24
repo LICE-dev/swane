@@ -31,6 +31,7 @@ from nipype.interfaces.base import (
     File,
     isdefined,
 )
+from threadpoolctl import threadpool_limits
 
 OMP_THREADS_VAR = "OMP_NUM_THREADS"
 OPENBLAS_THREADS_VAR = "OPENBLAS_NUM_THREADS"
@@ -128,9 +129,15 @@ class DipyCsdFit(BaseInterface):
 
         sh_order = sh_order_for_directions(n_directions_from_gtab(gtab))
 
-        # Parallelism is by process (num_processes); each worker inherits the
-        # environment, so pinning BLAS to a single thread here keeps the node's
-        # real footprint at the declared core count instead of num_procs * BLAS.
+        # Parallelism is by process (num_processes): BLAS is pinned to a single
+        # thread so the node's real footprint is the declared core count, not
+        # num_procs * BLAS. dipy spawns its workers (mp.set_start_method
+        # "spawn"), so the variables below reach them. They cannot shrink this
+        # process's pool, which OpenBLAS sized when numpy was imported:
+        # threadpool_limits pins the work done here (the response estimate, and
+        # the whole fit when serial). Never fork inside this block: with
+        # scipy's OpenBLAS 0.3.28, forking while the pool is limited and then
+        # restoring it crashes the next scipy BLAS call of this process.
         num_procs = (
             int(self.inputs.num_threads) if isdefined(self.inputs.num_threads) else 1
         )
@@ -141,32 +148,33 @@ class DipyCsdFit(BaseInterface):
         os.environ[OMP_THREADS_VAR] = "1"
         os.environ[OPENBLAS_THREADS_VAR] = "1"
         try:
-            response, _ = csd.auto_response_ssst(gtab, data, fa_thr=0.7)
-            model = csd.ConstrainedSphericalDeconvModel(
-                gtab, response, sh_order_max=sh_order
-            )
-            peaks = direction.peaks_from_model(
-                model,
-                data,
-                default_sphere,
-                relative_peak_threshold=0.5,
-                min_separation_angle=25,
-                mask=mask_data,
-                sh_order_max=sh_order,
-                return_sh=True,
-                # dipy defaults to npeaks=5 and allocates, for every voxel of
-                # the volume, peak_dirs (5,3) f64 + peak_values (5) f64 +
-                # peak_indices (5) i32 + qa (5) f64 = 228 B/voxel -- and the
-                # parallel path holds three full-volume copies of those (the
-                # pooled chunk results, the memmaps they are written into, and
-                # the arrays they are read back as). This node saves only
-                # shm_coeff, which is np.dot(odf, invB) and does not depend on
-                # npeaks; peak_directions is called without it, so a higher
-                # npeaks buys no speed either. Pinning it to 1 is free RAM.
-                npeaks=1,
-                parallel=num_procs > 1,
-                num_processes=num_procs,
-            )
+            with threadpool_limits(limits=1):
+                response, _ = csd.auto_response_ssst(gtab, data, fa_thr=0.7)
+                model = csd.ConstrainedSphericalDeconvModel(
+                    gtab, response, sh_order_max=sh_order
+                )
+                peaks = direction.peaks_from_model(
+                    model,
+                    data,
+                    default_sphere,
+                    relative_peak_threshold=0.5,
+                    min_separation_angle=25,
+                    mask=mask_data,
+                    sh_order_max=sh_order,
+                    return_sh=True,
+                    # dipy defaults to npeaks=5 and allocates, for every voxel of
+                    # the volume, peak_dirs (5,3) f64 + peak_values (5) f64 +
+                    # peak_indices (5) i32 + qa (5) f64 = 228 B/voxel -- and the
+                    # parallel path holds three full-volume copies of those (the
+                    # pooled chunk results, the memmaps they are written into, and
+                    # the arrays they are read back as). This node saves only
+                    # shm_coeff, which is np.dot(odf, invB) and does not depend on
+                    # npeaks; peak_directions is called without it, so a higher
+                    # npeaks buys no speed either. Pinning it to 1 is free RAM.
+                    npeaks=1,
+                    parallel=num_procs > 1,
+                    num_processes=num_procs,
+                )
         finally:
             for var, value in previous.items():
                 if value is None:

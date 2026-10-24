@@ -230,6 +230,61 @@ class TestDipyCsdFitThreadPinning:
         assert OMP_THREADS_VAR not in os.environ
         assert OPENBLAS_THREADS_VAR not in os.environ
 
+    @pytest.mark.parametrize("num_threads", [1, 4])
+    def test_live_blas_pool_is_one_thread_in_the_node(
+        self, workspace, make_nifti, monkeypatch, num_threads
+    ):
+        """OpenBLAS sizes its pool when numpy is imported, so exporting the
+        variables at run time does not reach the work done in the node's own
+        process (the response estimate, and the whole fit when num_threads=1):
+        the live pool must be one thread there. dipy spawns the parallel
+        workers, which read the variables (previous test)."""
+        import dipy.direction as direction_module
+        import dipy.reconst.csdeconv as csd_module
+        from threadpoolctl import threadpool_info
+
+        if not any(info["num_threads"] > 1 for info in threadpool_info()):
+            pytest.skip("the default thread pools are already single-threaded")
+
+        n_dirs, n_b0 = 30, 1
+        gtab, bvals, bvecs = _gtab(n_directions=n_dirs, n_b0=n_b0)
+        bval, bvec = _gtab_files(workspace, bvals, bvecs)
+        shape = (4, 4, 4)
+        data = np.ones(shape + (n_dirs + n_b0,), dtype=np.float32) * 100
+        in_file = make_nifti("dwi.nii.gz", data=data)
+        mask_file = make_nifti("mask.nii.gz", data=np.ones(shape, dtype=np.float32))
+
+        seen = {}
+
+        def _fake_response(gt, dt, **kwargs):
+            seen["response_pools"] = [i["num_threads"] for i in threadpool_info()]
+            return (np.array([0.0015, 0.0003, 0.0003]), 100.0), 0.2
+
+        def _fake_peaks(model, dt, sphere, **kwargs):
+            seen["peaks_pools"] = [i["num_threads"] for i in threadpool_info()]
+
+            class _PAM:
+                pass
+
+            pam = _PAM()
+            n_coeff = _coeff_count(kwargs.get("sh_order_max"))
+            pam.shm_coeff = np.zeros(dt.shape[:-1] + (n_coeff,), dtype=np.float32)
+            return pam
+
+        monkeypatch.setattr(csd_module, "auto_response_ssst", _fake_response)
+        monkeypatch.setattr(direction_module, "peaks_from_model", _fake_peaks)
+
+        node = DipyCsdFit()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.mask = mask_file
+        node.inputs.num_threads = num_threads
+        node.run()
+
+        assert seen["response_pools"] and set(seen["response_pools"]) == {1}
+        assert seen["peaks_pools"] and set(seen["peaks_pools"]) == {1}
+
 
 class TestDipyCsdFitNpeaks:
     """``npeaks`` is pinned to 1 because the node never saves the peaks.
