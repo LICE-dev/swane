@@ -481,19 +481,25 @@ is_linux() {
     [ "$(uname -s)" = "Linux" ]
 }
 
-# can_run_privileged: return 0 if sudo exists or we already are root.
-can_run_privileged() {
-    have_command sudo || [ "${EUID:-1}" = "0" ]
+# is_root: return 0 if the effective user is root ("id -u" prints 0; a
+# missing or failing id counts as not root).
+is_root() {
+    [ "$(id -u 2>/dev/null)" = "0" ]
 }
 
-# run_privileged CMD ARGS...: run a command through sudo (directly as root
-# when there is no sudo). "--yes" never implies "sudo -n": the password
-# prompt, if any, is the user's.
+# can_run_privileged: return 0 if we are root or sudo exists.
+can_run_privileged() {
+    is_root || have_command sudo
+}
+
+# run_privileged CMD ARGS...: run a command directly as root (never through
+# sudo, even where it exists), otherwise through sudo. "--yes" never implies
+# "sudo -n": the password prompt, if any, is the user's.
 run_privileged() {
-    if have_command sudo; then
-        sudo "$@"
-    else
+    if is_root; then
         "$@"
+    else
+        sudo "$@"
     fi
 }
 
@@ -588,6 +594,11 @@ ensure_locale() {
         return 0
     fi
     log_info "Generating the en_US.UTF-8 locale"
+    # Minimal images (Docker's ubuntu and debian) lack the locales package.
+    if ! have_command locale-gen; then
+        log_warn "locale-gen not found (install the locales package, e.g. apt-get install locales, then rerun): $LOCALE_HINT"
+        return 0
+    fi
     if ! run_privileged locale-gen en_US.UTF-8; then
         log_warn "locale-gen en_US.UTF-8 failed: $LOCALE_HINT"
         return 0
@@ -600,18 +611,19 @@ ensure_locale() {
 
 # linux_system_step: the Linux system setup, the only place that decides
 # whether anything runs with sudo. No-op off Linux.
-#   - apt-get, and sudo (or root): when packages (checked with dpkg-query)
+#   - apt-get, and root or sudo: when packages (checked with dpkg-query)
 #     or the en_US.UTF-8 locale are missing, ONE question names the steps
 #     that would run privileged (--yes answers yes; no terminal without
-#     --yes stops the installer, as every prompt does). Yes: they run.
-#     No: nothing runs with sudo, and one warning gives the commands to run
-#     by hand. Nothing missing: no question.
+#     --yes stops the installer, as every prompt does). Yes: they run, as
+#     root directly (never through sudo), otherwise with sudo. No: nothing
+#     runs, and one warning gives the commands to run by hand (without
+#     sudo for root). Nothing missing: no question.
 #   - apt-get without sudo (non-root): warnings with the manual commands.
 #   - no apt-get: warnings only, never sudo (locale-gen alone could not
 #     enable a locale such systems configure under /etc).
 # Call it directly (not inside $(...)): it reads the terminal and warns.
 linux_system_step() {
-    local need_packages=0 need_locale=0 reasons="" commands=""
+    local need_packages=0 need_locale=0 reasons="" commands="" sudo="" ran
     is_linux || return 0
     has_en_us_locale || need_locale=1
     if ! have_command apt-get; then
@@ -635,7 +647,7 @@ linux_system_step() {
         fi
         return 0
     fi
-    if [ "${EUID:-1}" = "0" ]; then
+    if is_root; then
         log_info "Linux system setup: these steps run as root:"
     else
         log_info "Linux system setup: these steps run with sudo, which may ask for your password:"
@@ -656,16 +668,23 @@ linux_system_step() {
         return 0
     fi
     # The reasons first, then every manual command as one shell line that
-    # can be pasted as is (nothing but commands after "run:").
+    # can be pasted as is (nothing but commands after "run:"): with sudo
+    # for a regular user, as they are for root (who may have no sudo).
+    if is_root; then
+        ran="nothing was run"
+    else
+        sudo="sudo "
+        ran="nothing was run with sudo"
+    fi
     if [ "$need_packages" = 1 ]; then
         reasons="3D Slicer may not start without its system packages ($APT_ALSA_NOTE)"
-        commands="sudo apt-get update && sudo $(apt_install_hint)"
+        commands="${sudo}apt-get update && ${sudo}$(apt_install_hint)"
     fi
     if [ "$need_locale" = 1 ]; then
         reasons="${reasons:+$reasons, and }FSL may report a missing locale"
-        commands="${commands:+$commands; }sudo locale-gen en_US.UTF-8"
+        commands="${commands:+$commands; }${sudo}locale-gen en_US.UTF-8"
     fi
-    log_warn "Linux system setup declined, nothing was run with sudo: $reasons. To set it up by hand, run: $commands"
+    log_warn "Linux system setup declined, $ran: $reasons. To set it up by hand, run: $commands"
     return 0
 }
 

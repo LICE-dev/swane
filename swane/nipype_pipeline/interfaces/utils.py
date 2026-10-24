@@ -140,7 +140,10 @@ def get_tool_cpu_config(max_cpu: int, limit_synth_cores: bool) -> int:
     """Thread count for a CPU-bound tool node under the hard-cap contract.
 
     limit_synth_cores caps Synth tools at SYNTH_CORE_LIMIT; otherwise the node
-    uses the full subject budget (max_cpu). The caller sets the node's
+    uses the full subject budget (max_cpu). Only FreeSurfer Synth tools
+    (SynthStrip, SynthMorph, SynthSeg) pass the "limit_cores" preference here:
+    the ANTs-based nodes (registration, antspynet, Atropos) always take the
+    subject budget, whatever the preference says. The caller sets the node's
     num_threads input to this value; nipype derives node.n_procs from it (via
     the Node.n_procs property), so the reservation is always nipype-aware.
 
@@ -203,10 +206,11 @@ def get_deskull_node(
             if out_file:
                 mask_name = fname_presuffix(out_file, suffix="_brain", use_ext=True)
             deskull_node.inputs.mask_file = mask_name
-        threads = get_tool_cpu_config(max_cpu, limit_synth_cores)
         # antspynet/ITK take threads only through num_threads (a real, nipype-aware
         # reservation), like the ANTs registration node -- no soft env-var path,
-        # hence the max_cpu bound (see apply_tool_num_threads).
+        # hence the max_cpu bound (see apply_tool_num_threads). Not a Synth tool:
+        # the "limit Synth tools" preference does not apply.
+        threads = get_tool_cpu_config(max_cpu, limit_synth_cores=False)
         apply_tool_num_threads(deskull_node, threads, max_cpu=max_cpu)
         if bet_surfaces:
             deskull_node.inskull_out_name = "mask_file"
@@ -442,7 +446,8 @@ def get_registration_node(
         # ANTs takes its thread count only through num_threads (which the node
         # exports as the ITK env var); nipype couples that to n_procs, so there
         # is no soft-env-var path -- always a real, nipype-aware reservation.
-        threads = get_tool_cpu_config(max_cpu, limit_synth_cores)
+        # Not a Synth tool: the "limit Synth tools" preference does not apply.
+        threads = get_tool_cpu_config(max_cpu, limit_synth_cores=False)
         apply_tool_num_threads(ants_reg, threads, max_cpu=max_cpu)
 
         if type(moving_brain) == str:

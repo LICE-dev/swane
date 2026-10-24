@@ -21,6 +21,12 @@ from swane.nipype_pipeline.interfaces.ants import ITK_THREADS_VAR, thread_env
 COMPOSE_PREFIX = "composed_"
 COMPOSE_SUFFIX = "comptx.nii.gz"
 
+# ITK threads used when num_threads is not set. Composition is independent per
+# voxel, so the thread count never changes the field; one thread matches the
+# single core the scheduler reserves for the node (its default n_procs), as in
+# AntsApplyTransforms. Leaving the variable unset would let ITK take every core.
+DEFAULT_NUM_THREADS = 1
+
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class AntsComposeTransformInputSpec(BaseInterfaceInputSpec):
@@ -39,7 +45,7 @@ class AntsComposeTransformInputSpec(BaseInterfaceInputSpec):
         mandatory=True,
         desc="the image defining the grid the field is sampled on",
     )
-    num_threads = traits.Int(nohash=True, desc="number of ITK threads")
+    num_threads = traits.Int(nohash=True, desc="number of ITK threads (default 1)")
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.TraitedSpec)  -*-
@@ -80,7 +86,12 @@ class AntsComposeTransform(BaseInterface):
     fresh_process = True
 
     def _run_interface(self, runtime):
-        with thread_env(self.inputs.num_threads):
+        num_threads = (
+            self.inputs.num_threads
+            if isdefined(self.inputs.num_threads)
+            else DEFAULT_NUM_THREADS
+        )
+        with thread_env(num_threads):
             import ants
 
             kwargs = {}

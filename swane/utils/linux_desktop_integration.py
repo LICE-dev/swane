@@ -103,6 +103,15 @@ def ensure_desktop_entry(icon_path: str) -> None:
         command = _launch_target()
         exec_path = command[0]
         exec_command = " ".join(f'"{arg}"' for arg in command)
+        exec_check = f'[ -x "{exec_path}" ]'
+        if command[1:2] == ["-m"]:
+            # "python -m swane": the interpreter outlives `pip uninstall swane`,
+            # so the package itself must still be found
+            exec_check += (
+                f' && "{exec_path}" -c \'import importlib.util, sys; '
+                f'sys.exit(importlib.util.find_spec("{command[2]}") is None)\''
+                " >/dev/null 2>&1"
+            )
         desktop_file = _desktop_file_path()
         launcher_script = _launcher_script_path()
 
@@ -117,7 +126,7 @@ def ensure_desktop_entry(icon_path: str) -> None:
             "            ;;\n"
             "    esac\n"
             "fi\n"
-            f'if [ -x "{exec_path}" ]; then\n'
+            f"if {exec_check}; then\n"
             f"    exec {exec_command}\n"
             "fi\n"
             f'rm -f "{launcher_script}" "{desktop_file}"\n'

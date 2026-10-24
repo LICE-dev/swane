@@ -5,7 +5,8 @@ name: Installer tests
 # zsh as the login shell, macOS Intel),
 # installing the SWANe of the commit under test, with a check of the result
 # and a second run (the update path); two "update" legs (Ubuntu, macOS
-# arm64) rerun it on the FSL update paths instead.
+# arm64) rerun it on the FSL update paths instead. The install-root job runs
+# it as root in an ubuntu:24.04 container without sudo (a Docker image).
 #
 # Manual only (user decision): run it on demand with
 #   gh workflow run installer-tests.yml -r <branch>
@@ -679,3 +680,125 @@ jobs:
           EXPECT_FSLDIR="$custom" EXPECT_INSTALLER_FSL=false bash -l .github/scripts/check_installed_env.sh \
             "$RUNNER_TEMP/installer-summary-C.txt"
           echo "::endgroup::"
+
+  # Root without sudo, as in a Docker container: an ubuntu:24.04 image has
+  # neither sudo nor the locales package (every real Ubuntu install has it,
+  # through ubuntu-minimal), and no curl. The preparation installs only what
+  # the installer itself needs (curl, ca-certificates), locales and git (for
+  # actions/checkout): the installer must then install the system packages
+  # as root directly, generate the locale, and end with no warning.
+  install-root:
+    name: install as root without sudo (ubuntu:24.04 container)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container: ubuntu:24.04
+    # SHELL is unset in the container: the installer picks the PATH startup
+    # file from it. DEBIAN_FRONTEND is set for the preparation only, so the
+    # installer's own apt-get runs as a user's would.
+    env:
+      SHELL: /bin/bash
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Prepare the container
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git locales
+      - uses: actions/checkout@v7
+      - name: Check root without sudo
+        run: |
+          [ "$(id -u)" = 0 ] || { echo "::error::Not root: $(id)"; exit 1; }
+          if found="$(command -v sudo)"; then
+            echo "::error::sudo is installed in the container: $found"
+            exit 1
+          fi
+          if locale -a 2>/dev/null | grep -Eiq '^en_US\.utf-?8$'; then
+            echo "::error::en_US.UTF-8 already exists: the locale step would not run"
+            exit 1
+          fi
+          echo "Root (HOME=$HOME), no sudo, no en_US.UTF-8 locale"
+          {
+            echo "SUMMARY_1=$RUNNER_TEMP/installer-summary-1.txt"
+            echo "SUMMARY_2=$RUNNER_TEMP/installer-summary-2.txt"
+            echo "LOG_1=$RUNNER_TEMP/installer-log-1.txt"
+            echo "LOG_2=$RUNNER_TEMP/installer-log-2.txt"
+          } >> "$GITHUB_ENV"
+      # The log (stderr) stays live in the job log and is also saved; fd 3
+      # carries the summary (stdout) past its tee, as in the install job.
+      - name: Run the installer
+        run: |
+          status=0
+          {
+            /bin/bash installer/install_swane.sh --yes --accept-fsl-license \
+              --swane-spec "$GITHUB_WORKSPACE" 2>&1 >&3 3>&- | tee "$LOG_1" >&2 3>&-
+          } 3>&1 | tee "$SUMMARY_1" || status=$?
+          [ "$status" = 0 ] || { echo "::error::The installer failed (exit $status)"; exit "$status"; }
+          grep -qxF "SWANe installer: conda $HOME/miniforge3" "$SUMMARY_1" ||
+            { echo "::error::Expected the conda in $HOME/miniforge3"; exit 1; }
+          grep -qE '^SWANe installer: FSL .* installed$' "$SUMMARY_1" ||
+            { echo "::error::Expected FSL to be installed"; exit 1; }
+          grep -qF 'Linux system setup: these steps run as root:' "$LOG_1" ||
+            { echo "::error::The system setup did not run as root"; exit 1; }
+          for line in '==> Installing system packages for 3D Slicer' '==> Generating the en_US.UTF-8 locale'; do
+            grep -qxF -- "$line" "$LOG_1" || { echo "::error::Missing from the log: '$line'"; exit 1; }
+          done
+          if grep -q '^WARNING: ' "$SUMMARY_1"; then
+            sed -n 's/^WARNING: \(.*\)/::error::Installer warning: \1/p' "$SUMMARY_1"
+            exit 1
+          fi
+          locale -a | grep -Eiq '^en_US\.utf-?8$' ||
+            { echo "::error::No en_US.UTF-8 locale after the installer"; exit 1; }
+      - name: Check the Linux system packages
+        run: |
+          # shellcheck disable=SC2016 # expanded by the inner bash
+          apt_list="$(bash -c '. installer/install_swane.sh && printf "%s\n" "$APT_PACKAGES"')"
+          read -r -a packages <<<"$apt_list"
+          [ "${#packages[@]}" -gt 0 ] || { echo "::error::Could not read APT_PACKAGES from the installer"; exit 1; }
+          native_arch="$(dpkg --print-architecture)"
+          installed() {
+            local status
+            # shellcheck disable=SC2016 # dpkg-query format, not a shell expansion
+            status="$(dpkg-query -W -f='${Status}\n' "$1:$native_arch" 2>/dev/null ||
+              dpkg-query -W -f='${Status}\n' "$1" 2>/dev/null || true)"
+            [ "$(printf '%s\n' "$status" | head -n 1)" = "install ok installed" ]
+          }
+          missing=""
+          for pkg in "${packages[@]}"; do
+            installed "$pkg" || missing="$missing $pkg"
+          done
+          installed libasound2t64 || installed libasound2 || missing="$missing libasound2t64|libasound2"
+          if [ -n "$missing" ]; then
+            echo "::error::System packages not installed:$missing"
+            exit 1
+          fi
+          echo "All ${#packages[@]} packages and libasound2t64/libasound2 are installed"
+      - name: Check the environment
+        timeout-minutes: 20
+        run: bash -l .github/scripts/check_installed_env.sh "$SUMMARY_1"
+      - name: Run the installer again from a pipe (update path)
+        run: |
+          status=0
+          {
+            # shellcheck disable=SC2002 # a real pipe, as with curl
+            cat installer/install_swane.sh |
+              /bin/bash -s -- --yes --accept-fsl-license --swane-spec "$GITHUB_WORKSPACE" 2>&1 >&3 3>&- |
+              tee "$LOG_2" >&2 3>&-
+          } 3>&1 | tee "$SUMMARY_2" || status=$?
+          [ "$status" = 0 ] || { echo "::error::The second run failed (exit $status)"; exit "$status"; }
+          grep -qxF '==> The system packages for 3D Slicer and the en_US.UTF-8 locale are already installed' "$LOG_2" ||
+            { echo "::error::The second run did not find the system packages and the locale already installed"; exit 1; }
+          grep -qE '^SWANe installer: FSL .* existing$' "$SUMMARY_2" ||
+            { echo "::error::Expected the second run to reuse the FSL of the first one"; exit 1; }
+          first="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_1")"
+          second="$(grep -E '^SWANe installer: (conda|env) ' "$SUMMARY_2")"
+          [ "$first" = "$second" ] || { echo "::error::The second run changed conda or swane-env"; exit 1; }
+          if grep -q '^WARNING: ' "$SUMMARY_2"; then
+            sed -n 's/^WARNING: \(.*\)/::error::Installer warning: \1/p' "$SUMMARY_2"
+            exit 1
+          fi
+      - name: Check the environment after the second run
+        timeout-minutes: 20
+        run: bash -l .github/scripts/check_installed_env.sh "$SUMMARY_2"

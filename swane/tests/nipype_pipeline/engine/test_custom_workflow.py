@@ -8,11 +8,16 @@ in-memory workflows out of ``IdentityInterface``/``Function`` nodes, so they
 need nipype but no FSL/FreeSurfer/Slicer installation.
 """
 
+import re
+
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import DataSink
 
-from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
+from swane.nipype_pipeline.engine.CustomWorkflow import (
+    CustomWorkflow,
+    mapnode_subdir_substitution,
+)
 from swane.nipype_pipeline.engine.NodeListEntry import NodeListEntry
 
 
@@ -211,3 +216,162 @@ class TestSinkResult:
             sub_folder="sub",
         )
         assert wf.get_node("SaveResults_gen_nested") is not None
+
+
+def _write_named_file(index):
+    """Write ``r-<index>.nii.gz`` in the node's working folder, as a real
+    interface does, and return its path."""
+    import os
+
+    path = os.path.abspath("r-%d.nii.gz" % index)
+    with open(path, "w") as handle:
+        handle.write("x")
+    return path
+
+
+class TestRemoveMapnodeSubdir:
+    """``sink_result(remove_mapnode_subdir=True)`` drops the ``_<name><n>``
+    folder a MapNode output gets in the DataSink destination."""
+
+    @staticmethod
+    def _apply(sep, path):
+        sink = DataSink()
+        sink.inputs.regexp_substitutions = [mapnode_subdir_substitution(sep)]
+        return sink._substitute(path)
+
+    def test_posix_destination(self):
+        path = "/w/subj/results/fMRI/_run_cluster_t3_1_to_ref_ants_apply0/r-x.nii.gz"
+        assert self._apply("/", path) == "/w/subj/results/fMRI/r-x.nii.gz"
+
+    def test_windows_destination(self):
+        """DataSink joins the destination with ``os.path.sep``: on Windows the
+        MapNode folder sits between backslashes."""
+        path = r"C:\w\subj\results\fMRI\_run_cluster_t3_1_to_ref_ants_apply0\r-x.nii.gz"
+        assert self._apply("\\", path) == r"C:\w\subj\results\fMRI\r-x.nii.gz"
+
+    def test_posix_pattern_is_unchanged(self):
+        """Linux/macOS keep the exact pattern SWANe has always used."""
+        assert mapnode_subdir_substitution("/") == (r"/_[^/]+[0-9]+(?=/[^/]+$)", "")
+
+    def test_sink_result_uses_the_host_separator(self, tmp_path):
+        import os
+
+        wf = CustomWorkflow(name="wf")
+        wf.add_nodes([_make_function_node("gen")])
+        wf.sink_result(
+            save_path=str(tmp_path),
+            result_node="gen",
+            result_name="out_file",
+            sub_folder="results",
+            remove_mapnode_subdir=True,
+        )
+        sink = wf.get_node("SaveResults_gen_out_file")
+        assert sink.inputs.regexp_substitutions == [mapnode_subdir_substitution(os.sep)]
+
+    def test_mapnode_results_land_in_the_sub_folder(self, tmp_path):
+        """A real run: every MapNode output is saved directly in the sub folder,
+        with the native separator of the host."""
+        from nipype import MapNode
+
+        wf = CustomWorkflow(name="wf", base_dir=str(tmp_path / "work"))
+        gen = MapNode(
+            Function(
+                input_names=["index"],
+                output_names=["out_file"],
+                function=_write_named_file,
+            ),
+            iterfield=["index"],
+            name="gen",
+        )
+        gen.inputs.index = [0, 1]
+        wf.add_nodes([gen])
+        out = tmp_path / "out"
+        wf.sink_result(
+            save_path=str(out),
+            result_node="gen",
+            result_name="out_file",
+            sub_folder="fMRI",
+            remove_mapnode_subdir=True,
+        )
+        wf.run()
+
+        # The MapNode folder must be gone (TestSinkResultLayoutUnderUnderscoreAncestor
+        # covers "_"-prefixed ancestors of the work directory).
+        saved = sorted(out.rglob("*.nii.gz"))
+        assert [p.name for p in saved] == ["r-0.nii.gz", "r-1.nii.gz"]
+        assert saved[0].parent == saved[1].parent
+        parts = saved[0].relative_to(out).parts
+        assert parts[0] == "fMRI"
+        assert not any(re.fullmatch(r"_gen\d+", part) for part in parts)
+
+
+class TestSinkResultLayoutUnderUnderscoreAncestor:
+    """The results layout does not depend on the subject folder's ancestors.
+
+    ``DataSink`` with ``parameterization`` keeps every ``_``-prefixed folder
+    of the source path, so an ancestor such as ``/data/_mri/`` or a CI
+    runner's ``_temp`` would reach the destination. ``sink_result`` turns
+    parameterization off: every file lands directly in the container folder.
+    """
+
+    @staticmethod
+    def _run(subject_dir, remove_mapnode_subdir):
+        """Run a SWANe-shaped graph (a sub workflow sinking into the main
+        workflow's ``base_dir``) and return the saved files, relative to it."""
+        from nipype import MapNode
+
+        save_path = str(subject_dir)
+        main = CustomWorkflow(name="main", base_dir=save_path)
+        sub = CustomWorkflow(name="sub")
+        single = Node(
+            Function(
+                input_names=["index"],
+                output_names=["out_file"],
+                function=_write_named_file,
+            ),
+            name="single",
+        )
+        single.inputs.index = 9
+        mapped = MapNode(
+            Function(
+                input_names=["index"],
+                output_names=["out_file"],
+                function=_write_named_file,
+            ),
+            iterfield=["index"],
+            name="mapped",
+        )
+        mapped.inputs.index = [0, 1]
+        sub.add_nodes([single, mapped])
+        sub.sink_result(save_path, "single", "out_file", "results")
+        sub.sink_result(
+            save_path,
+            "mapped",
+            "out_file",
+            "results",
+            remove_mapnode_subdir=remove_mapnode_subdir,
+        )
+        main.add_nodes([sub])
+        main.run()
+
+        results = subject_dir / "results"
+        return sorted(p.relative_to(results).as_posix() for p in results.rglob("*.gz"))
+
+    def test_mapnode_subdir_removed(self, tmp_path):
+        """Plain Node and flattened MapNode outputs land directly in the
+        container folder."""
+        saved = self._run(tmp_path / "_parent" / "subj", remove_mapnode_subdir=True)
+        assert saved == ["r-0.nii.gz", "r-1.nii.gz", "r-9.nii.gz"]
+
+    def test_mapnode_without_remove_subdir_is_flat(self, tmp_path):
+        """Without parameterization no ``_<name><n>`` MapNode folder is kept,
+        even when ``remove_mapnode_subdir`` is not requested."""
+        saved = self._run(tmp_path / "_parent" / "subj", remove_mapnode_subdir=False)
+        assert saved == ["r-0.nii.gz", "r-1.nii.gz", "r-9.nii.gz"]
+
+    def test_layout_matches_plain_ancestors(self, tmp_path):
+        """A ``_``-prefixed ancestor yields the same layout as a plain one."""
+        for remove in (True, False):
+            plain = self._run(tmp_path / "parent" / str(remove), remove)
+            underscored = self._run(tmp_path / "_parent" / str(remove), remove)
+            assert underscored == plain

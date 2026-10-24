@@ -11,6 +11,18 @@ from swane.workers.worker_pool import start_worker
 from swane.utils.DependencyManager import DependencyManager, DependenceStatus
 
 
+def _patch_slicer_process(monkeypatch, fake_run):
+    """Route the worker's Slicer subprocess through ``fake_run(cmd, **kwargs)``,
+    which returns an object whose ``stdout`` is the captured bytes (or raises)."""
+
+    def fake_communicate(cmd, timeout):
+        return fake_run(cmd).stdout
+
+    monkeypatch.setattr(
+        SlicerCheckWorker, "_communicate", staticmethod(fake_communicate)
+    )
+
+
 def test_find_slicer_python_linux(monkeypatch):
     # simulate find output
     monkeypatch.setattr(
@@ -307,7 +319,7 @@ def test_run_detects_slicer_and_modules(monkeypatch, tmp_path):
             s = b""
         return type("P", (), {"stdout": s})
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    _patch_slicer_process(monkeypatch, fake_run)
 
     # run should append a result
     w.run()
@@ -353,7 +365,7 @@ def test_module_install_command_keeps_script_path_separate(monkeypatch):
             s = b""
         return type("P", (), {"stdout": s})
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    _patch_slicer_process(monkeypatch, fake_run)
 
     w.run()
 
@@ -403,6 +415,43 @@ def test_find_slicer_python_windows_prefers_newest_and_user_path(monkeypatch, tm
     chosen = tmp_path / "slicer.org" / "Slicer 5.6.2"
     paths, _ = SlicerCheckWorker.find_slicer_python(str(chosen))
     assert paths == [str(chosen / "bin" / "PythonSlicer.exe")]
+
+
+def _fake_windows_slicer(root, folder, revision=None):
+    bin_dir = root / "slicer.org" / folder / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "PythonSlicer.exe").write_bytes(b"")
+    if revision is not None:
+        (bin_dir / "SlicerLauncherSettings.ini").write_text(
+            "[Application]\nname=Slicer\nrevision=%s\n" % revision
+        )
+    return str(bin_dir / "PythonSlicer.exe")
+
+
+def test_find_slicer_python_windows_orders_versions_numerically(monkeypatch, tmp_path):
+    """Without readable metadata the folder name decides, compared as
+    numbers: 5.10.0 is newer than 5.8.1."""
+    for folder in ("Slicer 5.8.1", "Slicer 5.10.0", "Slicer 5.6.2"):
+        _fake_windows_slicer(tmp_path, folder)
+    monkeypatch.setattr(platform, "system", lambda: "Windows")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    paths, _ = SlicerCheckWorker.find_slicer_python("")
+    assert ["Slicer 5.10.0" in p for p in paths] == [True, False, False]
+    assert "Slicer 5.8.1" in paths[1]
+
+
+def test_find_slicer_python_windows_prefers_the_highest_revision(monkeypatch, tmp_path):
+    """The build revision decides whatever the folder is called; an
+    install without readable metadata ranks last."""
+    newest = _fake_windows_slicer(tmp_path, "Slicer", revision="34045")
+    older = _fake_windows_slicer(tmp_path, "Slicer 5.10.0", revision="33241")
+    unknown = _fake_windows_slicer(tmp_path, "Slicer 9.9.9")
+    monkeypatch.setattr(platform, "system", lambda: "Windows")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    paths, _ = SlicerCheckWorker.find_slicer_python("")
+    assert paths == [newest, older, unknown]
 
 
 class TestSlicerCheckWorkerReal:
@@ -579,7 +628,7 @@ def test_run_version_oserror_emits_single_non_detected_result(monkeypatch):
     def raising_run(cmd, **kwargs):
         raise PermissionError(13, "Permission denied", cmd[0])
 
-    monkeypatch.setattr(subprocess, "run", raising_run)
+    _patch_slicer_process(monkeypatch, raising_run)
     w.run()
     assert len(results) == 1
     assert results[0][3] != DependenceStatus.DETECTED
@@ -599,7 +648,7 @@ def test_run_module_install_oserror_emits_single_warning(monkeypatch):
             return type("P", (), {"stdout": b"Slicer 5.6.2\n"})
         raise OSError("boom")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    _patch_slicer_process(monkeypatch, fake_run)
     w.run()
     assert len(results) == 1
     assert results[0][3] != DependenceStatus.DETECTED
@@ -619,9 +668,154 @@ def test_run_version_with_crlf_is_stripped(monkeypatch):
             return type("P", (), {"stdout": b"Slicer 5.6.2\r\n"})
         return type("P", (), {"stdout": b"MODULE FOUND\r\n"})
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    _patch_slicer_process(monkeypatch, fake_run)
     w.run()
     assert results[0][1] == "5.6.2"
+
+
+def test_run_decodes_a_non_utf8_report_with_the_locale_encoding(monkeypatch):
+    """Windows: Slicer's Python writes piped output in the ANSI code page, so a
+    non-ASCII profile path in ``MODULE PATH:`` is not valid UTF-8. The report
+    must be decoded (path intact) and the check must still finish."""
+    import json
+    import locale
+
+    _patch_found_slicer(monkeypatch)
+    monkeypatch.setattr(
+        DependencyManager, "check_slicer_version", staticmethod(lambda v: True)
+    )
+    monkeypatch.setattr(locale, "getpreferredencoding", lambda *a: "cp1252")
+    path = "C:\\Users\\Nicol\u00f2\\Extensions-34045\\SlicerFreeSurfer"
+    report = ("MODULE PATH:SlicerFreeSurfer=" + path + "\r\nMODULE FOUND\r\n").encode(
+        "cp1252"
+    )
+    events = []
+    w = SlicerCheckWorker(current_slicer_path="")
+    w.signal.extensions.connect(lambda st: events.append(("ext", st)))
+    w.signal.slicer.connect(lambda *a: events.append(("slicer", a)))
+
+    def fake_run(cmd, **kwargs):
+        if "--version" in cmd:
+            return type("P", (), {"stdout": b"Slicer 5.6.2\n"})
+        return type("P", (), {"stdout": report})
+
+    _patch_slicer_process(monkeypatch, fake_run)
+    w.run()
+    assert [e[0] for e in events] == ["ext", "slicer"]
+    assert json.loads(events[0][1])["paths"]["SlicerFreeSurfer"] == path
+    assert events[1][1][3] == DependenceStatus.DETECTED
+
+
+def test_run_passes_timeouts_and_reports_a_hung_module_install(monkeypatch):
+    """A stalled extension install must not block the check forever: the
+    install times out and the result is a single WARNING."""
+    _patch_found_slicer(monkeypatch)
+    monkeypatch.setattr(
+        DependencyManager, "check_slicer_version", staticmethod(lambda v: True)
+    )
+    timeouts = {}
+    results = []
+    w = SlicerCheckWorker(current_slicer_path="")
+    w.signal.slicer.connect(lambda *a: results.append(a))
+
+    def fake_communicate(cmd, timeout):
+        if "--version" in cmd:
+            timeouts["version"] = timeout
+            return b"Slicer 5.6.2\n"
+        timeouts["install"] = timeout
+        raise subprocess.TimeoutExpired(cmd, timeout)
+
+    monkeypatch.setattr(
+        SlicerCheckWorker, "_communicate", staticmethod(fake_communicate)
+    )
+    w.run()
+    assert timeouts == {
+        "version": SlicerCheckWorker.VERSION_TIMEOUT,
+        "install": SlicerCheckWorker.MODULE_INSTALL_TIMEOUT,
+    }
+    assert SlicerCheckWorker.VERSION_TIMEOUT == 60
+    assert SlicerCheckWorker.MODULE_INSTALL_TIMEOUT == 600
+    assert len(results) == 1
+    assert results[0][3] == DependenceStatus.WARNING
+
+
+def test_run_hung_version_check_is_not_detected(monkeypatch):
+    _patch_found_slicer(monkeypatch)
+    results = []
+    w = SlicerCheckWorker(current_slicer_path="")
+    w.signal.slicer.connect(lambda *a: results.append(a))
+
+    def fake_communicate(cmd, timeout):
+        raise subprocess.TimeoutExpired(cmd, timeout)
+
+    monkeypatch.setattr(
+        SlicerCheckWorker, "_communicate", staticmethod(fake_communicate)
+    )
+    w.run()
+    assert len(results) == 1
+    assert results[0][3] == DependenceStatus.MISSING
+
+
+def test_run_emits_a_result_on_an_unexpected_error(monkeypatch):
+    """Whatever fails inside the check, the home row must leave CHECKING."""
+
+    def broken(path):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(SlicerCheckWorker, "find_slicer_python", staticmethod(broken))
+    results = []
+    w = SlicerCheckWorker(current_slicer_path="")
+    w.signal.slicer.connect(lambda *a: results.append(a))
+    w.run()
+    assert len(results) == 1
+    assert results[0][3] == DependenceStatus.MISSING
+
+
+_HOLDER = """
+import subprocess, sys, time
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+open(sys.argv[1], "w").write(str(child.pid))
+print("started", flush=True)
+time.sleep(120)
+"""
+
+
+def test_communicate_timeout_kills_the_whole_process_tree(tmp_path):
+    """A launcher (like Slicer's) whose child inherits the stdout pipe: on a
+    timeout every process holding the pipe is killed, so the read returns
+    instead of waiting for an EOF that never comes (the Windows hang)."""
+    import sys
+    import time
+
+    import psutil
+
+    script = tmp_path / "holder.py"
+    script.write_text(_HOLDER)
+    pid_file = tmp_path / "child.pid"
+    start = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        SlicerCheckWorker._communicate(
+            [sys.executable, str(script), str(pid_file)], timeout=3
+        )
+    assert time.monotonic() - start < 30
+    child_pid = int(pid_file.read_text())
+    try:
+        child = psutil.Process(child_pid)
+        child.wait(timeout=10)
+    except psutil.NoSuchProcess:
+        pass
+    assert not psutil.pid_exists(child_pid) or (
+        psutil.Process(child_pid).status() == psutil.STATUS_ZOMBIE
+    )
+
+
+def test_communicate_returns_the_captured_bytes(tmp_path):
+    import sys
+
+    out = SlicerCheckWorker._communicate(
+        [sys.executable, "-c", "print('Slicer 5.6.2')"], timeout=60
+    )
+    assert out.strip() == b"Slicer 5.6.2"
 
 
 # --- Cheap revalidation of what a full check recorded -----------------------
@@ -708,7 +902,7 @@ def test_run_emits_extensions_state_before_result(monkeypatch):
             return type("P", (), {"stdout": b"Slicer 5.6.2\n"})
         return type("P", (), {"stdout": REPORT.encode()})
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    _patch_slicer_process(monkeypatch, fake_run)
     w.run()
     assert [e[0] for e in events] == ["ext", "slicer"]
     import json
@@ -730,7 +924,7 @@ def test_run_does_not_emit_extensions_state_when_module_missing(monkeypatch):
             return type("P", (), {"stdout": b"Slicer 5.6.2\n"})
         return type("P", (), {"stdout": b"MODULE MISSING:SlicerFreeSurfer\n"})
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    _patch_slicer_process(monkeypatch, fake_run)
     w.run()
     assert events == []
 
