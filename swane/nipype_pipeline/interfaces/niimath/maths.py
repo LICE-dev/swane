@@ -33,8 +33,7 @@ from nipype.interfaces.fsl import (
 # Absolute path to the niimath binary bundled with the pip package. The package
 # resolves the platform-specific binary name (e.g. ``niimath.exe`` on Windows),
 # so pointing ``_cmd`` at it works on Linux, macOS and Windows. Nipype runs
-# ``_cmd`` through a shell, so on Windows the path is quoted (it may contain
-# spaces); elsewhere it is used unchanged.
+# ``_cmd`` through a shell, so the path is quoted (it may contain spaces).
 NIIMATH_CMD = shell_executable(niimath.bin)
 
 # Nipype's FSLCommand takes the default output type from the FSLOUTPUTTYPE

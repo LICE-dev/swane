@@ -150,7 +150,8 @@ def test_posix_is_byte_identical_to_stock_nipype(monkeypatch):
     node = _PathCommand(in_file="/tmp/a b/in.nii.gz", in_files=["/x/a.nii", "/y/b"])
     assert node.cmdline == "tool --in '/tmp/a b/in.nii.gz' /x/a.nii /y/b"
     assert windows_compat.cmdline_quote("/tmp/a b") == shlex.quote("/tmp/a b")
-    assert windows_compat.shell_executable("/opt/a b/niimath") == "/opt/a b/niimath"
+    assert windows_compat.shell_executable("/opt/niimath") == "/opt/niimath"
+    assert windows_compat.shell_executable("/opt/a b/niimath") == "'/opt/a b/niimath'"
 
 
 def test_shell_executable_quotes_on_windows(monkeypatch):
@@ -158,6 +159,40 @@ def test_shell_executable_quotes_on_windows(monkeypatch):
     exe = r"C:\Users\Name Surname\env\Lib\site-packages\niimath\bin\niimath.exe"
     assert windows_compat.shell_executable(exe) == f'"{exe}"'
     assert windows_compat.windows_split(windows_compat.shell_executable(exe)) == [exe]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX executable path quoting")
+def test_niimath_runs_from_a_path_with_a_space(tmp_path, monkeypatch):
+    """An environment installed under a path with a space (e.g. a home or a
+    volume name) must not break the bundled executables: Nipype finds the
+    executable with ``shlex.split(cmd)[0]`` and runs ``cmd`` through a shell."""
+    import shutil
+
+    import nibabel as nib
+    import niimath
+    import numpy as np
+
+    from swane.nipype_pipeline.interfaces.niimath.maths import ImageMaths
+
+    monkeypatch.setattr(windows_compat, "is_windows", lambda: False)
+    exe_dir = tmp_path / "sp ace"
+    exe_dir.mkdir()
+    exe = exe_dir / "niimath"
+    shutil.copy2(niimath.bin, exe)
+
+    class _SpacedImageMaths(ImageMaths):
+        _cmd = windows_compat.shell_executable(str(exe))
+
+    in_file = tmp_path / "in.nii.gz"
+    nib.save(nib.Nifti1Image(np.ones((3, 3, 3), np.float32), np.eye(4)), in_file)
+    out_file = tmp_path / "out.nii.gz"
+    monkeypatch.chdir(tmp_path)
+    result = _SpacedImageMaths(
+        in_file=str(in_file), op_string="-add 1", out_file=str(out_file)
+    ).run()
+
+    assert shlex.split(result.runtime.cmdline)[0] == str(exe)
+    assert np.allclose(nib.load(out_file).get_fdata(), 2.0)
 
 
 # --- installation in every process ----------------------------------------------
