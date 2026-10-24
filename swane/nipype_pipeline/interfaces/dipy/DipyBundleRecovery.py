@@ -25,8 +25,9 @@ The two levers, and the mechanism each addresses:
 
 The accept rule is symmetric and self-guarding: keep the retried result only if
 its recall/precision harmonic mean (F) beats the original, so a retry that
-collapses the bundle is never kept. Every threshold is a named constant so it can
-be retuned in one place.
+collapses the bundle is never kept. The outcome is always written to a
+``.conf.json`` sidecar, so a re-run overwrites whatever an earlier run said.
+Every threshold is a named constant so it can be retuned in one place.
 """
 
 import json
@@ -43,6 +44,8 @@ from nipype.interfaces.base import (
     InputMultiPath,
     isdefined,
 )
+
+from swane.nipype_pipeline.interfaces.dipy import TrxWorkingDirMixin
 
 from swane.nipype_pipeline.interfaces.dipy.DipyRecoBundles import (
     RECOGNITION_DEFAULTS,
@@ -71,7 +74,8 @@ PREC_CONTAMINATED = 0.20
 REC_PRESENT = 0.25
 # The adjusted thresholds a retry uses: a tighter refine pruning to trim an
 # over-inclusive bundle, a wider first-pass reduction to pick up more of a sparse
-# one.
+# one. A retry only ever moves a threshold in its arm's direction, so a baseline
+# already at or past these (the AST/CST overrides) gets no retry.
 TIGHTEN_R_PRUNING_THR = 4.0
 WIDEN_REDUCTION_THR = 25.0
 # Below this recognised-streamline count a bundle is treated as empty for the
@@ -144,14 +148,18 @@ def adjusted_params(params, arm):
     """A copy of ``params`` with the one threshold ``arm`` adjusts.
 
     ``"tighten"`` lowers ``r_pruning_thr`` to :data:`TIGHTEN_R_PRUNING_THR`;
-    ``"widen"`` raises ``reduction_thr`` to :data:`WIDEN_REDUCTION_THR`. Any other
-    ``arm`` returns an unchanged copy.
+    ``"widen"`` raises ``reduction_thr`` to :data:`WIDEN_REDUCTION_THR`. Neither
+    ever moves a threshold the other way: one already tighter (or wider) is kept,
+    so the copy may equal ``params``, in which case no retry is worth running. Any
+    other ``arm`` returns an unchanged copy.
     """
     adjusted = dict(params)
     if arm == "tighten":
-        adjusted["r_pruning_thr"] = TIGHTEN_R_PRUNING_THR
+        adjusted["r_pruning_thr"] = min(
+            adjusted["r_pruning_thr"], TIGHTEN_R_PRUNING_THR
+        )
     elif arm == "widen":
-        adjusted["reduction_thr"] = WIDEN_REDUCTION_THR
+        adjusted["reduction_thr"] = max(adjusted["reduction_thr"], WIDEN_REDUCTION_THR)
     return adjusted
 
 
@@ -229,14 +237,15 @@ class DipyBundleRecoveryOutputSpec(TraitedSpec):
         "that matched the model better"
     )
     confidence_flag = File(
-        desc="a JSON sidecar written ONLY when the chosen bundle is low-confidence "
-        "(covers little of the model whatever the configuration); Undefined "
-        "otherwise, so DataSink sinks it only when present"
+        desc="the JSON confidence sidecar (.conf.json), always written: "
+        "'low_confidence' is true when the chosen bundle covers little of the "
+        "model whatever the configuration, plus the metric it was judged on. "
+        "Always present so a re-run's sidecar replaces an earlier run's"
     )
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyBundleRecovery(BaseInterface):
+class DipyBundleRecovery(TrxWorkingDirMixin, BaseInterface):
     """Score a recognised bundle against the atlas model and, when it looks
     contaminated or scarce, retry recognition once with an adjusted configuration,
     keeping whichever result matches the model better; flag one that stays poor.
@@ -272,17 +281,20 @@ class DipyBundleRecovery(BaseInterface):
         prec, rec, f5, count = _recognized_metric(chosen, model_bundle)
         arm = recovery_arm(prec, rec)
 
-        # One adjusted retry, kept only if it matches the model better.
-        if arm is not None:
-            params = {
-                "model_clust_thr": float(self.inputs.model_clust_thr),
-                "reduction_thr": float(self.inputs.reduction_thr),
-                "pruning_thr": float(self.inputs.pruning_thr),
-                "refine": bool(self.inputs.refine),
-                "r_reduction_thr": float(self.inputs.r_reduction_thr),
-                "r_pruning_thr": float(self.inputs.r_pruning_thr),
-            }
-            retry_params = adjusted_params(params, arm)
+        # One adjusted retry, kept only if it matches the model better. A retry
+        # with the default's own thresholds (no arm, or an arm its baseline already
+        # satisfies) is skipped: recognition is deterministic (the build pickle
+        # restores the RNG state), so it would only reproduce the default.
+        params = {
+            "model_clust_thr": float(self.inputs.model_clust_thr),
+            "reduction_thr": float(self.inputs.reduction_thr),
+            "pruning_thr": float(self.inputs.pruning_thr),
+            "refine": bool(self.inputs.refine),
+            "r_reduction_thr": float(self.inputs.r_reduction_thr),
+            "r_pruning_thr": float(self.inputs.r_pruning_thr),
+        }
+        retry_params = adjusted_params(params, arm)
+        if retry_params != params:
             retry = Streamlines()
             for chunk, pickle in zip(
                 self.inputs.tractogram_chunks, self.inputs.recobundles_pickles
@@ -307,22 +319,20 @@ class DipyBundleRecovery(BaseInterface):
             bbox_valid_check=False,
         )
 
-        self._flag_written = is_low_confidence(prec, rec, count)
-        if self._flag_written:
-            with open(self._gen_flagname(), "w") as flag_file:
-                json.dump(
-                    {
-                        "model_bundle": str(self.inputs.model_bundle_name),
-                        "precision": prec,
-                        "recall": rec,
-                        "f5": f5,
-                        "count": count,
-                        "retry_arm": arm,
-                        "low_confidence": True,
-                    },
-                    flag_file,
-                    indent=1,
-                )
+        with open(self._gen_flagname(), "w") as flag_file:
+            json.dump(
+                {
+                    "model_bundle": str(self.inputs.model_bundle_name),
+                    "precision": prec,
+                    "recall": rec,
+                    "f5": f5,
+                    "count": count,
+                    "retry_arm": arm,
+                    "low_confidence": is_low_confidence(prec, rec, count),
+                },
+                flag_file,
+                indent=1,
+            )
         return runtime
 
     def _gen_outfilename(self):
@@ -337,11 +347,10 @@ class DipyBundleRecovery(BaseInterface):
             if base.endswith(ext):
                 base = base[: -len(ext)]
                 break
-        return base + ".lowconf.json"
+        return base + ".conf.json"
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs["bundle"] = self._gen_outfilename()
-        if getattr(self, "_flag_written", False):
-            outputs["confidence_flag"] = self._gen_flagname()
+        outputs["confidence_flag"] = self._gen_flagname()
         return outputs

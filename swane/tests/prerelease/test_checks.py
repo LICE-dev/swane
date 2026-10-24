@@ -8,6 +8,7 @@ filenames and so silently emitted no checks -- a green pass that validated
 nothing. A directory-shape regression must fail loudly instead of vanishing.
 """
 
+import json
 import os
 
 import nibabel as nib
@@ -84,8 +85,12 @@ def test_dipy_bundle_recovery_flags_a_low_confidence_bundle(tmp_path):
     dti = _dti_results_dir(str(tmp_path))
     for side in ("lh", "rh"):
         open(os.path.join(dti, "r-%s_%s.vtp" % (SWEEP_TRACT, side)), "w").close()
-    # DipyBundleRecovery writes this sidecar only for a low-confidence bundle.
-    open(os.path.join(dti, "r-%s_rh.lowconf.json" % SWEEP_TRACT), "w").close()
+    # DipyBundleRecovery always writes this sidecar; only rh is low-confidence.
+    for side, low in (("lh", False), ("rh", True)):
+        with open(
+            os.path.join(dti, "r-%s_%s.conf.json" % (SWEEP_TRACT, side)), "w"
+        ) as f:
+            json.dump({"low_confidence": low}, f)
 
     checks = _by_name(_check_dipy_bundle_recovery(_dipy_result(str(tmp_path)), []))
 
@@ -311,6 +316,22 @@ def test_resting_networks_skip_a_fixed_dimensionality(tmp_path):
     root = str(tmp_path)
     files = _rs_maps(root, _rs_blob(20, -20))
     assert _networks(root, files, ic_dim="20") == {}
+
+
+def test_dipy_bundle_recovery_reads_the_sidecar_not_its_existence(tmp_path):
+    dti = _dti_results_dir(str(tmp_path))
+    for side in ("lh", "rh"):
+        open(os.path.join(dti, "r-%s_%s.vtp" % (SWEEP_TRACT, side)), "w").close()
+    # A confident sidecar is not a flag; an unreadable one is.
+    with open(os.path.join(dti, "r-%s_lh.conf.json" % SWEEP_TRACT), "w") as f:
+        json.dump({"low_confidence": False}, f)
+    with open(os.path.join(dti, "r-%s_rh.conf.json" % SWEEP_TRACT), "w") as f:
+        f.write("{not json")
+
+    checks = _by_name(_check_dipy_bundle_recovery(_dipy_result(str(tmp_path)), []))
+
+    assert checks["dipy.confidence.%s_lh" % SWEEP_TRACT].passed
+    assert not checks["dipy.confidence.%s_rh" % SWEEP_TRACT].passed
 
 
 def test_results_in_a_mapnode_subfolder_fail(tmp_path):

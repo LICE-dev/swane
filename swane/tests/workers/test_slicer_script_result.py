@@ -322,6 +322,49 @@ class TestVtpBundleBranch:
         )
         assert opened == []
 
+    @pytest.mark.parametrize(
+        "sidecar, flagged",
+        [
+            ('{"low_confidence": true}', True),
+            ('{"low_confidence": false}', False),
+            (None, False),  # no sidecar: nothing to flag
+            ("{not json", True),  # unreadable: flagged, to be safe
+        ],
+    )
+    def test_low_confidence_follows_the_sidecar_content(
+        self, slicer_script, tmp_path, sidecar, flagged
+    ):
+        module, log = slicer_script
+        dti_dir = tmp_path / "dti"
+        dti_dir.mkdir()
+        (dti_dir / "r-cst_lh.vtp").write_bytes(b"")
+        if sidecar is not None:
+            (dti_dir / "r-cst_lh.conf.json").write_text(sidecar)
+
+        module.tract_bundle(dti_dir=str(dti_dir), tract=CST, side="lh")
+
+        calls = normalise(log, dti=dti_dir)
+        model = "slicer.util.loadModel()"
+        if flagged:
+            assert f"{model}.SetName('cst_lh (LOW CONFIDENCE)')" in calls
+            assert f"{model}.GetDisplayNode().SetOpacity(0.4)" in calls
+        else:
+            assert calls == bundle_calls(CST, "lh", "<dti>/r-cst_lh.vtp")
+
+    def test_legacy_lowconf_sidecar_is_ignored(self, slicer_script, tmp_path):
+        # Only dev builds ever wrote it, and it was never cleared on a re-run.
+        module, log = slicer_script
+        dti_dir = tmp_path / "dti"
+        dti_dir.mkdir()
+        (dti_dir / "r-cst_lh.vtp").write_bytes(b"")
+        (dti_dir / "r-cst_lh.lowconf.json").write_text('{"low_confidence": true}')
+
+        module.tract_bundle(dti_dir=str(dti_dir), tract=CST, side="lh")
+
+        assert normalise(log, dti=dti_dir) == bundle_calls(
+            CST, "lh", "<dti>/r-cst_lh.vtp"
+        )
+
     def test_missing_bundle_file_makes_no_slicer_calls(self, slicer_script, tmp_path):
         module, log = slicer_script
         dti_dir = tmp_path / "dti"

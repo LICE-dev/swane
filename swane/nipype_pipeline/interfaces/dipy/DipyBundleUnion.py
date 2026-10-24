@@ -27,6 +27,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.dipy import TrxWorkingDirMixin
+
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterfaceInputSpec)  -*-
 class DipyBundleUnionInputSpec(BaseInterfaceInputSpec):
@@ -48,7 +50,7 @@ class DipyBundleUnionOutputSpec(TraitedSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyBundleUnion(BaseInterface):
+class DipyBundleUnion(TrxWorkingDirMixin, BaseInterface):
     """
     Concatenates the N per-chunk recognised partial bundles for one tract/side
     into a single atlas-space bundle, passing the input through unchanged when

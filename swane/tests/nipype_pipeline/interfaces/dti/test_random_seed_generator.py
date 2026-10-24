@@ -6,7 +6,11 @@ force an ordering dependency, so it runs without any neuroimaging tool.
 
 import pytest
 
-from swane.nipype_pipeline.interfaces.dti.RandomSeedGenerator import RandomSeedGenerator
+from swane.nipype_pipeline.interfaces.dti.RandomSeedGenerator import (
+    MAX_SEED,
+    MIN_SEED,
+    RandomSeedGenerator,
+)
 
 
 @pytest.fixture
@@ -28,18 +32,35 @@ class TestRandomSeedGenerator:
         assert len(result.outputs.seeds) == 5
 
     def test_seeds_are_in_expected_range(self, mask_file):
-        """Every generated seed is an ``int`` in ``[0, 1000)``.
+        """Every generated seed is an ``int`` in ``[MIN_SEED, MAX_SEED)``.
 
-        The seeds feed probabilistic tractography, so they must be plain
-        integers within the ``randrange(1000)`` domain.
+        The seeds become probtrackx2 ``--rseed`` values, so they must be plain
+        positive integers that fit a signed 32-bit int.
         """
         iface = RandomSeedGenerator()
         iface.inputs.seeds_n = 20
         iface.inputs.mask = mask_file
 
         result = iface.run()
-        assert all(0 <= seed < 1000 for seed in result.outputs.seeds)
+        assert all(MIN_SEED <= seed < MAX_SEED for seed in result.outputs.seeds)
         assert all(isinstance(seed, int) for seed in result.outputs.seeds)
+
+    def test_seed_bounds_fit_a_signed_32bit_int(self):
+        assert MIN_SEED >= 1
+        assert MAX_SEED <= 2**31 - 1
+
+    def test_seeds_are_never_repeated(self, mask_file):
+        """A repeated seed makes two probtrackx runs identical, and
+        SumMultiTracks would then count that realisation twice."""
+        import random
+
+        for state in range(20):
+            random.seed(state)
+            iface = RandomSeedGenerator()
+            iface.inputs.seeds_n = 100  # far more than track_procs' maximum
+            iface.inputs.mask = mask_file
+            seeds = iface.run().outputs.seeds
+            assert len(set(seeds)) == len(seeds) == 100
 
     def test_zero_seeds_yields_empty_list(self, mask_file):
         """Requesting zero seeds yields an empty list (boundary case)."""
