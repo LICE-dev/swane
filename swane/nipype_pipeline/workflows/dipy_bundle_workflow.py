@@ -14,8 +14,8 @@ Per side (``lh``/``rh`` -> the atlas's ``_L``/``_R`` convention) the chain is:
 
 ``DipyRecoBundlesRecognize`` -> ``DipyBundleUnion`` -> ``DipyBundleRecovery`` ->
 ``DipyBundlesToRef`` -> ``outputnode.bundle_lh``/``bundle_rh`` (``.vtp``,
-reference space), with ``outputnode.flag_lh``/``flag_rh`` a sidecar written only
-for a low-confidence bundle.
+reference space), with ``outputnode.flag_lh``/``flag_rh`` its ``.conf.json``
+confidence sidecar (``low_confidence`` true/false, always written).
 
 The recognise node is always a :class:`nipype.MapNode` over the shared build
 pickles and their ``.trx`` chunks, iterated in lockstep with the same
@@ -153,6 +153,9 @@ def dipy_bundle_workflow(
     bundle_bilateral : path
         The bilateral recognised bundle in reference space (``.vtp``), for tracts
         like the fornix that are not split by side.
+    flag_lh, flag_rh, flag_bilateral : path
+        The matching bundle's ``.conf.json`` confidence sidecar (see
+        :class:`DipyBundleRecovery`), always written.
     """
 
     atlas_base = DIPY_TRACT_ATLAS.get(name)

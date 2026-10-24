@@ -25,8 +25,9 @@ The two levers, and the mechanism each addresses:
 
 The accept rule is symmetric and self-guarding: keep the retried result only if
 its recall/precision harmonic mean (F) beats the original, so a retry that
-collapses the bundle is never kept. Every threshold is a named constant so it can
-be retuned in one place.
+collapses the bundle is never kept. The outcome is always written to a
+``.conf.json`` sidecar, so a re-run overwrites whatever an earlier run said.
+Every threshold is a named constant so it can be retuned in one place.
 """
 
 import json
@@ -234,9 +235,10 @@ class DipyBundleRecoveryOutputSpec(TraitedSpec):
         "that matched the model better"
     )
     confidence_flag = File(
-        desc="a JSON sidecar written ONLY when the chosen bundle is low-confidence "
-        "(covers little of the model whatever the configuration); Undefined "
-        "otherwise, so DataSink sinks it only when present"
+        desc="the JSON confidence sidecar (.conf.json), always written: "
+        "'low_confidence' is true when the chosen bundle covers little of the "
+        "model whatever the configuration, plus the metric it was judged on. "
+        "Always present so a re-run's sidecar replaces an earlier run's"
     )
 
 
@@ -315,22 +317,20 @@ class DipyBundleRecovery(BaseInterface):
             bbox_valid_check=False,
         )
 
-        self._flag_written = is_low_confidence(prec, rec, count)
-        if self._flag_written:
-            with open(self._gen_flagname(), "w") as flag_file:
-                json.dump(
-                    {
-                        "model_bundle": str(self.inputs.model_bundle_name),
-                        "precision": prec,
-                        "recall": rec,
-                        "f5": f5,
-                        "count": count,
-                        "retry_arm": arm,
-                        "low_confidence": True,
-                    },
-                    flag_file,
-                    indent=1,
-                )
+        with open(self._gen_flagname(), "w") as flag_file:
+            json.dump(
+                {
+                    "model_bundle": str(self.inputs.model_bundle_name),
+                    "precision": prec,
+                    "recall": rec,
+                    "f5": f5,
+                    "count": count,
+                    "retry_arm": arm,
+                    "low_confidence": is_low_confidence(prec, rec, count),
+                },
+                flag_file,
+                indent=1,
+            )
         return runtime
 
     def _gen_outfilename(self):
@@ -345,11 +345,10 @@ class DipyBundleRecovery(BaseInterface):
             if base.endswith(ext):
                 base = base[: -len(ext)]
                 break
-        return base + ".lowconf.json"
+        return base + ".conf.json"
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs["bundle"] = self._gen_outfilename()
-        if getattr(self, "_flag_written", False):
-            outputs["confidence_flag"] = self._gen_flagname()
+        outputs["confidence_flag"] = self._gen_flagname()
         return outputs

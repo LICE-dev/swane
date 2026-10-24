@@ -273,8 +273,15 @@ class TestRecoveryNode:
         outs = node._list_outputs()
         assert os.path.exists(outs["bundle"])
         assert _n(outs["bundle"]) == len(model_like)  # default kept as-is
-        assert not isdefined(outs["confidence_flag"])
-        assert not os.path.exists(node._gen_flagname())
+        # the sidecar is always written, so a re-run overwrites a stale flag
+        import json
+
+        assert outs["confidence_flag"] == node._gen_flagname()
+        assert outs["confidence_flag"].endswith("recovered.conf.json")
+        data = json.load(open(outs["confidence_flag"]))
+        assert data["low_confidence"] is False
+        assert data["model_bundle"] == "IFOF_R"
+        assert data["retry_arm"] is None
 
     def test_displaced_default_is_recovered_by_the_retry(self, atlas_dir, tmp_path):
         rng = np.random.default_rng(2)
@@ -291,7 +298,11 @@ class TestRecoveryNode:
         # the retry found the real bundle: far more streamlines than the default,
         # and good enough coverage that it is not flagged.
         assert _n(outs["bundle"]) > len(far)
-        assert not isdefined(outs["confidence_flag"])
+        import json
+
+        data = json.load(open(outs["confidence_flag"]))
+        assert data["low_confidence"] is False
+        assert data["retry_arm"] == "widen"
 
     def test_unrecoverable_default_is_flagged(self, atlas_dir, tmp_path):
         rng = np.random.default_rng(3)
@@ -352,7 +363,10 @@ class TestRecoveryNode:
         assert calls == []
         # the default is shipped, flagged as before (the retry could not change it)
         assert _n(node._list_outputs()["bundle"]) == 20
-        assert isdefined(node._list_outputs()["confidence_flag"])
+        import json
+
+        data = json.load(open(node._list_outputs()["confidence_flag"]))
+        assert data["low_confidence"] is True
 
     def test_retry_that_changes_a_threshold_runs_once_per_chunk(
         self, atlas_dir, tmp_path, monkeypatch
