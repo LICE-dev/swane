@@ -1230,9 +1230,9 @@ class MainWorkflow(CustomWorkflow):
                     bundle_workflow,
                     "inputnode.atlas2native",
                 )
-                # The confidence flag is a sidecar the recovery node writes only
-                # for a low-confidence bundle; its outputnode field is otherwise
-                # Undefined, which DataSink skips, so the sink is unconditional.
+                # The confidence flag is the .conf.json sidecar the recovery
+                # node always writes (low_confidence true/false), so a re-run
+                # overwrites the sidecar of an earlier one.
                 if tract == "fx":
                     for result_name in ("bundle_bilateral", "flag_bilateral"):
                         bundle_workflow.sink_result(
