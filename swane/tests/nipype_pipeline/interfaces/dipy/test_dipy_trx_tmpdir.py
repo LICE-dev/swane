@@ -126,3 +126,42 @@ def test_trx_memmaps_are_created_and_removed_in_the_node_dir(tmp_path, monkeypat
     assert glob.glob(str(node_dir / "trx_*")) == []  # removed once released
     assert (node_dir / "out.trx").exists()
     assert os.environ[TRX_TMPDIR_VAR] == str(system_tmp)  # restored
+
+
+class _LeakyTrx(TrxWorkingDirMixin, BaseInterface):
+    """Leaves a trx_* directory behind, as trx does on Windows, where a
+    temporary directory whose memmaps are still mapped cannot be deleted."""
+
+    input_spec = _TrxWriterInputSpec
+    output_spec = _TrxWriterOutputSpec
+    fail = False
+
+    def _run_interface(self, runtime):
+        os.makedirs(os.path.join("trx_leftover", "positions"))
+        with open(os.path.join("trx_leftover", "positions", "3.float32"), "wb") as f:
+            f.write(b"\0" * 12)
+        if _LeakyTrx.fail:
+            raise RuntimeError("boom")
+        return runtime
+
+    def _list_outputs(self):
+        return {}
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_trx_dirs_left_by_the_run_are_removed(tmp_path, fail):
+    node_dir = tmp_path / "node"
+    node_dir.mkdir()
+    (node_dir / "trx_from_before").mkdir()  # not created by this run: kept
+    (node_dir / "not_trx").mkdir()
+    _LeakyTrx.fail = fail
+
+    if fail:
+        with pytest.raises(RuntimeError):
+            _LeakyTrx().run(cwd=str(node_dir))
+    else:
+        _LeakyTrx().run(cwd=str(node_dir))
+
+    assert not (node_dir / "trx_leftover").exists()
+    assert (node_dir / "trx_from_before").is_dir()
+    assert (node_dir / "not_trx").is_dir()
