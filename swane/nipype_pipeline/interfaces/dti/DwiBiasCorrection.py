@@ -109,14 +109,16 @@ class DwiBiasCorrection(BaseInterface):
         # antspyx wants the physical voxel spacing to place its spline mesh; the
         # division below is index-aligned, so only the spatial spacing matters.
         zooms = in_nii.header.get_zooms()[:3]
-        mean_b0_img = ants.from_numpy(
-            mean_b0.astype(np.float32), spacing=tuple(float(z) for z in zooms)
-        )
 
+        # ITK sizes its global thread pool on the first ITK call of the process
+        # (ants.from_numpy here), so that call must run inside thread_env too.
         with thread_env(
             self.inputs.num_threads,
             (OMP_THREADS_VAR, OPENBLAS_THREADS_VAR, ITK_THREADS_VAR),
         ):
+            mean_b0_img = ants.from_numpy(
+                mean_b0.astype(np.float32), spacing=tuple(float(z) for z in zooms)
+            )
             # Estimate the bias field once, on the mean b0.
             bias_img = ants.n4_bias_field_correction(
                 mean_b0_img, return_bias_field=True
