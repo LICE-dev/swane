@@ -885,6 +885,13 @@ def _stub_linux_system(stub, apt_body=""):
     stub("apt-get", apt_body)
 
 
+def _stub_root(stub):
+    """The installer runs as root: ``id -u`` prints 0. Without this stub the
+    harness has no ``id`` and the installer runs as a regular user, whatever
+    user runs the tests."""
+    stub("id", '[ "$1" = -u ] && echo 0')
+
+
 def _stub_locale(sh, stub, present=False, generated=True):
     """``locale -a`` lists en_US.utf8 when ``present``, or once ``locale-gen``
     ran successfully if ``generated``."""
@@ -990,7 +997,6 @@ def test_apt_update_failure_warns_and_still_installs(sh, stub):
     assert "%s %s" % (APT_INSTALL, APT_LIST) in stub.calls("apt-get")
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="needs a non-root user")
 @pytest.mark.parametrize("answer", ["y\n", "yes\n"])
 def test_system_step_asks_once_and_runs_both_steps(sh, stub, answer):
     """One question, before the first sudo command, naming the steps."""
@@ -1140,7 +1146,6 @@ def test_system_step_plain_name_fallback_counts_as_installed(sh, stub):
     assert stub.calls("sudo") == []
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="needs a non-root user")
 def test_system_step_packages_present_locale_missing_asks_for_locale_only(sh, stub):
     _stub_linux_system(stub)
     _stub_locale(sh, stub)
@@ -1168,7 +1173,6 @@ def test_system_step_without_apt_never_asks_or_runs_sudo(sh, stub):
     assert LOCALE_HINT in warnings[1]
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="needs a non-root user")
 def test_system_step_without_sudo_for_non_root_warns(sh, stub):
     stub.platform("Linux", "x86_64")
     stub("apt-get")
@@ -1186,6 +1190,67 @@ def test_system_step_without_sudo_for_non_root_warns(sh, stub):
     assert command == "install --no-install-recommends %s libasound2t64" % APT_LIST
     _assert_shell_line("apt-get " + command)
     assert LOCALE_HINT in warnings[1]
+
+
+@pytest.mark.parametrize("with_sudo", [True, False])
+def test_system_step_as_root_runs_directly_never_through_sudo(sh, stub, with_sudo):
+    """Root (a container, an admin shell) runs the steps itself, with or
+    without sudo installed."""
+    stub.platform("Linux", "x86_64")
+    stub("apt-get")
+    if with_sudo:
+        stub("sudo", '"$@"')
+    _stub_root(stub)
+    _stub_locale(sh, stub)
+    result = sh.code(SYSTEM_STEP, tty="y\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stderr.count(SYSTEM_QUESTION) == 1
+    assert "Linux system setup: these steps run as root:" in result.stderr
+    assert "sudo" not in result.stderr
+    assert stub.calls("sudo") == []
+    assert stub.calls("apt-get") == [
+        APT_UPDATE,
+        "%s %s" % (APT_INSTALL, APT_LIST),
+        "%s libasound2t64" % APT_INSTALL,
+    ]
+    assert stub.calls("locale-gen") == ["locale-gen en_US.UTF-8"]
+    assert result.stdout == "", "nothing to warn about"
+
+
+def test_system_step_declined_as_root_gives_commands_without_sudo(sh, stub):
+    """Root may have no sudo: the manual commands must run as they are."""
+    stub.platform("Linux", "x86_64")
+    stub("apt-get")
+    _stub_root(stub)
+    _stub_locale(sh, stub)
+    result = sh.code(SYSTEM_STEP, tty="n\n")
+    assert result.returncode == 0, result.stderr
+    assert stub.calls("apt-get") == []
+    assert stub.calls("locale-gen") == []
+    warnings = result.stdout.splitlines()
+    assert len(warnings) == 1, warnings
+    assert warnings[0].startswith("Linux system setup declined, nothing was run: ")
+    commands = warnings[0].split(", run: ")[1]
+    assert commands == (
+        "apt-get update && apt-get install --no-install-recommends "
+        "%s libasound2t64; locale-gen en_US.UTF-8" % APT_LIST
+    )
+    _assert_shell_line(commands)
+
+
+def test_locale_gen_missing_warns_to_install_locales(sh, stub):
+    """Minimal images (Docker's ubuntu) have no locales package."""
+    stub.platform("Linux", "x86_64")
+    stub("sudo", '"$@"')
+    stub("locale", "echo C")
+    result = sh.code('ensure_locale; rc=$?; printf "%s" "$SUMMARY_WARNINGS"; exit $rc')
+    assert result.returncode == 0
+    assert stub.calls("sudo") == []
+    assert result.stdout.startswith(
+        "locale-gen not found (install the locales package, e.g. "
+        "apt-get install locales, then rerun): "
+    )
+    assert LOCALE_HINT in result.stdout
 
 
 def test_locale_present_is_noop(sh, stub):
@@ -4284,6 +4349,23 @@ def test_main_end_to_end_with_stubs(sh, stub):
     assert MARKER_BEGIN in world.profile.read_text()
     activate = world.env / "etc" / "conda" / "activate.d" / "swane-fsl.sh"
     assert str(world.fsl_prefix) in activate.read_text()
+
+
+def test_main_end_to_end_as_root_without_sudo(sh, stub):
+    """Root with no sudo installed (a container): the system steps run
+    directly and the install completes with no warning."""
+    world = InstallWorld(sh, stub)
+    (stub.dir / "sudo").unlink()
+    _stub_root(stub)
+    result = world.run(*E2E_ARGS)
+    assert result.returncode == 0, result.stderr
+    assert "Linux system setup: these steps run as root:" in result.stderr
+    assert "%s yes (--yes)" % SYSTEM_QUESTION in result.stderr
+    assert stub.calls("sudo") == []
+    assert stub.calls("apt-get")[0] == APT_UPDATE
+    assert stub.calls("locale-gen") == ["locale-gen en_US.UTF-8"]
+    assert not any(line.startswith("WARNING: ") for line in result.stdout.splitlines())
+    assert "Or run now: %s" % world.launcher in result.stdout
 
 
 def test_main_rerun_reports_existing_fsl(sh, stub):
