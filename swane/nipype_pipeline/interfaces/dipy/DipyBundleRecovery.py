@@ -71,7 +71,8 @@ PREC_CONTAMINATED = 0.20
 REC_PRESENT = 0.25
 # The adjusted thresholds a retry uses: a tighter refine pruning to trim an
 # over-inclusive bundle, a wider first-pass reduction to pick up more of a sparse
-# one.
+# one. A retry only ever moves a threshold in its arm's direction, so a baseline
+# already at or past these (the AST/CST overrides) gets no retry.
 TIGHTEN_R_PRUNING_THR = 4.0
 WIDEN_REDUCTION_THR = 25.0
 # Below this recognised-streamline count a bundle is treated as empty for the
@@ -144,14 +145,18 @@ def adjusted_params(params, arm):
     """A copy of ``params`` with the one threshold ``arm`` adjusts.
 
     ``"tighten"`` lowers ``r_pruning_thr`` to :data:`TIGHTEN_R_PRUNING_THR`;
-    ``"widen"`` raises ``reduction_thr`` to :data:`WIDEN_REDUCTION_THR`. Any other
-    ``arm`` returns an unchanged copy.
+    ``"widen"`` raises ``reduction_thr`` to :data:`WIDEN_REDUCTION_THR`. Neither
+    ever moves a threshold the other way: one already tighter (or wider) is kept,
+    so the copy may equal ``params``, in which case no retry is worth running. Any
+    other ``arm`` returns an unchanged copy.
     """
     adjusted = dict(params)
     if arm == "tighten":
-        adjusted["r_pruning_thr"] = TIGHTEN_R_PRUNING_THR
+        adjusted["r_pruning_thr"] = min(
+            adjusted["r_pruning_thr"], TIGHTEN_R_PRUNING_THR
+        )
     elif arm == "widen":
-        adjusted["reduction_thr"] = WIDEN_REDUCTION_THR
+        adjusted["reduction_thr"] = max(adjusted["reduction_thr"], WIDEN_REDUCTION_THR)
     return adjusted
 
 
@@ -272,17 +277,20 @@ class DipyBundleRecovery(BaseInterface):
         prec, rec, f5, count = _recognized_metric(chosen, model_bundle)
         arm = recovery_arm(prec, rec)
 
-        # One adjusted retry, kept only if it matches the model better.
-        if arm is not None:
-            params = {
-                "model_clust_thr": float(self.inputs.model_clust_thr),
-                "reduction_thr": float(self.inputs.reduction_thr),
-                "pruning_thr": float(self.inputs.pruning_thr),
-                "refine": bool(self.inputs.refine),
-                "r_reduction_thr": float(self.inputs.r_reduction_thr),
-                "r_pruning_thr": float(self.inputs.r_pruning_thr),
-            }
-            retry_params = adjusted_params(params, arm)
+        # One adjusted retry, kept only if it matches the model better. A retry
+        # with the default's own thresholds (no arm, or an arm its baseline already
+        # satisfies) is skipped: recognition is deterministic (the build pickle
+        # restores the RNG state), so it would only reproduce the default.
+        params = {
+            "model_clust_thr": float(self.inputs.model_clust_thr),
+            "reduction_thr": float(self.inputs.reduction_thr),
+            "pruning_thr": float(self.inputs.pruning_thr),
+            "refine": bool(self.inputs.refine),
+            "r_reduction_thr": float(self.inputs.r_reduction_thr),
+            "r_pruning_thr": float(self.inputs.r_pruning_thr),
+        }
+        retry_params = adjusted_params(params, arm)
+        if retry_params != params:
             retry = Streamlines()
             for chunk, pickle in zip(
                 self.inputs.tractogram_chunks, self.inputs.recobundles_pickles
