@@ -208,6 +208,45 @@ class TestDwiBiasCorrectionThreadPinning:
         assert OPENBLAS_THREADS_VAR not in os.environ
         assert ITK_THREADS_VAR not in os.environ
 
+    def test_itk_threads_pinned_before_the_first_itk_call(
+        self, workspace, make_nifti, monkeypatch
+    ):
+        """ITK sizes its global thread pool on the first ITK call of the
+        process (here ``ants.from_numpy``), not on the N4 call: the thread
+        count must already be exported then, or N4 runs on every core."""
+        import ants
+
+        monkeypatch.delenv(ITK_THREADS_VAR, raising=False)
+
+        shape = (4, 4, 4)
+        data = np.stack(
+            [np.ones(shape, dtype=np.float32), np.ones(shape, dtype=np.float32)],
+            axis=-1,
+        )
+        in_file = make_nifti("dwi.nii.gz", data=data)
+        bval = _make_bval(workspace, [0, 1000])
+
+        calls = {}
+        _install_n4_spy(monkeypatch, np.ones(shape, dtype=np.float32), calls)
+
+        from_numpy = ants.from_numpy
+        itk_at_from_numpy = []
+
+        def _from_numpy_spy(*args, **kwargs):
+            itk_at_from_numpy.append(os.environ.get(ITK_THREADS_VAR))
+            return from_numpy(*args, **kwargs)
+
+        monkeypatch.setattr(ants, "from_numpy", _from_numpy_spy)
+
+        node = DwiBiasCorrection()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.num_threads = 3
+        node.run()
+
+        assert itk_at_from_numpy, "ants.from_numpy was never called"
+        assert itk_at_from_numpy[0] == "3"
+
 
 class TestDwiBiasCorrectionRealN4:
     """A real (un-mocked) N4 run, to prove the wiring holds end to end."""

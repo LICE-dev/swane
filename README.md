@@ -209,7 +209,7 @@ This project includes subsection derived from other software, which licenses can
 - **Python task fMRI engine** (nilearn/scikit-learn, experimental, untested) as an alternative to FSL FEAT.
 - **FreeSurfer analysis step** workflow preference: *Disabled*, *SynthSeg Cortical Parcellation only*, *Surfaces + Cortical Parcellation*, *Complete Recon-all*.
 - **SynthSeg fast mode** workflow preference.
-- **Limit Synth tools CPU cores** application setting.
+- **Limit Synth tools CPU cores** application setting (FreeSurfer Synth tools only: ANTs registration, antspynet and Atropos always use the per-subject CPU budget).
 - **Estimated RAM allocation per subject** and **Enable resource monitor** application settings.
 - **Third-party license consent**: at the first launch, and whenever the version of a detected tool changes, SWANe shows the licenses of the external tools (FSL, FreeSurfer, 3D Slicer, dcm2niix, antspyx, antspynet, dipy) and requires their acceptance.
 - **Home tab**: each detected dependency shows a link to its license, and a new **Atlases** column lists the atlases and templates used by SWANe with their licenses.
