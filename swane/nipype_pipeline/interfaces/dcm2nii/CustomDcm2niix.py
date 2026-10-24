@@ -15,8 +15,7 @@ from swane.patches.windows_compat import shell_executable
 # absolute path to the dcm2niix binary shipped by the pip package, so no
 # system dcm2niix installation is required. The package exposes the path
 # without the Windows suffix, so we add it ourselves when needed. Nipype runs
-# ``_cmd`` through a shell, so on Windows the path is quoted (it may contain
-# spaces); elsewhere it is used unchanged.
+# ``_cmd`` through a shell, so the path is quoted (it may contain spaces).
 _dcm2niix_binary = Path(dcm2niix.bin)
 if platform.system() == "Windows" and _dcm2niix_binary.suffix != ".exe":
     _dcm2niix_binary = _dcm2niix_binary.with_suffix(".exe")

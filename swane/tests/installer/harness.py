@@ -13,9 +13,9 @@ be reached:
   passes;
 * ``PATH`` is ``<stubdir>:<toolsdir>``. ``toolsdir`` holds symlinks to a
   whitelist of basic utilities (:data:`BASIC_TOOLS`); every tool under test
-  (``uname``, ``conda``, ``sudo``, ``apt-get``, ``curl``, ``sha256sum``,
-  ``dot``, ``python``...) exists only when the test stubs it, so the real
-  ones can never run;
+  (``uname``, ``id``, ``conda``, ``sudo``, ``apt-get``, ``curl``,
+  ``sha256sum``, ``dot``, ``python``...) exists only when the test stubs it,
+  so the real ones can never run;
 * ``HOME`` is ``<tmp_path>/home`` and prompts read ``SWANE_TTY``, a file of
   scripted answers, never the real terminal.
 
