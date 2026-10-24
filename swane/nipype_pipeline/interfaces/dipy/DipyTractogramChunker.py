@@ -37,6 +37,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.dipy import TrxWorkingDirMixin
+
 
 def _strip_tractogram_ext(name):
     for ext in (".trx", ".trk", ".tck"):
@@ -79,7 +81,7 @@ class DipyTractogramChunkerOutputSpec(TraitedSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyTractogramChunker(BaseInterface):
+class DipyTractogramChunker(TrxWorkingDirMixin, BaseInterface):
     """
     Partitions an atlas-space tractogram into ``n_chunks`` representative
     (strided, never contiguous) sub-tractograms for a shared RecoBundles build,

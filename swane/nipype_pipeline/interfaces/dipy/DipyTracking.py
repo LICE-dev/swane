@@ -75,6 +75,8 @@ from nipype.interfaces.base import (
     isdefined,
 )
 
+from swane.nipype_pipeline.interfaces.dipy import TrxWorkingDirMixin
+
 # BLAS/OpenMP thread-count environment variables, pinned like the ITK variable
 # in AntsN4BiasFieldCorrection so numpy's OpenBLAS backend and the tracker's
 # OpenMP pool do not multithread invisibly to nipype's resource accounting.
@@ -333,7 +335,7 @@ class DipyTrackingOutputSpec(TraitedSpec):
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.interfaces.base.BaseInterface)  -*-
-class DipyTracking(BaseInterface):
+class DipyTracking(TrxWorkingDirMixin, BaseInterface):
     """
     Probabilistic tractography seeded from the WM PVE mask, with an
     FA-threshold stopping criterion. Streamlines are tracked in diffusion
