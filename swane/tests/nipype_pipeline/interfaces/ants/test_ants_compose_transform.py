@@ -232,6 +232,42 @@ class TestAntsComposeTransformThreads:
         node.run()
         assert ITK_THREADS_VAR not in os.environ
 
+    @pytest.mark.parametrize("num_threads, expected", [(None, "1"), (2, "2")])
+    def test_itk_threads_exported_from_the_first_itk_call(
+        self,
+        workspace,
+        make_nifti,
+        identity_transform,
+        monkeypatch,
+        spy_apply,
+        num_threads,
+        expected,
+    ):
+        """The node reserves one CPU by default and the composed field does not
+        depend on the thread count: without num_threads ITK must get one
+        thread, not every core, from the first ITK call (the image read)."""
+        import ants
+
+        from swane.nipype_pipeline.interfaces.ants import ITK_THREADS_VAR
+
+        monkeypatch.delenv(ITK_THREADS_VAR, raising=False)
+        seen = []
+        real_read = ants.image_read
+
+        def _spy_read(*args, **kwargs):
+            seen.append(os.environ.get(ITK_THREADS_VAR))
+            return real_read(*args, **kwargs)
+
+        monkeypatch.setattr(ants, "image_read", _spy_read)
+
+        node = _configured_node(make_nifti, identity_transform)
+        if num_threads is not None:
+            node.inputs.num_threads = num_threads
+        node.run()
+
+        assert seen and seen[0] == expected
+        assert ITK_THREADS_VAR not in os.environ
+
 
 @pytest.mark.heavy
 class TestAntsComposeTransformRealRun:

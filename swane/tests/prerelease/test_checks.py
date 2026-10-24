@@ -18,6 +18,7 @@ from swane.tests.prerelease.checks import (
     _check_dipy_bundle_recovery,
     _check_fmri_resting_networks,
     _check_fmri_task_location,
+    _check_no_mapnode_subfolder,
     GroundTruth,
     RESULTS_DIR,
     WARNING,
@@ -331,3 +332,20 @@ def test_dipy_bundle_recovery_reads_the_sidecar_not_its_existence(tmp_path):
 
     assert checks["dipy.confidence.%s_lh" % SWEEP_TRACT].passed
     assert not checks["dipy.confidence.%s_rh" % SWEEP_TRACT].passed
+
+
+def test_results_in_a_mapnode_subfolder_fail(tmp_path):
+    """Task fMRI cluster maps left in the MapNode folder are invisible to the
+    Slicer scene loader, which lists only results/fMRI."""
+    root = tmp_path / RESULTS_DIR
+    flat = root / "fMRI" / "r-fmri_0_cluster_a_threshold3.1.nii.gz"
+    nested = root / "fMRI" / "_fmri_0_cluster_t3_1_to_ref_ants_apply0" / "r-x.nii.gz"
+    for path in (flat, nested):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"")
+
+    ok = _check_no_mapnode_subfolder(str(tmp_path), [str(flat)])
+    assert ok.passed
+    bad = _check_no_mapnode_subfolder(str(tmp_path), [str(flat), str(nested)])
+    assert not bad.passed
+    assert "_fmri_0_cluster_t3_1_to_ref_ants_apply0" in bad.detail
