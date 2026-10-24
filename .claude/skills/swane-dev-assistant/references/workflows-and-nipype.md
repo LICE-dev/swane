@@ -59,6 +59,8 @@ When adding an analysis, trace this complete chain:
 - Keep cross-workflow connections explicit. Verify source/destination direction, especially for reference/moving images and transforms.
 - Propagate resource choices from `MainWorkflow` rather than querying host capacity independently inside each workflow.
 - Use `CustomWorkflow.sink_result` for persisted outputs and preserve its result names, subfolders, and regular-expression substitutions.
+- `DataSink` applies `regexp_substitutions` to a destination joined with `os.sep`: build any pattern that matches separators from `os.sep` (as `mapnode_subdir_substitution()` does), never with a hard-coded `/`, or it silently makes no substitution on Windows.
+- With its default `parameterization`, `DataSink` keeps in the destination every `_`-prefixed folder of the source path, not only the `_<name><n>` folders Nipype creates. A sink test must write its files in the node's own working folder (as a real interface does) and assert only the folders SWANe controls: CI's pytest basetemp lives under `$RUNNER_TEMP` (`.../_temp/...`).
 - Treat result filenames as downstream contracts. Search `Subject`, result-tree code, Slicer scripts, tests, and documentation before changing them.
 - Ensure new outputs appear in the UI/export path only when the file contract actually exists.
 
