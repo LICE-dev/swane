@@ -1,0 +1,3 @@
+# Shared project defaults. Keep credentials and machine-specific paths out of this file.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"

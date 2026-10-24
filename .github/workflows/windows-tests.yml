@@ -1,0 +1,399 @@
+name: Tests (Windows / macOS / Ubuntu)
+
+# Run title in the Actions list: suite, runner OS and optional prerelease passes.
+run-name: >-
+  ${{ inputs.suite }} tests on ${{ inputs.os }}${{ inputs.passes && format(' (passes: {0})', inputs.passes) || '' }}
+
+# Manual only: never runs on push or pull_request.
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Suite to run"
+        type: choice
+        options: [light, heavy, prerelease, all]
+        default: light
+      os:
+        description: "Runner OS (macOS/Ubuntu prerelease also installs a minimal FSL)"
+        type: choice
+        options: [windows-latest, macos-latest, ubuntu-latest]
+        default: windows-latest
+      passes:
+        description: "Comma-separated prerelease passes (empty = every runnable pass)"
+        type: string
+        default: ""
+      rebuild_cache:
+        description: "Rebuild phantom/weights caches"
+        type: boolean
+        default: false
+      fsl_release:
+        description: "macOS/Ubuntu prerelease: FSL release to install (empty = oldest supported)"
+        type: string
+        default: ""
+      slicer_release:
+        description: "heavy/prerelease: 3D Slicer release to install (empty = the CI default)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  # TEMPORARY (see swane/tests/helpers/fsl_policy_override.py): FSL has no
+  # Windows build, so the Windows runner tests as if FSL were only recommended
+  # despite the shipped FSL_MANDATORY = True. Empty (no override) elsewhere.
+  # Remove once FSL_MANDATORY ships as False or Windows drops the FSL requirement.
+  SWANE_TEST_FSL_MANDATORY: ${{ inputs.os == 'windows-latest' && '0' || '' }}
+
+jobs:
+  light:
+    if: ${{ inputs.suite == 'light' || inputs.suite == 'all' }}
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install system dependencies (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb dc bc || true
+          sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
+      - name: Install SWANe
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
+      - name: Environment report
+        shell: bash
+        run: |
+          python -c "import sys; print(sys.executable); print(sys.version)"
+          python -c "import dcm2niix, niimath; print('dcm2niix', dcm2niix.__file__); print('niimath', niimath.__file__)"
+          python -m pip freeze > pip-freeze.txt
+      - name: Light suite
+        shell: bash
+        # Per-test timeouts: a hung test dumps every thread's stack
+        # (faulthandler) and then fails, instead of eating the job timeout.
+        # The base temp must NOT contain a space: SWANe rejects subject folders
+        # whose path has blank spaces (SubjectRet.PathBlankSpaces). Spaces in
+        # executable paths stay covered by the quoting unit tests.
+        run: >
+          python -m pytest swane/tests -m "not heavy"
+          --basetemp "${{ runner.temp }}/swane_tmp"
+          --junitxml=junit-light.xml -p no:cacheprovider -rfEs
+          --timeout 600 -o faulthandler_timeout=300
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: light-${{ inputs.os }}
+          path: |
+            junit-light.xml
+            pip-freeze.txt
+
+  heavy:
+    if: ${{ inputs.suite == 'heavy' || inputs.suite == 'all' }}
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 240
+    env:
+      # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
+      # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
+      TEMPLATEFLOW_HOME: ${{ (inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow') || (inputs.os == 'macos-latest' && '/Users/runner/.cache/templateflow') || '/home/runner/.cache/templateflow' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install system dependencies (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb dc bc || true
+          sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
+      - name: Install SWANe
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
+      - name: Restore model/data caches
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.keras
+            ~/.antspy
+            ~/.cache/templateflow
+            ~/.cache/swane
+            ~/.dipy
+          key: heavy-${{ inputs.os }}-${{ hashFiles('setup.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
+      # Enables the requires_slicer tests (detection and module lifecycle).
+      - name: Install Slicer
+        uses: ./.github/actions/install-slicer
+        with:
+          release: ${{ inputs.slicer_release }}
+      - name: Fetch the phantom anatomy (TemplateFlow)
+        shell: bash
+        run: python -c "from swane.tests.helpers.phantom.anatomy_source import resolve_anatomy_files as r; print(r())"
+      - name: Heavy tests
+        shell: bash
+        run: >
+          python -m pytest swane/tests --run-heavy -m heavy
+          --basetemp "${{ runner.temp }}/swane_tmp"
+          --junitxml=junit-heavy.xml -p no:cacheprovider -rfEs
+          --timeout 1800 -o faulthandler_timeout=900
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: heavy-${{ inputs.os }}
+          path: junit-heavy.xml
+
+  prerelease-plan:
+    if: ${{ inputs.suite == 'prerelease' || inputs.suite == 'all' }}
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 120
+    outputs:
+      passes: ${{ steps.plan.outputs.passes }}
+      slicer_passes: ${{ steps.plan.outputs.slicer_passes }}
+    env:
+      # Space-free paths (SWANe rejects subject folders with blank spaces).
+      SWANE_PHANTOM_DIR: ${{ (inputs.os == 'windows-latest' && 'D:\swp_phantom') || (inputs.os == 'macos-latest' && '/Users/runner/swp_phantom') || '/home/runner/swp_phantom' }}
+      SWP_WORK_DIR: ${{ (inputs.os == 'windows-latest' && 'D:/swp') || (inputs.os == 'macos-latest' && '/Users/runner/swp') || '/home/runner/swp' }}
+      # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
+      # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
+      TEMPLATEFLOW_HOME: ${{ (inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow') || (inputs.os == 'macos-latest' && '/Users/runner/.cache/templateflow') || '/home/runner/.cache/templateflow' }}
+      # Standard runners: windows/ubuntu 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
+      SWP_CORES: ${{ inputs.os == 'macos-latest' && '3' || '4' }}
+      SWP_RAM: ${{ inputs.os == 'macos-latest' && '6' || '14' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install system dependencies (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb dc bc || true
+          sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
+      - name: Install SWANe
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest pytest-qt
+      # macOS / Linux only: Windows has no FSL build, so its sweep stays FSL-free.
+      - name: Install FSL
+        if: ${{ runner.os != 'Windows' }}
+        uses: ./.github/actions/install-fsl
+        with:
+          release: ${{ inputs.fsl_release }}
+      - name: Check FSL
+        if: ${{ runner.os != 'Windows' }}
+        shell: bash
+        # Fail here rather than let the sweep silently drop every FSL pass.
+        run: |
+          cat "$FSLDIR/etc/fslversion"
+          which bet flirt fnirt eddy_cpu dtifit bedpostx probtrackx2 melodic
+          python -c "from swane.utils.DependencyManager import DependencyManager as D; d = D.check_fsl(); print(d.state, d.label); assert d.state.name == 'DETECTED'"
+      # So the capability probe offers the Slicer passes instead of dropping
+      # them; their runners install Slicer again (installer cached).
+      - name: Install Slicer
+        uses: ./.github/actions/install-slicer
+        with:
+          release: ${{ inputs.slicer_release }}
+      - name: Phantom cache
+        id: phantom
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ env.SWANE_PHANTOM_DIR }}
+            ~/.cache/templateflow/tpl-MNI152NLin2009cSym
+          key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
+          enableCrossOsArchive: true
+      - name: Build phantom
+        if: steps.phantom.outputs.cache-hit != 'true'
+        shell: bash
+        run: python -c "from swane.tests.prerelease.subject import load_phantom; print(load_phantom().root)"
+      # The capability probe only offers the DIPY_RECOBUNDLES tractography
+      # passes when ~/.dipy/bundle_atlas_hcp842 already exists; SWANe would
+      # fetch it at run time, so fetch it once here and share it via cache.
+      # One cache per runner OS: the archive stores ~/.dipy relative to the
+      # workspace, and the home directory sits elsewhere on each OS, so an
+      # archive saved on macOS lands outside ~/.dipy when restored on Windows.
+      - name: HCP842 atlas cache
+        id: hcp842
+        uses: actions/cache@v6
+        with:
+          path: ~/.dipy/bundle_atlas_hcp842
+          key: dipy-hcp842-${{ runner.os }}-v1
+      - name: Fetch HCP842 atlas
+        if: steps.hcp842.outputs.cache-hit != 'true'
+        shell: bash
+        run: python -c "import os; from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import ensure_atlas as e; print(e(os.path.join(os.path.expanduser('~'), '.dipy')))"
+      - name: Plan
+        id: plan
+        shell: bash
+        env:
+          REQUESTED_PASSES: ${{ inputs.passes }}
+        run: |
+          python -m swane.tests.prerelease --dry-run --cores "$SWP_CORES" --ram "$SWP_RAM" | tee dry-run.txt
+          if [ -n "$REQUESTED_PASSES" ]; then
+            passes=$(python -c "import json,sys; print(json.dumps([p.strip() for p in sys.argv[1].split(',') if p.strip()]))" "$REQUESTED_PASSES" | tr -d '\r')
+          else
+            # stdout carries only the JSON list; probe chatter goes to stderr
+            passes=$(python -m swane.tests.prerelease --list-json --cores "$SWP_CORES" --ram "$SWP_RAM" | tr -d '\r')
+          fi
+          echo "passes=$passes" >> "$GITHUB_OUTPUT"
+          slicer_passes=$(python -c "import json; from swane.tests.prerelease.plan import passes_needing; print(json.dumps(passes_needing('slicer')))" | tr -d '\r')
+          echo "slicer_passes=$slicer_passes" >> "$GITHUB_OUTPUT"
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: prerelease-plan
+          path: dry-run.txt
+          if-no-files-found: ignore
+
+  prerelease-run:
+    needs: prerelease-plan
+    if: ${{ needs.prerelease-plan.outputs.passes != '[]' }}
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        pass: ${{ fromJSON(needs.prerelease-plan.outputs.passes) }}
+    env:
+      # Same paths and budget as prerelease-plan.
+      # Space-free paths (SWANe rejects subject folders with blank spaces).
+      SWANE_PHANTOM_DIR: ${{ (inputs.os == 'windows-latest' && 'D:\swp_phantom') || (inputs.os == 'macos-latest' && '/Users/runner/swp_phantom') || '/home/runner/swp_phantom' }}
+      SWP_WORK_DIR: ${{ (inputs.os == 'windows-latest' && 'D:/swp') || (inputs.os == 'macos-latest' && '/Users/runner/swp') || '/home/runner/swp' }}
+      # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
+      # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
+      TEMPLATEFLOW_HOME: ${{ (inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow') || (inputs.os == 'macos-latest' && '/Users/runner/.cache/templateflow') || '/home/runner/.cache/templateflow' }}
+      # Standard runners: windows/ubuntu 4 cores / 16 GB, macOS arm64 3 cores / 7 GB.
+      SWP_CORES: ${{ inputs.os == 'macos-latest' && '3' || '4' }}
+      SWP_RAM: ${{ inputs.os == 'macos-latest' && '6' || '14' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install system dependencies (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libopengl0 libgl1-mesa-dev libglu1-mesa libpulse0 libpulse-mainloop-glib0 libnss3 libx11-xcb1 libxdamage1 libxss1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 xvfb dc bc || true
+          sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
+      - name: Install SWANe
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest pytest-qt
+      # macOS / Linux only: Windows has no FSL build, so its sweep stays FSL-free.
+      - name: Install FSL
+        if: ${{ runner.os != 'Windows' }}
+        uses: ./.github/actions/install-fsl
+        with:
+          release: ${{ inputs.fsl_release }}
+      - name: Check FSL
+        if: ${{ runner.os != 'Windows' }}
+        shell: bash
+        # Fail here rather than let the sweep silently drop every FSL pass.
+        run: |
+          cat "$FSLDIR/etc/fslversion"
+          which bet flirt fnirt eddy_cpu dtifit bedpostx probtrackx2 melodic
+          python -c "from swane.utils.DependencyManager import DependencyManager as D; d = D.check_fsl(); print(d.state, d.label); assert d.state.name == 'DETECTED'"
+      # Only the passes gated on Slicer (plan.passes_needing) pay for it.
+      - name: Install Slicer
+        if: ${{ contains(fromJSON(needs.prerelease-plan.outputs.slicer_passes), matrix.pass) }}
+        uses: ./.github/actions/install-slicer
+        with:
+          release: ${{ inputs.slicer_release }}
+      # Restore this broad cache first: its ~/.cache/templateflow may hold
+      # 0-byte placeholders that would overwrite the phantom's anatomy files.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.keras
+            ~/.antspy
+            ~/.cache/templateflow
+            ~/.dipy
+          key: prerelease-models-${{ hashFiles('setup.py') }}
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ env.SWANE_PHANTOM_DIR }}
+            ~/.cache/templateflow/tpl-MNI152NLin2009cSym
+          key: phantom-${{ hashFiles('swane/tests/helpers/phantom/**/*.py') }}-${{ inputs.rebuild_cache && github.run_id || 'v1' }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - uses: actions/cache/restore@v6
+        with:
+          path: ~/.dipy/bundle_atlas_hcp842
+          key: dipy-hcp842-${{ runner.os }}-v1
+          fail-on-cache-miss: true
+      # On a models-cache miss the phantom cache creates TEMPLATEFLOW_HOME with
+      # tpl-MNI152NLin2009cSym only: TemplateFlow then skips its skeleton and
+      # finds no other template (e.g. the MNI152NLin6Asym of the resting-state
+      # AROMA registration). Add the missing skeleton without overwriting files.
+      - name: Complete the TemplateFlow skeleton
+        shell: bash
+        run: python -c "from templateflow import conf; conf.update(local=True, overwrite=False, silent=True)"
+      - name: Run pass
+        shell: bash
+        run: >
+          python -m swane.tests.prerelease --only ${{ matrix.pass }}
+          --cores "$SWP_CORES" --ram "$SWP_RAM" --work-dir "$SWP_WORK_DIR" --timeout 5
+      # Reports and logs only: never dicom/, the phantom or result volumes.
+      # Per-pass layout: <work dir>/<pass>/{pass_result.json,log/}; crash files
+      # are text (crashfile_format=txt) in log/, beside pypeline.log[.N].
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: prerelease-${{ matrix.pass }}
+          if-no-files-found: ignore
+          path: |
+            ${{ env.SWP_WORK_DIR }}/prerelease_report.html
+            ${{ env.SWP_WORK_DIR }}/prerelease_report.json
+            ${{ env.SWP_WORK_DIR }}/prerelease_state.json
+            ${{ env.SWP_WORK_DIR }}/*/pass_result.json
+            ${{ env.SWP_WORK_DIR }}/*/log/*.txt
+            ${{ env.SWP_WORK_DIR }}/*/log/pypeline.log*
+
+  prerelease-summary:
+    needs: [prerelease-plan, prerelease-run]
+    if: ${{ !cancelled() && needs.prerelease-plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # The merge script is stdlib only: no SWANe install needed.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: prerelease-*
+          path: artifacts
+          merge-multiple: false
+      - name: Merge pass results
+        shell: bash
+        env:
+          EXPECTED_PASSES: ${{ needs.prerelease-plan.outputs.passes }}
+        run: |
+          set +e
+          python swane/tests/prerelease/ci_summary.py artifacts \
+            --expected "$EXPECTED_PASSES" --output prerelease-summary.md > /dev/null
+          rc=$?
+          cat prerelease-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: prerelease-summary
+          path: prerelease-summary.md
+          if-no-files-found: ignore

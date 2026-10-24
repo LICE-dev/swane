@@ -3,9 +3,12 @@ from swane.utils.DataInputList import DataInputList, FMRI_NUM
 from swane import __version__
 from swane.utils.ResourceManager import ResourceManager
 
-from swane import strings
+from swane.resources import strings
 from swane.config.PreferenceEntry import PreferenceEntry
+from swane.utils.LicenseReference import TOOL_IDS as LICENSE_TOOL_IDS
 from swane.config.config_enums import *
+from swane.config.dependency_policy import FSL_MANDATORY, default_engines
+from swane.nipype_pipeline.workflows.workflow_constants import DIPY_TRACT_ATLAS
 
 try:
     base_dir = os.path.abspath(os.path.join(os.environ["FSLDIR"], "data/xtract_data"))
@@ -33,16 +36,17 @@ TRACTS = {
     "cbt": ["Cingulum subsection : Temporal", "false", 0],
     "cst": ["Corticospinal Tract", "true", 0],
     "fa": ["Frontal Aslant", "false", 0],
-    "fma": ["Forceps Major", "false", 0],
-    "fmi": ["Forceps Minor", "false", 0],
+    # TODO: fsl tract workflow does not handle non-bilateral tacts, so they are disabled for now
+    # "fma": ["Forceps Major", "false", 0],
+    # "fmi": ["Forceps Minor", "false", 0],
+    # "mcp": ["Middle Cerebellar Peduncle", "false", 0],
+    # "ac": ["Anterior Commissure", "false", 0],
     "fx": ["Fornix", "false", 0],
     "ilf": ["Inferior Longitudinal Fasciculus", "false", 0],
     "ifo": ["Inferior Fronto-Occipital Fasciculus", "false", 0],
-    "mcp": ["Middle Cerebellar Peduncle", "false", 0],
     "mdlf": ["Middle Longitudinal Fasciculus", "false", 0],
     "or": ["Optic Radiation", "true", 0],
     "str": ["Superior Thalamic Radiation", "false", 0],
-    "ac": ["Anterior Commissure", "false", 0],
     "uf": ["Uncinate Fasciculus", "false", 0],
     "vof": ["Vertical Occipital Fasciculus", "false", 0],
 }
@@ -60,7 +64,13 @@ if os.path.exists(structure_file):
 
 for k in list(TRACTS.keys()):
     if TRACTS[k][2] == 0:
-        del TRACTS[k]
+        if k in DIPY_TRACT_ATLAS:
+            # Not in the XTRACT data (e.g. FSL is not installed): the dipy engine
+            # does not need it, and the FSL engine skips tracts whose XTRACT
+            # protocol is missing.
+            TRACTS[k][2] = DEFAULT_N_SAMPLES
+        else:
+            del TRACTS[k]
 
 from psutil import virtual_memory
 import math
@@ -85,6 +95,10 @@ WF_PREFERENCES[category]["bet_bias_correction"] = PreferenceEntry(
     label="Bias reduction for skull removal",
     tooltip="Increase time with better results",
     default="false",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
 )
 WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
@@ -92,6 +106,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.3,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 WF_PREFERENCES[category]["flat1"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -125,6 +154,7 @@ WF_PREFERENCES[category]["freesurfer_step"] = PreferenceEntry(
         FreesurferStep.SYNTHSEG: "SynthStrip requires at least %.1f GB RAM"
         % ResourceManager.synth_seg_ram_requirements(),
     },
+    section=True,
 )
 
 WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
@@ -147,6 +177,17 @@ WF_PREFERENCES[category]["hippo_amyg_labels"] = PreferenceEntry(
     pref_requirement_fail_tooltip="Requires Freesurfer Surfaces",
 )
 
+WF_PREFERENCES[category]["synthseg_fast"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Use SynthSeg fast mode",
+    tooltip="Faster and uses less RAM, but is less accurate.",
+    default="false",
+    pref_requirement={
+        DataInputList.T13D: [("freesurfer_step", FreesurferStep.SYNTHSEG)]
+    },
+    pref_requirement_fail_tooltip="Requires FreeSurfer analysis step set to SynthSeg",
+)
+
 category = DataInputList.FLAIR3D
 WF_PREFERENCES[category] = {}
 WF_PREFERENCES[category]["bet_bias_correction"] = WF_PREFERENCES[DataInputList.T13D][
@@ -158,6 +199,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.5,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 
 category = DataInputList.MDC
@@ -171,6 +227,21 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.5,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 
 category = DataInputList.VENOUS_MR
@@ -181,12 +252,27 @@ WF_PREFERENCES[category]["bet_thr"] = PreferenceEntry(
     default=0.4,
     tooltip="Accepted values from 0 to 1, higher values are considered equal 1",
     range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.BET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is FSL BET",
+)
+WF_PREFERENCES[category]["antspynet_thr"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="antspynet brain-extraction threshold",
+    default=0.5,
+    tooltip="Probability threshold for the antspynet brain mask (0 to 1)",
+    range=[0, 1],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("deskull_engine", DeskullEngine.ANTSPYNET)]
+    },
+    pref_requirement_fail_tooltip="Only used when the brain extraction engine is antspynet",
 )
 WF_PREFERENCES[category]["vein_detection_mode"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="Venous volume detection mode",
     value_enum=VeinDetectionMode,
-    default=VeinDetectionMode.SD,
+    default=VeinDetectionMode.KURTOSIS,
 )
 WF_PREFERENCES[category]["vein_segment_threshold"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
@@ -204,6 +290,10 @@ WF_PREFERENCES[category]["cost_func"] = PreferenceEntry(
     label="FLIRT between modalities cost function",
     value_enum=BetweenModFlirtCost,
     default=BetweenModFlirtCost.NORMALIZED_MUTUAL_INFORMATION,
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("engine", RegistrationEngine.FSL)]
+    },
+    pref_requirement_fail_tooltip="Only used when the registration engine is FSL",
 )
 WF_PREFERENCES[category]["ai"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -227,7 +317,11 @@ WF_PREFERENCES[category]["cost_func"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     label="FLIRT between modalities cost function",
     value_enum=BetweenModFlirtCost,
-    default=BetweenModFlirtCost.MULTUAL_INFORMATION,
+    default=BetweenModFlirtCost.MUTUAL_INFORMATION,
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [("engine", RegistrationEngine.FSL)]
+    },
+    pref_requirement_fail_tooltip="Only used when the registration engine is FSL",
 )
 WF_PREFERENCES[category]["ai"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -308,6 +402,12 @@ WF_PREFERENCES[category]["old_eddy_correct"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
     label="Use older but faster fsl eddy_correct",
     default="false",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.FSL_XTRACT)
+        ]
+    },
+    pref_requirement_fail_tooltip="dipy always uses nlmeans",
 )
 WF_PREFERENCES[category]["tractography"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -321,25 +421,98 @@ WF_PREFERENCES[category]["tractography_threshold"] = PreferenceEntry(
     default=0.0035,
     range=[0.0001, 1],
     decimals=4,
-    pref_requirement={DataInputList.DTI: [("tractography", True)]},
-    pref_requirement_fail_tooltip="Tractography disabled",
+    pref_requirement={
+        DataInputList.DTI: [("tractography", True)],
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.FSL_XTRACT)
+        ],
+    },
+    pref_requirement_fail_tooltip="Requires tractography enabled and the FSL tractography engine",
 )
 WF_PREFERENCES[category]["track_procs"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Parallel processes for each side tractography",
     default=5,
     range=[1, 10],
-    pref_requirement={DataInputList.DTI: [("tractography", True)]},
-    pref_requirement_fail_tooltip="Tractography disabled",
+    pref_requirement={
+        DataInputList.DTI: [("tractography", True)],
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.FSL_XTRACT)
+        ],
+    },
+    pref_requirement_fail_tooltip="Requires tractography enabled and the FSL tractography engine",
+)
+WF_PREFERENCES[category]["cingulum"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Cingulum",
+    default="false",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.DIPY_RECOBUNDLES)
+        ]
+    },
+    pref_requirement_fail_tooltip="Only used with the dipy tractography engine",
+)
+WF_PREFERENCES[category]["seed_density"] = PreferenceEntry(
+    input_type=InputTypes.INT,
+    label="Seed density for tractography",
+    tooltip="Seed density in the WM mask: seeds are placed at random with a total count of this many per reference voxel volume of masked white matter (higher means more streamlines)",
+    default=2,
+    range=[1, 10],
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.DIPY_RECOBUNDLES)
+        ]
+    },
+    pref_requirement_fail_tooltip="Only used with the dipy tractography engine",
+)
+WF_PREFERENCES[category]["max_angle"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Maximum tracking angle",
+    tooltip="Maximum allowed angle between consecutive tracking steps",
+    default=20.0,
+    range=[1, 90],
+    decimals=1,
+    suffix="°",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.DIPY_RECOBUNDLES)
+        ]
+    },
+    pref_requirement_fail_tooltip="Only used with the dipy tractography engine",
+)
+WF_PREFERENCES[category]["step_size"] = PreferenceEntry(
+    input_type=InputTypes.FLOAT,
+    label="Tracking step size",
+    tooltip="Step size (mm) used by the probabilistic tracker",
+    default=0.2,
+    range=[0.05, 2.0],
+    decimals=2,
+    suffix=" mm",
+    pref_requirement={
+        GlobalPrefCategoryList.SYNTH: [
+            ("tractography_engine", TractographyEngine.DIPY_RECOBUNDLES)
+        ]
+    },
+    pref_requirement_fail_tooltip="Only used with the dipy tractography engine",
 )
 
 for tract in TRACTS.keys():
+    tract_pref_requirement = {DataInputList.DTI: [("tractography", True)]}
+    tract_pref_requirement_fail_tooltip = "Tractography disabled"
+    if tract not in DIPY_TRACT_ATLAS:
+        tract_pref_requirement[GlobalPrefCategoryList.SYNTH] = [
+            ("tractography_engine", TractographyEngine.FSL_XTRACT)
+        ]
+        tract_pref_requirement_fail_tooltip = (
+            "Requires tractography enabled and FSL tractography engine"
+        )
     WF_PREFERENCES[category][tract] = PreferenceEntry(
         input_type=InputTypes.BOOLEAN,
         label=TRACTS[tract][0],
         default=TRACTS[tract][1],
-        pref_requirement={DataInputList.DTI: [("tractography", True)]},
-        pref_requirement_fail_tooltip="Tractography disabled",
+        pref_requirement=tract_pref_requirement,
+        pref_requirement_fail_tooltip=tract_pref_requirement_fail_tooltip,
     )
 
 for x in range(FMRI_NUM):
@@ -446,19 +619,20 @@ WF_PREFERENCES[category]["del_end_vols"] = PreferenceEntry(
     default=0,
     range=[0, 500],
 )
-WF_PREFERENCES[category]["melodic_dim"] = PreferenceEntry(
+WF_PREFERENCES[category]["ic_dim"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="Independent Components to estimate",
     tooltip="Set 0 for automatic detection",
     default=0,
     range=[0, 200],
+    special_value_text="Auto",
 )
 WF_PREFERENCES[category]["melodic_thr"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Threshold for mixture model estimation",
     tooltip="Use 0.5 for alternative hypothesis or a greate value to exclude more false-positives",
     default=0.50,
-    decimal=2,
+    decimals=2,
     range=[0, 1],
 )
 WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
@@ -466,6 +640,17 @@ WF_PREFERENCES[category]["aroma"] = PreferenceEntry(
     label="ICA-AROMA denoising",
     default="true",
 )
+
+# Preference keys renamed across a SWANe version: {section: {old_key: new_key}}.
+# ConfigManager migrates them in place on load so that existing subject and
+# global config files keep working.
+RENAMED_PREFERENCES = {str(DataInputList.FMRI_RS): {"melodic_dim": "ic_dim"}}
+
+# Global and subject configuration files written by a SWANe version older than
+# this one (or with no readable last_swane_version) are discarded and replaced
+# by the defaults at load. Raise it in a release whose changes cannot be
+# migrated; never above __version__, or every start would reset again.
+PREF_RESET_BEFORE_VERSION = "0.2.5"
 
 GLOBAL_PREFERENCES = {}
 
@@ -496,6 +681,11 @@ GLOBAL_PREFERENCES[category]["slicer_version"] = PreferenceEntry(
     hidden=True,
     default="",
 )
+GLOBAL_PREFERENCES[category]["slicer_extensions_state"] = PreferenceEntry(
+    input_type=InputTypes.TEXT,
+    hidden=True,
+    default="",
+)
 GLOBAL_PREFERENCES[category]["last_pid"] = PreferenceEntry(
     input_type=InputTypes.INT,
     hidden=True,
@@ -506,11 +696,14 @@ GLOBAL_PREFERENCES[category]["last_swane_version"] = PreferenceEntry(
     hidden=True,
     default=__version__,
 )
-GLOBAL_PREFERENCES[category]["force_pref_reset"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    hidden=True,
-    default="false",
-)
+# One acceptance per tool of the license consent gate (LicenseReference.TOOL_IDS)
+for _license_tool in LICENSE_TOOL_IDS:
+    GLOBAL_PREFERENCES[category]["accepted_license_" + _license_tool] = PreferenceEntry(
+        input_type=InputTypes.TEXT,
+        label="Accepted license version for " + _license_tool,
+        default="",
+        hidden=True,
+    )
 GLOBAL_PREFERENCES[category]["slicer_scene_ext"] = PreferenceEntry(
     input_type=InputTypes.ENUM,
     hidden=True,
@@ -533,7 +726,7 @@ GLOBAL_PREFERENCES[category]["shutdown"] = PreferenceEntry(
     hidden=True,
     label=strings.menu_shutdown_pref,
     default="false",
-    default_at_startup="true",
+    default_at_startup=True,
 )
 GLOBAL_PREFERENCES[category]["auto_import"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -544,39 +737,31 @@ category = GlobalPrefCategoryList.PERFORMANCE
 GLOBAL_PREFERENCES[category] = {}
 GLOBAL_PREFERENCES[category]["max_subj"] = PreferenceEntry(
     input_type=InputTypes.INT,
-    label="Patient tab limit",
+    label="Subject tab limit",
     default=1,
-    range=[1, 5],
+    range=[1, ResourceManager.MAX_PARALLEL_SUBJECTS],
 )
 GLOBAL_PREFERENCES[category]["max_subj_cpu"] = PreferenceEntry(
     input_type=InputTypes.INT,
     label="CPU core limit per subject",
-    tooltip="To use all CPU cores set value equal to -1",
+    tooltip="Applies to each subject tab, whatever the number of tabs. "
+    "To use all CPU cores set value equal to -1",
     default=ResourceManager.get_default_cpu(),
     range=[-1, ResourceManager.get_max_cpu()],
     special_value_text="No limit",
     section=True,
 )
-GLOBAL_PREFERENCES[category]["multicore_node_limit"] = PreferenceEntry(
-    input_type=InputTypes.ENUM,
-    label="CPU management for multi-core steps",
-    value_enum=CoreLimit,
-    default=CoreLimit.SOFT_CAP,
-    informative_text={
-        CoreLimit.NO_LIMIT: "Multi-core steps ignore the subject CPU core limit, using all available resources",
-        CoreLimit.SOFT_CAP: "Multi-core steps use up to twice the subject CPU core limit",
-        CoreLimit.HARD_CAP: "Multi-core steps strictly respect the subject CPU core limit",
-    },
-)
-
 GLOBAL_PREFERENCES[category]["ram_gb"] = PreferenceEntry(
     input_type=InputTypes.FLOAT,
     label="Estimated RAM allocation per subject",
-    tooltip="Minimum RAM allocation: %.2fGB" % ResourceManager.MINIMUM_RAM,
+    tooltip="Applies to each subject tab, whatever the number of tabs",
     default=ResourceManager.get_default_ram(),
-    range=[ResourceManager.get_minimum_ram(), ResourceManager.get_maximum_ram()],
+    range=[
+        ResourceManager.get_minimum_subject_ram(),
+        ResourceManager.get_maximum_ram(),
+    ],
     suffix="GB",
-    decimal=2,
+    decimals=2,
     section=True,
 )
 GLOBAL_PREFERENCES[category]["cuda"] = PreferenceEntry(
@@ -605,33 +790,169 @@ GLOBAL_PREFERENCES[category]["resource_monitor"] = PreferenceEntry(
 )
 category = GlobalPrefCategoryList.SYNTH
 GLOBAL_PREFERENCES[category] = {}
-GLOBAL_PREFERENCES[category]["strip"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Use SynthStrip for brain extraction",
-    default=False,
-    dependency="is_freesurfer_synth",
-    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
-    pref_requirement={
-        GlobalPrefCategoryList.PERFORMANCE: [
-            ("ram_gb", ResourceManager.synth_strip_ram_requirements())
-        ]
+DEFAULT_ENGINES = default_engines(FSL_MANDATORY)
+GLOBAL_PREFERENCES[category]["deskull_engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="Brain extraction engine",
+    value_enum=DeskullEngine,
+    default=DEFAULT_ENGINES["deskull_engine"],
+    option_dependency={
+        DeskullEngine.ANTSPYNET: [
+            "is_antspynet",
+            "antspynet brain extraction requires the antspynet package",
+        ],
+        DeskullEngine.SYNTHSTRIP: [
+            "is_freesurfer_synth",
+            "SynthStrip requires FreeSurfer 8.1.0",
+        ],
+        DeskullEngine.BET: [
+            "is_fsl",
+            "FSL BET requires the FSL software suite",
+        ],
     },
-    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
-    % ResourceManager.synth_strip_ram_requirements(),
+    option_pref_requirement={
+        DeskullEngine.ANTSPYNET: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.antspynet_ram_requirements())
+            ]
+        },
+        DeskullEngine.SYNTHSTRIP: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.synth_strip_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        DeskullEngine.ANTSPYNET: "antspynet brain extraction requires at least %.1f GB RAM"
+        % ResourceManager.antspynet_ram_requirements(),
+        DeskullEngine.SYNTHSTRIP: "SynthStrip requires at least %.1f GB RAM"
+        % ResourceManager.synth_strip_ram_requirements(),
+    },
+    section=True,
 )
-GLOBAL_PREFERENCES[category]["morph"] = PreferenceEntry(
-    input_type=InputTypes.BOOLEAN,
-    label="Use SynthMorph registration",
-    default=False,
-    dependency="is_freesurfer_synth",
-    dependency_fail_tooltip="Synth tools recon-all requires FreeSurfer 8.1.0",
-    pref_requirement={
-        GlobalPrefCategoryList.PERFORMANCE: [
-            ("ram_gb", ResourceManager.synth_morph_ram_requirements())
-        ]
+GLOBAL_PREFERENCES[category]["engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="Registration engine",
+    value_enum=RegistrationEngine,
+    default=DEFAULT_ENGINES["engine"],
+    option_dependency={
+        RegistrationEngine.SYNTH: [
+            "is_freesurfer_synth",
+            "SynthMorph requires FreeSurfer 8.1.0",
+        ],
+        RegistrationEngine.ANTS: [
+            "is_antspyx",
+            "ANTs registration requires the antspyx package",
+        ],
+        RegistrationEngine.FSL: [
+            "is_fsl",
+            "FSL FLIRT/FNIRT requires the FSL software suite",
+        ],
     },
-    pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
-    % ResourceManager.synth_morph_ram_requirements(),
+    option_pref_requirement={
+        RegistrationEngine.SYNTH: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.synth_morph_ram_requirements())
+            ]
+        },
+        RegistrationEngine.ANTS: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.ants_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        RegistrationEngine.SYNTH: "SynthMorph requires at least %.1f GB RAM"
+        % ResourceManager.synth_morph_ram_requirements(),
+        RegistrationEngine.ANTS: "ANTs registration requires at least %.1f GB RAM"
+        % ResourceManager.ants_ram_requirements(),
+    },
+    section=True,
+)
+GLOBAL_PREFERENCES[category]["tractography_engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="Tractography engine",
+    value_enum=TractographyEngine,
+    default=DEFAULT_ENGINES["tractography_engine"],
+    option_dependency={
+        TractographyEngine.DIPY_RECOBUNDLES: [
+            "is_dipy",
+            "dipy tractography requires the dipy package",
+        ],
+        TractographyEngine.FSL_XTRACT: [
+            "is_fsl",
+            "FSL XTRACT/probtrackx2 requires the FSL software suite",
+        ],
+    },
+    option_pref_requirement={
+        TractographyEngine.DIPY_RECOBUNDLES: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.dipy_tractography_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        TractographyEngine.DIPY_RECOBUNDLES: "dipy tractography requires at least %.1f GB RAM"
+        % ResourceManager.dipy_tractography_ram_requirements(),
+    },
+    section=True,
+)
+GLOBAL_PREFERENCES[category]["segmentation_engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="Segmentation engine",
+    value_enum=SegmentationEngine,
+    default=DEFAULT_ENGINES["segmentation_engine"],
+    option_dependency={
+        SegmentationEngine.ANTS: [
+            "is_antspyx",
+            "Atropos segmentation requires the antspyx package",
+        ],
+        SegmentationEngine.FSL: [
+            "is_fsl",
+            "FSL FAST requires the FSL software suite",
+        ],
+    },
+    option_pref_requirement={
+        SegmentationEngine.ANTS: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.atropos_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        SegmentationEngine.ANTS: "Atropos segmentation requires at least %.1f GB RAM"
+        % ResourceManager.atropos_ram_requirements(),
+    },
+    section=True,
+)
+GLOBAL_PREFERENCES[category]["fmri_engine"] = PreferenceEntry(
+    input_type=InputTypes.ENUM,
+    label="Task fMRI engine",
+    tooltip="Resting state fMRI always runs on FSL (MELODIC)",
+    value_enum=FmriEngine,
+    default=DEFAULT_ENGINES["fmri_engine"],
+    option_dependency={
+        FmriEngine.FSL: [
+            "is_fsl",
+            "FSL fMRI requires FSL",
+        ],
+        FmriEngine.NILEARN: [
+            "is_nilearn",
+            "nilearn fMRI requires the nilearn/antspyx packages",
+        ],
+    },
+    option_pref_requirement={
+        FmriEngine.NILEARN: {
+            GlobalPrefCategoryList.PERFORMANCE: [
+                ("ram_gb", ResourceManager.nilearn_fmri_ram_requirements())
+            ]
+        },
+    },
+    option_pref_requirement_fail_tooltip={
+        FmriEngine.NILEARN: "nilearn fMRI requires at least %.1f GB RAM"
+        % ResourceManager.nilearn_fmri_ram_requirements(),
+    },
+    section=True,
 )
 GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
     input_type=InputTypes.BOOLEAN,
@@ -646,16 +967,44 @@ GLOBAL_PREFERENCES[category]["reconall"] = PreferenceEntry(
     },
     pref_requirement_fail_tooltip="SynthStrip requires at least %.1f GB RAM"
     % ResourceManager.synth_reconall_ram_requirements(),
+    section=True,
+)
+GLOBAL_PREFERENCES[category]["limit_cores"] = PreferenceEntry(
+    input_type=InputTypes.BOOLEAN,
+    label="Limit Synth tools to %d CPU cores" % ResourceManager.SYNTH_CORE_LIMIT,
+    tooltip="Caps FreeSurfer Synth tools (SynthStrip, SynthMorph, SynthSeg) at "
+    "%d CPU cores instead of the per-subject CPU budget. ANTs, antspynet and "
+    "Atropos always use the per-subject budget" % ResourceManager.SYNTH_CORE_LIMIT,
+    default=False,
+    pref_requirement={
+        GlobalPrefCategoryList.PERFORMANCE: [
+            ("max_subj_cpu", ResourceManager.SYNTH_CORE_LIMIT + 1)
+        ]
+    },
+    pref_requirement_fail_tooltip="Requires more than %d CPU core allocated per subject"
+    % ResourceManager.SYNTH_CORE_LIMIT,
 )
 category = GlobalPrefCategoryList.OPTIONAL_SERIES
 GLOBAL_PREFERENCES[category] = {}
+# External dependencies of optional series: {series: (dependency, fail tooltip)}
+OPTIONAL_SERIES_DEPENDENCIES = {
+    # Resting state fMRI runs on FSL (MELODIC) only
+    DataInputList.FMRI_RS: ("is_fsl", "Resting state fMRI requires FSL"),
+}
 for data_input in DataInputList:
     if data_input.value.optional:
+        dependency_kwargs = {}
+        if data_input in OPTIONAL_SERIES_DEPENDENCIES:
+            dependency, fail_tooltip = OPTIONAL_SERIES_DEPENDENCIES[data_input]
+            dependency_kwargs = dict(
+                dependency=dependency, dependency_fail_tooltip=fail_tooltip
+            )
         GLOBAL_PREFERENCES[category][data_input.value.name] = PreferenceEntry(
             input_type=InputTypes.BOOLEAN,
             label=data_input.value.label,
             default="false",
             restart=True,
+            **dependency_kwargs,
         )
 
 category = GlobalPrefCategoryList.MAIL_SETTINGS

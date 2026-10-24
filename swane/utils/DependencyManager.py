@@ -1,15 +1,28 @@
+# -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
+
+import functools
+import importlib.metadata
+import importlib.util
 import os
 import subprocess
 import re
 from shutil import which
-from nipype.interfaces import dcm2nii, fsl, freesurfer
-from swane import strings
+from swane.resources import strings
 from packaging import version
 from swane.config.ConfigManager import ConfigManager
-from PySide6.QtCore import QThreadPool
+from swane.workers.worker_pool import start_worker
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux
+from swane.utils.LicenseReference import (
+    FSL,
+    FREESURFER,
+    DCM2NIIX,
+    ANTSPYX,
+    ANTSPYNET,
+    DIPY,
+)
+from swane.utils.license_consent import version_with_license
 
 
 class DependenceStatus(Enum):
@@ -29,6 +42,7 @@ class Dependence:
         state: DependenceStatus,
         label: str,
         state2: DependenceStatus = DependenceStatus.MISSING,
+        detected_version: str = None,
     ):
         """
         Parameters
@@ -39,18 +53,22 @@ class Dependence:
             A string to inform the user about the depence status
         state2: DependenceStatus
             A value describing a subdependence status
+        detected_version: str
+            Raw version already discovered while checking the dependency.
         """
 
         self.state: DependenceStatus = state
         self.state2 = DependenceStatus.MISSING
         self.label = None
-        self.update(state, label, state2)
+        self.detected_version = None
+        self.update(state, label, state2, detected_version)
 
     def update(
         self,
         state: DependenceStatus,
         label: str,
         state2: DependenceStatus = DependenceStatus.MISSING,
+        detected_version: str = None,
     ):
         """
         Parameters
@@ -61,16 +79,127 @@ class Dependence:
             A string to inform the user about the depence status
         state2: DependenceStatus
             A value in DependenceStatus describing a subdependence status
+        detected_version: str
+            Raw dependency version associated with this state.
         """
 
         if state in DependenceStatus:
             self.state = state
             self.label = label
             self.state2 = state2
+            self.detected_version = detected_version
         else:
             self.state = DependenceStatus.MISSING
             self.state2 = DependenceStatus.MISSING
             self.label = strings.check_dep_generic_error
+            self.detected_version = None
+
+
+@functools.lru_cache(maxsize=1)
+def _has_en_us_locale() -> bool:
+    """Return True if en_US.utf8 locale is present on Linux, always True on other OS."""
+    if not is_linux():
+        return True
+    try:
+        res = subprocess.run(
+            ["locale", "-a"],
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            check=False,
+        )
+        out = res.stdout.lower()
+        return "en_us.utf8" in out or "en_us.utf-8" in out
+    except Exception:
+        return False
+
+
+def _read_first_line(path: str) -> str | None:
+    """Returns the first line of a text file, None if it is unreadable or empty."""
+    try:
+        with open(path, encoding="utf-8") as fobj:
+            lines = fobj.read().splitlines()
+    except OSError:
+        return None
+    return lines[0] if lines else None
+
+
+def _read_fsl_version() -> str | None:
+    """
+    Reads the installed FSL version from $FSLDIR/etc/fslversion, as
+    nipype.interfaces.fsl.Info.version() does, without importing Nipype
+    (importing nipype.interfaces.fsl takes seconds on GUI startup).
+
+    Returns
+    -------
+    The version string, None if FSL is not found.
+    """
+    fsldir = os.environ.get("FSLDIR")
+    if not fsldir:
+        return None
+    return _read_first_line(os.path.join(fsldir, "etc", "fslversion"))
+
+
+def _freesurfer_looseversion(raw_version: str) -> str:
+    """
+    Extracts the numeric version from a FreeSurfer build-stamp line.
+
+    Adapted from nipype.interfaces.freesurfer.base.Info.looseversion() (Nipype,
+    Apache License 2.0, see NOTICE.md) to avoid importing Nipype on GUI startup.
+
+    Parameters
+    ----------
+    raw_version: str
+        The first line of $FREESURFER_HOME/build-stamp.txt.
+
+    Returns
+    -------
+    The version string (e.g. "7.4.1").
+    """
+    vinfo = raw_version.rstrip().split("-")
+    try:
+        int(vinfo[-1], 16)
+    except ValueError:
+        githash = ""
+    else:
+        githash = "." + vinfo[-1]
+
+    # As of FreeSurfer v6.0.0, the final component is a githash
+    if githash:
+        if vinfo[3] == "dev":
+            return "6.0.0-dev" + githash
+        if vinfo[5][0] == "v":
+            return vinfo[5][1:]
+        if vinfo[3].count(".") == 2:
+            # e.g. freesurfer-linux-centos7_x86_64-7.1.0-20200511-813297b
+            return vinfo[3]
+        raise RuntimeError("Unknown version string: " + raw_version)
+    # Pre-6.0.0 heuristics
+    if "dev" in raw_version:
+        return vinfo[-1] + "-dev"
+    return raw_version.rstrip().split("-v")[-1]
+
+
+def _read_freesurfer_version() -> tuple[str | None, str | None]:
+    """
+    Reads the installed FreeSurfer version from $FREESURFER_HOME/build-stamp.txt,
+    as nipype.interfaces.freesurfer.Info does, without importing Nipype.
+
+    Returns
+    -------
+    A (raw build-stamp, numeric version) tuple, (None, None) if FreeSurfer is
+    not found or its version string is not recognized.
+    """
+    fs_home = os.environ.get("FREESURFER_HOME")
+    if not fs_home:
+        return None, None
+    raw_version = _read_first_line(os.path.join(fs_home, "build-stamp.txt"))
+    if raw_version is None:
+        return None, None
+    try:
+        return raw_version, _freesurfer_looseversion(raw_version)
+    except (IndexError, RuntimeError):
+        return None, None
 
 
 class DependencyManager:
@@ -78,7 +207,14 @@ class DependencyManager:
     Manager for checking dependencies and reporting messages about them
     """
 
-    MIN_FSL_VERSION = "6.0.6"
+    # 6.0.7.8 ships eddy 2401, the first to accept --nthr (CustomEddy passes it).
+    MIN_FSL_VERSION = "6.0.7.8"
+    # Kept in sync with the antspyx pin in setup.py.
+    MIN_ANTSPYX_VERSION = "0.6.1"
+    # Kept in sync with the antspynet pin in setup.py.
+    MIN_ANTSPYNET_VERSION = "0.3.2"
+    # Kept in sync with the dipy pin in setup.py.
+    MIN_DIPY_VERSION = "1.12.1"
     MIN_FREESURFER_VERSION = "7.3.2"
     SYNTH_FREESURFER_VERSION = "8.1.0"
     MIN_SLICER_VERSION = "5.2.1"
@@ -91,17 +227,22 @@ class DependencyManager:
     def __init__(self):
         self.dcm2niix = DependencyManager.check_dcm2niix()
         self.fsl = DependencyManager.check_fsl()
+        self.antspyx = DependencyManager.check_antspyx()
+        self.antspynet = DependencyManager.check_antspynet()
+        self.dipy = DependencyManager.check_dipy()
         self.freesurfer = DependencyManager.check_freesurfer()
         self.graphviz = DependencyManager.check_graphviz()
 
-    def is_fsl(self) -> bool:
+    def is_fsl(self=None) -> bool:
         """
         Returns
         -------
         True if fsl is detected (even if outdated).
 
         """
-        return self.fsl.state != DependenceStatus.MISSING
+        if self is not None:
+            return self.fsl.state != DependenceStatus.MISSING
+        return DependencyManager.check_fsl().state != DependenceStatus.MISSING
 
     def is_dcm2niix(self) -> bool:
         """
@@ -139,23 +280,78 @@ class DependencyManager:
         """
         return self.freesurfer.state2 != DependenceStatus.MISSING
 
-    @staticmethod
-    def is_freesurfer_synth() -> bool:
+    def is_freesurfer_synth(self=None) -> bool:
         """
         Returns
         -------
         True if freesurfer version contains synth commands.
-
         """
-        freesurfer_version = str(freesurfer.base.Info.looseversion())
+        detected = (
+            getattr(getattr(self, "freesurfer", None), "detected_version", None)
+            if self is not None
+            else None
+        )
+        if detected is not None:
+            freesurfer_version = detected
+        else:
+            _, freesurfer_version = _read_freesurfer_version()
+            if freesurfer_version is None:
+                return False
         try:
             found_version = version.parse(freesurfer_version)
-        except:
+        except Exception:
             return False
 
         return found_version >= version.parse(
             DependencyManager.SYNTH_FREESURFER_VERSION
         )
+
+    def is_antspyx(self=None) -> bool:
+        """
+        Returns
+        -------
+        True if the antspyx package is importable (even if outdated).
+
+        """
+        # Instance callers already paid the import/version-check cost in
+        # ``__init__``. Keep class-level calls working for prerelease capability
+        # probes, but do not repeat the check during normal GUI startup.
+        if self is not None:
+            return self.antspyx.state != DependenceStatus.MISSING
+        return DependencyManager.check_antspyx().state != DependenceStatus.MISSING
+
+    def is_antspynet(self=None) -> bool:
+        """
+        Returns
+        -------
+        True if the antspynet package is importable (even if outdated).
+        """
+        if self is not None:
+            return self.antspynet.state != DependenceStatus.MISSING
+        return DependencyManager.check_antspynet().state != DependenceStatus.MISSING
+
+    def is_dipy(self=None) -> bool:
+        """
+        Returns
+        -------
+        True if the dipy package is importable (even if outdated).
+        """
+        if self is not None:
+            return self.dipy.state != DependenceStatus.MISSING
+        return DependencyManager.check_dipy().state != DependenceStatus.MISSING
+
+    @staticmethod
+    def is_nilearn() -> bool:
+        """
+        Returns
+        -------
+        True if the nilearn package is importable.
+
+        """
+        try:
+            return importlib.util.find_spec("nilearn") is not None
+        except Exception:
+            return False
 
     @staticmethod
     def is_slicer(config: ConfigManager) -> bool:
@@ -196,17 +392,28 @@ class DependencyManager:
         if config is None or not config.global_config:
             return False
 
-        check_slicer = False
         if not DependencyManager.is_slicer(config):
-            check_slicer = True
+            return True
 
         if not DependencyManager.check_slicer_version(config.get_slicer_version()):
-            check_slicer = True
+            return True
 
         if config.get_slicer_validator():
-            check_slicer = True
+            return True
 
-        return check_slicer
+        # Fast filesystem-only revalidation of what the last full check
+        # recorded: any drift sends the application back to the full check.
+        from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+        if not SlicerCheckWorker.is_slicer_executable(config.get_slicer_path()):
+            return True
+
+        if not SlicerCheckWorker.extensions_state_is_valid(
+            config.get_slicer_extensions_state(), DependencyManager.SLICER_MODULES
+        ):
+            return True
+
+        return False
 
     @staticmethod
     def check_slicer_version(slicer_version: str) -> bool:
@@ -232,7 +439,11 @@ class DependencyManager:
             return False
 
     @staticmethod
-    def check_slicer(current_slicer_path: str, callback_func: callable):
+    def check_slicer(
+        current_slicer_path: str,
+        callback_func: callable,
+        extensions_callback: callable = None,
+    ):
         """
         Start a thread to scan the computer for Slicer
         Parameters
@@ -241,6 +452,9 @@ class DependencyManager:
             Current Slicer executable path
         callback_func: callable
             The UI function to call after the check thread
+        extensions_callback: callable
+            Optional, receives the JSON state of the extension install folders
+            when every required extension was found
         """
         from swane.workers.SlicerCheckWorker import SlicerCheckWorker
 
@@ -249,7 +463,32 @@ class DependencyManager:
 
         check_slicer_work = SlicerCheckWorker(current_slicer_path)
         check_slicer_work.signal.slicer.connect(callback_func)
-        QThreadPool.globalInstance().start(check_slicer_work)
+        if extensions_callback is not None:
+            check_slicer_work.signal.extensions.connect(extensions_callback)
+        start_worker(check_slicer_work)
+
+    @staticmethod
+    def quick_check_slicer_version(
+        slicer_path: str, expected_revision: str, callback_func: callable
+    ):
+        """
+        Start a thread that confirms the Slicer installation still matches the
+        revision recorded by the last full check (catches an in-place upgrade).
+
+        Parameters
+        ----------
+        slicer_path: str
+            Slicer executable path
+        expected_revision: str
+            The Slicer revision recorded by the last full check
+        callback_func: callable
+            Called with True if the revision matches, False otherwise
+        """
+        from swane.workers.SlicerCheckWorker import SlicerQuickCheckWorker
+
+        worker = SlicerQuickCheckWorker(slicer_path, expected_revision)
+        worker.signal.done.connect(callback_func)
+        start_worker(worker)
 
     @staticmethod
     def check_dcm2niix() -> Dependence:
@@ -258,15 +497,23 @@ class DependencyManager:
         -------
         A Dependence object with dcm2niix information.
         """
-        dcm2niix_version = dcm2nii.Info.version()
-        if dcm2niix_version is None:
+        if importlib.util.find_spec("dcm2niix") is None:
             return Dependence(
-                DependenceStatus.MISSING, strings.check_dep_dcm2niix_error
+                DependenceStatus.MISSING,
+                strings.check_dep_dcm2niix_error,
             )
-        return Dependence(
-            DependenceStatus.DETECTED,
-            strings.check_dep_dcm2niix_found % str(dcm2niix_version),
-        )
+        try:
+            dcm2niix_version = importlib.metadata.version("dcm2niix")
+            return Dependence(
+                DependenceStatus.DETECTED,
+                strings.check_dep_dcm2niix_found
+                % version_with_license(DCM2NIIX, dcm2niix_version),
+            )
+        except Exception:
+            return Dependence(
+                DependenceStatus.MISSING,
+                strings.check_dep_dcm2niix_error,
+            )
 
     @staticmethod
     def check_fsl() -> Dependence:
@@ -275,32 +522,134 @@ class DependencyManager:
         -------
         A Dependence object with fsl information.
         """
-        fsl_version = fsl.base.Info.version()
+        fsl_version = _read_fsl_version()
         if fsl_version is None:
             return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_error)
+        # The first line of etc/fslversion is parsed as is, with no suffix
+        # stripped: this matches nipype.interfaces.fsl.Info.version(), whose
+        # parse_version returns raw_info.splitlines()[0] (checked on Nipype
+        # 1.12.0), so SWANe and the Nipype FSL interfaces see the same version.
         try:
             found_version = version.parse(fsl_version)
         except:
             found_version = version.parse("0")
 
         # check if locale en_US.utf8 is available
-        if is_linux():
-            locale_en = os.system(DependencyManager.FLS_LOCALE_COMMAND)
-            if locale_en != 0:
-                return Dependence(
-                    DependenceStatus.MISSING, strings.check_dep_fsl_no_locale
-                )
+        if not _has_en_us_locale():
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_fsl_no_locale)
+
+        fsl_version_lic = version_with_license(FSL, fsl_version)
 
         # check fsl version
         if found_version < version.parse(DependencyManager.MIN_FSL_VERSION):
             return Dependence(
                 DependenceStatus.WARNING,
                 strings.check_dep_fsl_wrong_version
-                % (fsl_version, DependencyManager.MIN_FSL_VERSION),
+                % (fsl_version_lic, DependencyManager.MIN_FSL_VERSION),
+                detected_version=fsl_version,
             )
 
         return Dependence(
-            DependenceStatus.DETECTED, strings.check_dep_fsl_found % fsl_version
+            DependenceStatus.DETECTED,
+            strings.check_dep_fsl_found % fsl_version_lic,
+            detected_version=fsl_version,
+        )
+
+    @staticmethod
+    def check_antspyx() -> Dependence:
+        """
+        Returns
+        -------
+        A Dependence object with antspyx information.
+        """
+        if importlib.util.find_spec("ants") is None:
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_antspyx_error)
+        try:
+            antspyx_version = importlib.metadata.version("antspyx")
+        except Exception:
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_antspyx_error)
+
+        try:
+            found_version = version.parse(antspyx_version)
+        except:
+            found_version = version.parse("0")
+
+        antspyx_version_lic = version_with_license(ANTSPYX, antspyx_version)
+
+        if found_version < version.parse(DependencyManager.MIN_ANTSPYX_VERSION):
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_antspyx_wrong_version
+                % (antspyx_version_lic, DependencyManager.MIN_ANTSPYX_VERSION),
+                detected_version=antspyx_version,
+            )
+
+        return Dependence(
+            DependenceStatus.DETECTED,
+            strings.check_dep_antspyx_found % antspyx_version_lic,
+            detected_version=antspyx_version,
+        )
+
+    @staticmethod
+    def check_antspynet() -> Dependence:
+        """
+        Returns
+        -------
+        A Dependence object with antspynet information. Presence is detected
+        without importing antspynet (which would load tensorflow) via
+        importlib.util.find_spec; the version is read from package metadata.
+        """
+        if importlib.util.find_spec("antspynet") is None:
+            return Dependence(
+                DependenceStatus.MISSING, strings.check_dep_antspynet_error
+            )
+        try:
+            antspynet_version = importlib.metadata.version("antspynet")
+        except Exception:
+            return Dependence(
+                DependenceStatus.WARNING, strings.check_dep_antspynet_no_version
+            )
+        found_version = version.parse(antspynet_version)
+        antspynet_version_lic = version_with_license(ANTSPYNET, antspynet_version)
+        if found_version < version.parse(DependencyManager.MIN_ANTSPYNET_VERSION):
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_antspynet_wrong_version
+                % (antspynet_version_lic, DependencyManager.MIN_ANTSPYNET_VERSION),
+            )
+        return Dependence(
+            DependenceStatus.DETECTED,
+            strings.check_dep_antspynet_found % antspynet_version_lic,
+        )
+
+    @staticmethod
+    def check_dipy() -> Dependence:
+        """
+        Returns
+        -------
+        A Dependence object with dipy information. Presence is detected
+        without importing dipy via importlib.util.find_spec; the version is
+        read from package metadata.
+        """
+        if importlib.util.find_spec("dipy") is None:
+            return Dependence(DependenceStatus.MISSING, strings.check_dep_dipy_error)
+        try:
+            dipy_version = importlib.metadata.version("dipy")
+        except Exception:
+            return Dependence(
+                DependenceStatus.WARNING, strings.check_dep_dipy_no_version
+            )
+        found_version = version.parse(dipy_version)
+        dipy_version_lic = version_with_license(DIPY, dipy_version)
+        if found_version < version.parse(DependencyManager.MIN_DIPY_VERSION):
+            return Dependence(
+                DependenceStatus.WARNING,
+                strings.check_dep_dipy_wrong_version
+                % (dipy_version_lic, DependencyManager.MIN_DIPY_VERSION),
+            )
+        return Dependence(
+            DependenceStatus.DETECTED,
+            strings.check_dep_dipy_found % dipy_version_lic,
         )
 
     @staticmethod
@@ -323,59 +672,95 @@ class DependencyManager:
         """
 
         # FS installed
-        if freesurfer.base.Info.version() is None:
+        raw_version, freesurfer_version = _read_freesurfer_version()
+        if raw_version is None or freesurfer_version is None:
             return Dependence(
                 DependenceStatus.MISSING,
                 strings.check_dep_fs_error1,
                 DependenceStatus.MISSING,
             )
-        freesurfer_version = str(freesurfer.base.Info.looseversion())
+        # Version string with an inline license link (used in every label that
+        # reports the version); the raw freesurfer_version is kept for parsing.
+        fs_ver = version_with_license(FREESURFER, freesurfer_version)
 
         # FS version file presence
         if "FREESURFER_HOME" not in os.environ:
             return Dependence(
                 DependenceStatus.MISSING,
-                strings.check_dep_fs_error2 % freesurfer_version,
+                strings.check_dep_fs_error2 % fs_ver,
                 DependenceStatus.MISSING,
             )
+
+        # FreeSurfer license file check
         license_file = os.getenv("FS_LICENSE")
-        if license_file is None or not os.path.exists(license_file):
-            license_file = os.path.join(os.environ["FREESURFER_HOME"], "license.txt")
-        if not os.path.exists(license_file):
-            return Dependence(
-                DependenceStatus.MISSING,
-                strings.check_dep_fs_error4 % freesurfer_version,
-                DependenceStatus.MISSING,
+        if not license_file or not os.path.isfile(license_file):
+            candidates = [
+                os.path.join(os.path.expanduser("~"), "license.txt"),
+                os.path.join(os.environ.get("FREESURFER_HOME", ""), "license.txt"),
+                os.path.join(os.environ.get("FREESURFER_HOME", ""), ".license"),
+            ]
+            license_file = next(
+                (path for path in candidates if os.path.isfile(path)),
+                None,
             )
+            if license_file is None:
+                return Dependence(
+                    DependenceStatus.MISSING,
+                    strings.check_dep_fs_error4 % fs_ver,
+                    DependenceStatus.MISSING,
+                )
+            os.environ["FS_LICENSE"] = license_file
+
+        # FreeSurfer minimum version
         try:
             found_version = version.parse(freesurfer_version)
         except:
             found_version = version.parse("0")
-
-        # FS minimum version
         if found_version < version.parse(DependencyManager.MIN_FREESURFER_VERSION):
             return Dependence(
                 DependenceStatus.WARNING,
                 strings.check_dep_fs_outdated_version
-                % (freesurfer_version, DependencyManager.MIN_FREESURFER_VERSION),
+                % (fs_ver, DependencyManager.MIN_FREESURFER_VERSION),
+                detected_version=freesurfer_version,
             )
 
         # tcsh shell installed
         if which(DependencyManager.FSL_TCSH_COMMAND) is None:
             return Dependence(
                 DependenceStatus.WARNING,
-                strings.check_dep_fs_no_tcsh % freesurfer_version,
+                strings.check_dep_fs_no_tcsh % fs_ver,
                 DependenceStatus.MISSING,
+                detected_version=freesurfer_version,
             )
 
         # FS matlab runtime
-        result = subprocess.run(
-            DependencyManager.FREESURFER_MATLAB_COMMAND,
-            shell=True,
-            capture_output=True,
-            text=True,
-        )
-        matlab_found = result.returncode == 0
+        mcr_cmd = which(DependencyManager.FREESURFER_MATLAB_COMMAND)
+        if not mcr_cmd and "FREESURFER_HOME" in os.environ:
+            candidate = os.path.join(
+                os.environ["FREESURFER_HOME"],
+                "bin",
+                DependencyManager.FREESURFER_MATLAB_COMMAND,
+            )
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                mcr_cmd = candidate
+
+        output = ""
+        if not mcr_cmd:
+            matlab_found = False
+        else:
+            try:
+                res = subprocess.run(
+                    [mcr_cmd],
+                    capture_output=True,
+                    text=True,
+                    timeout=3.0,
+                    shell=False,
+                )
+                matlab_found = res.returncode == 0
+                output = (res.stdout or "") + (res.stderr or "")
+            except Exception:
+                matlab_found = False
+
         fs_dep = DependenceStatus.DETECTED
         matlab_dep = (
             DependenceStatus.DETECTED if matlab_found else DependenceStatus.MISSING
@@ -383,7 +768,7 @@ class DependencyManager:
 
         if found_version < version.parse(DependencyManager.SYNTH_FREESURFER_VERSION):
             error_string = strings.check_dep_fs_synth_version % (
-                freesurfer_version,
+                fs_ver,
                 DependencyManager.SYNTH_FREESURFER_VERSION,
             )
             fs_dep = DependenceStatus.WARNING
@@ -392,17 +777,16 @@ class DependencyManager:
             < ResourceManager.synth_reconall_ram_requirements()
         ):
             error_string = strings.check_dep_fs_low_ram % (
-                freesurfer_version,
+                fs_ver,
                 ResourceManager.synth_reconall_ram_requirements(),
             )
             fs_dep = DependenceStatus.WARNING
         else:
-            error_string = strings.check_dep_fs_found % freesurfer_version
+            error_string = strings.check_dep_fs_found % fs_ver
 
         if not matlab_found:
             fs_dep = DependenceStatus.WARNING
 
-            output = result.stdout + result.stderr
             match = re.search(DependencyManager.FREESURFER_MATLAB_REGEXP, output)
             if match:
                 install_cmd = match.group(1)
@@ -414,4 +798,5 @@ class DependencyManager:
             fs_dep,
             error_string,
             matlab_dep,
+            detected_version=freesurfer_version,
         )

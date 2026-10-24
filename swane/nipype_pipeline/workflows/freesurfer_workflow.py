@@ -1,21 +1,70 @@
+import os
+import tempfile
 from configparser import SectionProxy
 
 from nipype.interfaces.freesurfer import ReconAll, ApplyVolTransform
-from nipype.interfaces.fsl import BinaryMaths
-from multiprocessing import cpu_count
+from swane.nipype_pipeline.interfaces.niimath import BinaryMaths
 from nipype.pipeline.engine import Node
 from math import trunc
 
-from swane.nipype_pipeline.nodes.SynthSeg import SynthSeg
-from swane.nipype_pipeline.nodes.utils import getn
+from swane.nipype_pipeline.interfaces.freesurfer.SynthSeg import SynthSeg
+from swane.nipype_pipeline.interfaces.utils import (
+    getn,
+    get_synth_cpu_config,
+    apply_synth_num_threads,
+)
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.SegmentHA import SegmentHA
-from swane.nipype_pipeline.nodes.ThrROI import ThrROI
-from swane.config.config_enums import CoreLimit, FreesurferStep
+from swane.nipype_pipeline.interfaces.freesurfer.SegmentHA import SegmentHA
+from swane.nipype_pipeline.interfaces.niimath.ThrROI import ThrROI
+from swane.config.config_enums import FreesurferStep
 from nipype.interfaces.utility import IdentityInterface
 from swane.utils.ResourceManager import ResourceManager
+from swane.nipype_pipeline.workflows.workflow_constants import FS_DIR
 
-FS_DIR = "FS"
+# recon-all top-level flags for test_run, appended to the existing args.
+# -nuiterations 1 : halve NU intensity-correction iterations (default 2)
+# -norm3diters 1  : cut mri_normalize 3D iterations (both runs)
+# -no-fix-with-ga : drop the genetic-algorithm optimisation in the topology fixer
+RECONALL_TEST_ARGS = "-nuiterations 1 -norm3diters 1 -no-fix-with-ga"
+
+# Per-binary overrides for the -expert file. Moderate reductions (kept
+# deliberately conservative, "let's not overdo it"). The synthseg line is only
+# consulted when recon-all actually runs SynthSeg internally (FS v8 synth
+# path); it is inert for the classic path, so including it unconditionally is
+# safe.
+#
+# NOT included: "mris_register -N 10" -- would have been the biggest lever,
+# but FreeSurfer 8.2.0's rca-surfreg (unrelated to, and not fixed by, the
+# recon-all -expert patch below) splices xopts into the mris_register command
+# BETWEEN the first positional arg and the rest (`mris_register ... lh.sphere
+# -N 10 target.tif out.reg`), and mris_register does not accept a flag there --
+# it reads "-N" itself as the target filename ("could not open template file
+# -N"). mris_inflate/mris_fix_topology/mri_synthseg all place xopts safely (all
+# flags first, or all positionals first), so only this one line is unsafe.
+# fsr-getxopts's own comments date the current xopts-merging behaviour to
+# 10/16/24, so this whole mechanism is young; re-add the line once FreeSurfer
+# fixes rca-surfreg's argument ordering (see TODO.md).
+RECONALL_TEST_EXPERT = (
+    "mris_inflate -n 7\n"
+    "mris_fix_topology -niters 2\n"
+    "synthseg --fast\n"
+    "mri_ca_register -tol 0.2 -N 100 -LEVELS 4 -A 125 -DT 0.1\n"
+)
+
+
+def _reconall_test_expert_file() -> str:
+    """Write (idempotently) the test_run recon-all expert-options file.
+
+    A deterministic path with fixed content keeps the nipype hash stable
+    across runs, so an opt-in recon-all pass stays resumable. The same file
+    is shared by the three sequential ReconAll nodes; recon2/pial pass
+    xopts='overwrite' because recon1 has already copied it into the subject's
+    scripts dir.
+    """
+    path = os.path.join(tempfile.gettempdir(), "swane_reconall_test_expert.txt")
+    with open(path, "w") as handle:
+        handle.write(RECONALL_TEST_EXPERT)
+    return path
 
 
 def freesurfer_workflow(
@@ -23,9 +72,10 @@ def freesurfer_workflow(
     step: FreesurferStep,
     is_hippo_amyg_labels: bool,
     synth_config: SectionProxy,
+    synthseg_fast: bool = False,
     base_dir: str = "/",
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Freesurfer cortical reconstruction, white matter ROI, basal ganglia and thalami ROI.
@@ -45,8 +95,12 @@ def freesurfer_workflow(
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
-    multicore_node_limit: CORE_LIMIT, optional
-        Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
+
+    test_run : bool, optional
+        If True, speed up prerelease test runs at the cost of accuracy: for
+        the SynthSeg step, enable --fast and drop the robust variant; for the
+        recon-all steps, add lighter iteration counts via top-level flags and
+        an -expert file of per-binary overrides. The default is False.
 
     Input Node Fields
     ----------
@@ -120,10 +174,31 @@ def freesurfer_workflow(
     if step == FreesurferStep.SYNTHSEG:
         synth_seg = Node(SynthSeg(), name="synth_seg")
         synth_seg.inputs.parcellation = True
-        synth_seg.inputs.robust = True
+        # --fast and --robust are mutually exclusive SynthSeg variants:
+        # prerelease test runs always trade accuracy for speed, otherwise
+        # follow the user's Synth tools preference.
+        use_fast = test_run or synthseg_fast
+        synth_seg.inputs.fast = use_fast
+        synth_seg.inputs.robust = not use_fast
+        if use_fast:
+            # With --fast/robust=False SynthSeg fits in less RAM; reserve
+            # the same lowered figure the prerelease gate uses
+            # (capabilities._probe_synth_ram).
+            synth_seg._mem_gb = (
+                ResourceManager.synth_seg_ram_requirements()
+                * ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR
+            )
+        else:
+            synth_seg._mem_gb = ResourceManager.synth_seg_ram_requirements()
         synth_seg.inputs.use_cpu = True
         synth_seg.inputs.keep_geometry = True
-        # synth_seg.inputs.num_threads = 1
+        # SynthSeg cannot be tricked into using more threads than nipype
+        # believes it does (no separate env-var thread control), so it is
+        # always a hard, nipype-visible cap regardless of the CPU limit.
+        synth_seg_threads = get_synth_cpu_config(
+            max_cpu, synth_config.getboolean_safe("limit_cores")
+        )
+        apply_synth_num_threads(synth_seg, synth_seg_threads, max_cpu=max_cpu)
         synth_seg.inputs.out_file = "r-aparc_aseg.mgz"
         workflow.connect(inputnode, "reference", synth_seg, "in_file")
         workflow.connect(synth_seg, "out_file", outputnode, "vol_label_file")
@@ -151,27 +226,33 @@ def freesurfer_workflow(
         reconall_nprocs = 1
 
         if synth_config.getboolean_safe("reconall"):
-            reconall_mem_gb = (
-                ResourceManager.synth_reconall_ram_requirements()
-            )  # new recon-all needs a lot of RAM
-            # New reconall may heavily increase RAM usage with more than 1 cpu, for now skip openmp if using synth tools
+            if test_run:
+                reconall_mem_gb = (
+                    ResourceManager.synth_reconall_ram_requirements()
+                    * ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR
+                )
+            else:
+                reconall_mem_gb = ResourceManager.synth_reconall_ram_requirements()
+            # Synth recon-all stays serial (also under test_run, so the
+            # prerelease exercises the production setup): its RAM reservation
+            # is the single-thread figure, and -parallel/-openmp may heavily
+            # increase its RAM usage.
         else:
             reconall_environ = {"FS_V8_XOPTS": "0"}
             # parallel option splits some steps in right and left
             if max_cpu > 1:
                 reconall_parallel = True
-            # openmp option apply max cpu tu some steps, resulting in twice cpu usage for rogh/left steps
-            if multicore_node_limit == CoreLimit.NO_LIMIT:
-                # no limit
-                reconall_openmp = cpu_count()
-            elif multicore_node_limit == CoreLimit.SOFT_CAP:
-                # for soft cap we accept that parallelized steps use each max_cpu cores, resulting in twice the setting
-                reconall_openmp = max_cpu
-                reconall_nprocs = reconall_openmp
-            elif max_cpu > 1:
-                # for hard cap we use half of max_cpu setting, but at least 1
                 reconall_openmp = max(trunc(max_cpu / 2), 1)
                 reconall_nprocs = reconall_openmp * 2
+
+        # test_run: speed up recon-all with lighter iteration counts, via
+        # top-level flags plus an -expert file of per-binary overrides. The
+        # same expert file feeds all three sequential nodes.
+        reconall_args = "-no-isrunning"
+        reconall_expert = None
+        if test_run:
+            reconall_args = "-no-isrunning " + RECONALL_TEST_ARGS
+            reconall_expert = _reconall_test_expert_file()
 
         # NODE 1: Freesurfer autorecon1
         recon_all_recon1 = Node(ReconAll(), name="recon_all_recon1")
@@ -183,12 +264,23 @@ def freesurfer_workflow(
         recon_all_recon1.inputs.openmp = reconall_openmp
         recon_all_recon1.n_procs = reconall_nprocs
         recon_all_recon1.inputs.directive = "autorecon1"
-        recon_all_recon1.inputs.args = "-no-isrunning"
+        recon_all_recon1.inputs.args = reconall_args
+        if reconall_expert is not None:
+            recon_all_recon1.inputs.expert = reconall_expert
+            recon_all_recon1.inputs.xopts = "overwrite"
         workflow.connect(inputnode, "reference", recon_all_recon1, "T1_files")
         workflow.connect(inputnode, "subjects_dir", recon_all_recon1, "subjects_dir")
 
-        workflow.connect(recon_all_recon1, "subject_id", outputnode, "subject_id")
-        workflow.connect(recon_all_recon1, "subjects_dir", outputnode, "subjects_dir")
+        # outputnode.subject_id/subjects_dir are connected below, from the LAST
+        # recon-all node in this chain (not recon1): consumers outside this
+        # workflow (ASL/PET surface sampling in MainWorkflow) only get these two
+        # plain strings, not a tracked dependency on the actual surface files --
+        # they locate lh.white/lh.pial etc. on disk by FreeSurfer's own
+        # subjects_dir/subject_id convention. Wiring from recon1 let nipype
+        # consider them "ready" as soon as the FIRST node finished, so a slow
+        # recon2/recon_pial (e.g. a resumed multi-hour run) let ASL/PET surface
+        # sampling start and crash well before the files existed. Connecting
+        # from the last node gives nipype a real edge to wait on.
 
         # NODE 2: Freesurfer autorecon2
         recon_all_recon2 = Node(ReconAll(), name="recon_all_recon2")
@@ -199,7 +291,10 @@ def freesurfer_workflow(
         recon_all_recon2.inputs.openmp = reconall_openmp
         recon_all_recon2.n_procs = reconall_nprocs
         recon_all_recon2.inputs.directive = "autorecon2"
-        recon_all_recon2.inputs.args = "-no-isrunning"
+        recon_all_recon2.inputs.args = reconall_args
+        if reconall_expert is not None:
+            recon_all_recon2.inputs.expert = reconall_expert
+            recon_all_recon2.inputs.xopts = "overwrite"
         workflow.connect(
             recon_all_recon1, "subjects_dir", recon_all_recon2, "subjects_dir"
         )
@@ -214,7 +309,10 @@ def freesurfer_workflow(
         recon_all_recon_pial.inputs.openmp = reconall_openmp
         recon_all_recon_pial.n_procs = reconall_nprocs
         recon_all_recon_pial.inputs.directive = "autorecon-pial"
-        recon_all_recon_pial.inputs.args = "-no-isrunning"
+        recon_all_recon_pial.inputs.args = reconall_args
+        if reconall_expert is not None:
+            recon_all_recon_pial.inputs.expert = reconall_expert
+            recon_all_recon_pial.inputs.xopts = "overwrite"
         workflow.connect(
             recon_all_recon2, "subjects_dir", recon_all_recon_pial, "subjects_dir"
         )
@@ -224,6 +322,12 @@ def freesurfer_workflow(
 
         workflow.connect(recon_all_recon_pial, "pial", outputnode, "pial")
         workflow.connect(recon_all_recon_pial, "white", outputnode, "white")
+
+        # The actual last node in this chain: recon_all_recon_pial unless the
+        # RECONALL step adds recon_all_recon3 below. outputnode.subject_id/
+        # subjects_dir connect from whichever this ends up being (see the note
+        # by recon_all_recon1's own subjects_dir connection, above).
+        final_recon = recon_all_recon_pial
 
         # NODE 2: Aparcaseg linear transformation in reference space
         aparc_aseg2ref = Node(ApplyVolTransform(), name="aparc_aseg2ref")
@@ -283,18 +387,17 @@ def freesurfer_workflow(
             workflow.connect(
                 recon_all_recon_pial, "subject_id", recon_all_recon3, "subject_id"
             )
+            final_recon = recon_all_recon3
+
+        workflow.connect(final_recon, "subject_id", outputnode, "subject_id")
+        workflow.connect(final_recon, "subjects_dir", outputnode, "subjects_dir")
 
         if is_hippo_amyg_labels:
             # NODE 10: Segmentation of the hippocampal substructures and the nuclei of the amygdala
             segment_ha = Node(SegmentHA(), name="segment_ha")
             segment_ha._mem_gb = 5
-            if multicore_node_limit == CoreLimit.NO_LIMIT:
-                segment_ha.inputs.num_cpu = cpu_count()
-            elif multicore_node_limit == CoreLimit.SOFT_CAP:
-                segment_ha.inputs.num_cpu = max_cpu
-            else:
-                segment_ha.inputs.num_cpu = max_cpu
-                segment_ha.n_procs = segment_ha.inputs.num_cpu
+            segment_ha.inputs.num_cpu = max_cpu
+            segment_ha.n_procs = segment_ha.inputs.num_cpu
             workflow.connect(
                 recon_all_recon_pial, "subjects_dir", segment_ha, "subjects_dir"
             )

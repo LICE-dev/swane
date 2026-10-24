@@ -1,0 +1,401 @@
+"""License text resolution and consent evaluation for external tools."""
+
+import functools
+import os
+import urllib.request
+from dataclasses import dataclass
+from enum import Enum, auto
+from pathlib import Path
+
+from swane.utils.LicenseReference import (
+    LICENSES,
+    LicenseInfo,
+    bundled_license_path,
+    FSL,
+    FREESURFER,
+    SLICER,
+    DCM2NIIX,
+    ANTSPYX,
+    ANTSPYNET,
+    DIPY,
+    NIIMATH,
+    NILEARN,
+)
+
+UNKNOWN_VERSION = "unknown"
+DEFAULT_LICENSE_FETCH_TIMEOUT = 3.0
+
+
+class LicenseSource(Enum):
+    INSTALLED = auto()
+    ONLINE = auto()
+    BUNDLED = auto()
+
+
+@dataclass
+class ResolvedLicense:
+    tool_id: str
+    display_name: str
+    text: str
+    is_html: bool
+    source: LicenseSource
+    # Whether the gate should warn that this text is not the user's installed
+    # copy. False when the source is the tool's official reference anyway.
+    show_source_warning: bool = True
+    # Extra explanatory note shown alongside the license (e.g. why FSL's
+    # license is asked for even when FSL is not installed). Empty by default.
+    extra_note: str = ""
+
+
+def _read_first_existing(candidates: list):
+    for path in candidates:
+        try:
+            if path and os.path.isfile(path):
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    return fh.read(), path
+        except OSError:
+            continue
+    return None
+
+
+def fetch_online_license(
+    url: str,
+    is_html_online: bool,
+    timeout: float = DEFAULT_LICENSE_FETCH_TIMEOUT,
+):
+    """Fetch license text online. Return (text, is_html) or None on any failure."""
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            raw = resp.read()
+    except Exception:
+        return None
+    try:
+        text = raw.decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    if not text.strip():
+        return None
+    return text, is_html_online
+
+
+def _resolve_fsl_not_installed(info: LicenseInfo) -> ResolvedLicense:
+    """
+    Resolve FSL's license text when FSL is not installed.
+
+    FSL's license must still be accepted, because it also covers the
+    MNI152NLin6Asym template SWANe downloads and uses (AROMA registration
+    target, XTRACT/FLAT1), even without FSL itself. Always use the bundled
+    snapshot - never the installed/online lookups, which target an FSL
+    installation that does not exist here - so the displayed text's identity
+    matches ``_fsl_not_installed_marker()`` exactly.
+    """
+    from swane.resources import strings
+
+    with open(bundled_license_path(info), encoding="utf-8", errors="replace") as fh:
+        bundled_text = fh.read()
+    return ResolvedLicense(
+        info.tool_id,
+        info.display_name,
+        bundled_text,
+        # The bundled fsl.txt snapshot is the official license page's HTML
+        # (like FSL's online source, is_html_online=True), unlike the other
+        # tools' bundled plain-text license files.
+        info.is_html_online,
+        LicenseSource.BUNDLED,
+        show_source_warning=False,
+        extra_note=strings.license_consent_fsl_not_installed,
+    )
+
+
+def resolve_license_text(
+    info: LicenseInfo,
+    context: dict,
+    timeout: float = DEFAULT_LICENSE_FETCH_TIMEOUT,
+) -> ResolvedLicense:
+    if info.tool_id == FSL and context.get("fsl_installed") is False:
+        return _resolve_fsl_not_installed(info)
+    installed = _read_first_existing(info.installed_path_candidates(context))
+    if installed is not None:
+        return ResolvedLicense(
+            info.tool_id,
+            info.display_name,
+            installed[0],
+            False,
+            LicenseSource.INSTALLED,
+            show_source_warning=False,
+        )
+
+    online = fetch_online_license(info.official_url, info.is_html_online, timeout)
+    if online is not None:
+        return ResolvedLicense(
+            info.tool_id,
+            info.display_name,
+            online[0],
+            online[1],
+            LicenseSource.ONLINE,
+            show_source_warning=not info.online_is_official,
+        )
+
+    with open(bundled_license_path(info), encoding="utf-8", errors="replace") as fh:
+        bundled_text = fh.read()
+    return ResolvedLicense(
+        info.tool_id,
+        info.display_name,
+        bundled_text,
+        # Each bundled snapshot keeps the format of the tool's online source
+        # (FSL's is the licence page's HTML; the others are plain text).
+        info.is_html_online,
+        LicenseSource.BUNDLED,
+        show_source_warning=True,
+    )
+
+
+@functools.lru_cache(maxsize=32)
+def _cached_local_license_path(target, context_items: tuple):
+    context = dict(context_items)
+    info = LICENSES[target] if isinstance(target, str) else target
+    for path in info.installed_path_candidates(context):
+        try:
+            if path and os.path.isfile(path):
+                return path
+        except OSError:
+            continue
+    return None
+
+
+def local_license_path(info: LicenseInfo, context: dict):
+    """
+    Return the first existing local license file for a tool, or None.
+    Uses in-memory caching for repeated lookups within the process.
+
+    Only references the legal license text (never a per-user key file), because
+    the candidate lists are defined that way.
+    """
+    context_items = tuple(sorted((k, str(v)) for k, v in (context or {}).items()))
+    try:
+        return _cached_local_license_path(info, context_items)
+    except TypeError:
+        for path in info.installed_path_candidates(dict(context_items)):
+            try:
+                if path and os.path.isfile(path):
+                    return path
+            except OSError:
+                continue
+        return None
+
+
+def version_with_license(tool_id: str, version, context: dict = None) -> str:
+    """
+    Return a version string with an inline license link appended.
+
+    Used to place a license link inside the version parenthesis of a dependency
+    label. When there is no version (the tool/dependency was not found) the
+    value is returned unchanged and no license link is shown.
+    """
+    if not version:
+        return version
+    from swane.resources import strings
+
+    url = license_link_url(LICENSES[tool_id], context or {})
+    return '%s - <a href="%s">%s</a>' % (
+        version,
+        url,
+        strings.mainwindow_home_license_link,
+    )
+
+
+def license_link_url(info: LicenseInfo, context: dict) -> str:
+    """
+    Return a URL to open for a tool's license.
+
+    The local installed license file when present (as a file:// URL), otherwise
+    the tool's official license URL.
+    """
+    local = local_license_path(info, context)
+    if local is not None:
+        return Path(os.path.abspath(local)).as_uri()
+    return info.official_url
+
+
+def _fsl_version():
+    from nipype.interfaces import fsl
+
+    return fsl.base.Info.version()
+
+
+def _fsl_not_installed_marker() -> str:
+    """
+    Stable "version" identity for FSL's license when FSL is not installed.
+
+    Derived from the bundled license snapshot's content, so it stays the same
+    across restarts (no re-prompt once accepted) but changes - and so
+    re-prompts once, exactly like an installed tool's version bump - if a
+    future SWANe release ships an updated bundled snapshot.
+    """
+    import hashlib
+
+    with open(bundled_license_path(LICENSES[FSL]), "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()[:12]
+    return "not-installed-" + digest
+
+
+def _freesurfer_version():
+    from nipype.interfaces import freesurfer
+
+    if freesurfer.base.Info.version() is None:
+        return None
+    return str(freesurfer.base.Info.looseversion())
+
+
+def _dcm2niix_version():
+    # The pipeline (CustomDcm2niix) always runs the binary bundled by the
+    # dcm2niix pip package, never whatever "dcm2niix" resolves to on PATH,
+    # so the license-relevant version is the package attribute - not
+    # nipype's CommandLine-based Info.version(), which targets PATH.
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("dcm2niix")
+    except Exception:
+        return None
+
+
+def _antspyx_version():
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("antspyx")
+    except Exception:
+        return None
+
+
+def _antspynet_version():
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("antspynet")
+    except Exception:
+        return None
+
+
+def _dipy_version():
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("dipy")
+    except Exception:
+        return None
+
+
+def _niimath_version():
+    # niimath is a hard pip dependency: the maths pipeline always runs the
+    # binary bundled by the package, so the license-relevant version is the
+    # installed package version.
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("niimath")
+    except Exception:
+        return None
+
+
+def _nilearn_version():
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("nilearn")
+    except Exception:
+        return None
+
+
+def _is_slicer_detected(config) -> bool:
+    from swane.utils.DependencyManager import DependencyManager
+
+    return DependencyManager.is_slicer(config)
+
+
+def _norm(value) -> str:
+    value = "" if value is None else str(value).strip()
+    return value if value else UNKNOWN_VERSION
+
+
+def _cached_dependency_version(dependency_manager, attribute: str, resolver):
+    dependence = getattr(dependency_manager, attribute, None)
+    detected_version = getattr(dependence, "detected_version", None)
+    return resolver() if detected_version is None else detected_version
+
+
+def detected_tool_versions(dependency_manager, config) -> dict:
+    """Return {tool_id: detected_version_or_UNKNOWN} for each detected tool."""
+    versions = {}
+    if dependency_manager.is_fsl():
+        versions[FSL] = _norm(
+            _cached_dependency_version(dependency_manager, "fsl", _fsl_version)
+        )
+    else:
+        # FSL's license also covers the MNI152NLin6Asym template SWANe
+        # downloads and uses (AROMA registration target, XTRACT/FLAT1), so it
+        # is always in the consent gate, even without FSL itself installed.
+        versions[FSL] = _fsl_not_installed_marker()
+    if dependency_manager.is_freesurfer():
+        versions[FREESURFER] = _norm(
+            _cached_dependency_version(
+                dependency_manager, "freesurfer", _freesurfer_version
+            )
+        )
+    if _is_slicer_detected(config):
+        versions[SLICER] = _norm(config.get_slicer_version())
+    if dependency_manager.is_dcm2niix():
+        versions[DCM2NIIX] = _norm(_dcm2niix_version())
+    if dependency_manager.is_antspyx():
+        versions[ANTSPYX] = _norm(
+            _cached_dependency_version(dependency_manager, "antspyx", _antspyx_version)
+        )
+    if dependency_manager.is_antspynet():
+        versions[ANTSPYNET] = _norm(_antspynet_version())
+    if dependency_manager.is_dipy():
+        versions[DIPY] = _norm(_dipy_version())
+    # niimath and nilearn are required pip dependencies (not surfaced in the dependency UI),
+    # so they are detected directly from the installed package rather than through
+    # the dependency manager.
+    niimath_version = _niimath_version()
+    if niimath_version is not None:
+        versions[NIIMATH] = _norm(niimath_version)
+    nilearn_version = _nilearn_version()
+    if nilearn_version is not None:
+        versions[NILEARN] = _norm(nilearn_version)
+    return versions
+
+
+def tools_needing_consent(
+    dependency_manager, config, detected_versions: dict = None
+) -> list:
+    """Detected tools whose accepted version differs from the detected version.
+
+    ``detected_versions`` accepts a startup snapshot so callers can compare and
+    later persist exactly the same versions without probing external tools
+    multiple times.
+    """
+    detected = (
+        detected_tool_versions(dependency_manager, config)
+        if detected_versions is None
+        else detected_versions
+    )
+    ordered = [
+        FSL,
+        FREESURFER,
+        SLICER,
+        DCM2NIIX,
+        ANTSPYX,
+        ANTSPYNET,
+        DIPY,
+        NIIMATH,
+        NILEARN,
+    ]
+    needing = []
+    for tool_id in ordered:
+        if tool_id not in detected:
+            continue
+        if config.get_accepted_license_version(tool_id) != detected[tool_id]:
+            needing.append(tool_id)
+    return needing

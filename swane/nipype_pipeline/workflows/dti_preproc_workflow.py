@@ -1,27 +1,26 @@
 from nipype.interfaces.fsl import (
-    ExtractROI,
     EddyCorrect,
     DTIFit,
     BEDPOSTX5,
 )
-from nipype.interfaces.freesurfer.utils import LTAConvert
+from swane.nipype_pipeline.interfaces.volumes.ExtractVolumes import ExtractVolumes
 from nipype.pipeline.engine import Node
-from swane.config.config_enums import CoreLimit
+from swane.config.config_enums import RegistrationEngine, DeskullModality
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.GenEddyFiles import GenEddyFiles
-from swane.nipype_pipeline.nodes.CustomEddy import CustomEddy
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.dti.GenEddyFiles import GenEddyFiles
+from swane.nipype_pipeline.interfaces.fsl.CustomEddy import CustomEddy
+from swane.nipype_pipeline.interfaces.dti.AffineToFSL import AffineToFSL
+from swane.nipype_pipeline.interfaces.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,
+    resolve_registration_engine,
+    resolve_deskull_engine,
 )
 from configparser import SectionProxy
 from nipype.interfaces.utility import IdentityInterface
-from multiprocessing import cpu_count
-import os
-from os.path import abspath
 
 
 def dti_preproc_workflow(
@@ -30,8 +29,9 @@ def dti_preproc_workflow(
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
+    deskull_modality: DeskullModality = DeskullModality.T1,
     max_cpu: int = 0,
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP,
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     DTI preprocessing workflow with eddy current and motion artifact correction.
@@ -50,10 +50,14 @@ def dti_preproc_workflow(
         workflow settings.
     synth_config: SectionProxy
         FreeSurfer Synth tools settings.
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the b0 deskull node. The
+        default is DeskullModality.T1.
     max_cpu : int, optional
         If greater than 0, limit the core usage of bedpostx. The default is 0.
-    multicore_node_limit: CORE_LIMIT, optional
-        Preference for bedpostX core usage. The default il CORE_LIMIT.SOFT_CAP
+    test_run : bool, optional
+        If True, tweak eddy, registration and bedpostx parameters to speed up
+        prerelease test runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -80,15 +84,24 @@ def dti_preproc_workflow(
     thsamples : path
         Samples from the distribution on theta.
     diff2ref_mat : path
-        Linear registration matrix from diffusion to T13D reference space.
+        Diffusion -> T13D reference space affine, as an FSL matrix (FLIRT
+        ``.mat`` passthrough on FSL, converted via ``AffineToFSL`` on ANTs).
     ref2diff_mat : path
-        Linear registration inverse matrix from T13D reference to diffusion space.
-    mni2ref_warp : path
-        Nonlinear registration warp from MNI atlas to T13D reference space.
+        T13D reference -> diffusion space affine, as an FSL matrix
+        (``ConvertXFM`` inverse passthrough on FSL, converted via
+        ``AffineToFSL`` on ANTs).
+    nodif_brain : path
+        Betted b0 image in diffusion space (used as the probtrackx seed
+        reference).
 
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # Follow the configured engine (ANTs by default). SynthMorph is avoided for
+    # the diffusion registration (non-deterministic, and its diff<->ref outputs
+    # are now emitted as the ANTs transform-list view, not an FSL .mat).
+    engine = resolve_registration_engine(synth_config, allow_synth=False)
 
     # Input Node
     inputnode = Node(
@@ -106,7 +119,7 @@ def dti_preproc_workflow(
                 "thsamples",
                 "diff2ref_mat",
                 "ref2diff_mat",
-                "mni2ref_warp",
+                "nodif_brain",
             ]
         ),
         name="outputnode",
@@ -123,30 +136,36 @@ def dti_preproc_workflow(
     conversion.inputs.name_conflicts = 1
     conversion.inputs.merge_imgs = 2
 
-    # NODE 1b: Orienting in radiological convention
+    # NODE 1b: Orienting in radiological convention. The b-vectors lie along the
+    # voxel axes, so they follow the same permutation/flip: every consumer reads
+    # the reoriented ones, never dcm2niix's.
     reorient = Node(ForceOrient(), name="dti_reOrient")
     workflow.connect(conversion, "converted_files", reorient, "in_file")
+    workflow.connect(conversion, "bvecs", reorient, "in_bvec")
 
     # NODE 2: b0 image extraction
-    nodif = Node(ExtractROI(), name="dti_nodif")
+    nodif = Node(ExtractVolumes(), name="dti_nodif")
     nodif.long_name = "b0 extraction"
-    nodif.inputs.t_min = 0
-    nodif.inputs.t_size = 1
-    nodif.inputs.roi_file = "nodif.nii.gz"
+    nodif.inputs.start_volume = 0
+    nodif.inputs.num_volumes = 1
+    nodif.inputs.out_file = "nodif.nii.gz"
     workflow.connect(reorient, "out_file", nodif, "in_file")
 
     # NODE 3: Scalp removal from b0 image
     b0_deskull = get_deskull_node(
         name="dti_deskull",
         name_prefix="DTI",
-        use_synth=synth_config.getboolean_safe("strip"),
+        deskull_engine=resolve_deskull_engine(synth_config),
+        deskull_modality=deskull_modality,
         mask=True,
         bet_thr=0.3,
         bet_robust=True,
         bet_threshold=True,
         out_file="nodif_brain.nii.gz",
+        max_cpu=max_cpu,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
-    workflow.connect(nodif, "roi_file", b0_deskull, "in_file")
+    workflow.connect(nodif, "out_file", b0_deskull, "in_file")
 
     old_eddy_correct = config.getboolean_safe("old_eddy_correct")
     if old_eddy_correct:
@@ -157,6 +176,8 @@ def dti_preproc_workflow(
         eddy.inputs.out_file = "data.nii.gz"
         workflow.connect(reorient, "out_file", eddy, "in_file")
         eddy_output_name = "eddy_corrected"
+        # EddyCorrect emits no rotated b-vectors, so the unrotated ones stay.
+        bvec_source, bvec_field = reorient, "out_bvec"
     else:
         # NODE 4a: Generate Eddy files
         eddy_files = Node(GenEddyFiles(), name="dti_eddy_files")
@@ -166,34 +187,40 @@ def dti_preproc_workflow(
         eddy = Node(CustomEddy(), name="dti_eddy")
         eddy.inputs.use_cuda = is_cuda
         eddy._mem_gb = 1
+        if test_run:
+            # FSL default is 5; cut to the minimum for prerelease speed.
+            eddy.inputs.niter = 1
         if not is_cuda:
-            if multicore_node_limit == CoreLimit.HARD_CAP:
-                eddy_cpu = max_cpu
-                eddy.inputs.num_threads = max_cpu
-            elif multicore_node_limit == CoreLimit.SOFT_CAP:
-                eddy_cpu = max_cpu
-            else:
-                eddy_cpu = cpu_count()
+            eddy_cpu = max_cpu
+            eddy.inputs.num_threads = max_cpu
             eddy.inputs.environ = {
                 "OMP_NUM_THREADS": str(eddy_cpu),
                 "FSL_SKIP_GLOBAL": "1",
             }
+            # Keep this runtime workaround outside CustomEddy: the wrapper is
+            # temporary, while the Nipype hash bug applies to EddyInputSpec.
+            from swane.patches.nipype_patches import apply_patches
+
+            apply_patches()
             eddy.inputs.args = "--nthr=%d" % eddy_cpu
 
         workflow.connect(reorient, "out_file", eddy, "in_file")
         workflow.connect(conversion, "bvals", eddy, "in_bval")
-        workflow.connect(conversion, "bvecs", eddy, "in_bvec")
+        workflow.connect(reorient, "out_bvec", eddy, "in_bvec")
         workflow.connect(eddy_files, "acqp", eddy, "in_acqp")
         workflow.connect(eddy_files, "index", eddy, "in_index")
         workflow.connect(b0_deskull, "mask_file", eddy, "in_mask")
         eddy_output_name = "out_corrected"
+        # eddy rotates the volumes, so the gradients must follow them, else FA,
+        # MD and tractography carry a systematic bias (Leemans & Jones 2009).
+        bvec_source, bvec_field = eddy, "out_rotated_bvecs"
 
     # NODE 5: DTI metrics calculation
     dtifit = Node(DTIFit(), name="dti_dtifit")
     dtifit.long_name = "DTI metrics calculation"
     workflow.connect(eddy, eddy_output_name, dtifit, "dwi")
     workflow.connect(b0_deskull, "mask_file", dtifit, "mask")
-    workflow.connect(conversion, "bvecs", dtifit, "bvecs")
+    workflow.connect(bvec_source, bvec_field, dtifit, "bvecs")
     workflow.connect(conversion, "bvals", dtifit, "bvals")
 
     # NODE 6: b0 image linear registration in reference space
@@ -201,46 +228,47 @@ def dti_preproc_workflow(
         name="dif2ref",
         name_prefix="DTI",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
-        moving=[nodif, "roi_file"],
+        moving=[nodif, "out_file"],
         moving_brain=[b0_deskull, "out_file"],
         reference=[inputnode, "reference"],
         reference_brain=[inputnode, "reference_brain"],
         flirt_cost="corratio",
         non_linear=False,
         inverse=True,
+        test_run=test_run,
+        max_cpu=max_cpu,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
-    # Output mat must be fsl format to be used directly in probtrackx
-    if synth_config.getboolean_safe("morph"):
-        dif2ref_xfm = Node(LTAConvert(), name="dif2ref_xfm")
-        dif2ref_xfm.long_name = "Matrix conversion"
-        dif2ref_xfm.inputs.out_fsl = "dif2ref.mat"
-        workflow.connect(
-            dif2ref.out_registered_node, dif2ref.warp, dif2ref_xfm, "in_lta"
-        )
-
-        ref2dif_xfm = Node(LTAConvert(), name="ref2dif_xfm")
-        ref2dif_xfm.long_name = "Inverse matrix conversion"
-        ref2dif_xfm.inputs.out_fsl = "ref2dif.mat"
-        workflow.connect(dif2ref.inv_warp_node, dif2ref.inv_warp, ref2dif_xfm, "in_lta")
-
-        workflow.connect(dif2ref_xfm, "out_fsl", outputnode, "diff2ref_mat")
-        workflow.connect(ref2dif_xfm, "out_fsl", outputnode, "ref2diff_mat")
+    # probtrackx consumes a single FSL .mat per transform slot. Emit the
+    # diff<->ref affine as FSL: on FSL the FLIRT .mat and its ConvertXFM inverse
+    # pass straight through; on ANTs the ITK affine is converted with
+    # nitransforms (AffineToFSL), which needs no FSL/FreeSurfer CLI. dif2ref is
+    # affine-only and SYNTH is downgraded to ANTS above, so engine is FSL or ANTS.
+    if engine == RegistrationEngine.FSL:
+        fwd_node, fwd_field = dif2ref.fwd_transforms[0]
+        workflow.connect(fwd_node, fwd_field, outputnode, "diff2ref_mat")
+        inv_node, inv_field = dif2ref.inv_transforms[0]
+        workflow.connect(inv_node, inv_field, outputnode, "ref2diff_mat")
     else:
-        workflow.connect(
-            dif2ref.out_registered_node, dif2ref.warp, outputnode, "diff2ref_mat"
-        )
-        workflow.connect(
-            dif2ref.inv_warp_node, dif2ref.inv_warp, outputnode, "ref2diff_mat"
-        )
+        dif2ref_to_fsl = Node(AffineToFSL(), name="dif2ref_to_fsl")
+        dif2ref_to_fsl.long_name = "DTI-to-reference affine FSL conversion"
+        dif2ref_to_fsl.inputs.in_fmt = "itk"
+        fwd_node, fwd_field = dif2ref.fwd_transforms[0]
+        workflow.connect(fwd_node, fwd_field, dif2ref_to_fsl, "in_transform")
+        workflow.connect(b0_deskull, "out_file", dif2ref_to_fsl, "source_file")
+        workflow.connect(inputnode, "reference_brain", dif2ref_to_fsl, "reference_file")
+        workflow.connect(dif2ref_to_fsl, "out_fsl", outputnode, "diff2ref_mat")
+        workflow.connect(dif2ref_to_fsl, "out_fsl_inverse", outputnode, "ref2diff_mat")
+    workflow.connect(b0_deskull, "out_file", outputnode, "nodif_brain")
 
     fa_2_ref = apply_registration_node(
         name="fa_2_ref",
         name_prefix="FA",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[dif2ref.out_registered_node, dif2ref.warp],
         moving=[dtifit, "FA"],
@@ -254,51 +282,37 @@ def dti_preproc_workflow(
     is_tractography = config.getboolean_safe("tractography")
     if is_tractography:
 
-        mni = abspath(
-            os.path.join(os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm.nii.gz")
-        )
-        mni_brain = abspath(
-            os.path.join(
-                os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm_brain.nii.gz"
-            )
-        )
-
-        mni_2_ref = get_registration_node(
-            name="mni_2_ref",
-            name_prefix="MNI atlas",
-            name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
-            workflow=workflow,
-            moving=mni,
-            moving_brain=mni_brain,
-            reference=[inputnode, "reference"],
-            reference_brain=[inputnode, "reference_brain"],
-            flirt_cost="corratio",
-            non_linear=True,
-        )
-        workflow.connect(
-            mni_2_ref.out_registered_node, mni_2_ref.warp, outputnode, "mni2ref_warp"
-        )
-
         # NODE 8: Bayesian estimation of diffusion parameters
         bedpostx = Node(BEDPOSTX5(), name="dti_bedpostx")
-        bedpostx.inputs.n_fibres = 2
         bedpostx.inputs.rician = True
-        bedpostx.inputs.sample_every = 25
-        bedpostx.inputs.n_jumps = 1250
-        bedpostx.inputs.burn_in = 1000
+        if test_run:
+            # Cut the MCMC cost, dominated by burn_in + n_jumps * sample_every
+            # (~32k iterations/voxel by default): drop it to ~1.1k. n_fibres
+            # stays at 2 (matching full accuracy): dropping it to 1 was tried
+            # and made the left CST unreconstructable (waytotal 0, even with
+            # much heavier MCMC settings up to ~13k iterations/voxel) -- a
+            # single-fibre model can't represent the crossing along its path.
+            # n_fibres=2 recovers it even at this cheap MCMC setting (waytotal
+            # 463 vs the full-accuracy path's 432), so it is the one knob that
+            # actually matters here, not MCMC depth.
+            bedpostx.inputs.n_fibres = 2
+            bedpostx.inputs.sample_every = 5
+            bedpostx.inputs.n_jumps = 200
+            bedpostx.inputs.burn_in = 100
+        else:
+            bedpostx.inputs.n_fibres = 2
+            bedpostx.inputs.sample_every = 25
+            bedpostx.inputs.n_jumps = 1250
+            bedpostx.inputs.burn_in = 1000
         bedpostx.inputs.use_gpu = is_cuda
         if not is_cuda:
             # if cuda is enabled only 1 process is launched
-            if multicore_node_limit == CoreLimit.SOFT_CAP:
-                bedpostx.inputs.environ = {"FSLSUB_PARALLEL": str(max_cpu)}
-            elif multicore_node_limit == CoreLimit.HARD_CAP:
-                bedpostx.inputs.environ = {"FSLSUB_PARALLEL": str(max_cpu)}
-                bedpostx.n_procs = max_cpu
+            bedpostx.inputs.environ = {"FSLSUB_PARALLEL": str(max_cpu)}
+            bedpostx.n_procs = max_cpu
 
         workflow.connect(eddy, eddy_output_name, bedpostx, "dwi")
         workflow.connect(b0_deskull, "mask_file", bedpostx, "mask")
-        workflow.connect(conversion, "bvecs", bedpostx, "bvecs")
+        workflow.connect(bvec_source, bvec_field, bedpostx, "bvecs")
         workflow.connect(conversion, "bvals", bedpostx, "bvals")
 
         workflow.connect(bedpostx, "merged_fsamples", outputnode, "fsamples")

@@ -16,13 +16,16 @@ def get_os_type() -> str:
     """
     Get the operating system type.
 
-    :return: 'mac' if macOS, 'linux' if Linux, 'other' otherwise
+    :return: 'mac' if macOS, 'linux' if Linux, 'windows' if Windows,
+        'other' otherwise
     """
     system = platform.system().lower()
     if system == "darwin":
         return "mac"
     elif system == "linux":
         return "linux"
+    elif system == "windows":
+        return "windows"
     else:
         return "other"
 
@@ -32,6 +35,13 @@ def is_mac() -> bool:
     Check if the operating system is macOS.
     """
     return get_os_type() == "mac"
+
+
+def is_windows() -> bool:
+    """
+    Check if the operating system is Windows.
+    """
+    return get_os_type() == "windows"
 
 
 def is_linux() -> bool:

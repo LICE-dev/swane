@@ -1,0 +1,70 @@
+name: Install minimal FSL
+description: >-
+  Install the FSL packages SWANe runs, pinned to the oldest FSL release SWANe
+  supports on this runner platform (or to an explicit release), from FSL's own
+  conda channel. FSL is free for non-commercial use (see its licence); it is
+  downloaded on the runner and never copied into the repository.
+
+inputs:
+  release:
+    description: "FSL release to pin (empty = oldest release >= MIN_FSL_VERSION)"
+    required: false
+    default: ""
+
+outputs:
+  release:
+    description: "The FSL release installed"
+    value: ${{ steps.resolve.outputs.release }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install FSL runtime dependencies (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends dc bc || true
+
+    - name: Resolve FSL packages
+      id: resolve
+      shell: bash
+      env:
+        FSL_RELEASE: ${{ inputs.release }}
+      run: |
+        python swane/utils/fsl_conda.py --release "$FSL_RELEASE"
+        python swane/utils/fsl_conda.py --release "$FSL_RELEASE" \
+          --format github | tr -d '\r' >> "$GITHUB_OUTPUT"
+
+    - uses: mamba-org/setup-micromamba@v3
+      with:
+        micromamba-root-path: ${{ runner.temp }}/mamba
+        environment-name: fsl
+        create-args: ${{ steps.resolve.outputs.specs }}
+        condarc: |
+          channels:
+            - https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public/
+            - conda-forge
+          channel_priority: strict
+        cache-environment: true
+        cache-environment-key: fsl-${{ steps.resolve.outputs.platform }}-${{ steps.resolve.outputs.release }}-
+        # Never activated: the FSL env ships its own python, which must not
+        # shadow the job's interpreter that has SWANe installed.
+        init-shell: none
+        post-cleanup: none
+
+    - name: Configure FSLDIR
+      shell: bash
+      env:
+        FSLDIR: ${{ runner.temp }}/mamba/envs/fsl
+        FSL_RELEASE: ${{ steps.resolve.outputs.release }}
+      run: |
+        # The conda packages do not write etc/fslversion (FSL's installer
+        # does); nipype reads the FSL version from it. It names the release
+        # whose package versions were installed.
+        mkdir -p "$FSLDIR/etc"
+        echo "$FSL_RELEASE" > "$FSLDIR/etc/fslversion"
+        echo "FSLDIR=$FSLDIR" >> "$GITHUB_ENV"
+        echo "FSLOUTPUTTYPE=NIFTI_GZ" >> "$GITHUB_ENV"
+        # Appended, not prepended: the job's python keeps precedence.
+        echo "PATH=$PATH:$FSLDIR/bin" >> "$GITHUB_ENV"
