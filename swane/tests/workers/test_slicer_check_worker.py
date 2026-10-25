@@ -552,6 +552,15 @@ class TestSlicerCheckWorkerReal:
             SlicerCheckWorker.read_slicer_revision(copy_slicer) == real_rev
         ), "Revision on duplicated Slicer did not match real Slicer"
 
+        # The first launch of a bundle copied to a new path can outlast
+        # VERSION_TIMEOUT on macOS (163 s for the CI's own install under
+        # Rosetta), and the worker would then fall back to the system search:
+        # launch the copy once, as the CI does for its install.
+        try:
+            SlicerCheckWorker._communicate([copy_slicer, "--version"], timeout=600)
+        except subprocess.TimeoutExpired:
+            pytest.fail("the Slicer copy did not start within 600 s")
+
         slicer_check_worker = SlicerCheckWorker(copy_slicer)
         with qtbot.waitSignal(
             slicer_check_worker.signal.slicer, timeout=2000000
