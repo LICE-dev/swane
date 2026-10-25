@@ -249,6 +249,26 @@ def _is_low_confidence(conf_file):
         return True
 
 
+def _low_confidence_detail(name, conf_file):
+    """What a flagged dipy sidecar measured: its precision, recall and count."""
+    try:
+        with open(conf_file) as f:
+            conf = json.load(f)
+        return (
+            "%s flagged as low confidence: precision %.2f, recall %.2f, "
+            "%d streamlines (retry: %s)"
+            % (
+                name,
+                conf["precision"],
+                conf["recall"],
+                conf["count"],
+                conf.get("retry_arm") or "none",
+            )
+        )
+    except Exception:
+        return "%s confidence sidecar unreadable: %s" % (name, conf_file)
+
+
 def _check_no_mapnode_subfolder(subject_dir: str, files: list) -> CheckResult:
     """No result may sit in a ``_<name><n>`` MapNode subfolder.
 
@@ -318,11 +338,16 @@ def _check_dipy_bundle_recovery(result, files: list) -> list:
                 "r-%s.vtp present" % name,
             )
         )
+        low = _is_low_confidence(conf_file)
         checks.append(
             CheckResult(
                 "dipy.confidence.%s" % name,
-                not _is_low_confidence(conf_file),
-                "%s is not flagged as low confidence" % name,
+                not low,
+                (
+                    _low_confidence_detail(name, conf_file)
+                    if low
+                    else "%s is not flagged as low confidence" % name
+                ),
                 severity=WARNING,
             )
         )
