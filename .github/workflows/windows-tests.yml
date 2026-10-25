@@ -50,6 +50,10 @@ jobs:
     if: ${{ inputs.suite == 'light' || inputs.suite == 'all' }}
     runs-on: ${{ inputs.os }}
     timeout-minutes: 90
+    env:
+      # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
+      # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
+      TEMPLATEFLOW_HOME: ${{ (inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow') || (inputs.os == 'macos-latest' && '/Users/runner/.cache/templateflow') || '/home/runner/.cache/templateflow' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -67,6 +71,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
+      # The CerebrA atlas the phantom tests read without downloading: the same
+      # cache the prerelease phantom keeps, fetched on a miss.
+      - name: TemplateFlow cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/templateflow/tpl-MNI152NLin2009cSym
+          key: templateflow-cerebra-v1
+          enableCrossOsArchive: true
+      - name: Fetch the phantom anatomy (TemplateFlow)
+        shell: bash
+        run: python -c "from swane.tests.helpers.phantom.anatomy_source import resolve_anatomy_files as r; print(r())"
       - name: Environment report
         shell: bash
         run: |

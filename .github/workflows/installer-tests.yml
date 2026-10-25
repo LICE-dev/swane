@@ -61,6 +61,35 @@ jobs:
           fi
           python -m pytest swane/tests/installer -p no:cacheprovider -rfEs
 
+  # The unit tests under the real "conda activate" on macOS (bash, dash and
+  # the system zsh), against a Miniforge of the version the installer pins:
+  # GitHub's macOS arm64 runners have no conda of their own.
+  unit-macos:
+    name: unit tests (macos-latest, real conda activate)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install Miniforge
+        shell: bash
+        run: |
+          version=$(sed -n 's/^MINIFORGE_VERSION="\(.*\)"$/\1/p' installer/install_swane.sh)
+          curl -fsSL -o "$RUNNER_TEMP/miniforge.sh" \
+            "https://github.com/conda-forge/miniforge/releases/download/$version/Miniforge3-$version-MacOSX-$(uname -m).sh"
+          bash "$RUNNER_TEMP/miniforge.sh" -b -p "$RUNNER_TEMP/miniforge"
+          echo "CONDA_EXE=$RUNNER_TEMP/miniforge/bin/conda" >> "$GITHUB_ENV"
+      - name: Install SWANe
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+      - name: Installer unit tests
+        shell: bash
+        run: python -m pytest swane/tests/installer -p no:cacheprovider -rfEs
+
   install:
     name: ${{ matrix.scenario }} (${{ matrix.os }}, ${{ matrix.conda }} conda, ${{ matrix.login_shell }})
     runs-on: ${{ matrix.os }}
