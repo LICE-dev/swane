@@ -792,12 +792,19 @@ def test_communicate_timeout_kills_the_whole_process_tree(tmp_path):
     script = tmp_path / "holder.py"
     script.write_text(_HOLDER)
     pid_file = tmp_path / "child.pid"
-    start = time.monotonic()
-    with pytest.raises(subprocess.TimeoutExpired):
-        SlicerCheckWorker._communicate(
-            [sys.executable, str(script), str(pid_file)], timeout=3
-        )
-    assert time.monotonic() - start < 30
+    # The timeout runs from the launch: on a loaded host the holder can be
+    # killed before it starts its child, an attempt that proves nothing.
+    for _ in range(5):
+        start = time.monotonic()
+        with pytest.raises(subprocess.TimeoutExpired):
+            SlicerCheckWorker._communicate(
+                [sys.executable, str(script), str(pid_file)], timeout=3
+            )
+        assert time.monotonic() - start < 30
+        if pid_file.exists():
+            break
+    else:
+        pytest.fail("the holder never started its child before the timeout")
     child_pid = int(pid_file.read_text())
     try:
         child = psutil.Process(child_pid)
