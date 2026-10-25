@@ -15,6 +15,7 @@ from swane.nipype_pipeline.interfaces.utils import (
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.interfaces.freesurfer.SegmentHA import SegmentHA
+from swane.utils.freesurfer_mcr import mcr_environ
 from swane.nipype_pipeline.interfaces.niimath.ThrROI import ThrROI
 from swane.config.config_enums import FreesurferStep
 from nipype.interfaces.utility import IdentityInterface
@@ -398,6 +399,9 @@ def freesurfer_workflow(
             segment_ha._mem_gb = 5
             segment_ha.inputs.num_cpu = max_cpu
             segment_ha.n_procs = segment_ha.inputs.num_cpu
+            # glibc >= 2.41 refuses the Matlab Runtime libraries that ask for
+            # an executable stack: allow it for this command alone.
+            segment_ha.inputs.environ = mcr_environ()
             workflow.connect(
                 recon_all_recon_pial, "subjects_dir", segment_ha, "subjects_dir"
             )

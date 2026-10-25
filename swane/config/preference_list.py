@@ -497,7 +497,10 @@ WF_PREFERENCES[category]["step_size"] = PreferenceEntry(
     pref_requirement_fail_tooltip="Only used with the dipy tractography engine",
 )
 
-for tract in TRACTS.keys():
+
+def tract_preference_entry(tract: str) -> PreferenceEntry:
+    """Build the subject boolean of a TRACTS entry; a tract with no dipy atlas
+    counterpart also requires the FSL tractography engine."""
     tract_pref_requirement = {DataInputList.DTI: [("tractography", True)]}
     tract_pref_requirement_fail_tooltip = "Tractography disabled"
     if tract not in DIPY_TRACT_ATLAS:
@@ -507,13 +510,17 @@ for tract in TRACTS.keys():
         tract_pref_requirement_fail_tooltip = (
             "Requires tractography enabled and FSL tractography engine"
         )
-    WF_PREFERENCES[category][tract] = PreferenceEntry(
+    return PreferenceEntry(
         input_type=InputTypes.BOOLEAN,
         label=TRACTS[tract][0],
         default=TRACTS[tract][1],
         pref_requirement=tract_pref_requirement,
         pref_requirement_fail_tooltip=tract_pref_requirement_fail_tooltip,
     )
+
+
+for tract in TRACTS.keys():
+    WF_PREFERENCES[category][tract] = tract_preference_entry(tract)
 
 for x in range(FMRI_NUM):
     category = DataInputList["FMRI" + "_%s" % x]

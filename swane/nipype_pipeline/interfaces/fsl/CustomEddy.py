@@ -17,8 +17,14 @@ class CustomEddy(Eddy):
     def _use_cuda(self):
         if self.inputs.use_cuda and gpu_count() > 0:
             self.inputs.num_threads = 1
-            # eddy_cuda usually link to eddy_cudaX.X but some versions miss the symlink
-            # anyway in newer fsl versions eddy automatically use cuda on cuda-capable systems
+            # GPU -> "eddy", CPU -> "eddy_cpu" (see _run_interface). Since about
+            # FSL 6.0.6 the binaries are eddy_cpu and eddy_cudaX.Y, and "eddy"
+            # is FSL's dispatcher, which runs the CUDA binary when it detects a
+            # GPU and eddy_cpu otherwise; "eddy_cuda" exists only in older
+            # installs (or as a user-made link to eddy_cudaX.Y).
+            # The dispatcher detects the GPU on its own: should it disagree
+            # with gpu_count() (e.g. a broken driver), eddy silently runs on
+            # the CPU with the single thread set above.
             self._cmd = "eddy_cuda" if which("eddy_cuda") else "eddy"
         else:
             self._cmd = "eddy_openmp"

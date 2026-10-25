@@ -91,6 +91,13 @@ def _add_recovery(
     what a recognise node reserves for the largest chunk (static fallback
     included).
     """
+    # TODO: the low-confidence gate is never seen passing in the pre-release
+    # sweep. Its only dipy pass (dti_tractography_dipy) pins FSL registration
+    # + BET, and there both CST sides came out with precision 0 and recall 0
+    # (CST_R recognised ~26 mm from the atlas model, more than the 8-12 mm FSL
+    # offset the checks assume); macOS flags only cst_lh. Investigate the FSL
+    # registration quality on the phantom, and add an ANTS + ANTSPYNET dipy
+    # pass where confidence must be good, once it is shown to be on the phantom.
     recovery = Node(DipyBundleRecovery(), name="recovery_%s" % suffix)
     recovery._mem_gb = RecoBundlesRamEstimator.STATIC_FALLBACK_GB
     recovery.ram_estimator = DipyBundleRecoveryRamEstimator()

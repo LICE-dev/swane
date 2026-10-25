@@ -14,6 +14,7 @@ from swane.workers.worker_pool import start_worker
 from enum import Enum, auto
 from swane.utils.ResourceManager import ResourceManager
 from swane.utils.platform_and_tools_utils import is_linux
+from swane.utils import freesurfer_mcr
 from swane.utils.LicenseReference import (
     FSL,
     FREESURFER,
@@ -761,6 +762,21 @@ class DependencyManager:
             except Exception:
                 matlab_found = False
 
+        # checkMCR.sh only checks that the runtime folder exists: on Linux,
+        # also check that the runtime loads (glibc >= 2.41 can refuse it).
+        mcr_load_error = ""
+        if matlab_found and is_linux():
+            mcr_root = freesurfer_mcr.find_mcr_root(os.environ["FREESURFER_HOME"])
+            error = freesurfer_mcr.mcr_load_error(mcr_root) if mcr_root else None
+            if error is not None:
+                matlab_found = False
+                if freesurfer_mcr.EXECSTACK_ERROR in error:
+                    mcr_load_error = strings.check_dep_fs_error_matlab_execstack % (
+                        freesurfer_mcr.glibc_version() or "glibc"
+                    )
+                else:
+                    mcr_load_error = strings.check_dep_fs_error_matlab_load % error
+
         fs_dep = DependenceStatus.DETECTED
         matlab_dep = (
             DependenceStatus.DETECTED if matlab_found else DependenceStatus.MISSING
@@ -788,7 +804,9 @@ class DependencyManager:
             fs_dep = DependenceStatus.WARNING
 
             match = re.search(DependencyManager.FREESURFER_MATLAB_REGEXP, output)
-            if match:
+            if mcr_load_error:
+                error_string += mcr_load_error
+            elif match:
                 install_cmd = match.group(1)
                 error_string += strings.check_dep_fs_error_matlab_command % install_cmd
             else:

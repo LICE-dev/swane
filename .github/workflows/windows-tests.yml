@@ -14,7 +14,7 @@ on:
         options: [light, heavy, prerelease, all]
         default: light
       os:
-        description: "Runner OS (macOS/Ubuntu prerelease also installs a minimal FSL)"
+        description: "Runner OS (macOS/Ubuntu also install a minimal FSL)"
         type: choice
         options: [windows-latest, macos-latest, ubuntu-latest]
         default: windows-latest
@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
       fsl_release:
-        description: "macOS/Ubuntu prerelease: FSL release to install (empty = oldest supported)"
+        description: "macOS/Ubuntu: FSL release to install (empty = oldest supported)"
         type: string
         default: ""
       slicer_release:
@@ -50,6 +50,10 @@ jobs:
     if: ${{ inputs.suite == 'light' || inputs.suite == 'all' }}
     runs-on: ${{ inputs.os }}
     timeout-minutes: 90
+    env:
+      # TemplateFlow defaults to platformdirs' user cache (~/Library/Caches on
+      # macOS, AppData\Local on Windows); pin it to the cached ~/.cache path.
+      TEMPLATEFLOW_HOME: ${{ (inputs.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\templateflow') || (inputs.os == 'macos-latest' && '/Users/runner/.cache/templateflow') || '/home/runner/.cache/templateflow' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -67,6 +71,25 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
+      # macOS / Linux only (Windows has no FSL build): the matrix snapshots
+      # read FSL data (MNI templates, XTRACT protocols) and some tests run real
+      # FSL tools. The environment is cached by the action.
+      - name: Install FSL
+        if: ${{ runner.os != 'Windows' }}
+        uses: ./.github/actions/install-fsl
+        with:
+          release: ${{ inputs.fsl_release }}
+      # The CerebrA atlas the phantom tests read without downloading: the same
+      # cache the prerelease phantom keeps, fetched on a miss.
+      - name: TemplateFlow cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/templateflow/tpl-MNI152NLin2009cSym
+          key: templateflow-cerebra-v1
+          enableCrossOsArchive: true
+      - name: Fetch the phantom anatomy (TemplateFlow)
+        shell: bash
+        run: python -c "from swane.tests.helpers.phantom.anatomy_source import resolve_anatomy_files as r; print(r())"
       - name: Environment report
         shell: bash
         run: |
@@ -118,6 +141,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
+      # macOS / Linux only (Windows has no FSL build): the matrix snapshots
+      # read FSL data (MNI templates, XTRACT protocols) and some tests run real
+      # FSL tools. The environment is cached by the action.
+      - name: Install FSL
+        if: ${{ runner.os != 'Windows' }}
+        uses: ./.github/actions/install-fsl
+        with:
+          release: ${{ inputs.fsl_release }}
       - name: Restore model/data caches
         uses: actions/cache@v6
         with:

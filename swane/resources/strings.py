@@ -468,6 +468,14 @@ check_dep_fs_error_matlab_no_command = (
 check_dep_fs_error_matlab_command = (
     "<br>OPTIONAL: install Matlab Runtime with command <i>%s</i>"
 )
+check_dep_fs_error_matlab_execstack = (
+    "<br>Matlab Runtime found, but %s refuses to load it (executable stack): "
+    "update the system packages, the fix is in the glibc stable releases"
+)
+check_dep_fs_error_matlab_load = (
+    "<br>Matlab Runtime found, but it cannot be loaded (<i>%s</i>): reinstall it "
+    "(<a href='https://surfer.nmr.mgh.harvard.edu/fswiki/MatlabRuntime'>instructions</a>)"
+)
 check_dep_fs_error4 = (
     "FreeSurfer detected (%s). License key missing (<a "
     "href='https://surfer.nmr.mgh.harvard.edu/registration.html'>registration instructions</a>)"
