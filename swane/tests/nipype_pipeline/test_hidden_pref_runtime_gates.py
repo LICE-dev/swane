@@ -19,8 +19,15 @@ from swane.config.config_enums import (
     GlobalPrefCategoryList,
     TractographyEngine,
 )
-from swane.config.preference_list import TRACTS, WF_PREFERENCES
+from swane.config.preference_list import (
+    DEFAULT_N_SAMPLES,
+    TRACTS,
+    WF_PREFERENCES,
+    tract_preference_entry,
+)
 from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+from swane.nipype_pipeline.workflows import tractography_workflow
+from swane.nipype_pipeline.workflows.workflow_constants import DIPY_TRACT_ATLAS
 from swane.utils.DataInputList import DataInputList as DIL
 from swane.utils.DependencyManager import DependencyManager
 from swane.utils.SubjectInputStateList import SubjectInputStateList
@@ -35,6 +42,14 @@ HIDDEN_GATED_BOOLEANS = {
     (DIL.DTI, "old_eddy_correct"): "test_old_eddy_correct",
     (DIL.DTI, "cingulum"): "test_cingulum",
 }
+# The FSL-only tracts exist only where the XTRACT data is installed
+HIDDEN_GATED_BOOLEANS.update(
+    {
+        (DIL.DTI, tract): "test_fsl_only_tract"
+        for tract in TRACTS
+        if tract not in DIPY_TRACT_ATLAS
+    }
+)
 
 
 def test_every_hidden_gated_boolean_has_a_runtime_gate_test():
@@ -180,3 +195,42 @@ def test_cingulum(build, tractography_engine, expected):
     )
     has_cingulum = any("cingulum" in node.fullname for node in nodes)
     assert has_cingulum is expected
+
+
+@pytest.fixture
+def fsl_only_tract(tmp_path, monkeypatch):
+    """An FSL-only tract with an XTRACT protocol, whether or not FSL is
+    installed: a disposable protocol folder replaces the XTRACT data."""
+    tract = "atr"
+    assert tract not in DIPY_TRACT_ATLAS
+    if tract not in TRACTS:
+        monkeypatch.setitem(
+            TRACTS, tract, ["Anterior Thalamic Radiation", "false", DEFAULT_N_SAMPLES]
+        )
+    monkeypatch.setitem(WF_PREFERENCES[DIL.DTI], tract, tract_preference_entry(tract))
+    xtract_dir = tmp_path / "xtract_data"
+    for side in ("l", "r"):
+        protocol_dir = xtract_dir / ("%s_%s" % (tract, side))
+        protocol_dir.mkdir(parents=True)
+        (protocol_dir / "seed.nii.gz").touch()
+        (protocol_dir / "target.nii.gz").touch()
+    monkeypatch.setattr(tractography_workflow, "XTRACT_DATA_DIR", str(xtract_dir))
+    return tract
+
+
+@pytest.mark.parametrize(
+    "tractography_engine, expected",
+    [
+        (TractographyEngine.DIPY_RECOBUNDLES, False),
+        (TractographyEngine.FSL_XTRACT, True),
+    ],
+)
+def test_fsl_only_tract(build, fsl_only_tract, tractography_engine, expected):
+    nodes = build(
+        {"tractography_engine": tractography_engine.name},
+        {(DIL.DTI, fsl_only_tract): "true"},
+    )
+    has_tract = any(
+        node.fullname.startswith("tract_%s." % fsl_only_tract) for node in nodes
+    )
+    assert has_tract is expected
