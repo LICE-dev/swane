@@ -90,7 +90,16 @@ def test_dipy_bundle_recovery_flags_a_low_confidence_bundle(tmp_path):
         with open(
             os.path.join(dti, "r-%s_%s.conf.json" % (SWEEP_TRACT, side)), "w"
         ) as f:
-            json.dump({"low_confidence": low}, f)
+            json.dump(
+                {
+                    "precision": 0.0,
+                    "recall": 0.125,
+                    "count": 13,
+                    "retry_arm": "widen",
+                    "low_confidence": low,
+                },
+                f,
+            )
 
     checks = _by_name(_check_dipy_bundle_recovery(_dipy_result(str(tmp_path)), []))
 
@@ -101,6 +110,14 @@ def test_dipy_bundle_recovery_flags_a_low_confidence_bundle(tmp_path):
     # A flagged bundle is a warning, not a broken pass: the recovery mechanism
     # is doing its job (see _check_dipy_bundle_recovery's docstring).
     assert checks["dipy.confidence.%s_rh" % SWEEP_TRACT].severity == WARNING
+    # The warning says what was measured, not the expected outcome.
+    assert checks["dipy.confidence.%s_rh" % SWEEP_TRACT].detail == (
+        "%s_rh flagged as low confidence: precision 0.00, recall 0.12, "
+        "13 streamlines (retry: widen)" % SWEEP_TRACT
+    )
+    assert checks["dipy.confidence.%s_lh" % SWEEP_TRACT].detail == (
+        "%s_lh is not flagged as low confidence" % SWEEP_TRACT
+    )
 
 
 def _rs_result(subject_dir, engine="FSL", **values):
