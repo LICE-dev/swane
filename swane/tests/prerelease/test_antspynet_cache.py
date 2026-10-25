@@ -37,6 +37,9 @@ def test_preload_runs_in_a_child_process_and_leaves_the_caller_clean(monkeypatch
 
         return _Done()
 
+    # A heavy test in the same session may have imported the real antspynet
+    # already (it cannot be unloaded): only an import by this call counts.
+    monkeypatch.delitem(sys.modules, "antspynet", raising=False)
     monkeypatch.setattr(antspynet_weights.subprocess, "run", fake_run)
     monkeypatch.setattr(antspynet_weights, "weights_are_fetched", lambda x: False)
     antspynet_cache.preload_antspynet_models(verbose=False)
