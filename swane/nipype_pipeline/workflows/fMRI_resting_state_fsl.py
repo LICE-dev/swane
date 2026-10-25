@@ -12,6 +12,11 @@ from swane.nipype_pipeline.workflows.fMRI_resting_state_aroma import (
 )
 from swane.config.config_enums import RegistrationEngine
 
+# MELODIC starts its ICA from a random matrix: without a seed the same input
+# gives a different decomposition at every run. A fixed seed (melodic --seed,
+# not listed by --help) makes the resting-state maps reproducible.
+MELODIC_SEED = 1
+
 
 def build_fsl_resting(
     workflow: CustomWorkflow,
@@ -109,6 +114,7 @@ def build_fsl_resting(
         melodic.inputs.out_stats = True
         melodic.inputs.no_bet = True
         melodic.inputs.report = True
+        melodic.inputs.args = "--seed=%d" % MELODIC_SEED
         workflow.connect(input_list, "out", melodic, "in_files")
         workflow.connect(dilatemask, "out_file", melodic, "mask")
         workflow.connect(getTR, "TR", melodic, "tr_sec")
@@ -125,6 +131,7 @@ def build_fsl_resting(
     preproc_melodic.inputs.out_stats = True
     preproc_melodic.inputs.no_bet = True
     preproc_melodic.inputs.report = True
+    preproc_melodic.inputs.args = "--seed=%d" % MELODIC_SEED
     workflow.connect(input_list, "out", preproc_melodic, "in_files")
     workflow.connect(meanfuncmask, "mask_file", preproc_melodic, "mask")
     workflow.connect(getTR, "TR", preproc_melodic, "tr_sec")
@@ -199,6 +206,7 @@ def build_fsl_resting(
     melodic.inputs.out_stats = True
     melodic.inputs.no_bet = True
     melodic.inputs.report = True
+    melodic.inputs.args = "--seed=%d" % MELODIC_SEED
     workflow.connect(input_list_denoised, "out", melodic, "in_files")
     workflow.connect(dilatemask, "out_file", melodic, "mask")
     workflow.connect(getTR, "TR", melodic, "tr_sec")

@@ -129,6 +129,7 @@
     suffix = '_thresh'
 - inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
 - melodic [MELODIC] cmd=melodic mem_gb=0.2 n_procs=1
+    args = '--seed=1'
     dim = 0
     environ = {FSLOUTPUTTYPE='NIFTI_GZ'}
     mm_thresh = 0.5
