@@ -56,9 +56,9 @@ def test_load_check_uses_the_tool_environment(monkeypatch, tmp_path):
 
 def test_load_check_reports_the_loader_message(tmp_path):
     """A real child process: the library is missing, so ctypes fails and the
-    last stderr line (the loader message) comes back."""
+    last stderr line (the loader message, worded per OS) comes back."""
     error = mcr.mcr_load_error(str(tmp_path))
-    assert error is not None and "OSError" in error
+    assert error is not None and "libmwmclbase.so" in error
 
 
 @pytest.mark.heavy
