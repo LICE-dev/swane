@@ -14,7 +14,7 @@ on:
         options: [light, heavy, prerelease, all]
         default: light
       os:
-        description: "Runner OS (macOS/Ubuntu prerelease also installs a minimal FSL)"
+        description: "Runner OS (macOS/Ubuntu also install a minimal FSL)"
         type: choice
         options: [windows-latest, macos-latest, ubuntu-latest]
         default: windows-latest
@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
       fsl_release:
-        description: "macOS/Ubuntu prerelease: FSL release to install (empty = oldest supported)"
+        description: "macOS/Ubuntu: FSL release to install (empty = oldest supported)"
         type: string
         default: ""
       slicer_release:
@@ -71,6 +71,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
+      # macOS / Linux only (Windows has no FSL build): the matrix snapshots
+      # read FSL data (MNI templates, XTRACT protocols) and some tests run real
+      # FSL tools. The environment is cached by the action.
+      - name: Install FSL
+        if: ${{ runner.os != 'Windows' }}
+        uses: ./.github/actions/install-fsl
+        with:
+          release: ${{ inputs.fsl_release }}
       # The CerebrA atlas the phantom tests read without downloading: the same
       # cache the prerelease phantom keeps, fetched on a miss.
       - name: TemplateFlow cache
@@ -133,6 +141,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
+      # macOS / Linux only (Windows has no FSL build): the matrix snapshots
+      # read FSL data (MNI templates, XTRACT protocols) and some tests run real
+      # FSL tools. The environment is cached by the action.
+      - name: Install FSL
+        if: ${{ runner.os != 'Windows' }}
+        uses: ./.github/actions/install-fsl
+        with:
+          release: ${{ inputs.fsl_release }}
       - name: Restore model/data caches
         uses: actions/cache@v6
         with:
