@@ -580,3 +580,62 @@ def test_freesurfer_looseversion_matches_nipype(monkeypatch, tmp_path, stamp):
 
     monkeypatch.setattr(Info, "version", classmethod(lambda cls: stamp))
     assert dm._freesurfer_looseversion(stamp) == str(Info.looseversion())
+
+
+@pytest.mark.parametrize(
+    "load_error, state2, message",
+    [
+        (None, "DETECTED", ""),
+        (
+            "OSError: libmwblas.so: cannot enable executable stack as shared "
+            "object requires: Invalid argument",
+            "MISSING",
+            "glibc 2.41 refuses to load it",
+        ),
+        (
+            "OSError: libmwfoo.so: missing",
+            "MISSING",
+            "cannot be loaded (<i>OSError: libmwfoo.so: missing</i>)",
+        ),
+    ],
+)
+def test_check_freesurfer_matlab_runtime_must_load(
+    monkeypatch, tmp_path, load_error, state2, message
+):
+    """checkMCR.sh only sees the runtime folder: on Linux the runtime must
+    also load, or the Matlab tools are reported missing with the reason."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("FS_LICENSE", raising=False)
+    monkeypatch.setattr(dm, "_read_freesurfer_version", lambda: ("8.2.0", "8.2.0"))
+    fake_fs = tmp_path / "freesurfer"
+    lib = fake_fs / "MCRv97" / dm.freesurfer_mcr.MCR_BASE_LIBRARY
+    lib.parent.mkdir(parents=True)
+    lib.touch()
+    monkeypatch.setenv("FREESURFER_HOME", str(fake_fs))
+    (fake_fs / "license.txt").write_text("license")
+    monkeypatch.setattr(dm, "which", lambda cmd: "/usr/bin/" + cmd)
+    monkeypatch.setattr(
+        dm.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="", stderr=""),
+    )
+    monkeypatch.setattr(
+        dm.ResourceManager, "total_memory_gb", staticmethod(lambda: 9999)
+    )
+    monkeypatch.setattr(
+        dm.ResourceManager,
+        "synth_reconall_ram_requirements",
+        staticmethod(lambda: 1),
+    )
+    monkeypatch.setattr(dm, "is_linux", lambda: True)
+    monkeypatch.setattr(dm.freesurfer_mcr, "mcr_load_error", lambda root: load_error)
+    monkeypatch.setattr(dm.freesurfer_mcr, "glibc_version", lambda: "glibc 2.41")
+
+    dep = DependencyManager.check_freesurfer()
+    assert dep.state2 == DependenceStatus[state2]
+    assert message in dep.label
+    if state2 == "MISSING":
+        assert dep.state == DependenceStatus.WARNING

@@ -85,6 +85,13 @@ def snapshot_os_type(monkeypatch):
     monkeypatch.setattr(resource_manager, "get_os_type", lambda: "linux")
 
 
+@pytest.fixture(autouse=True)
+def snapshot_glibc_tunables(monkeypatch):
+    """The Matlab Runtime environment appends the execstack tunable to the
+    user's GLIBC_TUNABLES: render the snapshots without host tunables."""
+    monkeypatch.delenv("GLIBC_TUNABLES", raising=False)
+
+
 @pytest.fixture
 def graph_snapshot(tmp_path):
     """Return ``check(workflow, subdir, name, config, title=None)``.
