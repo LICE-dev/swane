@@ -1,18 +1,24 @@
-from nipype.interfaces.fsl import RobustFOV, ApplyMask
+from swane.nipype_pipeline.interfaces.niimath import NiiMathRobustFov
+from swane.nipype_pipeline.interfaces.niimath import ApplyMask
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
 from nipype import Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
 
-from swane.nipype_pipeline.nodes.N4BiasFieldCorrection import N4BiasFieldCorrection
-from swane.nipype_pipeline.nodes.ZIntNorm import ZIntNorm
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.ants.AntsN4BiasFieldCorrection import (
+    AntsN4BiasFieldCorrection,
+)
+from swane.nipype_pipeline.interfaces.stats.ZIntNorm import ZIntNorm
+from swane.nipype_pipeline.interfaces.utils import (
     get_deskull_node,
     get_registration_node,
     apply_registration_node,
+    resolve_registration_engine,
+    resolve_deskull_engine,
 )
+from swane.config.config_enums import DeskullModality
 
 
 def linear_reg_workflow(
@@ -24,6 +30,9 @@ def linear_reg_workflow(
     is_volumetric: bool = True,
     is_partial_coverage: bool = False,
     bias_field_correction: bool = False,
+    deskull_modality: DeskullModality = DeskullModality.T1,
+    max_cpu: int = 0,
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Transforms input images in a reference space through a linear registration.
@@ -46,6 +55,14 @@ def linear_reg_workflow(
         True if series only includes brain partially. The default is False.
     bias_field_correction : bool, optional
         True to enable bias field correction. The default is False.
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the deskull node. The default
+        is DeskullModality.T1.
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of Synth tools. The default is 0.
+    test_run : bool, optional
+        If True, speed up registration and N4 bias field correction for
+        prerelease test runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -79,6 +96,13 @@ def linear_reg_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # Phase 1 scope decision (docs/superpowers/specs/2026-08-24-ants-phase1-callsite-audit.md):
+    # linear_reg's out_matrix_file has no consumer in Phase 1, so it is safe to
+    # follow the configured engine (ANTs by default). nonlinear_reg_workflow
+    # stays pinned to FSL (see its own allow_ants=False) until its FSL-specific
+    # ApplyWarp consumers are ported (Phase 2/3).
+    engine = resolve_registration_engine(synth_config)
 
     # Input Node
     inputnode = Node(
@@ -115,7 +139,7 @@ def linear_reg_workflow(
     workflow.connect(conversion, "converted_files", reorient, "in_file")
 
     # NODE 3: Crop neck
-    robustfov = Node(RobustFOV(), name="%s_robustfov" % name)
+    robustfov = Node(NiiMathRobustFov(), name="%s_robustfov" % name)
     workflow.connect(reorient, "out_file", robustfov, "in_file")
 
     def get_betted_name(basename):
@@ -147,6 +171,7 @@ def linear_reg_workflow(
     workflow.connect(inputnode, "output_name", unbetted_name, "basename")
 
     bet_thr = None if not config else config.getfloat_safe("bet_thr")
+    antspynet_thr = None if not config else config.getfloat_safe("antspynet_thr")
     bet_bias_correction = (
         False if not config else config.getboolean_safe("bet_bias_correction")
     )
@@ -161,42 +186,50 @@ def linear_reg_workflow(
         deskull = get_deskull_node(
             name=name + "_deskull",
             name_prefix=name,
-            use_synth=synth_config.getboolean_safe("strip"),
+            deskull_engine=resolve_deskull_engine(synth_config),
+            deskull_modality=deskull_modality,
             mask=True,
             bet_thr=bet_thr,
+            antspynet_thr=antspynet_thr,
             bet_robust=True,
             bet_bias_correction=bet_bias_correction,
+            max_cpu=max_cpu,
+            limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
         )
-        workflow.connect(robustfov, "out_roi", deskull, "in_file")
+        workflow.connect(robustfov, "out_file", deskull, "in_file")
         moving_brain = [deskull, "out_file"]
 
     reg_wrap = get_registration_node(
         name=name,
         name_prefix=name,
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
-        moving=[robustfov, "out_roi"],
+        moving=[robustfov, "out_file"],
         moving_brain=moving_brain,
         reference=[inputnode, "reference"],
         reference_brain=reference_brain,
         is_volumetric=is_volumetric,
         flirt_cost="mutualinfo",
         flirt_search=flirt_search,
+        test_run=test_run,
+        max_cpu=max_cpu,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
     unbetted_2_ref = apply_registration_node(
-            name=name,
-            name_prefix="Unbetted image",
-            name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
-            workflow=workflow,
-            warp=[reg_wrap.out_registered_node, reg_wrap.warp],
-            moving=[robustfov, "out_roi"],
-            reference=[inputnode, "reference"],
-            out_file=[unbetted_name, "out_file"],
-            non_linear=False,
-        )
+        name=name,
+        name_prefix="Unbetted image",
+        name_suffix="to reference",
+        engine=engine,
+        workflow=workflow,
+        warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        registration=reg_wrap,
+        moving=[robustfov, "out_file"],
+        reference=[inputnode, "reference"],
+        out_file=[unbetted_name, "out_file"],
+        non_linear=False,
+    )
 
     if is_partial_coverage:
         brain_masking = Node(ApplyMask(), name="%s_brain_mask" % name)
@@ -209,12 +242,13 @@ def linear_reg_workflow(
         workflow.connect(unbetted_2_ref, "out_file", outputnode, "registered_file")
     else:
         deskull_2_ref = apply_registration_node(
-            name="deskulled_"+name,
+            name="deskulled_" + name,
             name_prefix="Skull stripped image",
             name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
+            engine=engine,
             workflow=workflow,
             warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+            registration=reg_wrap,
             moving=[deskull, "out_file"],
             reference=[inputnode, "reference"],
             out_file=[betted_name, "out_file"],
@@ -223,8 +257,13 @@ def linear_reg_workflow(
 
         if bias_field_correction:
             bias_correction = Node(
-                N4BiasFieldCorrection(), name="bias_correction", mem_gb=2
+                AntsN4BiasFieldCorrection(), name="bias_correction", mem_gb=2
             )
+            if max_cpu != 0:
+                bias_correction.inputs.num_threads = max_cpu
+            if test_run:
+                # antspyx default is [50, 50, 50, 50] per resolution level.
+                bias_correction.inputs.max_iterations = [30, 20, 10, 5]
             workflow.connect(unbetted_name, "out_file", bias_correction, "out_file")
             workflow.connect(deskull_2_ref, "out_file", bias_correction, "mask_file")
             workflow.connect(unbetted_2_ref, "out_file", bias_correction, "in_file")
@@ -235,12 +274,23 @@ def linear_reg_workflow(
             workflow.connect(bias_correction, "out_file", corrected_deskull, "in_file")
 
             workflow.connect(bias_correction, "out_file", outputnode, "registered_file")
-            workflow.connect(corrected_deskull, "out_file", outputnode, "registered_file_brain")
-            workflow.connect(deskull_2_ref, "out_file", outputnode, "uncorrected_registered_file_brain")
-            workflow.connect(unbetted_2_ref, "out_file", outputnode, "uncorrected_registered_file")
+            workflow.connect(
+                corrected_deskull, "out_file", outputnode, "registered_file_brain"
+            )
+            workflow.connect(
+                deskull_2_ref,
+                "out_file",
+                outputnode,
+                "uncorrected_registered_file_brain",
+            )
+            workflow.connect(
+                unbetted_2_ref, "out_file", outputnode, "uncorrected_registered_file"
+            )
         else:
             # Skip bias field correction
-            workflow.connect(deskull_2_ref, "out_file", outputnode, "registered_file_brain")
+            workflow.connect(
+                deskull_2_ref, "out_file", outputnode, "registered_file_brain"
+            )
             workflow.connect(unbetted_2_ref, "out_file", outputnode, "registered_file")
     workflow.connect(
         reg_wrap.out_registered_node, reg_wrap.warp, outputnode, "out_matrix_file"

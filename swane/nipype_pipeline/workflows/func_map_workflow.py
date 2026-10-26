@@ -1,24 +1,24 @@
 from nipype.interfaces.freesurfer import SampleToSurface
-from nipype.interfaces.fsl import (
+from swane.nipype_pipeline.interfaces.niimath import (
     IsotropicSmooth,
     ApplyMask,
-    SwapDimensions,
     ImageMaths,
 )
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.workflows.tractography_workflow import SIDES
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.AsymmetryIndex import AsymmetryIndex
-from swane.nipype_pipeline.nodes.Zscore import Zscore
-from nipype.interfaces.utility import IdentityInterface
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.stats.AsymmetryIndex import AsymmetryIndex
+from swane.nipype_pipeline.interfaces.stats.Zscore import Zscore
+from nipype.interfaces.utility import IdentityInterface, Function
 from configparser import SectionProxy
-import swane_supplement
+from swane import resources
 from swane.config.config_enums import BetweenModFlirtCost, FreesurferStep
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     get_registration_node,
+    resolve_registration_engine,
 )
 
 
@@ -29,6 +29,8 @@ def func_map_workflow(
     config: SectionProxy,
     synth_config: SectionProxy,
     base_dir: str = "/",
+    max_cpu: int = 0,
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Analysis for PET or ASL:
@@ -50,6 +52,11 @@ def func_map_workflow(
         FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of Synth tools. The default is 0.
+    test_run : bool, optional
+        If True, speed up the underlying registrations for prerelease test
+        runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -97,6 +104,8 @@ def func_map_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    engine = resolve_registration_engine(synth_config)
 
     # Input Node
     inputnode = Node(
@@ -150,7 +159,7 @@ def func_map_workflow(
     smooth.inputs.sigma = 2
     workflow.connect(reorient, "out_file", smooth, "in_file")
 
-    if config.getenum_safe("cost_func") is BetweenModFlirtCost.MULTUAL_INFORMATION:
+    if config.getenum_safe("cost_func") is BetweenModFlirtCost.MUTUAL_INFORMATION:
         cost = "mutualinfo"
     elif (
         config.getenum_safe("cost_func")
@@ -164,7 +173,7 @@ def func_map_workflow(
         name="%s_2_ref" % name,
         name_prefix=name,
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         moving=[reorient, "out_file"],
         moving_brain=[reorient, "out_file"],
@@ -172,15 +181,19 @@ def func_map_workflow(
         is_volumetric=True,
         flirt_cost=cost,
         non_linear=False,
+        test_run=test_run,
+        max_cpu=max_cpu,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
     smooth_2_ref = apply_registration_node(
         name="%s_smooth_2_ref_flirt" % name,
         name_prefix="Smoothed %s" % name,
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[reg_wrap.out_registered_node, reg_wrap.warp],
+        registration=reg_wrap,
         moving=[smooth, "out_file"],
         reference=[inputnode, "reference"],
         non_linear=False,
@@ -257,13 +270,17 @@ def func_map_workflow(
     is_ai = config.getboolean_safe("ai")
 
     if is_ai:
-        sym_template = swane_supplement.sym_template
+        from swane.utils.templates import get_swane_template
+
+        sym_template = get_swane_template(
+            name="MNI152NLin2009cSym", resolution=1, desc="brain", enforce_las=True
+        )
 
         func_2_sym_warp = apply_registration_node(
             name="%s_2_sym_warp" % name,
             name_prefix=name,
             name_suffix="to symmetric atlas",
-            use_synth=synth_config.getboolean_safe("morph"),
+            engine=engine,
             workflow=workflow,
             warp=[inputnode, "ref_2_sym_warp"],
             moving=[smooth_2_ref, "out_file"],
@@ -272,10 +289,31 @@ def func_map_workflow(
         )
 
         # NODE 12: RL swap of image in symmetric atlas
-        sym_swap = Node(SwapDimensions(), name="%s_sym_swap" % name)
+        def swap_rl(in_file):
+            import os
+            import numpy as np
+            import nibabel as nib
+
+            img = nib.load(in_file)
+            # flip along the x (right-left) axis keeping the affine unchanged,
+            # i.e. the anatomy is mirrored in the same voxel space.
+            # set_data_dtype avoids any residual rescaling on write
+            flipped = np.flip(img.get_fdata(dtype=np.float32), axis=0)
+            hdr = img.header.copy()
+            hdr.set_data_dtype(np.float32)
+            out_file = os.path.abspath("sym_swapped.nii.gz")
+            nib.save(nib.Nifti1Image(flipped, img.affine, hdr), out_file)
+            return out_file
+
+        sym_swap = Node(
+            Function(
+                input_names=["in_file"],
+                output_names=["out_file"],
+                function=swap_rl,
+            ),
+            name="%s_sym_swap" % name,
+        )
         sym_swap.long_name = "right-left flip"
-        sym_swap.inputs.out_file = "%s_sym_swapped.nii.gz" % name
-        sym_swap.inputs.new_dims = ("-x", "y", "z")
         workflow.connect(func_2_sym_warp, "out_file", sym_swap, "in_file")
 
         # NODE 13: Asymmetry index calculation
@@ -297,7 +335,7 @@ def func_map_workflow(
             name="%s_ai_2_ref" % name,
             name_prefix="AI",
             name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
+            engine=engine,
             workflow=workflow,
             warp=[inputnode, "ref_2_sym_invwarp"],
             moving=[ai_threshold, "out_file"],

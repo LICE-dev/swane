@@ -1,0 +1,1059 @@
+"""Unit and equivalence tests for
+:class:`swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection.DipyMotionCorrection`.
+
+The node performs between-volumes DWI motion correction and reorients the
+gradient directions to compensate for the applied rotations. It ships two
+interchangeable paths behind the same interface: a **serial** path calling
+dipy's ``motion_correction`` directly (kept permanently reachable as reference
+and fallback) and a **parallel** path that dispatches the per-volume affine
+registrations across our own process pool. The parallel path must reassemble
+volumes strictly by index and produce output bit-for-bit identical to the
+serial path when the BLAS thread count matches on both sides.
+
+Three layers, mirroring the design's "DipyMotionCorrection equivalence":
+
+* 1a - reassembly by index: mocked registration returns identifiable payloads
+  *out of order*; volume *i* must land at position *i*.
+* 1b - bvec reorientation + indexing trap: a known rigid rotation must produce
+  the analytic reoriented gradients, b0 rows stay ``[0, 0, 0]`` and norms are
+  preserved; ``reorient_bvecs`` must be called with the non-b0 rotations only
+  (``affines[..., ~b0s_mask]``), never the full affine array.
+* 1b-bis - bvec frame: the registration rotations are world (RAS mm) rotations
+  while the bvecs are FSL-convention vectors in the image frame, so the
+  rotations must be conjugated into that frame. The same physical motion must
+  give the same physical gradients whatever the storage orientation (light,
+  mocked registration), and a phantom acquired with known head rotations must
+  give back its fibre direction after the real registration (heavy).
+* 1c - serial-vs-parallel oracle (``@pytest.mark.heavy``): real dipy on both
+  sides with BLAS pinned to one thread, asserting exact equality.
+"""
+
+import multiprocessing
+import os
+
+import numpy as np
+import nibabel as nib
+import pytest
+
+import swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection as motion_module
+from swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection import (
+    DipyMotionCorrection,
+    OMP_THREADS_VAR,
+    OPENBLAS_THREADS_VAR,
+    _register_moving_volumes,
+    _serial_motion_correction,
+    _parallel_motion_correction,
+)
+
+
+def _write_bval_bvec(directory, bvals, bvecs):
+    """Write FSL-format bval/bvec files (bvecs as 3 rows x N cols)."""
+    bval_path = os.path.join(str(directory), "dwi.bval")
+    bvec_path = os.path.join(str(directory), "dwi.bvec")
+    np.savetxt(bval_path, np.asarray(bvals, dtype=float)[np.newaxis, :], fmt="%g")
+    np.savetxt(bvec_path, np.asarray(bvecs, dtype=float).T, fmt="%.10f")
+    return bval_path, bvec_path
+
+
+def _rotation_x(angle):
+    """A right-handed rotation about the x axis (orthonormal 3x3)."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]])
+
+
+def _rotation_y(angle):
+    """A right-handed rotation about the y axis (orthonormal 3x3)."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+
+
+def _rotation_z(angle):
+    """A right-handed rotation about the z axis (orthonormal 3x3)."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+
+
+# x-axis flip of the FSL b-vector convention.
+_FLIP_X = np.diag([-1.0, 1.0, 1.0])
+
+
+def _storage_affine(axes, zooms=(2.0, 2.0, 2.0)):
+    """A 4x4 affine whose voxel axes point along the columns of ``axes``."""
+    affine = np.eye(4)
+    affine[:3, :3] = np.asarray(axes, dtype=float) @ np.diag(zooms)
+    affine[:3, 3] = [40.0, -30.0, 20.0]
+    return affine
+
+
+def _fsl_frame(axes):
+    """FSL-convention b-vector -> world direction, for voxel axes ``axes``.
+
+    FSL b-vectors are expressed along the voxel axes, with x mirrored when the
+    voxel-to-world determinant is positive (neurological storage). Written out
+    from the known axes, independently of the node's own implementation.
+    """
+    axes = np.asarray(axes, dtype=float)
+    return axes @ _FLIP_X if np.linalg.det(axes) > 0 else axes
+
+
+class TestDefaultPipelineIsRigidOnly:
+    """The registration pipeline is rigid-only -- the trailing ``affine`` stage of
+    dipy's ``motion_correction`` default is dropped.
+
+    Between-volumes head motion is a rigid transform, so the affine stage models
+    scaling/shear that pure head motion cannot produce. Omitting it preserves
+    series fidelity while saving execution time. The one thing the affine stage was
+    also doing -- the branch's only geometric eddy-distortion correction -- is
+    therefore given up; that asymmetry vs the FSL eddy path is declared in the spec.
+    Both the serial and parallel paths read this single module constant, so they
+    stay equivalent across the new pipeline.
+    """
+
+    def test_default_pipeline_drops_the_affine_stage(self):
+        assert motion_module.DEFAULT_PIPELINE == [
+            "center_of_mass",
+            "translation",
+            "rigid",
+        ]
+        assert "affine" not in motion_module.DEFAULT_PIPELINE
+
+
+class TestOptimizerOptionsArePinned:
+    """Every dipy registration call receives explicit optimizer options.
+
+    dipy 1.12.1 moved the ``{"gtol": 1e-4, "ftol": 1e-3}`` default from
+    ``affine_registration`` to ``register_dwi_series`` only, so relying on dipy's
+    defaults made the parallel path (direct ``affine_registration`` calls) run with
+    scipy's much tighter ftol and diverge from the serial path. Each call must get
+    the pinned values in a fresh dict, because dipy's AffineRegistration mutates it.
+    """
+
+    EXPECTED = {"gtol": 1e-4, "ftol": 1e-3}
+
+    def _assert_pinned(self, options):
+        assert options == self.EXPECTED
+        assert options is not motion_module.DEFAULT_OPTIMIZER_OPTIONS
+
+    def _gtab_and_img(self, bvals):
+        from dipy.core.gradients import gradient_table
+
+        n = len(bvals)
+        data = np.random.default_rng(3).random((6, 6, 4, n))
+        bvecs = np.zeros((n, 3))
+        bvecs[np.asarray(bvals) > 0] = [1.0, 0.0, 0.0]
+        gtab = gradient_table(np.asarray(bvals, dtype=float), bvecs=bvecs)
+        return nib.Nifti1Image(data, np.eye(4)), gtab
+
+    def test_constant_value(self):
+        assert motion_module.DEFAULT_OPTIMIZER_OPTIONS == self.EXPECTED
+
+    def test_serial_path_passes_options(self, monkeypatch):
+        seen = {}
+
+        def spy_motion_correction(img, gtab, **kwargs):
+            seen.update(kwargs)
+            return img, np.zeros((4, 4, img.shape[-1]))
+
+        monkeypatch.setattr(motion_module, "motion_correction", spy_motion_correction)
+        img, gtab = self._gtab_and_img([0, 1000, 1000])
+        _serial_motion_correction(img, gtab)
+        self._assert_pinned(seen["optimizer_options"])
+
+    def test_parallel_b0_registration_passes_options(self, monkeypatch):
+        seen = {}
+
+        def spy_register_series(b0_img, ref, **kwargs):
+            seen.update(kwargs)
+            n = b0_img.shape[-1]
+            return np.asanyarray(b0_img.dataobj), np.repeat(
+                np.eye(4)[..., np.newaxis], n, axis=-1
+            )
+
+        def fake_register_moving_volumes(moving_data, static, aff, pipeline, n):
+            affs = np.repeat(np.eye(4)[..., np.newaxis], moving_data.shape[-1], -1)
+            return moving_data.astype(np.float32), affs
+
+        monkeypatch.setattr(motion_module, "register_series", spy_register_series)
+        monkeypatch.setattr(
+            motion_module, "_register_moving_volumes", fake_register_moving_volumes
+        )
+        # Two b0s so the b0-to-b0 register_series branch actually runs.
+        img, gtab = self._gtab_and_img([0, 0, 1000])
+        _parallel_motion_correction(img, gtab, 1)
+        self._assert_pinned(seen["optimizer_options"])
+
+    def test_parallel_worker_registration_passes_options(self, monkeypatch):
+        seen = {}
+
+        def spy_affine_registration(moving, static, **kwargs):
+            seen.update(kwargs)
+            return moving, np.eye(4)
+
+        monkeypatch.setattr(
+            motion_module, "affine_registration", spy_affine_registration
+        )
+        monkeypatch.setattr(motion_module, "_worker_static", np.zeros((6, 6, 4)))
+        monkeypatch.setattr(motion_module, "_worker_static_affine", np.eye(4))
+        motion_module._register_one_volume(
+            0, np.zeros((6, 6, 4)), np.eye(4), motion_module.DEFAULT_PIPELINE
+        )
+        self._assert_pinned(seen["optimizer_options"])
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1a - reassembly by index
+# --------------------------------------------------------------------------- #
+class TestReassemblyByIndex:
+    def test_out_of_order_registration_reassembled_by_index(self):
+        """A registration finishing out of order must still land at its index.
+
+        The mock ignores the image content and returns, for volume ``i``, a 3D
+        block filled with ``i`` and an affine filled with ``i``. Higher indices
+        are made to finish first, so a submission-order reassembly would scramble
+        the result; only index-keyed placement passes.
+        """
+        import time
+
+        n_vols = 6
+        shape = (3, 4, 5)
+        moving = np.zeros(shape + (n_vols,), dtype=np.float64)
+        ref = np.zeros(shape, dtype=np.float64)
+        affine = np.eye(4)
+
+        def mock_register(index, mov, mov_aff, pipeline):
+            # Later indices return sooner -> completion order is reversed.
+            time.sleep((n_vols - index) * 0.01)
+            return (
+                index,
+                np.full(shape, float(index)),
+                np.full((4, 4), float(index)),
+            )
+
+        xformed, affines = _register_moving_volumes(
+            moving,
+            ref,
+            affine,
+            pipeline=motion_module.DEFAULT_PIPELINE,
+            num_threads=n_vols,
+            register_fn=mock_register,
+            use_processes=False,
+        )
+
+        for i in range(n_vols):
+            assert np.all(xformed[..., i] == i), f"volume {i} misplaced"
+            assert np.all(affines[..., i] == i), f"affine {i} misplaced"
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1a-ter - volume buffers are float32, affine buffers stay float64 (C2.3)
+# --------------------------------------------------------------------------- #
+class TestBufferDtypes:
+    """The large per-volume buffers are float32; the 4x4 affine buffers stay
+    float64.
+
+    Halving the volume-buffer dtype halves their RAM (they are the full 4D
+    series, the node's memory ceiling) while costing only float32 rounding of
+    the resampled intensities. The affine arrays are 4x4 per volume — their
+    memory is negligible and precision there propagates to every voxel, so they
+    must remain float64.
+    """
+
+    def test_register_moving_volumes_returns_float32_volumes_float64_affines(self):
+        """``_register_moving_volumes`` stores volumes float32, affines float64."""
+        n_vols = 4
+        shape = (5, 6, 4)
+        moving = np.random.default_rng(0).random(shape + (n_vols,))
+        static = np.random.default_rng(1).random(shape)
+        affine = np.eye(4)
+
+        def mock_register(index, mov, mov_aff, pipeline):
+            # A value that is NOT exactly representable in float32, so a float32
+            # buffer is observable as a rounding difference, not just a dtype tag.
+            return (
+                index,
+                np.full(shape, 0.123456789012345, dtype=np.float64),
+                np.full((4, 4), float(index), dtype=np.float64),
+            )
+
+        xformed, affines = _register_moving_volumes(
+            moving,
+            static,
+            affine,
+            pipeline=motion_module.DEFAULT_PIPELINE,
+            num_threads=1,
+            register_fn=mock_register,
+            use_processes=False,
+        )
+
+        assert xformed.dtype == np.float32, "volume buffer must be float32"
+        assert affines.dtype == np.float64, "affine buffer must stay float64"
+
+    def test_parallel_output_is_float32_volumes_float64_affine_array(
+        self, workspace, monkeypatch
+    ):
+        """``_parallel_motion_correction`` emits float32 volume data and a
+        float64 affine array.
+
+        The registration itself is left untouched (mocked here): only the
+        assembled output buffers change dtype. A single b0 keeps the b0-averaging
+        branch out of the way so the test stays fast and deterministic.
+        """
+        from dipy.core.gradients import gradient_table
+
+        shape = (6, 6, 4)
+        n_dirs = 3
+        rng = np.random.default_rng(2)
+        data = rng.random(shape + (n_dirs + 1,))
+        affine = np.eye(4)
+        img = nib.Nifti1Image(data, affine)
+        bvals = np.array([0.0, 1000.0, 1000.0, 1000.0])
+        bvecs = np.array(
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        )
+        gtab = gradient_table(bvals, bvecs=bvecs)
+
+        def fake_register_moving_volumes(
+            moving_data, static, aff, pipeline, num_threads, **kwargs
+        ):
+            n = moving_data.shape[-1]
+            xf = np.zeros(moving_data.shape, dtype=np.float32)
+            affs = np.zeros((4, 4, n), dtype=np.float64)
+            for i in range(n):
+                affs[..., i] = np.eye(4)
+            return xf, affs
+
+        monkeypatch.setattr(
+            motion_module, "_register_moving_volumes", fake_register_moving_volumes
+        )
+
+        registered_img, affine_array = _parallel_motion_correction(img, gtab, 1)
+
+        assert affine_array.dtype == np.float64, "affine array must stay float64"
+        assert (
+            np.asanyarray(registered_img.dataobj).dtype == np.float32
+        ), "assembled volume data must be float32"
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1a-quater - per-platform pool start method (C2.1, revised 2026-09-05)
+# --------------------------------------------------------------------------- #
+class TestPoolContext:
+    """The pool start method is platform-conditional (user decision 2026-09-05):
+    fork on Linux (fastest, no per-worker re-import), spawn on Windows (fork
+    unavailable) and macOS (fork is unsafe there).
+
+    This is safe only because BLAS is pinned in the pool INITIALIZER (and
+    threadpool_limits(1) wraps each registration), not via parent-environment
+    inheritance — so every start method leaves workers correctly pinned.
+    """
+
+    @pytest.mark.skipif(
+        "fork" not in multiprocessing.get_all_start_methods(),
+        reason="the fork start method does not exist on this host",
+    )
+    def test_linux_uses_fork(self):
+        assert motion_module._pool_context("linux").get_start_method() == "fork"
+
+    def test_windows_uses_spawn(self):
+        assert motion_module._pool_context("win32").get_start_method() == "spawn"
+
+    def test_macos_uses_spawn(self):
+        assert motion_module._pool_context("darwin").get_start_method() == "spawn"
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1a-bis - BLAS pinning in the worker initializer, not at import (C2.1)
+# --------------------------------------------------------------------------- #
+
+
+def _worker_return_env():
+    """Callable run inside a pool worker — returns its own os.environ snapshot."""
+    import os
+
+    return dict(os.environ)
+
+
+def _worker_check_static_global():
+    """Callable run inside a pool worker — checks for the static global."""
+    import swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection as mod
+
+    return {
+        "has_static": hasattr(mod, "_worker_static") and mod._worker_static is not None,
+        "has_static_affine": hasattr(mod, "_worker_static_affine")
+        and mod._worker_static_affine is not None,
+    }
+
+
+class TestBlasWorkerInitializer:
+    """BLAS pinning must happen inside each worker via the pool initializer, not
+    at module import time.
+
+    Under ``spawn`` (the only context, per the user's 2026-09-04 decision) each
+    worker re-imports the module and starts from library defaults. A pin applied
+    at import in the parent is silently lost. The initializer is the only
+    correct placement.
+
+    Two assertions:
+
+    1. Importing the module does NOT set ``OPENBLAS_NUM_THREADS`` in the parent
+       process (import-safe).
+    2. A worker spawned by the pool's initializer DOES have
+       ``OPENBLAS_NUM_THREADS == "1"`` in its environment.
+    """
+
+    def test_import_does_not_pin_blas_in_parent(self):
+        """Importing DipyMotionCorrection must not touch the parent environment.
+
+        If the module pins BLAS at import time, the parent's
+        ``os.environ["OPENBLAS_NUM_THREADS"]`` would be set — and that pin
+        would be silently absent in spawn workers that re-import.
+        """
+        # Ensure the variable is absent before the import.
+        old = os.environ.pop(OPENBLAS_THREADS_VAR, None)
+        old_omp = os.environ.pop(OMP_THREADS_VAR, None)
+        try:
+            # Force a re-import by removing the module from sys.modules.
+            import importlib
+            import sys
+
+            mod_name = "swane.nipype_pipeline.interfaces.dipy.DipyMotionCorrection"
+            saved = sys.modules.pop(mod_name, None)
+            try:
+                importlib.import_module(mod_name)
+                # After import, the vars must still be absent.
+                assert OPENBLAS_THREADS_VAR not in os.environ, (
+                    "importing DipyMotionCorrection sets OPENBLAS_NUM_THREADS "
+                    "in the parent — the pin must be in the worker initializer"
+                )
+                assert OMP_THREADS_VAR not in os.environ, (
+                    "importing DipyMotionCorrection sets OMP_NUM_THREADS "
+                    "in the parent — the pin must be in the worker initializer"
+                )
+            finally:
+                if saved is not None:
+                    sys.modules[mod_name] = saved
+        finally:
+            if old is not None:
+                os.environ[OPENBLAS_THREADS_VAR] = old
+            if old_omp is not None:
+                os.environ[OMP_THREADS_VAR] = old_omp
+
+    def test_pool_worker_has_blas_pinned_by_initializer(self):
+        """A worker in the motion-correction pool must have BLAS pinned to 1.
+
+        The pool must use an ``initializer`` that sets
+        ``OPENBLAS_NUM_THREADS=1`` and ``OMP_NUM_THREADS=1`` in each worker
+        before any registration runs. This test submits a trivial job that
+        returns the worker's ``os.environ`` and asserts the pin is present.
+
+        Against the current code (no initializer, no spawn context) this test
+        MUST FAIL — proving the test actually catches the defect.
+        """
+        import multiprocessing
+        from concurrent.futures import ProcessPoolExecutor
+
+        # The module must expose an initializer for the pool. If it does not,
+        # the test fails — which is the pre-implementation expected result.
+        assert hasattr(motion_module, "_worker_initializer"), (
+            "DipyMotionCorrection must expose _worker_initializer for the "
+            "spawn-context pool; the current code lacks it"
+        )
+
+        ctx = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(
+            max_workers=1,
+            mp_context=ctx,
+            initializer=motion_module._worker_initializer,
+            initargs=(1,),
+        ) as pool:
+            env = pool.submit(_worker_return_env).result()
+
+        assert env.get(OPENBLAS_THREADS_VAR) == "1", (
+            f"worker OPENBLAS_NUM_THREADS is {env.get(OPENBLAS_THREADS_VAR)!r}, "
+            "expected '1' — the initializer must pin it"
+        )
+        assert env.get(OMP_THREADS_VAR) == "1", (
+            f"worker OMP_NUM_THREADS is {env.get(OMP_THREADS_VAR)!r}, "
+            "expected '1' — the initializer must pin it"
+        )
+
+    def test_pool_worker_receives_static_via_initializer(self):
+        """The static reference must be hoisted into initargs, not shipped per job.
+
+        After the initializer runs, the worker must have the static reference
+        accessible via a module-level global (set by the initializer), so it
+        does not need to be pickled and sent with every volume submission.
+
+        Against the current code (static shipped per job) this test MUST FAIL.
+        """
+        import multiprocessing
+        from concurrent.futures import ProcessPoolExecutor
+
+        assert hasattr(
+            motion_module, "_worker_initializer"
+        ), "DipyMotionCorrection must expose _worker_initializer"
+
+        # Create a small synthetic static reference.
+        static = np.ones((5, 5, 3), dtype=np.float64)
+        static_affine = np.eye(4)
+
+        ctx = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(
+            max_workers=1,
+            mp_context=ctx,
+            initializer=motion_module._worker_initializer,
+            initargs=(1, static, static_affine),
+        ) as pool:
+            # Submit a function that checks the worker global.
+            result = pool.submit(_worker_check_static_global).result()
+
+        assert result["has_static"] is True, (
+            "worker does not have _worker_static set — the initializer "
+            "must hoist the static reference into the worker global"
+        )
+        assert result["has_static_affine"] is True, (
+            "worker does not have _worker_static_affine set — the initializer "
+            "must hoist the static affine into the worker global"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1b - bvec reorientation + the indexing trap
+# --------------------------------------------------------------------------- #
+class _ControlledAffinesHarness:
+    def _run_with_controlled_affines(
+        self, workspace, monkeypatch, bvals, bvecs, rotation, affine=None
+    ):
+        """Drive the node with the registration mocked to a known affine array.
+
+        b0 volumes get an identity affine, non-b0 volumes get ``rotation`` (a
+        world-space rotation, as dipy's registration returns it). The image is
+        stored with ``affine`` (LAS by default, as ForceOrient leaves it). The
+        real ``reorient_bvecs`` runs on whatever the node passes it; a spy
+        records that argument so the test can assert the indexing.
+        """
+        bvals = np.asarray(bvals, dtype=float)
+        n_vols = bvals.shape[0]
+        shape = (4, 4, 3)
+        data = np.random.default_rng(0).random(shape + (n_vols,))
+        if affine is None:
+            affine = _storage_affine(_FLIP_X)
+        in_file = os.path.join(str(workspace), "dwi.nii.gz")
+        nib.save(nib.Nifti1Image(data, affine), in_file)
+        bval_path, bvec_path = _write_bval_bvec(workspace, bvals, bvecs)
+
+        # b0s_mask is what the node will compute from the bvals.
+        from dipy.core.gradients import gradient_table
+
+        gtab = gradient_table(bvals, bvecs=np.asarray(bvecs, dtype=float))
+        b0s_mask = gtab.b0s_mask
+
+        affine_array = np.zeros((4, 4, n_vols))
+        affine_array[..., b0s_mask] = np.eye(4)[..., np.newaxis]
+        affine_array[..., ~b0s_mask] = rotation_to_affine(rotation)[..., np.newaxis]
+
+        def fake_motion(img, gtab_in, *args, **kwargs):
+            return nib.Nifti1Image(data, affine), affine_array
+
+        monkeypatch.setattr(motion_module, "_serial_motion_correction", fake_motion)
+
+        recorded = {}
+        real_reorient = motion_module.reorient_bvecs
+
+        def spy_reorient(gtab_in, affines, **kwargs):
+            recorded["affines"] = np.array(affines)
+            return real_reorient(gtab_in, affines, **kwargs)
+
+        monkeypatch.setattr(motion_module, "reorient_bvecs", spy_reorient)
+
+        node = DipyMotionCorrection()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval_path
+        node.inputs.bvec = bvec_path
+        node.inputs.num_threads = 1
+        node.inputs.parallel = False
+        result = node.run()
+
+        out_bvec = np.loadtxt(result.outputs.out_bvec)  # 3 x N
+        return out_bvec, b0s_mask, affine_array, recorded
+
+
+class TestBvecReorientation(_ControlledAffinesHarness):
+    def test_reorients_nonb0_only_and_preserves_b0_and_norms(
+        self, workspace, monkeypatch
+    ):
+        # b0 at index 0, four diffusion directions after it. Positional slicing
+        # of the affine array (``[..., :n_nonb0]``) would grab the b0 identity
+        # and drop the last rotation -> a silent misalignment this catches.
+        bvals = [0, 1000, 1000, 1000, 1000]
+        bvecs = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [1.0, 1.0, 0.0],
+            ]
+        )
+        bvecs[1:] /= np.linalg.norm(bvecs[1:], axis=1, keepdims=True)
+        rotation = _rotation_z(np.deg2rad(30.0))
+
+        out_bvec, b0s_mask, affine_array, recorded = self._run_with_controlled_affines(
+            workspace, monkeypatch, bvals, bvecs, rotation
+        )
+
+        # The call must pass only the non-b0 rotations, keyed by ~b0s_mask,
+        # each expressed in the LAS bvec frame (F R F, F the x flip).
+        expected_affines = np.stack(
+            [
+                _FLIP_X @ affine_array[:3, :3, i] @ _FLIP_X
+                for i in np.flatnonzero(~b0s_mask)
+            ],
+            axis=-1,
+        )
+        assert recorded["affines"].shape == expected_affines.shape
+        assert recorded["affines"].shape[-1] == int(np.sum(~b0s_mask))
+        assert np.allclose(recorded["affines"], expected_affines, atol=1e-12)
+
+        out_bvec = out_bvec.T  # -> N x 3
+        # b0 row stays exactly zero.
+        assert np.allclose(out_bvec[0], [0.0, 0.0, 0.0])
+        # Non-b0 rows are the analytic F R^T F @ bvec (reorient applies the
+        # inverse rotation, in the LAS bvec frame), unit-normed.
+        for i in range(1, len(bvals)):
+            expected = _FLIP_X @ rotation.T @ _FLIP_X @ bvecs[i]
+            expected /= np.linalg.norm(expected)
+            assert np.allclose(
+                out_bvec[i], expected, atol=1e-6
+            ), f"gradient {i} not reoriented as expected"
+            assert np.isclose(np.linalg.norm(out_bvec[i]), 1.0, atol=1e-6)
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1b-bis - the bvec frame (world rotations vs FSL image-frame bvecs)
+# --------------------------------------------------------------------------- #
+class TestBvecFrame(_ControlledAffinesHarness):
+    """dipy's registration returns world (RAS mm) rotations R, mapping the
+    reference onto the moved head; ``reorient_bvecs`` applies R^-1 in whatever
+    frame R is written in. The bvecs are FSL-convention vectors in the image
+    frame W (W maps them to world), so the correct reoriented gradient is
+    W^T R^-1 W b, not R^-1 b. For axial LAS storage W = diag(-1, 1, 1): a pitch
+    (about x) commutes with W and was right, while a yaw (z) or roll (y) was
+    applied backwards, a 2 x angle error.
+    """
+
+    BVALS = [0, 1000, 1000, 1000, 1000, 1000]
+
+    def _gradients(self):
+        g = np.array(
+            [
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [1.0, 1.0, 0.0],
+                [0.3, -0.5, 0.8],
+            ]
+        )
+        return g / np.linalg.norm(g, axis=1, keepdims=True)
+
+    def _reorient(self, workspace, monkeypatch, bvecs, rotation, affine):
+        all_bvecs = np.vstack([[0.0, 0.0, 0.0], bvecs])
+        out_bvec, _, _, _ = self._run_with_controlled_affines(
+            workspace, monkeypatch, self.BVALS, all_bvecs, rotation, affine
+        )
+        return out_bvec.T[1:]
+
+    def test_axial_las_yaw_and_roll_follow_the_image_frame(
+        self, workspace, monkeypatch
+    ):
+        g = self._gradients()
+        affine = _storage_affine(_FLIP_X)
+        for rotation in (
+            _rotation_z(np.deg2rad(6.0)),
+            _rotation_y(np.deg2rad(6.0)),
+        ):
+            out = self._reorient(workspace, monkeypatch, g, rotation, affine)
+            # Conjugating by the x flip reverses a z/y rotation: F R^T F = R.
+            assert np.allclose(out, g @ rotation.T, atol=1e-6)
+
+    def test_axial_las_pitch_is_unchanged_by_the_frame(self, workspace, monkeypatch):
+        g = self._gradients()
+        rotation = _rotation_x(np.deg2rad(6.0))
+        out = self._reorient(
+            workspace, monkeypatch, g, rotation, _storage_affine(_FLIP_X)
+        )
+        assert np.allclose(out, g @ rotation, atol=1e-6)
+
+    @pytest.mark.parametrize(
+        "axes",
+        [
+            pytest.param(_FLIP_X, id="axial-LAS"),
+            pytest.param(np.eye(3), id="axial-RAS"),
+            pytest.param(
+                _rotation_x(np.deg2rad(15.0)) @ _rotation_z(np.deg2rad(10.0)) @ _FLIP_X,
+                id="oblique-LAS",
+            ),
+            pytest.param(
+                [[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]],
+                id="sagittal-PIR",
+            ),
+            pytest.param(
+                [[-1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]],
+                id="coronal-LSA",
+            ),
+            pytest.param(
+                [[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                id="permuted-ASL",
+            ),
+        ],
+    )
+    def test_same_motion_gives_same_physical_gradients_in_any_storage(
+        self, workspace, monkeypatch, axes
+    ):
+        """The reoriented gradient, taken back to world, is R^-1 g whatever the
+        storage orientation: the physics does not depend on how the voxels are
+        laid out on disk."""
+        g_world = self._gradients()
+        rotation = (
+            _rotation_x(np.deg2rad(5.0))
+            @ _rotation_y(np.deg2rad(-7.0))
+            @ _rotation_z(np.deg2rad(9.0))
+        )
+        frame = _fsl_frame(axes)
+        bvecs = g_world @ frame  # rows of W^T g: the dcm2niix FSL bvecs
+        out = self._reorient(
+            workspace, monkeypatch, bvecs, rotation, _storage_affine(axes)
+        )
+        assert np.allclose(out @ frame.T, g_world @ rotation, atol=1e-6)
+
+
+class TestMotionOutputDtype:
+    """The registered volumes are a float computation; casting them back to the
+    raw DWI's int16 dtype quantizes every correction. The node must write
+    float32 on disk (bit-for-bit serial/parallel is unaffected: both paths save
+    the same float32 buffer)."""
+
+    def _make_int16_dwi(self, workspace, data):
+        img = nib.Nifti1Image(np.asarray(data).astype(np.int16), np.eye(4))
+        img.header.set_data_dtype(np.int16)
+        in_file = os.path.join(str(workspace), "raw_int16_dwi.nii.gz")
+        nib.save(img, in_file)
+        return in_file
+
+    def test_output_is_float32_even_from_int16_source_header(
+        self, workspace, monkeypatch
+    ):
+        # Five volumes (a non-square bvec table so FSL orientation is
+        # unambiguous): one b0 plus four unit diffusion directions.
+        bvals = [0, 1000, 1000, 1000, 1000]
+        bvecs = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [1.0, 1.0, 0.0],
+            ]
+        )
+        bvecs[1:] /= np.linalg.norm(bvecs[1:], axis=1, keepdims=True)
+        n_vols = len(bvals)
+        shape = (4, 4, 3)
+        rng = np.random.default_rng(7)
+        data = (rng.random(shape + (n_vols,)) * 300 + 100).astype(np.int16)
+        in_file = self._make_int16_dwi(workspace, data)
+        bval_path, bvec_path = _write_bval_bvec(workspace, bvals, bvecs)
+
+        # A known non-integer registered result: int16 would round it away.
+        registered = data.astype(np.float32) + 0.4
+        affine_array = np.tile(np.eye(4)[..., np.newaxis], (1, 1, n_vols))
+
+        def fake_motion(img, gtab_in, *args, **kwargs):
+            return nib.Nifti1Image(registered, np.eye(4)), affine_array
+
+        monkeypatch.setattr(motion_module, "_serial_motion_correction", fake_motion)
+
+        node = DipyMotionCorrection()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval_path
+        node.inputs.bvec = bvec_path
+        node.inputs.num_threads = 1
+        node.inputs.parallel = False
+        result = node.run()
+
+        out_img = nib.load(result.outputs.out_file)
+        assert out_img.header.get_data_dtype() == np.dtype(np.float32)
+        # The float correction survived (int16 rounding would show as ~0.4 err).
+        assert np.allclose(out_img.get_fdata(dtype=np.float32), registered, atol=1e-4)
+
+
+def rotation_to_affine(rotation):
+    """Embed a 3x3 rotation into a 4x4 affine with zero translation."""
+    aff = np.eye(4)
+    aff[:3, :3] = rotation
+    return aff
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1c - serial vs parallel equivalence (heavy: real dipy registration)
+# --------------------------------------------------------------------------- #
+def _make_synthetic_dwi(directory, seed=0):
+    """A tiny 4D DWI with a single b0 and small inter-volume shifts.
+
+    Written under ``directory`` so test artefacts never enter the repository.
+    """
+    rng = np.random.default_rng(seed)
+    shape = (18, 18, 8)
+    n_dirs = 5
+    base = rng.random(shape)
+    vols = [base]  # b0
+    for i in range(n_dirs):
+        shifted = np.roll(base, shift=(i % 2, (i + 1) % 2, 0), axis=(0, 1, 2))
+        vols.append(shifted + 0.02 * rng.random(shape))
+    data = np.stack(vols, axis=-1)
+    affine = np.eye(4)
+    in_file = os.path.join(str(directory), "dwi.nii.gz")
+    nib.save(nib.Nifti1Image(data, affine), in_file)
+
+    bvals = [0] + [1000] * n_dirs
+    bvecs = np.zeros((n_dirs + 1, 3))
+    dirs = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 1.0],
+        ]
+    )
+    dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+    bvecs[1:] = dirs
+    bval_path, bvec_path = _write_bval_bvec(directory, bvals, bvecs)
+    return in_file, bval_path, bvec_path, n_dirs + 1
+
+
+@pytest.mark.heavy
+class TestSerialParallelOracle:
+    def _run_node(self, out_dir, in_file, bval, bvec, parallel, num_threads):
+        node = DipyMotionCorrection()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.num_threads = num_threads
+        node.inputs.parallel = parallel
+        tag = "par" if parallel else "ser"
+        node.inputs.out_file = os.path.join(out_dir, f"dwi_{tag}_{num_threads}.nii.gz")
+        node.inputs.out_bvec = os.path.join(out_dir, f"dwi_{tag}_{num_threads}.bvec")
+        node.inputs.out_bval = os.path.join(out_dir, f"dwi_{tag}_{num_threads}.bval")
+        result = node.run()
+        return result.outputs
+
+    def test_parallel_matches_serial_bit_for_bit(self, tmp_path):
+        out_dir = str(tmp_path)
+        in_file, bval, bvec, n_total = _make_synthetic_dwi(out_dir)
+
+        # BLAS pinned to one thread on both sides so the deterministic optimiser
+        # yields identical floats; loosening this would mask real bugs.
+        old_omp = os.environ.get(OMP_THREADS_VAR)
+        old_ob = os.environ.get(OPENBLAS_THREADS_VAR)
+        os.environ[OMP_THREADS_VAR] = "1"
+        os.environ[OPENBLAS_THREADS_VAR] = "1"
+        try:
+            serial = self._run_node(
+                out_dir, in_file, bval, bvec, parallel=False, num_threads=1
+            )
+            parallel1 = self._run_node(
+                out_dir, in_file, bval, bvec, parallel=True, num_threads=1
+            )
+            # Multiple workers must still reassemble to the same bytes.
+            parallel2 = self._run_node(
+                out_dir, in_file, bval, bvec, parallel=True, num_threads=2
+            )
+        finally:
+            for var, val in (
+                (OMP_THREADS_VAR, old_omp),
+                (OPENBLAS_THREADS_VAR, old_ob),
+            ):
+                if val is None:
+                    os.environ.pop(var, None)
+                else:
+                    os.environ[var] = val
+
+        serial_data = nib.load(serial.out_file).get_fdata()
+        serial_bvec = np.loadtxt(serial.out_bvec)
+
+        for other in (parallel1, parallel2):
+            other_data = nib.load(other.out_file).get_fdata()
+            assert np.array_equal(
+                serial_data, other_data
+            ), "parallel motion-corrected volumes differ from serial"
+            assert np.array_equal(
+                serial_bvec, np.loadtxt(other.out_bvec)
+            ), "parallel reoriented bvecs differ from serial"
+
+        # Cheap guards: volume count preserved and no worker silently zeroed out.
+        assert serial_data.shape[-1] == n_total
+        for i in range(serial_data.shape[-1]):
+            assert np.any(serial_data[..., i] != 0), f"volume {i} is entirely zero"
+
+    def test_bval_passthrough_unchanged(self, tmp_path):
+        out_dir = str(tmp_path)
+        in_file, bval, bvec, _ = _make_synthetic_dwi(out_dir, seed=1)
+        outputs = self._run_node(
+            out_dir, in_file, bval, bvec, parallel=True, num_threads=1
+        )
+        assert np.array_equal(np.loadtxt(outputs.out_bval), np.loadtxt(bval))
+
+
+# --------------------------------------------------------------------------- #
+# Layer 1b-ter - known head rotations on a single-fibre phantom (heavy)
+# --------------------------------------------------------------------------- #
+# Asymmetric Gaussian blobs (centre in mm from the FOV centre, sigma in mm,
+# amplitude) giving the registration an unambiguous anatomy to lock onto.
+_PHANTOM_BLOBS = [
+    ((-20.0, 10.0, 5.0), 9.0, 1.0),
+    ((15.0, -18.0, -6.0), 7.0, 0.8),
+    ((25.0, 22.0, 10.0), 6.0, 0.6),
+    ((-8.0, -25.0, 12.0), 8.0, 0.7),
+    ((5.0, 5.0, -14.0), 10.0, 0.9),
+]
+_PHANTOM_EVALS = np.array([1.7e-3, 0.3e-3, 0.3e-3])
+_PHANTOM_BVAL = 1000.0
+
+
+def _phantom_s0(points):
+    out = np.full(points.shape[:-1], 50.0)
+    for centre, sigma, amplitude in _PHANTOM_BLOBS:
+        d2 = np.sum((points - np.asarray(centre)) ** 2, axis=-1)
+        out += 1000.0 * amplitude * np.exp(-d2 / (2.0 * sigma**2))
+    return out
+
+
+def _make_rotated_phantom_dwi(directory, axes, rotations, gradients, fibre):
+    """A single-fibre DWI acquired with the head rotated before each DW volume.
+
+    Every voxel holds the same tensor (principal direction ``fibre``, world
+    frame). The b0 has no motion; DW volume ``k`` is acquired with gradient
+    ``gradients[k]`` (world) while the head is rotated by ``rotations[k]``
+    (world, about the FOV centre): the voxel at world point x shows the anatomy
+    at R^T x, attenuated along R^T g. The bvecs are written in FSL convention
+    for the stored axes, as dcm2niix does.
+
+    The world origin is put at the FOV centre: dipy's rigid parameters rotate
+    about the world origin and, with the pinned loose ``ftol``, an origin far
+    from the head leaves a rotation residual of its own (2 degrees for a 6
+    degree yaw at 57 mm) that would blur the frame check this phantom is for.
+    """
+    shape = (40, 40, 28)
+    affine = _storage_affine(axes, zooms=(2.5, 2.5, 2.5))
+    affine[:3, 3] -= (affine @ np.r_[(np.array(shape) - 1) / 2.0, 1.0])[:3]
+    ijk = np.stack(np.meshgrid(*[np.arange(n) for n in shape], indexing="ij"), -1)
+    world = ijk @ affine[:3, :3].T + affine[:3, 3]
+
+    e1 = fibre / np.linalg.norm(fibre)
+    e2 = np.cross(e1, [0.0, 0.0, 1.0])
+    e2 /= np.linalg.norm(e2)
+    e3 = np.cross(e1, e2)
+    basis = np.stack([e1, e2, e3], axis=1)
+    tensor = basis @ np.diag(_PHANTOM_EVALS) @ basis.T
+
+    volumes = [_phantom_s0(world)]
+    for rotation, g in zip(rotations, gradients):
+        g_anat = rotation.T @ g
+        attenuation = np.exp(-_PHANTOM_BVAL * g_anat @ tensor @ g_anat)
+        volumes.append(_phantom_s0(world @ rotation) * attenuation)
+    in_file = os.path.join(str(directory), "phantom_dwi.nii.gz")
+    nib.save(
+        nib.Nifti1Image(np.stack(volumes, axis=-1).astype(np.float32), affine),
+        in_file,
+    )
+    bvals = [0.0] + [_PHANTOM_BVAL] * len(gradients)
+    bvecs = np.vstack([[0.0, 0.0, 0.0], np.asarray(gradients) @ _fsl_frame(axes)])
+    bval_path, bvec_path = _write_bval_bvec(directory, bvals, bvecs)
+    return in_file, bval_path, bvec_path
+
+
+def _phantom_analytic_fa():
+    md = np.mean(_PHANTOM_EVALS)
+    return np.sqrt(1.5 * np.sum((_PHANTOM_EVALS - md) ** 2) / np.sum(_PHANTOM_EVALS**2))
+
+
+@pytest.mark.heavy
+class TestReorientationOnRotatedPhantom:
+    """Real dipy registration on a phantom whose head rotations are known.
+
+    After motion correction the tensor fitted with the reoriented bvecs must
+    point along the phantom's fibre (taken back to world through the voxel
+    axes, the frame dipy fits in for LAS storage). With the world rotations
+    applied to the image-frame bvecs unconjugated, a 6 degree yaw gave an
+    11.7 degree V1 error and a 6 degree roll 8.6 degrees; random +-4 degree
+    motion gave a 1.5 degree median error and an FA 0.01 too high.
+    """
+
+    FIBRE = np.array([1.0, 1.0, 0.3]) / np.linalg.norm([1.0, 1.0, 0.3])
+
+    def _v1_errors_and_fa(self, tmp_path, axes, rotations, gradients):
+        from dipy.core.gradients import gradient_table
+        from dipy.reconst.dti import TensorModel
+
+        in_file, bval, bvec = _make_rotated_phantom_dwi(
+            tmp_path, axes, rotations, gradients, self.FIBRE
+        )
+        node = DipyMotionCorrection()
+        node.inputs.in_file = in_file
+        node.inputs.bval = bval
+        node.inputs.bvec = bvec
+        node.inputs.num_threads = min(4, os.cpu_count() or 1)
+        node.inputs.parallel = True
+        node.inputs.out_file = os.path.join(str(tmp_path), "moco.nii.gz")
+        node.inputs.out_bvec = os.path.join(str(tmp_path), "moco.bvec")
+        node.inputs.out_bval = os.path.join(str(tmp_path), "moco.bval")
+        outputs = node.run().outputs
+
+        gtab = gradient_table(
+            np.loadtxt(outputs.out_bval), bvecs=np.loadtxt(outputs.out_bvec).T
+        )
+        data = nib.load(outputs.out_file).get_fdata()
+        c = np.array(data.shape[:3]) // 2
+        roi = data[c[0] - 4 : c[0] + 4, c[1] - 4 : c[1] + 4, c[2] - 3 : c[2] + 3]
+        fit = TensorModel(gtab).fit(roi)
+        v1_world = fit.evecs[..., 0].reshape(-1, 3) @ np.asarray(axes, float).T
+        cosines = np.clip(np.abs(v1_world @ self.FIBRE), 0.0, 1.0)
+        return np.rad2deg(np.arccos(cosines)), fit.fa.ravel()
+
+    def _gradients(self):
+        g = np.random.default_rng(0).normal(size=(30, 3))
+        return g / np.linalg.norm(g, axis=1, keepdims=True)
+
+    @pytest.mark.parametrize(
+        "axes, rotation",
+        [
+            pytest.param(_FLIP_X, _rotation_z(np.deg2rad(6.0)), id="LAS-yaw"),
+            pytest.param(_FLIP_X, _rotation_y(np.deg2rad(6.0)), id="LAS-roll"),
+            pytest.param(
+                _rotation_x(np.deg2rad(15.0)) @ _rotation_z(np.deg2rad(10.0)) @ _FLIP_X,
+                _rotation_x(np.deg2rad(6.0)),
+                id="obliqueLAS-pitch",
+            ),
+        ],
+    )
+    def test_uniform_rotation_recovers_the_fibre(self, tmp_path, axes, rotation):
+        gradients = self._gradients()
+        errors, _ = self._v1_errors_and_fa(
+            tmp_path, axes, [rotation] * len(gradients), gradients
+        )
+        assert np.max(errors) < 0.5, f"V1 error up to {np.max(errors):.2f} deg"
+
+    def test_random_motion_recovers_the_fibre_and_fa(self, tmp_path):
+        rng = np.random.default_rng(1)
+        gradients = self._gradients()
+        rotations = [
+            _rotation_x(np.deg2rad(rng.uniform(-4.0, 4.0)))
+            @ _rotation_y(np.deg2rad(rng.uniform(-4.0, 4.0)))
+            @ _rotation_z(np.deg2rad(rng.uniform(-4.0, 4.0)))
+            for _ in gradients
+        ]
+        axes = _rotation_x(np.deg2rad(15.0)) @ _rotation_z(np.deg2rad(10.0)) @ _FLIP_X
+        errors, fa = self._v1_errors_and_fa(tmp_path, axes, rotations, gradients)
+        assert np.median(errors) < 0.75, f"median V1 error {np.median(errors):.2f}"
+        assert np.max(errors) < 1.0, f"V1 error up to {np.max(errors):.2f} deg"
+        assert abs(np.median(fa) - _phantom_analytic_fa()) < 0.005

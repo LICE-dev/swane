@@ -1,4 +1,11 @@
-import pydicom
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+# pydicom (and numpy, requests, PIL... it pulls in) is imported lazily where
+# files are read: importing it at module level slows down GUI startup.
+if TYPE_CHECKING:
+    import pydicom
 
 
 class DicomSeries:
@@ -36,6 +43,8 @@ class DicomSeries:
     def refine_frame_number(self):
         if self.is_multi_frame and self.multi_frame_loc is not None:
             if self.ds is None:
+                import pydicom
+
                 self.ds = pydicom.dcmread(self.multi_frame_loc, force=True)
             for i, frame_group in enumerate(self.ds.PerFrameFunctionalGroupsSequence):
                 if i == 0:
@@ -48,6 +57,8 @@ class DicomSeries:
             self.ds = None
             del self.ds
         elif self.frames < 10:
+            import pydicom
+
             ds = pydicom.dcmread(self.dicom_locs[0], force=True)
             if not hasattr(ds, "ImageType") or "MOSAIC" not in ds.ImageType:
                 self.frames = 0
@@ -80,11 +91,11 @@ class DicomSubject:
 
     def get_series(
         self, study_instance_uid: pydicom.uid.UID, series_number
-    ) -> DicomSeries:
+    ) -> DicomSeries | None:
         if study_instance_uid not in self.studies:
-            return []
+            return None
         elif series_number not in self.studies[study_instance_uid]:
-            return []
+            return None
         else:
             return self.studies[study_instance_uid][series_number]
 
@@ -153,7 +164,7 @@ class DicomTree:
 
     def get_series(
         self, subject: str, study_instance_uid: pydicom.uid.UID, series_number
-    ) -> DicomSeries:
+    ) -> DicomSeries | None:
         if subject not in self.dicom_subjects:
             return None
         return self.dicom_subjects[subject].get_series(

@@ -1,19 +1,25 @@
 from datetime import datetime
 import os
-from multiprocessing import cpu_count
 from os.path import abspath
 
-import swane_supplement
+from swane.patches.nipype_patches import apply_patches
+
+apply_patches()
+
+from swane import resources
+
 from swane.utils.ResourceManager import ResourceManager
+from swane.nipype_pipeline.workflows.workflow_constants import RESULT_DIR
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DataInputList import DataInputList as DIL, FMRI_NUM
 from swane.config.config_enums import (
     Planes,
-    CoreLimit,
     BlockDesign,
     GlobalPrefCategoryList,
     FreesurferStep,
+    DeskullModality,
+    TractographyEngine,
 )
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
 from swane.nipype_pipeline.workflows.linear_reg_workflow import linear_reg_workflow
@@ -31,6 +37,14 @@ from swane.nipype_pipeline.workflows.func_map_workflow import func_map_workflow
 from swane.nipype_pipeline.workflows.venous_mr_workflow import venous_mr_workflow
 from swane.nipype_pipeline.workflows.venous_ct_workflow import venous_ct_workflow
 from swane.nipype_pipeline.workflows.dti_preproc_workflow import dti_preproc_workflow
+from swane.nipype_pipeline.workflows.dipy_dti_preproc_workflow import (
+    dipy_dti_preproc_workflow,
+)
+from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import default_atlas_dir
+from swane.nipype_pipeline.workflows.dipy_bundle_workflow import (
+    dipy_bundle_workflow,
+    DIPY_TRACT_ATLAS,
+)
 from swane.nipype_pipeline.workflows.seeg_ct_workflow import seeg_ct_workflow
 from swane.nipype_pipeline.workflows.tractography_workflow import (
     tractography_workflow,
@@ -38,30 +52,30 @@ from swane.nipype_pipeline.workflows.tractography_workflow import (
 )
 from swane.config.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
-from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
-    MonitoredMultiProcPlugin,
-)
 
 DEBUG = False
 
 
-# TODO implementazione error manager
+# TODO error manager implementation
 class MainWorkflow(CustomWorkflow):
-    Result_DIR: str = "results"
+    Result_DIR: str = RESULT_DIR
 
     is_resource_monitor: bool = False
+    test_run: bool = False
     max_cpu: int = -1
     max_gpu: int = -1
-    multicore_node_limit: CoreLimit = CoreLimit.SOFT_CAP
+
     memory_gb: float = -1
     freesurfer_step: FreesurferStep = FreesurferStep.DISABLED
     is_hippo_amyg_labels: bool = False
+    is_synthseg_fast: bool = False
     is_flat1: bool = False
     is_tractography: bool = False
+    is_tissue_segmentation: bool = False
     is_slicer: bool = False
-    is_ai: bool = False
+    is_fsl: bool = False
     t1: CustomWorkflow
-    freesurfer: CustomWorkflow
+    freesurfer: CustomWorkflow = None
     sym: CustomWorkflow
     flair: CustomWorkflow
     mni1: CustomWorkflow
@@ -92,6 +106,7 @@ class MainWorkflow(CustomWorkflow):
         subject_config: ConfigManager,
         dependency_manager: DependencyManager,
         subject_input_state_list: SubjectInputStateList,
+        test_run: bool = False,
     ):
         """
         Create the Workflows and their sub-workflows based on the list of available data inputs
@@ -108,11 +123,16 @@ class MainWorkflow(CustomWorkflow):
             The state of application dependency
         subject_input_state_list : SubjectInputStateList
             The list of all available input data from the DICOM directory.
+        test_run : bool, optional
+            If True, tweak heavy node parameters to speed up prerelease test
+            runs at the cost of accuracy, without overriding options the user
+            has explicitly configured. The default is False.
 
         """
 
         super().__init__(name, base_dir)
 
+        self.test_run = test_run
         self.global_config = global_config
         self.subject_config = subject_config
         self.dependency_manager = dependency_manager
@@ -125,7 +145,6 @@ class MainWorkflow(CustomWorkflow):
         self.set_analyses_request()
 
         self.launch_3dt1_analysis()
-        self.launch_ai_analysis()
         self.launch_freesurfer_analysis()
         self.launch_3dflair_analysis()
         self.launch_flat1_analysis()
@@ -156,17 +175,19 @@ class MainWorkflow(CustomWorkflow):
         self.max_cpu = self.global_config.getint_safe(
             GlobalPrefCategoryList.PERFORMANCE, "max_subj_cpu"
         )
-        if self.max_cpu < 1:
-            self.max_cpu = cpu_count()
-        self.multicore_node_limit = self.global_config.getenum_safe(
-            GlobalPrefCategoryList.PERFORMANCE, "multicore_node_limit"
-        )
+        # A configuration from another computer (copied ~/.SWANe, shared home,
+        # resized VM) can hold more cores than this one: never oversubscribe
+        if self.max_cpu < 1 or self.max_cpu > ResourceManager.get_max_cpu():
+            self.max_cpu = ResourceManager.get_max_cpu()
+
         # GPU management
         self.max_gpu = self.global_config.getint_safe(
             GlobalPrefCategoryList.PERFORMANCE, "max_subj_gpu"
         )
         if self.max_gpu < 0:
-            self.max_gpu = MonitoredMultiProcPlugin.gpu_count()
+            from nipype.utils.gpu_count import gpu_count
+
+            self.max_gpu = gpu_count()
 
         # RAM management
         self.memory_gb = self.global_config.getfloat_safe(
@@ -194,19 +215,14 @@ class MainWorkflow(CustomWorkflow):
                 self.dependency_manager.is_freesurfer_matlab()
                 and self.subject_config.get_workflow_hippo_pref()
             )
+            self.is_synthseg_fast = (
+                self.subject_config.get_workflow_synthseg_fast_pref()
+            )
 
         # Check for FLAT1 requirement and request
         self.is_flat1 = (
             self.subject_config.getboolean_safe(DIL.T13D, "flat1")
             and self.subject_input_state_list[DIL.FLAIR3D].loaded
-        )
-        # Check for Asymmetry Index request
-        self.is_ai = (
-            self.subject_config.getboolean_safe(DIL.PET, "ai")
-            and self.subject_input_state_list[DIL.PET].loaded
-        ) or (
-            self.subject_config.getboolean_safe(DIL.ASL, "ai")
-            and self.subject_input_state_list[DIL.ASL].loaded
         )
         # Check for Tractography request
         self.is_tractography = self.subject_config.getboolean_safe(
@@ -214,6 +230,32 @@ class MainWorkflow(CustomWorkflow):
         )
         # Check if Slicer is installed to allow venous ct segmente_endocranium
         self.is_slicer = self.dependency_manager.is_slicer(self.global_config)
+        # Resting state fMRI runs on FSL (MELODIC) only
+        self.is_fsl = self.dependency_manager.is_fsl()
+        # The reference tissue segmentation runs once in ref_workflow, only if
+        # at least one consumer will be built.
+        self.is_tissue_segmentation = self.is_tissue_segmentation_needed()
+
+    def is_tissue_segmentation_needed(self) -> bool:
+        """
+        Whether a consumer of the shared reference tissue segmentation will be
+        built. Mirrors the gates of launch_flat1_analysis and
+        launch_dipy_dti_analysis (tractography branch).
+        """
+        if self.is_flat1:
+            return True
+
+        if (
+            self.subject_input_state_list[DIL.DTI].loaded
+            and self.is_tractography
+            and self.global_config.getenum_safe(
+                GlobalPrefCategoryList.SYNTH, "tractography_engine"
+            )
+            == TractographyEngine.DIPY_RECOBUNDLES
+        ):
+            return True
+
+        return False
 
     def launch_3dt1_analysis(self):
         ref_dir = self.subject_input_state_list.get_dicom_dir(DIL.T13D)
@@ -222,6 +264,10 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=ref_dir,
             config=self.subject_config[DIL.T13D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.T1,
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
+            tissue_segmentation=self.is_tissue_segmentation,
         )
         self.t1.long_name = "3D T1w analysis"
         self.add_nodes([self.t1])
@@ -239,20 +285,31 @@ class MainWorkflow(CustomWorkflow):
             sub_folder=self.Result_DIR,
         )
 
-    def launch_ai_analysis(self):
-        if not self.is_ai:
+    def ensure_sym_registration(self) -> None:
+        """
+        Build the shared nonlinear registration to the symmetric atlas ("sym")
+        once. It feeds the asymmetry index for both PET and ASL, so it is
+        created lazily by the first requester; a second attempt would make
+        nipype raise on a duplicate node, hence the idempotency guard.
+        """
+        if getattr(self, "sym", None) is not None:
             return
 
         # Non linear registration for Asymmetry Index
         self.sym = nonlinear_reg_workflow(
             name="sym",
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.sym.long_name = "Symmetric atlas registration"
 
         sym_inputnode = self.sym.get_node("inputnode")
-        sym_template = swane_supplement.sym_template
-        sym_inputnode.inputs.atlas = sym_template
+        from swane.utils.templates import get_swane_template
+
+        sym_inputnode.inputs.atlas = get_swane_template(
+            name="MNI152NLin2009cSym", resolution=1, desc="brain", enforce_las=True
+        )
         self.connect(
             self.t1, "outputnode.reference_brain", self.sym, "inputnode.in_file"
         )
@@ -266,9 +323,10 @@ class MainWorkflow(CustomWorkflow):
             name="freesurfer",
             step=self.freesurfer_step,
             is_hippo_amyg_labels=self.is_hippo_amyg_labels,
+            synthseg_fast=self.is_synthseg_fast,
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            test_run=self.test_run,
         )
         self.freesurfer.long_name = "Freesurfer analysis"
 
@@ -330,6 +388,9 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.FLAIR3D],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            deskull_modality=DeskullModality.FLAIR,
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.flair.long_name = "3D Flair analysis"
         self.add_nodes([self.flair])
@@ -358,34 +419,49 @@ class MainWorkflow(CustomWorkflow):
             sub_folder=self.Result_DIR,
         )
 
-        # TODO: explore possibility of freesurfer based asymmetry index
-        # if is_freesurfer:
-        #     from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
-        #     flair_ai = freesurfer_asymmetry_index_workflow(name="flair_ai")
-        #     self.connect(flair, "outputnode.registered_file", flair_ai, "inputnode.in_file")
-        #     self.connect(freesurfer, "outputnode.vol_label_file_nii", flair_ai, "inputnode.seg_file")
+    def ensure_mni1_registration(self) -> str:
+        """
+        Build the shared nonlinear registration to the MNI1mm atlas (``mni1``)
+        once. It feeds both FLAT1 and DTI tractography, so it is created lazily
+        by the first requester; a second attempt would make nipype raise on a
+        duplicate node, hence the idempotency guard.
+
+        Returns
+        -------
+        mni1_path : str
+            The MNI1mm brain atlas path (also needed as a FLAT1 input).
+        """
+        from swane.utils.templates import get_swane_template
+
+        mni1_path = get_swane_template(
+            name="MNI152NLin6Asym", resolution=1, desc="brain", enforce_las=True
+        )
+
+        if getattr(self, "mni1", None) is not None:
+            return mni1_path
+
+        # Non linear registration to MNI1mm Atlas (shared by FLAT1 and DTI)
+        self.mni1 = nonlinear_reg_workflow(
+            name="mni1",
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
+        )
+        self.mni1.long_name = "MNI atlas registration"
+
+        mni1_inputnode = self.mni1.get_node("inputnode")
+        mni1_inputnode.inputs.atlas = mni1_path
+        self.connect(
+            self.t1, "outputnode.reference_brain", self.mni1, "inputnode.in_file"
+        )
+
+        return mni1_path
 
     def launch_flat1_analysis(self):
         if not self.is_flat1:
             return
 
-        # Non linear registration to MNI1mm Atlas for FLAT1
-        self.mni1 = nonlinear_reg_workflow(
-            name="mni1",
-            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
-        )
-        self.mni1.long_name = "MNI atlas registration"
-
-        mni1_inputnode = self.mni1.get_node("inputnode")
-        mni1_path = abspath(
-            os.path.join(
-                os.environ["FSLDIR"], "data/standard/MNI152_T1_1mm_brain.nii.gz"
-            )
-        )
-        mni1_inputnode.inputs.atlas = mni1_path
-        self.connect(
-            self.t1, "outputnode.reference_brain", self.mni1, "inputnode.in_file"
-        )
+        mni1_path = self.ensure_mni1_registration()
 
         # FLAT1 analysis
         self.flat1 = flat1_workflow(
@@ -400,6 +476,18 @@ class MainWorkflow(CustomWorkflow):
             "outputnode.uncorrected_reference_brain",
             self.flat1,
             "inputnode.reference_brain",
+        )
+        self.connect(
+            self.t1,
+            "outputnode.tissue_pve",
+            self.flat1,
+            "inputnode.tissue_pve",
+        )
+        self.connect(
+            self.t1,
+            "outputnode.tissue_restored",
+            self.flat1,
+            "inputnode.tissue_restored",
         )
         self.connect(
             self.flair,
@@ -454,12 +542,15 @@ class MainWorkflow(CustomWorkflow):
                     config=None,
                     is_volumetric=False,
                     synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                    deskull_modality=DeskullModality.FLAIR,
+                    max_cpu=self.max_cpu,
+                    test_run=self.test_run,
                 )
                 self.flair2d.long_name = "2D %s FLAIR analysis" % plane.value
                 self.add_nodes([self.flair2d])
 
                 flair2d_inputnode = self.flair2d.get_node("inputnode")
-                flair2d_inputnode.inputs.output_name = "flair2d_%s" % plane
+                flair2d_inputnode.inputs.output_name = "flair2d_%s" % plane.value
                 self.connect(
                     self.t1, "outputnode.reference", self.flair2d, "inputnode.reference"
                 )
@@ -492,6 +583,9 @@ class MainWorkflow(CustomWorkflow):
             is_volumetric=True,  # perform better with volumetric settings
             is_partial_coverage=True,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.T2,
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.t2_cor.long_name = "2D coronal T2 analysis"
         self.add_nodes([self.t2_cor])
@@ -537,6 +631,9 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.MDC],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             bias_field_correction=True,
+            deskull_modality=DeskullModality.T1,
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.mdc.long_name = "Post-contrast 3D T1w analysis"
         self.add_nodes([self.mdc])
@@ -574,6 +671,8 @@ class MainWorkflow(CustomWorkflow):
             freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.ASL],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.asl.long_name = "Arterial Spin Labelling analysis"
 
@@ -639,6 +738,7 @@ class MainWorkflow(CustomWorkflow):
                 )
 
         if self.subject_config.getboolean_safe(DIL.ASL, "ai"):
+            self.ensure_sym_registration()
             self.connect(
                 self.sym,
                 "outputnode.fieldcoeff_file",
@@ -687,6 +787,8 @@ class MainWorkflow(CustomWorkflow):
             freesurfer_step=self.freesurfer_step,
             config=self.subject_config[DIL.PET],
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.pet.long_name = "Pet analysis"
 
@@ -751,13 +853,8 @@ class MainWorkflow(CustomWorkflow):
                     sub_folder=self.Result_DIR,
                 )
 
-            # TODO work in progress for segmentation based asymmetry study
-            # from swane.nipype_pipeline.workflows.freesurfer_asymmetry_index_workflow import freesurfer_asymmetry_index_workflow
-            # pet_ai = freesurfer_asymmetry_index_workflow(name="pet_ai")
-            # self.connect(pet, "outputnode.registered_file", pet_ai, "inputnode.in_file")
-            # self.connect(freesurfer, "outputnode.vol_label_file_nii", pet_ai, "inputnode.seg_file")
-
         if self.subject_config.getboolean_safe(DIL.PET, "ai"):
+            self.ensure_sym_registration()
             self.connect(
                 self.sym,
                 "outputnode.fieldcoeff_file",
@@ -816,8 +913,11 @@ class MainWorkflow(CustomWorkflow):
             DIL.VENOUS_CT.value.workflow_name,
             venous_ct_dir=venous_ct_dir,
             config=self.subject_config[DIL.VENOUS_CT],
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             venous2_ct_dir=venous2_ct_dir,
             slicer_path=self.global_config.get_slicer_path(),
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.venous_ct.long_name = "Venous CT analysis"
 
@@ -859,6 +959,9 @@ class MainWorkflow(CustomWorkflow):
             config=self.subject_config[DIL.VENOUS_MR],
             venous2_mr_dir=venous2_mr_dir,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.VENOUS,
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.venous_mr.long_name = "Venous MRA analysis"
 
@@ -892,6 +995,9 @@ class MainWorkflow(CustomWorkflow):
             DIL.SEEG_CT.value.workflow_name,
             seeg_ct_dir=seeg_ct_dir,
             config=self.subject_config[DIL.SEEG_CT],
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.seeg_ct_dir.long_name = "SEEG CT analysis"
 
@@ -922,13 +1028,21 @@ class MainWorkflow(CustomWorkflow):
         # DTI analysis
         dti_dir = self.subject_input_state_list.get_dicom_dir(DIL.DTI)
 
+        tractography_engine = self.global_config.getenum_safe(
+            GlobalPrefCategoryList.SYNTH, "tractography_engine"
+        )
+        if tractography_engine == TractographyEngine.DIPY_RECOBUNDLES:
+            self.launch_dipy_dti_analysis(dti_dir)
+            return
+
         self.dti_preproc = dti_preproc_workflow(
             name=DIL.DTI.value.workflow_name,
             dti_dir=dti_dir,
             config=self.subject_config[DIL.DTI],
             max_cpu=self.max_cpu,
-            multicore_node_limit=self.multicore_node_limit,
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.NODIF,
+            test_run=self.test_run,
         )
         self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
         self.connect(
@@ -949,6 +1063,12 @@ class MainWorkflow(CustomWorkflow):
         )
 
         if self.is_tractography:
+            # The MNI->reference nonlinear warp is the same registration FLAT1
+            # relies on: reuse the shared mni1 workflow instead of recomputing
+            # it inside dti_preproc. It must run whenever tractography is on,
+            # even if no tract is selected.
+            self.ensure_mni1_registration()
+
             for tract in TRACTS.keys():
                 try:
                     if not self.subject_config.getboolean_safe(DIL.DTI, tract):
@@ -960,6 +1080,7 @@ class MainWorkflow(CustomWorkflow):
                     name=tract,
                     config=self.subject_config[DIL.DTI],
                     synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                    test_run=self.test_run,
                 )
                 if tract_workflow is not None:
                     tract_workflow.long_name = TRACTS[tract][0] + " tractography"
@@ -1006,8 +1127,8 @@ class MainWorkflow(CustomWorkflow):
                         "inputnode.ref2diff_mat",
                     )
                     self.connect(
-                        self.dti_preproc,
-                        "outputnode.mni2ref_warp",
+                        self.mni1,
+                        "outputnode.inverse_warp",
                         tract_workflow,
                         "inputnode.mni2ref_warp",
                     )
@@ -1026,6 +1147,136 @@ class MainWorkflow(CustomWorkflow):
                             sub_folder=os.path.join(self.Result_DIR, "dti"),
                         )
 
+    def launch_dipy_dti_analysis(self, dti_dir):
+        # dipy tractography engine: preprocessing to a global tractogram. New
+        # dipy nodes implement HARD_CAP only, so the factory takes no
+        # get_registration_node bounds its nipype-aware branch to max_cpu.
+        self.dti_preproc = dipy_dti_preproc_workflow(
+            name=DIL.DTI.value.workflow_name,
+            dti_dir=dti_dir,
+            config=self.subject_config[DIL.DTI],
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            deskull_modality=DeskullModality.NODIF,
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
+        )
+        self.dti_preproc.long_name = "Diffusion Tensor Imaging preprocessing"
+        self.connect(
+            self.t1,
+            "outputnode.reference_brain",
+            self.dti_preproc,
+            "inputnode.reference_brain",
+        )
+        self.connect(
+            self.t1, "outputnode.reference", self.dti_preproc, "inputnode.reference"
+        )
+
+        self.dti_preproc.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="FA",
+            sub_folder=self.Result_DIR,
+        )
+
+        if self.is_tractography:
+            # WM seed mask from the shared reference tissue segmentation.
+            self.connect(
+                self.t1,
+                "outputnode.tissue_pve",
+                self.dti_preproc,
+                "inputnode.tissue_pve",
+            )
+            # Global tractogram outputs consumed by the per-tract bundle
+            # workflows. The shared RecoBundles build ran once inside the preproc
+            # workflow (chunker -> build MapNode); each tract below only
+            # recognises from it, so the build is never repeated per tract.
+            for result_name in ("tractogram", "tractogram_atlas", "atlas2native"):
+                self.dti_preproc.sink_result(
+                    save_path=self.base_dir,
+                    result_node="outputnode",
+                    result_name=result_name,
+                    sub_folder=os.path.join(self.Result_DIR, "dti"),
+                )
+
+            atlas_dir = default_atlas_dir()
+            num_threads = self.max_cpu if self.max_cpu and self.max_cpu > 0 else 1
+
+            def add_bundle_workflow(tract, long_label):
+                """Instantiate one per-tract dipy bundle workflow consuming the
+                shared build, and sink its two reference-space .vtp results."""
+                bundle_workflow = dipy_bundle_workflow(
+                    name=tract,
+                    num_threads=num_threads,
+                )
+                if bundle_workflow is None:
+                    return
+                bundle_workflow.long_name = long_label
+                bundle_workflow.get_node("inputnode").inputs.atlas_dir = atlas_dir
+                self.connect(
+                    self.dti_preproc,
+                    "outputnode.recobundles_builds",
+                    bundle_workflow,
+                    "inputnode.recobundles_builds",
+                )
+                self.connect(
+                    self.dti_preproc,
+                    "outputnode.recobundles_chunks",
+                    bundle_workflow,
+                    "inputnode.recobundles_chunks",
+                )
+                self.connect(
+                    self.dti_preproc,
+                    "outputnode.atlas2native",
+                    bundle_workflow,
+                    "inputnode.atlas2native",
+                )
+                # The confidence flag is the .conf.json sidecar the recovery
+                # node always writes (low_confidence true/false), so a re-run
+                # overwrites the sidecar of an earlier one.
+                if tract == "fx":
+                    for result_name in ("bundle_bilateral", "flag_bilateral"):
+                        bundle_workflow.sink_result(
+                            save_path=self.base_dir,
+                            result_node="outputnode",
+                            result_name=result_name,
+                            sub_folder=os.path.join(self.Result_DIR, "dti"),
+                        )
+                else:
+                    for side in SIDES:
+                        for result_name in ("bundle_%s" % side, "flag_%s" % side):
+                            bundle_workflow.sink_result(
+                                save_path=self.base_dir,
+                                result_node="outputnode",
+                                result_name=result_name,
+                                sub_folder=os.path.join(self.Result_DIR, "dti"),
+                            )
+
+            # The TRACTS checkboxes are shared with the FSL engine; only the
+            # tracts with an HCP842 atlas counterpart get a dipy bundle workflow
+            # (atr/str/cbd/cbp/cbt -- greyed on dipy -- and the non-bilateral
+            # fma/fmi/mcp/ac have no counterpart, so dipy_bundle_workflow returns
+            # None for them and they are skipped).
+            for tract in TRACTS.keys():
+                if tract not in DIPY_TRACT_ATLAS:
+                    continue
+                try:
+                    if not self.subject_config.getboolean_safe(DIL.DTI, tract):
+                        continue
+                except Exception:
+                    continue
+                add_bundle_workflow(tract, TRACTS[tract][0] + " tractography")
+
+            # The cingulum is a dipy-only checkbox (not in the shared TRACTS
+            # list; greyed on FSL), mapping to the atlas C_L/C_R bundles.
+            try:
+                cingulum_selected = self.subject_config.getboolean_safe(
+                    DIL.DTI, "cingulum"
+                )
+            except Exception:
+                cingulum_selected = False
+            if cingulum_selected:
+                add_bundle_workflow("cingulum", "Cingulum tractography")
+
     def launch_fMRI_task_analysis(self):
         # Check for Task FMRI sequences
         for y in range(FMRI_NUM):
@@ -1042,6 +1293,9 @@ class MainWorkflow(CustomWorkflow):
                 dicom_dir=dicom_dir,
                 config=self.subject_config[DIL["FMRI_%d" % y]],
                 base_dir=self.base_dir,
+                synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+                max_cpu=self.max_cpu,
+                test_run=self.test_run,
             )
             self.fMRI.long_name = "Task fMRI analysis - %d" % y
             self.connect(
@@ -1056,6 +1310,7 @@ class MainWorkflow(CustomWorkflow):
                     result_node="outputnode",
                     result_name="threshold_file_cont1_thresh%d" % thresh_i,
                     sub_folder=os.path.join(self.Result_DIR, "fMRI"),
+                    remove_mapnode_subdir=True,
                 )
                 if (
                     self.subject_config.getenum_safe(DIL["FMRI_%d" % y], "block_design")
@@ -1066,12 +1321,14 @@ class MainWorkflow(CustomWorkflow):
                         result_node="outputnode",
                         result_name="threshold_file_cont2_thresh%d" % thresh_i,
                         sub_folder=os.path.join(self.Result_DIR, "fMRI"),
+                        remove_mapnode_subdir=True,
                     )
 
     def launch_fMRI_resting_state_analysis(self):
         # Check for Resting state FMRI sequences
         if (
-            not DIL.FMRI_RS in self.subject_input_state_list
+            not self.is_fsl
+            or not DIL.FMRI_RS in self.subject_input_state_list
             or not self.subject_input_state_list[DIL.FMRI_RS].loaded
         ):
             return
@@ -1082,6 +1339,9 @@ class MainWorkflow(CustomWorkflow):
             dicom_dir=dicom_dir,
             config=self.subject_config[DIL.FMRI_RS],
             base_dir=self.base_dir,
+            synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
+            max_cpu=self.max_cpu,
+            test_run=self.test_run,
         )
         self.fMRI_resting_state.long_name = "Resting state fMRI analysis"
         self.connect(
@@ -1090,11 +1350,20 @@ class MainWorkflow(CustomWorkflow):
             self.fMRI_resting_state,
             "inputnode.reference_brain",
         )
-
+        # The ICA-AROMA classification overview ("aroma_classification" on the
+        # output node) is deliberately not saved in the results folder.
         self.fMRI_resting_state.sink_result(
             save_path=self.base_dir,
             result_node="outputnode",
             result_name="thresh_zstat_files",
             sub_folder=os.path.join(self.Result_DIR, "fMRI_resting_state"),
             remove_mapnode_subdir=True,
+        )
+
+        self.fMRI_resting_state.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="ic_mix",
+            sub_folder=os.path.join(self.Result_DIR, "fMRI_resting_state"),
+            regexp_substitutions=[(r"melodic_mix$", "ica_mix")],
         )

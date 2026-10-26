@@ -1,6 +1,6 @@
 from enum import Enum, auto
 
-from swane import strings
+from swane.resources import strings
 from swane.config.PrefCategory import PrefCategory
 
 
@@ -25,19 +25,14 @@ class SlicerExtensions(Enum):
     MRML = "mrml"
 
 
-class CoreLimit(Enum):
-    NO_LIMIT = "No limit"
-    SOFT_CAP = "Soft cap"
-    HARD_CAP = "Hard Cap"
-
-
 class BetweenModFlirtCost(Enum):
-    MULTUAL_INFORMATION = "Mutual information"
+    MUTUAL_INFORMATION = "Mutual information"
     NORMALIZED_MUTUAL_INFORMATION = "Normalized mutual information"
     CORRELATION_RATIO = "Correlation ratio"
 
 
 class VeinDetectionMode(Enum):
+    KURTOSIS = "Automatic (kurtosis)"
     SD = "Automatic (standard deviation)"
     MEAN = "Automatic (mean value)"
     FIRST = "Always first volume"
@@ -64,6 +59,47 @@ class FreesurferStep(Enum):
             FreesurferStep.AUTORECON_PIAL,
             FreesurferStep.RECONALL,
         }
+
+
+class RegistrationEngine(Enum):
+    FSL = "FSL (FLIRT/FNIRT)"
+    SYNTH = "FreeSurfer SynthMorph"
+    ANTS = "ANTs (antspyx)"
+
+
+class DeskullEngine(Enum):
+    ANTSPYNET = "ANTs (antspynet)"
+    SYNTHSTRIP = "FreeSurfer SynthStrip"
+    BET = "FSL BET"
+
+
+class TractographyEngine(Enum):
+    FSL_XTRACT = "FSL (XTRACT/probtrackx2)"
+    DIPY_RECOBUNDLES = "dipy (CSD + RecoBundles)"
+
+
+class SegmentationEngine(Enum):
+    ANTS = "ANTs (antspyx Atropos)"
+    FSL = "FSL (FAST)"
+
+
+class FmriEngine(Enum):
+    NILEARN = "Python (nilearn/scikit-learn)"
+    FSL = "FSL (FEAT)"
+
+
+class DeskullModality(Enum):
+    T1 = "t1"
+    FLAIR = "flair"
+    T2 = "t2"
+    BOLD = "bold"
+    # Per-input antspynet networks; see the note at the deskull node in
+    # venous_mr_workflow for the VENOUS choice.
+    # NODIF (the DTI b0) deliberately shares the BOLD network: with the same
+    # value it is an Enum alias of BOLD (its name is "BOLD" and iteration skips
+    # it), so never branch on it to tell the DTI b0 from a BOLD volume.
+    NODIF = "bold"
+    VENOUS = "flair.v0"
 
 
 class SliceTiming(Enum):
@@ -96,7 +132,7 @@ class Planes(Enum):
 class GlobalPrefCategoryList(Enum):
     MAIN = PrefCategory("main", "Global settings")
     PERFORMANCE = PrefCategory("performance", "Performance")
-    SYNTH = PrefCategory("synth", "Synth tools")
+    SYNTH = PrefCategory("synth", "Processing engines")
     OPTIONAL_SERIES = PrefCategory("optional_series", "Optional series")
     MAIL_SETTINGS = PrefCategory("mail_settings", "Mail settings")
 
@@ -113,7 +149,7 @@ class PerformanceProfile(str, Enum):
 
     Notes
     -----
-    The enum values are localized strings from `swane.strings`.
+    The enum values are localized strings from `swane.resources.strings`.
 
     """
 

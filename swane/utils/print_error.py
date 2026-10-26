@@ -1,7 +1,7 @@
 import sys
 import os
 from datetime import datetime
-from swane import strings
+from swane.resources import strings
 from inspect import getframeinfo, stack
 
 ERROR_FILE = os.path.abspath(
@@ -33,7 +33,7 @@ def print_error():
         line_number = caller.lineno
         message = f"\n\n{datetime.now().strftime('%Y/%m/%d, %H:%M:%S')} - File name: {file_name} - Func name: {function_name} - Exception type: {exception_type} at Line: {line_number}"
 
-        with open(ERROR_FILE, "a+") as f:
+        with open(ERROR_FILE, "a+", encoding="utf-8") as f:
             f.write(message)
 
     except Exception as e:

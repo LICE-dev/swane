@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QFrame,
 )
-from swane import strings, EXIT_CODE_REBOOT
+from swane.resources import strings
+from swane import EXIT_CODE_REBOOT
 from swane.config.ConfigManager import ConfigManager
 from swane.ui.PreferenceUIEntry import PreferenceUIEntry
 from swane.config.preference_list import WF_PREFERENCES, GLOBAL_PREFERENCES
@@ -165,7 +166,7 @@ class PreferencesWindow(QDialog):
                             fail_tooltip = self.preferences[category][
                                 key
                             ].option_pref_requirement_fail_tooltip[option]
-                        except:
+                        except Exception:
                             pass
                         for pref_cat in self.preferences[category][
                             key
@@ -223,11 +224,11 @@ class PreferencesWindow(QDialog):
                                 .subject.input_state_list[cat_check]
                                 .loaded
                             ):
-                                self.inputs[x].disable(
-                                    self.preferences[category][
-                                        key
-                                    ].input_requirement_fail_tooltip
-                                )
+                                # The required input series can only be loaded
+                                # from outside this window (it depends on the
+                                # subject's DICOM data), so hide rather than
+                                # gray out.
+                                self.inputs[x].hide()
                                 break
 
                 # Add GUI elements to grid
@@ -348,9 +349,9 @@ class PreferencesWindow(QDialog):
             )
             if dep_check is None or not callable(dep_check) or not dep_check():
 
-                self.inputs[x].disable(
-                    self.preferences[category][key].dependency_fail_tooltip
-                )
+                # An external dependency cannot be installed from this window,
+                # so graying the preference out would be a dead end: hide it.
+                self.inputs[x].hide()
                 return False
         if self.preferences[category][key].resource is not None:
             resource_check = getattr(
@@ -363,26 +364,47 @@ class PreferencesWindow(QDialog):
                 or not callable(resource_check)
                 or not resource_check()
             ):
-                self.inputs[x].disable(
-                    self.preferences[category][key].resource_fail_tooltip
-                )
+                # Same reasoning as the dependency check above: a missing
+                # host resource cannot be fixed from this window.
+                self.inputs[x].hide()
                 return False
 
         # no need return false because combo should neve be completely disabled for subsection dep
         if self.preferences[category][key].input_type == InputTypes.ENUM:
             for enum_key in self.preferences[category][key].option_dependency:
-                dep_check = getattr(
-                    self.dependency_manager,
-                    self.preferences[category][key].option_dependency[enum_key][0],
-                    None,
-                )
-                if dep_check is not None and callable(dep_check) and not dep_check():
-                    tooltip = self.preferences[category][key].option_dependency[
-                        enum_key
-                    ][1]
+                ok, tooltip = self.check_option_dependency(category, key, enum_key)
+                if not ok:
                     self.inputs[x].disable_combo_option(enum_key, False, tooltip)
 
         return True
+
+    def check_option_dependency(
+        self, category: Enum, key: str, option: Enum
+    ) -> tuple[bool, str]:
+        """
+        Check whether a single combo option's external dependency is satisfied.
+
+        Parameters
+        ----------
+        category: Enum
+            The category of the preference to be tested.
+        key: str
+            The name of the preference to be tested.
+        option: Enum
+            The specific combo option (enum member) to be tested.
+
+        Return
+        ----------
+        A tuple: (True, "") if the option has no dependency or it is satisfied,
+        otherwise (False, fail_tooltip).
+        """
+        option_dependency = self.preferences[category][key].option_dependency
+        if option not in option_dependency:
+            return True, ""
+        dep_check = getattr(self.dependency_manager, option_dependency[option][0], None)
+        if dep_check is not None and callable(dep_check) and not dep_check():
+            return False, option_dependency[option][1]
+        return True, ""
 
     def validation_field_changed(self, checked, my_cat: str, my_key: str):
         validation_holder = my_key + self.my_config.VALIDATION_SUFFIX
@@ -431,7 +453,7 @@ class PreferencesWindow(QDialog):
                         continue
                     try:
                         req = GLOBAL_PREFERENCES[req_cat][req_key[0]]
-                    except:
+                    except Exception:
                         req = WF_PREFERENCES[req_cat][req_key[0]]
 
                     if req.input_type == InputTypes.BOOLEAN:
@@ -452,17 +474,22 @@ class PreferencesWindow(QDialog):
                         InputTypes.FLOAT,
                         InputTypes.INT,
                     ):
-                        check = (
-                            self.global_config.getfloat_safe(req_cat, req_key[0])
-                            >= req_key[1]
+                        req_value = self.global_config.getfloat_safe(
+                            req_cat, req_key[0]
+                        )
+                        check = req_value >= req_key[1] or (
+                            req.special_value_text and req_value == req.range[0]
                         )
                     else:
-                        check = req_key[1] = self.global_config[req_cat][req_key[0]]
+                        check = req_key[1] == self.global_config[req_cat][req_key[0]]
 
                     if not check:
                         if option is None:
-                            # disable all input
-                            self.inputs[my_x].disable(fail_tooltip)
+                            # The requirement lives in another preferences
+                            # window (it is not one of self.input_keys), so it
+                            # cannot be changed from here: hide rather than
+                            # gray out.
+                            self.inputs[my_x].hide()
                         else:
                             self.inputs[my_x].disable_combo_option(
                                 option, False, fail_tooltip
@@ -492,9 +519,14 @@ class PreferencesWindow(QDialog):
                         InputTypes.FLOAT,
                         InputTypes.INT,
                     ):
-                        check = float(self.inputs[req_x].get_value()) >= req_key[1]
+                        req_entry = self.preferences[req_cat][req_key[0]]
+                        req_value = float(self.inputs[req_x].get_value())
+                        check = req_value >= req_key[1] or (
+                            req_entry.special_value_text
+                            and req_value == req_entry.range[0]
+                        )
                     else:
-                        check = req_key[1] = self.inputs[req_x].get_value()
+                        check = req_key[1] == self.inputs[req_x].get_value()
 
                     if not check:
                         if option is None:
@@ -507,7 +539,11 @@ class PreferencesWindow(QDialog):
         if not option:
             self.inputs[my_x].enable()
         else:
-            self.inputs[my_x].disable_combo_option(option, True, "")
+            # The pref_requirement check above passed, but this option may
+            # still be gated by its own option_dependency (e.g. a missing
+            # external package): don't blindly re-enable it in that case.
+            ok, tooltip = self.check_option_dependency(my_cat, my_key, option)
+            self.inputs[my_x].disable_combo_option(option, ok, tooltip)
 
     def save_preferences(self):
         """
