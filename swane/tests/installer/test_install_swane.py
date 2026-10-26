@@ -81,6 +81,10 @@ def test_usage_explains_the_swane_spec_forms(sh):
     assert 'passed verbatim to "pip install -U"' in text
     assert "(default: swane, the latest release on PyPI)" in text
     assert "SWANe 0.2.5 or newer is required" in text
+    assert (
+        'A VCS URL (git+...) is then reinstalled with "--force-reinstall --no-deps"'
+        in text
+    )
     for example in (
         "a PyPI version swane==0.2.5",
         "a local checkout /path/to/swane",
@@ -97,6 +101,11 @@ def test_usage_explains_the_swane_spec_forms(sh):
         (["--swane-spec"], "--swane-spec needs a value"),
         (["--miniforge-prefix"], "--miniforge-prefix needs a value"),
         (["--install-dir"], "--install-dir needs a value"),
+        (["--conda-root"], "--conda-root needs a value"),
+        (
+            ["--conda-root", "/c", "--miniforge-prefix", "/m"],
+            "--conda-root and --miniforge-prefix cannot be used together",
+        ),
     ],
 )
 def test_bad_command_line_exits_2_with_usage(sh, args, message):
@@ -112,10 +121,28 @@ def test_parse_args_sets_every_option(sh):
         "parse_args --yes --accept-fsl-license --no-fsl --swane-spec /x/y "
         '--miniforge-prefix "/p q" --install-dir "/e f"; '
         'printf "%s|" "$ASSUME_YES" "$ACCEPT_FSL_LICENSE" "$NO_FSL" '
-        '"$SWANE_SPEC" "$MINIFORGE_PREFIX" "$SWANE_INSTALL_DIR"'
+        '"$SWANE_SPEC" "$MINIFORGE_PREFIX" "$MINIFORGE_PREFIX_SET" '
+        '"$SWANE_INSTALL_DIR"'
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "1|1|1|/x/y|/p q|/e f|"
+    assert result.stdout == "1|1|1|/x/y|/p q|1|/e f|"
+
+
+def test_parse_args_conda_root_is_made_absolute(sh):
+    result = sh.code(
+        'parse_args --conda-root "~/my conda/"; printf "%s" "$CONDA_ROOT_OPTION"'
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s/my conda" % sh.home
+
+
+@pytest.mark.parametrize(
+    "given, expected",
+    [("~", "{home}"), ("~/a/", "{home}/a"), ("a~/b", "{cwd}/a~/b"), ("/", "/")],
+)
+def test_normalize_dir(sh, given, expected):
+    result = sh("normalize_dir", given)
+    assert result.stdout == "%s\n" % expected.format(home=sh.home, cwd=sh.tmp)
 
 
 @pytest.mark.parametrize(
@@ -153,6 +180,8 @@ def test_usage_documents_install_dir(sh):
     assert "--install-dir DIR" in text
     assert "DIR/swane-env" in text
     assert "DIR/swane-fsl" in text
+    assert "--conda-root DIR" in text
+    assert "a rerun proposes the choices of the previous run" in text
 
 
 @pytest.mark.parametrize(
@@ -182,17 +211,21 @@ def test_main_defaults_ignore_the_environment(sh):
         # A no-op install flow: only main's option handling is under test.
         "install_flow() { :; }; "
         'main; printf "%s|" "$ASSUME_YES" "$ACCEPT_FSL_LICENSE" "$NO_FSL" '
-        '"$SWANE_SPEC" "$MINIFORGE_PREFIX"',
+        '"$SWANE_SPEC" "$MINIFORGE_PREFIX" "$MINIFORGE_PREFIX_SET" '
+        '"$CONDA_ROOT_OPTION" "$SWANE_INSTALL_DIR"',
         env={
             "ASSUME_YES": "1",
             "ACCEPT_FSL_LICENSE": "1",
             "NO_FSL": "1",
             "SWANE_SPEC": "other",
             "MINIFORGE_PREFIX": "/elsewhere",
+            "MINIFORGE_PREFIX_SET": "1",
+            "CONDA_ROOT_OPTION": "/c",
+            "SWANE_INSTALL_DIR": "/i",
         },
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "0|0|0|swane|%s/miniforge3|" % sh.home
+    assert result.stdout == "0|0|0|swane|%s/miniforge3|0|||" % sh.home
 
 
 def test_original_path_is_recorded_at_source_time(sh):
@@ -531,83 +564,394 @@ def _fsl_with_conda(fsl_root):
     return fsl_root
 
 
-def test_find_conda_skips_fsl_conda(sh):
+#: The first root of list_conda_roots: what --yes uses.
+FIRST_CONDA = 'list_conda_roots > "$TMPDIR/roots" || exit 1; head -n 1 "$TMPDIR/roots"'
+
+
+def test_first_conda_skips_fsl_conda(sh):
     """Review Focus 2: FSL sourced in the shell puts FSL's conda first on PATH."""
     fsl = _fsl_with_conda(sh.home / "fsl")
     miniforge = make_conda_root(sh.home / "miniforge3")
-    result = sh("find_conda", env={"PATH": "%s:%s" % (fsl / "bin", sh.path)})
+    result = sh.code(FIRST_CONDA, env={"PATH": "%s:%s" % (fsl / "bin", sh.path)})
     assert result.returncode == 0, result.stderr
     assert result.stdout == "%s\n" % miniforge
 
 
-def test_find_conda_skips_conda_exe_inside_fsl(sh):
+def test_first_conda_skips_conda_exe_inside_fsl(sh):
     fsl = _fsl_with_conda(sh.home / "fsl")
     miniforge = make_conda_root(sh.home / "miniforge3")
-    result = sh("find_conda", env={"CONDA_EXE": fsl / "bin" / "conda"})
+    result = sh.code(FIRST_CONDA, env={"CONDA_EXE": fsl / "bin" / "conda"})
     assert result.stdout == "%s\n" % miniforge
 
 
-def test_find_conda_skips_fsldir_without_fslversion(sh):
+def test_first_conda_skips_fsldir_without_fslversion(sh):
     """A root equal to $FSLDIR is rejected even without etc/fslversion."""
     fsl = make_conda_root(sh.home / "fsl-conda")
     miniforge = make_conda_root(sh.home / "miniforge3")
-    result = sh(
-        "find_conda",
+    result = sh.code(
+        FIRST_CONDA,
         env={"CONDA_EXE": fsl / "bin" / "conda", "FSLDIR": str(fsl) + "/"},
     )
     assert result.stdout == "%s\n" % miniforge
 
 
-def test_find_conda_prefers_conda_exe(sh):
+def test_first_conda_prefers_conda_exe(sh):
     anaconda = make_conda_root(sh.home / "anaconda3")
     make_conda_root(sh.home / "miniforge3")
-    result = sh("find_conda", env={"CONDA_EXE": anaconda / "bin" / "conda"})
+    result = sh.code(FIRST_CONDA, env={"CONDA_EXE": anaconda / "bin" / "conda"})
     assert result.returncode == 0, result.stderr
     assert result.stdout == "%s\n" % anaconda
 
 
 @pytest.mark.parametrize("bindir", ["bin", "condabin"])
-def test_find_conda_uses_conda_on_path(sh, bindir):
+def test_first_conda_uses_conda_on_path(sh, bindir):
     root = make_conda_root(sh.tmp / "elsewhere" / "conda")
     make_executable(root / "condabin" / "conda", "exit 0")
     make_conda_root(sh.home / "miniforge3")
-    result = sh("find_conda", env={"PATH": "%s:%s" % (root / bindir, sh.path)})
+    result = sh.code(FIRST_CONDA, env={"PATH": "%s:%s" % (root / bindir, sh.path)})
     assert result.stdout == "%s\n" % root
 
 
-def test_find_conda_user_roots_in_order(sh):
+def test_first_conda_user_roots_in_order(sh):
     make_conda_root(sh.home / "anaconda3")
     miniconda = make_conda_root(sh.home / "miniconda3")
-    assert sh("find_conda").stdout == "%s\n" % miniconda
+    assert sh.code(FIRST_CONDA).stdout == "%s\n" % miniconda
     miniforge = make_conda_root(sh.home / "miniforge3")
-    assert sh("find_conda").stdout == "%s\n" % miniforge
+    assert sh.code(FIRST_CONDA).stdout == "%s\n" % miniforge
 
 
-def test_find_conda_ignores_dir_without_conda_sh(sh):
+def test_first_conda_ignores_dir_without_conda_sh(sh):
     (sh.home / "miniforge3" / "bin").mkdir(parents=True)
     anaconda = make_conda_root(sh.home / "anaconda3")
-    assert sh("find_conda").stdout == "%s\n" % anaconda
+    assert sh.code(FIRST_CONDA).stdout == "%s\n" % anaconda
 
 
-def test_find_conda_custom_miniforge_prefix(sh):
+def test_first_conda_custom_miniforge_prefix(sh):
     custom = make_conda_root(sh.tmp / "custom-forge")
-    result = sh("find_conda", env={"MINIFORGE_PREFIX": custom})
+    result = sh.code(FIRST_CONDA, env={"MINIFORGE_PREFIX": custom})
     assert result.stdout == "%s\n" % custom
 
 
-def test_find_conda_system_roots(sh):
+def test_first_conda_system_roots(sh):
     system = make_conda_root(sh.tmp / "opt" / "conda")
-    result = sh(
-        "find_conda",
+    result = sh.code(
+        FIRST_CONDA,
         env={"SWANE_SYSTEM_CONDA_ROOTS": "%s %s" % (sh.tmp / "missing", system)},
     )
     assert result.stdout == "%s\n" % system
 
 
-def test_find_conda_none(sh):
-    result = sh("find_conda")
+def test_first_conda_none(sh):
+    result = sh.code(FIRST_CONDA)
     assert result.returncode == 1
     assert result.stdout == ""
+
+
+def test_list_conda_roots_lists_every_root_once_in_order(sh):
+    """The previous run's conda first, then the discovery order; a root
+    reached twice (here through a symlink) is listed once."""
+    pinned = make_conda_root(sh.tmp / "pinned conda")
+    _write_pinned_launcher(sh, pinned, sh.tmp / "envs" / "swane-env")
+    anaconda = make_conda_root(sh.home / "anaconda3")
+    miniforge = make_conda_root(sh.home / "miniforge3")
+    (sh.tmp / "forge-link").symlink_to(miniforge)
+    system = make_conda_root(sh.tmp / "opt" / "conda")
+    _fsl_with_conda(sh.tmp / "fsl")
+    result = sh(
+        "list_conda_roots",
+        env={
+            "CONDA_EXE": anaconda / "bin" / "conda",
+            "MINIFORGE_PREFIX": sh.tmp / "forge-link",
+            "SWANE_SYSTEM_CONDA_ROOTS": "%s %s" % (sh.tmp / "fsl", system),
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        str(pinned),
+        str(anaconda),
+        str(miniforge),
+        str(system),
+    ]
+
+
+def test_list_conda_roots_skips_a_pinned_root_that_is_gone(sh):
+    _write_pinned_launcher(sh, sh.tmp / "gone", sh.tmp / "envs" / "swane-env")
+    miniforge = make_conda_root(sh.home / "miniforge3")
+    assert sh("list_conda_roots").stdout == "%s\n" % miniforge
+
+
+# ---------------------------------------------------------------------------
+# Choosing the conda and the environments directory
+# ---------------------------------------------------------------------------
+
+#: choose_conda, then what it chose: "CHOSEN_CONDA_ROOT|MINIFORGE_PREFIX".
+CHOOSE_CONDA = 'choose_conda; printf "%s|%s" "$CHOSEN_CONDA_ROOT" "$MINIFORGE_PREFIX"'
+
+
+def _two_condas(sh):
+    """~/miniforge3 and ~/anaconda3, listed in that order."""
+    return make_conda_root(sh.home / "miniforge3"), make_conda_root(
+        sh.home / "anaconda3"
+    )
+
+
+def test_choose_conda_lists_the_roots_and_miniforge(sh):
+    miniforge, anaconda = _two_condas(sh)
+    result = sh.code(CHOOSE_CONDA, tty="yes\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s|%s/miniforge3" % (miniforge, sh.home)
+    assert "  1) %s\n  2) %s\n" % (miniforge, anaconda) in result.stderr
+    assert "  3) Download and install a new Miniforge" in result.stderr
+    assert (
+        "Type yes to use 1 (%s), or the number of another choice: " % (miniforge)
+        in result.stderr
+    )
+
+
+@pytest.mark.parametrize("answer", ["2", "02"])
+def test_choose_conda_by_number(sh, answer):
+    _, anaconda = _two_condas(sh)
+    result = sh.code(CHOOSE_CONDA, tty=answer + "\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("%s|" % anaconda)
+
+
+def test_choose_conda_asks_again_until_the_answer_is_valid(sh):
+    _, anaconda = _two_condas(sh)
+    result = sh.code(CHOOSE_CONDA, tty="\nno\n0\n4\n123456789\n2\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("%s|" % anaconda)
+    assert result.stderr.count("Please type yes or a number from 1 to 3.") == 5
+
+
+def test_choose_conda_previous_run_is_the_proposal(sh):
+    _two_condas(sh)
+    pinned = make_conda_root(sh.tmp / "new conda")
+    _write_pinned_launcher(sh, pinned, sh.tmp / "envs" / "swane-env")
+    result = sh.code(CHOOSE_CONDA, tty="yes\n")
+    assert result.stdout.startswith("%s|" % pinned)
+    assert "Type yes to use 1 (%s)" % pinned in result.stderr
+
+
+def test_choose_conda_new_miniforge_at_the_proposed_prefix(sh):
+    _two_condas(sh)
+    prefix = sh.tmp / "forge"
+    result = sh.code(CHOOSE_CONDA, env={"MINIFORGE_PREFIX": prefix}, tty="3\nyes\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "|%s" % prefix
+    assert "Miniforge will be installed in: %s" % prefix in result.stderr
+
+
+def test_choose_conda_new_miniforge_in_a_typed_directory(sh):
+    """~ is expanded; existing directories (a conda or not) are refused."""
+    miniforge, _ = _two_condas(sh)
+    (sh.tmp / "taken").mkdir()
+    result = sh.code(
+        CHOOSE_CONDA,
+        tty="3\nyes\n%s\n%s\n~/new forge/\n" % (miniforge, sh.tmp / "taken"),
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "|%s/new forge" % sh.home
+    # ~/miniforge3 exists: there is no proposal, "yes" asks again.
+    assert "Miniforge will be installed in" not in result.stderr
+    assert result.stderr.count("it must not exist yet") == 4
+    assert "%s is already a conda installation" % miniforge in result.stderr
+    assert "%s already exists" % (sh.tmp / "taken") in result.stderr
+
+
+def test_choose_conda_without_any_conda_offers_only_miniforge(sh):
+    result = sh.code(CHOOSE_CONDA, tty="yes\nyes\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "|%s/miniforge3" % sh.home
+    assert "No conda installation found." in result.stderr
+    assert "  1) Download and install a new Miniforge" in result.stderr
+    assert "Type yes to use 1 (Download and install a new Miniforge)" in (result.stderr)
+
+
+def test_choose_conda_assume_yes_takes_the_proposal(sh):
+    miniforge, _ = _two_condas(sh)
+    result = sh.code(CHOOSE_CONDA, env={"ASSUME_YES": "1"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("%s|" % miniforge)
+    assert "Conda: %s (--yes)" % miniforge in result.stderr
+
+
+def test_choose_conda_assume_yes_without_conda_picks_miniforge(sh):
+    result = sh.code(CHOOSE_CONDA, env={"ASSUME_YES": "1"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "|%s/miniforge3" % sh.home
+    assert "Conda: Miniforge in %s/miniforge3 (--yes)" % sh.home in result.stderr
+
+
+def test_choose_conda_options_answer_without_a_terminal(sh):
+    miniforge, anaconda = _two_condas(sh)
+    chosen = sh.code(CHOOSE_CONDA, env={"CONDA_ROOT_OPTION": anaconda})
+    assert chosen.returncode == 0, chosen.stderr
+    assert chosen.stdout.startswith("%s|" % anaconda)
+    forge = sh.code(
+        CHOOSE_CONDA,
+        env={"MINIFORGE_PREFIX_SET": "1", "MINIFORGE_PREFIX": sh.tmp / "mf"},
+    )
+    assert forge.returncode == 0, forge.stderr
+    assert forge.stdout == "|%s" % (sh.tmp / "mf")
+
+
+@pytest.mark.parametrize("kind", ["missing", "fsl"])
+def test_choose_conda_refuses_a_bad_conda_root(sh, kind):
+    root = sh.tmp / "root"
+    if kind == "fsl":
+        _fsl_with_conda(root)
+    result = sh.code(CHOOSE_CONDA, env={"CONDA_ROOT_OPTION": root})
+    assert result.returncode == 1
+    assert "--conda-root %s is not a usable conda installation" % root in (
+        result.stderr
+    )
+
+
+@pytest.mark.parametrize(
+    "tty, message",
+    [
+        (None, "No terminal available to choose the conda: rerun with --yes"),
+        ("", "No conda chosen (end of input)"),
+        ("3\n", "No Miniforge directory chosen (end of input)"),
+    ],
+)
+def test_choose_conda_without_an_answer_dies(sh, tty, message):
+    _two_condas(sh)
+    result = sh.code(CHOOSE_CONDA, tty=tty)
+    assert result.returncode == 1
+    assert message in result.stderr
+
+
+#: choose_install_dir "$ROOT", then "SWANE_INSTALL_DIR|SUMMARY_WARNINGS".
+CHOOSE_DIR = (
+    'choose_install_dir "$ROOT"; printf "%s|%s" "$SWANE_INSTALL_DIR" '
+    '"$SUMMARY_WARNINGS"'
+)
+
+
+def test_proposed_install_dir_is_the_roots_envs(sh):
+    root = make_conda_root(sh.tmp / "conda")
+    assert sh("proposed_install_dir", root).stdout == "%s/envs\n" % root
+    (root / "envs").mkdir()
+    assert sh("proposed_install_dir", root).stdout == "%s/envs\n" % root
+    # A Miniforge still to install.
+    missing = sh.tmp / "forge"
+    assert sh("proposed_install_dir", missing).stdout == "%s/envs\n" % missing
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write anywhere")
+@pytest.mark.parametrize("with_envs", [True, False])
+def test_proposed_install_dir_of_a_read_only_root_is_in_home(sh, with_envs):
+    root = make_conda_root(sh.tmp / "conda")
+    if with_envs:
+        (root / "envs").mkdir()
+        (root / "envs").chmod(0o555)
+    root.chmod(0o555)
+    try:
+        result = sh("proposed_install_dir", root)
+    finally:
+        root.chmod(0o755)
+        if with_envs:
+            (root / "envs").chmod(0o755)
+    assert result.stdout == "%s/.conda/envs\n" % sh.home
+
+
+def test_proposed_install_dir_keeps_the_previous_runs_directory(sh):
+    root = make_conda_root(sh.tmp / "conda")
+    env = _make_env(sh.tmp / "my envs" / "swane-env")
+    _write_pinned_launcher(sh, root, env)
+    assert sh("proposed_install_dir", root).stdout == "%s\n" % (sh.tmp / "my envs")
+
+
+@pytest.mark.parametrize("case", ["other_conda", "env_gone", "foreign"])
+def test_proposed_install_dir_ignores_what_is_not_a_previous_choice(sh, case):
+    root = make_conda_root(sh.tmp / "conda")
+    env = sh.tmp / "my envs" / "swane-env"
+    if case != "env_gone":
+        _make_env(env)
+    _write_pinned_launcher(
+        sh,
+        sh.tmp / "other conda" if case == "other_conda" else root,
+        env,
+        marker=case != "foreign",
+    )
+    assert sh("proposed_install_dir", root).stdout == "%s/envs\n" % root
+
+
+def test_choose_install_dir_yes_takes_the_proposal(sh):
+    root = make_conda_root(sh.tmp / "conda")
+    result = sh.code(CHOOSE_DIR, env={"ROOT": root}, tty="yes\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s/envs|" % root
+    assert (
+        "The SWANe environments (swane-env, swane-fsl) will be installed in: "
+        "%s/envs" % root
+    ) in result.stderr
+    assert "Type yes to continue, or another directory: " in result.stderr
+
+
+def test_choose_install_dir_typed_directory(sh):
+    """Empty answers and a file are refused; the directory is made absolute."""
+    root = make_conda_root(sh.tmp / "conda")
+    (sh.tmp / "a file").write_text("")
+    result = sh.code(CHOOSE_DIR, env={"ROOT": root}, tty="\na file\nmy envs//\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s/my envs|" % sh.tmp
+    assert "%s/a file is not a directory" % sh.tmp in result.stderr
+
+
+def test_choose_install_dir_assume_yes_and_option_need_no_terminal(sh):
+    root = make_conda_root(sh.tmp / "conda")
+    yes = sh.code(CHOOSE_DIR, env={"ROOT": root, "ASSUME_YES": "1"})
+    assert yes.returncode == 0, yes.stderr
+    assert yes.stdout == "%s/envs|" % root
+    assert "SWANe environments directory: %s/envs (--yes)" % root in yes.stderr
+    option = sh.code(
+        CHOOSE_DIR, env={"ROOT": root, "SWANE_INSTALL_DIR": sh.tmp / "mine"}
+    )
+    assert option.returncode == 0, option.stderr
+    assert option.stdout == "%s|" % (sh.tmp / "mine")
+
+
+@pytest.mark.parametrize(
+    "tty, message",
+    [
+        (None, "No terminal available to choose where the SWANe environments go"),
+        ("", "No directory chosen for the SWANe environments (end of input)"),
+    ],
+)
+def test_choose_install_dir_without_an_answer_dies(sh, tty, message):
+    root = make_conda_root(sh.tmp / "conda")
+    result = sh.code(CHOOSE_DIR, env={"ROOT": root}, tty=tty)
+    assert result.returncode == 1
+    assert message in result.stderr
+
+
+def test_choose_install_dir_same_directory_as_before_is_quiet(sh):
+    root = make_conda_root(sh.tmp / "conda")
+    env = _make_env(sh.tmp / "old" / "swane-env")
+    _write_pinned_launcher(sh, root, env)
+    result = sh.code(CHOOSE_DIR, env={"ROOT": root}, tty="yes\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "%s|" % (sh.tmp / "old")
+    assert "WARNING" not in result.stderr
+
+
+@pytest.mark.parametrize("old_root", ["same", "other"])
+def test_choose_install_dir_leaves_the_previous_env_elsewhere(sh, old_root):
+    """A swane-env of a previous run, in this conda or another one, is never
+    reused from another directory: a warning names it."""
+    root = make_conda_root(sh.tmp / "conda")
+    pinned_root = root if old_root == "same" else sh.tmp / "old conda"
+    env = _make_env(pinned_root / "envs" / "swane-env")
+    _write_pinned_launcher(sh, pinned_root, env)
+    result = sh.code(CHOOSE_DIR, env={"ROOT": root}, tty="%s\n" % (sh.tmp / "new"))
+    assert result.returncode == 0, result.stderr
+    installed, warnings = result.stdout.split("|", 1)
+    assert installed == str(sh.tmp / "new")
+    assert "remains in %s, untouched" % env in warnings
+    assert "now the one the launcher starts" in warnings
 
 
 # ---------------------------------------------------------------------------
@@ -1691,15 +2035,6 @@ def _write_pinned_launcher(sh, root, env_prefix, marker=True):
     return launcher
 
 
-def _resolve(sh, root, **env):
-    """Run resolve_install_dir; print SWANE_INSTALL_DIR and the warnings."""
-    return sh.code(
-        'resolve_install_dir "$ROOT"; printf "%s|%s" "$SWANE_INSTALL_DIR" '
-        '"$SUMMARY_WARNINGS"',
-        env=dict({"ROOT": root}, **env),
-    )
-
-
 def _make_env(prefix):
     (prefix / "conda-meta").mkdir(parents=True)
     return prefix
@@ -1719,65 +2054,6 @@ def test_launcher_pin_ignores_a_foreign_launcher_and_missing_pins(sh):
     assert sh.code("launcher_pin SWANE_ENV_PREFIX").returncode == 1
     _write_pinned_launcher(sh, sh.tmp / "root", sh.tmp / "env")
     assert sh.code("launcher_pin SWANE_NOPE").returncode == 1
-
-
-def test_resolve_install_dir_keeps_the_previous_choice(sh):
-    root = sh.tmp / "conda"
-    env = _make_env(sh.tmp / "my envs" / "swane-env")
-    _write_pinned_launcher(sh, root, env)
-    result = _resolve(sh, root)
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == "%s|" % (sh.tmp / "my envs")
-    assert "Keeping the install directory of the previous run" in result.stderr
-
-
-@pytest.mark.parametrize(
-    "case", ["no_launcher", "default_envs", "other_conda", "env_gone", "foreign"]
-)
-def test_resolve_install_dir_ignores_what_is_not_a_previous_choice(sh, case):
-    root = sh.tmp / "conda"
-    env = sh.tmp / "my envs" / "swane-env"
-    if case == "default_envs":
-        env = root / "envs" / "swane-env"
-    if case != "env_gone":
-        _make_env(env)
-    if case != "no_launcher":
-        _write_pinned_launcher(
-            sh,
-            sh.tmp / "other conda" if case == "other_conda" else root,
-            env,
-            marker=case != "foreign",
-        )
-    root.mkdir(exist_ok=True)
-    result = _resolve(sh, root)
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == "|"
-    assert result.stderr == ""
-
-
-def test_resolve_install_dir_explicit_option_wins_and_same_dir_is_quiet(sh):
-    root = sh.tmp / "conda"
-    root.mkdir()
-    env = _make_env(sh.tmp / "old" / "swane-env")
-    _write_pinned_launcher(sh, root, env)
-    same = _resolve(sh, root, SWANE_INSTALL_DIR=sh.tmp / "old")
-    assert same.stdout == "%s|" % (sh.tmp / "old")
-    assert same.stderr == ""
-    other = _resolve(sh, root, SWANE_INSTALL_DIR=sh.tmp / "new")
-    assert other.returncode == 0, other.stderr
-    installed, warnings = other.stdout.split("|", 1)
-    assert installed == str(sh.tmp / "new")
-    assert "remains in %s, untouched" % env in warnings
-    assert "now the one the launcher starts" in warnings
-
-
-def test_resolve_install_dir_default_envs_old_env_warns_on_new_dir(sh):
-    """Moving from conda's own directory to --install-dir leaves the old env."""
-    root = sh.tmp / "conda"
-    env = _make_env(root / "envs" / "swane-env")
-    _write_pinned_launcher(sh, root, env)
-    result = _resolve(sh, root, SWANE_INSTALL_DIR=sh.tmp / "new")
-    assert "remains in %s, untouched" % env in result.stdout
 
 
 def test_ensure_swane_env_creates_in_install_dir(sh, stub):
@@ -2023,6 +2299,14 @@ def test_existing_env_with_everything_on_macos_arm_installs_nothing(sh, stub):
     assert conda.conda_calls("install") == []
 
 
+def _remove_hint(conda, prefix):
+    """The removal command an unusable swane-env error ends with."""
+    return "\n    %s env remove -y -p %s" % (
+        bash_quote(str(conda.root / "bin" / "conda")),
+        bash_quote(str(prefix)),
+    )
+
+
 def test_existing_env_wrong_python_dies(sh, stub):
     stub.platform("Linux", "x86_64")
     conda = FakeConda(sh, stub)
@@ -2031,9 +2315,10 @@ def test_existing_env_wrong_python_dies(sh, stub):
     conda.set_envs(prefix)
     result = _ensure(sh, conda)
     assert result.returncode == 1
-    assert "swane-env uses Python 3.11; remove it or rename it, then rerun" in (
-        result.stderr
-    )
+    assert (
+        "swane-env in %s uses Python 3.11; remove it or rename it, then rerun" % prefix
+    ) in result.stderr
+    assert _remove_hint(conda, prefix) in result.stderr
     assert conda.conda_calls("create") == []
     assert conda.conda_calls("install") == []
     assert stub.calls(str(python)) == ["%s -c %s" % (python, VERSION_CODE)]
@@ -2048,6 +2333,7 @@ def test_existing_env_without_python_dies(sh, stub):
     result = _ensure(sh, conda)
     assert result.returncode == 1
     assert "has no Python" in result.stderr
+    assert _remove_hint(conda, prefix) in result.stderr
 
 
 def test_swane_spec_is_passed_to_pip(sh, stub):
@@ -2061,6 +2347,69 @@ def test_swane_spec_is_passed_to_pip(sh, stub):
     assert stub.calls(str(python))[-2] == (
         "%s -m pip install -U /path/to/checkout" % python
     )
+
+
+GIT_SPEC = "git+https://github.com/LICE-dev/swane.git@dev"
+
+
+@pytest.mark.parametrize(
+    "spec, vcs",
+    [
+        (GIT_SPEC, True),
+        ("swane @ " + GIT_SPEC, True),
+        ("swane@git+ssh://git@github.com/LICE-dev/swane.git", True),
+        ("hg+https://example.org/swane", True),
+        ("svn+https://example.org/swane", True),
+        ("bzr+https://example.org/swane", True),
+        ("swane", False),
+        ("swane==0.2.5", False),
+        ("/path/to/swane", False),
+        ("/path/to/swane-0.2.5-py3-none-any.whl", False),
+        ("https://example.org/swane-0.2.5.tar.gz", False),
+    ],
+)
+def test_is_vcs_spec(sh, spec, vcs):
+    result = sh.code('is_vcs_spec "$SPEC"', env={"SPEC": spec})
+    assert result.returncode == (0 if vcs else 1)
+
+
+@pytest.mark.parametrize("spec", [GIT_SPEC, "swane @ " + GIT_SPEC])
+def test_vcs_spec_is_reinstalled_without_deps(sh, stub, spec):
+    """pip keeps a same-version SWANe: a VCS URL is force-reinstalled alone."""
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    python = conda.add_env(prefix, dot=True)
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda, spec=spec)
+    assert result.returncode == 0, result.stderr
+    assert stub.calls(str(python))[-3:] == [
+        "%s -m pip install -U %s" % (python, spec),
+        "%s -m pip install --force-reinstall --no-deps %s" % (python, spec),
+        "%s %s" % (python, SWANE_CHECK_CALL),
+    ]
+
+
+def test_vcs_reinstall_failure_dies(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    stub.script(
+        prefix / "bin" / "python",
+        "python",
+        'case "$*" in\n'
+        '    "-c "*) echo 3.12 ;;\n'
+        '    "-m pip install -U "*) exit 0 ;;\n'
+        "    *) exit 1 ;;\n"
+        "esac",
+    )
+    make_executable(prefix / "bin" / "dot", "exit 0")
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda, spec=GIT_SPEC)
+    assert result.returncode == 1
+    assert (
+        "pip install --force-reinstall --no-deps %s failed in swane-env" % GIT_SPEC
+    ) in result.stderr
 
 
 MISSING_FSL_CONDA = "ModuleNotFoundError: No module named 'swane.utils.fsl_conda'"
@@ -4177,8 +4526,8 @@ class InstallWorld:
 
     A conda root (found through ``CONDA_EXE``) without ``swane-env``. Its
     ``bin/conda`` (logged as ``conda``) prints :attr:`envs_json` for ``env
-    list --json``; ``create -n swane-env`` makes :attr:`env` (with
-    ``bin/dot`` when graphviz is requested) and ``create -n swane-fsl``
+    list --json``; ``create -p .../swane-env`` makes :attr:`env` (with
+    ``bin/dot`` when graphviz is requested) and ``create -p .../swane-fsl``
     makes :attr:`fsl_prefix` (filled as an FSL solve would, see
     :func:`_fake_fsl_solver`, as is the prefix of ``install -p``), each then
     listed. The env's ``bin/python``
@@ -4233,15 +4582,15 @@ class InstallWorld:
             "    env) cat %(json)s ;;\n"
             '    create) echo "conda create output"\n'
             '        case " $* " in\n'
-            '            *" -n swane-env "*)\n'
-            "                mkdir -p %(env_bin)s\n"
+            '            *"/swane-env "*)\n'
+            "                mkdir -p %(env_bin)s %(env_meta)s\n"
             "                cp %(template)s %(env_bin)s/python\n"
             '                case " $* " in\n'
             '                    *" graphviz "*) printf "#!/bin/sh\\n" > %(env_bin)s/dot\n'
             "                        chmod 755 %(env_bin)s/dot ;;\n"
             "                esac\n"
             "                printf '%%s' %(with_env)s > %(json)s ;;\n"
-            '            *" -n swane-fsl "*)\n'
+            '            *"/swane-fsl "*)\n'
             "                mkdir -p %(fsl_bin)s\n"
             "                %(fill)s %(fsl)s\n"
             "                printf '%%s' %(with_fsl)s > %(json)s ;;\n"
@@ -4255,6 +4604,7 @@ class InstallWorld:
             % {
                 "json": bash_quote(str(self.envs_json)),
                 "env_bin": bash_quote(str(self.env / "bin")),
+                "env_meta": bash_quote(str(self.env / "conda-meta")),
                 "template": bash_quote(str(template)),
                 "with_env": bash_quote(with_env),
                 "fsl_bin": bash_quote(str(self.fsl_prefix / "bin")),
@@ -4312,25 +4662,22 @@ def test_main_end_to_end_with_stubs(sh, stub):
         "conda --version",  # the conda found (warn_old_conda)
         "sudo %s" % APT_UPDATE,  # install_linux_packages
         "sudo locale-gen en_US.UTF-8",  # ensure_locale
-        "conda create -y -n swane-env",  # ensure_swane_env
+        "conda create -y -p %s" % world.env,  # ensure_swane_env
         "env-python -m pip install -U /x",
         "env-python %s" % SWANE_CHECK_CALL,
         "env-python -I -c from swane.utils.fsl_conda import min_fsl_version",
-        "conda create -y -n swane-fsl",  # fsl_step
+        "conda create -y -p %s" % world.fsl_prefix,  # fsl_step
         "createFSLWrapper " + " ".join(FSL_PROGRAMS),
         "mktemp",  # write_launcher
         "basename",  # ensure_local_bin_on_path
     ]
     indexes = [_first_index(calls, step) for step in steps]
     assert indexes == sorted(indexes), calls
+    # The environments directory is chosen: conda's list is never read.
     assert world.conda_calls() == [
         "conda --version",
-        "conda env list --json",
-        "conda create -y -n swane-env %s python=3.12 graphviz" % CHANNELS,
-        "conda env list --json",
-        "conda env list --json",
-        "conda create -y -n swane-fsl %s %s" % (FSL_CHANNELS, FSL_SPECS),
-        "conda env list --json",
+        "conda create -y -p %s %s python=3.12 graphviz" % (world.env, CHANNELS),
+        "conda create -y -p %s %s %s" % (world.fsl_prefix, FSL_CHANNELS, FSL_SPECS),
     ]
     assert "defaults" not in stub.calls_log.read_text()
     # The summary is the only output on stdout.
@@ -4376,7 +4723,7 @@ def test_main_rerun_reports_existing_fsl(sh, stub):
     result = world.run(*E2E_ARGS)
     assert result.returncode == 0, result.stderr
     # swane-env is found (graphviz already in it), the hook's FSL is reused.
-    assert world.conda_calls() == ["conda --version", "conda env list --json"]
+    assert world.conda_calls() == ["conda --version"]
     assert not any(" create " in call for call in stub.calls())
     assert "env-python -m pip install -U /x" in stub.calls()
     assert result.stdout.splitlines() == [
@@ -4516,7 +4863,8 @@ def test_main_under_rosetta_dies_before_downloading(sh, stub):
 def test_main_declined_system_setup_warns_in_the_summary(sh, stub):
     """Answering "n" at the one sudo question, the install goes on."""
     world = InstallWorld(sh, stub)
-    sh.tty_path.write_text("n\n")
+    # The conda and the environments directory first, then the sudo question.
+    sh.tty_path.write_text("yes\nyes\nn\n")
     result = world.run("--no-fsl", "--swane-spec", "/x")
     assert result.returncode == 0, result.stderr
     assert result.stderr.count(SYSTEM_QUESTION) == 1
@@ -4532,3 +4880,65 @@ def test_main_declined_system_setup_warns_in_the_summary(sh, stub):
         "Open a new terminal and run: swane",
         "Or run now: %s" % world.launcher,
     ]
+
+
+def test_main_asks_both_choices_before_changing_anything(sh, stub):
+    """Both choices come first: with no answer left for the sudo question the
+    run stops there, having changed nothing."""
+    world = InstallWorld(sh, stub)
+    mine = sh.tmp / "my envs"
+    sh.tty_path.write_text("1\n%s\n" % mine)
+    result = world.run("--no-fsl", "--swane-spec", "/x")
+    assert result.returncode == 1
+    stderr = result.stderr
+    assert (
+        stderr.index("Conda: %s" % world.root)
+        < stderr.index("SWANe environments directory: %s" % mine)
+        < stderr.index(SYSTEM_QUESTION)
+    )
+    assert stub.calls("conda") == ["conda --version"]
+    assert stub.calls("sudo") == []
+    assert not mine.exists()
+    assert not world.launcher.exists()
+
+
+def test_main_typed_directory_holds_swane_env(sh, stub):
+    world = InstallWorld(sh, stub)
+    mine = sh.tmp / "my envs"
+    sh.tty_path.write_text("yes\n%s\nyes\n" % mine)
+    result = world.run("--no-fsl", "--swane-spec", "/x")
+    # The fake conda creates swane-env where it always does: what matters is
+    # the prefix passed to it.
+    assert "conda create -y -p %s/swane-env %s python=3.12 graphviz" % (
+        mine,
+        CHANNELS,
+    ) in stub.calls("conda"), result.stderr
+
+
+def test_main_never_reuses_the_swane_env_of_another_conda(sh, stub):
+    """The reported bug: conda lists the swane-env of an old conda install
+    (all share ~/.conda/environments.txt); the chosen conda gets its own."""
+    world = InstallWorld(sh, stub)
+    old = sh.tmp / "old conda" / "envs" / "swane-env"
+    old_python = _env_python(stub, old / "bin" / "python", "old-python")
+    (old / "conda-meta").mkdir()
+    world.envs_json.write_text(json.dumps({"envs": [str(world.root), str(old)]}))
+    result = world.run(*E2E_ARGS)
+    assert result.returncode == 0, result.stderr
+    assert stub.calls(str(old_python)) == []
+    assert stub.calls("old-python") == []
+    assert "conda create -y -p %s %s python=3.12 graphviz" % (
+        world.env,
+        CHANNELS,
+    ) in stub.calls("conda")
+    assert "SWANe installer: env %s" % world.env in result.stdout.splitlines()
+
+
+def test_main_conda_root_option_picks_that_conda(sh, stub):
+    world = InstallWorld(sh, stub)
+    other = make_conda_root(sh.home / "miniforge3")
+    result = world.run(*E2E_ARGS, "--conda-root", world.root)
+    assert result.returncode == 0, result.stderr
+    assert "Conda: %s (--conda-root)" % world.root in result.stderr
+    assert result.stdout.splitlines()[0] == "SWANe installer: conda %s" % world.root
+    assert not (other / "envs").exists()
