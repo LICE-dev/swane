@@ -107,7 +107,7 @@ Options can be passed after `bash -s --`, for example `curl -fsSL <url> | bash -
 | `--conda-root DIR` | Use the conda installed in `DIR`, without asking. |
 | `--accept-fsl-license` | Accept the FSL licence without prompting. |
 | `--no-fsl` | Do not install or configure FSL (an FSL already wired into `swane-env` is kept). |
-| `--swane-spec SPEC` | What to install as SWANe, passed verbatim to `pip install -U` (default: `swane`, the latest release on PyPI). SWANe 0.2.5 or newer is required. Accepted forms: a PyPI version (`swane==0.2.5`), a local checkout (`/path/to/swane`), a git URL (`git+https://github.com/LICE-dev/swane.git@<branch>`), a wheel file (`/path/to/swane-0.2.5-py3-none-any.whl`). |
+| `--swane-spec SPEC` | What to install as SWANe, passed verbatim to `pip install -U` (default: `swane`, the latest release on PyPI). SWANe 0.2.5 or newer is required. Accepted forms: a PyPI version (`swane==0.2.5`), a local checkout (`/path/to/swane`), a git URL (`git+https://github.com/LICE-dev/swane.git@<branch>`), a wheel file (`/path/to/swane-0.2.5-py3-none-any.whl`). A VCS URL (`git+...`) is then reinstalled with `pip install --force-reinstall --no-deps`, so a rerun installs the branch's latest commit even when the SWANe version is unchanged. |
 | `--miniforge-prefix DIR` | Install Miniforge into `DIR` (reused if it is already there) and use it, without asking; not together with `--conda-root`. Without it, choosing a new Miniforge at the prompt proposes `~/miniforge3`. |
 | `--install-dir DIR` | Directory for the conda environments the installer creates, without asking: `DIR/swane-env` and, when FSL is installed, `DIR/swane-fsl`. |
 | `-h`, `--help` | Show the help and exit. |

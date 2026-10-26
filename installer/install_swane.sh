@@ -1142,10 +1142,20 @@ env_remove_hint() {
         "$2" "$(shell_quote "$exe")" "$(shell_quote "$2")"
 }
 
+# is_vcs_spec SPEC: succeed if the pip SPEC is a VCS URL (git+, hg+, svn+,
+# bzr+), bare or as "name @ URL".
+is_vcs_spec() {
+    case "$1" in
+        git+* | hg+* | svn+* | bzr+* | *@*git+* | *@*hg+* | *@*svn+* | *@*bzr+*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # ensure_swane_env ROOT SWANE_SPEC: create swane-env in the conda ROOT (Python
 # SWANE_ENV_PYTHON plus swane_env_packages), or update an existing one (same
 # Python required; swane_env_packages installed into it), then
-# "pip install -U SWANE_SPEC" into it, and die if that SWANe is older than
+# "pip install -U SWANE_SPEC" into it (plus "pip install --force-reinstall
+# --no-deps SWANE_SPEC" for a VCS URL), and die if that SWANe is older than
 # SWANE_MIN_VERSION (it has no swane.utils.fsl_conda). Sets SWANE_ENV_PREFIX
 # and prints nothing on stdout (conda and pip output goes to stderr). Call it
 # directly, not inside $(...).
@@ -1193,6 +1203,14 @@ ensure_swane_env() {
     log_info "Installing $spec into $SWANE_ENV_NAME"
     PYTHONNOUSERSITE=1 "$prefix/bin/python" -m pip install -U "$spec" </dev/null >&2 ||
         die "pip install -U $spec failed in $SWANE_ENV_NAME"
+    # pip keeps an installed SWANe whose version equals the one a VCS URL
+    # gives, so new commits on a branch would never be installed: reinstall
+    # SWANe alone from that URL (its dependencies were handled just above).
+    if is_vcs_spec "$spec"; then
+        log_info "Reinstalling SWANe from $spec"
+        PYTHONNOUSERSITE=1 "$prefix/bin/python" -m pip install --force-reinstall --no-deps "$spec" </dev/null >&2 ||
+            die "pip install --force-reinstall --no-deps $spec failed in $SWANE_ENV_NAME"
+    fi
     # Isolated mode (-I): a SWANe checkout in the current directory must not
     # stand in for the installed one. "Too old" only when the module is
     # missing or the version is below SWANE_MIN_VERSION; any other failure
@@ -2035,6 +2053,10 @@ Options:
                              a PyPI version   swane==0.2.5
                              a local checkout /path/to/swane
                              a git URL        git+https://github.com/LICE-dev/swane.git@<branch>
+                           A VCS URL (git+...) is then reinstalled with
+                           "--force-reinstall --no-deps", so a rerun installs
+                           the branch's latest commit even when the SWANe
+                           version is unchanged.
                              a wheel file     /path/to/swane-0.2.5-py3-none-any.whl
   --conda-root DIR         Use the conda installed in DIR without asking.
   --miniforge-prefix DIR   Install Miniforge into DIR (reused if it is already

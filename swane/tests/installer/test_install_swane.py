@@ -81,6 +81,10 @@ def test_usage_explains_the_swane_spec_forms(sh):
     assert 'passed verbatim to "pip install -U"' in text
     assert "(default: swane, the latest release on PyPI)" in text
     assert "SWANe 0.2.5 or newer is required" in text
+    assert (
+        'A VCS URL (git+...) is then reinstalled with "--force-reinstall --no-deps"'
+        in text
+    )
     for example in (
         "a PyPI version swane==0.2.5",
         "a local checkout /path/to/swane",
@@ -2343,6 +2347,69 @@ def test_swane_spec_is_passed_to_pip(sh, stub):
     assert stub.calls(str(python))[-2] == (
         "%s -m pip install -U /path/to/checkout" % python
     )
+
+
+GIT_SPEC = "git+https://github.com/LICE-dev/swane.git@dev"
+
+
+@pytest.mark.parametrize(
+    "spec, vcs",
+    [
+        (GIT_SPEC, True),
+        ("swane @ " + GIT_SPEC, True),
+        ("swane@git+ssh://git@github.com/LICE-dev/swane.git", True),
+        ("hg+https://example.org/swane", True),
+        ("svn+https://example.org/swane", True),
+        ("bzr+https://example.org/swane", True),
+        ("swane", False),
+        ("swane==0.2.5", False),
+        ("/path/to/swane", False),
+        ("/path/to/swane-0.2.5-py3-none-any.whl", False),
+        ("https://example.org/swane-0.2.5.tar.gz", False),
+    ],
+)
+def test_is_vcs_spec(sh, spec, vcs):
+    result = sh.code('is_vcs_spec "$SPEC"', env={"SPEC": spec})
+    assert result.returncode == (0 if vcs else 1)
+
+
+@pytest.mark.parametrize("spec", [GIT_SPEC, "swane @ " + GIT_SPEC])
+def test_vcs_spec_is_reinstalled_without_deps(sh, stub, spec):
+    """pip keeps a same-version SWANe: a VCS URL is force-reinstalled alone."""
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    python = conda.add_env(prefix, dot=True)
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda, spec=spec)
+    assert result.returncode == 0, result.stderr
+    assert stub.calls(str(python))[-3:] == [
+        "%s -m pip install -U %s" % (python, spec),
+        "%s -m pip install --force-reinstall --no-deps %s" % (python, spec),
+        "%s %s" % (python, SWANE_CHECK_CALL),
+    ]
+
+
+def test_vcs_reinstall_failure_dies(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    stub.script(
+        prefix / "bin" / "python",
+        "python",
+        'case "$*" in\n'
+        '    "-c "*) echo 3.12 ;;\n'
+        '    "-m pip install -U "*) exit 0 ;;\n'
+        "    *) exit 1 ;;\n"
+        "esac",
+    )
+    make_executable(prefix / "bin" / "dot", "exit 0")
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda, spec=GIT_SPEC)
+    assert result.returncode == 1
+    assert (
+        "pip install --force-reinstall --no-deps %s failed in swane-env" % GIT_SPEC
+    ) in result.stderr
 
 
 MISSING_FSL_CONDA = "ModuleNotFoundError: No module named 'swane.utils.fsl_conda'"
