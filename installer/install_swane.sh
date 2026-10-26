@@ -932,6 +932,17 @@ resolve_install_dir() {
     return 0
 }
 
+# env_remove_hint ROOT PREFIX: print, for an error message, a new line with
+# the command that removes the environment PREFIX with the conda of ROOT
+# (both quoted for the shell); print nothing if ROOT has no conda. Check first
+# that nothing else (e.g. an FSL install) uses PREFIX: the command deletes it.
+env_remove_hint() {
+    local exe
+    exe="$(conda_exe "$1")" || return 0
+    printf '\nIf nothing else uses %s, remove it with:\n    %s env remove -y -p %s' \
+        "$2" "$(shell_quote "$exe")" "$(shell_quote "$2")"
+}
+
 # ensure_swane_env ROOT SWANE_SPEC: create swane-env in the conda ROOT (Python
 # SWANE_ENV_PYTHON plus swane_env_packages), or update an existing one (same
 # Python required; swane_env_packages installed into it), then
@@ -951,11 +962,11 @@ ensure_swane_env() {
         0)
             log_info "Updating the existing $SWANE_ENV_NAME environment in $prefix"
             if [ ! -x "$prefix/bin/python" ]; then
-                die "$SWANE_ENV_NAME in $prefix has no Python; remove it or rename it, then rerun"
+                die "$SWANE_ENV_NAME in $prefix has no Python; remove it or rename it, then rerun$(env_remove_hint "$root" "$prefix")"
             fi
             version="$("$prefix/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])' </dev/null)" || version="unknown"
             if [ "$version" != "$SWANE_ENV_PYTHON" ]; then
-                die "$SWANE_ENV_NAME uses Python $version; remove it or rename it, then rerun"
+                die "$SWANE_ENV_NAME in $prefix uses Python $version; remove it or rename it, then rerun$(env_remove_hint "$root" "$prefix")"
             fi
             packages="$(swane_env_packages "$prefix")"
             if [ -n "$packages" ]; then

@@ -2023,6 +2023,14 @@ def test_existing_env_with_everything_on_macos_arm_installs_nothing(sh, stub):
     assert conda.conda_calls("install") == []
 
 
+def _remove_hint(conda, prefix):
+    """The removal command an unusable swane-env error ends with."""
+    return "\n    %s env remove -y -p %s" % (
+        bash_quote(str(conda.root / "bin" / "conda")),
+        bash_quote(str(prefix)),
+    )
+
+
 def test_existing_env_wrong_python_dies(sh, stub):
     stub.platform("Linux", "x86_64")
     conda = FakeConda(sh, stub)
@@ -2031,9 +2039,10 @@ def test_existing_env_wrong_python_dies(sh, stub):
     conda.set_envs(prefix)
     result = _ensure(sh, conda)
     assert result.returncode == 1
-    assert "swane-env uses Python 3.11; remove it or rename it, then rerun" in (
-        result.stderr
-    )
+    assert (
+        "swane-env in %s uses Python 3.11; remove it or rename it, then rerun" % prefix
+    ) in result.stderr
+    assert _remove_hint(conda, prefix) in result.stderr
     assert conda.conda_calls("create") == []
     assert conda.conda_calls("install") == []
     assert stub.calls(str(python)) == ["%s -c %s" % (python, VERSION_CODE)]
@@ -2048,6 +2057,7 @@ def test_existing_env_without_python_dies(sh, stub):
     result = _ensure(sh, conda)
     assert result.returncode == 1
     assert "has no Python" in result.stderr
+    assert _remove_hint(conda, prefix) in result.stderr
 
 
 def test_swane_spec_is_passed_to_pip(sh, stub):
