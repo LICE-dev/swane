@@ -29,7 +29,7 @@ def stub(tmp_path) -> Stubs:
 def sh(tmp_path, stub, tools_dir) -> Runner:
     """Runner of installer functions in an isolated bash.
 
-    ``sh("find_conda", env={...}, tty="y\\n")`` returns a
+    ``sh("list_conda_roots", env={...}, tty="y\\n")`` returns a
     ``CompletedProcess``; ``sh.code("snippet")`` runs arbitrary bash after
     sourcing. ``sh.home`` is the ``HOME`` of every call.
     """

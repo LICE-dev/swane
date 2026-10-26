@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # SWANe installer for Linux and macOS.
 #
-# Builds a working SWANe environment: conda (Miniforge when no conda is
-# found), a Python 3.12 "swane-env", graphviz, TensorFlow on macOS Intel,
+# Builds a working SWANe environment: the conda the user chooses (an
+# installed one or a new Miniforge), a Python 3.12 "swane-env" in the
+# directory the user chooses, graphviz, TensorFlow on macOS Intel,
 # "pip install swane", an optional minimal FSL, the Linux system packages
 # 3D Slicer needs and a "swane" launcher in ~/.local/bin.
 #
@@ -43,9 +44,14 @@ ACCEPT_FSL_LICENSE="${ACCEPT_FSL_LICENSE:-0}"
 NO_FSL="${NO_FSL:-0}"
 SWANE_SPEC="${SWANE_SPEC:-swane}"
 MINIFORGE_PREFIX="${MINIFORGE_PREFIX:-$HOME/miniforge3}"
+# 1 when --miniforge-prefix was given: Miniforge is chosen without asking.
+MINIFORGE_PREFIX_SET="${MINIFORGE_PREFIX_SET:-0}"
+# The conda root given with --conda-root (empty: choose_conda asks).
+CONDA_ROOT_OPTION="${CONDA_ROOT_OPTION:-}"
 # Directory that holds the swane-env and swane-fsl environments
-# (INSTALL_DIR/swane-env, INSTALL_DIR/swane-fsl); empty means conda's own
-# environments directory.
+# (INSTALL_DIR/swane-env, INSTALL_DIR/swane-fsl). Set by --install-dir or by
+# choose_install_dir; empty only before that choice (functions called on
+# their own then fall back to conda's own environments directory).
 SWANE_INSTALL_DIR="${SWANE_INSTALL_DIR:-}"
 
 # System-wide conda roots probed after the user's own (space-separated;
@@ -309,43 +315,188 @@ is_conda_root() {
     return 0
 }
 
-# find_conda: print the first usable conda root among $CONDA_EXE, "conda" on
-# PATH, the usual per-user roots, MINIFORGE_PREFIX and
-# SWANE_SYSTEM_CONDA_ROOTS; return 1 if there is none. A shell started by
-# "curl | bash" has not read the user's rc files, so PATH alone is not enough.
-find_conda() {
-    local candidate conda_path root
+# list_conda_roots: print, one per line, every usable conda root among the
+# one the launcher of a previous run pins, $CONDA_EXE, "conda" on PATH, the
+# usual per-user roots, MINIFORGE_PREFIX and SWANE_SYSTEM_CONDA_ROOTS, in
+# that order, each once (compared with symlinks resolved); return 1 if there
+# is none. A shell started by "curl | bash" has not read the user's rc files,
+# so PATH alone is not enough.
+list_conda_roots() {
+    local candidates="" candidate conda_path root seen="
+" physical found=1
+    candidates="$(launcher_pin SWANE_CONDA_ROOT)" || candidates=""
     if [ -n "${CONDA_EXE:-}" ]; then
-        candidate="$(dirname -- "$(dirname -- "$CONDA_EXE")")"
-        if is_conda_root "$candidate"; then
-            printf '%s\n' "$candidate"
-            return 0
-        fi
+        candidates="$candidates
+$(dirname -- "$(dirname -- "$CONDA_EXE")")"
     fi
     conda_path="$(command -v conda 2>/dev/null || true)"
     case "$conda_path" in
-        */condabin/conda) candidate="${conda_path%/condabin/conda}" ;;
-        */bin/conda) candidate="${conda_path%/bin/conda}" ;;
-        *) candidate="" ;;
+        */condabin/conda) candidates="$candidates
+${conda_path%/condabin/conda}" ;;
+        */bin/conda) candidates="$candidates
+${conda_path%/bin/conda}" ;;
     esac
-    if [ -n "$candidate" ] && is_conda_root "$candidate"; then
-        printf '%s\n' "$candidate"
-        return 0
-    fi
     for candidate in "$HOME/miniforge3" "$HOME/miniconda3" "$HOME/anaconda3" "$MINIFORGE_PREFIX"; do
-        if is_conda_root "$candidate"; then
-            printf '%s\n' "$candidate"
-            return 0
-        fi
+        candidates="$candidates
+$candidate"
     done
     # Word splitting is intended: the variable is a space-separated list.
     for root in $SWANE_SYSTEM_CONDA_ROOTS; do
-        if is_conda_root "$root"; then
-            printf '%s\n' "$root"
+        candidates="$candidates
+$root"
+    done
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        physical="$(physical_dir "$candidate")"
+        case "$seen" in
+            *"
+$physical
+"*) continue ;;
+        esac
+        seen="$seen$physical
+"
+        if is_conda_root "$candidate"; then
+            printf '%s\n' "$candidate"
+            found=0
+        fi
+    done <<EOF
+$candidates
+EOF
+    return "$found"
+}
+
+# Set by choose_conda: the conda root to use, or empty when Miniforge is to be
+# installed into MINIFORGE_PREFIX.
+CHOSEN_CONDA_ROOT=""
+
+# read_choice VAR PROMPT NO_TTY_ERROR EOF_ERROR: read_tty VAR PROMPT, dying
+# with NO_TTY_ERROR without a terminal and with EOF_ERROR at end of input.
+read_choice() {
+    local status=0
+    read_tty "$1" "$2" || status=$?
+    case "$status" in
+        1) die "$3" ;;
+        2) die "$4" ;;
+    esac
+    return 0
+}
+
+# choose_conda: set CHOSEN_CONDA_ROOT. --conda-root and --miniforge-prefix
+# answer without asking; --yes takes the proposal (the first of
+# list_conda_roots, or Miniforge when there is none). Otherwise the user
+# picks, on the terminal, one of the conda roots found or a new Miniforge
+# (choose_miniforge_prefix then asks where). Call it directly, not inside
+# $(...).
+choose_conda() {
+    local roots count=0 root answer index proposal
+    CHOSEN_CONDA_ROOT=""
+    if [ -n "$CONDA_ROOT_OPTION" ]; then
+        is_conda_root "$CONDA_ROOT_OPTION" ||
+            die "--conda-root $CONDA_ROOT_OPTION is not a usable conda installation (it needs etc/profile.d/conda.sh and must not be an FSL install)"
+        CHOSEN_CONDA_ROOT="$CONDA_ROOT_OPTION"
+        log_info "Conda: $CHOSEN_CONDA_ROOT (--conda-root)"
+        return 0
+    fi
+    if [ "$MINIFORGE_PREFIX_SET" = "1" ]; then
+        log_info "Conda: Miniforge in $MINIFORGE_PREFIX (--miniforge-prefix)"
+        return 0
+    fi
+    roots="$(list_conda_roots)" || roots=""
+    if [ -n "$roots" ]; then
+        count="$(printf '%s\n' "$roots" | wc -l | tr -d ' ')"
+        proposal="${roots%%
+*}"
+    else
+        proposal="Download and install a new Miniforge"
+    fi
+    if [ "$ASSUME_YES" = "1" ]; then
+        CHOSEN_CONDA_ROOT="${roots%%
+*}"
+        log_info "Conda: ${CHOSEN_CONDA_ROOT:-Miniforge in $MINIFORGE_PREFIX} (--yes)"
+        return 0
+    fi
+    if [ "$count" = "0" ]; then
+        log_info "No conda installation found. The choices are:"
+    else
+        log_info "Conda installations found. The choices are:"
+    fi
+    index=0
+    while IFS= read -r root; do
+        [ -n "$root" ] || continue
+        index=$((index + 1))
+        printf '  %d) %s\n' "$index" "$root" >&2
+    done <<EOF
+$roots
+EOF
+    printf '  %d) Download and install a new Miniforge\n' "$((count + 1))" >&2
+    while :; do
+        read_choice answer "Type yes to use 1 ($proposal), or the number of another choice: " \
+            "No terminal available to choose the conda: rerun with --yes, --conda-root DIR or --miniforge-prefix DIR" \
+            "No conda chosen (end of input): rerun the installer and type yes or a number, or rerun with --yes, --conda-root DIR or --miniforge-prefix DIR"
+        case "$answer" in
+            [yY] | [yY][eE][sS]) index=1 ;;
+            *[!0-9]* | "") index=0 ;;
+            *)
+                # Leading zeros dropped: "08" is not an octal error.
+                index="$(printf '%s\n' "$answer" | sed 's/^0*//')"
+                # Very long numbers are never a valid choice.
+                [ "${#index}" -le 4 ] || index=0
+                ;;
+        esac
+        if [ -n "$index" ] && [ "$index" -ge 1 ] && [ "$index" -le "$count" ]; then
+            CHOSEN_CONDA_ROOT="$(printf '%s\n' "$roots" | sed -n "${index}p")"
+            log_info "Conda: $CHOSEN_CONDA_ROOT"
             return 0
         fi
+        if [ "$index" = "$((count + 1))" ]; then
+            choose_miniforge_prefix
+            return 0
+        fi
+        log_info "Please type yes or a number from 1 to $((count + 1))."
     done
-    return 1
+}
+
+# choose_miniforge_prefix: ask on the terminal where Miniforge goes and set
+# MINIFORGE_PREFIX. The proposal is MINIFORGE_PREFIX when it does not exist
+# yet; the answer must be a directory that does not exist (an existing conda
+# is chosen from the list of choose_conda instead).
+choose_miniforge_prefix() {
+    local answer dir prompt
+    while :; do
+        if [ -e "$MINIFORGE_PREFIX" ] || [ -L "$MINIFORGE_PREFIX" ]; then
+            prompt="Type the directory to install Miniforge into (it must not exist yet): "
+        else
+            log_info "Miniforge will be installed in: $MINIFORGE_PREFIX"
+            prompt="Type yes to continue, or another directory: "
+        fi
+        read_choice answer "$prompt" \
+            "No terminal available to choose where Miniforge goes: rerun with --miniforge-prefix DIR" \
+            "No Miniforge directory chosen (end of input): rerun the installer, or rerun with --miniforge-prefix DIR"
+        case "$answer" in
+            "")
+                continue
+                ;;
+            [yY] | [yY][eE][sS])
+                if [ ! -e "$MINIFORGE_PREFIX" ] && [ ! -L "$MINIFORGE_PREFIX" ]; then
+                    log_info "Conda: Miniforge in $MINIFORGE_PREFIX"
+                    return 0
+                fi
+                continue
+                ;;
+        esac
+        dir="$(normalize_dir "$answer")"
+        if [ -e "$dir" ] || [ -L "$dir" ]; then
+            if is_conda_root "$dir"; then
+                log_info "$dir is already a conda installation: rerun the installer and choose it from the list, or type another directory."
+            else
+                log_info "$dir already exists: type a directory that does not exist yet."
+            fi
+            continue
+        fi
+        MINIFORGE_PREFIX="$dir"
+        log_info "Conda: Miniforge in $MINIFORGE_PREFIX"
+        return 0
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -906,27 +1057,75 @@ launcher_pin() {
     printf '%s\n' "$line" | sed "s/'\\\\''/'/g"
 }
 
-# resolve_install_dir ROOT: decide SWANE_INSTALL_DIR against the swane-env a
-# previous run left (the one its launcher pins, when it is in the conda ROOT
-# of this run and still an environment). Without --install-dir the directory
-# that swane-env is in is kept, unless it is conda's own environments
-# directory; with --install-dir naming another place, the old swane-env stays
-# untouched and a warning (repeated in the summary) says the launcher now
-# points to the new one. Never fails. Call it directly, not inside $(...).
-resolve_install_dir() {
-    local root="$1" pinned_root pinned_env dir
-    pinned_root="$(launcher_pin SWANE_CONDA_ROOT)" || return 0
-    pinned_env="$(launcher_pin SWANE_ENV_PREFIX)" || return 0
-    [ "$(physical_dir "$pinned_root")" = "$(physical_dir "$root")" ] || return 0
-    [ "$(basename -- "$pinned_env")" = "$SWANE_ENV_NAME" ] || return 0
-    [ -d "$pinned_env/conda-meta" ] || return 0
-    dir="$(dirname -- "$pinned_env")"
-    if [ -z "$SWANE_INSTALL_DIR" ]; then
-        if [ "$(physical_dir "$dir")" != "$(physical_dir "$root")/envs" ]; then
-            SWANE_INSTALL_DIR="$dir"
-            log_info "Keeping the install directory of the previous run: $dir (--install-dir changes it)"
+# previous_env: print the swane-env the launcher of a previous run pins, when
+# it is still an environment (has conda-meta); return 1 otherwise.
+previous_env() {
+    local pinned_env
+    pinned_env="$(launcher_pin SWANE_ENV_PREFIX)" || return 1
+    [ "$(basename -- "$pinned_env")" = "$SWANE_ENV_NAME" ] || return 1
+    [ -d "$pinned_env/conda-meta" ] || return 1
+    printf '%s\n' "$pinned_env"
+}
+
+# proposed_install_dir ROOT: print the directory choose_install_dir proposes
+# for the conda ROOT (which may not exist yet: a Miniforge to install). The
+# directory of the previous run's swane-env when that run used ROOT too;
+# otherwise ROOT/envs when it can be written (or created), else
+# ~/.conda/envs, where conda itself puts environments of a root the user
+# cannot write.
+proposed_install_dir() {
+    local root="$1" pinned_root pinned_env
+    if pinned_env="$(previous_env)" && pinned_root="$(launcher_pin SWANE_CONDA_ROOT)" &&
+        [ "$(physical_dir "$pinned_root")" = "$(physical_dir "$root")" ]; then
+        dirname -- "$pinned_env"
+        return 0
+    fi
+    if [ -d "$root/envs" ]; then
+        [ -w "$root/envs" ] && printf '%s\n' "$root/envs" && return 0
+    elif [ ! -e "$root" ] || [ -w "$root" ]; then
+        printf '%s\n' "$root/envs"
+        return 0
+    fi
+    printf '%s\n' "$HOME/.conda/envs"
+}
+
+# choose_install_dir ROOT: set SWANE_INSTALL_DIR, where swane-env and
+# swane-fsl are looked for and created, for the conda ROOT. --install-dir
+# answers without asking and --yes takes the proposal (proposed_install_dir);
+# otherwise the user confirms the proposal or types another directory on the
+# terminal. A swane-env of a previous run left elsewhere stays untouched, with
+# a warning (repeated in the summary) that the launcher now starts the new
+# one. Call it directly, not inside $(...).
+choose_install_dir() {
+    local root="$1" proposal answer dir pinned_env
+    if [ -n "$SWANE_INSTALL_DIR" ]; then
+        log_info "SWANe environments directory: $SWANE_INSTALL_DIR (--install-dir)"
+    else
+        proposal="$(proposed_install_dir "$root")"
+        if [ "$ASSUME_YES" = "1" ]; then
+            SWANE_INSTALL_DIR="$proposal"
+            log_info "SWANe environments directory: $SWANE_INSTALL_DIR (--yes)"
         fi
-    elif [ "$(physical_dir "$dir")" != "$(physical_dir "$SWANE_INSTALL_DIR")" ]; then
+    fi
+    while [ -z "$SWANE_INSTALL_DIR" ]; do
+        log_info "The SWANe environments ($SWANE_ENV_NAME, $SWANE_FSL_ENV_NAME) will be installed in: $proposal"
+        read_choice answer "Type yes to continue, or another directory: " \
+            "No terminal available to choose where the SWANe environments go: rerun with --yes or --install-dir DIR" \
+            "No directory chosen for the SWANe environments (end of input): rerun the installer and type yes or a directory, or rerun with --yes or --install-dir DIR"
+        case "$answer" in
+            "") continue ;;
+            [yY] | [yY][eE][sS]) dir="$proposal" ;;
+            *) dir="$(normalize_dir "$answer")" ;;
+        esac
+        if [ -e "$dir" ] && [ ! -d "$dir" ]; then
+            log_info "$dir is not a directory: type another one."
+            continue
+        fi
+        SWANE_INSTALL_DIR="$dir"
+        log_info "SWANe environments directory: $SWANE_INSTALL_DIR"
+    done
+    if pinned_env="$(previous_env)" &&
+        [ "$(physical_dir "$(dirname -- "$pinned_env")")" != "$(physical_dir "$SWANE_INSTALL_DIR")" ]; then
         log_warn "A $SWANE_ENV_NAME from a previous run remains in $pinned_env, untouched; $SWANE_ENV_NAME in $SWANE_INSTALL_DIR is now the one the launcher starts"
     fi
     return 0
@@ -1818,11 +2017,15 @@ Usage: install_swane.sh [options]
    or: curl -fsSL $INSTALLER_URL | bash -s -- [options]
 
 Install SWANe into a conda environment named swane-env (Linux and macOS).
-An existing conda is reused; otherwise Miniforge is installed. SWANe is then
-started with the "swane" command from a new terminal.
+The installer first asks which conda to use (one already installed, or a new
+Miniforge) and in which directory to put the SWANe environments; a rerun
+proposes the choices of the previous run. SWANe is then started with the
+"swane" command from a new terminal.
 
 Options:
-  --yes                    Answer yes to every prompt except the FSL licence.
+  --yes                    Answer yes to every prompt except the FSL licence:
+                           the proposed conda (the first one found, else a new
+                           Miniforge) and environments directory are used.
   --accept-fsl-license     Accept the FSL licence without prompting.
   --no-fsl                 Do not install or configure FSL.
   --swane-spec SPEC        What to install as SWANe, passed verbatim to
@@ -1833,15 +2036,20 @@ Options:
                              a local checkout /path/to/swane
                              a git URL        git+https://github.com/LICE-dev/swane.git@<branch>
                              a wheel file     /path/to/swane-0.2.5-py3-none-any.whl
-  --miniforge-prefix DIR   Where to install Miniforge when no conda is found
-                           (default: ~/miniforge3).
+  --conda-root DIR         Use the conda installed in DIR without asking.
+  --miniforge-prefix DIR   Install Miniforge into DIR (reused if it is already
+                           there) and use it, without asking. Not together
+                           with --conda-root. When choosing a new Miniforge at
+                           the prompt, DIR is the proposed place (default:
+                           ~/miniforge3).
   --install-dir DIR        Directory for the conda environments this installer
-                           creates: DIR/swane-env and, when FSL is installed,
-                           DIR/swane-fsl (default: the environments directory
-                           of conda). Environments already in the default
-                           location are left alone; with this option only DIR
-                           is searched. A rerun without the option keeps the
-                           DIR of the previous run.
+                           creates, without asking: DIR/swane-env and, when
+                           FSL is installed, DIR/swane-fsl. Without it the
+                           installer proposes the directory of the previous
+                           run, else the environments directory of the chosen
+                           conda. Only the chosen directory is searched:
+                           environments elsewhere (e.g. in another conda) are
+                           left alone.
   -h, --help               Show this help and exit.
 EOF
 }
@@ -1876,6 +2084,23 @@ absolute_path() {
     esac
 }
 
+# normalize_dir PATH: print the directory PATH made absolute (absolute_path),
+# without trailing slashes, a leading "~" or "~/" standing for $HOME (an
+# answer typed at a prompt is not expanded by the shell).
+normalize_dir() {
+    local dir="$1"
+    # shellcheck disable=SC2088 # a literal "~" is matched on purpose
+    case "$dir" in
+        "~") dir="$HOME" ;;
+        "~/"*) dir="$HOME/${dir#"~/"}" ;;
+    esac
+    dir="$(absolute_path "$dir")"
+    while [ "${dir%/}" != "$dir" ] && [ "$dir" != "/" ]; do
+        dir="${dir%/}"
+    done
+    printf '%s\n' "$dir"
+}
+
 # parse_args ARGS...: set the option globals; exit 2 on a bad command line.
 parse_args() {
     while [ "$#" -gt 0 ]; do
@@ -1895,17 +2120,22 @@ parse_args() {
                     usage_error "--miniforge-prefix needs a value"
                 fi
                 MINIFORGE_PREFIX="$(absolute_path "$2")"
+                MINIFORGE_PREFIX_SET=1
+                shift
+                ;;
+            --conda-root)
+                if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                    usage_error "--conda-root needs a value"
+                fi
+                CONDA_ROOT_OPTION="$(normalize_dir "$2")"
                 shift
                 ;;
             --install-dir)
                 if [ "$#" -lt 2 ] || [ -z "$2" ]; then
                     usage_error "--install-dir needs a value"
                 fi
-                SWANE_INSTALL_DIR="$(absolute_path "$2")"
                 # No trailing slash: the environments are INSTALL_DIR/NAME.
-                while [ "${SWANE_INSTALL_DIR%/}" != "$SWANE_INSTALL_DIR" ] && [ "$SWANE_INSTALL_DIR" != "/" ]; do
-                    SWANE_INSTALL_DIR="${SWANE_INSTALL_DIR%/}"
-                done
+                SWANE_INSTALL_DIR="$(normalize_dir "$2")"
                 shift
                 ;;
             -h | --help)
@@ -1916,6 +2146,9 @@ parse_args() {
         esac
         shift
     done
+    if [ -n "$CONDA_ROOT_OPTION" ] && [ "$MINIFORGE_PREFIX_SET" = "1" ]; then
+        usage_error "--conda-root and --miniforge-prefix cannot be used together"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -1956,14 +2189,17 @@ install_flow() {
     case "$platform" in
         macos-*) refuse_rosetta ;;
     esac
-    if root="$(find_conda)"; then
+    # Both choices come before any change to the system.
+    choose_conda
+    choose_install_dir "${CHOSEN_CONDA_ROOT:-$MINIFORGE_PREFIX}"
+    if [ -n "$CHOSEN_CONDA_ROOT" ]; then
+        root="$CHOSEN_CONDA_ROOT"
         log_info "Using the conda in $root"
     else
-        log_info "No conda found: installing Miniforge into $MINIFORGE_PREFIX"
+        log_info "Installing Miniforge into $MINIFORGE_PREFIX"
         root="$(install_miniforge "$MINIFORGE_PREFIX")" || exit 1
     fi
     warn_old_conda "$root"
-    resolve_install_dir "$root"
     linux_system_step
     ensure_swane_env "$root" "$SWANE_SPEC"
     fsl_step "$root" "$SWANE_ENV_PREFIX"
@@ -1979,6 +2215,8 @@ main() {
     NO_FSL=0
     SWANE_SPEC="swane"
     MINIFORGE_PREFIX="$HOME/miniforge3"
+    MINIFORGE_PREFIX_SET=0
+    CONDA_ROOT_OPTION=""
     SWANE_INSTALL_DIR=""
     # ${1+"$@"}: an empty "$@" is an unbound-variable error under "set -u"
     # in old bash releases (macOS /bin/bash 3.2).
