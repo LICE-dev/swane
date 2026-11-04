@@ -302,3 +302,96 @@ def test_failure_exits_non_zero_with_real_slicer(slicer_executable, tmp_path):
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert "selects no voxel" in proc.stdout + proc.stderr
     assert not (tmp_path / "mask.nii.gz").exists()
+
+
+@real_slicer
+def test_isolated_launch_ignores_user_slicerrc(
+    slicer_executable, tmp_path, monkeypatch
+):
+    """The node launches Slicer isolated from the user's customizations
+    (``swane.utils.slicer_isolation``): a user ``.slicerrc.py`` that breaks
+    Slicer must not run, while Wrap Solidify still loads from the extension
+    module folders the Slicer check records."""
+    import subprocess
+
+    import nibabel as nib
+
+    from swane.utils.DependencyManager import DependencyManager
+    from swane.utils.slicer_isolation import extension_module_dirs, isolation_args
+    from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+    # conftest forces QT_QPA_PLATFORM=offscreen for swane's own Qt app;
+    # Slicer's bundled Qt has no such plugin and would refuse to start.
+    monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
+
+    # The check's own extension report, from the real (non-isolated) Slicer.
+    report = SlicerCheckWorker._decode(
+        SlicerCheckWorker._communicate(
+            SlicerCheckWorker.module_install_cmd(slicer_executable),
+            SlicerCheckWorker.MODULE_INSTALL_TIMEOUT,
+        )
+    )
+    assert "MODULE FOUND" in report, report
+    module_dirs = extension_module_dirs(
+        json.dumps(SlicerCheckWorker.parse_extension_report(report)),
+        DependencyManager.SLICER_MODULES,
+    )
+    assert module_dirs, report
+
+    # A user home whose slicerrc leaves a marker and then breaks the startup.
+    home = tmp_path / "home"
+    home.mkdir()
+    marker = tmp_path / "slicerrc_ran"
+    (home / ".slicerrc.py").write_text(
+        f"open({str(marker)!r}, 'w').close()\n"
+        "raise RuntimeError('user slicerrc must not run in SWANe batch jobs')\n"
+    )
+    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home))
+
+    # Sanity: the same home's slicerrc does run in a plain launch, so the
+    # isolated run below proves something on this platform.
+    subprocess.run(
+        [
+            slicer_executable,
+            "--no-splash",
+            "--no-main-window",
+            "--python-code",
+            "slicer.util.exit(0)",
+        ],
+        env=env,
+        capture_output=True,
+        timeout=300,
+    )
+    assert marker.exists(), "the test slicerrc is not where Slicer looks for it"
+    marker.unlink()
+
+    ct = tmp_path / "ct.nii.gz"
+    _write_ct_phantom(ct)
+    out = tmp_path / "inskull.nii.gz"
+    proc = subprocess.run(
+        [
+            slicer_executable,
+            "--no-splash",
+            "--no-main-window",
+            *isolation_args(module_dirs),
+            "--python-script",
+            SCRIPT_PATH,
+            "--input",
+            str(ct),
+            "--output",
+            str(out),
+            "--iterations",
+            "2",
+            "--oversampling",
+            "1",
+            "--skull_threshold",
+            "500",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert not marker.exists(), proc.stdout + proc.stderr
+    assert (np.asarray(nib.load(str(out)).dataobj) != 0).any()

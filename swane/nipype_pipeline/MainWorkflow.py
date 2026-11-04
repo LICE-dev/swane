@@ -52,6 +52,7 @@ from swane.nipype_pipeline.workflows.tractography_workflow import (
 )
 from swane.config.preference_list import TRACTS
 from swane.utils.DependencyManager import DependencyManager
+from swane.utils.slicer_isolation import extension_module_dirs
 
 DEBUG = False
 
@@ -916,6 +917,10 @@ class MainWorkflow(CustomWorkflow):
             synth_config=self.global_config[GlobalPrefCategoryList.SYNTH],
             venous2_ct_dir=venous2_ct_dir,
             slicer_path=self.global_config.get_slicer_path(),
+            slicer_module_paths=extension_module_dirs(
+                self.global_config.get_slicer_extensions_state(),
+                DependencyManager.SLICER_MODULES,
+            ),
             max_cpu=self.max_cpu,
             test_run=self.test_run,
         )

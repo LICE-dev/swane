@@ -1,5 +1,6 @@
 # slicerpython script for module checking
 # Warning: slicer library is not required beacuse the script is executed in Slicer environment
+import json
 import os
 import sys
 
@@ -37,6 +38,16 @@ def install_extensions_from_args(argv):
             continue
         if ext_path and os.path.isdir(ext_path):
             print("MODULE PATH:" + extensionName + "=" + ext_path)
+        # The extension's module folders, as Slicer itself lists them: SWANe
+        # passes them to its isolated batch runs (swane.utils.slicer_isolation)
+        # instead of rebuilding them from the install layout, which differs
+        # between Slicer versions and platforms.
+        try:
+            module_dirs = [str(path) for path in em.extensionModulePaths(extensionName)]
+        except Exception:
+            continue
+        if module_dirs:
+            print("MODULE DIRS:" + extensionName + "=" + json.dumps(module_dirs))
 
     if len(errors) == 0:
         print("MODULE FOUND")
