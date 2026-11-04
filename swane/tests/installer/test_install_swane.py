@@ -2390,6 +2390,62 @@ def test_vcs_spec_is_reinstalled_without_deps(sh, stub, spec):
     ]
 
 
+MACOS_SCIPY_SPEC = "scipy>=1.17.1"
+
+
+@pytest.mark.parametrize("machine", ["arm64", "x86_64"])
+@pytest.mark.parametrize("spec", ["swane", GIT_SPEC])
+def test_macos_installs_newer_scipy_after_swane(sh, stub, machine, spec):
+    """SciPy < 1.17 cannot be loaded on recent macOS: it goes in after SWANe."""
+    stub.platform("Darwin", machine)
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    python = conda.add_env(prefix, dot=True, tensorflow=True)
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda, spec=spec)
+    assert result.returncode == 0, result.stderr
+    calls = stub.calls(str(python))
+    # Last pip call before the import check: nothing puts SciPy back after it.
+    assert calls[-2:] == [
+        "%s -m pip install -U %s" % (python, MACOS_SCIPY_SPEC),
+        "%s %s" % (python, SWANE_CHECK_CALL),
+    ]
+    assert calls.index("%s -m pip install -U %s" % (python, spec)) < len(calls) - 2
+    assert "pip's warning that antspyx requires scipy<1.16 is expected" in (
+        result.stderr
+    )
+
+
+def test_linux_keeps_the_scipy_pip_picks(sh, stub):
+    stub.platform("Linux", "x86_64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    python = conda.add_env(prefix, dot=True)
+    conda.set_envs(prefix)
+    assert _ensure(sh, conda).returncode == 0
+    assert not any(MACOS_SCIPY_SPEC in call for call in stub.calls(str(python)))
+
+
+def test_macos_scipy_install_failure_dies(sh, stub):
+    stub.platform("Darwin", "arm64")
+    conda = FakeConda(sh, stub)
+    prefix = conda.root / "envs" / "swane-env"
+    stub.script(
+        prefix / "bin" / "python",
+        "python",
+        'case "$*" in\n'
+        '    "-c "*) echo 3.12 ;;\n'
+        '    "-m pip install -U swane") exit 0 ;;\n'
+        "    *) exit 1 ;;\n"
+        "esac",
+    )
+    make_executable(prefix / "bin" / "dot", "exit 0")
+    conda.set_envs(prefix)
+    result = _ensure(sh, conda)
+    assert result.returncode == 1
+    assert "pip install -U %s failed in swane-env" % MACOS_SCIPY_SPEC in result.stderr
+
+
 def test_vcs_reinstall_failure_dies(sh, stub):
     stub.platform("Linux", "x86_64")
     conda = FakeConda(sh, stub)
