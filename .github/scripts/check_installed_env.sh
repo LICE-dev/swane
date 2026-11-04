@@ -8,7 +8,7 @@
 # Reads the conda root and swane-env prefix pinned in ~/.local/bin/swane
 # (never sourcing the launcher: it would exec SWANe), checks them against the
 # installer summary, activates swane-env the way the launcher does and checks
-# FSL, graphviz, a headless SWANe import, SciPy >= 1.17.1 on macOS and, when
+# FSL, graphviz, a headless SWANe import, SciPy >=1.17.1,<1.19 on macOS and, when
 # EXPECT_CONDA_TENSORFLOW is "true" (macOS Intel), TensorFlow; then deactivates it and checks that the
 # FSL hook undid its changes.
 #
@@ -205,7 +205,7 @@ dot -V || fail "dot -V failed"
 # only under __name__ == "__main__").
 python -c "import swane.__main__" || fail "import swane.__main__ failed"
 
-# macOS: the installer puts scipy >= 1.17.1 over the scipy < 1.16 antspyx
+# macOS: the installer puts scipy >=1.17.1,<1.19 over the scipy < 1.16 antspyx
 # asks for (older wheels hold gfortran modules recent macOS cannot load);
 # the SciPy modules SWANe's dependencies use, and antspyx, must still load.
 if [ "$(uname -s)" = Darwin ]; then
@@ -216,8 +216,9 @@ import scipy, scipy.stats, scipy.integrate, scipy.optimize, scipy.sparse.linalg
 import ants
 v = scipy.__version__
 print("scipy", v, "antspyx", importlib.metadata.version("antspyx"))
-if tuple(int(p) for p in v.split(".")[:3]) < (1, 17, 1):
-    sys.exit("scipy %s is older than 1.17.1" % v)
+parsed = tuple(int(p) for p in v.split(".")[:3])
+if not (1, 17, 1) <= parsed < (1, 19):
+    sys.exit("scipy %s is not >=1.17.1,<1.19" % v)
 if type(sys.modules.get("scipy.sparse.linalg._propack")).__name__ == "MockPropackModule":
     sys.exit("the PROPACK mock shadows the real module of scipy %s" % v)
 ' || fail "SciPy check failed on macOS"

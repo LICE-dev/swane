@@ -2390,7 +2390,7 @@ def test_vcs_spec_is_reinstalled_without_deps(sh, stub, spec):
     ]
 
 
-MACOS_SCIPY_SPEC = "scipy>=1.17.1"
+MACOS_SCIPY_SPEC = "scipy>=1.17.1,<1.19"
 
 
 @pytest.mark.parametrize("machine", ["arm64", "x86_64"])

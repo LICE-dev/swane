@@ -859,7 +859,10 @@ SWANE_TENSORFLOW_SPEC="tensorflow>=2.18"
 # to load; 1.17.1 has none. antspyx (every release up to 0.6.3) requires
 # scipy < 1.16, so pip never picks a fixed SciPy by itself: it is installed
 # afterwards, and pip's warning about the antspyx requirement is expected.
-SWANE_MACOS_SCIPY_SPEC="scipy>=1.17.1"
+# Capped below the next minor release not yet verified with SWANe (antspyx
+# and nilearn are not tested against it): raise the cap after the macOS CI
+# passes on it.
+SWANE_MACOS_SCIPY_SPEC="scipy>=1.17.1,<1.19"
 # First conda release whose default solver is libmamba.
 SWANE_MIN_FAST_CONDA="23.10"
 # Oldest SWANe this installer works with: the first release with
