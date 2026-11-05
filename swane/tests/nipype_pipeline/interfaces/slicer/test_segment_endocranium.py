@@ -7,6 +7,8 @@ is tested here (``out_file`` is a ``genfile`` with a fixed name).
 
 import os
 
+import pytest
+
 from swane.nipype_pipeline.interfaces.slicer.SegmentEndocranium import (
     SegmentEndocranium,
 )
@@ -46,14 +48,25 @@ class TestSegmentEndocraniumPathWithSpaces:
         ct = tmp_path / "ct.nii.gz"
         ct.write_text("x")
 
-        node = SegmentEndocranium(slicer_cmd=str(slicer), in_file=str(ct))
+        modules = tmp_path / "Slicer 5.8.1" / "qt-scripted-modules"
+        modules.mkdir()
+        node = SegmentEndocranium(
+            slicer_cmd=str(slicer), in_file=str(ct), module_paths=[str(modules)]
+        )
         if os.name == "nt":
             return  # POSIX quoting asserted below; Windows in the class below
         tokens = shlex.split(node.cmdline)
         assert tokens[0] == str(slicer)
         idx = tokens.index("--python-script")
         assert tokens[idx + 1].endswith("slicer_seg_endocranium.py")
-        assert tokens[idx - 2 : idx] == ["--no-splash", "--no-main-window"]
+        assert tokens[1:idx] == [
+            "--no-splash",
+            "--no-main-window",
+            "--disable-settings",
+            "--ignore-slicerrc",
+            "--additional-module-paths",
+            str(modules),
+        ]
 
 
 def _fake_slicer(tmp_path):
@@ -64,7 +77,9 @@ def _fake_slicer(tmp_path):
     slicer.chmod(0o755)
     ct = tmp_path / "ct.nii.gz"
     ct.write_text("x")
-    return str(slicer), str(ct)
+    modules = slicer_dir / "qt-scripted-modules"
+    modules.mkdir()
+    return str(slicer), str(ct), str(modules)
 
 
 class TestSegmentEndocraniumQuotingPerPlatform:
@@ -75,12 +90,13 @@ class TestSegmentEndocraniumQuotingPerPlatform:
         from swane.patches import windows_compat
 
         monkeypatch.setattr(windows_compat, "is_windows", lambda: False)
-        slicer, ct = _fake_slicer(tmp_path)
-        node = SegmentEndocranium(slicer_cmd=slicer, in_file=ct)
+        slicer, ct, modules = _fake_slicer(tmp_path)
+        node = SegmentEndocranium(slicer_cmd=slicer, in_file=ct, module_paths=[modules])
         worker = node._cmd.rsplit(" ", 1)[1]
         assert node._cmd == (
             f"{shlex.quote(slicer)} --no-splash --no-main-window "
-            f"--python-script {worker}"
+            f"--disable-settings --ignore-slicerrc --additional-module-paths "
+            f"{shlex.quote(modules)} --python-script {worker}"
         )
         assert shlex.split(worker)[0].endswith("slicer_seg_endocranium.py")
 
@@ -96,9 +112,9 @@ class TestSegmentEndocraniumQuotingPerPlatform:
         monkeypatch.setattr(windows_compat, "is_windows", lambda: True)
         monkeypatch.setattr(nipype_core, "shlex", nipype_core.shlex)
         npx.install_windows_cmdline_quoting()
-        slicer, ct = _fake_slicer(tmp_path)
+        slicer, ct, modules = _fake_slicer(tmp_path)
 
-        node = SegmentEndocranium(slicer_cmd=slicer, in_file=ct)
+        node = SegmentEndocranium(slicer_cmd=slicer, in_file=ct, module_paths=[modules])
         cmdline = node.cmdline
         assert "'" not in cmdline
         assert cmdline.startswith(f'"{slicer}" --no-splash --no-main-window ')
@@ -108,3 +124,32 @@ class TestSegmentEndocraniumQuotingPerPlatform:
         idx = tokens.index("--python-script")
         assert tokens[idx + 1].endswith("slicer_seg_endocranium.py")
         assert tokens[tokens.index("--input") + 1] == ct
+        assert tokens[tokens.index("--additional-module-paths") + 1] == modules
+
+
+class TestSegmentEndocraniumIsolation:
+    def test_module_paths_set_after_slicer_cmd_update_the_command(self, tmp_path):
+        """The workflow sets ``slicer_cmd`` then ``module_paths``: the command
+        follows the last value."""
+        slicer, ct, modules = _fake_slicer(tmp_path)
+        node = SegmentEndocranium(slicer_cmd=slicer, in_file=ct)
+        assert "--additional-module-paths" not in node._cmd
+        node.inputs.module_paths = [modules]
+        assert "--additional-module-paths" in node._cmd
+        assert modules in node._cmd
+
+    def test_module_paths_are_not_hashed(self, tmp_path):
+        """Moving Slicer changes the folders, not the result: no rerun."""
+        slicer, ct, modules = _fake_slicer(tmp_path)
+        a = SegmentEndocranium(slicer_cmd=slicer, in_file=ct, module_paths=[modules])
+        b = SegmentEndocranium(slicer_cmd=slicer, in_file=ct, module_paths=["/x"])
+        assert a.inputs.get_hashval()[1] == b.inputs.get_hashval()[1]
+
+    @pytest.mark.parametrize("missing", [[], ["/no/such/modules"]])
+    def test_run_fails_clearly_without_module_folders(self, tmp_path, missing):
+        """Unknown/removed extension folders: an isolated Slicer would miss Wrap
+        Solidify, so the node stops before launching Slicer, naming the fix."""
+        slicer, ct, _ = _fake_slicer(tmp_path)
+        node = SegmentEndocranium(slicer_cmd=slicer, in_file=ct, module_paths=missing)
+        with pytest.raises(RuntimeError, match="repeat the 3D Slicer check"):
+            node._run_interface(None)

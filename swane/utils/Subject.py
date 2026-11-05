@@ -996,6 +996,7 @@ class Subject:
 
         """
 
+        from swane.utils.slicer_isolation import extension_module_dirs
         from swane.workers.SlicerExportWorker import SlicerExportWorker
 
         slicer_thread = SlicerExportWorker(
@@ -1003,6 +1004,10 @@ class Subject:
             self.result_dir(),
             self.global_config.get_slicer_scene_ext(),
             self.config,
+            module_paths=extension_module_dirs(
+                self.global_config.get_slicer_extensions_state(),
+                DependencyManager.SLICER_MODULES,
+            ),
         )
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)

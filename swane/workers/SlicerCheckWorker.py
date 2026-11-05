@@ -12,6 +12,7 @@ from swane.resources import strings
 from swane.utils.DependencyManager import DependencyManager, DependenceStatus
 from swane.utils.license_consent import version_with_license
 from swane.utils.LicenseReference import SLICER
+from swane.utils.slicer_isolation import extension_module_dirs
 import platform
 
 
@@ -230,17 +231,37 @@ if _swane_os.path.isdir(_swane_workers_dir):
         return revision, name
 
     @staticmethod
+    def module_install_cmd(slicer_cmd: str) -> list[str]:
+        """
+        Command running ``slicer_script_module_install.py`` in a normal (not
+        isolated) Slicer: it installs the missing extensions and reports their
+        folders, so it must see the user's real settings.
+
+        Run without a shell: the script path is a separate argv element, so an
+        install dir containing spaces survives.
+        """
+        return [
+            slicer_cmd,
+            "--no-splash",
+            "--no-main-window",
+            "--python-script",
+            os.path.join(os.path.dirname(__file__), "slicer_script_module_install.py"),
+            ",".join(DependencyManager.SLICER_MODULES),
+        ]
+
+    @staticmethod
     def parse_extension_report(output: str) -> dict:
         """
-        Parse the ``SLICER REVISION:`` / ``MODULE PATH:`` lines printed by
-        ``slicer_script_module_install.py``.
+        Parse the ``SLICER REVISION:`` / ``MODULE PATH:`` / ``MODULE DIRS:``
+        lines printed by ``slicer_script_module_install.py``.
 
         Returns
         -------
         dict
-            ``{"revision": str, "paths": {extension name: install folder}}``
+            ``{"revision": str, "paths": {extension name: install folder},
+            "module_paths": {extension name: [module folder, ...]}}``
         """
-        state = {"revision": "", "paths": {}}
+        state = {"revision": "", "paths": {}, "module_paths": {}}
         for line in output.splitlines():
             line = line.strip()
             if line.startswith("SLICER REVISION:"):
@@ -249,6 +270,20 @@ if _swane_os.path.isdir(_swane_workers_dir):
                 name, sep, path = line.split(":", 1)[1].partition("=")
                 if sep and name.strip() and path.strip():
                     state["paths"][name.strip()] = path.strip()
+            elif line.startswith("MODULE DIRS:"):
+                name, sep, dirs = line.split(":", 1)[1].partition("=")
+                try:
+                    dirs = json.loads(dirs)
+                except ValueError:
+                    continue
+                if (
+                    sep
+                    and name.strip()
+                    and isinstance(dirs, list)
+                    and dirs
+                    and all(isinstance(d, str) and d for d in dirs)
+                ):
+                    state["module_paths"][name.strip()] = dirs
         return state
 
     @staticmethod
@@ -259,8 +294,9 @@ if _swane_os.path.isdir(_swane_workers_dir):
         Returns
         -------
         bool
-            True if the state lists every module and each install folder still
-            exists. An empty, malformed or incomplete state is not valid, so the
+            True if the state lists every module and each install folder, and
+            each module folder used by the isolated batch runs, still exists.
+            An empty, malformed or incomplete state is not valid, so the
             caller falls back to the full check.
         """
         try:
@@ -269,10 +305,12 @@ if _swane_os.path.isdir(_swane_workers_dir):
             return False
         if not isinstance(paths, dict):
             return False
-        return all(
+        if not all(
             isinstance(paths.get(module), str) and os.path.isdir(paths[module])
             for module in modules
-        )
+        ):
+            return False
+        return extension_module_dirs(raw_state, modules) is not None
 
     @staticmethod
     def is_slicer_executable(slicer_path: str) -> bool:
@@ -599,22 +637,11 @@ if _swane_os.path.isdir(_swane_workers_dir):
                     state = DependenceStatus.WARNING
                 else:
                     # Try to automatically install Slicer extensions.
-                    # Run without a shell: the script path is a separate argv
-                    # element, so an install dir containing spaces survives.
-                    module_install_script = os.path.join(
-                        os.path.dirname(__file__),
-                        "slicer_script_module_install.py",
-                    )
-                    cmd3 = [
-                        cmd,
-                        "--no-splash",
-                        "--no-main-window",
-                        "--python-script",
-                        module_install_script,
-                        ",".join(DependencyManager.SLICER_MODULES),
-                    ]
                     output3 = (
-                        self._run_slicer(cmd3, SlicerCheckWorker.MODULE_INSTALL_TIMEOUT)
+                        self._run_slicer(
+                            SlicerCheckWorker.module_install_cmd(cmd),
+                            SlicerCheckWorker.MODULE_INSTALL_TIMEOUT,
+                        )
                         or ""
                     )
                     if "MODULE FOUND" in output3:
