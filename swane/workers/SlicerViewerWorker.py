@@ -1,16 +1,13 @@
-from PySide6.QtCore import QRunnable
+from swane.utils.qt_compat import QRunnable
 import os
 import subprocess
 
 
 class SlicerViewerWorker(QRunnable):
     """
-    Spawn a thread for 3D Slicer result export
+    Spawn a thread to open the workflow results scene into 3D Slicer.
 
     """
-
-    PROGRESS_MSG_PREFIX = "SLICERLOADER: "
-    END_MSG = "ENDLOADING"
 
     def __init__(self, slicer_path: str, scene_path: str):
         """
@@ -29,11 +26,15 @@ class SlicerViewerWorker(QRunnable):
         self.scene_path: str = scene_path
 
     def run(self):
-        cmd = self.slicer_path + " " + self.scene_path
-        popen = subprocess.Popen(
-            cmd,
+        # Just opens the scene; the automatic MELODIC resting-state
+        # timecourse viewer is wired up by the SWANe slicerrc bootstrap
+        # (see SlicerCheckWorker), so it also works when the user opens the
+        # scene manually, outside SWANe.
+        # Discard stdout instead of piping it: nobody drains the pipe here, so a
+        # PIPE would fill its OS buffer and deadlock Slicer once it prints enough.
+        subprocess.Popen(
+            [self.slicer_path, self.scene_path],
             cwd=os.getcwd(),
-            shell=True,
-            stdout=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
             universal_newlines=True,
         )

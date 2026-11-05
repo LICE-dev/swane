@@ -1,0 +1,292 @@
+import pytest
+from unittest.mock import MagicMock
+from swane.workers.WorkflowGenerateWorker import WorkflowGenerateWorker
+from swane.config.config_enums import GlobalPrefCategoryList, DeskullEngine
+
+
+def test_preload_models_only_when_antspynet(monkeypatch):
+    subject = MagicMock()
+    synth_config = MagicMock()
+    subject.global_config = {GlobalPrefCategoryList.SYNTH: synth_config}
+
+    worker = WorkflowGenerateWorker(subject)
+
+    # Mock dependencies
+    strings_mock = MagicMock()
+    strings_mock.subj_tab_wf_gen_models = "Downloading models..."
+
+    mock_resolve = MagicMock()
+    monkeypatch.setattr(
+        "swane.nipype_pipeline.interfaces.utils.resolve_deskull_engine",
+        mock_resolve,
+        raising=False,
+    )
+
+    mock_weights_are_fetched = MagicMock(return_value=False)
+    monkeypatch.setattr(
+        "swane.utils.antspynet_weights.weights_are_fetched",
+        mock_weights_are_fetched,
+        raising=False,
+    )
+
+    mock_preload_weights = MagicMock()
+    monkeypatch.setattr(
+        "swane.utils.antspynet_weights.preload_weights",
+        mock_preload_weights,
+        raising=False,
+    )
+
+    # Case 1: NOT ANTSPYNET
+    mock_resolve.return_value = DeskullEngine.BET
+    worker._preload_models(strings_mock)
+    mock_preload_weights.assert_not_called()
+
+    # Case 2: ANTSPYNET
+    mock_resolve.return_value = DeskullEngine.ANTSPYNET
+    worker._preload_models(strings_mock)
+    mock_preload_weights.assert_called_once()
+
+
+def test_preload_models_fetches_every_network_whatever_the_modalities(monkeypatch):
+    """Intentional: the generate worker downloads all the antspynet networks
+    behind the modal progress dialog, so that a later run never downloads."""
+    from swane.utils.antspynet_weights import WEIGHTS_BY_MODALITY
+
+    subject = MagicMock()
+    subject.global_config = {GlobalPrefCategoryList.SYNTH: MagicMock()}
+    worker = WorkflowGenerateWorker(subject)
+    monkeypatch.setattr(
+        "swane.nipype_pipeline.interfaces.utils.resolve_deskull_engine",
+        lambda config: DeskullEngine.ANTSPYNET,
+    )
+    monkeypatch.setattr(
+        "swane.utils.antspynet_weights.weights_are_fetched", lambda names: False
+    )
+    fetched = MagicMock()
+    monkeypatch.setattr("swane.utils.antspynet_weights.preload_weights", fetched)
+
+    worker._preload_models(MagicMock())
+
+    fetched.assert_called_once()
+    assert set(fetched.call_args.args[0]) == set(WEIGHTS_BY_MODALITY.values())
+
+
+TEMPLATES = [
+    ("MNI152NLin2009cSym", 1, "brain"),
+    ("MNI152NLin6Asym", 1, "brain"),
+    ("MNI152NLin6Asym", 2, "brain"),
+]
+
+
+def _template_worker(monkeypatch, cached):
+    """A worker whose template cache holds exactly ``cached``; returns the
+    worker, the progress messages and the get_swane_template mock."""
+    import swane.utils.templates as templates
+
+    monkeypatch.setattr(
+        templates,
+        "is_template_cached",
+        lambda name, res, desc, suffix="T1w": (name, res, desc) in cached,
+    )
+    fetch = MagicMock()
+    monkeypatch.setattr(templates, "get_swane_template", fetch)
+    worker = WorkflowGenerateWorker(MagicMock())
+    messages = []
+    worker.signal.progress_msg.connect(messages.append)
+    return worker, messages, fetch
+
+
+def test_preload_templates_silent_when_all_cached(monkeypatch):
+    worker, messages, fetch = _template_worker(monkeypatch, set(TEMPLATES))
+    strings = MagicMock()
+    strings.subj_tab_wf_gen_templates = "Downloading templates..."
+
+    worker._preload_templates(strings)
+
+    assert messages == []
+    fetch.assert_not_called()
+
+
+def test_preload_templates_fetches_all_when_one_is_missing(monkeypatch):
+    worker, messages, fetch = _template_worker(monkeypatch, set(TEMPLATES[:2]))
+    strings = MagicMock()
+    strings.subj_tab_wf_gen_templates = "Downloading templates..."
+
+    worker._preload_templates(strings)
+
+    assert messages == ["Downloading templates..."]
+    assert [c.kwargs["name"] for c in fetch.call_args_list] == [t[0] for t in TEMPLATES]
+
+
+def _dipy_subject(engine, dti_loaded, tractography):
+    from swane.utils.DataInputList import DataInputList as DIL
+
+    subject = MagicMock()
+    subject.global_config.getenum_safe.return_value = engine
+    subject.input_state_list = {DIL.DTI: MagicMock(loaded=dti_loaded)}
+    subject.config.getboolean_safe.return_value = tractography
+    return subject
+
+
+@pytest.fixture
+def mock_atlas(monkeypatch, tmp_path):
+    """Point the atlas at an empty tmp dir and mock the fetch."""
+    import swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR as slr
+
+    mock_ensure = MagicMock()
+    monkeypatch.setattr(slr, "default_atlas_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(slr, "ensure_atlas", mock_ensure)
+    return mock_ensure, tmp_path
+
+
+@pytest.mark.parametrize(
+    "engine, dti_loaded, tractography",
+    [
+        ("FSL_XTRACT", True, True),
+        ("DIPY_RECOBUNDLES", False, True),
+        ("DIPY_RECOBUNDLES", True, False),
+    ],
+)
+def test_preload_dipy_atlas_skipped_without_dipy_tractography(
+    mock_atlas, engine, dti_loaded, tractography
+):
+    from swane.config.config_enums import TractographyEngine
+
+    mock_ensure, _ = mock_atlas
+    subject = _dipy_subject(TractographyEngine[engine], dti_loaded, tractography)
+    worker = WorkflowGenerateWorker(subject)
+
+    worker._preload_dipy_atlas(MagicMock())
+
+    mock_ensure.assert_not_called()
+
+
+def test_preload_dipy_atlas_fetches_when_dipy_tractography(mock_atlas):
+    from swane.config.config_enums import TractographyEngine
+
+    mock_ensure, atlas_dir = mock_atlas
+    subject = _dipy_subject(TractographyEngine.DIPY_RECOBUNDLES, True, True)
+    worker = WorkflowGenerateWorker(subject)
+
+    worker._preload_dipy_atlas(MagicMock())
+
+    mock_ensure.assert_called_once_with(str(atlas_dir))
+
+
+def test_preload_dipy_atlas_skipped_when_already_fetched(mock_atlas):
+    from swane.config.config_enums import TractographyEngine
+    from swane.nipype_pipeline.interfaces.dipy.DipyAtlasSLR import (
+        atlas_wholebrain_path,
+    )
+
+    mock_ensure, atlas_dir = mock_atlas
+    wholebrain = atlas_wholebrain_path(atlas_dir)
+    wholebrain.parent.mkdir(parents=True)
+    wholebrain.touch()
+    subject = _dipy_subject(TractographyEngine.DIPY_RECOBUNDLES, True, True)
+    worker = WorkflowGenerateWorker(subject)
+
+    worker._preload_dipy_atlas(MagicMock())
+
+    mock_ensure.assert_not_called()
+
+
+def test_failed_preload_does_not_skip_the_others(monkeypatch):
+    subject = MagicMock()
+    worker = WorkflowGenerateWorker(subject)
+    calls = []
+
+    def _failing(_strings):
+        calls.append("templates")
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(
+        worker, "_load_pipeline_modules", lambda _s: calls.append("modules")
+    )
+    monkeypatch.setattr(worker, "_preload_templates", _failing)
+    monkeypatch.setattr(worker, "_preload_models", lambda _s: calls.append("models"))
+    monkeypatch.setattr(
+        worker, "_preload_dipy_atlas", lambda _s: calls.append("dipy_atlas")
+    )
+
+    worker.run()
+
+    assert calls == ["modules", "templates", "models", "dipy_atlas"]
+    subject.generate_workflow.assert_called_once()
+
+
+@pytest.mark.parametrize("loaded", [True, False])
+def test_load_pipeline_modules_shows_label_only_when_loading(monkeypatch, loaded):
+    import importlib
+    from swane.utils import main_workflow_preload
+
+    imported = []
+    monkeypatch.setattr(
+        main_workflow_preload, "is_main_workflow_loaded", lambda: loaded
+    )
+    monkeypatch.setattr(importlib, "import_module", imported.append)
+    worker = WorkflowGenerateWorker(MagicMock())
+    messages = []
+    worker.signal.progress_msg.connect(messages.append)
+    strings_mock = MagicMock()
+    strings_mock.subj_tab_wf_gen_modules = "Loading modules..."
+
+    worker._load_pipeline_modules(strings_mock)
+
+    if loaded:
+        assert messages == [] and imported == []
+    else:
+        assert messages == ["Loading modules..."]
+        assert imported == [main_workflow_preload.MAIN_WORKFLOW_MODULE]
+
+
+def test_finished_is_emitted_when_generation_raises(monkeypatch):
+    """The GUI keeps a non-closable progress dialog open until ``finished``:
+    an exception from generate_workflow must still emit it, as GenWfError."""
+    from swane.utils.Subject import SubjectRet
+
+    subject = MagicMock()
+    subject.generate_workflow.side_effect = RuntimeError("dot failed")
+    worker = WorkflowGenerateWorker(subject)
+    for preload in (
+        "_load_pipeline_modules",
+        "_preload_templates",
+        "_preload_models",
+        "_preload_dipy_atlas",
+    ):
+        monkeypatch.setattr(worker, preload, lambda strings: None)
+
+    emitted = []
+    worker.signal.finished.connect(emitted.append)
+    worker.run()
+
+    assert emitted == [SubjectRet.GenWfError]
+
+
+def test_timed_out_weights_preload_still_generates(monkeypatch):
+    """A weights download that times out must not keep the non-closable
+    progress dialog up: generation goes on and finished is emitted."""
+    import subprocess
+
+    from swane.utils.Subject import SubjectRet
+
+    subject = MagicMock()
+    subject.generate_workflow.return_value = SubjectRet.GenWfCompleted
+    worker = WorkflowGenerateWorker(subject)
+    for preload in (
+        "_load_pipeline_modules",
+        "_preload_templates",
+        "_preload_dipy_atlas",
+    ):
+        monkeypatch.setattr(worker, preload, lambda strings: None)
+
+    def _timed_out(_strings):
+        raise subprocess.TimeoutExpired(["python"], 1800, stderr="stuck here")
+
+    monkeypatch.setattr(worker, "_preload_models", _timed_out)
+    emitted = []
+    worker.signal.finished.connect(emitted.append)
+
+    worker.run()
+
+    assert emitted == [SubjectRet.GenWfCompleted]

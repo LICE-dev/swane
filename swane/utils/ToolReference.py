@@ -4,7 +4,11 @@ from enum import Enum
 class Package(Enum):
     FSL = "fsl"
     FREESURFER = "freesurfer"
-    SLICER = "slicer"
+    ANTS = "ants"
+    NIPY = "nipy"
+    DIPY = "dipy"
+    NIIMATH = "niimath"
+    NILEARN = "nilearn"
     OTHER = "Other"
 
 
@@ -30,6 +34,10 @@ def get_command_info(key: str) -> ToolReference:
 
 
 utilities_url = "https://fsl.fmrib.ox.ac.uk/fsl/docs/utilities/fslutils.html#"
+spatialimages_url = (
+    "https://nipy.org/nibabel/reference/nibabel.spatialimages.html#spatialimage"
+)
+nibabel_reference = "https://doi.org/10.5281/zenodo.591597"
 
 tool_reference_list = {
     # Structural
@@ -84,7 +92,7 @@ tool_reference_list = {
         ],
     ),
     # Diffusion / Tractography
-    "CustomEddy": ToolReference(
+    "Eddy": ToolReference(
         command="eddy",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/eddy/eddy.html",
@@ -111,7 +119,7 @@ tool_reference_list = {
             "Hernandez M, Guerrero GD, Cecilia JM, et al. Accelerating fibre orientation estimation from diffusion MRI using GPUs. PLoS One. 2013.",
         ],
     ),
-    "CustomProbTrackX2": ToolReference(
+    "ProbTrackX2": ToolReference(
         command="probtrackx",
         package=Package.FSL,
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/diffusion/probtrackx.html",
@@ -129,6 +137,85 @@ tool_reference_list = {
             "Warrington S, Bryant K, Khrapitchev A, et al. XTRACT: Standardised protocols for automated tractography. NeuroImage. 2020.",
             "Warrington S, Thompson E, Bastiani M, et al. Concurrent mapping of brain ontogeny and phylogeny. Sci Adv. 2022.",
             "de Groot M, Vernooij MW, Klein S, et al. Improving alignment in tract-based spatial statistics. NeuroImage. 2013.",
+        ],
+    ),
+    "DwiCrop": ToolReference(
+        command="median_otsu [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.segment.html#dipy.segment.mask.median_otsu",
+        references=[],
+    ),
+    "DipyDenoise": ToolReference(
+        command="nlmeans [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.denoise.html#module-dipy.denoise.nlmeans",
+        references=[
+            "Coupé P, Yger P, Prima S, et al. An optimized blockwise nonlocal means denoising filter for 3-D magnetic resonance images. IEEE Trans Med Imaging. 2008;27(4):425-441."
+        ],
+    ),
+    "DipyMotionCorrection": ToolReference(
+        command="motion_correction [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.align.html#dipy.align.motion_correction",
+        references=[],
+    ),
+    "DwiBiasCorrection": ToolReference(
+        command="N4BiasFieldCorrection [antspyx]",
+        package=Package.ANTS,
+        url="https://antspyx.readthedocs.io/en/latest/utils.html#ants.n4_bias_field_correction",
+        references=[
+            "Tustison NJ, Avants BB, Cook PA, et al. N4ITK: improved N3 bias correction. IEEE Trans Med Imaging. 2010;29(6):1310-1320."
+        ],
+    ),
+    "DipyTensorFit": ToolReference(
+        command="TensorModel [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.reconst.html#module-dipy.reconst.dti",
+        references=[],
+    ),
+    "DipyCsdFit": ToolReference(
+        command="ConstrainedSphericalDeconvModel [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.reconst.html#module-dipy.reconst.csdeconv",
+        references=[
+            "Tournier JD, Calamante F, Connelly A. Robust determination of the fibre orientation distribution in diffusion MRI: non-negativity constrained super-resolved spherical deconvolution. NeuroImage. 2007;35(4):1459-1472."
+        ],
+    ),
+    "DipyTracking": ToolReference(
+        command="probabilistic_tracking [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.tracking.html#module-dipy.tracking.tracker",
+        references=[
+            "Descoteaux M, Deriche R, Knösche TR, Anwander A. Deterministic and probabilistic tractography based on complex fibre orientation distributions. IEEE Trans Med Imaging. 2009;28(2):269-286."
+        ],
+    ),
+    "DipyAtlasSLR": ToolReference(
+        command="RecoBundles / whole-brain SLR [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/examples_built/segmentation/bundle_extraction.html",
+        references=[
+            "Garyfallidis E, Côté MA, Rheault F, et al. Recognition of white matter bundles using local and global streamline-based registration and clustering. NeuroImage. 2018;170:283-295.",
+            "Yeh FC, Panesar S, Fernandes D, et al. Population-averaged atlas of the macroscale human structural connectome and its network topology. NeuroImage. 2018;178:57-68.",
+        ],
+    ),
+    "DipyRecoBundlesBuild": ToolReference(
+        command="RecoBundles [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.segment.html#dipy.segment.bundles.RecoBundles",
+        references=[
+            "Garyfallidis E, Côté MA, Rheault F, et al. Recognition of white matter bundles using local and global streamline-based registration and clustering. NeuroImage. 2018;170:283-295.",
+            "Yeh FC, Panesar S, Fernandes D, et al. Population-averaged atlas of the macroscale human structural connectome and its network topology. NeuroImage. 2018;178:57-68.",
+        ],
+    ),
+    "DipyRecoBundlesRecognize": ToolReference(
+        command="RecoBundles.recognize [dipy]",
+        package=Package.DIPY,
+        url="https://docs.dipy.org/stable/reference/dipy.segment.html#dipy.segment.bundles.RecoBundles.recognize",
+        references=[
+            "Garyfallidis E, Côté MA, Rheault F, et al. Recognition of white matter bundles using local and global streamline-based registration and clustering. NeuroImage. 2018;170:283-295.",
+            "Yeh FC, Panesar S, Fernandes D, et al. Population-averaged atlas of the macroscale human structural connectome and its network topology. NeuroImage. 2018;178:57-68.",
+            # The refine pass this node runs by default.
+            "Chandio BQ, Risacher SL, Pestilli F, et al. Bundle analytics, a computational framework for investigating the shapes and profiles of brain pathways across populations. Scientific Reports. 2020;10:17149.",
         ],
     ),
     # Registration
@@ -180,30 +267,72 @@ tool_reference_list = {
         url="https://fsl.fmrib.ox.ac.uk/fsl/docs/structural/fsl_anat.html",
         references=[],
     ),
+    "NiiMathRobustFov": ToolReference(
+        command="niimath",
+        package=Package.NIIMATH,
+        url="https://github.com/rordenlab/niimath",
+        references=[],
+    ),
+    "NiiMathSliceTimer": ToolReference(
+        command="niimath -stc",
+        package=Package.NIIMATH,
+        url="https://github.com/rordenlab/niimath",
+        references=[
+            "Rorden C, Webster M, Drake C, et al. niimath and fslmaths: replication as a method to enhance popular neuroimaging tools. Aperture Neuro. 2024.",
+            "Cox RW. AFNI: software for analysis and visualization of functional magnetic resonance neuroimages. Comput Biomed Res. 1996;29(3):162-173.",
+        ],
+    ),
+    "Cluster": ToolReference(
+        command="fsl-cluster",
+        package=Package.FSL,
+        url="https://fsl.fmrib.ox.ac.uk/fsl/docs/statistics/cluster.html",
+        references=[],
+    ),
     # FSL Utilities
     "MERGE": ToolReference(
         command="fslmerge", package=Package.FSL, url=utilities_url, references=[]
     ),
     "ForceOrient": ToolReference(
-        command="fslorient", package=Package.FSL, url=utilities_url, references=[]
+        command="orientations [NiBabel]",
+        package=Package.NIPY,
+        url="https://nipy.org/nibabel/reference/nibabel.orientations.html",
+        references=[nibabel_reference],
     ),
     "MathsCommand": ToolReference(
-        command="fslmaths", package=Package.FSL, url=utilities_url, references=[]
+        command="niimath",
+        package=Package.NIIMATH,
+        url="https://github.com/rordenlab/niimath",
+        references=[
+            "Rorden C, Webster M, Drake C, et al. niimath and fslmaths: replication as a method to enhance popular neuroimaging tools. Aperture Neuro. 2024."
+        ],
     ),
-    "FslNVols": ToolReference(
-        command="fslnvols", package=Package.FSL, url=utilities_url, references=[]
+    "NVols": ToolReference(
+        command="spatialimages [NiBabel]",
+        package=Package.NIPY,
+        url=spatialimages_url,
+        references=[nibabel_reference],
     ),
-    "Split": ToolReference(
-        command="fslsplit", package=Package.FSL, url=utilities_url, references=[]
+    "ImageStatistics": ToolReference(
+        command="statistics [NumPy]",
+        package=Package.OTHER,
+        url="https://numpy.org/doc/stable/reference/routines.statistics.html",
+        references=[
+            "Harris CR, Millman KJ, van der Walt SJ, et al. Array programming with NumPy. Nature. 2020."
+        ],
     ),
-    "GetNiftiTR": ToolReference(
-        command="fslval", package=Package.FSL, url=utilities_url, references=[]
+    "AsymmetryIndex": ToolReference(
+        command="arithmetic [NumPy]",
+        package=Package.OTHER,
+        url="https://numpy.org/doc/stable/reference/routines.math.html",
+        references=[
+            "Harris CR, Millman KJ, van der Walt SJ, et al. Array programming with NumPy. Nature. 2020."
+        ],
     ),
-    "ExtractROI": ToolReference(
-        command="fslroi", package=Package.FSL, url=utilities_url, references=[]
-    ),
-    "ImageStats": ToolReference(
-        command="fslstats", package=Package.FSL, url=utilities_url, references=[]
+    "ArtifactDetect": ToolReference(
+        command="rapidart [Nipype]",
+        package=Package.OTHER,
+        url="https://nipype.readthedocs.io/en/latest/api/generated/nipype.algorithms.rapidart.html",
+        references=[],
     ),
     # FreeSurfer
     "SynthSeg": ToolReference(
@@ -281,12 +410,65 @@ tool_reference_list = {
             "Rolfe S, Pieper S, Porto A, et al. SlicerMorph: An open and extensible platform to retrieve, visualize and analyze 3D morphology. Methods Ecol Evol. 2021."
         ],
     ),
-    "N4BiasFieldCorrection": ToolReference(
-        command="N4BiasFieldCorrection [SimpleITK]",
-        package=Package.OTHER,
-        url="https://simpleitk.readthedocs.io/en/master/link_N4BiasFieldCorrection_docs.html",
+    # ANTs (antspyx / antspynet)
+    "AntsN4BiasFieldCorrection": ToolReference(
+        command="N4BiasFieldCorrection [antspyx]",
+        package=Package.ANTS,
+        url="https://antspyx.readthedocs.io/en/latest/utils.html#ants.n4_bias_field_correction",
         references=[
-            "Lowekamp BC, Chen DT, Ibáñez L, Blezek D. The Design of SimpleITK. Front Neuroinform. 2013."
+            "Tustison NJ, Avants BB, Cook PA, et al. N4ITK: improved N3 bias correction. IEEE Trans Med Imaging. 2010;29(6):1310-1320."
+        ],
+    ),
+    "AntsAtropos": ToolReference(
+        command="Atropos [antspyx]",
+        package=Package.ANTS,
+        url="https://antspyx.readthedocs.io/en/latest/segmentation.html#ants.atropos",
+        references=[
+            "Avants BB, Tustison NJ, Wu J, Cook PA, Gee JC. An open source multivariate framework for n-tissue segmentation with evaluation on public data. Neuroinformatics. 2011;9(4):381-400."
+        ],
+    ),
+    "AntsRegistration": ToolReference(
+        command="antsRegistration",
+        package=Package.ANTS,
+        url="https://antspyx.readthedocs.io/en/latest/registration.html#ants.registration",
+        references=[
+            "Avants BB, Epstein CL, Grossman M, Gee JC. Symmetric diffeomorphic image registration with cross-correlation: evaluating automated labeling of elderly and neurodegenerative brain. Med Image Anal. 2008;12(1):26-41.",
+            "Klein A, Andersson J, Ardekani BA, et al. Evaluation of 14 nonlinear deformation algorithms applied to human brain MRI registration. Neuroimage. 2009;46(3):786-802.",
+            "Murphy K, van Ginneken B, Reinhardt JM, et al. Evaluation of registration methods on thoracic CT: the EMPIRE10 challenge. IEEE Trans Med Imaging. 2011;30(11):1901-1920.",
+            "Avants BB, Tustison NJ, Stauffer M, Song G, Wu B, Gee JC. A reproducible evaluation of ANTs similarity metric performance in brain image registration. Neuroimage. 2011;54(3):2033-2044.",
+        ],
+    ),
+    "AntsPyNetBrainExtraction": ToolReference(
+        command="brain_extraction [antspynet]",
+        package=Package.ANTS,
+        url="https://github.com/ANTsX/ANTsPyNet/blob/master/antspynet/utilities/brain_extraction.py",
+        references=[
+            "Tustison NJ, Cook PA, Holbrook AJ, et al. The ANTsX ecosystem for quantitative biological and medical imaging. Sci Rep. 2021;11:9068."
+        ],
+    ),
+    "AntsMotionCorrection": ToolReference(
+        command="motion_correction [antspyx]",
+        package=Package.ANTS,
+        url="",
+        references=[
+            "Avants BB, Epstein CL, Grossman M, Gee JC. Symmetric diffeomorphic image registration with cross-correlation: evaluating automated labeling of elderly and neurodegenerative brain. Med Image Anal. 2008;12(1):26-41.",
+            "Tustison NJ, Cook PA, Holbrook AJ, et al. The ANTsX ecosystem for quantitative biological and medical imaging. Sci Rep. 2021;11:9068.",
+        ],
+    ),
+    "AffineToRAS": ToolReference(
+        command="linear [nitransforms]",
+        package=Package.NIPY,
+        url="https://github.com/nipy/nitransforms",
+        references=[],
+    ),
+    # NILEARN
+    "NilearnFirstLevel": ToolReference(
+        command="FirstLevelModel [nilearn]",
+        package=Package.NILEARN,
+        url="https://nilearn.github.io/stable/modules/generated/nilearn.glm.first_level.FirstLevelModel.html",
+        references=[
+            "Friston KJ, Holmes AP, Worsley KJ, et al. Statistical parametric maps in functional imaging: a general linear approach. Hum Brain Mapp. 1994;2(4):189-210.",
+            "Abraham A, Pedregosa F, Eickenberg M, et al. Machine learning for neuroimaging with scikit-learn. Front Neuroinform. 2014;8:14.",
         ],
     ),
 }
@@ -305,19 +487,28 @@ equivalent_command_list = {
     "Threshold": "MathsCommand",
     "ThrROI": "MathsCommand",
     "ApplyMask": "MathsCommand",
-    "DeleteVolumes": "MathsCommand",
     "ImageMaths": "MathsCommand",
     "BinaryMaths": "MathsCommand",
     "UnaryMaths": "MathsCommand",
     "SumMultiVols": "MathsCommand",
-    "SumMultiTracks": "MathsCommand",
+    "SumMultiTracks": "AsymmetryIndex",
     "SpatialFilter": "MathsCommand",
     "ApplyXFM": "FLIRT",
     "CustomSliceTimer": "FEAT",
+    "CustomFilterRegressor": "FilterRegressor",
+    "FEATModel": "FEAT",
+    "FILMGLS": "FEAT",
+    "SmoothEstimate": "Cluster",
     "FeatureSpatialPrep": "AromaClassification",
     "FeatureTimeSeries": "AromaClassification",
     "FeatureFrequency": "AromaClassification",
     "FeatureSpatial": "AromaClassification",
     "SynthMorphApply": "SynthMorphReg",
+    "CustomEddy": "Eddy",
     "EddyCorrect": "Eddy",
+    "AntsApplyTransforms": "AntsRegistration",
+    "AntsComposeTransform": "AntsRegistration",
+    "GetNiftiTR": "NVols",
+    "ExtractVolumes": "NVols",
+    "DeleteVolumes": "NVols",
 }

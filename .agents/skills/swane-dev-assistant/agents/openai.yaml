@@ -1,4 +1,0 @@
-interface:
-  display_name: "SWANe Dev Assistant"
-  short_description: "Sviluppo e governance architetturale SWANe"
-  default_prompt: "Usa $swane-dev-assistant per implementare e verificare questa modifica in SWANe."

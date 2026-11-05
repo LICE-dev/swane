@@ -1,4 +1,4 @@
-from PySide6.QtCore import Signal, QObject, QRunnable
+from swane.utils.qt_compat import Signal, QObject, QRunnable
 from swane.nipype_pipeline.engine.WorkflowReport import WorkflowReport, WorkflowSignals
 from multiprocessing import Queue
 

@@ -1,0 +1,488 @@
+"""Command line entry point for the pre-release sweep.
+
+    python3 -m swane.tests.prerelease --cores 8 --ram 10
+
+The sweep takes hours, so it is deliberately a command rather than a pytest
+run: progress is persisted after every pass, ``--resume`` (the default) picks
+up where an interrupted run stopped, and everything it produced stays on disk
+for inspection.
+
+Useful variants::
+
+    # see what would run on this machine, without running anything
+    python3 -m swane.tests.prerelease --dry-run
+
+    # include the slow FreeSurfer passes
+    python3 -m swane.tests.prerelease --cores 8 --ram 10 --with-reconall
+
+    # re-check results already on disk, without re-running the workflows
+    python3 -m swane.tests.prerelease --checks-only
+
+    # one pass at a time
+    python3 -m swane.tests.prerelease --only dti_tractography
+
+    # open a finished pass in Slicer for visual inspection
+    python3 -m swane.tests.prerelease --view structural_fsl
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+
+from swane.utils.ResourceManager import ResourceManager
+
+DEFAULT_WORK_DIR = os.path.join(os.path.expanduser("~"), "test_swane", "prerelease")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python3 -m swane.tests.prerelease",
+        description=(
+            "Run every SWANe workflow over the synthetic phantom exam across "
+            "the configuration matrix, then check the results."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    resources = parser.add_argument_group("resources given to each workflow")
+    resources.add_argument(
+        "--cores",
+        type=int,
+        default=ResourceManager.get_default_cpu(),
+        help="CPU cores for the MonitoredMultiProcPlugin (default: %(default)s)",
+    )
+    resources.add_argument(
+        "--ram",
+        type=float,
+        default=ResourceManager.get_default_ram(),
+        help="RAM budget in GB for the plugin (default: %(default).1f)",
+    )
+
+    selection = parser.add_argument_group("what to run")
+    selection.add_argument(
+        "--with-reconall",
+        action="store_true",
+        help="include the slow FreeSurfer recon-all passes (hours each)",
+    )
+    selection.add_argument(
+        "--only",
+        metavar="PASS",
+        nargs="+",
+        help="run only these passes (see --list)",
+    )
+    selection.add_argument(
+        "--list", action="store_true", help="list the passes and exit"
+    )
+    selection.add_argument(
+        "--list-json",
+        action="store_true",
+        help="probe the host and print, as a JSON list on stdout, the names of "
+        "the passes that can run here (everything else goes to stderr); for "
+        "CI job matrices",
+    )
+    selection.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="show the plan and the host capabilities, run nothing",
+    )
+    selection.add_argument(
+        "--checks-only",
+        action="store_true",
+        help="re-check results already on disk without running any workflow",
+    )
+    selection.add_argument(
+        "--view",
+        metavar="PASS",
+        help="open a finished pass's results in the Slicer GUI exactly as SWANe "
+        "builds the result scene, for inspection, then exit. The scene is built "
+        "live and NOT saved (no scene.mrb), so it costs no disk; close Slicer "
+        "when done. See --list for pass names.",
+    )
+
+    behaviour = parser.add_argument_group("behaviour")
+    behaviour.add_argument(
+        "--work-dir",
+        default=DEFAULT_WORK_DIR,
+        help="where subjects, logs and reports go (default: %(default)s)",
+    )
+    behaviour.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="ignore previous results and run everything again",
+    )
+    behaviour.add_argument(
+        "--rebuild-phantom",
+        action="store_true",
+        help="regenerate the phantom DICOM even if a cached copy exists",
+    )
+    behaviour.add_argument(
+        "--full-accuracy",
+        action="store_true",
+        help="disable test_run speed shortcuts (subsampling, reduced "
+        "iterations/samples, ...) and run every pass at full accuracy, "
+        "like a real analysis; slower",
+    )
+    behaviour.add_argument(
+        "--no-cuda",
+        action="store_true",
+        help="pretend the host has no GPU: force the CUDA capability off so "
+        "the CUDA paths (eddy/bedpostx/probtrackx) downgrade to CPU. Useful on "
+        "a box whose GPU is present but has a broken CUDA/FSL build.",
+    )
+    behaviour.add_argument(
+        "--no-ground-truth",
+        action="store_true",
+        help="skip the anatomical plausibility checks (they rebuild the "
+        "phantom tissue model, which needs FreeSurfer and some memory)",
+    )
+    behaviour.add_argument(
+        "--slicer",
+        default=os.environ.get("SWANE_SLICER_PATH", ""),
+        help="path to the Slicer executable, needed by the venous CT passes "
+        "(default: whatever the user's ~/.SWANe configuration records)",
+    )
+    behaviour.add_argument(
+        "--timeout",
+        type=float,
+        default=3.0,
+        metavar="HOURS",
+        help="kill and fail a pass that runs longer than this many hours "
+        "wall clock, so a hung workflow (e.g. the SegmentEndocranium hang) "
+        "cannot block the rest of the sweep; 0 disables it (default: "
+        "%(default)s)",
+    )
+    behaviour.add_argument(
+        "-v", "--verbose", action="store_true", help="print every node as it starts"
+    )
+    return parser
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+
+    # TEMPORARY (see swane/tests/helpers/fsl_policy_override.py): FSL-free
+    # planning on the Windows CI runner despite the shipped FSL_MANDATORY.
+    from swane.tests.helpers.fsl_policy_override import apply_fsl_policy_override
+
+    if apply_fsl_policy_override():
+        # stderr: --list-json keeps stdout for the JSON list only.
+        print(
+            "SWANE_TEST_FSL_MANDATORY=0: FSL_MANDATORY overridden to False",
+            file=sys.stderr,
+        )
+
+    # Imported late so --help and --list stay instant.
+    from swane.tests.prerelease import capabilities as caps_mod
+    from swane.tests.prerelease import report as report_mod
+    from swane.tests.prerelease.checks import (
+        GroundTruth,
+        check_cpu_gpu_equivalence,
+        check_pass,
+    )
+    from swane.tests.prerelease.plan import (
+        PASSES,
+        build_plan,
+        coverage,
+        describe_plan,
+    )
+
+    if args.list:
+        for spec in PASSES:
+            tag = " (opt-in: --with-reconall)" if spec.heavy_freesurfer else ""
+            print("%-28s %s%s" % (spec.name, spec.description, tag))
+        return 0
+
+    if args.list_json:
+        return _list_json(args)
+
+    work_dir = os.path.abspath(args.work_dir)
+    os.makedirs(work_dir, exist_ok=True)
+
+    # Slicer comes from the user's real SWANe settings unless overridden: that
+    # is where the application records it after validating the version.
+    slicer_path = args.slicer or user_slicer_path()
+    if slicer_path:
+        print("Slicer: %s" % slicer_path)
+    global_config = _slicer_probe_config(slicer_path)
+
+    if args.view:
+        return view_pass(args.view, work_dir, slicer_path)
+
+    # test_run (the default) lightens SynthSeg/SynthMorph, so their RAM gate is
+    # lowered to match; --full-accuracy turns both the shortcuts and the lower
+    # gate off together.
+    test_run = not args.full_accuracy
+    caps = caps_mod.probe(
+        global_config=global_config,
+        cores=args.cores,
+        ram_gb=args.ram,
+        test_run=test_run,
+    )
+    if args.no_cuda:
+        caps.add("cuda", False, "forced off by --no-cuda")
+    print(caps.describe())
+    print("")
+
+    plan = build_plan(caps, with_reconall=args.with_reconall, only=args.only)
+    cover = coverage(plan, caps)
+    print(describe_plan(plan, cover))
+    print("")
+
+    blocking = caps_mod.blocking_failures(caps)
+    if blocking and not args.dry_run:
+        print("Cannot run:")
+        for cap in blocking:
+            print("  - %s: %s" % (cap.name, cap.reason))
+        return 2
+
+    if args.dry_run:
+        print("Dry run: nothing was executed.")
+        return 0
+
+    if not [p for p in plan if not p.skipped]:
+        print("No pass can run on this host with these options.")
+        return 2
+
+    from swane.tests.prerelease.runner import (
+        PrereleaseAlreadyRunningError,
+        PrereleaseWorkDirLock,
+        run_sweep,
+    )
+    from swane.tests.prerelease.subject import load_phantom
+
+    if args.checks_only:
+        results = _reload_results(work_dir, plan)
+        phantom_root = None
+    else:
+        try:
+            with PrereleaseWorkDirLock(work_dir) as work_dir_lock:
+                print("Preparing the phantom exam (generated once, then cached)...")
+                exam = load_phantom(force=args.rebuild_phantom)
+                print("  %s" % exam.root)
+                print("")
+                phantom_root = exam.root
+                results = run_sweep(
+                    plan,
+                    exam,
+                    work_dir,
+                    cores=args.cores,
+                    ram_gb=args.ram,
+                    slicer_path=slicer_path,
+                    resume=not args.no_resume,
+                    verbose=args.verbose,
+                    test_run=test_run,
+                    timeout_seconds=(args.timeout * 3600 if args.timeout > 0 else None),
+                    _work_dir_lock=work_dir_lock,
+                )
+        except PrereleaseAlreadyRunningError as error:
+            print("Cannot run: %s" % error)
+            return 2
+
+    ground_truth = None
+    if not args.no_ground_truth:
+        print("")
+        print("Loading the phantom ground truth for the anatomical checks...")
+        try:
+            # Cached beside the phantom when it was built; recomputed only for a
+            # pre-sidecar cache or the checks-only path (no phantom root here).
+            ground_truth = GroundTruth.load(phantom_root)
+        except Exception as exc:
+            print("  could not obtain it (%s); those checks are skipped." % exc)
+
+    print("")
+    print("Checking results...")
+    for result in results:
+        result.checks = check_pass(result, ground_truth)
+
+    # The GPU tractography pass is only meaningful compared against its CPU
+    # counterpart: both can pass their own checks independently while the two
+    # backends silently disagree. Fold that comparison into the GPU pass's
+    # own check list, keeping the report's per-pass structure unchanged.
+    by_name = {result.name: result for result in results}
+    cpu_pass = by_name.get("dti_tractography")
+    gpu_pass = by_name.get("dti_tractography_gpu")
+    if cpu_pass is not None and gpu_pass is not None:
+        gpu_pass.checks.extend(check_cpu_gpu_equivalence(cpu_pass, gpu_pass))
+
+    for result in results:
+        if result.status == "skipped":
+            continue
+        print("  %s" % result.name)
+        for check in result.checks:
+            if not check.passed:
+                print(str(check))
+
+    report = report_mod.build_report(
+        results,
+        caps,
+        cover,
+        work_dir,
+        options={
+            "cores": args.cores,
+            "ram_gb": args.ram,
+            "with_reconall": args.with_reconall,
+            "only": args.only,
+            "ground_truth": ground_truth is not None,
+            "test_run": test_run,
+        },
+    )
+    json_path = report_mod.write_json(report, work_dir)
+    html_path = report_mod.write_html(report, work_dir)
+    report_mod.print_summary(report)
+    print("Report: %s" % html_path)
+    print("        %s" % json_path)
+    print("Results kept under: %s" % work_dir)
+
+    return 0 if report_mod.overall_success(report) else 1
+
+
+def _list_json(args) -> int:
+    """Print the runnable pass names as a JSON list, and nothing else, on stdout.
+
+    Probing and planning chatter is sent to stderr so a CI step can capture
+    stdout straight into a job output.
+    """
+    import contextlib
+    import json
+
+    from swane.tests.prerelease import capabilities as caps_mod
+    from swane.tests.prerelease.plan import build_plan
+
+    with contextlib.redirect_stdout(sys.stderr):
+        slicer_path = args.slicer or user_slicer_path()
+        caps = caps_mod.probe(
+            global_config=_slicer_probe_config(slicer_path),
+            cores=args.cores,
+            ram_gb=args.ram,
+            test_run=not args.full_accuracy,
+        )
+        if args.no_cuda:
+            caps.add("cuda", False, "forced off by --no-cuda")
+        blocking = caps_mod.blocking_failures(caps)
+        if blocking:
+            print("Cannot run:")
+            for cap in blocking:
+                print("  - %s: %s" % (cap.name, cap.reason))
+        else:
+            plan = build_plan(caps, with_reconall=args.with_reconall, only=args.only)
+    if blocking:
+        return 2
+    print(json.dumps([p.name for p in plan if not p.skipped]))
+    return 0
+
+
+def view_pass(pass_name: str, work_dir: str, slicer_path: str) -> int:
+    """Open a finished pass's result scene in the Slicer GUI, without saving it.
+
+    Runs the very script SWANe uses to build a subject's result scene
+    (``workers/slicer_script_result.py``) over the pass's ``results/`` folder,
+    but with a main window and ``--no-save``: the scene is assembled live for
+    inspection and nothing is written to disk, so any pass can be reviewed on
+    demand without a per-pass ``scene.mrb`` eating space. Blocks until the user
+    closes Slicer.
+    """
+    import subprocess
+
+    import swane
+
+    if not slicer_path:
+        print("No Slicer configured (pass --slicer or set it in ~/.SWANe).")
+        return 2
+    results_dir = os.path.join(work_dir, pass_name, "results")
+    if not os.path.isdir(results_dir):
+        print("No results for pass %r under %s" % (pass_name, work_dir))
+        print("Run the pass first; use --list for the pass names.")
+        return 2
+
+    script = os.path.join(
+        os.path.dirname(swane.__file__), "workers", "slicer_script_result.py"
+    )
+    # slicer_script_result.py reads its results folder from the CWD, so launch
+    # Slicer there. No --no-main-window: we want the GUI. --no-save keeps it
+    # ephemeral (and leaves the window open until the user closes it).
+    print("Building the result scene for %r in Slicer (not saved)." % pass_name)
+    print("Close Slicer when you are done inspecting.")
+    try:
+        return subprocess.call(
+            [slicer_path, "--python-script", script, "--no-save"], cwd=results_dir
+        )
+    except (OSError, FileNotFoundError) as exc:
+        print("Could not launch Slicer at %s (%s)" % (slicer_path, exc))
+        return 2
+
+
+def user_slicer_path() -> str:
+    """Read the Slicer path out of the user's real SWANe configuration.
+
+    SWANe stores it in ``~/.SWANe`` once Slicer has been configured (and
+    version-validated) in the application, so that file — not an environment
+    variable — is the natural source for anyone running this sweep.
+
+    Deliberately read-only: instantiating :class:`ConfigManager` on the real
+    file would rewrite it as a side effect of loading, and a test suite has no
+    business editing the user's settings.
+    """
+    import configparser
+
+    from swane.resources import strings
+    from swane.config.config_enums import GlobalPrefCategoryList
+
+    path = os.path.join(os.path.expanduser("~"), "." + strings.APPNAME)
+    if not os.path.isfile(path):
+        return ""
+    parser = configparser.ConfigParser()
+    try:
+        parser.read(path)
+        return parser.get(
+            str(GlobalPrefCategoryList.MAIN), "slicer_path", fallback=""
+        ).strip()
+    except configparser.Error:
+        return ""
+
+
+def _slicer_probe_config(slicer_path: str):
+    """A throwaway global config carrying only the Slicer path, for probing."""
+    if not slicer_path:
+        return None
+    try:
+        import tempfile
+
+        from swane.config.ConfigManager import ConfigManager
+        from swane.config.config_enums import GlobalPrefCategoryList
+
+        folder = tempfile.mkdtemp(prefix="swane_probe_")
+        config = ConfigManager(global_base_folder=folder)
+        config[GlobalPrefCategoryList.MAIN]["slicer_path"] = slicer_path
+        return config
+    except Exception:
+        return None
+
+
+def _reload_results(work_dir: str, plan: list) -> list:
+    """Rebuild PassResult objects from a previous run, for ``--checks-only``."""
+    from swane.tests.prerelease.runner import PassResult, load_state
+
+    state = load_state(work_dir)
+    results = []
+    for item in plan:
+        stored = state.get(item.name)
+        if not stored:
+            results.append(
+                PassResult(
+                    name=item.name,
+                    status="skipped",
+                    reason="no recorded result in %s" % work_dir,
+                )
+            )
+            continue
+        results.append(
+            PassResult(
+                **{k: v for k, v in stored.items() if k in PassResult.__annotations__}
+            )
+        )
+    return results
+
+
+if __name__ == "__main__":
+    sys.exit(main())

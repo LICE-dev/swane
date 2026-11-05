@@ -1,0 +1,530 @@
+"""What this machine can actually run.
+
+The pre-release suite sweeps configuration axes that each need something from
+the host: FreeSurfer for recon-all, a GPU for the CUDA paths, enough RAM for
+the Synth tools, the XTRACT protocol data for real tractography, Slicer for
+the venous-CT endocranium segmentation.
+
+Nothing here *fails* when something is missing: an unavailable axis is dropped
+from the plan with an explicit, printable reason, so a run on a partially
+equipped box still exercises everything that box can do. The reasons are part
+of the report — a pass that never ran must never be mistaken for one that ran
+and succeeded.
+
+RAM thresholds are not reinvented: they come from
+:class:`~swane.utils.ResourceManager.ResourceManager`, the same source the
+application itself uses to enable or grey out these preferences.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+from dataclasses import dataclass, field
+
+from swane.config.preference_list import XTRACT_DATA_DIR
+from swane.utils.DependencyManager import DependencyManager
+from swane.utils.ResourceManager import ResourceManager
+
+#: RAM the antspynet deskull node reserves (``get_deskull_node``'s ``mem_gb``).
+#: ResourceManager has no antspynet entry: the node uses a fixed figure, and so
+#: does the ANTSPYNET option gate in ``preference_list``.
+ANTSPYNET_RAM_GB = 5.0
+
+
+@dataclass(frozen=True)
+class Capability:
+    """One host feature, and why it is (not) usable."""
+
+    name: str
+    available: bool
+    reason: str
+
+    def __str__(self) -> str:
+        mark = "yes" if self.available else "no "
+        return "  [%s] %-22s %s" % (mark, self.name, self.reason)
+
+
+@dataclass
+class Capabilities:
+    """The full probe result, keyed by feature name."""
+
+    items: dict = field(default_factory=dict)
+    #: RAM the user allocated to the runs, in GB (drives the Synth thresholds).
+    ram_gb: float = 0.0
+    #: CPU cores the user allocated to the runs.
+    cores: int = 0
+
+    def add(self, name: str, available: bool, reason: str) -> None:
+        self.items[name] = Capability(name, available, reason)
+
+    def has(self, name: str) -> bool:
+        item = self.items.get(name)
+        return bool(item and item.available)
+
+    def reason(self, name: str) -> str:
+        item = self.items.get(name)
+        return item.reason if item else "not probed"
+
+    def missing(self) -> list:
+        return [c for c in self.items.values() if not c.available]
+
+    def describe(self) -> str:
+        lines = [
+            "Host capabilities (cores=%d, ram=%.1f GB):" % (self.cores, self.ram_gb)
+        ]
+        lines.extend(str(self.items[k]) for k in sorted(self.items))
+        return "\n".join(lines)
+
+
+def _probe_fsl(dependency_manager: DependencyManager, caps: Capabilities) -> None:
+    caps.add(
+        "fsl",
+        dependency_manager.is_fsl(),
+        (
+            "FSL %s" % os.environ.get("FSLDIR", "?")
+            if dependency_manager.is_fsl()
+            else "no usable FSL (>= %s) found; FSL engines are dropped"
+            % DependencyManager.MIN_FSL_VERSION
+        ),
+    )
+
+
+def _probe_dcm2niix(dependency_manager: DependencyManager, caps: Capabilities) -> None:
+    caps.add(
+        "dcm2niix",
+        dependency_manager.is_dcm2niix(),
+        (
+            "available"
+            if dependency_manager.is_dcm2niix()
+            else "missing; phantom DICOM cannot be converted"
+        ),
+    )
+
+
+def _probe_freesurfer(
+    dependency_manager: DependencyManager, caps: Capabilities
+) -> None:
+    has_fs = dependency_manager.is_freesurfer()
+    caps.add(
+        "freesurfer",
+        has_fs,
+        (
+            "FreeSurfer at %s" % os.environ.get("FREESURFER_HOME", "?")
+            if has_fs
+            else "no FreeSurfer (>= %s); recon-all/SynthSeg axes are dropped"
+            % DependencyManager.MIN_FREESURFER_VERSION
+        ),
+    )
+
+    # The hippocampal/amygdala subfield step needs the Matlab runtime.
+    has_matlab = has_fs and dependency_manager.is_freesurfer_matlab()
+    caps.add(
+        "freesurfer_matlab",
+        has_matlab,
+        (
+            "Matlab runtime present"
+            if has_matlab
+            else "no FreeSurfer Matlab runtime; hippo/amygdala labels are dropped"
+        ),
+    )
+
+    # SynthStrip/SynthSeg/SynthMorph ship with recent FreeSurfer only.
+    has_synth = has_fs and DependencyManager.is_freesurfer_synth()
+    caps.add(
+        "freesurfer_synth",
+        has_synth,
+        (
+            "Synth tools present (FreeSurfer >= %s)"
+            % DependencyManager.SYNTH_FREESURFER_VERSION
+            if has_synth
+            else "FreeSurfer < %s; Synth tool axes are dropped"
+            % DependencyManager.SYNTH_FREESURFER_VERSION
+        ),
+    )
+
+
+def _recon_all_path() -> str:
+    fs_home = os.environ.get("FREESURFER_HOME")
+    if fs_home:
+        candidate = os.path.join(fs_home, "bin", "recon-all")
+        if os.path.isfile(candidate):
+            return candidate
+    return shutil.which("recon-all") or ""
+
+
+def _recon_all_has_expert_bug(path: str) -> bool:
+    """True if this recon-all is the unpatched FS 8.x build that crashes on -expert.
+
+    The surface-registration stage tests the expert-options path as a tcsh
+    boolean: ``if($XOptsFile)`` -- a path string in a numeric context, which
+    aborts with "if: Expression Syntax." The fix (and every correct use of the
+    variable elsewhere in the same script) is ``if($#XOptsFile ...)``. So the
+    bare ``if($XOptsFile)`` form is a reliable fingerprint of the buggy build.
+    """
+    try:
+        with open(path, errors="ignore") as handle:
+            text = handle.read()
+    except OSError:
+        return False
+    return "if($XOptsFile)" in text or "if ($XOptsFile)" in text
+
+
+def _probe_reconall_expert(caps: Capabilities, test_run: bool = False) -> None:
+    """Detect the FreeSurfer 8.x recon-all ``-expert`` bug.
+
+    The prerelease recon-all passes lean on an ``-expert`` options file to run
+    faster in test_run, but an unpatched FS 8.x recon-all crashes at surface
+    registration whenever an expert file is present (see
+    :func:`_recon_all_has_expert_bug`). FreeSurfer fixed it in its own patch
+    (``fs820_updates.sh``, mid-2026). A ``--full-accuracy`` run passes no expert
+    file, so it is unaffected -- hence this only gates the test_run passes.
+    """
+    if not test_run or not caps.has("freesurfer"):
+        caps.add("reconall_expert", True, "no -expert file used (full accuracy)")
+        return
+    recon_all = _recon_all_path()
+    if not recon_all:
+        caps.add("reconall_expert", True, "recon-all not found; assuming usable")
+        return
+    buggy = _recon_all_has_expert_bug(recon_all)
+    caps.add(
+        "reconall_expert",
+        not buggy,
+        (
+            "recon-all handles -expert correctly"
+            if not buggy
+            else "recon-all mishandles -expert (crashes at surface registration); "
+            "apply the FreeSurfer fs820_updates.sh patch, or run --full-accuracy"
+        ),
+    )
+
+
+def _probe_synth_ram(caps: Capabilities, test_run: bool = False) -> None:
+    """Each Synth tool has its own RAM floor; check the allocated budget.
+
+    ``test_run`` mirrors the sweep's own test_run mode: SynthSeg (``--fast``,
+    ``robust=False``), SynthMorph (``steps=5``) and Synth recon-all (lighter
+    iterations, SynthSeg ``--fast`` via the -expert file) then do less work and
+    fit in less RAM, so their floor is lowered by ``TEST_RUN_SYNTH_RAM_FACTOR``.
+    This must stay in lock-step with the per-node ``mem_gb`` those tools reserve
+    under test_run (interfaces/utils.py, freesurfer_workflow.py): lower the gate but
+    not the reservation and the pass is planned yet aborts in the plugin's
+    prerun check; lower the reservation but not the gate and it is never planned.
+    SynthStrip has no such flag, so it is not scaled.
+    """
+    has_synth = caps.has("freesurfer_synth")
+    factor = ResourceManager.TEST_RUN_SYNTH_RAM_FACTOR if test_run else 1.0
+    for name, base_needed, reducible in (
+        ("synth_strip", ResourceManager.synth_strip_ram_requirements(), False),
+        ("synth_morph", ResourceManager.synth_morph_ram_requirements(), True),
+        ("synth_seg", ResourceManager.synth_seg_ram_requirements(), True),
+        ("synth_reconall", ResourceManager.synth_reconall_ram_requirements(), True),
+    ):
+        if not has_synth:
+            caps.add(name, False, "requires the FreeSurfer Synth tools")
+            continue
+        needed = base_needed * factor if reducible else base_needed
+        enough = caps.ram_gb >= needed
+        note = " (test_run)" if reducible and test_run else ""
+        caps.add(
+            name,
+            enough,
+            (
+                "%.1f GB allocated >= %.1f GB required%s" % (caps.ram_gb, needed, note)
+                if enough
+                else "needs %.1f GB%s, only %.1f GB allocated"
+                % (needed, note, caps.ram_gb)
+            ),
+        )
+
+
+def _probe_antspyx(caps: Capabilities) -> None:
+    """The ANTs registration backend: the antspyx package plus its RAM floor.
+
+    Unlike the Synth tools, antspyx is a plain Python package (no FreeSurfer
+    bundle), so it is probed on its own. Its RAM floor comes from
+    :meth:`ResourceManager.ants_ram_requirements`, the same source the
+    application uses to enable or grey out the ANTS engine option. The floor is
+    checked against the allocated budget, not total system memory, because that
+    is what the workflow will actually be allowed to use.
+    """
+    has_antspyx = DependencyManager.is_antspyx()
+    needed = ResourceManager.ants_ram_requirements()
+    if not has_antspyx:
+        caps.add("antspyx", False, "antspyx not importable; the ANTS engine is dropped")
+        return
+    enough = caps.ram_gb >= needed
+    caps.add(
+        "antspyx",
+        enough,
+        (
+            "antspyx present, %.1f GB allocated >= %.1f GB required"
+            % (caps.ram_gb, needed)
+            if enough
+            else "antspyx present but needs %.1f GB, only %.1f GB allocated"
+            % (needed, caps.ram_gb)
+        ),
+    )
+
+
+def _probe_antspynet(caps: Capabilities) -> None:
+    """The antspynet brain-extraction backend: the package plus its RAM floor.
+
+    Probed on its own, like antspyx: it is a plain Python package, not part of
+    the FreeSurfer Synth bundle. The floor is the fixed 5 GB the deskull node
+    reserves (``get_deskull_node`` sets ``mem_gb=5``), the same figure the
+    application uses to enable or grey out the ANTSPYNET engine option; it is
+    checked against the allocated budget, not total system memory, because that
+    is what the workflow will actually be allowed to use.
+    """
+    has_antspynet = DependencyManager.is_antspynet()
+    needed = ANTSPYNET_RAM_GB
+    if not has_antspynet:
+        caps.add(
+            "antspynet",
+            False,
+            "antspynet not importable; the ANTSPYNET deskull engine is dropped",
+        )
+        return
+    enough = caps.ram_gb >= needed
+    caps.add(
+        "antspynet",
+        enough,
+        (
+            "antspynet present, %.1f GB allocated >= %.1f GB required"
+            % (caps.ram_gb, needed)
+            if enough
+            else "antspynet present but needs %.1f GB, only %.1f GB allocated"
+            % (needed, caps.ram_gb)
+        ),
+    )
+
+
+def _probe_dipy(caps: Capabilities) -> None:
+    has_dipy = DependencyManager.is_dipy()
+    if not has_dipy:
+        caps.add(
+            "dipy",
+            False,
+            "dipy package not importable; the DIPY_RECOBUNDLES engine is dropped",
+        )
+        return
+
+    needed = ResourceManager.dipy_tractography_ram_requirements()
+    enough = caps.ram_gb >= needed
+
+    atlas_dir = os.path.join(os.path.expanduser("~"), ".dipy", "bundle_atlas_hcp842")
+    has_atlas = os.path.isdir(atlas_dir)
+
+    if not has_atlas:
+        caps.add(
+            "dipy",
+            False,
+            "dipy present but HCP842 atlas not found in ~/.dipy/bundle_atlas_hcp842",
+        )
+    elif not enough:
+        caps.add(
+            "dipy",
+            False,
+            "dipy present but needs %.1f GB, only %.1f GB allocated"
+            % (needed, caps.ram_gb),
+        )
+    else:
+        caps.add(
+            "dipy",
+            True,
+            "dipy and HCP842 atlas present, %.1f GB allocated >= %.1f GB required"
+            % (caps.ram_gb, needed),
+        )
+
+
+def _probe_tractography(caps: Capabilities) -> None:
+    """Tractography runs with either engine: FSL XTRACT or dipy RecoBundles."""
+    ok = caps.has("xtract") or caps.has("dipy")
+    caps.add(
+        "tractography",
+        ok,
+        "XTRACT or dipy available" if ok else "neither XTRACT nor dipy is usable",
+    )
+
+
+def _probe_gpu(caps: Capabilities) -> None:
+    try:
+        is_cuda = ResourceManager.is_cuda()
+    except Exception:
+        is_cuda = False
+    caps.add(
+        "cuda",
+        is_cuda,
+        "GPU detected" if is_cuda else "no GPU detected; CUDA axes are dropped",
+    )
+
+
+def _probe_xtract(dependency_manager: DependencyManager, caps: Capabilities) -> None:
+    # A real tract graph needs the per-tract protocol folders. The suite only
+    # sweeps the corticospinal tract, so that is what must be present. XTRACT
+    # runs FSL's probtrackx (and the FSL diffusion chain), so FSL is needed too.
+    if not dependency_manager.is_fsl():
+        caps.add("xtract", False, "no usable FSL; the XTRACT engine is dropped")
+        return
+    tract_dir = os.path.join(XTRACT_DATA_DIR, "cst_l") if XTRACT_DATA_DIR else ""
+    ok = bool(XTRACT_DATA_DIR) and os.path.isdir(tract_dir)
+    caps.add(
+        "xtract",
+        ok,
+        (
+            "XTRACT protocols at %s" % XTRACT_DATA_DIR
+            if ok
+            else "no XTRACT protocol data; the XTRACT engine is dropped"
+        ),
+    )
+
+
+def _probe_mni(caps: Capabilities) -> None:
+    """MNI standard templates, read at construction by several branches."""
+    missing = []
+    try:
+        from swane.utils.templates import get_swane_template
+
+        get_swane_template(name="MNI152NLin6Asym", resolution=1, desc="brain")
+        get_swane_template(name="MNI152NLin6Asym", resolution=2, desc="brain")
+        get_swane_template(name="MNI152NLin2009cSym", resolution=1, desc="brain")
+    except Exception as e:
+        missing = ["TemplateFlow templates"]
+
+    caps.add(
+        "mni_templates",
+        not missing,
+        (
+            "MNI standard templates present"
+            if not missing
+            else "missing %s; FLAT1/AI/tractography/AROMA axes are dropped"
+            % ", ".join(missing)
+        ),
+    )
+
+
+def _probe_slicer(global_config, caps: Capabilities) -> None:
+    try:
+        ok = DependencyManager.is_slicer(global_config)
+    except Exception:
+        ok = False
+    caps.add(
+        "slicer",
+        ok,
+        (
+            "Slicer configured"
+            if ok
+            else "no valid Slicer path in the global config; venous CT is dropped"
+        ),
+    )
+
+
+def _probe_ram_budget(caps: Capabilities) -> None:
+    """The allocated budget must exist physically, or nipype will thrash/OOM."""
+    total = ResourceManager.total_memory_gb()
+    ok = caps.ram_gb <= total
+    caps.add(
+        "ram_budget",
+        ok,
+        (
+            "%.1f GB of %.1f GB physical" % (caps.ram_gb, total)
+            if ok
+            else "asked for %.1f GB but the machine has %.1f GB; lower --ram"
+            % (caps.ram_gb, total)
+        ),
+    )
+
+
+def _probe_phantom_anatomy(caps: Capabilities) -> None:
+    """The phantom anatomy is CerebrA + ICBM 2009c Sym, from TemplateFlow."""
+    from swane.tests.helpers.phantom.anatomy_source import (
+        _templateflow_home,
+        anatomy_available,
+    )
+
+    caps.add(
+        "phantom_anatomy",
+        True,
+        (
+            "CerebrA/ICBM 2009c Sym in the TemplateFlow cache (%s)"
+            % _templateflow_home()
+            if anatomy_available()
+            else "CerebrA/ICBM 2009c Sym will be downloaded from TemplateFlow"
+        ),
+    )
+
+
+def _probe_nilearn(caps: Capabilities) -> None:
+    has_nilearn = DependencyManager.is_nilearn()
+    caps.add(
+        "nilearn",
+        has_nilearn,
+        (
+            "nilearn present"
+            if has_nilearn
+            else "nilearn not importable; the NILEARN fMRI engine is dropped"
+        ),
+    )
+
+
+def probe(
+    global_config=None,
+    cores: int = 0,
+    ram_gb: float = 0.0,
+    test_run: bool = False,
+) -> Capabilities:
+    """Probe the host for everything the pre-release sweep depends on.
+
+    Parameters
+    ----------
+    global_config : ConfigManager, optional
+        Used only for the Slicer path, which lives in the application settings.
+    cores, ram_gb
+        The budget the user allocated; the Synth thresholds are checked against
+        ``ram_gb`` rather than against total system memory, because that is what
+        the workflows will actually be allowed to use.
+    test_run
+        When the sweep runs in test_run mode, SynthSeg/SynthMorph fit in less
+        RAM, so their gate is lowered to match (see :func:`_probe_synth_ram`).
+    """
+    caps = Capabilities(cores=cores, ram_gb=ram_gb)
+    dependency_manager = DependencyManager()
+
+    _probe_fsl(dependency_manager, caps)
+    _probe_dcm2niix(dependency_manager, caps)
+    _probe_freesurfer(dependency_manager, caps)
+    _probe_reconall_expert(caps, test_run=test_run)
+    _probe_phantom_anatomy(caps)
+    _probe_ram_budget(caps)
+    _probe_synth_ram(caps, test_run=test_run)
+    _probe_antspyx(caps)
+    _probe_antspynet(caps)
+    _probe_gpu(caps)
+    _probe_xtract(dependency_manager, caps)
+    _probe_dipy(caps)
+    _probe_tractography(caps)
+    _probe_mni(caps)
+    _probe_slicer(global_config, caps)
+    _probe_nilearn(caps)
+
+    caps.add(
+        "graphviz",
+        shutil.which("dot") is not None,
+        "dot available" if shutil.which("dot") else "no graphviz; graphs are skipped",
+    )
+    return caps
+
+
+#: Capabilities without which nothing can run at all. FSL joins them only when
+#: the build makes it mandatory (swane.config.dependency_policy.FSL_MANDATORY).
+BLOCKING = ("dcm2niix", "phantom_anatomy", "ram_budget")
+
+
+def blocking_failures(caps: Capabilities) -> list:
+    """Return the capabilities that make a run pointless, if any."""
+    from swane.config import dependency_policy
+
+    names = (("fsl",) if dependency_policy.FSL_MANDATORY else ()) + BLOCKING
+    return [caps.items[name] for name in names if not caps.has(name)]

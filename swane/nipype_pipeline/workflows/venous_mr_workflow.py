@@ -1,22 +1,24 @@
-from nipype.interfaces.fsl import (
-    Split,
+from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
-    ImageStats,
     ImageMaths,
 )
-from nipype.interfaces.utility import Merge
+from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
+from nipype.interfaces.utility import Merge, Function
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
-from swane.nipype_pipeline.nodes.VenousCheck import VenousCheck
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.vascular.VenousCheck import VenousCheck
 from nipype.interfaces.utility import IdentityInterface
 from configparser import SectionProxy
-from swane.nipype_pipeline.nodes.utils import get_deskull_node
-from swane.nipype_pipeline.nodes.utils import (
+from swane.nipype_pipeline.interfaces.utils import get_deskull_node
+from swane.nipype_pipeline.interfaces.utils import (
     apply_registration_node,
     get_registration_node,
+    resolve_registration_engine,
+    resolve_deskull_engine,
 )
+from swane.config.config_enums import DeskullModality
 
 
 def venous_mr_workflow(
@@ -26,6 +28,9 @@ def venous_mr_workflow(
     synth_config: SectionProxy,
     venous2_mr_dir: str = None,
     base_dir: str = "/",
+    deskull_modality: DeskullModality = DeskullModality.T1,
+    max_cpu: int = 0,
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Analysis of phase contrasts images (in single or two series) to obtain in skull veins
@@ -45,6 +50,14 @@ def venous_mr_workflow(
         If veins phase is divided from anatomic phase, use this param to load the second DICOM files directory.
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
+    deskull_modality : DeskullModality, optional
+        antspynet brain-extraction modality for the deskull node. The default
+        is DeskullModality.T1.
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of Synth tools. The default is 0.
+    test_run : bool, optional
+        If True, speed up the underlying registration for prerelease test
+        runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -66,6 +79,9 @@ def venous_mr_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # The workflow follows the configured registration engine (ANTs by default).
+    engine = resolve_registration_engine(synth_config)
 
     # Input Node
     inputnode = Node(
@@ -95,9 +111,27 @@ def venous_mr_workflow(
     # If the phases are in the same sequence
     if venous2_mr_dir is None:
         # NODE 3a: Divide the two phases from the phase contrast
-        veins_split = Node(Split(), name="veins_split")
+        def split_volumes(in_file):
+            import os
+            import nibabel as nib
+
+            img = nib.load(in_file)
+            out_files = []
+            for index in range(img.shape[-1]):
+                out_file = os.path.abspath("vol%04d.nii.gz" % index)
+                nib.save(img.slicer[..., index], out_file)
+                out_files.append(out_file)
+            return out_files
+
+        veins_split = Node(
+            Function(
+                input_names=["in_file"],
+                output_names=["out_files"],
+                function=split_volumes,
+            ),
+            name="veins_split",
+        )
         veins_split.long_name = "volumes splitting"
-        veins_split.inputs.dimension = "t"
         workflow.connect(veins_reOrient, "out_file", veins_split, "in_file")
 
         workflow.connect(veins_split, "out_files", veins_check, "in_files")
@@ -123,13 +157,27 @@ def venous_mr_workflow(
         workflow.connect(veins_merge, "out", veins_check, "in_files")
 
     # NODE 5: Scalp removal and in skull structures segmentation
+    #
+    # The mask is applied to the venous phase (NODE 6), so it must cover the
+    # whole intracranial space: a mask following the brain surface clips the
+    # superior sagittal sinus and the veins running against the inner skull
+    # table. Hence BET surfaces (inskull mask) and DeskullModality.VENOUS.
+    #
+    # VENOUS uses the antspynet "flair.v0" network, which needs no post-step.
+    # It is a previous-version network: if it is dropped from a future antspynet
+    # release, the second choice is "t2" plus a 3 mm dilation of the mask in
+    # physical space (not in voxels - venous phases are often anisotropic).
     deskull = get_deskull_node(
         name_prefix="anatomic phase",
         name="vein_mr_deskull",
-        use_synth=synth_config.getboolean_safe("strip"),
+        deskull_engine=resolve_deskull_engine(synth_config),
+        deskull_modality=deskull_modality,
         mask=True,
         bet_thr=config.getfloat_safe("bet_thr"),
+        antspynet_thr=config.getfloat_safe("antspynet_thr"),
         bet_surfaces=True,
+        max_cpu=max_cpu,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
     workflow.connect(veins_check, "out_file_anat", deskull, "in_file")
 
@@ -146,31 +194,36 @@ def venous_mr_workflow(
         name="anat_2_ref",
         name_prefix="anatomic phase",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         moving=[veins_check, "out_file_anat"],
         moving_brain=[veins_check, "out_file_anat"],
         reference=[inputnode, "reference"],
         reference_brain=[inputnode, "reference_brain"],
         flirt_cost="mutualinfo",
+        test_run=test_run,
+        max_cpu=max_cpu,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
 
     veins_2_ref = apply_registration_node(
         name_prefix="venous phase",
         name_suffix="to reference",
         name="veins_2_ref",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[anat_2_ref.out_registered_node, anat_2_ref.warp],
+        # Mandatory on the ANTs engine: applies the transform list through its
+        # paired which_to_invert flags instead of the single-field boundary path
+        registration=anat_2_ref,
         moving=[veins_inskull_mask, "out_file"],
         reference=[inputnode, "reference"],
         non_linear=False,
     )
 
     # NODE 9: Get the max value of venous phase
-    veins_range = Node(ImageStats(), name="veins_range")
+    veins_range = Node(ImageStatistics(), name="veins_range")
     veins_range.long_name = "intensity range detection"
-    veins_range.inputs.op_string = "-R"
     workflow.connect(veins_2_ref, "out_file", veins_range, "in_file")
 
     # NODE 10: Venous phase rescaling in 0-100
@@ -179,12 +232,12 @@ def venous_mr_workflow(
     veins_rescale.inputs.out_file = "r-veins_mra_inskull.nii.gz"
 
     # Function to define the operation string
-    def rescale_string(intensity_range):
-        op_string = "-mul 100 -div %f" % intensity_range[1]
+    def rescale_string(max_value):
+        op_string = "-mul 100 -div %f" % max_value
         return op_string
 
     workflow.connect(
-        veins_range, ("out_stat", rescale_string), veins_rescale, "op_string"
+        veins_range, ("max_value", rescale_string), veins_rescale, "op_string"
     )
     workflow.connect(veins_2_ref, "out_file", veins_rescale, "in_file")
 

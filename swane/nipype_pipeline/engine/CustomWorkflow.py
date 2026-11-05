@@ -1,13 +1,27 @@
 # -*- DISCLAIMER: this file contains code derived from Nipype (https://github.com/nipy/nipype/blob/master/LICENSE)  -*-
 
+import os
+import re
+
 from nipype.pipeline.engine import Workflow
 from nipype import Node, logging, MapNode
 from nipype.interfaces.utility import IdentityInterface
 from nipype.interfaces.io import DataSink
 from swane.nipype_pipeline.engine.NodeListEntry import NodeListEntry
-from swane import strings
+from swane.resources import strings
 
 logger = logging.getLogger("nipype.workflow")
+
+
+def mapnode_subdir_substitution(sep: str = os.sep) -> tuple[str, str]:
+    """DataSink ``regexp_substitutions`` entry that drops the ``_<name><n>``
+    folder of a MapNode output, i.e. the folder right before the file name.
+
+    DataSink applies the substitutions to a destination joined with the host
+    separator, so the pattern is built from ``sep`` (a backslash on Windows).
+    """
+    s = re.escape(sep)
+    return rf"{s}_[^{s}]+[0-9]+(?={s}[^{s}]+$)", ""
 
 
 # -*- DISCLAIMER: this class extends a Nipype class (nipype.pipeline.engine.Workflow)  -*-
@@ -124,11 +138,16 @@ class CustomWorkflow(Workflow):
         data_sink.long_name = "%s: " + result_name
         data_sink.inputs.base_directory = save_path
         data_sink.inputs.container = sub_folder
+        # SWANe uses no iterables. With parameterization DataSink keeps every
+        # "_"-prefixed folder of the source path, including ancestors of the
+        # subject folder (e.g. /data/_mri/), so results would land in nested
+        # folders that the Slicer loaders never list.
+        data_sink.inputs.parameterization = False
 
         if regexp_substitutions is not None:
             data_sink.inputs.regexp_substitutions = regexp_substitutions
         elif remove_mapnode_subdir:
-            data_sink.inputs.regexp_substitutions = [(r"/_[^/]+[0-9]+(?=/[^/]+$)", "")]
+            data_sink.inputs.regexp_substitutions = [mapnode_subdir_substitution()]
 
         self.connect(result_node, result_name, data_sink, "@file")
 

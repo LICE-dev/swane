@@ -4,20 +4,23 @@ import shutil
 from swane.utils.DataInputList import DataInputList, ImageModality
 from enum import Enum, auto
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.utils.SubjectInputStateList import SubjectInputStateList
 from swane.utils.DependencyManager import DependencyManager
 from swane.workers.DicomSearchWorker import DicomSearchWorker
-from PySide6.QtCore import QThreadPool
-from swane import strings
-from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+from swane.workers.worker_pool import start_worker
+from swane.resources import strings
 import traceback
-from threading import Thread
-from swane.nipype_pipeline.workflows.freesurfer_workflow import FS_DIR
+from swane.nipype_pipeline.workflows.workflow_constants import FS_DIR, RESULT_DIR
 from multiprocessing import Queue
-from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
-from swane.workers.WorkflowProcess import WorkflowProcess
-from swane.workers.SlicerExportWorker import SlicerExportWorker
-from swane.utils.ToolReference import tool_reference_list
+from swane.utils.ToolReference import get_command_info
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+    from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
+    from swane.workers.WorkflowProcess import WorkflowProcess
+    from swane.workers.SlicerExportWorker import SlicerExportWorker
 
 
 class SubjectRet(Enum):
@@ -26,6 +29,7 @@ class SubjectRet(Enum):
     FolderOutsideMain = auto()
     FolderAlreadyExists = auto()
     InvalidFolderTree = auto()
+    ConfigError = auto()
     ValidFolder = auto()
     DataInputNonEmpty = auto()
     DataInputLoading = auto()
@@ -43,6 +47,7 @@ class SubjectRet(Enum):
     GenWfError = auto()
     GenWfCompleted = auto()
     ExecWfResume = auto()
+    ExecWfResumeIncompatible = auto()
     ExecWfResumeFreesurfer = auto()
     ExecWfStarted = auto()
     ExecWfStopped = auto()
@@ -64,9 +69,9 @@ class Subject:
         self.input_state_list: SubjectInputStateList = None
         self.config: ConfigManager = None
         self.dependency_manager: DependencyManager = dependency_manager
-        self.workflow: MainWorkflow = None
-        self.workflow_process: WorkflowProcess = None
-        self.workflow_monitor_work: WorkflowMonitorWorker = None
+        self.workflow: "MainWorkflow" = None
+        self.workflow_process: "WorkflowProcess" = None
+        self.workflow_monitor_work: "WorkflowMonitorWorker" = None
 
     def load(self, subject_folder: str) -> SubjectRet:
         """
@@ -87,8 +92,8 @@ class Subject:
         if check != SubjectRet.ValidFolder:
             return check
 
-        self.folder = subject_folder
-        self.name = os.path.basename(subject_folder)
+        self.folder = os.path.abspath(subject_folder)
+        self.name = os.path.basename(self.folder)
         self.input_state_list = SubjectInputStateList(
             self.dicom_folder(), self.global_config
         )
@@ -242,7 +247,7 @@ class Subject:
                     i, maximum
                 )
             )
-        QThreadPool.globalInstance().start(dicom_src_work)
+        start_worker(dicom_src_work)
 
     def check_input_folder_step3(
         self,
@@ -271,23 +276,26 @@ class Subject:
         subjects_list = dicom_src_work.tree.get_subject_list()
 
         if len(subjects_list) == 0:
-            status_callback(
-                data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work
-            )
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work
+                )
             return
 
         if len(subjects_list) > 1:
-            status_callback(
-                data_input, SubjectRet.DataInputWarningMultiSubj, dicom_src_work
-            )
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningMultiSubj, dicom_src_work
+                )
             return
 
         studies_list = dicom_src_work.tree.get_studies_list(subjects_list[0])
 
         if len(studies_list) != 1:
-            status_callback(
-                data_input, SubjectRet.DataInputWarningMultiStudy, dicom_src_work
-            )
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningMultiStudy, dicom_src_work
+                )
             return
 
         series_list = dicom_src_work.tree.get_series_list(
@@ -295,18 +303,27 @@ class Subject:
         )
 
         if len(series_list) != 1:
-            status_callback(
-                data_input, SubjectRet.DataInputWarningMultiSeries, dicom_src_work
-            )
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningMultiSeries, dicom_src_work
+                )
             return
 
         series = dicom_src_work.tree.get_series(
             subjects_list[0], studies_list[0], series_list[0]
         )
 
+        if series is None:
+            if status_callback is not None:
+                status_callback(
+                    data_input, SubjectRet.DataInputWarningNoDicom, dicom_src_work
+                )
+            return
+
         self.input_state_list[data_input].loaded = True
         self.input_state_list[data_input].volumes = series.volumes
-        status_callback(data_input, SubjectRet.DataInputValid, dicom_src_work)
+        if status_callback is not None:
+            status_callback(data_input, SubjectRet.DataInputValid, dicom_src_work)
 
     def dicom_import_to_folder(
         self,
@@ -349,15 +366,20 @@ class Subject:
         dest_path = os.path.join(self.dicom_folder(), str(data_input))
 
         try:
+            copied = False
             for thisFile in copy_list:
                 if not os.path.isfile(thisFile):
                     continue
 
                 shutil.copy(thisFile, dest_path)
+                copied = True
                 if progress_callback is not None:
                     progress_callback(1)
 
-            return SubjectRet.DataImportCompleted
+            if copied:
+                return SubjectRet.DataImportCompleted
+            else:
+                return SubjectRet.DataImportErrorCopy
         except:
             return SubjectRet.DataImportErrorCopy
 
@@ -375,8 +397,8 @@ class Subject:
         None.
 
         """
-        self.config = ConfigManager(self.folder)
-        self.config.check_dependencies(dependency_manager)
+        self.config = ConfigManager(self.folder, global_config=self.global_config)
+        self.config.check_dependencies(dependency_manager, self.global_config)
 
     def dicom_folder(self, data_input: DataInputList = None) -> str:
         """
@@ -582,22 +604,26 @@ class Subject:
         ):
             return SubjectRet.FolderAlreadyExists
         else:
+            base_folder = os.path.abspath(
+                os.path.join(
+                    self.global_config.get_main_working_directory(), subject_name
+                )
+            )
+            dicom_folder = os.path.join(
+                base_folder, self.global_config.get_default_dicom_folder()
+            )
             try:
-                base_folder = os.path.abspath(
-                    os.path.join(
-                        self.global_config.get_main_working_directory(), subject_name
-                    )
-                )
-                dicom_folder = os.path.join(
-                    base_folder, self.global_config.get_default_dicom_folder()
-                )
                 for data_input in DataInputList:
                     os.makedirs(
                         os.path.join(dicom_folder, str(data_input)), exist_ok=True
                     )
-                return self.load(base_folder)
-            except:
+            except OSError:
                 return SubjectRet.FolderNotFound
+
+            try:
+                return self.load(base_folder)
+            except Exception:
+                return SubjectRet.ConfigError
 
     def can_generate_workflow(self) -> bool:
         """
@@ -609,7 +635,9 @@ class Subject:
         """
         return (
             self.input_state_list.is_ref_loaded()
-            and self.dependency_manager.is_fsl()
+            and (
+                not dependency_policy.FSL_MANDATORY or self.dependency_manager.is_fsl()
+            )
             and self.dependency_manager.is_dcm2niix()
         )
 
@@ -643,7 +671,7 @@ class Subject:
         -------
         The subject results directory path
         """
-        return os.path.join(self.folder, MainWorkflow.Result_DIR)
+        return os.path.join(self.folder, RESULT_DIR)
 
     def scene_path(self) -> str:
         """
@@ -657,8 +685,9 @@ class Subject:
 
     def generate_workflow(self, generate_graphs: bool = True) -> SubjectRet:
         """
-        Generates and populates the Main Workflow.
-        Generates the graphviz analysis graphs on a new thread.
+        Generates and populates the Main Workflow, then writes the tool
+        references file and the graphviz analysis graphs (best effort: their
+        failure is logged and does not fail the generation).
 
         Parameters
         ----------
@@ -679,6 +708,8 @@ class Subject:
 
             # Node List population
             try:
+                from swane.nipype_pipeline.MainWorkflow import MainWorkflow
+
                 self.workflow = MainWorkflow(
                     name=self.name + strings.WF_DIR_SUFFIX,
                     base_dir=self.folder,
@@ -689,46 +720,77 @@ class Subject:
                 )
             except:
                 traceback.print_exc()
-                # TODO: generiamo un file crash nella cartella log?
+                # TODO: should we generate a crash file in the log folder?
                 return SubjectRet.GenWfError
 
-        graph_dir = self.graph_dir()
-        shutil.rmtree(graph_dir, ignore_errors=True)
-        os.mkdir(graph_dir)
+        # The references list and the analysis graphs are informative extras:
+        # a failure here must not turn a valid workflow into a generation error
+        try:
+            self._write_references_file()
+        except Exception:
+            print("Warning: tool references file not written:")
+            traceback.print_exc()
 
+        try:
+            self._write_workflow_graphs(generate_graphs)
+        except Exception:
+            print("Warning: workflow graphs not generated:")
+            traceback.print_exc()
+
+        return SubjectRet.GenWfCompleted
+
+    def _write_references_file(self):
+        """
+        Writes references.txt with the citation of every tool used by the workflow.
+        """
         interfaces = self.workflow.get_interface_array()
         reference_file = os.path.join(self.folder, "references.txt")
         with open(reference_file, "w", encoding="utf-8") as f:
+            written = set()
             for key in interfaces:
-                if key in tool_reference_list:
-                    tool = tool_reference_list[key]
+                tool = get_command_info(key)
+                # Several interface classes can share one reference (aliases)
+                if tool is not None and id(tool) not in written:
+                    written.add(id(tool))
                     f.write(f"Command: {tool.command}\n")
                     f.write(f"URL: {tool.url}\n")
                     if tool.references:
                         f.write("References:\n")
                         for ref in tool.references:
                             f.write(f" - {ref}\n")
-                    f.write("\n" + "=" * 50 + "\n\n")  # separatore tra tools
+                    f.write("\n" + "=" * 50 + "\n\n")  # separator between tools
 
-        # Graphviz analysis graphs drawing
+    def _write_workflow_graphs(self, generate_graphs: bool):
+        """
+        Empties the graph folder and, if requested, draws the graphviz graph of
+        every subworkflow. A failing graph is skipped: the GUI hides graphs
+        whose file is missing.
+        """
+        graph_dir = self.graph_dir()
+        shutil.rmtree(graph_dir, ignore_errors=True)
+        os.mkdir(graph_dir)
+
+        if not generate_graphs or not self.dependency_manager.is_graphviz():
+            return
+
         node_list = self.workflow.get_node_array()
-        if generate_graphs:
-            for node in node_list.keys():
-                if len(node_list[node].node_list.keys()) > 0:
-                    if self.dependency_manager.is_graphviz():
-                        thread = Thread(
-                            target=self.workflow.get_node(node).write_graph,
-                            kwargs={
-                                "graph2use": self.GRAPH_TYPE,
-                                "format": Subject.GRAPH_FILE_EXT,
-                                "dotfilename": os.path.join(
-                                    self.graph_file(node_list[node].long_name)
-                                ),
-                            },
-                        )
-                        thread.start()
-
-        return SubjectRet.GenWfCompleted
+        for node in node_list.keys():
+            if len(node_list[node].node_list.keys()) > 0:
+                try:
+                    self.workflow.get_node(node).write_graph(
+                        graph2use=self.GRAPH_TYPE,
+                        format=Subject.GRAPH_FILE_EXT,
+                        # The dot source must not share the output path:
+                        # nipype runs "dot -o <base>.svg <dotfile>" and on
+                        # Windows dot cannot overwrite its own open input
+                        dotfilename=os.path.splitext(
+                            self.graph_file(node_list[node].long_name)
+                        )[0]
+                        + ".dot",
+                    )
+                except Exception:
+                    print(f"Warning: graph of {node} not generated:")
+                    traceback.print_exc()
 
     def is_workflow_process_alive(self) -> bool:
         """
@@ -763,6 +825,24 @@ class Subject:
         True if a previous workflow execution is found
         """
         return os.path.exists(self.workflow_dir())
+
+    def can_resume_workflow(self) -> bool:
+        """
+        Returns
+        -------
+        False if a previous workflow execution has results that this version
+        cannot load (e.g. written by an older SWANe whose interfaces have since
+        moved), True otherwise
+        """
+        from swane.nipype_pipeline.engine.cache_compatibility import (
+            find_unloadable_result,
+        )
+
+        unloadable = find_unloadable_result(self.workflow_dir())
+        if unloadable is not None:
+            print("Previous workflow execution cannot be resumed: " + unloadable)
+            return False
+        return True
 
     def delete_workflow_dir(self):
         """
@@ -817,7 +897,8 @@ class Subject:
         Parameters
         ----------
         resume: bool, optional
-            If True resume previous run, if False delete them, if None and previous run is found, stops. Default is None
+            If True resume previous run, if False delete them, if None and previous run is found, stops. Default is None.
+            A previous run whose results this version cannot load is never resumed: unless resume is False, stops
         resume_freesurfer: bool, optional
             If True resume previous fs run , if False delete them, if None and previous fs run is found, stops. Default is None
         update_node_callback: callable, optional
@@ -833,6 +914,8 @@ class Subject:
             return SubjectRet.ExecWfStatusError
         # Checks for a previous workflow execution
         if self.workflow_dir_exists():
+            if resume is not False and not self.can_resume_workflow():
+                return SubjectRet.ExecWfResumeIncompatible
             if resume is None:
                 return SubjectRet.ExecWfResume
             elif not resume:
@@ -849,12 +932,16 @@ class Subject:
         queue = Queue(maxsize=500)
 
         # Generates a Monitor Worker to receive workflows notifications
+        from swane.workers.WorkflowMonitorWorker import WorkflowMonitorWorker
+
         self.workflow_monitor_work = WorkflowMonitorWorker(queue)
         if update_node_callback is not None:
             self.workflow_monitor_work.signal.log_msg.connect(update_node_callback)
-        QThreadPool.globalInstance().start(self.workflow_monitor_work)
+        start_worker(self.workflow_monitor_work)
 
         # Starts the workflow on a new process
+        from swane.workers.WorkflowProcess import WorkflowProcess
+
         self.workflow_process = WorkflowProcess(self.name, self.workflow, queue)
         self.workflow_process.start()
         return SubjectRet.ExecWfStarted
@@ -872,6 +959,7 @@ class Subject:
             return SubjectRet.ExecWfStatusError
         # Workflow killing
         self.workflow_process.stop_event.set()
+        return SubjectRet.ExecWfStopped
 
     def reset_workflow(self, force: bool = False) -> bool:
         """
@@ -908,6 +996,8 @@ class Subject:
 
         """
 
+        from swane.workers.SlicerExportWorker import SlicerExportWorker
+
         slicer_thread = SlicerExportWorker(
             self.global_config.get_slicer_path(),
             self.result_dir(),
@@ -916,4 +1006,4 @@ class Subject:
         )
         if progress_callback is not None:
             slicer_thread.signal.export.connect(progress_callback)
-        QThreadPool.globalInstance().start(slicer_thread)
+        start_worker(slicer_thread)

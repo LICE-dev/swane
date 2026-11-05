@@ -1,0 +1,166 @@
+name: Install 3D Slicer
+description: >-
+  Install a pinned stable 3D Slicer release (Windows, macOS or Linux) from Slicer's
+  own package server, export its executable as SWANE_SLICER_PATH and validate
+  it through SWANe's own Slicer check, which also installs the Slicer
+  extensions SWANe needs. Slicer is downloaded on the runner and never copied
+  into the repository. SWANe must already be installed in the job's Python.
+
+inputs:
+  release:
+    description: "Slicer release to install (empty = ci_slicer_env.DEFAULT_RELEASE)"
+    required: false
+    default: ""
+
+outputs:
+  release:
+    description: "The Slicer release installed"
+    value: ${{ steps.resolve.outputs.release }}
+  path:
+    description: "The Slicer executable"
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Slicer package
+      id: resolve
+      shell: bash
+      env:
+        SLICER_RELEASE: ${{ inputs.release }}
+      run: |
+        python swane/tests/prerelease/ci_slicer_env.py --release "$SLICER_RELEASE"
+        python swane/tests/prerelease/ci_slicer_env.py --release "$SLICER_RELEASE" \
+          --format github | tr -d '\r' >> "$GITHUB_OUTPUT"
+
+    # Slicer publishes amd64 macOS packages only: Apple Silicon runs them
+    # under Rosetta, as on users' machines.
+    - name: Install Rosetta
+      if: ${{ runner.os == 'macOS' && runner.arch == 'ARM64' }}
+      shell: bash
+      run: sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+
+    # Only the installer is cached, never the installed tree: the extensions
+    # are installed fresh on every run, through SWANe's own check below.
+    - uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/slicer-installer
+        key: slicer-installer-${{ steps.resolve.outputs.os }}-${{ steps.resolve.outputs.release }}
+
+    - name: Download and verify
+      shell: bash
+      env:
+        URL: ${{ steps.resolve.outputs.url }}
+        INSTALLER: ${{ runner.temp }}/slicer-installer/${{ steps.resolve.outputs.filename }}
+        SHA512: ${{ steps.resolve.outputs.sha512 }}
+      run: |
+        mkdir -p "$(dirname "$INSTALLER")"
+        if [ ! -f "$INSTALLER" ]; then
+          curl -L --fail --retry 3 --retry-delay 10 -o "$INSTALLER" "$URL"
+        fi
+        # Checked on cache hits too: a corrupt cached installer must not pass.
+        python -c "import hashlib, sys; h = hashlib.sha512(); f = open(sys.argv[1], 'rb'); [h.update(b) for b in iter(lambda: f.read(1 << 20), b'')]; sys.exit(h.hexdigest() != sys.argv[2])" "$INSTALLER" "$SHA512" \
+          || { echo "SHA-512 mismatch for $INSTALLER"; rm -f "$INSTALLER"; exit 1; }
+
+    # Per-user default folder, where SlicerCheckWorker looks when no path is
+    # configured. NSIS reads /D= up to the end of the line, spaces included.
+    - name: Install (Windows)
+      if: ${{ runner.os == 'Windows' }}
+      id: install-win
+      shell: pwsh
+      env:
+        INSTALLER: ${{ runner.temp }}/slicer-installer/${{ steps.resolve.outputs.filename }}
+        SLICER_RELEASE: ${{ steps.resolve.outputs.release }}
+      run: |
+        $dest = Join-Path $env:LOCALAPPDATA "slicer.org\Slicer $env:SLICER_RELEASE"
+        $proc = Start-Process -FilePath $env:INSTALLER -ArgumentList "/S /D=$dest" -Wait -PassThru
+        if ($proc.ExitCode -ne 0) { throw "Slicer installer exited with $($proc.ExitCode)" }
+        $exe = Join-Path $dest "Slicer.exe"
+        if (-not (Test-Path $exe)) { throw "Slicer.exe not found in $dest" }
+        "path=$exe" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+    # /Applications is one of the places SlicerCheckWorker searches.
+    - name: Install (macOS)
+      if: ${{ runner.os == 'macOS' }}
+      id: install-mac
+      shell: bash
+      env:
+        INSTALLER: ${{ runner.temp }}/slicer-installer/${{ steps.resolve.outputs.filename }}
+        MOUNT: ${{ runner.temp }}/slicer-dmg
+      run: |
+        mkdir -p "$MOUNT"
+        hdiutil attach "$INSTALLER" -nobrowse -noautoopen -readonly -mountpoint "$MOUNT"
+        app=$(find "$MOUNT" -maxdepth 1 -name "*.app" -print -quit)
+        [ -n "$app" ] || { echo "no .app in the Slicer dmg"; exit 1; }
+        rm -rf /Applications/Slicer.app
+        ditto "$app" /Applications/Slicer.app
+        hdiutil detach "$MOUNT"
+        exe=/Applications/Slicer.app/Contents/MacOS/Slicer
+        [ -x "$exe" ] || { echo "$exe not found"; exit 1; }
+        echo "path=$exe" >> "$GITHUB_OUTPUT"
+
+    # $HOME/slicer is searched by SlicerCheckWorker ($HOME search stage).
+    - name: Install (Linux)
+      if: ${{ runner.os == 'Linux' }}
+      id: install-linux
+      shell: bash
+      env:
+        INSTALLER: ${{ runner.temp }}/slicer-installer/${{ steps.resolve.outputs.filename }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libegl1 \
+          libgl1 \
+          libopengl0 \
+          libgl1-mesa-dev \
+          libglu1-mesa \
+          libpulse0 \
+          libpulse-mainloop-glib0 \
+          libnss3 \
+          libx11-xcb1 \
+          libxdamage1 \
+          libxss1 \
+          libxkbcommon-x11-0 \
+          libxcb-cursor0 \
+          libxcb-icccm4 \
+          libxcb-image0 \
+          libxcb-keysyms1 \
+          libxcb-randr0 \
+          libxcb-render-util0 \
+          libxcb-shape0 \
+          libxcb-sync1 \
+          libxcb-xfixes0 \
+          libxcb-xinerama0 \
+          libxcb-xkb1 \
+          xvfb || true
+        sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
+        if ! pgrep -x Xvfb > /dev/null; then
+          Xvfb :99 -screen 0 1024x768x24 -nolisten tcp -ac +extension GLX +render -noreset > /dev/null 2>&1 &
+          sleep 1
+        fi
+        echo "DISPLAY=:99" >> "$GITHUB_ENV"
+        dest="$HOME/slicer"
+        rm -rf "$dest"
+        mkdir -p "$dest"
+        tar -xzf "$INSTALLER" -C "$dest" --strip-components=1
+        exe="$dest/Slicer"
+        [ -x "$exe" ] || { echo "$exe not found"; exit 1; }
+        echo "path=$exe" >> "$GITHUB_OUTPUT"
+
+    - name: Export SWANE_SLICER_PATH
+      id: install
+      shell: bash
+      env:
+        SLICER_EXE: ${{ steps.install-win.outputs.path || steps.install-mac.outputs.path || steps.install-linux.outputs.path }}
+      run: |
+        [ -n "$SLICER_EXE" ] || { echo "Slicer install is supported on Windows, macOS and Linux only"; exit 1; }
+        echo "path=$SLICER_EXE" >> "$GITHUB_OUTPUT"
+        echo "SWANE_SLICER_PATH=$SLICER_EXE" >> "$GITHUB_ENV"
+        DISPLAY="${DISPLAY:-:99}" "$SLICER_EXE" --version
+
+    # Fail here rather than let the job silently skip the Slicer tests/passes.
+    - name: Check Slicer
+      shell: bash
+      env:
+        SWANE_SLICER_PATH: ${{ steps.install.outputs.path }}
+      run: DISPLAY="${DISPLAY:-:99}" python -m swane.tests.prerelease.ci_slicer_check

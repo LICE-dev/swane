@@ -1,5 +1,4 @@
-from nipype.interfaces.fsl import (
-    FLIRT,
+from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
     ImageMaths,
     Threshold,
@@ -9,18 +8,25 @@ from nipype.interfaces.fsl import (
 )
 from nipype import Node, IdentityInterface
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.CustomDcm2niix import CustomDcm2niix
-from swane.nipype_pipeline.nodes.ForceOrient import ForceOrient
+from swane.nipype_pipeline.interfaces.dcm2nii.CustomDcm2niix import CustomDcm2niix
+from swane.nipype_pipeline.interfaces.geometry.ForceOrient import ForceOrient
 from configparser import SectionProxy
 
-from swane.nipype_pipeline.nodes.ram_estimators import FlirtRamEstimator
+from swane.config.config_enums import RegistrationEngine
+from swane.nipype_pipeline.interfaces.utils import (
+    get_registration_node,
+    resolve_registration_engine,
+)
 
 
 def seeg_ct_workflow(
     name: str,
     seeg_ct_dir: str,
     config: SectionProxy,
+    synth_config: SectionProxy,
     base_dir: str = "/",
+    max_cpu: int = 0,
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Analysis of CT after stereoEGG to extract elecrtodes.
@@ -33,8 +39,16 @@ def seeg_ct_workflow(
         The directory path of the no contrast scan DICOM files.
     config: SectionProxy
         workflow settings.
+    synth_config: SectionProxy
+        FreeSurfer Synth tools settings (drives the registration engine).
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
+    max_cpu : int, optional
+        If greater than 0, limit the core usage of the registration tools. The
+        default is 0.
+    test_run : bool, optional
+        If True, speed up the underlying registration for prerelease test
+        runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -58,6 +72,11 @@ def seeg_ct_workflow(
     """
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
+
+    # CT follows the global registration engine (ANTs by default).
+    # SynthMorph is not recommended on CT.
+    engine = resolve_registration_engine(synth_config, allow_synth=False)
+
     electrode_thr = config.getint_safe("electrode_threshold")
     erode_kernel_size = config.getfloat_safe("erode_kernel_size")
 
@@ -94,29 +113,37 @@ def seeg_ct_workflow(
     )
     workflow.connect(seeg_ct_reOrient, "out_file", electrodes_weight_map, "in_file")
 
-    # Do not use synthmorph, FLIRT performs better on CT
-    seeg_ct_2_ref_flirt = Node(FLIRT(), name="seeg_ct_2_ref_flirt")
-    seeg_ct_2_ref_flirt.long_name = "%s to reference space"
-    seeg_ct_2_ref_flirt.ram_estimator = FlirtRamEstimator()
-    seeg_ct_2_ref_flirt.inputs.out_matrix_file = "seegct2ref.mat"
-    seeg_ct_2_ref_flirt.inputs.cost = "mutualinfo"
-    seeg_ct_2_ref_flirt.inputs.searchr_x = [-90, 90]
-    seeg_ct_2_ref_flirt.inputs.searchr_y = [-90, 90]
-    seeg_ct_2_ref_flirt.inputs.searchr_z = [-90, 90]
-    seeg_ct_2_ref_flirt.inputs.dof = 6
-    seeg_ct_2_ref_flirt.inputs.interp = "trilinear"
-    workflow.connect(
-        electrodes_weight_map, "out_file", seeg_ct_2_ref_flirt, "in_weight"
+    # Linear registration of the seeg CT to reference space. The binary weight
+    # map (0 on electrodes, 1 elsewhere) down-weights the metal artefact around
+    # the electrodes: the abstraction wires it as the ANTs metric ``moving_mask``
+    # (1 marks the region the metric registers ON) or, on FSL, as FLIRT's
+    # ``in_weight`` -- the same map, correct polarity for both.
+    seeg_ct_2_ref = get_registration_node(
+        name="seeg_ct_2_ref",
+        name_prefix="",
+        name_suffix="to reference space",
+        engine=engine,
+        workflow=workflow,
+        moving=[seeg_ct_reOrient, "out_file"],
+        reference=[inputnode, "reference"],
+        non_linear=False,
+        is_volumetric=True,
+        flirt_cost="mutualinfo",
+        flirt_search=90,
+        moving_mask=[electrodes_weight_map, "out_file"],
+        test_run=test_run,
+        max_cpu=max_cpu,
+        limit_synth_cores=synth_config.getboolean_safe("limit_cores"),
     )
-    workflow.connect(seeg_ct_reOrient, "out_file", seeg_ct_2_ref_flirt, "in_file")
-    workflow.connect(inputnode, "reference", seeg_ct_2_ref_flirt, "reference")
+    seeg_registered_node = seeg_ct_2_ref.registered_node
+    seeg_registered_field = seeg_ct_2_ref.registered_field
 
     # Electrode mask in ref space
     seeg_electrodes_thr_ref = Node(Threshold(), name="seeg_electrodes_thr_ref")
     seeg_electrodes_thr_ref.long_name = "Electrode segmentation"
     seeg_electrodes_thr_ref.inputs.thresh = electrode_thr
     workflow.connect(
-        seeg_ct_2_ref_flirt, "out_file", seeg_electrodes_thr_ref, "in_file"
+        seeg_registered_node, seeg_registered_field, seeg_electrodes_thr_ref, "in_file"
     )
 
     # No electode mask in ref space
@@ -125,7 +152,10 @@ def seeg_ct_workflow(
     seeg_no_electrodes_thr_ref.inputs.thresh = electrode_thr
     seeg_no_electrodes_thr_ref.inputs.direction = "above"
     workflow.connect(
-        seeg_ct_2_ref_flirt, "out_file", seeg_no_electrodes_thr_ref, "in_file"
+        seeg_registered_node,
+        seeg_registered_field,
+        seeg_no_electrodes_thr_ref,
+        "in_file",
     )
 
     # Erode brain mask

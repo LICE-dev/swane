@@ -18,18 +18,106 @@ Note:
 - External libraries: SimpleITK, subprocess, os, glob, argparse
 """
 
+import json
 import os
+import re
 import sys
 import glob
 import subprocess
 import argparse
-import SimpleITK as sitk
 
-os.environ["QT_LOGGING_RULES"] = "*.warning=false"
+# slicer/vtk/qt are auto-injected as globals only into the script Slicer runs
+# directly via --python-script; this module must import them explicitly so
+# it also works when imported (e.g. by slicerrc_swane.py, at Slicer startup)
+# to reuse install_timecourse_viewer() without re-running the whole
+# export.
+import slicer
+import vtk
+import qt
 
 # -----------------------------
 # Utility Functions
 # -----------------------------
+
+
+def _make_colormap_transparent_at_zero(
+    display_node,
+    color_node_id: str,
+    window_min: float,
+    window_max: float,
+    volume_name: str,
+):
+    """
+    Clone the color table assigned to a volume and make the entries around
+    value 0 fully transparent, so no-signal voxels let the layer below show
+    through instead of being painted with the LUT's zero color.
+
+    Works for both one-sided (e.g. Cold-to-Hot) and diverging (signed,
+    e.g. Blue-Red) LUTs, since it locates the table entry that corresponds
+    to the value 0 given the volume's own window bounds, rather than
+    assuming 0 sits at either end of the range.
+
+    Parameters
+    ----------
+    display_node : vtkMRMLScalarVolumeDisplayNode
+        Display node of the volume; its color node is replaced with the
+        edited clone.
+    color_node_id : str
+        ID of the original (shared) Slicer color node.
+    window_min, window_max : float
+        Display window bounds actually applied to the volume (must match
+        what was set via SetWindowLevelMinMax so the 0 entry is located
+        correctly).
+    volume_name : str
+        Used only to name the cloned color node.
+
+    Returns
+    -------
+    None
+    """
+    original_color_node = slicer.mrmlScene.GetNodeByID(color_node_id)
+    if original_color_node is None:
+        original_color_node = slicer.mrmlScene.GetFirstNodeByName(color_node_id)
+    if original_color_node is None or window_max <= window_min:
+        return
+    if not original_color_node.IsA("vtkMRMLColorTableNode"):
+        # Procedural color nodes (e.g. "PET-Rainbow2") don't expose an
+        # editable, indexed RGBA table, so this technique doesn't apply.
+        print(
+            f"SLICERLOADER: Cannot hide zero for '{volume_name}': "
+            f"color node '{color_node_id}' is not an editable color table"
+        )
+        return
+
+    n_colors = original_color_node.GetNumberOfColors()
+    if n_colors <= 0:
+        return
+
+    clone = slicer.mrmlScene.AddNewNodeByClass(
+        "vtkMRMLColorTableNode", f"{volume_name}_hide0"
+    )
+    # Rebuild the table entry-by-entry instead of clone.Copy(original_color_node):
+    # Copy() also duplicates the source's SingletonTag, so the clone ends up
+    # sharing Slicer's built-in singleton identity. On the next scene
+    # save/reload round-trip this either silently drops our edited clone
+    # (recent Slicer) or corrupts the shared built-in table for every other
+    # volume using it (observed on Slicer 5.6.1). A "User" type table with
+    # its own identity, populated by hand, has nothing to collide with.
+    clone.SetTypeToUser()
+    clone.SetNumberOfColors(n_colors)
+    clone.SetNamesInitialised(True)
+    original_lut = original_color_node.GetLookupTable()
+    for i in range(n_colors):
+        r, g, b, a = original_lut.GetTableValue(i)
+        clone.SetColor(i, original_color_node.GetColorName(i), r, g, b, a)
+
+    zero_fraction = min(max((0.0 - window_min) / (window_max - window_min), 0.0), 1.0)
+    zero_index = int(round(zero_fraction * (n_colors - 1)))
+    margin = max(1, round(n_colors * 0.01))
+    for i in range(max(0, zero_index - margin), min(n_colors, zero_index + margin + 1)):
+        clone.SetOpacity(i, 0.0)
+
+    display_node.SetAndObserveColorNodeID(clone.GetID())
 
 
 def load_anat(
@@ -37,6 +125,7 @@ def load_anat(
     volume_name: str,
     color_node_id: str = None,
     hide_zero: bool = False,
+    symmetric_window: bool = False,
 ):
     """
     Load an anatomical volume (NIfTI) into Slicer.
@@ -51,6 +140,9 @@ def load_anat(
         Slicer color node ID to assign to the loaded volume.
     hide_zero : bool, optional
         If True, hide voxels with value == 0 (display only).
+    symmetric_window : bool, optional
+        If True, force the display window to be centered on 0 (min = -max),
+        so a diverging LUT's neutral color always sits at value 0.
 
     Returns
     -------
@@ -66,6 +158,10 @@ def load_anat(
 
     try:
         print(f"SLICERLOADER: Loading {volume_name}")
+        # Imported here: only the export needs it, and this module is also
+        # imported at every Slicer start by slicerrc_swane.py.
+        import SimpleITK as sitk
+
         reader = sitk.ImageFileReader()
         reader.SetFileName(file_path)
         reader.ReadImageInformation()
@@ -91,9 +187,30 @@ def load_anat(
         if color_node_id:
             dn.SetAndObserveColorNodeID(color_node_id)
 
-        # --- Hide zero (display-only) ---
-        if hide_zero:
-            node.SetAttribute("HideZero", "True")
+        # --- Display window: shared by symmetric_window and hide_zero, so
+        #     the "value 0" they each reason about is the same one. ---
+        window_min = window_max = None
+        if symmetric_window or hide_zero:
+            image_data = node.GetImageData()
+            if image_data:
+                min_val, max_val = image_data.GetScalarRange()
+                if symmetric_window:
+                    abs_max = max(abs(min_val), abs(max_val))
+                    window_min, window_max = -abs_max, abs_max
+                else:
+                    window_min, window_max = min_val, max_val
+
+        if window_min is not None and window_max is not None:
+            dn.SetAutoWindowLevel(0)
+            dn.SetWindowLevelMinMax(window_min, window_max)
+
+        # --- Hide zero (display-only): make no-signal voxels transparent
+        #     via the color table instead of a threshold, so it also works
+        #     for signed/diverging maps (threshold would hide one whole side). ---
+        if hide_zero and color_node_id and window_min is not None:
+            _make_colormap_transparent_at_zero(
+                dn, color_node_id, window_min, window_max, volume_name
+            )
 
         return node
 
@@ -225,12 +342,8 @@ def parse_arguments():
         Parsed arguments.
     """
     parser = argparse.ArgumentParser(description="Load multi-modal data into Slicer")
-    parser.add_argument(
-        "--results_folder",
-        type=str,
-        default=os.getcwd(),
-        help="Directory containing results and imaging data",
-    )
+    # NB: the results folder is always the process CWD (set by SlicerExportWorker
+    # via Popen cwd=result_dir), so no --results_folder argument is exposed.
     parser.add_argument(
         "--dti_threshold",
         type=float,
@@ -248,6 +361,14 @@ def parse_arguments():
         type=float,
         default=97.5,
         help="Threshold for vein detection",
+    )
+    parser.add_argument(
+        "--no-save",
+        dest="no_save",
+        action="store_true",
+        help="build the scene for inspection but do not write scene.mrb "
+        "(and, when run with a main window, leave Slicer open instead of "
+        "quitting). Lets results be viewed on demand without spending disk.",
     )
     return parser.parse_args()
 
@@ -280,13 +401,96 @@ def load_fmri_task(scene_dir: str):
             load_anat(
                 fmri_path,
                 file.replace(".nii.gz", ""),
-                "vtkMRMLPETProceduralColorNodePET-Rainbow2",
+                "vtkMRMLColorTableNodeFileColdToHotRainbow.txt",
+                hide_zero=True,
             )
+
+
+IC_MIX_TABLE_NAME = "ic_mix"
+IC_MIX_TABLE_ATTRIBUTE = "SwaneICMix"
+
+
+def _read_ic_mix(fmri_dir: str):
+    """
+    Parse IC's mix file into one timecourse per
+    independent component.
+
+    The file has one row per fMRI timepoint and one column per component.
+
+    Parameters
+    ----------
+    fmri_dir : str
+        Directory containing the ic_mix file.
+
+    Returns
+    -------
+    list[list[float]] or None
+        ``timecourses[i]`` is the timecourse of IC ``i + 1``, or None if the
+        file is missing or unreadable.
+    """
+    # The component time-series file is "ica_mix" for new results (both
+    # engines) and "melodic_mix" for results produced before the rename;
+    # accept either so that old result folders still load.
+    mix_path = os.path.join(fmri_dir, "ica_mix")
+    if not os.path.exists(mix_path):
+        mix_path = os.path.join(fmri_dir, "melodic_mix")
+    if not os.path.exists(mix_path):
+        return None
+    try:
+        with open(mix_path, "r") as mix_file:
+            rows = [line.split() for line in mix_file if line.strip()]
+        n_components = len(rows[0])
+        return [[float(row[ic]) for row in rows] for ic in range(n_components)]
+    except Exception as e:
+        print(f"SLICERLOADER: Failed to read ic_mix: {e}")
+        return None
+
+
+def _bake_ic_mix_table(fmri_dir: str):
+    """
+    Store each independent component's timecourse as a column of a
+    vtkMRMLTableNode saved with the scene.
+
+    The original ic_mix text file lives next to the zstat NIfTI
+    files on disk, but once results are bundled into a .mrb Slicer extracts
+    volumes into its own temporary layout and that folder is no longer
+    reachable. Baking the timecourses into a table node keeps them
+    available to the interactive timecourse viewer after save/reload.
+
+    Parameters
+    ----------
+    fmri_dir : str
+        Directory containing the ic_mix file.
+
+    Returns
+    -------
+    None
+    """
+    timecourses = _read_ic_mix(fmri_dir)
+    if not timecourses:
+        return
+
+    table_node = slicer.mrmlScene.AddNewNodeByClass(
+        "vtkMRMLTableNode", IC_MIX_TABLE_NAME
+    )
+    table_node.SetAttribute(IC_MIX_TABLE_ATTRIBUTE, "1")
+    table = table_node.GetTable()
+    for ic, timecourse in enumerate(timecourses, start=1):
+        column = vtk.vtkDoubleArray()
+        column.SetName(f"IC{ic}")
+        for value in timecourse:
+            column.InsertNextValue(value)
+        table.AddColumn(column)
+    table.Modified()
+    print(
+        f"SLICERLOADER: Baked ic_mix timecourses "
+        f"({len(timecourses)} IC(s)) into scene"
+    )
 
 
 def load_fmri_resting_state(scene_dir: str):
     """
-    Load resting-state fMRI volumes.
+    Load resting-state fMRI volumes and their IC timecourses.
 
     Parameters
     ----------
@@ -301,10 +505,329 @@ def load_fmri_resting_state(scene_dir: str):
     if not os.path.exists(fmri_dir):
         return
 
-    pattern = "r-*[0-9].nii.gz"
-    zstat_files = glob.glob(pattern, root_dir=fmri_dir)
+    pattern = os.path.join(fmri_dir, "r-*[0-9].nii.gz")
+    zstat_files = glob.glob(pattern)
+
     for zstat_file in sorted(zstat_files):
-        load_anat(fmri_dir, zstat_file, "vtkMRMLColorTableNodeFileColdToHotRainbow.txt")
+        load_anat(
+            fmri_dir,
+            os.path.basename(zstat_file),
+            "vtkMRMLColorTableNodeFileColdToHotRainbow.txt",
+            hide_zero=True,
+        )
+
+    _bake_ic_mix_table(fmri_dir)
+
+
+# -----------------------------
+# Resting-state fMRI timecourse viewer
+# -----------------------------
+#
+# Activated at Slicer startup by the SWANe slicerrc bootstrap (see
+# slicerrc_swane.py / SlicerCheckWorker), not during main_export() itself:
+# the headless export has no slice view to react to, and this needs to be
+# active in *any* interactive session, including scenes opened manually,
+# outside SWANe.
+
+
+def _get_ic_from_volume_name(name: str):
+    """
+    Extract the 1-based independent-component index from a zstat volume
+    name such as "r-thresh_zstat01" or "zstat1".
+
+    Parameters
+    ----------
+    name : str
+        Volume node name.
+
+    Returns
+    -------
+    int or None
+        The IC index, or None if the name doesn't encode one.
+    """
+    match = re.search(r"(?:r-)?(?:thresh_)?zstat(\d+)", name, re.IGNORECASE)
+    if match is None:
+        return None
+    ic = int(match.group(1))
+    return ic if ic >= 1 else None
+
+
+def _get_mix_table():
+    """
+    Find the table node baked by _bake_ic_mix_table(), if any.
+
+    Returns
+    -------
+    vtkMRMLTableNode or None
+    """
+    for node in slicer.mrmlScene.GetNodesByClass("vtkMRMLTableNode"):
+        if node.GetAttribute(IC_MIX_TABLE_ATTRIBUTE) == "1":
+            return node
+    return None
+
+
+def _get_active_zstat(composite_node):
+    """
+    Find the IC zstat volume shown in a slice view, if any.
+
+    Foreground takes priority over background, matching how the volume the
+    user is currently looking at is layered.
+
+    Parameters
+    ----------
+    composite_node : vtkMRMLSliceCompositeNode
+
+    Returns
+    -------
+    (vtkMRMLScalarVolumeNode, int) or (None, None)
+        The volume node and its IC index.
+    """
+    if composite_node is None:
+        return None, None
+    for get_volume_id in (
+        composite_node.GetForegroundVolumeID,
+        composite_node.GetBackgroundVolumeID,
+    ):
+        volume_id = get_volume_id()
+        if not volume_id:
+            continue
+        node = slicer.mrmlScene.GetNodeByID(volume_id)
+        ic = _get_ic_from_volume_name(node.GetName()) if node else None
+        if ic is not None:
+            return node, ic
+    return None, None
+
+
+def _plot_layouts():
+    """
+    Slicer layout ids that display a plot chart.
+
+    Returns
+    -------
+    set[int]
+    """
+    layout_node = slicer.vtkMRMLLayoutNode
+    return {
+        layout_node.SlicerLayoutConventionalPlotView,
+        layout_node.SlicerLayoutFourUpPlotView,
+        layout_node.SlicerLayoutFourUpPlotTableView,
+        layout_node.SlicerLayoutOneUpPlotView,
+        layout_node.SlicerLayoutThreeOverThreePlotView,
+    }
+
+
+class TimecourseViewer:
+    """
+    Keeps a single Plot chart in sync with whichever IC zstat map is
+    currently shown in the foreground/background of any slice view.
+    """
+
+    CHART_NAME = "Timecourse_Chart"
+    SERIES_NAME = "Timecourse_Series"
+    TABLE_NAME = "Timecourse_Plot"
+
+    def __init__(self):
+        self._last_ic = None
+        self._previous_layout = None
+        self._plot_table_node = None
+        self._series_node = None
+        self._chart_node = None
+        self._observed_composite_nodes = []
+
+    def _plot_nodes(self):
+        return (self._plot_table_node, self._series_node, self._chart_node)
+
+    def _ensure_plot_nodes(self):
+        scene = slicer.mrmlScene
+        if all(
+            node is not None and scene.IsNodePresent(node)
+            for node in self._plot_nodes()
+        ):
+            return
+        # First use, or a node left the scene (deleted by the user): rebuild
+        # the whole table/series/chart set, dropping what is left of the old one.
+        for node in self._plot_nodes():
+            if node is not None and scene.IsNodePresent(node):
+                scene.RemoveNode(node)
+
+        self._plot_table_node = scene.AddNewNodeByClass(
+            "vtkMRMLTableNode", self.TABLE_NAME
+        )
+        table = self._plot_table_node.GetTable()
+        x_array = vtk.vtkIntArray()
+        x_array.SetName("Volume")
+        y_array = vtk.vtkDoubleArray()
+        y_array.SetName("Timecourse")
+        table.AddColumn(x_array)
+        table.AddColumn(y_array)
+
+        self._series_node = scene.AddNewNodeByClass(
+            "vtkMRMLPlotSeriesNode", self.SERIES_NAME
+        )
+        self._series_node.SetAndObserveTableNodeID(self._plot_table_node.GetID())
+        self._series_node.SetXColumnName("Volume")
+        self._series_node.SetYColumnName("Timecourse")
+        self._series_node.SetPlotType(self._series_node.PlotTypeLine)
+
+        self._chart_node = scene.AddNewNodeByClass(
+            "vtkMRMLPlotChartNode", self.CHART_NAME
+        )
+        self._chart_node.AddAndObservePlotSeriesNodeID(self._series_node.GetID())
+
+    def _on_scene_closed(self, caller, event):
+        # Everything cached here belongs to the scene that was just closed:
+        # its plot nodes are gone, and neither the last plotted IC nor the
+        # remembered layout applies to the next scene.
+        self._last_ic = None
+        self._previous_layout = None
+        self._plot_table_node = None
+        self._series_node = None
+        self._chart_node = None
+
+    def _show(self, ic: int, volume_name: str) -> bool:
+        """
+        Plot the timecourse of ``ic``.
+
+        Returns
+        -------
+        bool
+            True if the chart was shown, False if nothing could be plotted
+            (plots module or mix table not available yet, IC not in table).
+        """
+        plots_module = getattr(slicer.modules, "plots", None)
+        if plots_module is None:
+            return False
+
+        mix_table_node = _get_mix_table()
+        if mix_table_node is None:
+            return False
+        column = mix_table_node.GetTable().GetColumnByName(f"IC{ic}")
+        if column is None:
+            print(f"SLICERLOADER: No timecourse for IC{ic} in mix table")
+            return False
+
+        self._ensure_plot_nodes()
+        n = column.GetNumberOfTuples()
+        table = self._plot_table_node.GetTable()
+        table.SetNumberOfRows(n)
+        x_array = table.GetColumnByName("Volume")
+        y_array = table.GetColumnByName("Timecourse")
+        for i in range(n):
+            x_array.SetValue(i, i + 1)
+            y_array.SetValue(i, column.GetValue(i))
+        table.Modified()
+
+        self._chart_node.SetTitle(f"IC {ic} - {volume_name}")
+        layout_manager = slicer.app.layoutManager()
+        if (
+            self._previous_layout is None
+            and layout_manager is not None
+            and layout_manager.layout not in _plot_layouts()
+        ):
+            # remember the layout the user had, to restore it in _hide().
+            # A layout already showing a plot (e.g. a scene saved while the
+            # chart was open) is not a valid restore target.
+            self._previous_layout = layout_manager.layout
+        slicer.modules.plots.logic().ShowChartInLayout(self._chart_node)
+        return True
+
+    def _hide(self):
+        """
+        Close the plot view by restoring the layout that was active before
+        the first timecourse was shown.
+        """
+        layout_manager = slicer.app.layoutManager()
+        if layout_manager is not None:
+            if self._previous_layout is not None:
+                layout_manager.setLayout(self._previous_layout)
+            elif layout_manager.layout in _plot_layouts():
+                # no usable layout remembered: leave the plot layout anyway
+                layout_manager.setLayout(
+                    slicer.vtkMRMLLayoutNode.SlicerLayoutConventionalView
+                )
+        self._previous_layout = None
+
+    def _find_zstat_in_other_views(self, exclude_composite_node):
+        for node in slicer.util.getNodesByClass("vtkMRMLSliceCompositeNode"):
+            if node is exclude_composite_node:
+                continue
+            volume, ic = _get_active_zstat(node)
+            if ic is not None:
+                return volume, ic
+        return None, None
+
+    def _on_composite_modified(self, caller, event):
+        volume, ic = _get_active_zstat(caller)
+        if ic is None:
+            volume, ic = self._find_zstat_in_other_views(caller)
+
+        if ic is None:
+            if self._last_ic is not None:
+                self._last_ic = None
+                self._hide()
+            return
+
+        if ic == self._last_ic:
+            return
+        # Remember the IC only once it was actually plotted: while a scene
+        # is still loading the mix table may not exist yet, and caching the
+        # IC then would turn every later selection of it (the only choice
+        # when there is a single IC) into a no-op.
+        if self._show(ic, volume.GetName()):
+            self._last_ic = ic
+
+    def _observe_composite_node(self, node):
+        tag = node.AddObserver(
+            vtk.vtkCommand.ModifiedEvent, self._on_composite_modified
+        )
+        self._observed_composite_nodes.append((node, tag))
+
+    def install(self):
+        """
+        Start observing every existing (and future) slice view so the
+        timecourse plot follows whatever IC map the user looks at.
+        """
+        for node in slicer.util.getNodesByClass("vtkMRMLSliceCompositeNode"):
+            self._observe_composite_node(node)
+
+        @vtk.calldata_type(vtk.VTK_OBJECT)
+        def _on_node_added(caller, event, calldata):
+            if calldata is not None and calldata.IsA("vtkMRMLSliceCompositeNode"):
+                self._observe_composite_node(calldata)
+
+        slicer.mrmlScene.AddObserver(slicer.vtkMRMLScene.NodeAddedEvent, _on_node_added)
+        slicer.mrmlScene.AddObserver(
+            slicer.vtkMRMLScene.EndCloseEvent, self._on_scene_closed
+        )
+        # keep the callback (and its closure over self) alive for the
+        # session, since AddObserver doesn't hold a Python reference
+        self._on_node_added = _on_node_added
+
+
+def install_timecourse_viewer():
+    """
+    Activate the automatic timecourse plot for this Slicer session.
+
+    Registers observers on the slice views (existing and future), so that
+    whenever a IC zstat map is shown the matching timecourse plot
+    appears. When the current scene has no baked-in mix table (e.g.
+    a non-SWANe scene, or a subject without resting-state analysis) the
+    observers simply never find data to plot, so this stays harmless.
+
+    Meant to be called once per session, typically from the SWANe slicerrc
+    bootstrap so it also covers scenes opened manually, outside SWANe.
+    Idempotent: a second call is a no-op.
+
+    Returns
+    -------
+    None
+    """
+    if getattr(slicer, "swaneTimecourseViewer", None) is not None:
+        return
+    viewer = TimecourseViewer()
+    viewer.install()
+    # keep a reference alive for the lifetime of the Slicer session
+    slicer.swaneTimecourseViewer = viewer
 
 
 def create_grayscale_model(
@@ -437,41 +960,68 @@ def load_vein(
 # -----------------------------
 
 
+def _make_labelmap_zero_transparent(node):
+    """
+    Make labelmap background value 0 fully transparent,
+    while keeping all non-zero labels visible.
+    """
+    if node is None:
+        return
+
+    display_node = node.GetDisplayNode()
+    if display_node is None:
+        node.CreateDefaultDisplayNodes()
+        display_node = node.GetDisplayNode()
+
+    color_node = display_node.GetColorNode()
+    if color_node is None:
+        return
+
+    # For labelmaps, value 0 is the background.
+    # Set its opacity to zero in the existing color table.
+    if color_node.IsA("vtkMRMLColorTableNode"):
+        zero_index = 0
+
+        if color_node.GetNumberOfColors() > zero_index:
+            color_node.SetOpacity(zero_index, 0.0)
+            color_node.Modified()
+            display_node.Modified()
+
+
 def load_freesurfer_segmentation_file(seg_file: str):
     """
     Load a FreeSurfer segmentation file into Slicer.
-
-    Handles differences between Linux and other platforms to avoid plugin crashes.
-
-    Parameters
-    ----------
-    seg_file : str
-        Full path to the FreeSurfer segmentation file (.mgz).
-
-    Returns
-    -------
-    None
     """
+
     if not os.path.exists(seg_file):
         print(f"SLICERLOADER: Segmentation file not found: {seg_file}")
         return
 
     try:
-        # On Linux, use the old method to prevent Slicer FreeSurfer plugin crashes
         if "linux" in sys.platform:
-            slicer.util.loadVolume(
-                seg_file, {"labelmap": True, "colorNodeID": "vtkMRMLColorTableNodeFile"}
+            node = slicer.util.loadVolume(
+                seg_file,
+                {
+                    "labelmap": True,
+                    "colorNodeID": "vtkMRMLColorTableNodeFile",
+                },
             )
+
+            if node is not None:
+                _make_labelmap_zero_transparent(node)
+
         else:
-            # On Windows/macOS, use FreeSurferImporter plugin logic
-            slicer.util.getModuleLogic("FreeSurferImporter").LoadFreeSurferSegmentation(
-                seg_file
-            )
+            node = slicer.util.getModuleLogic(
+                "FreeSurferImporter"
+            ).LoadFreeSurferSegmentation(seg_file)
+
         print(
-            f"SLICERLOADER: Loaded FreeSurfer segmentation: {os.path.basename(seg_file)}"
+            f"SLICERLOADER: Loaded FreeSurfer segmentation: "
+            f"{os.path.basename(seg_file)}"
         )
+
     except Exception as e:
-        print(f"SLICERLOADER: Failed to load segmentation {seg_file}: {e}")
+        print(f"SLICERLOADER: Failed to load segmentation " f"{seg_file}: {e}")
 
 
 def load_freesurfer(scene_dir: str, ref_node):
@@ -644,7 +1194,11 @@ def tract_model(
     # ------------------------------------------------------------------
     # Load tract volume and set segmentation geometry
     # ------------------------------------------------------------------
-    tract_node = slicer.util.loadVolume(tract_file)
+    try:
+        tract_node = slicer.util.loadVolume(tract_file)
+    except Exception as e:
+        print(f"SLICERLOADER: Failed to load tract {tract_file}: {e}")
+        return
     segmentation_node.SetReferenceImageGeometryParameterFromVolumeNode(tract_node)
 
     # ------------------------------------------------------------------
@@ -699,15 +1253,100 @@ def tract_model(
     slicer.mrmlScene.RemoveNode(tract_node)
 
 
+def _is_low_confidence(flag_file: str) -> bool:
+    """
+    Whether a dipy bundle's ``.conf.json`` sidecar flags it as low-confidence.
+
+    The recovery node always writes the sidecar, so its ``low_confidence``
+    field, not its existence, is the flag. No sidecar means nothing to flag; an
+    unreadable one is treated as flagged, to be safe.
+    """
+    if not os.path.exists(flag_file):
+        return False
+    try:
+        with open(flag_file) as file:
+            return bool(json.load(file)["low_confidence"])
+    except Exception:
+        return True
+
+
+def tract_bundle(dti_dir: str, tract: dict, side: str = None):
+    """
+    Load a single dipy fiber bundle as a 3D model.
+
+    The dipy tractography engine writes each recognized bundle as VTK PolyData
+    (``r-<tract>_<side>.vtp`` or ``r-<tract>.vtp`` for bilateral), a format
+    3D Slicer reads natively as a model, already resampled in the reference space
+    — so the file is loaded as-is, with no transform and no thresholding. This is
+    the counterpart of :func:`tract_model`, which handles the FSL probabilistic maps.
+
+    Parameters
+    ----------
+    dti_dir : str
+        Directory containing DTI tractography outputs.
+
+    tract : dict
+        Dictionary describing the tract with the following keys:
+            - 'name' (str): tract name (e.g. 'cst', 'af')
+            - 'color' (list): RGB color in range [0-1]
+
+    side : str, optional
+        Hemisphere side identifier ('lh' or 'rh'). If None, loads a bilateral bundle.
+
+    Returns
+    -------
+    None
+    """
+    if side:
+        bundle_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.vtp")
+        flag_file = os.path.join(dti_dir, f"r-{tract['name']}_{side}.conf.json")
+        name_suffix = f"_{side}"
+        side_print = f" ({side.upper()})"
+    else:
+        bundle_file = os.path.join(dti_dir, f"r-{tract['name']}.vtp")
+        flag_file = os.path.join(dti_dir, f"r-{tract['name']}.conf.json")
+        name_suffix = ""
+        side_print = " (BILATERAL)"
+
+    if not os.path.exists(bundle_file):
+        print(f"SLICERLOADER: Bundle file not found: {bundle_file}")
+        return
+
+    low_conf = _is_low_confidence(flag_file)
+    if low_conf:
+        side_print += " [LOW CONFIDENCE]"
+        name_suffix += " (LOW CONFIDENCE)"
+
+    print(f"SLICERLOADER: Loading tract bundle '{tract['name']}'{side_print}")
+
+    try:
+        model_node = slicer.util.loadModel(bundle_file)
+    except Exception as e:
+        print(f"SLICERLOADER: Failed to load tract bundle {bundle_file}: {e}")
+        return
+    model_node.SetName(f"{tract['name']}{name_suffix}")
+    model_node.CreateDefaultDisplayNodes()
+
+    display_node = model_node.GetDisplayNode()
+    display_node.SetColor(*tract["color"])
+    if low_conf:
+        display_node.SetOpacity(0.4)
+    # Show the bundle cross-section in the slice views too, like the
+    # segmentations built from the FSL maps.
+    display_node.SetVisibility2D(True)
+
+
 def main_tract(dti_dir: str, scene_dir: str, dti_threshold: float = 0.0035):
     """
     Create DTI tractography segmentations and export them as 3D models.
 
-    For each hemisphere (LH, RH), this function:
-    - Creates a segmentation node
-    - Loads tract probability maps
-    - Thresholds them to generate segments
-    - Saves the resulting segmentation to disk
+    For each hemisphere (LH, RH) and each tract, this function branches on the
+    result format:
+    - ``r-<tract>_<side>.vtp`` (dipy): loaded as a fiber bundle model, in the
+      reference space, with no thresholding.
+    - ``r-<tract>_<side>.nii.gz`` (FSL): loaded as a probability map,
+      thresholded into a segment of a per-hemisphere segmentation node, which
+      is then saved to disk.
 
     Parameters
     ----------
@@ -732,18 +1371,41 @@ def main_tract(dti_dir: str, scene_dir: str, dti_threshold: float = 0.0035):
         {"name": "cst", "thr": 500, "color": [0, 1, 0]},
         {"name": "af", "thr": 1500, "color": [1, 0, 1]},
         {"name": "or", "thr": 500, "color": [1, 1, 0]},
+        {"name": "fx", "thr": 500, "color": [0, 1, 1]},
     ]
 
     print("SLICERLOADER: Creating DTI tract 3D models (this may take a few minutes)")
 
+    # Handle dipy bilateral tracts (e.g. fornix) once, independent of hemisphere
+    bilateral_dipy_tracts = set()
+    for tract in tracts:
+        if os.path.exists(os.path.join(dti_dir, f"r-{tract['name']}.vtp")):
+            tract_bundle(dti_dir=dti_dir, tract=tract, side=None)
+            bilateral_dipy_tracts.add(tract["name"])
+
     for side in sides:
+        # Branch per tract on the result format: dipy writes a .vtp bundle,
+        # FSL a .nii.gz probability map. Only the latter needs a segmentation.
+        volume_tracts = []
+        for tract in tracts:
+            if tract["name"] in bilateral_dipy_tracts:
+                continue
+            if os.path.exists(os.path.join(dti_dir, f"r-{tract['name']}_{side}.vtp")):
+                tract_bundle(dti_dir=dti_dir, tract=tract, side=side)
+            else:
+                volume_tracts.append(tract)
+
+        # Every tract of this hemisphere came from dipy: nothing to threshold.
+        if not volume_tracts:
+            continue
+
         # Create a segmentation node for the current hemisphere
         segmentation_node = slicer.mrmlScene.AddNewNodeByClass(
             "vtkMRMLSegmentationNode", f"tracts_{side}"
         )
         segmentation_node.CreateDefaultDisplayNodes()
 
-        for tract in tracts:
+        for tract in volume_tracts:
             tract_model(
                 segmentation_node=segmentation_node,
                 dti_dir=dti_dir,
@@ -826,31 +1488,35 @@ def main_export():
         "r-mdc_brain",
         "r-mdc",
         "r-FA",
-        "r-flair2d_tra_brain",
-        "r-flair2d_cor_brain",
-        "r-flair2d_sag_brain",
+        "r-flair2d_transverse_brain",
+        "r-flair2d_coronal_brain",
+        "r-flair2d_sagittal_brain",
         "r-t2_cor_brain",
         "r-t2_cor",
         "r-binary_flair",
         "r-junction_z",
         "r-extension_z",
-        "r-melodic_IC",
+        "r-melodic_IC",  # kept for results produced before the ic_mix rename
     ]
     for vol in base_volumes:
         load_anat(results_folder, vol)
 
     # Load colored volumes
     color_volumes = [
-        ("r-asl_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False),
-        ("r-pet_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False),
-        ("r-pet", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True),
-        ("r-pet_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False),
-        ("r-asl", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True),
-        ("r-asl_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False),
+        ("r-asl_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False, True),
+        ("r-pet_ai", "vtkMRMLColorTableNodeFileDivergingBlueRed.txt", False, True),
+        ("r-pet", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True, False),
+        ("r-pet_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False, False),
+        ("r-asl", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", True, False),
+        ("r-asl_zscore", "vtkMRMLColorTableNodeFileColdToHotRainbow.txt", False, False),
     ]
-    for vol_name, color_node, hide_zero in color_volumes:
+    for vol_name, color_node, hide_zero, symmetric_window in color_volumes:
         load_anat(
-            results_folder, vol_name, color_node_id=color_node, hide_zero=hide_zero
+            results_folder,
+            vol_name,
+            color_node_id=color_node,
+            hide_zero=hide_zero,
+            symmetric_window=symmetric_window,
         )
 
     # Example: load lesions, fMRI, veins, FreeSurfer
@@ -865,13 +1531,48 @@ def main_export():
     load_freesurfer(results_folder, ref_node)
     dtiDir = os.path.join(results_folder, "dti")
     if os.path.isdir(dtiDir):
-        main_tract(dtiDir, results_folder)
+        main_tract(dtiDir, results_folder, dti_threshold=args.dti_threshold)
     load_seeg(results_folder)
     show_node(ref_node)
 
+    if args.no_save:
+        print("SLICERLOADER: Scene built (not saved: --no-save)")
+        return
     print("SLICERLOADER: Saving Slicer scene")
     slicer.util.saveScene(os.path.join(results_folder, "scene.mrb"))
 
 
-main_export()
-qt.QTimer.singleShot(0, slicer.app.quit)
+if __name__ == "__main__":
+    # Guarded so this file can also be imported (e.g. by slicerrc_swane.py, at
+    # Slicer startup) to reuse install_timecourse_viewer() without
+    # re-running the whole batch export.
+    os.environ["QT_LOGGING_RULES"] = "*.warning=false"
+    try:
+        main_export()
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
+        import slicer
+
+        slicer.util.exit(status=1)
+
+    # In --no-save (inspection) mode, leave Slicer open so the user can look at
+    # the scene and close it themselves; only auto-quit in the headless export.
+    if "--no-save" not in sys.argv:
+        qt.QTimer.singleShot(0, slicer.app.quit)
+
+        # Fallback: Slicer occasionally hangs on shutdown in headless mode
+        # after the scene has been saved. We spawn a daemon thread to forcefully
+        # exit the process after a reasonable timeout, preventing SWANe from hanging.
+        import threading
+        import os
+        import time
+
+        def force_exit():
+            time.sleep(5)
+            os._exit(0)
+
+        t = threading.Thread(target=force_exit)
+        t.daemon = True
+        t.start()
