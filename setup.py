@@ -87,9 +87,11 @@ setup(
         # BLAS pool in DipyMotionCorrection, filelock serialises the HCP842 atlas
         # fetch in DipyAtlasSLR.
         "threadpoolctl==3.6.0",
-        # scipy>=1.17.1 prevent a macos bug with PROPACK, but it conflicts
-        # with antspyx < 0.6.4 (which forces scipy < 1.16). We now handle the
-        # PROPACK bug with a monkeypatch in swane.patches.scipy_patches instead.
+        # scipy>=1.17.1 prevents a macOS bug with its gfortran-built modules
+        # (PROPACK, scipy.integrate, scipy.optimize), but it conflicts with
+        # antspyx <= 0.6.3 (which forces scipy < 1.16), so it is not required
+        # here: installer/install_swane.sh installs it on macOS after SWANe,
+        # and swane.patches.scipy_patches mocks PROPACK for older SciPy.
         "filelock>=3.20.3,<4",
         "templateflow>=24.0.0",
         "vtk",

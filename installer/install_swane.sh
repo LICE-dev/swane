@@ -4,7 +4,7 @@
 # Builds a working SWANe environment: the conda the user chooses (an
 # installed one or a new Miniforge), a Python 3.12 "swane-env" in the
 # directory the user chooses, graphviz, TensorFlow on macOS Intel,
-# "pip install swane", an optional minimal FSL, the Linux system packages
+# "pip install swane" (then a newer SciPy on macOS), an optional minimal FSL, the Linux system packages
 # 3D Slicer needs and a "swane" launcher in ~/.local/bin.
 #
 # Usage:
@@ -632,6 +632,10 @@ is_linux() {
     [ "$(uname -s)" = "Linux" ]
 }
 
+is_macos() {
+    [ "$(uname -s)" = "Darwin" ]
+}
+
 # is_root: return 0 if the effective user is root ("id -u" prints 0; a
 # missing or failing id counts as not root).
 is_root() {
@@ -849,6 +853,16 @@ SWANE_ENV_PYTHON="3.12"
 # of the pip requirements there): it comes from conda-forge on that platform,
 # requested on every create and update of swane-env.
 SWANE_TENSORFLOW_SPEC="tensorflow>=2.18"
+# SciPy installed over the one pip picks for SWANe, on macOS only. SciPy
+# < 1.17 wheels ship gfortran-built extension modules (PROPACK, but also
+# scipy.integrate and scipy.optimize ones) that recent macOS releases refuse
+# to load; 1.17.1 has none. antspyx (every release up to 0.6.3) requires
+# scipy < 1.16, so pip never picks a fixed SciPy by itself: it is installed
+# afterwards, and pip's warning about the antspyx requirement is expected.
+# Capped below the next minor release not yet verified with SWANe (antspyx
+# and nilearn are not tested against it): raise the cap after the macOS CI
+# passes on it.
+SWANE_MACOS_SCIPY_SPEC="scipy>=1.17.1,<1.19"
 # First conda release whose default solver is libmamba.
 SWANE_MIN_FAST_CONDA="23.10"
 # Oldest SWANe this installer works with: the first release with
@@ -1155,7 +1169,8 @@ is_vcs_spec() {
 # SWANE_ENV_PYTHON plus swane_env_packages), or update an existing one (same
 # Python required; swane_env_packages installed into it), then
 # "pip install -U SWANE_SPEC" into it (plus "pip install --force-reinstall
-# --no-deps SWANE_SPEC" for a VCS URL), and die if that SWANe is older than
+# --no-deps SWANE_SPEC" for a VCS URL, and "pip install -U
+# SWANE_MACOS_SCIPY_SPEC" on macOS), and die if that SWANe is older than
 # SWANE_MIN_VERSION (it has no swane.utils.fsl_conda). Sets SWANE_ENV_PREFIX
 # and prints nothing on stdout (conda and pip output goes to stderr). Call it
 # directly, not inside $(...).
@@ -1210,6 +1225,13 @@ ensure_swane_env() {
         log_info "Reinstalling SWANe from $spec"
         PYTHONNOUSERSITE=1 "$prefix/bin/python" -m pip install --force-reinstall --no-deps "$spec" </dev/null >&2 ||
             die "pip install --force-reinstall --no-deps $spec failed in $SWANE_ENV_NAME"
+    fi
+    # After every "pip install -U SWANE_SPEC", which puts back the SciPy
+    # antspyx asks for (see SWANE_MACOS_SCIPY_SPEC).
+    if is_macos; then
+        log_info "Installing $SWANE_MACOS_SCIPY_SPEC into $SWANE_ENV_NAME (macOS cannot load older SciPy builds; pip's warning that antspyx requires scipy<1.16 is expected)"
+        PYTHONNOUSERSITE=1 "$prefix/bin/python" -m pip install -U "$SWANE_MACOS_SCIPY_SPEC" </dev/null >&2 ||
+            die "pip install -U $SWANE_MACOS_SCIPY_SPEC failed in $SWANE_ENV_NAME"
     fi
     # Isolated mode (-I): a SWANe checkout in the current directory must not
     # stand in for the installed one. "Too old" only when the module is
