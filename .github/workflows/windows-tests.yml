@@ -71,6 +71,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
+          # macOS: the SciPy installer/install_swane.sh puts over the one antspyx
+          # asks for (SWANE_MACOS_SCIPY_SPEC), so CI runs what users get.
+          if [ "$RUNNER_OS" = macOS ]; then
+            scipy_spec="$(sed -n 's/^SWANE_MACOS_SCIPY_SPEC="\(.*\)"$/\1/p' installer/install_swane.sh)"
+            [ -n "$scipy_spec" ] || { echo "::error::No SWANE_MACOS_SCIPY_SPEC in installer/install_swane.sh"; exit 1; }
+            python -m pip install -U "$scipy_spec"
+            python -c "import scipy; print('scipy', scipy.__version__)"
+          fi
       # macOS / Linux only (Windows has no FSL build): the matrix snapshots
       # read FSL data (MNI templates, XTRACT protocols) and some tests run real
       # FSL tools. The environment is cached by the action.
@@ -141,6 +149,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt pytest-timeout SimpleITK
+          # macOS: the SciPy installer/install_swane.sh puts over the one antspyx
+          # asks for (SWANE_MACOS_SCIPY_SPEC), so CI runs what users get.
+          if [ "$RUNNER_OS" = macOS ]; then
+            scipy_spec="$(sed -n 's/^SWANE_MACOS_SCIPY_SPEC="\(.*\)"$/\1/p' installer/install_swane.sh)"
+            [ -n "$scipy_spec" ] || { echo "::error::No SWANE_MACOS_SCIPY_SPEC in installer/install_swane.sh"; exit 1; }
+            python -m pip install -U "$scipy_spec"
+            python -c "import scipy; print('scipy', scipy.__version__)"
+          fi
       # macOS / Linux only (Windows has no FSL build): the matrix snapshots
       # read FSL data (MNI templates, XTRACT protocols) and some tests run real
       # FSL tools. The environment is cached by the action.
@@ -214,6 +230,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt
+          # macOS: the SciPy installer/install_swane.sh puts over the one antspyx
+          # asks for (SWANE_MACOS_SCIPY_SPEC), so CI runs what users get.
+          if [ "$RUNNER_OS" = macOS ]; then
+            scipy_spec="$(sed -n 's/^SWANE_MACOS_SCIPY_SPEC="\(.*\)"$/\1/p' installer/install_swane.sh)"
+            [ -n "$scipy_spec" ] || { echo "::error::No SWANE_MACOS_SCIPY_SPEC in installer/install_swane.sh"; exit 1; }
+            python -m pip install -U "$scipy_spec"
+            python -c "import scipy; print('scipy', scipy.__version__)"
+          fi
       # macOS / Linux only: Windows has no FSL build, so its sweep stays FSL-free.
       - name: Install FSL
         if: ${{ runner.os != 'Windows' }}
@@ -324,6 +348,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest pytest-qt
+          # macOS: the SciPy installer/install_swane.sh puts over the one antspyx
+          # asks for (SWANE_MACOS_SCIPY_SPEC), so CI runs what users get.
+          if [ "$RUNNER_OS" = macOS ]; then
+            scipy_spec="$(sed -n 's/^SWANE_MACOS_SCIPY_SPEC="\(.*\)"$/\1/p' installer/install_swane.sh)"
+            [ -n "$scipy_spec" ] || { echo "::error::No SWANE_MACOS_SCIPY_SPEC in installer/install_swane.sh"; exit 1; }
+            python -m pip install -U "$scipy_spec"
+            python -c "import scipy; print('scipy', scipy.__version__)"
+          fi
       # macOS / Linux only: Windows has no FSL build, so its sweep stays FSL-free.
       - name: Install FSL
         if: ${{ runner.os != 'Windows' }}
