@@ -102,15 +102,17 @@ class TestSlicerHelpers:
         exe.write_text("x")
         exe.chmod(0o755)
         paths = {}
+        module_paths = {}
         for name in DependencyManager.SLICER_MODULES:
-            (tmp_path / name).mkdir()
+            (tmp_path / name / "modules").mkdir(parents=True)
             paths[name] = str(tmp_path / name)
+            module_paths[name] = [str(tmp_path / name / "modules")]
         config = ConfigManager(global_base_folder=str(tmp_path))
         config.set_slicer_path(str(exe))
         config.set_slicer_version("5.6.2")
         config.set_slicer_validator(False)
         config.set_slicer_extensions_state(
-            json.dumps({"revision": "1", "paths": paths})
+            json.dumps({"revision": "1", "paths": paths, "module_paths": module_paths})
         )
         return config
 

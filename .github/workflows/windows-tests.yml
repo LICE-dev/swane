@@ -95,6 +95,13 @@ jobs:
           path: ~/.cache/templateflow/tpl-MNI152NLin2009cSym
           key: templateflow-cerebra-v1
           enableCrossOsArchive: true
+      # On a cache hit TEMPLATEFLOW_HOME holds tpl-MNI152NLin2009cSym only:
+      # TemplateFlow then skips its skeleton and finds no other template (the
+      # MNI152NLin6Asym the resting-state, FLAT1 and tract tests resolve).
+      # Add the missing skeleton without overwriting files.
+      - name: Complete the TemplateFlow skeleton
+        shell: bash
+        run: python -c "from templateflow import conf; conf.update(local=True, overwrite=False, silent=True)"
       - name: Fetch the phantom anatomy (TemplateFlow)
         shell: bash
         run: python -c "from swane.tests.helpers.phantom.anatomy_source import resolve_anatomy_files as r; print(r())"
@@ -271,6 +278,13 @@ jobs:
         if: steps.phantom.outputs.cache-hit != 'true'
         shell: bash
         run: python -c "from swane.tests.prerelease.subject import load_phantom; print(load_phantom().root)"
+      # On a phantom cache hit TEMPLATEFLOW_HOME holds tpl-MNI152NLin2009cSym
+      # only: TemplateFlow then skips its skeleton, the MNI152NLin6Asym probe
+      # fails and the plan silently drops the FLAT1/AI/tractography/AROMA axes.
+      # Add the missing skeleton without overwriting files.
+      - name: Complete the TemplateFlow skeleton
+        shell: bash
+        run: python -c "from templateflow import conf; conf.update(local=True, overwrite=False, silent=True)"
       # The capability probe only offers the DIPY_RECOBUNDLES tractography
       # passes when ~/.dipy/bundle_atlas_hcp842 already exists; SWANe would
       # fetch it at run time, so fetch it once here and share it via cache.

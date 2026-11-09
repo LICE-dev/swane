@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -841,6 +842,9 @@ REPORT = (
     "SLICER REVISION:34045\n"
     "MODULE PATH:SlicerFreeSurfer=/ext/Extensions-34045/SlicerFreeSurfer\n"
     "MODULE PATH:SurfaceWrapSolidify=C:\\ext\\Extensions-34045\\SurfaceWrapSolidify\r\n"
+    'MODULE DIRS:SlicerFreeSurfer=["/ext/a=b/qt-loadable-modules", "/ext/x"]\n'
+    "MODULE DIRS:SurfaceWrapSolidify=not json\n"
+    "MODULE DIRS:Empty=[]\n"
     "MODULE FOUND\n"
 )
 
@@ -852,16 +856,29 @@ def test_parse_extension_report():
         "SlicerFreeSurfer": "/ext/Extensions-34045/SlicerFreeSurfer",
         "SurfaceWrapSolidify": "C:\\ext\\Extensions-34045\\SurfaceWrapSolidify",
     }
+    # JSON list, split on the first "=" only; malformed or empty lists dropped
+    assert state["module_paths"] == {
+        "SlicerFreeSurfer": ["/ext/a=b/qt-loadable-modules", "/ext/x"]
+    }
     assert SlicerCheckWorker.parse_extension_report("") == {
         "revision": "",
         "paths": {},
+        "module_paths": {},
     }
 
 
-def _state(paths):
+def _state(paths, module_paths=None):
     import json
 
-    return json.dumps({"revision": "1", "paths": {k: str(v) for k, v in paths.items()}})
+    if module_paths is None:
+        module_paths = {k: [str(v)] for k, v in paths.items()}
+    return json.dumps(
+        {
+            "revision": "1",
+            "paths": {k: str(v) for k, v in paths.items()},
+            "module_paths": module_paths,
+        }
+    )
 
 
 def test_extensions_state_is_valid(tmp_path):
@@ -871,6 +888,16 @@ def test_extensions_state_is_valid(tmp_path):
     b.mkdir()
     ok = _state({"A": a, "B": b})
     assert SlicerCheckWorker.extensions_state_is_valid(ok, ["A", "B"]) is True
+
+    # a state recorded before the module folders were (no isolated launch
+    # possible) or whose module folder is gone: the full check must run again
+    no_dirs = json.loads(ok)
+    del no_dirs["module_paths"]
+    assert (
+        SlicerCheckWorker.extensions_state_is_valid(json.dumps(no_dirs), ["A"]) is False
+    )
+    gone = _state({"A": a}, {"A": [str(tmp_path / "gone")]})
+    assert SlicerCheckWorker.extensions_state_is_valid(gone, ["A"]) is False
 
     # an extension folder removed by the user
     b.rmdir()
@@ -1123,6 +1150,9 @@ def test_module_install_script_reports_revision_and_paths(tmp_path):
         def extensionInstallPath(self, name):
             return str(tmp_path / name)
 
+        def extensionModulePaths(self, name):
+            return [str(tmp_path / name / "lib" / "qt-scripted-modules")]
+
     fake_slicer = types.SimpleNamespace(
         app=types.SimpleNamespace(extensionsManagerModel=lambda: EM(), revision=34045),
         moduleNames=types.SimpleNamespace(SlicerFreeSurfer=True),
@@ -1143,3 +1173,6 @@ def test_module_install_script_reports_revision_and_paths(tmp_path):
     state = SlicerCheckWorker.parse_extension_report(buf.getvalue())
     assert state["revision"] == "34045"
     assert state["paths"] == {"SlicerFreeSurfer": str(ext_dir)}
+    assert state["module_paths"] == {
+        "SlicerFreeSurfer": [str(ext_dir / "lib" / "qt-scripted-modules")]
+    }

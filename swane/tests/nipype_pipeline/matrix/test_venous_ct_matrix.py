@@ -60,6 +60,7 @@ def _build(
         synth_config=synth,
         venous2_ct_dir=[make_input_dir("contrast_0"), make_input_dir("contrast_1")],
         slicer_path=make_file("Slicer.exe", "x"),
+        slicer_module_paths=[make_input_dir("wrap_solidify_modules")],
         test_run=test_run,
     )
 

@@ -20,6 +20,7 @@ deliberate exceptions the catalog documents and the sweep exploits:
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import shutil
@@ -217,6 +218,40 @@ def _configure_fmri(pass_item, subject_config, exam, wiring) -> None:
         section["del_end_vols"] = str(end)
 
 
+@functools.lru_cache(maxsize=None)
+def slicer_extensions_state(slicer_path: str) -> str:
+    """The ``slicer_extensions_state`` a full Slicer check would record.
+
+    SWANe's batch Slicer runs are isolated from the user's Slicer settings and
+    load the extensions only from the module folders recorded by the Slicer
+    check (``swane.utils.slicer_isolation``). Each pass has a throwaway global
+    config, so run the check's own extension script once per Slicer (it also
+    installs a missing extension) rather than the whole check, which would
+    rewrite the developer's ``~/.slicerrc.py``.
+
+    Returns
+    -------
+    str
+        The JSON state, or "" if Slicer could not report it.
+    """
+    from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+
+    try:
+        output = SlicerCheckWorker._decode(
+            SlicerCheckWorker._communicate(
+                SlicerCheckWorker.module_install_cmd(slicer_path),
+                SlicerCheckWorker.MODULE_INSTALL_TIMEOUT,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 - reported, the pass then fails
+        print("Could not read the Slicer extension folders: %s" % exc)
+        return ""
+    if "MODULE FOUND" not in output:
+        print("Slicer extensions missing:\n%s" % output)
+        return ""
+    return json.dumps(SlicerCheckWorker.parse_extension_report(output))
+
+
 def prepare_subject(
     pass_item,
     exam: PhantomExam,
@@ -256,6 +291,7 @@ def prepare_subject(
     global_config[performance]["resource_monitor"] = "true"
     if slicer_path:
         global_config[GlobalPrefCategoryList.MAIN]["slicer_path"] = slicer_path
+        global_config.set_slicer_extensions_state(slicer_extensions_state(slicer_path))
 
     _enable_optional_series(global_config, wiring)
 

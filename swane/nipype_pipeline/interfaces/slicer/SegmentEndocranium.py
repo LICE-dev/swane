@@ -9,11 +9,23 @@ from nipype.interfaces.base import (
 import os
 
 from swane.patches.windows_compat import cmdline_quote
+from swane.utils.slicer_isolation import isolation_args
 
 
 class SegmentEndocraniumInputSpec(CommandLineInputSpec):
 
     slicer_cmd = File(exists=True, mandatory=True, desc="Slicer executable path")
+
+    # Not hashed: the folders depend on where Slicer is installed, not on the
+    # result, so moving Slicer must not rerun the node.
+    module_paths = traits.List(
+        traits.Str(),
+        mandatory=True,
+        nohash=True,
+        desc="Module folders of the Slicer extensions the worker needs, as "
+        "recorded by the Slicer check (Slicer runs isolated from the user's "
+        "settings, slicerrc and extra modules)",
+    )
 
     in_file = File(
         exists=True, mandatory=True, desc="Original CT image", argstr="--input %s"
@@ -58,7 +70,9 @@ class SegmentEndocranium(CommandLine):
 
     def __init__(self, **inputs):
         super().__init__(**inputs)
-        self.inputs.on_trait_change(self._cmd_update, "slicer_cmd")
+        self.inputs.on_trait_change(
+            self._cmd_update, "slicer_cmd,module_paths,module_paths_items"
+        )
         if isdefined(self.inputs.slicer_cmd):
             self._cmd_update()
 
@@ -75,10 +89,29 @@ class SegmentEndocranium(CommandLine):
         # nipype runs _cmd through a shell: quote both paths (Slicer's install
         # dir contains a space on Windows). cmdline_quote matches the quoting
         # SWANe's Nipype patch uses for every other argument on each platform.
+        module_paths = (
+            self.inputs.module_paths if isdefined(self.inputs.module_paths) else []
+        )
+        isolation = " ".join(
+            cmdline_quote(str(arg)) for arg in isolation_args(module_paths)
+        )
         self._cmd = (
             f"{cmdline_quote(str(self.inputs.slicer_cmd))} --no-splash "
-            f"--no-main-window --python-script {cmdline_quote(worker_path)}"
+            f"--no-main-window {isolation} "
+            f"--python-script {cmdline_quote(worker_path)}"
         )
+
+    def _run_interface(self, runtime):
+        missing = [p for p in self.inputs.module_paths if not os.path.isdir(p)]
+        if not self.inputs.module_paths or missing:
+            # Isolated Slicer would start without the Wrap Solidify effect and
+            # fail deep inside the worker: say what is wrong instead.
+            raise RuntimeError(
+                "3D Slicer extension module folders are unknown or missing "
+                f"({', '.join(missing) or 'none recorded'}): repeat the 3D Slicer "
+                "check from SWANe, then rerun the workflow."
+            )
+        return super()._run_interface(runtime)
 
     def _format_arg(self, name, spec, value):
         return super()._format_arg(name, spec, value)

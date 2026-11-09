@@ -9,6 +9,7 @@
 - segment_endocranium [SegmentEndocranium] cmd=slicer_seg_endocranium.py mem_gb=2.5 n_procs=1
     environ = {}
     iterations = 6
+    module_paths = ['<TMP>/wrap_solidify_modules']
     oversampling = 1.5
     skull_threshold = -1
     slicer_cmd = '<TMP>/Slicer.exe'

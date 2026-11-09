@@ -30,6 +30,7 @@ def venous_ct_workflow(
     synth_config: SectionProxy,
     venous2_ct_dir: list,
     slicer_path: str,
+    slicer_module_paths: list = None,
     base_dir: str = "/",
     max_cpu: int = 0,
     test_run: bool = False,
@@ -52,6 +53,10 @@ def venous_ct_workflow(
         A list of directory paths of the contrast scans DICOM files.
     slicer_path: path
         Path to 3D Slicer executable
+    slicer_module_paths: list, optional
+        Module folders of the Slicer extensions, recorded by the Slicer check
+        (see swane.utils.slicer_isolation). Without them the endocranium
+        node fails with an explicit message.
     base_dir : str, optional
         The base directory path relative to parent workflow. The default is "/".
     max_cpu : int, optional
@@ -146,6 +151,7 @@ def venous_ct_workflow(
     deskull = Node(SegmentEndocranium(), name="segment_endocranium", mem_gb=2.5)
     deskull.long_name = "Non-contrast scan %s"
     deskull.inputs.slicer_cmd = slicer_path
+    deskull.inputs.module_paths = list(slicer_module_paths or [])
     seg_iterations = config.getint_safe("segment_endocranium_iteration")
     seg_oversampling = config.getfloat_safe("segment_endocranium_oversampling")
     if test_run:
