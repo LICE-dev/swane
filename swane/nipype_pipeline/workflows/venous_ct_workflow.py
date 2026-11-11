@@ -84,6 +84,8 @@ def venous_ct_workflow(
     ----------
     veins : path
         Intracranial veins in T13D reference space.
+    basal : path
+        Non-contrast CT in T13D reference space.
 
     """
 

@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import re
 from os.path import abspath
 
 from swane.patches.nipype_patches import apply_patches
@@ -941,6 +942,15 @@ class MainWorkflow(CustomWorkflow):
             result_node="outputnode",
             result_name="veins",
             sub_folder=self.Result_DIR,
+        )
+        self.venous_ct.sink_result(
+            save_path=self.base_dir,
+            result_node="outputnode",
+            result_name="basal",
+            sub_folder=self.Result_DIR,
+            regexp_substitutions=[
+                (rf"[^{re.escape(os.sep)}]+$", "r-ct_noncontrast.nii.gz")
+            ],
         )
 
     def launch_venous_mr_analysis(self):

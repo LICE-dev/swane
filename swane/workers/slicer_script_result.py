@@ -1493,6 +1493,7 @@ def main_export():
         "r-flair2d_sagittal_brain",
         "r-t2_cor_brain",
         "r-t2_cor",
+        "r-ct_noncontrast",
         "r-binary_flair",
         "r-junction_z",
         "r-extension_z",
