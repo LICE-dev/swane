@@ -336,6 +336,10 @@ def get_registration_node(
     path raises.
     """
 
+    # TODO: Add an optional out_file parameter (and matching support on
+    # AntsRegistration) so callers like venous_ct_workflow can set a deterministic
+    # filename for the registered output directly on the node instead of
+    # relying on DataSink regexp_substitutions in MainWorkflow.
     if map_moving and engine == RegistrationEngine.FSL and non_linear:
         raise ValueError(
             "map_moving is not supported for the FSL nonlinear registration "

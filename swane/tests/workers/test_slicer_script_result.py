@@ -568,3 +568,30 @@ def test_import_has_no_startup_side_effects(monkeypatch):
 
     assert "SimpleITK" not in sys.modules
     assert "QT_LOGGING_RULES" not in os.environ
+
+
+def test_main_export_loads_noncontrast_ct_volume(slicer_script, tmp_path, monkeypatch):
+    """``main_export`` loads the registered non-contrast CT (``r-ct_noncontrast``)."""
+    module, log = slicer_script
+    for loader in (
+        "load_fmri_task",
+        "load_fmri_resting_state",
+        "load_vein",
+        "load_freesurfer",
+        "load_seeg",
+    ):
+        monkeypatch.setattr(module, loader, lambda *a, **k: None)
+
+    loaded_volumes = []
+
+    def fake_load_anat(scene_dir, volume_name, *args, **kwargs):
+        loaded_volumes.append(volume_name)
+        return CallSpy(volume_name, log)
+
+    monkeypatch.setattr(module, "load_anat", fake_load_anat)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["slicer_script_result.py"])
+
+    module.main_export()
+
+    assert "r-ct_noncontrast" in loaded_volumes
