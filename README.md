@@ -180,34 +180,23 @@ This project includes subsection derived from other software, which licenses can
 
 ## Changelog
 
-### [0.3.1] - Unreleased
+### [0.3] - 2026-11-13
 
 #### Added
 
 - **Experimental native Windows support**: SWANe can be installed on Windows 10/11 with pip and run with the processing engines that do not need FSL and FreeSurfer (see [SWANe on Windows](https://github.com/LICE-dev/swane/wiki/05-SWANe-on-Windows)).
-
-#### Changed
-
-- **FSL** is now a **recommended** dependency: SWANe runs all the analyses except the Resting State fMRI with the new default processing engines, which do not need FSL. The FSL engines can still be selected when FSL is installed; a stored FSL engine choice falls back to the default if FSL is not detected.
-- **New default processing engines**: ANTs (antspynet) for brain extraction, dipy (CSD + RecoBundles) for tractography, ANTs (antspyx Atropos) for tissue segmentation and Python (nilearn/scikit-learn) for task fMRI. Registration still runs with ANTs (antspyx).
-- **Resting State fMRI** requires FSL: without FSL the Resting State fMRI optional series cannot be enabled.
-
-### [0.3] - Unreleased
-
-#### Added
-
 - **SWANe installer** for Ubuntu and macOS: a single command creates a dedicated conda environment (`swane-env`) with Python 3.12 and SWANe, optionally installs a minimal FSL, installs the Ubuntu system packages and adds a `swane` launcher. The `--install-dir` option places the environments in a folder of your choice. It is now the recommended installation method (see [[Getting Started|03-Getting-Started#quick-install-ubuntumacos]]).
 - **Processing engines**: the former *Synth Tools* section of the Application Settings is now called **Processing engines** and lets the user choose the tool used for each processing step:
-  - **Brain extraction engine**: FSL BET (default), ANTs (antspynet) or FreeSurfer SynthStrip;
+  - **Brain extraction engine**: ANTs (antspynet, default), FSL BET or FreeSurfer SynthStrip;
   - **Registration engine**: ANTs (antspyx, default), FSL (FLIRT/FNIRT) or FreeSurfer SynthMorph;
-  - **Tractography engine**: FSL (XTRACT/probtrackx2, default) or dipy (CSD + RecoBundles, experimental);
-  - **Segmentation engine**: FSL (FAST, default) or ANTs (antspyx Atropos);
-  - **Task fMRI engine**: FSL (FEAT, default) or Python (nilearn/scikit-learn, experimental).
+  - **Tractography engine**: dipy (CSD + RecoBundles, default) or FSL (XTRACT/probtrackx2);
+  - **Segmentation engine**: ANTs (antspyx Atropos, default) or FSL (FAST);
+  - **Task fMRI engine**: Python (nilearn/scikit-learn, default) or FSL (FEAT).
 - **ANTs registration**: linear and nonlinear registrations run by default with ANTs (antspyx), for every workflow.
 - **antspynet brain extraction** as an alternative to FSL BET, with a new *antspynet brain-extraction threshold* workflow preference.
-- **dipy tractography engine** (experimental, untested): constrained spherical deconvolution, probabilistic tracking and bundle recognition with RecoBundles and the HCP842 bundle atlas. New DTI preferences: *Cingulum*, *Seed density for tractography*, *Maximum tracking angle*, *Tracking step size*. Results are exported as streamline bundles; bundles poorly matched to the atlas are flagged as **(LOW CONFIDENCE)** in 3D Slicer.
+- **dipy tractography engine**: constrained spherical deconvolution, probabilistic tracking and bundle recognition with RecoBundles and the HCP842 bundle atlas. New DTI preferences: *Cingulum*, *Seed density for tractography*, *Maximum tracking angle*, *Tracking step size*. Results are exported as streamline bundles; bundles poorly matched to the atlas are flagged as **(LOW CONFIDENCE)** in 3D Slicer.
 - **ANTs Atropos tissue segmentation** as an alternative to FSL FAST. The tissue segmentation is computed once on the 3D T1w and shared by the analyses that need it.
-- **Python task fMRI engine** (nilearn/scikit-learn, experimental, untested) as an alternative to FSL FEAT.
+- **Python task fMRI engine** (nilearn/scikit-learn) as an alternative to FSL FEAT.
 - **FreeSurfer analysis step** workflow preference: *Disabled*, *SynthSeg Cortical Parcellation only*, *Surfaces + Cortical Parcellation*, *Complete Recon-all*.
 - **SynthSeg fast mode** workflow preference.
 - **Limit Synth tools CPU cores** application setting (FreeSurfer Synth tools only: ANTs registration, antspynet and Atropos always use the per-subject CPU budget).
@@ -219,11 +208,15 @@ This project includes subsection derived from other software, which licenses can
 - Progress messages while the processing modules load and while templates, antspynet models and the dipy atlas are downloaded at workflow generation.
 - SWANe icon in the Linux taskbar/dock and Linux desktop entry.
 - Link to the FreeSurfer recon-all log in the subject log folder.
+- Venous CT: the non-contrast CT registered to the T1w reference (`r-ct_noncontrast`) is saved in the results and shown in 3D Slicer.
 
 #### Changed
 
 - **Python requirement**: from >=3.10 to >=3.12.
-- **FSL requirement**: from >=6.0.6 to >=6.0.7.8. FSL remains a mandatory dependency: in the next releases it will be possible to choose directly whether to use SWANe with or without FSL.
+- **FSL requirement**: from >=6.0.6 to >=6.0.7.8.
+- **FSL** is now a **recommended** dependency: SWANe runs all the analyses except the Resting State fMRI with the new default processing engines, which do not need FSL. The FSL engines can still be selected when FSL is installed; a stored FSL engine choice falls back to the default if FSL is not detected.
+- **New default processing engines**: ANTs (antspynet) for brain extraction, dipy (CSD + RecoBundles) for tractography, ANTs (antspyx Atropos) for tissue segmentation and Python (nilearn/scikit-learn) for task fMRI. Registration still runs with ANTs (antspyx).
+- **Resting State fMRI** requires FSL: without FSL the Resting State fMRI optional series cannot be enabled.
 - **dcm2niix** and **niimath** are now installed automatically as Python packages together with SWANe: a separate dcm2niix installation is no longer needed.
 - Image maths steps now run with niimath instead of fslmaths.
 - **Nipype** updated to 1.12; other Python package requirements updated.
@@ -239,6 +232,8 @@ This project includes subsection derived from other software, which licenses can
 - Preferences that cannot be used with the selected engines are hidden or disabled, with a tooltip explaining why.
 - Faster startup: dependency checks and processing modules are loaded in background.
 - The 3D Slicer installation is checked again at every startup.
+- The Resting State fMRI independent component decomposition (MELODIC) is seeded, so it is reproducible.
+- The installer asks which conda and environments directory to use.
 
 #### Removed
 
