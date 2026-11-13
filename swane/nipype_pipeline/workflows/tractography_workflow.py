@@ -3,18 +3,26 @@ import glob
 from nipype import Node, IdentityInterface, MapNode, JoinNode, Merge
 from configparser import SectionProxy
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.RandomSeedGenerator import RandomSeedGenerator
-from swane.nipype_pipeline.nodes.CustomProbTrackX2 import CustomProbTrackX2
-from swane.nipype_pipeline.nodes.MergeTargets import MergeTargets
-from swane.nipype_pipeline.nodes.SumMultiTracks import SumMultiTracks
+from swane.nipype_pipeline.interfaces.dti.RandomSeedGenerator import RandomSeedGenerator
+from swane.nipype_pipeline.interfaces.dti.MergeTargets import MergeTargets
+from swane.nipype_pipeline.interfaces.dti.SumMultiTracks import SumMultiTracks
+from swane.config.config_enums import RegistrationEngine
 from swane.config.preference_list import TRACTS, DEFAULT_N_SAMPLES, XTRACT_DATA_DIR
-from swane.nipype_pipeline.nodes.utils import apply_registration_node
+from swane.nipype_pipeline.interfaces.utils import (
+    apply_registration_node,
+    resolve_registration_engine,
+)
+from nipype.interfaces.fsl import ProbTrackX2
 
 SIDES = ["lh", "rh"]
 
 
 def tractography_workflow(
-    name: str, config: SectionProxy, synth_config: SectionProxy, base_dir: str = "/"
+    name: str,
+    config: SectionProxy,
+    synth_config: SectionProxy,
+    base_dir: str = "/",
+    test_run: bool = False,
 ) -> CustomWorkflow:
     """
     Executes tractography for chosen tract using xtract protocols.
@@ -29,6 +37,9 @@ def tractography_workflow(
         FreeSurfer Synth tools settings.
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
+    test_run : bool, optional
+        If True, halve the xtract-derived n_samples to speed up prerelease
+        test runs at the cost of accuracy. The default is False.
 
     Input Node Fields
     ----------
@@ -81,6 +92,8 @@ def tractography_workflow(
 
     workflow = CustomWorkflow(name="tract_" + name, base_dir=base_dir)
 
+    engine = resolve_registration_engine(synth_config)
+
     inputnode = Node(
         IdentityInterface(
             fields=[
@@ -120,6 +133,9 @@ def tractography_workflow(
         n_samples = int(TRACTS[name][2] / track_threads)
     except:
         n_samples = int(DEFAULT_N_SAMPLES / track_threads)
+    if test_run:
+        # Halve the xtract-protocol sample count for prerelease speed.
+        n_samples = max(1, n_samples // 2)
 
     for side in SIDES:
         # Xtract protocol loading
@@ -151,7 +167,7 @@ def tractography_workflow(
             name="seed_2_ref_%s_%s" % (name, side),
             name_prefix="seed mask",
             name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
+            engine=engine,
             workflow=workflow,
             warp=[inputnode, "mni2ref_warp"],
             moving=seed_file,
@@ -165,7 +181,7 @@ def tractography_workflow(
             name="targets_2_ref_%s_%s" % (name, side),
             name_prefix="target mask",
             name_suffix="to reference",
-            use_synth=synth_config.getboolean_safe("morph"),
+            engine=engine,
             workflow=workflow,
             warp=[inputnode, "mni2ref_warp"],
             moving=None,
@@ -173,14 +189,16 @@ def tractography_workflow(
             non_linear=True,
             labelmap=True,
         )
+        moving_field = "input_image" if engine == RegistrationEngine.ANTS else "in_file"
         if len(target_files) > 1:
-            targets_2_ref.iterables = ("in_file", target_files)
+            targets_2_ref.iterables = (moving_field, target_files)
         else:
-            targets_2_ref.inputs.in_file = target_files[0]
+            setattr(targets_2_ref.inputs, moving_field, target_files[0])
 
-        # NODE 10: Tractography
+        # NODE 10: Tractography (runs in reference space; probtrackx bridges to
+        # diffusion internally via the FSL xfm/inv_xfm matrices)
         probtrackx = MapNode(
-            CustomProbTrackX2(),
+            ProbTrackX2(),
             name="probtrackx_%s_%s" % (name, side),
             iterfield=["random_seed"],
         )
@@ -191,7 +209,7 @@ def tractography_workflow(
         probtrackx.inputs.rand_fib = 1
         probtrackx.inputs.sample_random_points = 1
         probtrackx.inputs.use_gpu = is_cuda
-        # TODO argomento --ompl che fa??
+        # TODO what does the --ompl argument do??
         probtrackx.inputs.opd = True
         workflow.connect(inputnode, "fsamples", probtrackx, "fsamples")
         workflow.connect(inputnode, "mask", probtrackx, "mask")
@@ -223,7 +241,7 @@ def tractography_workflow(
         if is_invert:
             # NODE 11: Inverted tractography
             probtrackx_inverted = MapNode(
-                CustomProbTrackX2(),
+                ProbTrackX2(),
                 name="probtrackx_inverted_%s_%s" % (name, side),
                 iterfield=["random_seed"],
             )
@@ -256,7 +274,7 @@ def tractography_workflow(
                 name="exclude_2_ref_%s_%s" % (name, side),
                 name_prefix="exclude mask",
                 name_suffix="to reference",
-                use_synth=synth_config.getboolean_safe("morph"),
+                engine=engine,
                 workflow=workflow,
                 warp=[inputnode, "mni2ref_warp"],
                 moving=exclude_file,
@@ -278,7 +296,7 @@ def tractography_workflow(
                 name="stop_2_ref_%s_%s" % (name, side),
                 name_prefix="stop mask",
                 name_suffix="to reference",
-                use_synth=synth_config.getboolean_safe("morph"),
+                engine=engine,
                 workflow=workflow,
                 warp=[inputnode, "mni2ref_warp"],
                 moving=stop_file,

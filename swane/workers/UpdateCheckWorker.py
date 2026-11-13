@@ -1,4 +1,4 @@
-from PySide6.QtCore import QRunnable, Signal, QObject
+from swane.utils.qt_compat import QRunnable, Signal, QObject
 from packaging import version
 import subprocess
 import sys
@@ -22,11 +22,14 @@ class UpdateCheckWorker(QRunnable):
 
     def run(self):
 
-        cmd = sys.executable + " -m pip index versions swane 2>/dev/null"
-        output = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE).stdout.decode(
-            "utf-8"
-        )
-        for stdout_line in output.split("\n"):
+        # argv list, no shell: an interpreter path containing a space survives
+        cmd = [sys.executable, "-m", "pip", "index", "versions", "swane"]
+        output = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        ).stdout.decode("utf-8")
+        for stdout_line in output.splitlines():
             regex_pattern = r"^swane \((.+)\)$"
             match = re.match(regex_pattern, stdout_line)
             if match:

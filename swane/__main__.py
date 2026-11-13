@@ -1,13 +1,44 @@
-import psutil
-
 from swane.utils.fsl_conflict_handler import fsl_conflict_check
+
+REMOVE_DESKTOP_ENTRY_FLAG = "--remove-desktop-entry"
+
+
+def remove_desktop_entry_requested() -> bool:
+    """
+    Handle the standalone command that immediately removes the Linux .desktop
+    entry created by ensure_desktop_entry().
+
+    Not required for normal cleanup after "pip uninstall swane": the entry's
+    launcher already self-removes itself and the entry the first time it is run
+    against a no-longer-existing SWANe executable. This is only for users who
+    want the menu entry gone right away.
+
+    Returns
+    -------
+    True if the flag was given and the entry was removed (SWANe must not start).
+    """
+    import sys
+
+    if REMOVE_DESKTOP_ENTRY_FLAG not in sys.argv:
+        return False
+    from swane.utils.linux_desktop_integration import remove_desktop_entry
+
+    remove_desktop_entry()
+    return True
 
 
 def main():
     import sys
     import os
-    from swane import strings
-    import swane_supplement
+
+    # The console-script entry point ("swane") calls main() directly
+    if remove_desktop_entry_requested():
+        sys.exit(0)
+
+    import psutil
+    from swane.resources import strings
+    from swane import resources
+    from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication, QMessageBox
     from PySide6.QtGui import QIcon, QPixmap
     from swane.ui.MainWindow import MainWindow
@@ -15,6 +46,8 @@ def main():
     from swane import EXIT_CODE_REBOOT
     from swane.config.config_enums import GlobalPrefCategoryList
     from swane.utils.last_pid_is_running import last_pid_is_running
+    from swane.utils.linux_desktop_integration import ensure_desktop_entry
+    from swane.utils.main_workflow_preload import start_main_workflow_preload
 
     # Exit Code definition for automatic reboot
     current_exit_code = EXIT_CODE_REBOOT
@@ -27,10 +60,26 @@ def main():
         else:
             app = QApplication.instance()
 
+        # Qt sets the C library LC_ALL to the host environment locale. In locales
+        # with comma decimals (e.g. it_IT, de_DE), this breaks C/C++ scientific
+        # libraries (ITK/ANTs) that parse floating-point numbers with '.' decimals.
+        import locale
+
+        try:
+            locale.setlocale(locale.LC_NUMERIC, "C")
+        except Exception:
+            pass
+
         # SWANe Icon definition
-        app.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
+        app.setWindowIcon(QIcon(QPixmap(resources.appIcon_file)))
+        # Desktop file name definition, needed on Linux/Wayland to match the running
+        # window to the .desktop entry installed by ensure_desktop_entry() below, so
+        # that the taskbar/dock shows the SWANe icon instead of a generic one
+        app.setDesktopFileName("swane")
         # SWANe App Name definition
         app.setApplicationDisplayName(strings.APPNAME)
+        # Install/refresh the Linux .desktop entry so taskbar/dock show the SWANe icon
+        ensure_desktop_entry(resources.appIcon_file)
 
         # SWANe Configuration loading
         global_config = ConfigManager()
@@ -43,16 +92,33 @@ def main():
             msg_box.setText(strings.main_multiple_instances_error)
             msg_box.exec()
             sys.exit(-1)
-            
+
         current_process = psutil.Process(os.getpid())
-        global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = str(current_process.pid)
-        global_config[GlobalPrefCategoryList.MAIN]["last_pid_create_time"] = str(current_process.create_time())
+        global_config[GlobalPrefCategoryList.MAIN]["last_pid"] = str(
+            current_process.pid
+        )
+        global_config[GlobalPrefCategoryList.MAIN]["last_pid_create_time"] = str(
+            current_process.create_time()
+        )
         global_config.save()
 
-        # MainWindow in a varariable to prenvent garbage collector deletion (might cause crash)
+        # MainWindow in a variable to prevent garbage collector deletion (might cause crash)
         try:
             widget = MainWindow(global_config)
-            widget.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
+            widget.setWindowIcon(QIcon(QPixmap(resources.appIcon_file)))
+
+            # Import the Nipype main workflow off the GUI thread once the event
+            # loop runs, so opening the first subject does not stall the GUI
+            QTimer.singleShot(0, start_main_workflow_preload)
+
+            # Start the regular Qt event loop before running the modal license
+            # gate. This lets the already-visible main window paint and process
+            # events while license texts are resolved in the background.
+            def _run_license_consent_gate():
+                if not widget.run_license_consent_gate():
+                    app.exit(0)
+
+            QTimer.singleShot(0, _run_license_consent_gate)
             current_exit_code = app.exec()
         finally:
             # At SWANe exit
@@ -68,6 +134,11 @@ def main():
 
 
 if __name__ == "__main__":
+
+    import sys
+
+    if remove_desktop_entry_requested():
+        sys.exit(0)
 
     # Before GUI execution check for fsl/python/freesurfer error
     if fsl_conflict_check():

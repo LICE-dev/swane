@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from PySide6_VerticalQTabWidget import VerticalQTabWidget
 
-from swane import strings
+from swane.resources import strings
 from swane.utils.ToolReference import Package, tool_reference_list
 from swane.utils.ToolReference import ToolReference
 
@@ -30,6 +30,11 @@ class ToolReferenceWindow(QDialog):
     Tools are grouped by package and displayed in dedicated vertical tabs.
     A global search field allows filtering tools by command name.
     """
+
+    DEFAULT_WIDTH = 720
+    DEFAULT_HEIGHT = 520
+    MIN_WIDTH = 600
+    MIN_HEIGHT = 420
 
     def __init__(
         self,
@@ -61,6 +66,8 @@ class ToolReferenceWindow(QDialog):
         )
         self.setWindowModality(Qt.NonModal)
         self.setModal(False)
+        self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
+        self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
 
         # Cache per package:
         # (
@@ -109,7 +116,16 @@ class ToolReferenceWindow(QDialog):
         )
 
         for idx, pkg in enumerate(
-            (Package.FSL, Package.FREESURFER, Package.OTHER)
+            (
+                Package.FSL,
+                Package.FREESURFER,
+                Package.ANTS,
+                Package.NIPY,
+                Package.DIPY,
+                Package.NIIMATH,
+                Package.NILEARN,
+                Package.OTHER,
+            )
         ):
             tab = self._build_package_tab(pkg)
             self._tab_widget.addTab(tab, pkg.value.upper())
@@ -137,6 +153,17 @@ class ToolReferenceWindow(QDialog):
 
         if search_string:
             self.search_edit.setText(search_string)
+
+    def sizeHint(self) -> QSize:
+        """
+        Return the recommended default size for the tool reference window.
+
+        Returns
+        -------
+        QSize
+            Preferred initial size of the window.
+        """
+        return QSize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
 
     def search(self, tab: Package, string: str) -> None:
         """
@@ -244,15 +271,13 @@ class ToolReferenceWindow(QDialog):
         # --- No results placeholder
         no_results = QLabel(strings.toolreference_no_results)
         no_results.setAlignment(Qt.AlignCenter)
-        no_results.setStyleSheet(
-            """
+        no_results.setStyleSheet("""
             QLabel {
                 font-size: 13px;
                 color: #777;
                 margin-top: 20px;
             }
-            """
-        )
+            """)
         no_results.setVisible(False)
 
         scroll_lay.addWidget(no_results)
@@ -294,11 +319,7 @@ class ToolReferenceWindow(QDialog):
         List[Tuple[str, ToolReference]]
             List of tool database keys and corresponding tool references.
         """
-        items = [
-            (key, ref)
-            for key, ref in self._db.items()
-            if ref.package == package
-        ]
+        items = [(key, ref) for key, ref in self._db.items() if ref.package == package]
 
         items.sort(key=lambda item: item[1].command.lower())
 
@@ -393,8 +414,7 @@ class ToolReferenceWindow(QDialog):
         """
         card = QFrame()
         card.setObjectName("toolCard")
-        card.setStyleSheet(
-            """
+        card.setStyleSheet("""
             QFrame#toolCard {
                 background: #f9f9f9;
                 border: 1px solid #dddddd;
@@ -405,8 +425,7 @@ class ToolReferenceWindow(QDialog):
                 background: transparent;
                 border: none;
             }
-            """
-        )
+            """)
 
         lay = QVBoxLayout(card)
         lay.setContentsMargins(12, 10, 12, 12)
@@ -414,67 +433,59 @@ class ToolReferenceWindow(QDialog):
 
         # --- Command header
         cmd_label = QLabel(ref.command)
-        cmd_label.setStyleSheet(
-            """
+        cmd_label.setStyleSheet("""
             QLabel {
                 font-size: 16px;
                 font-weight: 600;
                 color: #111;
             }
-            """
-        )
+            """)
 
         lay.addWidget(cmd_label)
 
         # --- Documentation URL
-        url_label = QLabel(
-            f"<a href='{ref.url}' style='text-decoration:none;'>"
-            f"{ref.url}</a>"
-        )
-        url_label.setTextFormat(Qt.RichText)
-        url_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        url_label.setOpenExternalLinks(True)
-        url_label.setStyleSheet(
-            """
-            QLabel {
-                font-size: 14px;
-                font-weight: 600;
-                margin-top: 6px;
-                color: #555;
-            }
-            """
-        )
+        if ref.url:
+            url_label = QLabel(
+                f"<a href='{ref.url}' style='text-decoration:none;'>" f"{ref.url}</a>"
+            )
+            url_label.setTextFormat(Qt.RichText)
+            url_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+            url_label.setOpenExternalLinks(True)
+            url_label.setStyleSheet("""
+                QLabel {
+                    font-size: 14px;
+                    font-weight: 600;
+                    margin-top: 6px;
+                    color: #555;
+                }
+                """)
 
-        lay.addWidget(url_label)
+            lay.addWidget(url_label)
 
         # --- References section
         if ref.references:
             ref_title = QLabel(strings.toolreference_reference_label)
-            ref_title.setStyleSheet(
-                """
+            ref_title.setStyleSheet("""
                 QLabel {
                     font-size: 14px;
                     font-weight: 600;
                     margin-top: 6px;
                     color: #222;
                 }
-                """
-            )
+                """)
 
             lay.addWidget(ref_title)
 
             for i, reference in enumerate(ref.references, start=1):
                 reference_label = QLabel(f"{i}. {reference}")
                 reference_label.setWordWrap(True)
-                reference_label.setStyleSheet(
-                    """
+                reference_label.setStyleSheet("""
                     QLabel {
                         font-size: 12px;
                         margin-left: 12px;
                         color: #333;
                     }
-                    """
-                )
+                    """)
 
                 lay.addWidget(reference_label)
 

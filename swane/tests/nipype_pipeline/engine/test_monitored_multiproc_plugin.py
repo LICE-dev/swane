@@ -1,0 +1,505 @@
+"""Unit tests for the insufficient-resources signaling in
+:class:`~swane.nipype_pipeline.engine.MonitoredMultiProcPlugin.MonitoredMultiProcPlugin`.
+
+``_prerun_check()`` is nipype's own pre-flight gate: before a workflow
+starts, it compares every node's declared ``mem_gb`` / ``n_procs`` / GPU need
+against the plugin's budget and raises ``RuntimeError`` if any single node's
+requirement can never be satisfied (not "the queue is full right now", but
+"this can never be scheduled with this budget"). ``MonitoredMultiProcPlugin``
+wraps that check to also put a ``WORKFLOW_INSUFFICIENT_RESOURCES`` report on
+the signaling queue before re-raising -- that is what lets SWANe's UI (and
+the pre-release sweep, see ``tests/prerelease/runner.py``) surface the
+failure to the user instead of it disappearing into a stack trace inside the
+workflow subprocess.
+
+These tests drive ``_prerun_check`` directly against a minimal fake
+graph/node, for all three budgets (CPU threads, RAM, GPU slots), without
+spinning up nipype's real process pools or building an actual workflow.
+"""
+
+import os
+from concurrent.futures import Future
+from concurrent.futures.process import BrokenProcessPool
+from multiprocessing import Queue
+from queue import Empty
+from types import SimpleNamespace
+
+import pytest
+from nipype import MapNode, Node, Workflow
+from nipype.interfaces.base import (
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    TraitedSpec,
+    traits,
+)
+
+# nipype's plugin package imports the Unix-only ``pwd`` module (via its sge
+# plugin); swane's pwd stub (swane.patches.windows_compat, installed by
+# conftest) makes it importable on Windows too, so nothing is skipped here.
+from nipype.pipeline.plugins.multiproc import (  # noqa: F401
+    MultiProcPlugin as _RealMultiProcPlugin,
+)
+
+from swane.nipype_pipeline.engine.MonitoredMultiProcPlugin import (
+    MonitoredMultiProcPlugin,
+)
+from swane.nipype_pipeline.engine.WorkflowReport import WorkflowSignals
+
+
+class _FakeNode:
+    """Stands in for a nipype ``Node``: only what ``_prerun_check`` reads."""
+
+    def __init__(self, mem_gb=0.1, n_procs=1, gpu=False):
+        self.mem_gb = mem_gb
+        self.n_procs = n_procs
+        self._gpu = gpu
+
+    def is_gpu_node(self):
+        return self._gpu
+
+
+class _FakeGraph:
+    """Stands in for the networkx graph ``_prerun_check`` iterates."""
+
+    def __init__(self, nodes):
+        self._nodes = nodes
+
+    def nodes(self):
+        return self._nodes
+
+
+@pytest.fixture
+def make_plugin():
+    """Build a :class:`MonitoredMultiProcPlugin` with a small, explicit budget.
+
+    Yields a ``(plugin, queue)`` pair and shuts the plugin's process pool
+    down afterwards -- ``MultiProcPlugin.__init__`` allocates a real
+    ``ProcessPoolExecutor``, which must be released or it leaks workers
+    across the test session.
+    """
+    created = []
+
+    def _make(**budget):
+        queue = Queue()
+        plugin_args = {"n_procs": 4, "memory_gb": 8.0, "n_gpu_procs": 1}
+        plugin_args.update(budget)
+        plugin_args["queue"] = queue
+        plugin = MonitoredMultiProcPlugin(plugin_args=plugin_args)
+        created.append(plugin)
+        return plugin, queue
+
+    yield _make
+
+    for plugin in created:
+        plugin.pool.shutdown(wait=False, cancel_futures=True)
+
+
+class TestPrerunCheckSignalsInsufficientResources:
+    """Each budget (RAM, CPU threads, GPU slots) is checked independently."""
+
+    def test_ram_over_budget_raises_and_signals(self, make_plugin):
+        plugin, queue = make_plugin(memory_gb=1.0)
+        graph = _FakeGraph([_FakeNode(mem_gb=2.0)])
+
+        with pytest.raises(RuntimeError):
+            plugin._prerun_check(graph)
+
+        report = queue.get(timeout=5)
+        assert report.signal_type == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES
+
+    def test_cores_over_budget_raises_and_signals(self, make_plugin):
+        plugin, queue = make_plugin(n_procs=1)
+        graph = _FakeGraph([_FakeNode(n_procs=4)])
+
+        with pytest.raises(RuntimeError):
+            plugin._prerun_check(graph)
+
+        report = queue.get(timeout=5)
+        assert report.signal_type == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES
+
+    def test_gpu_over_budget_raises_and_signals(self, make_plugin):
+        plugin, queue = make_plugin(n_gpu_procs=0)
+        graph = _FakeGraph([_FakeNode(n_procs=1, gpu=True)])
+
+        with pytest.raises(RuntimeError):
+            plugin._prerun_check(graph)
+
+        report = queue.get(timeout=5)
+        assert report.signal_type == WorkflowSignals.WORKFLOW_INSUFFICIENT_RESOURCES
+
+    def test_within_every_budget_does_not_raise_or_signal(self, make_plugin):
+        plugin, queue = make_plugin()
+        graph = _FakeGraph([_FakeNode(mem_gb=1.0, n_procs=2, gpu=False)])
+
+        plugin._prerun_check(graph)  # must not raise
+
+        assert queue.empty()
+
+    def test_gpu_node_within_budget_does_not_raise(self, make_plugin):
+        """A GPU node that fits the GPU slot budget must not be flagged."""
+        plugin, queue = make_plugin(n_gpu_procs=1)
+        graph = _FakeGraph([_FakeNode(n_procs=1, gpu=True)])
+
+        plugin._prerun_check(graph)  # must not raise
+
+        assert queue.empty()
+
+
+def _register_task(plugin, taskid, node_name):
+    """Wire one in-flight task into the plugin's bookkeeping, as _submit_job does."""
+    future = Future()
+    plugin._task_obj[taskid] = future
+    plugin._task_nodes[taskid] = node_name
+    plugin._future_taskids[future] = taskid
+    return future
+
+
+def test_broken_process_pool_callback_feeds_every_in_flight_task(make_plugin):
+    """A native worker crash must become observable outside the callback.
+
+    ``Future.result()`` raises in Nipype's done-callback. Without SWANe's
+    interception, concurrent.futures only logs that exception and Nipype keeps
+    polling forever. Because the pool marks *all* in-flight futures broken at
+    once and there is no way to tell which node actually crashed, every pending
+    task must receive a terminal result -- otherwise the tasks whose own
+    callback cannot resolve a task id keep Nipype waiting for a result that can
+    never appear.
+    """
+    plugin, queue = make_plugin()
+
+    futures = {
+        taskid: _register_task(plugin, taskid, name)
+        for taskid, name in (
+            (17, "prerelease_wf.ref_bias_correction"),
+            (18, "prerelease_wf.innocent_neighbour"),
+            (19, "prerelease_wf.another_neighbour"),
+        )
+    }
+    # A single worker dies by signal; concurrent.futures then marks the whole
+    # pool broken, so any of the three callbacks may fire first.
+    crasher = futures[18]
+    crasher.set_exception(BrokenProcessPool("worker terminated abruptly"))
+
+    plugin._async_callback(crasher)
+
+    for taskid in (17, 18, 19):
+        result = plugin._taskresult[taskid]
+        assert result["taskid"] == taskid
+        assert result["traceback"]
+        # No sentinel flag: each result must flow through the normal crash path
+        # so its NODE_ERROR carries the crash file and the real node name.
+        assert "_swane_node_error_reported" not in result
+
+    # The callback itself does not emit NODE_ERROR (Nipype's poll loop does,
+    # via _report_crash) and no longer force-stops the workflow process.
+    assert queue.empty()
+
+
+def test_broken_process_pool_reports_each_in_flight_node_via_report_crash(
+    make_plugin, monkeypatch
+):
+    """The fed results route through _report_crash, tagging the broken-pool reason.
+
+    This is the emission path a real run takes: the poll loop reads each
+    terminal result and calls :meth:`_report_crash`. Here we drive that method
+    directly with the fed result to assert the NODE_ERROR names the node and
+    carries both the broken-pool ``info`` and the crash file Nipype wrote for
+    the abrupt failure.
+    """
+    # The parent _report_crash writes a real crash file from a full nipype Node;
+    # stub the writer so the test can use a lightweight node and still assert the
+    # crash file path is threaded onto the NODE_ERROR.
+    import nipype.pipeline.plugins.base as nipype_base
+
+    monkeypatch.setattr(
+        nipype_base, "report_crash", lambda node, traceback=None: "ref_crash.txt"
+    )
+
+    plugin, queue = make_plugin()
+    node_name = "prerelease_wf.ref_bias_correction"
+    future = _register_task(plugin, 17, node_name)
+    future.set_exception(BrokenProcessPool("worker terminated abruptly"))
+
+    plugin._async_callback(future)
+
+    node = SimpleNamespace(fullname=node_name)
+    crash_file = plugin._report_crash(node, result=plugin._taskresult[17])
+
+    assert crash_file == "ref_crash.txt"
+    report = queue.get(timeout=5)
+    assert report.signal_type == WorkflowSignals.NODE_ERROR
+    assert report.node_name == node_name
+    assert "terminated abruptly" in report.info
+    assert report.crash_file == "ref_crash.txt"
+
+
+def test_broken_pool_on_submit_without_in_flight_tasks_still_reports_failure(
+    make_plugin,
+):
+    """A pool already dead at submit time has no in-flight task to carry the failure.
+
+    With nothing to route through _report_crash, a standalone NODE_ERROR must be
+    emitted so the pass is recorded as failed instead of silently passing.
+    """
+    plugin, queue = make_plugin()
+
+    plugin._handle_broken_pool(
+        BrokenProcessPool("pool already dead"),
+        unsubmitted_node="prerelease_wf.ref_bias_correction",
+    )
+
+    report = queue.get(timeout=5)
+    assert report.signal_type == WorkflowSignals.NODE_ERROR
+    assert report.node_name == "prerelease_wf.ref_bias_correction"
+    assert "terminated abruptly" in report.info
+
+
+def test_broken_shared_pool_spares_in_flight_fresh_process_nodes(make_plugin):
+    """A fresh process is not part of the shared pool: when the pool breaks,
+    a node running in its own fresh process keeps running and must not be
+    handed a failure it never had (see test_fresh_process.py)."""
+    plugin, _ = make_plugin()
+    pooled = _register_task(plugin, 17, "wf.pooled")
+    fresh = _register_task(plugin, 18, "wf.fresh")
+    plugin._fresh_pools[fresh] = object()
+
+    pooled.set_exception(BrokenProcessPool("worker terminated abruptly"))
+    plugin._async_callback(pooled)
+
+    assert plugin._taskresult[17]["traceback"]
+    assert 18 not in plugin._taskresult
+
+
+def test_broken_fresh_process_fails_only_its_node(make_plugin):
+    plugin, _ = make_plugin()
+    pooled = _register_task(plugin, 17, "wf.pooled")
+    fresh = _register_task(plugin, 18, "wf.fresh")
+    plugin._fresh_pools[fresh] = object()
+
+    fresh.set_exception(BrokenProcessPool("worker terminated abruptly"))
+    plugin._async_callback(fresh)
+
+    assert any(
+        "BrokenProcessPool" in line for line in plugin._taskresult[18]["traceback"]
+    )
+    assert 17 not in plugin._taskresult
+    assert not pooled.done()
+    assert not plugin._broken_pool_reported
+
+
+class _FailOnOneInputSpec(BaseInterfaceInputSpec):
+    value = traits.Int(mandatory=True, desc="the subnode fails when this is 1")
+
+
+class _FailOnOneOutputSpec(TraitedSpec):
+    value = traits.Int(desc="the input, unchanged")
+
+
+class _FailOnOne(BaseInterface):
+    """Raises for ``value == 1``, passes every other value through."""
+
+    input_spec = _FailOnOneInputSpec
+    output_spec = _FailOnOneOutputSpec
+
+    def _run_interface(self, runtime):
+        if self.inputs.value == 1:
+            raise ValueError("synthetic subnode failure")
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        outputs["value"] = self.inputs.value
+        return outputs
+
+
+def _drain(queue):
+    # a multiprocessing.Queue publishes through a feeder thread: empty() can
+    # be True right after a put(), so wait briefly for each report
+    reports = []
+    while True:
+        try:
+            reports.append(queue.get(timeout=1))
+        except Empty:
+            return reports
+
+
+def test_failed_mapnode_subnode_is_reported_on_its_mapnode(tmp_path):
+    """A subnode's NODE_ERROR must name its MapNode, which the GUI knows.
+
+    nipype names subnodes ``_<mapnode><i>`` with no hierarchy, so reporting the
+    subnode's own fullname gives a report without a workflow name, which
+    SubjectTab cannot map to a row.
+    """
+    outer = Workflow(name="nipype_pt_x", base_dir=str(tmp_path))
+    outer.config["execution"]["poll_sleep_duration"] = "0.05"
+    outer.config["execution"]["crashdump_dir"] = str(tmp_path)
+    inner = Workflow(name="sub_wf")
+    mapped = MapNode(_FailOnOne(), iterfield=["value"], name="mapped")
+    mapped.inputs.value = [0, 1, 2]
+    inner.add_nodes([mapped])
+    outer.add_nodes([inner])
+
+    queue = Queue()
+    plugin = MonitoredMultiProcPlugin(
+        plugin_args={
+            "n_procs": 2,
+            "memory_gb": 1.0,
+            "n_gpu_procs": 0,
+            "queue": queue,
+        }
+    )
+    with pytest.raises(RuntimeError):
+        outer.run(plugin=plugin)
+
+    errors = [r for r in _drain(queue) if r.signal_type == WorkflowSignals.NODE_ERROR]
+    assert len(errors) == 1
+    assert errors[0].workflow_name == "sub_wf"
+    assert errors[0].node_name == "mapped"
+    # the crash file of the subnode that failed, attached to the MapNode row
+    assert errors[0].crash_file and os.path.isfile(errors[0].crash_file)
+
+
+def test_broken_pool_on_subnode_submit_reports_its_mapnode(make_plugin):
+    """A subnode whose submission finds the pool dead is reported by its MapNode."""
+    plugin, queue = make_plugin()
+
+    class _DeadPool:
+        def submit(self, *args, **kwargs):
+            raise BrokenProcessPool("pool already dead")
+
+        def shutdown(self, *args, **kwargs):
+            pass
+
+    plugin.pool.shutdown(wait=False, cancel_futures=True)
+    plugin.pool = _DeadPool()
+    subnode = Node(_FailOnOne(), name="_mapped0")
+    subnode.swane_report_name = "nipype_pt_x.sub_wf.mapped"
+
+    with pytest.raises(BrokenProcessPool):
+        plugin._submit_job(subnode)
+
+    errors = [r for r in _drain(queue) if r.signal_type == WorkflowSignals.NODE_ERROR]
+    assert [(r.workflow_name, r.node_name) for r in errors] == [("sub_wf", "mapped")]
+
+
+class _FuturePool:
+    """A shared pool stand-in whose tasks never run: submit() just hands out a
+    pending future, so only the plugin's bookkeeping is exercised."""
+
+    def submit(self, *args, **kwargs):
+        return Future()
+
+    def shutdown(self, *args, **kwargs):
+        pass
+
+
+def _bare_task_node(name):
+    return SimpleNamespace(
+        name=name,
+        fullname="wf.%s" % name,
+        interface=SimpleNamespace(inputs=SimpleNamespace()),
+    )
+
+
+def _use_future_pool(plugin):
+    plugin.pool.shutdown(wait=False, cancel_futures=True)
+    plugin.pool = _FuturePool()
+
+
+def test_task_maps_are_changed_under_the_lock(make_plugin):
+    """The broken-pool callback snapshots the task maps from the executor's
+    thread: every change the scheduler thread makes must hold the same lock."""
+    plugin, _ = make_plugin()
+    _use_future_pool(plugin)
+    lock = plugin._task_maps_lock
+
+    class _GuardedDict(dict):
+        def __setitem__(self, key, value):
+            assert lock._is_owned(), "task map written without the lock"
+            super().__setitem__(key, value)
+
+        def pop(self, *args):
+            assert lock._is_owned(), "task map changed without the lock"
+            return super().pop(*args)
+
+    plugin._future_taskids = _GuardedDict()
+    plugin._task_nodes = _GuardedDict()
+
+    taskid = plugin._submit_job(_bare_task_node("_guarded"))
+    plugin._clear_task(taskid)
+
+    assert not plugin._future_taskids and not plugin._task_nodes
+
+
+def test_broken_pool_snapshot_survives_concurrent_submit_and_clear(make_plugin):
+    """Snapshotting while the scheduler submits and clears must never fail.
+
+    A failed snapshot leaves _broken_pool_reported set with no result fed, so
+    every other broken future's callback returns early and nipype waits
+    forever. The thread switch interval is shortened to make the race likely.
+    """
+    import logging
+    import sys
+    import threading
+
+    plugin, _ = make_plugin()
+    _use_future_pool(plugin)
+    for index in range(2000):
+        plugin._submit_job(_bare_task_node("_in_flight%d" % index))
+
+    stop = threading.Event()
+
+    def scheduler():
+        while not stop.is_set():
+            taskids = [plugin._submit_job(_bare_task_node("_churn")) for _ in range(50)]
+            for taskid in taskids:
+                plugin._clear_task(taskid)
+
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    logging.disable(logging.CRITICAL)
+    thread = threading.Thread(target=scheduler)
+    thread.start()
+    failures = []
+    try:
+        for _ in range(300):
+            plugin._broken_pool_reported = False
+            plugin._taskresult.clear()
+            try:
+                plugin._handle_broken_pool(BrokenProcessPool("worker died"))
+            except RuntimeError as error:
+                failures.append(error)
+    finally:
+        stop.set()
+        thread.join()
+        logging.disable(logging.NOTSET)
+        sys.setswitchinterval(interval)
+
+    assert not failures, "%d snapshots failed: %s" % (len(failures), failures[0])
+
+
+def test_master_thread_node_failure_makes_run_raise(tmp_path):
+    """A node run on the scheduler's own thread (run_without_submitting) that
+    fails must make Workflow.run() raise, as in nipype's MultiProcPlugin: the
+    workflow process only flags a failed run when run() raises."""
+    workflow = Workflow(name="wf", base_dir=str(tmp_path))
+    workflow.config["execution"]["poll_sleep_duration"] = "0.05"
+    workflow.config["execution"]["crashdump_dir"] = str(tmp_path)
+    failing = Node(_FailOnOne(), name="failing", run_without_submitting=True)
+    failing.inputs.value = 1
+    workflow.add_nodes([failing])
+
+    queue = Queue()
+    plugin = MonitoredMultiProcPlugin(
+        plugin_args={
+            "n_procs": 1,
+            "memory_gb": 1.0,
+            "n_gpu_procs": 0,
+            "queue": queue,
+        }
+    )
+    with pytest.raises(RuntimeError, match="synthetic subnode failure"):
+        workflow.run(plugin=plugin)
+
+    errors = [r for r in _drain(queue) if r.signal_type == WorkflowSignals.NODE_ERROR]
+    assert [r.node_name for r in errors] == ["wf.failing"]

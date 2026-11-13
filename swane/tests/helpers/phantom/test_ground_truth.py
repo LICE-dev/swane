@@ -1,0 +1,240 @@
+"""The phantom ground truth must cache and reload identically to a rebuild.
+
+Two layers, matching the two ways the ground truth is obtained:
+
+* fast, no FreeSurfer -- ``compute_centres`` on a hand-built tiny tissue model,
+  the JSON round-trip, and the load/fallback decision in ``GroundTruth.load``;
+* heavy, needs the CerebrA anatomy -- the cached sidecar built with the phantom must
+  equal what ``GroundTruth.build`` recomputes from scratch, so switching the
+  sweep from rebuild to load cannot change a single graded coordinate.
+"""
+
+import numpy as np
+import pytest
+
+from swane.tests.helpers.phantom.ground_truth import (
+    GROUND_TRUTH_FILENAME,
+    build_centres,
+    compute_centres,
+    load_centres,
+    save_ground_truth,
+)
+from swane.tests.helpers.phantom.tissue import TissueClass, TissueModel
+
+
+def _has_anatomy() -> bool:
+    from swane.tests.helpers.phantom.anatomy_source import anatomy_available
+
+    return anatomy_available()
+
+
+def _synthetic_model() -> TissueModel:
+    """A tiny hand-built tissue model, enough to exercise ``compute_centres``.
+
+    A 10^3 grid with an affine that centres RAS x on zero, so the venous sinus
+    voxels straddle both hemispheres and the L/R split has something to divide.
+    """
+    shape = (10, 10, 10)
+    labels = np.full(shape, TissueClass.AIR, dtype=np.int16)
+    labels[2:8, 2:8, 2:8] = TissueClass.WM  # brain bulk
+    labels[4:6, 4:6, 4:6] = TissueClass.CORTICAL_GM
+    # A slab of venous sinus spanning x, so both hemispheres are populated.
+    labels[1:9, 5, 6] = TissueClass.VENOUS_SINUS
+
+    # Motor cortex in both hemispheres (x from -3 to +3), like the real one.
+    precentral = np.zeros(shape, dtype=bool)
+    precentral[2:9, 4:6, 7] = True
+    cst = np.zeros(shape, dtype=bool)
+    cst[5, 5, 2:8] = True
+
+    # AF and OR corridors straddle x = 0 so both hemispheres are populated. The
+    # arcuate is placed anterior (high RAS y = high j) and the optic radiation
+    # posterior (low y), the coarse fronto-temporal-vs-occipital relation the
+    # real corridors must also satisfy.
+    af = np.zeros(shape, dtype=bool)
+    af[2:9, 7, 6] = True  # y = +2 (anterior)
+    orad = np.zeros(shape, dtype=bool)
+    orad[2:9, 3, 4] = True  # y = -2 (posterior)
+
+    # voxel -> RAS with the origin at the grid centre: x in [-5, 4].
+    affine = np.array(
+        [
+            [1.0, 0.0, 0.0, -5.0],
+            [0.0, 1.0, 0.0, -5.0],
+            [0.0, 0.0, 1.0, -5.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    return TissueModel(
+        labels=labels,
+        affine=affine,
+        zooms=(1.0, 1.0, 1.0),
+        precentral=precentral,
+        cst=cst,
+        af=af,
+        optic_radiation=orad,
+    )
+
+
+def test_compute_centres_returns_expected_features():
+    centres = compute_centres(_synthetic_model())
+    for key in ("brain", "precentral", "cst", "venous_sinus", "seeg"):
+        assert key in centres, "missing centroid %r" % key
+        assert np.asarray(centres[key]).shape == (3,)
+    # The venous slab straddles x = 0, so both hemisphere centroids exist and
+    # sit on the correct sides.
+    assert centres["venous_sinus_L"][0] < 0
+    assert centres["venous_sinus_R"][0] > 0
+    # Same split for the motor cortex (the task fMRI side ground truth).
+    assert centres["precentral_L"][0] < 0
+    assert centres["precentral_R"][0] > 0
+
+
+def test_compute_centres_returns_rs_posterior_network():
+    """The posterior resting-state network centre is the centre of the cortical
+    grey matter inside the RAS box the BOLD generator draws it from."""
+    from swane.tests.helpers.phantom.sequences import RS_POSTERIOR_BOX
+
+    model = _synthetic_model()
+    # 10 mm voxels centring the cortical GM cube (voxels 4-5) in the posterior
+    # box; one more GM voxel 45 mm away on every axis lies outside it.
+    r, a, s = RS_POSTERIOR_BOX["r"], RS_POSTERIOR_BOX["a"], RS_POSTERIOR_BOX["s"]
+    target = np.array([np.mean(r), np.mean(a), np.mean(s)])
+    model.affine[:3, :3] = np.eye(3) * 10.0
+    model.affine[:3, 3] = target - 45.0
+    model.labels[0, 0, 0] = TissueClass.CORTICAL_GM
+
+    centres = compute_centres(model)
+
+    assert np.allclose(centres["rs_posterior"], target)
+
+
+def test_compute_centres_returns_af_or_corridors():
+    """AF and OR centroids exist per hemisphere and sit where anatomy demands.
+
+    Fails today because ``compute_centres`` derives no AF/OR centroids. The
+    coarse relations pinned here are exactly what a plausible-but-wrong corridor
+    would violate: the corridors must split into left/right hemispheres on the
+    RAS x sign, and the arcuate must sit anterior to the optic radiation.
+    """
+    centres = compute_centres(_synthetic_model())
+    for key in ("af_l", "af_r", "or_l", "or_r"):
+        assert key in centres, "missing centroid %r" % key
+        c = np.asarray(centres[key])
+        assert c.shape == (3,)
+        assert np.all(np.isfinite(c)), key
+    # Hemisphere split on the RAS x sign, as venous_sinus already does.
+    assert centres["af_l"][0] < 0 < centres["af_r"][0]
+    assert centres["or_l"][0] < 0 < centres["or_r"][0]
+    # Arcuate is fronto-temporal (anterior); optic radiation is occipital
+    # (posterior): AF centroid is anterior (higher RAS y) to OR on both sides.
+    assert centres["af_l"][1] > centres["or_l"][1]
+    assert centres["af_r"][1] > centres["or_r"][1]
+
+
+def test_save_load_round_trip_is_exact(tmp_path):
+    centres = compute_centres(_synthetic_model())
+    save_ground_truth(str(tmp_path), centres)
+    assert (tmp_path / GROUND_TRUTH_FILENAME).is_file()
+
+    reloaded = load_centres(str(tmp_path))
+    assert reloaded is not None
+    assert set(reloaded) == set(centres)
+    for key in centres:
+        assert np.allclose(reloaded[key], centres[key]), key
+
+
+def test_load_centres_missing_returns_none(tmp_path):
+    assert load_centres(str(tmp_path)) is None
+
+
+def test_ground_truth_load_uses_cache_without_rebuilding(tmp_path, monkeypatch):
+    """A present sidecar is used verbatim; the expensive rebuild never runs."""
+    from swane.tests.prerelease import checks
+
+    centres = compute_centres(_synthetic_model())
+    save_ground_truth(str(tmp_path), centres)
+
+    def _fail(*_args, **_kwargs):
+        raise AssertionError("build_centres must not be called when a sidecar exists")
+
+    monkeypatch.setattr(checks, "build_centres", _fail)
+    truth = checks.GroundTruth.load(str(tmp_path))
+    for key in centres:
+        assert np.allclose(truth.centres[key], centres[key]), key
+
+
+def test_ground_truth_load_falls_back_to_build_when_missing(tmp_path, monkeypatch):
+    """No sidecar (an old cache) -> recompute from the tissue model."""
+    from swane.tests.prerelease import checks
+
+    sentinel = {"brain": np.array([1.0, 2.0, 3.0])}
+    monkeypatch.setattr(checks, "build_centres", lambda *_a, **_k: sentinel)
+    truth = checks.GroundTruth.load(str(tmp_path))
+    assert truth.centres is sentinel
+
+
+def test_ground_truth_load_none_dir_builds(monkeypatch):
+    """The checks-only path passes no phantom root and must still build."""
+    from swane.tests.prerelease import checks
+
+    sentinel = {"brain": np.array([0.0, 0.0, 0.0])}
+    monkeypatch.setattr(checks, "build_centres", lambda *_a, **_k: sentinel)
+    assert checks.GroundTruth.load(None).centres is sentinel
+
+
+@pytest.mark.heavy
+@pytest.mark.skipif(
+    not _has_anatomy(),
+    reason="CerebrA/ICBM 2009c Sym not in the TemplateFlow cache",
+)
+def test_real_af_or_corridors_are_anatomically_placed():
+    """The AF/OR corridors built on the CerebrA anatomy land where the anatomy demands.
+
+    Unlike the hand-built fast test, this stamps the corridors on the real WM
+    and would catch waypoints that miss white matter entirely (empty mask ->
+    omitted centroid) or that put a corridor on the wrong side or in the wrong
+    lobe. The coarse relations are anatomy, not fitted numbers: bilateral split
+    on RAS x, arcuate anterior to optic radiation, and the optic radiation
+    posterior of the brain centroid.
+    """
+    from swane.tests.helpers.phantom.tissue import build_tissue_model
+
+    centres = compute_centres(build_tissue_model())
+    for key in ("af_l", "af_r", "or_l", "or_r"):
+        assert key in centres, "corridor %r missed the white matter entirely" % key
+        assert np.all(np.isfinite(centres[key])), key
+    # Bilateral split on the RAS x sign.
+    assert centres["af_l"][0] < 0 < centres["af_r"][0]
+    assert centres["or_l"][0] < 0 < centres["or_r"][0]
+    # Arcuate (fronto-temporal) sits anterior to the optic radiation (occipital).
+    assert centres["af_l"][1] > centres["or_l"][1]
+    assert centres["af_r"][1] > centres["or_r"][1]
+    # The optic radiation reaches back toward the occipital pole, behind the
+    # brain's own centre of mass.
+    assert centres["or_l"][1] < centres["brain"][1]
+    assert centres["or_r"][1] < centres["brain"][1]
+
+
+@pytest.mark.heavy
+@pytest.mark.skipif(
+    not _has_anatomy(),
+    reason="CerebrA/ICBM 2009c Sym not in the TemplateFlow cache",
+)
+def test_cached_sidecar_matches_rebuild(tmp_path):
+    """The whole point: load == rebuild, to the coordinate.
+
+    Building the model once and caching its centroids must give exactly what
+    recomputing the model would, or the sweep would grade against a subtly
+    different reference after the load optimisation.
+    """
+    from swane.tests.prerelease.checks import GroundTruth
+
+    centres = build_centres()
+    save_ground_truth(str(tmp_path), centres)
+
+    cached = GroundTruth.load(str(tmp_path)).centres
+    rebuilt = GroundTruth.build().centres
+    assert set(cached) == set(rebuilt)
+    for key in rebuilt:
+        assert np.allclose(cached[key], rebuilt[key], atol=1e-6), key

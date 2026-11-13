@@ -1,0 +1,82 @@
+# workflow snapshot: dipy_bundle / cingulum
+#
+#   num_threads = 4
+#   tract = cingulum
+#
+# nodes=10 edges=16
+
+- inputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- outputnode [IdentityInterface] mem_gb=0.2 n_procs=1
+- recognize_lh [DipyRecoBundlesRecognize] mapnode(iterfield=recobundles_pickle,tractogram_chunk) mem_gb=6.0 n_procs=4
+    model_bundle_name = 'C_L'
+    model_clust_thr = 2.5
+    num_threads = 4
+    pruning_thr = 8.0
+    r_pruning_thr = 6.0
+    r_reduction_thr = 12.0
+    reduction_thr = 15.0
+    refine = True
+    slr = True
+- recognize_rh [DipyRecoBundlesRecognize] mapnode(iterfield=recobundles_pickle,tractogram_chunk) mem_gb=6.0 n_procs=4
+    model_bundle_name = 'C_R'
+    model_clust_thr = 2.5
+    num_threads = 4
+    pruning_thr = 8.0
+    r_pruning_thr = 6.0
+    r_reduction_thr = 12.0
+    reduction_thr = 15.0
+    refine = True
+    slr = True
+- recovery_lh [DipyBundleRecovery] mem_gb=6.0 n_procs=4
+    model_bundle_name = 'C_L'
+    model_clust_thr = 2.5
+    num_threads = 4
+    out_bundle = 'r-cingulum_lh.trx'
+    pruning_thr = 8.0
+    r_pruning_thr = 6.0
+    r_reduction_thr = 12.0
+    reduction_thr = 15.0
+    refine = True
+    slr = True
+- recovery_rh [DipyBundleRecovery] mem_gb=6.0 n_procs=4
+    model_bundle_name = 'C_R'
+    model_clust_thr = 2.5
+    num_threads = 4
+    out_bundle = 'r-cingulum_rh.trx'
+    pruning_thr = 8.0
+    r_pruning_thr = 6.0
+    r_reduction_thr = 12.0
+    reduction_thr = 15.0
+    refine = True
+    slr = True
+- to_ref_lh [DipyBundlesToRef] mem_gb=1.0 n_procs=1
+    out_name = 'r-cingulum_lh'
+- to_ref_rh [DipyBundlesToRef] mem_gb=1.0 n_procs=1
+    out_name = 'r-cingulum_rh'
+- union_lh [DipyBundleUnion] mem_gb=1.0 n_procs=1
+- union_rh [DipyBundleUnion] mem_gb=1.0 n_procs=1
+# connections
+inputnode.atlas2native -> to_ref_lh.atlas2native
+inputnode.atlas2native -> to_ref_rh.atlas2native
+inputnode.atlas_dir -> recognize_lh.atlas_dir
+inputnode.atlas_dir -> recognize_rh.atlas_dir
+inputnode.atlas_dir -> recovery_lh.atlas_dir
+inputnode.atlas_dir -> recovery_rh.atlas_dir
+inputnode.recobundles_builds -> recognize_lh.recobundles_pickle
+inputnode.recobundles_builds -> recognize_rh.recobundles_pickle
+inputnode.recobundles_builds -> recovery_lh.recobundles_pickles
+inputnode.recobundles_builds -> recovery_rh.recobundles_pickles
+inputnode.recobundles_chunks -> recognize_lh.tractogram_chunk
+inputnode.recobundles_chunks -> recognize_rh.tractogram_chunk
+inputnode.recobundles_chunks -> recovery_lh.tractogram_chunks
+inputnode.recobundles_chunks -> recovery_rh.tractogram_chunks
+recognize_lh.recognized_bundle -> union_lh.recognized_bundles
+recognize_rh.recognized_bundle -> union_rh.recognized_bundles
+recovery_lh.bundle -> to_ref_lh.bundle
+recovery_lh.confidence_flag -> outputnode.flag_lh
+recovery_rh.bundle -> to_ref_rh.bundle
+recovery_rh.confidence_flag -> outputnode.flag_rh
+to_ref_lh.bundle_vtp -> outputnode.bundle_lh
+to_ref_rh.bundle_vtp -> outputnode.bundle_rh
+union_lh.bundle -> recovery_lh.default_bundle
+union_rh.bundle -> recovery_rh.default_bundle

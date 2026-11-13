@@ -1,9 +1,11 @@
-from PySide6.QtCore import QRunnable, Signal, QObject
+from swane.utils.qt_compat import QRunnable, Signal, QObject
+import logging
 import os
 import subprocess
 
 from swane.config.ConfigManager import ConfigManager
 from swane.utils.DataInputList import DataInputList
+from swane.utils.slicer_isolation import isolation_args
 
 
 class SlicerExportSignaler(QObject):
@@ -20,9 +22,24 @@ class SlicerExportWorker(QRunnable):
     END_MSG = "ENDLOADING"
 
     def __init__(
-        self, slicer_path: str, result_dir: str, scene_ext: str, config: ConfigManager
+        self,
+        slicer_path: str,
+        result_dir: str,
+        scene_ext: str,
+        config: ConfigManager,
+        module_paths: list = None,
     ):
+        """
+        Parameters
+        ----------
+        module_paths: list, optional
+            Module folders of the Slicer extensions recorded by the Slicer
+            check (see swane.utils.slicer_isolation). Slicer runs isolated from
+            the user's settings, slicerrc and extra modules, so without them
+            the export is not started.
+        """
         super(SlicerExportWorker, self).__init__()
+        self.module_paths: list = list(module_paths or [])
         self.signal = SlicerExportSignaler()
         self.slicer_path: str = slicer_path
         self.result_dir: str = result_dir
@@ -41,28 +58,62 @@ class SlicerExportWorker(QRunnable):
             DataInputList.DTI, "tractography_threshold"
         )
 
-        cmd = (
-            self.slicer_path
-            + " --no-splash --no-main-window --python-script "
-            + os.path.join(
-                os.path.dirname(__file__),
-                f"slicer_script_result.py --dti_threshold {str(dti_threshold)} "
-                f"--vein_threshold_mr {str(vein_threshold_mr)} --vein_threshold_ct {str(vein_threshold_ct)}",
+        # Run without a shell: the script path is a separate argv element, so an
+        # install dir containing spaces survives.
+        result_script = os.path.join(
+            os.path.dirname(__file__), "slicer_script_result.py"
+        )
+        if not self.module_paths:
+            # Isolated Slicer would start without SlicerFreeSurfer: report it
+            # like a launch failure instead of producing an incomplete scene.
+            logging.getLogger(__name__).error(
+                "3D Slicer export not started: extension module folders "
+                "unknown, repeat the 3D Slicer check"
             )
-        )
+            self.signal.export.emit(self.END_MSG)
+            return
 
-        popen = subprocess.Popen(
-            cmd,
-            cwd=self.result_dir,
-            shell=True,
-            stdout=subprocess.PIPE,
-            universal_newlines=True,
-        )
-        for stdout_line in iter(popen.stdout.readline, ""):
-            if stdout_line.startswith(self.PROGRESS_MSG_PREFIX):
-                self.signal.export.emit(
-                    stdout_line.replace(self.PROGRESS_MSG_PREFIX, "").replace("\n", "")
-                )
-        popen.stdout.close()
-        popen.wait()
-        self.signal.export.emit(self.END_MSG)
+        cmd = [
+            self.slicer_path,
+            "--no-splash",
+            "--no-main-window",
+            *isolation_args(self.module_paths),
+            "--python-script",
+            result_script,
+            "--dti_threshold",
+            str(dti_threshold),
+            "--vein_threshold_mr",
+            str(vein_threshold_mr),
+            "--vein_threshold_ct",
+            str(vein_threshold_ct),
+        ]
+
+        popen = None
+        try:
+            popen = subprocess.Popen(
+                cmd,
+                cwd=self.result_dir,
+                stdout=subprocess.PIPE,
+                universal_newlines=True,
+            )
+            for stdout_line in iter(popen.stdout.readline, ""):
+                if stdout_line.startswith(self.PROGRESS_MSG_PREFIX):
+                    self.signal.export.emit(
+                        stdout_line.replace(self.PROGRESS_MSG_PREFIX, "").replace(
+                            "\n", ""
+                        )
+                    )
+            popen.stdout.close()
+            popen.wait()
+        except OSError as e:
+            # Missing/stale Slicer path or permission problem: report it, but
+            # never leave the modal progress dialog waiting for END_MSG.
+            logging.getLogger(__name__).error(
+                "3D Slicer export failed to run %s: %s", self.slicer_path, e
+            )
+        finally:
+            if popen is not None and popen.poll() is None:
+                # an exception interrupted the read loop: do not leak Slicer
+                popen.kill()
+                popen.wait()
+            self.signal.export.emit(self.END_MSG)

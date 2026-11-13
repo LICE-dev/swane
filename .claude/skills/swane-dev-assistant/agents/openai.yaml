@@ -1,0 +1,4 @@
+interface:
+  display_name: "SWANe Dev Assistant"
+  short_description: "Develop and govern SWANe safely"
+  default_prompt: "Use $swane-dev-assistant to implement and validate this SWANe change."

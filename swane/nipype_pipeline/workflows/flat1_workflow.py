@@ -1,26 +1,32 @@
 from configparser import SectionProxy
 
-import swane_supplement
+from swane import resources
 
-from nipype.interfaces.fsl import (
+from swane.nipype_pipeline.interfaces.niimath import (
     ApplyMask,
     BinaryMaths,
-    FAST,
-    ImageStats,
     SpatialFilter,
     Threshold,
 )
+from swane.nipype_pipeline.interfaces.stats.ImageStatistics import ImageStatistics
 from nipype.pipeline.engine import Node
 from swane.nipype_pipeline.engine.CustomWorkflow import CustomWorkflow
-from swane.nipype_pipeline.nodes.ThrROI import ThrROI
+from swane.nipype_pipeline.interfaces.niimath.ThrROI import ThrROI
 from nipype.interfaces.utility import IdentityInterface, Function
 
-from swane.nipype_pipeline.nodes.ram_estimators import FastRamEstimator
-from swane.nipype_pipeline.nodes.utils import apply_registration_node
+from swane.config.config_enums import SegmentationEngine
+from swane.nipype_pipeline.interfaces.utils import (
+    apply_registration_node,
+    resolve_registration_engine,
+    resolve_segmentation_engine,
+)
 
 
 def flat1_workflow(
-    name: str, mni1_dir: str, synth_config: SectionProxy, base_dir: str = "/"
+    name: str,
+    mni1_dir: str,
+    synth_config: SectionProxy,
+    base_dir: str = "/",
 ) -> CustomWorkflow:
     """
     Creation of a junction and extension z-score map based on T13D, FLAIR3D and
@@ -33,14 +39,20 @@ def flat1_workflow(
     mni1_dir : path
         The file path of the MNI1 template.
     synth_config: SectionProxy
-        reeSurfer Synth tools settings.
+        FreeSurfer Synth tools settings (registration engine; the
+        segmentation engine that produced tissue_pve).
     base_dir : path, optional
         The base directory path relative to parent workflow. The default is "/".
 
     Input Node Fields
     ----------
     reference_brain : path
-        Betted T13D reference file.
+        Betted T13D reference file (reference space of the output maps).
+    tissue_pve : list of path
+        Tissue partial volume / posterior maps of the T13D ordered
+        [CSF, GM, WM], from the shared reference segmentation.
+    tissue_restored : path
+        Bias-corrected betted T13D matching tissue_pve.
     flair_brain : path
         Betted FLAIR3D.
     ref_2_mni1_warp : path
@@ -73,11 +85,16 @@ def flat1_workflow(
 
     workflow = CustomWorkflow(name=name, base_dir=base_dir)
 
+    engine = resolve_registration_engine(synth_config)
+    segmentation_engine = resolve_segmentation_engine(synth_config)
+
     # Input Node
     inputnode = Node(
         IdentityInterface(
             fields=[
                 "reference_brain",
+                "tissue_pve",
+                "tissue_restored",
                 "flair_brain",
                 "ref_2_mni1_warp",
                 "ref_2_mni1_inverse_warp",
@@ -92,17 +109,8 @@ def flat1_workflow(
         name="outputnode",
     )
 
-    # NODE 1: three class fast segmentation
-    fast = Node(FAST(), name="%s_fast" % name, mem_gb=4)
-    fast.ram_estimator = FastRamEstimator()
-    fast.inputs.img_type = 1  # param -t
-    fast.inputs.number_classes = 3  # param n
-    fast.inputs.hyper = 0.1  # param -H
-    fast.inputs.bias_lowpass = 40  # param -l
-    fast.inputs.output_biascorrected = True  # param -B
-    fast.inputs.bias_iters = 4  # param -I
-    workflow.add_nodes([fast])
-    workflow.connect(inputnode, "reference_brain", fast, "in_files")
+    # NODE 1: the three-class tissue segmentation (engine-selectable) runs once
+    # in the reference workflow and arrives through tissue_pve/tissue_restored.
 
     def pick_first_two(file_list):
         return file_list[1], file_list[2]
@@ -116,13 +124,13 @@ def flat1_workflow(
         name="fast_segment_split",
     )
     fast_segment_split.long_name = "Segment identification"
-    workflow.connect(fast, "partial_volume_files", fast_segment_split, "file_list")
+    workflow.connect(inputnode, "tissue_pve", fast_segment_split, "file_list")
 
     flair_2_mni1 = apply_registration_node(
         name="flair_2_mni1",
         name_prefix="flair",
         name_suffix="MNI atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
         moving=[inputnode, "flair_brain"],
@@ -134,10 +142,10 @@ def flat1_workflow(
         name="restore_2_mni1",
         name_prefix="T1",
         name_suffix="MNI atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
-        moving=[fast, "restored_image"],
+        moving=[inputnode, "tissue_restored"],
         reference=mni1_dir,
         non_linear=True,
     )
@@ -146,7 +154,7 @@ def flat1_workflow(
         name="gm_2_mni1",
         name_prefix="Gray matter",
         name_suffix="MNI atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
         moving=[fast_segment_split, "gm_seg"],
@@ -158,13 +166,53 @@ def flat1_workflow(
         name="wm_2_mni1",
         name_prefix="White matter",
         name_suffix="MNI atlas",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_warp"],
         moving=[fast_segment_split, "wm_seg"],
         reference=mni1_dir,
         non_linear=True,
     )
+
+    # NODE 5b: GM/WM tissue-mask source for the mean-based masking below.
+    #
+    # FLAT1 consumes gm_2_mni1/wm_2_mni1 as BINARY ApplyMask masks (fslmaths
+    # -mas: any nonzero voxel counts as tissue). FSL FAST partial-volume maps
+    # are sparse (exactly 0 outside a tissue), so they work directly. ANTs
+    # Atropos posteriors are DENSE: every class keeps a small nonzero
+    # probability over the whole brain mask. Used raw, the GM and WM masks would
+    # then cover the same voxels, making gm_mean == wm_mean and collapsing
+    # binary_flair and the junction/extension maps to zero.
+    #
+    # So in the Atropos branch only, threshold each posterior at 0.1 before it is
+    # used as a mask: this restores a FAST-like sparse, tissue-specific support.
+    # (No -bin: the only downstream use is ApplyMask, which reads nonzero
+    # support, not values.)
+    #
+    # Other viable approaches, if this ever needs revisiting:
+    #   * PVE-weighted consumption (fslmaths -mul instead of -mas) in FLAT1:
+    #     handles dense posteriors without a threshold, but changes the FSL FAST
+    #     output too (no longer bit-identical).
+    #   * A binary hard segmentation per class (argmax / posterior > 0.5):
+    #     simplest, but drops the boundary partial volumes below 0.5.
+    #   * Atropos native partial-volume model ("pvlabel" / partial-volume
+    #     classes): true PV fractions like FAST, but needs new parameters.
+    if segmentation_engine == SegmentationEngine.ANTS:
+        gm_tissue = Node(
+            Threshold(thresh=0.1, direction="below"), name="%s_gm_bin" % name
+        )
+        gm_tissue.long_name = "Grey matter mask threshold"
+        workflow.connect(gm_2_mni1, "out_file", gm_tissue, "in_file")
+        wm_tissue = Node(
+            Threshold(thresh=0.1, direction="below"), name="%s_wm_bin" % name
+        )
+        wm_tissue.long_name = "White matter mask threshold"
+        workflow.connect(wm_2_mni1, "out_file", wm_tissue, "in_file")
+        gm_mask_source = (gm_tissue, "out_file")
+        wm_mask_source = (wm_tissue, "out_file")
+    else:  # FSL FAST PVE are already sparse: use them directly (unchanged)
+        gm_mask_source = (gm_2_mni1, "out_file")
+        wm_mask_source = (wm_2_mni1, "out_file")
 
     # NODE 6: Divided image generation from FLAIR/T1
     flair_div_ref = Node(BinaryMaths(), name="%s_flairDIVref" % name)
@@ -185,39 +233,37 @@ def flat1_workflow(
     # NODE 8: Cerebellum removal from divided image
     cortex_mask = Node(ApplyMask(), name="%s_cortexMask" % name)
     cortex_mask.long_name = "outliers %s"
-    cortex_mask.inputs.mask_file = swane_supplement.cortex_mas
+    cortex_mask.inputs.mask_file = resources.cortex_mas
     workflow.connect(outliers_removal, "out_file", cortex_mask, "in_file")
 
     # NODE 9: Masking for gray matter on t1_restore in MNI1
     gm_mask = Node(ApplyMask(), name="%s_gmMask" % name)
     gm_mask.long_name = "Grey matter %s"
     workflow.connect(cortex_mask, "out_file", gm_mask, "in_file")
-    workflow.connect(gm_2_mni1, "out_file", gm_mask, "mask_file")
+    workflow.connect(gm_mask_source[0], gm_mask_source[1], gm_mask, "mask_file")
 
     # NODE 10: Masking for white matter on t1_restore in MNI1
     wm_mask = Node(ApplyMask(), name="%s_wmMask" % name)
     wm_mask.long_name = "White matter %s"
     workflow.connect(cortex_mask, "out_file", wm_mask, "in_file")
-    workflow.connect(wm_2_mni1, "out_file", wm_mask, "mask_file")
+    workflow.connect(wm_mask_source[0], wm_mask_source[1], wm_mask, "mask_file")
 
     # NODE 11: Mean calculation for gray matter
-    gm_mean = Node(ImageStats(), name="%s_gm_mean" % name)
+    gm_mean = Node(ImageStatistics(), name="%s_gm_mean" % name)
     gm_mean.long_name = "Grey matter mean value calculation"
-    gm_mean.inputs.op_string = "-M"
     workflow.connect(gm_mask, "out_file", gm_mean, "in_file")
 
     # NODE 12: Mean calculation for white matter
-    wm_mean = Node(ImageStats(), name="%s_wm_mean" % name)
+    wm_mean = Node(ImageStatistics(), name="%s_wm_mean" % name)
     wm_mean.long_name = "White matter mean value calculation"
-    wm_mean.inputs.op_string = "-M"
     workflow.connect(wm_mask, "out_file", wm_mean, "in_file")
 
-    # TODO parametri per ora inutilizzati. Valutare in futuro la loro implementazione
-    # FLAT1_gm_std = Node(ImageStats(), name="%s_gm_std")
+    # TODO currently unused parameters. Consider their implementation in the future
+    # FLAT1_gm_std = Node(ImageStatistics(), name="%s_gm_std")
     # FLAT1_gm_std.inputs.op_string="-S"
     # workflow.connect(FLAT1_gmMask,"out_file",FLAT1_gm_std,"in_file")
 
-    # FLAT1_wm_std = Node(ImageStats(), name="%s_wm_std")
+    # FLAT1_wm_std = Node(ImageStatistics(), name="%s_wm_std")
     # FLAT1_wm_std.inputs.op_string="-S"
     # workflow.connect(FLAT1_wmMask,"out_file",FLAT1_wm_std,"in_file")
 
@@ -226,8 +272,8 @@ def flat1_workflow(
     binary_flair.long_name = "Mean based masking"
     binary_flair.inputs.out_file = "binary_flair.nii.gz"
     workflow.connect(cortex_mask, "out_file", binary_flair, "in_file")
-    workflow.connect(gm_mean, "out_stat", binary_flair, "seg_val_max")
-    workflow.connect(wm_mean, "out_stat", binary_flair, "seg_val_min")
+    workflow.connect(gm_mean, "mean", binary_flair, "seg_val_max")
+    workflow.connect(wm_mean, "mean", binary_flair, "seg_val_min")
 
     # NODE 14: Junction map generation
     convolution_flair = Node(SpatialFilter(), name="%s_convolution_flair" % name)
@@ -242,7 +288,7 @@ def flat1_workflow(
     junction_mean = Node(BinaryMaths(), name="%s_junction_mean" % name)
     junction_mean.long_name = "junction variation from mean atlas"
     junction_mean.inputs.operation = "sub"  # Param -sub
-    junction_mean.inputs.operand_file = swane_supplement.mean_flair
+    junction_mean.inputs.operand_file = resources.mean_flair
     junction_mean.inputs.out_file = "junction_flair.nii.gz"
     workflow.connect(convolution_flair, "out_file", junction_mean, "in_file")
 
@@ -250,20 +296,19 @@ def flat1_workflow(
     junction_z = Node(BinaryMaths(), name="%s_junctionz" % name)
     junction_z.long_name = "junction z score calculation"
     junction_z.inputs.operation = "div"
-    junction_z.inputs.operand_file = swane_supplement.std_final_flair
+    junction_z.inputs.operand_file = resources.std_final_flair
     junction_z.inputs.out_file = "junctionZ_flair.nii.gz"
     workflow.connect(junction_mean, "out_file", junction_z, "in_file")
 
     # NODE 15: Cerebellum mask on restore_t1
     masked_cerebellum = Node(ApplyMask(), name="%s_masked_cerebellum" % name)
     masked_cerebellum.long_name = "cerebellum %s"
-    masked_cerebellum.inputs.mask_file = swane_supplement.binary_cerebellum
+    masked_cerebellum.inputs.mask_file = resources.binary_cerebellum
     workflow.connect(restore_2_mni1, "out_file", masked_cerebellum, "in_file")
 
     # NODE 16: Cerebellum mean value calculation
-    cerebellum_mean = Node(ImageStats(), name="%s_cerebellum_mean" % name)
+    cerebellum_mean = Node(ImageStatistics(), name="%s_cerebellum_mean" % name)
     cerebellum_mean.long_name = "cerebellum mean value calculation"
-    cerebellum_mean.inputs.op_string = "-M"
     workflow.connect(masked_cerebellum, "out_file", cerebellum_mean, "in_file")
 
     # NODE 17: Grey matter mask on restore_t1
@@ -271,7 +316,7 @@ def flat1_workflow(
     restore_gm_mask.long_name = "grey matter %s"
     restore_gm_mask.inputs.out_file = "masked_image_GM.nii.gz"
     workflow.connect(restore_2_mni1, "out_file", restore_gm_mask, "in_file")
-    workflow.connect(gm_2_mni1, "out_file", restore_gm_mask, "mask_file")
+    workflow.connect(gm_mask_source[0], gm_mask_source[1], restore_gm_mask, "mask_file")
 
     # NODE 18: Grey matter normalization on cerebellum mean value
     normalised_gm_mask = Node(BinaryMaths(), name="%s_normalised_GM_mask" % name)
@@ -279,7 +324,7 @@ def flat1_workflow(
     normalised_gm_mask.inputs.operation = "div"
     normalised_gm_mask.inputs.out_file = "normalised_GM_mask.nii.gz"
     workflow.connect(restore_gm_mask, "out_file", normalised_gm_mask, "in_file")
-    workflow.connect(cerebellum_mean, "out_stat", normalised_gm_mask, "operand_value")
+    workflow.connect(cerebellum_mean, "mean", normalised_gm_mask, "operand_value")
 
     # NODE 19: Extension map generation
     smoothed_image_extension = Node(
@@ -298,7 +343,7 @@ def flat1_workflow(
     extension_mean = Node(BinaryMaths(), name="%s_image_extension" % name)
     extension_mean.long_name = "extension variation from mean atlas"
     extension_mean.inputs.operation = "sub"
-    extension_mean.inputs.operand_file = swane_supplement.mean_extension
+    extension_mean.inputs.operand_file = resources.mean_extension
     extension_mean.inputs.out_file = "extension_image.nii.gz"
     workflow.connect(smoothed_image_extension, "out_file", extension_mean, "in_file")
 
@@ -306,7 +351,7 @@ def flat1_workflow(
     extension_z = Node(BinaryMaths(), name="%s_image_extensionz" % name)
     extension_z.long_name = "extension z score calculation"
     extension_z.inputs.operation = "div"
-    extension_z.inputs.operand_file = swane_supplement.std_final_extension
+    extension_z.inputs.operand_file = resources.std_final_extension
     extension_z.inputs.out_file = "extension_z.nii.gz"
     workflow.connect(extension_mean, "out_file", extension_z, "in_file")
 
@@ -316,13 +361,13 @@ def flat1_workflow(
     no_cereb_extension_z.inputs.out_file = "no_cereb_extension_z.nii.gz"
     workflow.connect(extension_z, "out_file", no_cereb_extension_z, "in_file")
     # workflow.connect(outliers_mask, "out_file", no_cereb_extension_z, "mask_file")
-    no_cereb_extension_z.inputs.mask_file = swane_supplement.cortex_mas
+    no_cereb_extension_z.inputs.mask_file = resources.cortex_mas
 
     extension_z_2_ref = apply_registration_node(
         name="extension_z_2_ref",
         name_prefix="Extension",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_inverse_warp"],
         moving=[no_cereb_extension_z, "out_file"],
@@ -335,7 +380,7 @@ def flat1_workflow(
         name="junction_z_2_ref",
         name_prefix="Junction",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_inverse_warp"],
         moving=[junction_z, "out_file"],
@@ -348,7 +393,7 @@ def flat1_workflow(
         name="binary_flair_2_ref",
         name_prefix="Binary Flair",
         name_suffix="to reference",
-        use_synth=synth_config.getboolean_safe("morph"),
+        engine=engine,
         workflow=workflow,
         warp=[inputnode, "ref_2_mni1_inverse_warp"],
         moving=[binary_flair, "out_file"],

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QTabWidget,
     QGridLayout,
+    QVBoxLayout,
     QLabel,
     QSizePolicy,
     QSpacerItem,
@@ -15,12 +16,14 @@ from PySide6.QtWidgets import (
     QDialog,
     QPushButton,
     QStyleOptionButton,
+    QProgressDialog,
 )
 from PySide6.QtGui import QAction, QIcon, QPixmap, QFont, QCloseEvent, QDesktopServices
-from PySide6.QtCore import QCoreApplication, Qt, QThreadPool, QUrl
+from PySide6.QtCore import QCoreApplication, Qt, QUrl, QEventLoop
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
 from swane.ui.PreferenceWizardWindow import PreferenceWizardWindow
+from swane.workers.worker_pool import start_worker
 from swane.ui.ToolReferenceWindow import ToolReferenceWindow
 from swane.utils.DependencyManager import (
     DependencyManager,
@@ -29,12 +32,25 @@ from swane.utils.DependencyManager import (
 )
 from swane.ui.SubjectTab import SubjectTab
 from swane.ui.PreferencesWindow import PreferencesWindow
-import swane_supplement
-from swane import __version__, EXIT_CODE_REBOOT, strings
+from swane.utils.license_consent import (
+    tools_needing_consent,
+    detected_tool_versions,
+    version_with_license,
+)
+from swane.utils.LicenseReference import SLICER
+from swane.utils.AtlasReference import ATLASES
+from swane.ui.LicenseConsentWindow import LicenseConsentWindow
+from swane.workers.LicenseResolveWorker import LicenseResolveWorker
+from swane.workers.SlicerCheckWorker import SlicerCheckWorker
+from swane import resources
+from swane.resources import strings
+from swane import __version__, EXIT_CODE_REBOOT
 from swane.workers.UpdateCheckWorker import UpdateCheckWorker
 from swane.utils.Subject import Subject, SubjectRet
 from swane.config.ConfigManager import ConfigManager
+from swane.config import dependency_policy
 from swane.config.config_enums import GlobalPrefCategoryList
+from swane.utils.platform_and_tools_utils import is_mac, is_windows
 
 
 class MainWindow(QMainWindow):
@@ -53,12 +69,12 @@ class MainWindow(QMainWindow):
         self.global_config.check_dependencies(self.dependency_manager)
 
         # GUI Icons setting
-        self.setWindowIcon(QIcon(QPixmap(swane_supplement.appIcon_file)))
-        self.OK_ICON_FILE = swane_supplement.okIcon_file
-        self.ERROR_ICON_FILE = swane_supplement.errorIcon_file
-        self.WARNING_ICON_FILE = swane_supplement.warnIcon_file
-        self.LOADING_MOVIE_FILE = swane_supplement.loadingMovie_file
-        self.VOID_SVG_FILE = swane_supplement.voidsvg_file
+        self.setWindowIcon(QIcon(QPixmap(resources.appIcon_file)))
+        self.OK_ICON_FILE = resources.okIcon_file
+        self.ERROR_ICON_FILE = resources.errorIcon_file
+        self.WARNING_ICON_FILE = resources.warnIcon_file
+        self.LOADING_MOVIE_FILE = resources.loadingMovie_file
+        self.VOID_SVG_FILE = resources.voidsvg_file
         self.OK_ICON = QPixmap(self.OK_ICON_FILE)
         self.ERROR_ICON = QPixmap(self.ERROR_ICON_FILE)
         self.WARNING_ICON = QPixmap(self.WARNING_ICON_FILE)
@@ -86,7 +102,7 @@ class MainWindow(QMainWindow):
         update_thread.signal.last_available.connect(
             lambda pip_version: self.update_available(pip_version)
         )
-        QThreadPool.globalInstance().start(update_thread)
+        start_worker(update_thread)
 
     def update_available(self, pip_version: str):
         """
@@ -201,9 +217,12 @@ class MainWindow(QMainWindow):
             self.global_config, dependency_manager=self.dependency_manager
         )
 
-        # Guard to avoid an already loaded subject directory
+        # Guard to avoid an already loaded subject directory, however its path
+        # is spelled (QFileDialog returns "/" separators even on Windows)
         for tab in self.subject_tab_array:
-            if tab.subject.folder == folder_path:
+            if folder_path and os.path.normcase(
+                os.path.realpath(tab.subject.folder)
+            ) == os.path.normcase(os.path.realpath(folder_path)):
                 msg_box = QMessageBox()
                 msg_box.setIcon(QMessageBox.Icon.Warning)
                 msg_box.setText(strings.mainwindow_subj_already_loaded_error)
@@ -329,6 +348,12 @@ class MainWindow(QMainWindow):
             msg_box.setText(strings.mainwindow_subj_exists_error + subject_name)
             msg_box.exec()
             return
+        elif create_subject_ret == SubjectRet.ConfigError:
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setText(strings.mainwindow_new_subj_config_error)
+            msg_box.exec()
+            return
         elif create_subject_ret == SubjectRet.ValidFolder:
             msg_box = QMessageBox()
             msg_box.setText(strings.mainwindow_new_subj_created + subject_name)
@@ -388,7 +413,30 @@ class MainWindow(QMainWindow):
             QCoreApplication.exit(EXIT_CODE_REBOOT)
 
         if ret != 0:
+            # A lower ram_gb (or another changed requirement) may leave an
+            # engine or option selected that no longer fits: re-validate the
+            # global and the open subject configurations before any workflow
+            # is generated again.
+            self.global_config.check_dependencies(self.dependency_manager)
+            self._check_subject_dependencies()
             self.reset_workflows()
+
+    def _check_subject_dependencies(self):
+        """
+        Re-validate the configuration of the open subjects against the
+        global preferences (e.g. an option above the current ram_gb).
+
+        Returns
+        -------
+        None.
+
+        """
+
+        for subj in self.subject_tab_array:
+            if subj.subject is not None and subj.subject.config is not None:
+                subj.subject.config.check_dependencies(
+                    self.dependency_manager, self.global_config
+                )
 
     def edit_wf_config(self):
         """
@@ -445,10 +493,119 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return
 
+        # The wizard may change the resources and the engines: no workflow
+        # generated with the previous ones survives, whatever the user does.
+        self.reset_workflows()
+
+        # Parenting makes the window manager keep the dialog above the main
+        # window, which on first run is shown right before the wizard.
         wf_preference_window = PreferenceWizardWindow(
-            self.global_config, self.dependency_manager
+            self.global_config,
+            self.dependency_manager,
+            parent=self,
         )
         wf_preference_window.exec()
+
+        # The wizard picks the global engines and defaults within the new
+        # ram_gb, but the open subjects keep their own choices (e.g. SynthSeg).
+        self._check_subject_dependencies()
+
+    def run_license_consent_gate(self) -> bool:
+        """
+        Show the external-tool license consent gate if needed.
+
+        Returns
+        -------
+        bool
+            True to proceed with startup, False if the user declined and the
+            application must abort.
+        """
+        # DependencyManager already performed the expensive import/external-tool
+        # checks during MainWindow construction. Slicer is evaluated directly
+        # from the current configuration, so rebuilding the manager here only
+        # repeats work on the GUI thread.
+        detected = detected_tool_versions(self.dependency_manager, self.global_config)
+        needing = tools_needing_consent(
+            self.dependency_manager, self.global_config, detected
+        )
+        if not needing:
+            return True
+
+        context = {
+            "slicer_path": self.global_config.get_slicer_path(),
+            "fsl_installed": self.dependency_manager.is_fsl(),
+        }
+        resolved = self._resolve_licenses(needing, context)
+        if resolved is None or len(resolved) != len(needing):
+            return False
+
+        dialog = LicenseConsentWindow(resolved, parent=self)
+        if dialog.exec() != QDialog.Accepted:
+            return False
+
+        for tool_id in dialog.accepted_tool_ids:
+            self.global_config.set_accepted_license_version(
+                tool_id, detected.get(tool_id, "")
+            )
+        self.global_config.save()
+        return True
+
+    def _resolve_licenses(self, needing, context):
+        """
+        Resolve the license texts for the given tools without freezing the UI.
+
+        Resolution may perform a bounded network fetch when a license is not
+        found locally. It is offloaded to a worker while a modal busy indicator
+        keeps processing GUI events until the worker emits its terminal signal.
+
+        Parameters
+        ----------
+        needing: list
+            Tool ids that require consent.
+        context: dict
+            Resolution context (e.g. the Slicer path).
+
+        Returns
+        -------
+        list
+            The resolved licenses, in the same order as ``needing``.
+        """
+        progress = QProgressDialog(strings.license_consent_preparing, None, 0, 0, self)
+        progress.setWindowTitle(strings.license_consent_title)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        progress.show()
+
+        loop = QEventLoop(self)
+        resolved_box = []
+        error_box = []
+
+        def _on_resolved(resolved):
+            resolved_box.append(resolved)
+
+        def _on_failed(message):
+            error_box.append(message)
+
+        worker = LicenseResolveWorker(needing, context)
+        self._license_resolve_worker = worker
+        worker.signal.resolved.connect(_on_resolved)
+        worker.signal.failed.connect(_on_failed)
+        worker.signal.finished.connect(loop.quit)
+        try:
+            start_worker(worker)
+            loop.exec()
+        finally:
+            progress.close()
+            self._license_resolve_worker = None
+        if error_box:
+            msg_box = QMessageBox(parent=self)
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setWindowTitle(strings.license_consent_title)
+            msg_box.setText(strings.license_consent_resolution_error)
+            msg_box.exec()
+            return None
+        return resolved_box[0] if resolved_box else None
 
     def start_tool_reference(self, default_tab=None, search_str=None):
         """
@@ -472,7 +629,7 @@ class MainWindow(QMainWindow):
             parent=self, default_tab=default_tab, search_string=search_str
         )
 
-        # quando viene chiusa, libera il riferimento
+        # when closed, release the reference
         self._tool_reference_window.finished.connect(
             lambda _: setattr(self, "_tool_reference_window", None)
         )
@@ -543,11 +700,9 @@ class MainWindow(QMainWindow):
         about_dialog = QDialog(parent=self)
         layout = QGridLayout()
 
-        bold_font = QFont()
-        bold_font.setBold(True)
         title_font = QFont()
         title_font.setBold(True)
-        title_font.setPointSize(title_font.pointSize() * 1.5)
+        title_font.setPointSize(int(title_font.pointSize() * 1.5))
 
         label_about1 = QLabel(strings.APPNAME)
         label_about1.setFont(title_font)
@@ -558,7 +713,7 @@ class MainWindow(QMainWindow):
         label_about5 = QLabel(strings.aboutwindow_wiki_dependencylist)
 
         label_about_icon = QLabel()
-        icon = QPixmap(swane_supplement.appIcon_file)
+        icon = QPixmap(resources.appIcon_file)
 
         label_about_icon.setPixmap(icon.scaled(60, 60))
 
@@ -620,7 +775,7 @@ class MainWindow(QMainWindow):
         button_action6 = QAction(
             QIcon.fromTheme("tools-wizard"), strings.menu_start_preference_wizard, self
         )
-        button_action6.triggered.connect(self.start_preference_wizard)
+        button_action6.triggered.connect(lambda: self.start_preference_wizard())
 
         button_action7 = QAction(strings.menu_shutdown_pref, self)
         button_action7.setCheckable(True)
@@ -700,7 +855,7 @@ class MainWindow(QMainWindow):
             lambda: QDesktopServices.openUrl(QUrl(strings.chatgpt_url))
         )
 
-        # Add to status bar (use addPermanentWidget per preferenza)
+        # Add to status bar (use addPermanentWidget as preferred)
         self.statusBar().addPermanentWidget(chatgpt_button)
 
         self.show()
@@ -778,10 +933,11 @@ class MainWindow(QMainWindow):
             not self.check_running_workflows(ignore_subj=subject)
             and not self.check_workflow_error()
         ):
-            os.system("systemctl poweroff")
-            os.system("osascript -e 'tell app \"System Events\" to shut down'")
+            if is_mac():
+                os.system("osascript -e 'tell app \"System Events\" to shut down'")
+            else:
+                os.system("systemctl poweroff")
             exit()
-            pass
 
     def home_tab_ui(self):
         """
@@ -793,13 +949,15 @@ class MainWindow(QMainWindow):
 
         """
 
+        self.home_v_layout = QVBoxLayout()
         self.home_grid_layout = QGridLayout()
+        self.home_v_layout.addLayout(self.home_grid_layout)
 
         bold_font = QFont()
         bold_font.setBold(True)
         title_font = QFont()
         title_font.setBold(True)
-        title_font.setPointSize(title_font.pointSize() * 1.5)
+        title_font.setPointSize(int(title_font.pointSize() * 1.5))
         x = 0
 
         label_welcome1 = QLabel(strings.mainwindow_home_label1)
@@ -811,13 +969,18 @@ class MainWindow(QMainWindow):
         label_welcome4 = QLabel(strings.mainwindow_home_label4)
         label_welcome4.setFont(bold_font)
 
-        self.home_grid_layout.addWidget(label_welcome1, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome1, x, 0, 1, 5)
         x += 1
-        self.home_grid_layout.addWidget(label_welcome2, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome2, x, 0, 1, 5)
         x += 1
-        self.home_grid_layout.addWidget(label_welcome3, x, 0, 1, 2)
+        self.home_grid_layout.addWidget(label_welcome3, x, 0, 1, 5)
         x += 1
-        self.home_grid_layout.addWidget(label_welcome4, x, 0, 1, 2)
+        if is_windows() and not dependency_policy.FSL_MANDATORY:
+            label_windows = QLabel(strings.windows_experimental_warn)
+            label_windows.setWordWrap(True)
+            self.home_grid_layout.addWidget(label_windows, x, 0, 1, 5)
+            x += 1
+        self.home_grid_layout.addWidget(label_welcome4, x, 0, 1, 5)
         x += 1
 
         # Main window dependency check
@@ -825,54 +988,121 @@ class MainWindow(QMainWindow):
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
         self.home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
+
+        # Atlases column, aligned next to the mandatory dependencies section
+        label_atlases = QLabel(strings.mainwindow_home_label_atlases)
+        label_atlases.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        label_atlases.setFont(bold_font)
+        self.home_grid_layout.addWidget(label_atlases, x, 3, 1, 2)
+
+        horizontal_spacer = QSpacerItem(
+            40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum
+        )
+        self.home_grid_layout.addItem(horizontal_spacer, x, 2, 1, 1)
+
+        y = x + 1
+        for atlas in ATLASES:
+            y = self.add_atlas_entry(atlas, y)
+
         x += 1
 
         x = self.add_home_entry(self.dependency_manager.dcm2niix, x)
 
-        x = self.add_home_entry(self.dependency_manager.fsl, x)
+        if dependency_policy.FSL_MANDATORY:
+            x = self.add_home_entry(self.dependency_manager.fsl, x)
+
+        x = self.add_home_entry(self.dependency_manager.antspyx, x)
+
+        x = self.add_home_entry(self.dependency_manager.antspynet, x)
+
+        x = self.add_home_entry(self.dependency_manager.dipy, x)
+
+        from swane.utils.license_consent import _nilearn_version
+        from swane.utils.DependencyManager import version_with_license
+        from swane.utils.LicenseReference import NILEARN
+
+        nilearn_version = _nilearn_version()
+        if nilearn_version:
+            lbl = strings.check_dep_nilearn_found % version_with_license(
+                NILEARN, nilearn_version
+            )
+            x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, lbl), x)
+
+        self.optional_grid_layout = QGridLayout()
+        self.home_v_layout.addLayout(self.optional_grid_layout)
+
+        opt_x = 0
 
         label_main_dep = QLabel(strings.mainwindow_home_label6)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        self.home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
-        x += 1
+        self.optional_grid_layout.addWidget(label_main_dep, opt_x, 0, 1, 2)
+        opt_x += 1
 
-        x = self.add_home_entry(self.dependency_manager.freesurfer, x)
+        if not dependency_policy.FSL_MANDATORY:
+            opt_x = self.add_home_entry(
+                self.dependency_manager.fsl, opt_x, self.optional_grid_layout
+            )
+
+        opt_x = self.add_home_entry(
+            self.dependency_manager.freesurfer, opt_x, self.optional_grid_layout
+        )
         self.global_config.freesurfer = self.dependency_manager.is_freesurfer()
 
         if DependencyManager.need_slicer_check(self.global_config):
-            self.slicer_x = x
-            x = self.add_home_entry(
+            self.slicer_x = opt_x
+            opt_x = self.add_home_entry(
                 Dependence(
                     DependenceStatus.CHECKING, strings.mainwindow_dep_slicer_src
                 ),
-                x,
+                opt_x,
+                self.optional_grid_layout,
             )
             DependencyManager.check_slicer(
-                self.global_config.get_slicer_path(), self.slicer_row
+                self.global_config.get_slicer_path(),
+                self.slicer_row,
+                self.slicer_extensions_state_row,
             )
         else:
-            label = (
-                strings.check_dep_slicer_found % self.global_config.get_slicer_version()
+            label = strings.check_dep_slicer_found % version_with_license(
+                SLICER, self.global_config.get_slicer_version()
             )
-            x = self.add_home_entry(Dependence(DependenceStatus.DETECTED, label), x)
+            self.slicer_x = opt_x
+            opt_x = self.add_home_entry(
+                Dependence(DependenceStatus.DETECTED, label),
+                opt_x,
+                self.optional_grid_layout,
+            )
+            # Slicer is valid: make sure the slicerrc startup patch is present
+            SlicerCheckWorker.add_slicer_startup_patch()
+            # The fast checks of need_slicer_check passed; confirm in background
+            # that the installation still matches the recorded revision.
+            DependencyManager.quick_check_slicer_version(
+                self.global_config.get_slicer_path(),
+                self.global_config.get_slicer_revision(),
+                self.slicer_quick_check_done,
+            )
 
         label_main_dep = QLabel(strings.mainwindow_home_label7)
         label_main_dep.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         label_main_dep.setFont(bold_font)
-        self.home_grid_layout.addWidget(label_main_dep, x, 0, 1, 2)
-        x += 1
+        self.optional_grid_layout.addWidget(label_main_dep, opt_x, 0, 1, 2)
+        opt_x += 1
 
-        x = self.add_home_entry(self.dependency_manager.graphviz, x)
+        opt_x = self.add_home_entry(
+            self.dependency_manager.graphviz, opt_x, self.optional_grid_layout
+        )
 
         vertical_spacer = QSpacerItem(
             20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding
         )
-        self.home_grid_layout.addItem(vertical_spacer, x, 0, 1, 2)
+        self.home_v_layout.addItem(vertical_spacer)
 
-        self.homeTab.setLayout(self.home_grid_layout)
+        self.homeTab.setLayout(self.home_v_layout)
 
-    def add_home_entry(self, dep: Dependence, x: int) -> int:
+    def add_home_entry(
+        self, dep: Dependence, x: int, layout: QGridLayout = None
+    ) -> int:
         """
         Generates a dependency check label, adding it to an existing layout
 
@@ -882,6 +1112,8 @@ class MainWindow(QMainWindow):
             A Dependence object to be parsed.
         x : int
             The starting grid layout row index.
+        layout : QGridLayout
+            The grid layout to which to add the widgets. Defaults to self.home_grid_layout.
 
         Returns
         -------
@@ -889,6 +1121,9 @@ class MainWindow(QMainWindow):
             The next grid layout row index.
 
         """
+
+        if layout is None:
+            layout = self.home_grid_layout
 
         label_icon = QLabel()
         label_icon.setScaledContents(True)
@@ -905,23 +1140,90 @@ class MainWindow(QMainWindow):
 
         label_icon.setFixedSize(25, 25)
 
-        old_icon_layout = self.home_grid_layout.itemAtPosition(x, 0)
+        old_icon_layout = layout.itemAtPosition(x, 0)
         if old_icon_layout is not None:
             old_icon_layout.widget().deleteLater()
-            self.home_grid_layout.removeItem(old_icon_layout)
-        self.home_grid_layout.addWidget(label_icon, x, 0)
+            layout.removeItem(old_icon_layout)
+        layout.addWidget(label_icon, x, 0)
 
         label = QLabel(dep.label)
         label.setOpenExternalLinks(True)
         label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
 
-        old_label_layout = self.home_grid_layout.itemAtPosition(x, 1)
+        old_label_layout = layout.itemAtPosition(x, 1)
         if old_label_layout is not None:
             old_label_layout.widget().deleteLater()
-            self.home_grid_layout.removeItem(old_label_layout)
-        self.home_grid_layout.addWidget(label, x, 1)
+            layout.removeItem(old_label_layout)
+        layout.addWidget(label, x, 1)
 
         return x + 1
+
+    def add_atlas_entry(self, atlas, y: int) -> int:
+        """
+        Generates an atlas name and license link, adding them to the home grid.
+
+        Parameters
+        ----------
+        atlas : AtlasInfo
+            The atlas to display.
+        y : int
+            The starting grid layout row index for the atlas row.
+
+        Returns
+        -------
+        int
+            The next grid layout row index.
+
+        """
+
+        label = QLabel(
+            '%s (<a href="%s">%s</a>)'
+            % (
+                atlas.display_name,
+                atlas.license_url,
+                strings.mainwindow_home_license_link,
+            )
+        )
+        label.setOpenExternalLinks(True)
+        label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.home_grid_layout.addWidget(label, y, 3, 1, 2)
+
+        return y + 1
+
+    def slicer_quick_check_done(self, revision_matches: bool):
+        """
+        Handle the background Slicer revision confirmation: on a mismatch (e.g.
+        an in-place upgrade) the extensions may be gone, so run the full check.
+
+        Parameters
+        ----------
+        revision_matches : bool
+            True if the executable still reports the recorded revision.
+        """
+        if revision_matches:
+            return
+        self.add_home_entry(
+            Dependence(DependenceStatus.CHECKING, strings.mainwindow_dep_slicer_src),
+            self.slicer_x,
+            self.optional_grid_layout,
+        )
+        DependencyManager.check_slicer(
+            self.global_config.get_slicer_path(),
+            self.slicer_row,
+            self.slicer_extensions_state_row,
+        )
+
+    def slicer_extensions_state_row(self, state: str):
+        """
+        Persist where the full Slicer check found the extensions.
+
+        Parameters
+        ----------
+        state : str
+            JSON with the Slicer revision and the extension install folders.
+        """
+        self.global_config.set_slicer_extensions_state(state)
+        self.global_config.save()
 
     def slicer_row(
         self, slicer_path: str, slicer_version: str, msg: str, state: DependenceStatus
@@ -946,7 +1248,9 @@ class MainWindow(QMainWindow):
 
         """
 
-        self.add_home_entry(Dependence(state, msg), self.slicer_x)
+        self.add_home_entry(
+            Dependence(state, msg), self.slicer_x, self.optional_grid_layout
+        )
 
         if state is not DependenceStatus.MISSING:
             self.global_config.set_slicer_path(slicer_path)

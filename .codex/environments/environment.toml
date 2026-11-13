@@ -1,0 +1,140 @@
+version = 1
+name = "SWANe"
+
+[setup]
+script = "bash .codex/scripts/invoke-project-action.sh setup"
+
+[setup.darwin]
+script = "bash .codex/scripts/invoke-project-action.sh setup"
+
+[setup.linux]
+script = "bash .codex/scripts/invoke-project-action.sh setup"
+
+[setup.win32]
+script = 'powershell -NoProfile -ExecutionPolicy Bypass -File ".codex\scripts\Invoke-ProjectAction.ps1" -Action setup'
+
+[[actions]]
+name = "Run SWANe"
+icon = "run"
+command = "bash .codex/scripts/invoke-project-action.sh run"
+platform = "darwin"
+
+[[actions]]
+name = "Run SWANe"
+icon = "run"
+command = "bash .codex/scripts/invoke-project-action.sh run"
+platform = "linux"
+
+[[actions]]
+name = "Run SWANe"
+icon = "run"
+command = 'powershell -NoProfile -ExecutionPolicy Bypass -File ".codex\scripts\Invoke-ProjectAction.ps1" -Action run'
+platform = "win32"
+
+[[actions]]
+name = "Bootstrap Python"
+icon = "tool"
+command = "bash .codex/scripts/invoke-project-action.sh bootstrap"
+platform = "darwin"
+
+[[actions]]
+name = "Bootstrap Python"
+icon = "tool"
+command = "bash .codex/scripts/invoke-project-action.sh bootstrap"
+platform = "linux"
+
+[[actions]]
+name = "Bootstrap Python"
+icon = "tool"
+command = 'powershell -NoProfile -ExecutionPolicy Bypass -File ".codex\scripts\Invoke-ProjectAction.ps1" -Action bootstrap'
+platform = "win32"
+
+[[actions]]
+name = "Compile"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh compile"
+platform = "darwin"
+
+[[actions]]
+name = "Compile"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh compile"
+platform = "linux"
+
+[[actions]]
+name = "Compile"
+icon = "test"
+command = 'powershell -NoProfile -ExecutionPolicy Bypass -File ".codex\scripts\Invoke-ProjectAction.ps1" -Action compile'
+platform = "win32"
+
+[[actions]]
+name = "Core tests"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh core-tests"
+platform = "darwin"
+
+[[actions]]
+name = "Core tests"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh core-tests"
+platform = "linux"
+
+[[actions]]
+name = "Core tests"
+icon = "test"
+command = 'powershell -NoProfile -ExecutionPolicy Bypass -File ".codex\scripts\Invoke-ProjectAction.ps1" -Action core-tests'
+platform = "win32"
+
+[[actions]]
+name = "Workflow graph tests"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh workflow-tests"
+platform = "darwin"
+
+[[actions]]
+name = "Workflow graph tests"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh workflow-tests"
+platform = "linux"
+
+[[actions]]
+name = "Workflow graph tests"
+icon = "test"
+command = 'powershell -NoProfile -ExecutionPolicy Bypass -File ".codex\scripts\Invoke-ProjectAction.ps1" -Action workflow-tests'
+platform = "win32"
+
+[[actions]]
+name = "Format check"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh format"
+platform = "darwin"
+
+[[actions]]
+name = "Format check"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh format"
+platform = "linux"
+
+[[actions]]
+name = "Format check"
+icon = "test"
+command = 'powershell -NoProfile -ExecutionPolicy Bypass -File ".codex\scripts\Invoke-ProjectAction.ps1" -Action format'
+platform = "win32"
+
+[[actions]]
+name = "Pip check"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh pip-check"
+platform = "darwin"
+
+[[actions]]
+name = "Pip check"
+icon = "test"
+command = "bash .codex/scripts/invoke-project-action.sh pip-check"
+platform = "linux"
+
+[[actions]]
+name = "Pip check"
+icon = "test"
+command = 'powershell -NoProfile -ExecutionPolicy Bypass -File ".codex\scripts\Invoke-ProjectAction.ps1" -Action pip-check'
+platform = "win32"
