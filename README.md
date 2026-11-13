@@ -1,7 +1,7 @@
 <h1 align="center"> SWANe</h1><br>
 <p align="center">
   <a href="#">
-    <img alt="SWANe" title="SWANe" src="swane/resources/icons/swane.png">
+    <img alt="SWANe" title="SWANe" src="https://github.com/LICE-dev/swane/raw/main/swane/resources/icons/swane.png">
   </a>
 </p>
 <h3 align="center"> Standardized Workflow for Advanced Neuroimaging in Epilepsy</h3>
@@ -174,8 +174,8 @@ You can contact us at the following e-mail: [dev@lice.it](mailto:dev@lice.it).
 
 ## License
 
-This project is licensed under the [MIT](LICENSE) License - see the [LICENSE](LICENSE) file for details
-This project includes subsection derived from other software, which licenses can be found in the [NOTICE](NOTICE.md) file
+This project is licensed under the [MIT](https://github.com/LICE-dev/swane/blob/main/LICENSE) License - see the [LICENSE](https://github.com/LICE-dev/swane/blob/main/LICENSE) file for details
+This project includes subsection derived from other software, which licenses can be found in the [NOTICE](https://github.com/LICE-dev/swane/blob/main/NOTICE.md) file
 
 
 ## Changelog

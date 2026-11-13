@@ -11,10 +11,17 @@ def get_property(prop):
     return result.group(1)
 
 
+def get_long_description():
+    with open("README.md", encoding="utf-8") as f:
+        return f.read()
+
+
 setup(
     name="swane",
     version=get_property("__version__"),
     description="Standardized Workflow for Advanced Neuroimaging in Epilepsy",
+    long_description=get_long_description(),
+    long_description_content_type="text/markdown",
     author="LICE - Commissione Neuroimmagini",
     author_email="dev@lice.it",
     packages=find_packages(exclude=["swane.tests", "swane.tests.*"]),
